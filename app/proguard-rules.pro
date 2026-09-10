@@ -1,0 +1,2 @@
+-keepattributes Signature,InnerClasses,EnclosingMethod
+-keepclassmembers class * extends android.webkit.WebViewClient { public *; }

@@ -1,0 +1,101 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+package cc.novelia.app.ui
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import cc.novelia.app.data.*
+import coil.compose.AsyncImage
+import kotlinx.coroutines.CancellationException
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+
+@Composable fun Screen(title: String, back: (() -> Unit)? = null, actions: @Composable RowScope.() -> Unit = {}, content: @Composable (PaddingValues) -> Unit) {
+    Scaffold(topBar = { TopAppBar(title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) }, navigationIcon = { if(back != null) IconButton(onClick = back) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "返回") } }, actions = actions) }, content = content)
+}
+@Composable fun EmptyState(title: String, message: String, icon: ImageVector = Icons.Outlined.AutoStories, action: String? = null, onAction: () -> Unit = {}) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 40.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = RoundedCornerShape(28.dp), modifier = Modifier.size(88.dp)) { Box(contentAlignment = Alignment.Center) { Icon(icon, null, Modifier.size(36.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer) } }
+        Text(title, style = MaterialTheme.typography.titleLarge)
+        Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if(action != null) FilledTonalButton(onClick = onAction) { Text(action) }
+    }
+}
+@Composable fun <T> AsyncContent(key: Any?, load: suspend () -> T, modifier: Modifier = Modifier, content: @Composable (T, () -> Unit) -> Unit) {
+    var refresh by remember(key) { mutableIntStateOf(0) }
+    val result by produceState<Result<T>?>(null, key, refresh) {
+        value = null
+        value = try { Result.success(load()) } catch(e: CancellationException) { throw e } catch(e: Exception) { Result.failure(e) }
+    }
+    Box(modifier.fillMaxSize()) {
+        val current = result
+        when {
+            current == null -> Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) { CircularProgressIndicator(); Text("正在加载…", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            current.isFailure -> EmptyState("暂时无法加载", current.exceptionOrNull().friendlyMessage(), Icons.Outlined.CloudOff, "重试", { refresh++ })
+            else -> content(current.getOrThrow()) { refresh++ }
+        }
+    }
+}
+fun Throwable?.friendlyMessage(): String = when(this) { is ApiException -> message; is java.net.UnknownHostException -> "网络不可用，请检查连接。已缓存的章节仍可在书架中阅读。"; is java.net.SocketTimeoutException -> "连接超时，请稍后重试"; is IllegalArgumentException -> message?.take(200) ?: "输入内容或文件格式不符合要求"; else -> "操作未完成，请检查网络或文件内容后重试" }
+@Composable fun BookCover(book: BookCard, modifier: Modifier = Modifier) {
+    Box(modifier.width(76.dp).height(104.dp).clip(RoundedCornerShape(12.dp)).background(Brush.linearGradient(listOf(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.secondaryContainer))), contentAlignment = Alignment.Center) {
+        if(book.cover != null) AsyncImage(book.cover, "${book.title} 封面", Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        else Column(Modifier.padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(Icons.Outlined.AutoStories, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
+            Spacer(Modifier.height(8.dp)); Text(book.title.take(8), fontSize = 12.sp, lineHeight = 17.sp, maxLines = 3, color = MaterialTheme.colorScheme.onPrimaryContainer)
+        }
+    }
+}
+@Composable fun BookRow(book: BookCard, onClick: () -> Unit, trailing: @Composable (() -> Unit)? = null) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+        BookCover(book)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(book.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(book.subtitle.ifBlank { providers[book.ref.provider] ?: "本地小说" }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if(book.total > 0) Text(if(book.ref.isWenku) "${book.total} 个分卷文件" else "${book.translated} / ${book.total} 章有译文", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            else if(book.originalTitle != book.title) Text(book.originalTitle, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        trailing?.invoke()
+    }
+}
+@Composable fun SectionTitle(title: String, detail: String? = null, onClick: () -> Unit = {}) {
+    Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 14.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        if(detail != null) TextButton(onClick = onClick) { Text(detail) }
+    }
+}
+@Composable fun ChoiceRow(label: String, options: List<String>, selected: Int, onSelect: (Int) -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
+        Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { options.forEachIndexed { i, title -> FilterChip(selected == i, onClick = { onSelect(i) }, label = { Text(title) }) } }
+    }
+}
+@Composable fun MenuRow(title: String, description: String, icon: ImageVector, onClick: () -> Unit, trailing: @Composable (() -> Unit)? = null) {
+    ListItem(headlineContent = { Text(title) }, supportingContent = { if(description.isNotEmpty()) Text(description) }, leadingContent = { Icon(icon, null, tint = MaterialTheme.colorScheme.primary) }, trailingContent = trailing, modifier = Modifier.clickable(onClick = onClick).heightIn(min = 64.dp))
+}
+@Composable fun TextPrompt(title: String, label: String, initial: String = "", onDismiss: () -> Unit, onSave: (String) -> Unit) {
+    var text by remember { mutableStateOf(initial) }
+    AlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = { OutlinedTextField(text, { text = it }, label = { Text(label) }, modifier = Modifier.fillMaxWidth(), minLines = 1, maxLines = 6) }, confirmButton = { TextButton(onClick = { onSave(text.trim()); onDismiss() }, enabled = text.isNotBlank()) { Text("保存") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } })
+}
+@Composable fun ConfirmDialog(title: String, message: String, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+    AlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = { Text(message) }, confirmButton = { TextButton(onClick = { onConfirm(); onDismiss() }) { Text("确认") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } })
+}
+fun displayDate(seconds: Long): String = runCatching { DateTimeFormatter.ofPattern("yyyy.MM.dd").format(Instant.ofEpochSecond(seconds).atZone(ZoneId.systemDefault())) }.getOrDefault("")
