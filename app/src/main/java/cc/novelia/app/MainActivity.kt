@@ -51,13 +51,14 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(link) { link?.let { controller.openLink(it); incoming.value = null } }
                 LaunchedEffect(Unit) { runCatching { app.session.refresh() } }
                 val entry by nav.currentBackStackEntryAsState(); val route = entry?.destination?.route
+                ObserveDownloadCelebrations(controller, route)
                 val roots = listOf("shelf", "discover?query={query}", "community", "profile")
                 val tabs = listOf(Triple("shelf", "书架", Icons.Outlined.CollectionsBookmark), Triple("discover", "发现", Icons.Outlined.Explore), Triple("community", "社区", Icons.Outlined.Forum), Triple("profile", "我的", Icons.Outlined.PersonOutline))
                 fun switchTab(target: String) { nav.navigate(target) { popUpTo(nav.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } }
                 val showNavigation = route in roots
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     val wide = maxWidth >= 600.dp
-                    Scaffold(snackbarHost = { SnackbarHost(snackbar) }, bottomBar = {
+                    Scaffold(snackbarHost = { StickerSnackbarHost(snackbar) }, bottomBar = {
                         if(showNavigation && !wide) NavigationBar { tabs.forEach { (target, label, icon) ->
                             val selected = route?.startsWith(target) == true
                             NavigationBarItem(selected, { if(!selected) switchTab(target) }, { NavigationIcon(icon, label, selected) }, label = { Text(label) })

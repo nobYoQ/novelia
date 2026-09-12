@@ -40,10 +40,11 @@ suspend fun importDocument(c: AppController, uri: Uri) = withContext(Dispatchers
     val (name, bytes) = readDocument(c, uri)
     val doc = DocumentTools.parse(name, bytes)
     val duplicate = c.store.state.value.books.filter { it.book.ref.isLocal }.firstOrNull { runCatching { c.store.document(it.book.ref.id).sourceHash == doc.sourceHash }.getOrDefault(false) }
-    if(duplicate != null) { c.message("「${duplicate.book.title}」已在书架中"); return@withContext }
+    if(duplicate != null) { c.message("「${duplicate.book.title}」已在书架中"); return@withContext false }
     c.store.saveDocument(doc)
     c.store.documentSource(doc.id, doc.format).writeBytes(bytes)
     c.store.saveBook(BookCard(BookRef("local", doc.id), doc.name, cover = doc.coverImage?.let { c.store.documentImage(doc.id, it).absolutePath }, subtitle = "${doc.format.uppercase()} · ${doc.chapters.size} 章"))
+    true
 }
 fun readDocument(c: AppController, uri: Uri): Pair<String, ByteArray> {
     val resolver = c.app.contentResolver
@@ -63,7 +64,16 @@ fun readDocument(c: AppController, uri: Uri): Pair<String, ByteArray> {
     var queueingDownloads by remember { mutableStateOf(false) }
     val sourceExporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri -> val ref = localExport; if(uri != null && ref != null) c.action("原文件已导出") { withContext(Dispatchers.IO) { val doc = c.store.document(ref.id); val source = c.store.documentSource(ref.id, doc.format); val bytes = if(source.exists()) source.readBytes() else doc.chapters.joinToString("\n\n") { it.paragraphs.joinToString("\n\n") }.toByteArray(); c.app.contentResolver.openOutputStream(uri)?.use { it.write(bytes) } ?: error("无法写入文件") } }; localExport = null }
     var importing by remember { mutableStateOf(false) }
-    val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris -> if(uris.isNotEmpty()) c.action("导入完成") { importing = true; try { uris.forEach { importDocument(c, it) } } finally { importing = false } } }
+    val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if(uris.isNotEmpty()) c.action {
+            importing = true
+            try {
+                var imported = 0
+                uris.forEach { if(importDocument(c, it)) imported++ }
+                if(imported > 0) c.celebrate("已导入 $imported 本小说", MidoriSticker.Approve)
+            } finally { importing = false }
+        }
+    }
     val recent = remember(state.books, state.positions) {
         state.books.asSequence().filter { state.positions.containsKey(it.book.ref.key) }.maxByOrNull { state.positions.getValue(it.book.ref.key).updatedAt }
     }
@@ -139,7 +149,7 @@ fun readDocument(c: AppController, uri: Uri): Pair<String, ByteArray> {
                                     }
                                 }, enabled = managing && !queueingDownloads && downloadableSelection.isNotEmpty()) { Text(if(queueingDownloads) "正在加入…" else "下载") }
                             } } }
-                            if(books.isEmpty()) item { EmptyState(if(tab == 1) "把故事装进口袋" else "书架等你来填满", if(tab == 1) "支持 EPUB、TXT 和 SRT，导入后即可离线阅读。" else "去发现喜欢的小说，或导入你已有的文件。", action = if(tab == 1) "导入文件" else "去发现", onAction = { if(tab == 1) importer.launch(arrayOf("*/*")) else c.go("discover") }) }
+                            if(books.isEmpty()) item { EmptyState(if(tab == 1) "把故事装进口袋" else "书架等你来填满", if(tab == 1) "支持 EPUB、TXT 和 SRT，导入后即可离线阅读。" else "去发现喜欢的小说，或导入你已有的文件。", action = if(tab == 1) "导入文件" else "去发现", onAction = { if(tab == 1) importer.launch(arrayOf("*/*")) else c.go("discover") }, sticker = MidoriSticker.Welcome) }
                             items(books, key = { it.book.ref.key }, contentType = { "book" }) { saved ->
                                 val selectionColor = animateColorAsState(
                                     if(managing && saved.book.ref.key in selection) MaterialTheme.colorScheme.primaryContainer.copy(alpha = .5f) else Color.Transparent,

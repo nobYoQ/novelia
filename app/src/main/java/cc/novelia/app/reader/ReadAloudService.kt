@@ -26,7 +26,7 @@ class ReadAloudService : Service() {
     private var engine: TextToSpeech? = null
     private var paragraphs = emptyList<String>(); private var index = 0; private var ready = false; private var paused = false; private var title = "朗读"; private var rate = 1f; private var language = Locale.SIMPLIFIED_CHINESE
     private val handler = Handler(Looper.getMainLooper())
-    private val stopTimer = Runnable { stopSelf() }
+    private val stopTimer = Runnable { paused = true; status.value = SLEEP_TIMER_FINISHED; stopSelf() }
     private lateinit var focus: AudioFocusRequest
     override fun onCreate() {
         super.onCreate()
@@ -37,7 +37,7 @@ class ReadAloudService : Service() {
             if(ready) configureAndSpeak() else { status.value = "系统朗读引擎不可用，请在系统设置中安装语音"; stopSelf() }
         } }
         engine?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-            override fun onStart(utteranceId: String?) { status.value = "正在朗读：$title" }
+            override fun onStart(utteranceId: String?) { if(!paused) status.value = "正在朗读：$title" }
             override fun onDone(utteranceId: String?) { handler.post { if(!paused) { index++; speak() } } }
             @Deprecated("Deprecated in Java") override fun onError(utteranceId: String?) { status.value = "朗读失败，请检查系统语音包"; stopSelf() }
         })
@@ -75,6 +75,7 @@ class ReadAloudService : Service() {
     override fun onDestroy() { handler.removeCallbacksAndMessages(null); engine?.stop(); engine?.shutdown(); getSystemService(AudioManager::class.java).abandonAudioFocusRequest(focus); stopForeground(STOP_FOREGROUND_REMOVE); super.onDestroy() }
     override fun onBind(intent: Intent?): IBinder? = null
     companion object {
+        const val SLEEP_TIMER_FINISHED = "朗读定时已结束"
         val status = MutableStateFlow("")
         fun start(context: Context, paragraphs: List<String>, title: String, settings: ReaderSettings) {
             File(context.cacheDir, "tts-queue.json").writeText(appJson.encodeToString(paragraphs))

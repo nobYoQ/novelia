@@ -9,6 +9,7 @@ import cc.novelia.app.NoveliaApplication
 import cc.novelia.app.data.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.IOException
@@ -22,6 +23,7 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
     val session get() = app.session
     val metadataCache get() = app.metadataCache
     var afterLogin: (() -> Unit)? = null
+    private var celebration: Job? = null
     fun go(route: String) { nav.navigate(route) { launchSingleTop = true } }
     fun back() { nav.popBackStack() }
     fun book(ref: BookRef) {
@@ -41,8 +43,12 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
         }
     }
     fun message(text: String) { scope.launch { snackbar.showSnackbar(text) } }
-    fun action(success: String? = null, block: suspend () -> Unit) { scope.launch(Dispatchers.Main.immediate) {
-        try { block(); success?.let { snackbar.showSnackbar(it) } }
+    fun celebrate(text: String, sticker: MidoriSticker) {
+        celebration?.cancel()
+        celebration = scope.launch { snackbar.showSnackbar(StickerSnackbarVisuals(text, sticker)) }
+    }
+    fun action(success: String? = null, sticker: MidoriSticker? = null, block: suspend () -> Unit) { scope.launch(Dispatchers.Main.immediate) {
+        try { block(); success?.let { if(sticker != null) celebrate(it, sticker) else snackbar.showSnackbar(it) } }
         catch(e: kotlinx.coroutines.CancellationException) { throw e }
         catch(e: Exception) { snackbar.showSnackbar(e.friendlyMessage()) }
     } }

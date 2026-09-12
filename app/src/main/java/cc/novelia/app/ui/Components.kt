@@ -21,6 +21,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -39,10 +42,11 @@ import java.time.format.DateTimeFormatter
 @Composable fun Screen(title: String, back: (() -> Unit)? = null, actions: @Composable RowScope.() -> Unit = {}, content: @Composable (PaddingValues) -> Unit) {
     Scaffold(topBar = { TopAppBar(title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) }, navigationIcon = { if(back != null) IconButton(onClick = back) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "返回") } }, actions = actions) }, content = content)
 }
-@Composable fun EmptyState(title: String, message: String, icon: ImageVector = Icons.Outlined.AutoStories, action: String? = null, onAction: () -> Unit = {}) {
+@Composable fun EmptyState(title: String, message: String, icon: ImageVector = Icons.Outlined.AutoStories, action: String? = null, onAction: () -> Unit = {}, sticker: MidoriSticker? = null) {
     MotionContent(Unit, Modifier.fillMaxWidth()) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 40.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = RoundedCornerShape(28.dp), modifier = Modifier.size(88.dp)) { Box(contentAlignment = Alignment.Center) { Icon(icon, null, Modifier.size(36.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer) } }
+            if(sticker != null) StickerAccent(sticker, modifier = Modifier.size(112.dp))
+            else Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = RoundedCornerShape(28.dp), modifier = Modifier.size(88.dp)) { Box(contentAlignment = Alignment.Center) { Icon(icon, null, Modifier.size(36.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer) } }
             Text(title, style = MaterialTheme.typography.titleLarge)
             Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if(action != null) FilledTonalButton(onClick = onAction) { Text(action) }
@@ -77,7 +81,7 @@ val LocalReducedMotion = staticCompositionLocalOf { false }
         val current = result
         when {
             current == null -> Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) { CircularProgressIndicator(); Text("正在加载…", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            current.isFailure -> if(loading) CircularProgressIndicator(Modifier.align(Alignment.Center)) else EmptyState("暂时无法加载", current.exceptionOrNull().friendlyMessage(), Icons.Outlined.CloudOff, "重试", retry)
+            current.isFailure -> if(loading) CircularProgressIndicator(Modifier.align(Alignment.Center)) else EmptyState("暂时无法加载", current.exceptionOrNull().friendlyMessage(), Icons.Outlined.CloudOff, "重试", retry, sticker = MidoriSticker.Concerned)
             else -> {
                 // Keep the same composition during refresh so list positions and editor state survive.
                 MotionContent(key, Modifier.fillMaxSize()) {
@@ -86,8 +90,11 @@ val LocalReducedMotion = staticCompositionLocalOf { false }
                 if(loading) LinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter))
                 refreshError?.let { error ->
                     MotionContent(error, Modifier.align(Alignment.BottomCenter).padding(12.dp)) {
-                        Snackbar(action = { TextButton(onClick = retry) { Text("重试") } }) {
-                            Text("刷新未完成：${error.friendlyMessage()}")
+                        Snackbar(modifier = Modifier.heightIn(min = 64.dp), action = { TextButton(onClick = retry) { Text("重试") } }) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                StickerAccent(MidoriSticker.Concerned, error, Modifier.size(40.dp))
+                                Text("刷新未完成：${error.friendlyMessage()}", Modifier.weight(1f))
+                            }
                         }
                     }
                 }
@@ -105,29 +112,29 @@ val LocalReducedMotion = staticCompositionLocalOf { false }
 }
 fun Throwable?.friendlyMessage(): String = when(this) { is ApiException -> message; is java.net.UnknownHostException -> "网络不可用，请检查连接。已缓存的章节仍可在书架中阅读。"; is java.net.SocketTimeoutException -> "连接超时，请稍后重试"; is IllegalArgumentException -> message?.take(200) ?: "输入内容或文件格式不符合要求"; else -> "操作未完成，请检查网络或文件内容后重试" }
 @Composable fun BookCover(book: BookCard, modifier: Modifier = Modifier) {
-    Box(modifier.width(76.dp).height(104.dp).clip(RoundedCornerShape(12.dp)).background(Brush.linearGradient(listOf(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.secondaryContainer))), contentAlignment = Alignment.Center) {
-        if(book.cover != null) {
+    val source = book.cover?.takeIf { it.isNotBlank() }
+    var loaded by remember(source) { mutableStateOf(false) }
+    Box(modifier.width(76.dp).height(104.dp).clip(RoundedCornerShape(12.dp)).semantics {
+        contentDescription = "${book.title} ${if(loaded) "封面" else "默认封面"}"
+    }, contentAlignment = Alignment.Center) {
+        DefaultBookCover(book, Modifier.matchParentSize().clearAndSetSemantics {})
+        if(source != null) {
             val reducedMotion = LocalReducedMotion.current
-            var loaded by remember(book.cover) { mutableStateOf(false) }
-            var memoryCached by remember(book.cover) { mutableStateOf(false) }
-            val coverAlpha = remember(book.cover) { Animatable(0f) }
-            LaunchedEffect(book.cover, loaded, memoryCached, reducedMotion) {
+            var memoryCached by remember(source) { mutableStateOf(false) }
+            val coverAlpha = remember(source) { Animatable(0f) }
+            LaunchedEffect(source, loaded, memoryCached, reducedMotion) {
                 if(!loaded) coverAlpha.snapTo(0f)
                 else if(reducedMotion || memoryCached) coverAlpha.snapTo(1f)
                 else coverAlpha.animateTo(1f, tween(180))
             }
             AsyncImage(
-                book.cover, "${book.title} 封面",
+                source, null,
                 Modifier.fillMaxSize().graphicsLayer { alpha = if(reducedMotion || memoryCached) 1f else coverAlpha.value },
                 contentScale = ContentScale.Crop,
                 onLoading = { loaded = false; memoryCached = false },
                 onSuccess = { memoryCached = it.result.dataSource == DataSource.MEMORY_CACHE; loaded = true },
                 onError = { loaded = false; memoryCached = false },
             )
-        }
-        else Column(Modifier.padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(Icons.Outlined.AutoStories, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
-            Spacer(Modifier.height(8.dp)); Text(book.title.take(8), fontSize = 12.sp, lineHeight = 17.sp, maxLines = 3, color = MaterialTheme.colorScheme.onPrimaryContainer)
         }
     }
 }

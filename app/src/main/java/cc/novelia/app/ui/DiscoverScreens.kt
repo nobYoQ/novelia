@@ -91,7 +91,7 @@ import kotlinx.coroutines.delay
                         }) { result, refresh ->
                             val books = remember(result.items, local.blockedBooks, local.blockedTags) { result.items.filter { visibleBook(it, local) } }
                             LazyColumn {
-                                if(books.isEmpty()) item { EmptyState("没有找到匹配的作品", "试试其他关键词，或调整筛选与屏蔽条件。", Icons.Outlined.SearchOff, "重新加载", refresh) }
+                                if(books.isEmpty()) item { EmptyState("没有找到匹配的作品", "试试其他关键词，或调整筛选与屏蔽条件。", Icons.Outlined.SearchOff, "重新加载", refresh, sticker = MidoriSticker.Curious) }
                                 items(books, key = { it.ref.key }, contentType = { "book" }) { BookRow(it, { c.book(it.ref) }, if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(160), placementSpec = tween(220), fadeOutSpec = tween(120))) }
                                 item { PageControls(page, result.pageNumber) { page = it } }
                             }

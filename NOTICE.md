@@ -7,3 +7,5 @@
 使用的第三方库及其许可证包括 AndroidX / Compose、Kotlin、kotlinx.coroutines、kotlinx.serialization、OkHttp、Coil、Markwon（Apache 2.0），Jsoup（MIT）和 ICU4J（Unicode License）。正式分发时应携带对应版本的完整许可证及必要声明。
 
 网站上的小说、封面、译文和用户内容属于相应权利人。测试夹具中的《风与书页》短文为此工程自行编写，不随正式应用作为远端内容展示。
+
+互动图标、默认封面与部分状态反馈使用用户提供的 `HoshikawaMidori-1789205072094` 贴纸素材，保留原始 WebP 图像。原文件与应用资源的映射见 [贴纸交互设计](docs/sticker-interactions.md)。贴纸权利归原作者或相应权利人所有；项目未为这些素材声明开源许可证。

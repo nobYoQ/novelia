@@ -10,6 +10,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -23,7 +24,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
-import cc.novelia.app.BuildConfig
 import cc.novelia.app.data.*
 import coil.imageLoader
 import kotlinx.coroutines.launch
@@ -69,10 +69,15 @@ import kotlinx.serialization.encodeToString
 }
 @Composable fun ProfileScreen(c: AppController) {
     val profile by c.session.profile.collectAsStateWithLifecycle(); val state by c.store.state.collectAsStateWithLifecycle(); var logout by remember { mutableStateOf(false) }
-    Screen("我的") { padding -> LazyColumn(Modifier.padding(padding), contentPadding = PaddingValues(bottom = 24.dp)) {
-        item { Card(Modifier.fillMaxWidth().padding(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+    val listState = rememberLazyListState()
+    val companionVisible by remember { derivedStateOf {
+        listState.layoutInfo.visibleItemsInfo.any { it.key == "profile-card" }
+    } }
+    Screen("我的") { padding -> LazyColumn(Modifier.padding(padding), state = listState, contentPadding = PaddingValues(bottom = 24.dp)) {
+        item(key = "profile-card") { Card(Modifier.fillMaxWidth().padding(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
             Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Icon(Icons.Outlined.AccountCircle, null, Modifier.size(48.dp)); Text(profile?.username ?: "你好，阅读者", style = MaterialTheme.typography.headlineMedium)
+                MidoriCompanion(visible = companionVisible)
+                Text(profile?.username ?: "你好，阅读者", style = MaterialTheme.typography.headlineMedium)
                 Text(if(profile == null) "在此设备阅读，也可以连接原站账号。" else "${mapOf("admin" to "管理员", "member" to "普通成员", "trusted" to "可信成员", "restricted" to "受限账号", "banned" to "被封禁账号")[profile?.role] ?: profile?.role} · 注册于 ${displayDate(profile!!.createdAt)}", style = MaterialTheme.typography.bodyMedium)
                 if(profile == null) Button(onClick = { c.go("login") }) { Text("登录 / 注册") } else TextButton(onClick = { logout = true }) { Text("退出登录") }
             }
@@ -98,7 +103,7 @@ import kotlinx.serialization.encodeToString
     val importSettings = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let { c.action("设置已导入") { val backup = withContext(Dispatchers.IO) { appJson.decodeFromString<SettingsBackup>(readDocument(c, it).second.toString(Charsets.UTF_8)) }; require(backup.version == 1 && backup.theme in listOf("system", "light", "dark") && backup.reader.fontSize in 14f..32f && backup.reader.lineHeight in 1.3f..2.6f && backup.reader.width in 300f..900f && backup.reader.engines.toSet() == setOf("sakura", "gpt", "youdao")); c.store.update { s -> s.copy(reader = backup.reader, theme = backup.theme, reducedMotion = backup.reducedMotion, blockedBooks = backup.blockedBooks, blockedTags = backup.blockedTags, blockedUsers = backup.blockedUsers, hideNovelComments = backup.hideNovelComments, wifiOnly = backup.wifiOnly) } } } }
     Screen("阅读与外观", c::back) { padding -> LazyColumn(Modifier.padding(padding)) {
         item { ChoiceRow("应用主题", listOf("跟随系统", "浅色", "深色"), listOf("system", "light", "dark").indexOf(state.theme)) { index -> c.store.update { it.copy(theme = listOf("system", "light", "dark")[index]) } } }
-        item { TogglePreference("减少动态效果", "减少页面切换、列表变化与按压动效", state.reducedMotion) { value -> c.store.update { it.copy(reducedMotion = value) } } }
+        item { TogglePreference("减少动态效果", "", state.reducedMotion) { value -> c.store.update { it.copy(reducedMotion = value) } } }
         item { MenuRow("默认阅读偏好", "调整所有小说的阅读体验", Icons.Outlined.TextFields, { reader = true }) }
         item { MenuRow("朗读通知", "允许在通知栏控制朗读", Icons.Outlined.Notifications, { if(Build.VERSION.SDK_INT >= 33) notifications.launch(android.Manifest.permission.POST_NOTIFICATIONS) else c.message("当前系统无需申请通知权限") }) }
         item { TogglePreference("仅在 Wi-Fi 下载", "新建下载任务等待非计费网络", state.wifiOnly) { value -> c.store.update { it.copy(wifiOnly = value) } } }
@@ -153,7 +158,7 @@ import kotlinx.serialization.encodeToString
 }
 @Composable fun AboutScreen(c: AppController) {
     Screen("帮助与关于", c::back) { padding -> LazyColumn(Modifier.padding(padding)) {
-        item { Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) { Icon(Icons.Outlined.AutoStories, null, Modifier.size(64.dp), tint = MaterialTheme.colorScheme.primary); Text("Novelia", style = MaterialTheme.typography.headlineLarge); Text("让每个故事，随身同行。", color = MaterialTheme.colorScheme.onSurfaceVariant); Text("Android ${BuildConfig.VERSION_NAME} · 非官方客户端", style = MaterialTheme.typography.labelMedium) } }
+        item { AboutIdentity() }
         item { MenuRow("原站使用教程", "账号规则、检索语法与资源说明", Icons.Outlined.HelpOutline, { c.go("article/64f3d63f794cbb1321145c07") }) }
         item { MenuRow("反馈与建议", "在原站社区查看和提交反馈", Icons.Outlined.Forum, { c.go("community") }) }
         item { MenuRow("访问原站", "n.novelia.cc", Icons.Outlined.OpenInNew, { c.external("https://n.novelia.cc") }) }

@@ -1,4 +1,4 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui
 
 import android.app.Activity
@@ -52,6 +52,7 @@ import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -251,7 +252,10 @@ import java.util.UUID
                                 IconButton(onClick = { chapter.prevId?.let(::openChapter) }, enabled = chapter.prevId != null && !leaving) { Icon(Icons.Outlined.SkipPrevious, "上一章") }
                                 TextButton(onClick = { toc = true }) { Icon(Icons.Outlined.FormatListBulleted, null, Modifier.size(18.dp)); Text(" 目录") }
                                 IconButton(onClick = { note = paragraphs.getOrNull((scroll.firstVisibleItemIndex - 1).coerceAtLeast(0)) }, enabled = paragraphs.isNotEmpty()) { Icon(Icons.Outlined.BookmarkAdd, "添加书签或笔记") }
-                                IconButton(onClick = { speechSheet = true }) { Icon(Icons.Outlined.VolumeUp, "朗读本章") }
+                                IconButton(onClick = { speechSheet = true }) {
+                                    if(speechStatus == ReadAloudService.SLEEP_TIMER_FINISHED) StickerAccent(MidoriSticker.Sleep, speechStatus, Modifier.size(40.dp).semantics { contentDescription = "朗读定时已结束，打开朗读设置" })
+                                    else Icon(Icons.Outlined.VolumeUp, "朗读本章")
+                                }
                                 IconButton(onClick = { chapter.nextId?.let(::openChapter) }, enabled = chapter.nextId != null && !leaving) { Icon(Icons.Outlined.SkipNext, "下一章") }
                             }
                             Text("${if(cached) "本地内容 · " else ""}$percent% · 点击正文收起工具栏", Modifier.align(Alignment.CenterHorizontally).padding(bottom = 8.dp), style = MaterialTheme.typography.labelSmall, color = foreground.copy(alpha = .65f))
@@ -263,10 +267,13 @@ import java.util.UUID
         if(toc) ModalBottomSheet(onDismissRequest = { toc = false }) {
             AsyncContent(ref.key, load = { withContext(Dispatchers.IO) { if(ref.isLocal) c.store.document(ref.id).chapters.map { TocItem(it.title, it.title, it.id) } else c.detail<WebDetail>("novel/${ref.key}").toc } }, modifier = Modifier.fillMaxHeight(.8f)) { list, _ -> TocPanel(c, ref, list, chapterId) { id -> toc = false; openChapter(id) } }
         }
-        if(speechSheet) ModalBottomSheet(onDismissRequest = { speechSheet = false }) {
-            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        if(speechSheet) ModalBottomSheet(onDismissRequest = { speechSheet = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+            Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text("系统朗读", style = MaterialTheme.typography.titleLarge)
-                Text(speechStatus.ifBlank { "从当前段落朗读至本章结束。语音由系统提供。" }, style = MaterialTheme.typography.bodyMedium)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if(speechStatus == ReadAloudService.SLEEP_TIMER_FINISHED) StickerAccent(MidoriSticker.Sleep, speechStatus, Modifier.size(64.dp))
+                    Text(speechStatus.ifBlank { "从当前段落朗读至本章结束。语音由系统提供。" }, style = MaterialTheme.typography.bodyMedium)
+                }
                 Text("${settings.speechRate}× · ${settings.speechMinutes} 分钟后停止", style = MaterialTheme.typography.labelLarge)
                 Button(onClick = {
                     val first = (scroll.firstVisibleItemIndex - 1).coerceAtLeast(0)
@@ -275,7 +282,7 @@ import java.util.UUID
                     val text = (if(japanese) chapter.paragraphs.drop(originalIndex) else paragraphs.drop(first).mapNotNull { it.parts.firstOrNull { p -> !p.secondary }?.text }).filterNot { it.startsWith("novelia-image:") || it.startsWith("<图片>") }
                     runCatching { ReadAloudService.start(context, text, chapter.title, settings) }.onFailure { c.message(it.friendlyMessage()) }
                 }, Modifier.fillMaxWidth()) { Text("从这里开始朗读") }
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     TextButton(onClick = { context.startService(Intent(context, ReadAloudService::class.java).setAction("pause")) }, enabled = speechStatus.startsWith("正在朗读")) { Text("暂停") }
                     TextButton(onClick = { context.startService(Intent(context, ReadAloudService::class.java).setAction("resume")) }, enabled = speechStatus == "朗读已暂停") { Text("继续") }
                     TextButton(onClick = { context.startService(Intent(context, ReadAloudService::class.java).setAction("stop")) }) { Text("停止") }
@@ -312,23 +319,26 @@ import java.util.UUID
     }
 }
 
-@Composable private fun ReaderIllustration(model: Any, foreground: Color, onToggleMenu: () -> Unit) {
+@Composable internal fun ReaderIllustration(model: Any, foreground: Color, onToggleMenu: () -> Unit) {
     val context = LocalContext.current
     val animate = !LocalReducedMotion.current && ValueAnimator.areAnimatorsEnabled()
     val request = remember(context, model, animate) { ImageRequest.Builder(context).data(model).crossfade(if(animate) 180 else 0).build() }
     var loading by remember(model) { mutableStateOf(true) }
     var failed by remember(model) { mutableStateOf(false) }
+    var expanded by remember(model) { mutableStateOf(false) }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         // Reserve a portrait illustration frame before decoding so incoming images cannot shift later paragraphs.
         Box(Modifier.fillMaxWidth().height((maxWidth * 1.35f).coerceIn(180.dp, 900.dp))
             .background(foreground.copy(alpha = .035f))
-            .clickable(onClickLabel = "显示或收起阅读工具栏", onClick = onToggleMenu), contentAlignment = Alignment.Center) {
+            .combinedClickable(onClickLabel = "显示或收起阅读工具栏", onClick = onToggleMenu,
+                onLongClickLabel = "放大查看插图", onLongClick = { expanded = true }), contentAlignment = Alignment.Center) {
             AsyncImage(request, "小说插图", Modifier.fillMaxSize(), contentScale = ContentScale.Fit,
                 onLoading = { loading = true; failed = false }, onSuccess = { loading = false; failed = false }, onError = { loading = false; failed = true })
             if(loading) CircularProgressIndicator(Modifier.size(28.dp), color = foreground.copy(alpha = .65f), strokeWidth = 2.dp)
             if(failed) Text("插图暂时无法加载", Modifier.padding(24.dp), style = MaterialTheme.typography.bodyMedium, color = foreground.copy(alpha = .7f))
         }
     }
+    if(expanded) IllustrationViewer(model) { expanded = false }
 }
 
 @Composable fun ReaderPreferences(value: ReaderSettings, perBook: Boolean? = null, onPerBook: (Boolean) -> Unit = {}, onChange: (ReaderSettings) -> Unit) {
@@ -363,5 +373,5 @@ import java.util.UUID
         ChoiceRow("朗读定时停止", listOf("15 分钟", "30 分钟", "60 分钟"), listOf(15, 30, 60).indexOf(value.speechMinutes)) { onChange(value.copy(speechMinutes = listOf(15, 30, 60)[it])) }
     }
 }
-@Composable fun TogglePreference(title: String, subtitle: String, value: Boolean, onChange: (Boolean) -> Unit) { ListItem(headlineContent = { Text(title) }, supportingContent = { Text(subtitle) }, trailingContent = { Switch(value, onCheckedChange = null) }, modifier = Modifier.toggleable(value = value, role = Role.Switch, onValueChange = onChange)) }
+@Composable fun TogglePreference(title: String, subtitle: String, value: Boolean, onChange: (Boolean) -> Unit) { ListItem(headlineContent = { Text(title) }, supportingContent = if(subtitle.isNotBlank()) ({ Text(subtitle) }) else null, trailingContent = { Switch(value, onCheckedChange = null) }, modifier = Modifier.toggleable(value = value, role = Role.Switch, onValueChange = onChange)) }
 @Composable private fun ReaderSlider(label: String, value: Float, range: ClosedFloatingPointRange<Float>, enabled: Boolean = true, onChange: (Float) -> Unit) { Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) { Text(label, style = MaterialTheme.typography.labelLarge); Slider(value, onChange, valueRange = range, enabled = enabled) } }
