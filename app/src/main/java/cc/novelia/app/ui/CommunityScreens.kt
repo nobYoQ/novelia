@@ -2,7 +2,8 @@
 package cc.novelia.app.ui
 
 import android.widget.TextView
-import androidx.compose.foundation.clickable
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -13,6 +14,7 @@ import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
@@ -30,52 +32,95 @@ import kotlinx.serialization.encodeToString
 
 val categories = linkedMapOf("General" to "小说交流", "Guide" to "使用指南", "Support" to "反馈建议")
 @Composable fun CommunityScreen(c: AppController) {
-    var category by rememberSaveable { mutableStateOf("General") }; var page by rememberSaveable { mutableIntStateOf(0) }; var search by rememberSaveable { mutableStateOf("") }; var saved by remember { mutableStateOf(false) }
+    var category by rememberSaveable { mutableStateOf("General") }; var page by rememberSaveable { mutableIntStateOf(0) }; var search by rememberSaveable { mutableStateOf("") }; var saved by rememberSaveable { mutableStateOf(false) }
+    val reducedMotion = LocalReducedMotion.current
     val state by c.store.state.collectAsStateWithLifecycle()
-    Screen("社区", actions = { IconButton(onClick = { saved = !saved }) { Icon(if(saved) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder, "已收藏的文章") }; IconButton(onClick = { c.requireLogin { c.go("compose") } }) { Icon(Icons.Outlined.Edit, "发布帖子") } }) { padding ->
+    Screen("社区", actions = {
+        IconToggleButton(checked = saved, onCheckedChange = { saved = it }) {
+            Crossfade(saved, animationSpec = tween(if(reducedMotion) 0 else 160), label = "savedArticles") { showingSaved ->
+                Icon(if(showingSaved) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder, "已收藏的文章")
+            }
+        }
+        IconButton(onClick = { c.requireLogin { c.go("compose") } }) { Icon(Icons.Outlined.Edit, "发布帖子") }
+    }) { padding ->
         Column(Modifier.padding(padding)) {
             PrimaryTabRow(categories.keys.indexOf(category)) { categories.forEach { (key, label) -> Tab(category == key, { category = key; page = 0; saved = false }, text = { Text(label) }) } }
             OutlinedTextField(search, { search = it }, label = { Text(if(saved) "搜索已收藏的文章" else "在本页文章中查找") }, singleLine = true, leadingIcon = { Icon(Icons.Outlined.Search, null) }, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), shape = MaterialTheme.shapes.extraLarge)
-            if(saved) ArticleList(c, Page(1, state.savedArticles.filter { it.title.contains(search, true) }), 0, {})
-            else AsyncContent(listOf(category, page), load = { c.api.get<Page<Article>>("article", mapOf("page" to "$page", "pageSize" to "20", "category" to category)) }) { result, _ -> ArticleList(c, result.copy(items = result.items.filter { it.title.contains(search, true) && it.user.username !in state.blockedUsers }), page, { page = it }) }
+            val settledSearch = rememberDebouncedQuery(search)
+            MotionContent(listOf(category, saved), Modifier.weight(1f), animateInitial = false) {
+                if(saved) {
+                    val articles = remember(state.savedArticles, settledSearch) { state.savedArticles.filter { it.title.contains(settledSearch, true) } }
+                    ArticleList(c, Page(1, articles), 0, {})
+                } else AsyncContent(listOf(category, page), load = { c.api.get<Page<Article>>("article", mapOf("page" to "$page", "pageSize" to "20", "category" to category)) }) { result, _ ->
+                    val articles = remember(result.items, settledSearch, state.blockedUsers) { result.items.filter { it.title.contains(settledSearch, true) && it.user.username !in state.blockedUsers } }
+                    ArticleList(c, result.copy(items = articles), page, { page = it })
+                }
+            }
         }
     }
 }
 @Composable private fun ArticleList(c: AppController, result: Page<Article>, page: Int, changePage: (Int) -> Unit) {
+    val reducedMotion = LocalReducedMotion.current
     LazyColumn {
         if(result.items.isEmpty()) item { EmptyState("这里暂时没有文章", "试试其他分类，或调整搜索词。", Icons.Outlined.Forum) }
-        items(result.items, key = { it.id }) { article ->
-            Column(Modifier.fillMaxWidth().clickable { c.go("article/${article.id}") }.padding(horizontal = 20.dp, vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) { if(article.pinned) Icon(Icons.Outlined.PushPin, "置顶", Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary); Text(categories[article.category].orEmpty(), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium); if(article.locked) Icon(Icons.Outlined.Lock, "已锁定", Modifier.size(14.dp)) }
-                Text(article.title, style = MaterialTheme.typography.titleMedium)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("${article.user.username} · ${displayDate(article.createAt)}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant); Text("${article.numComments} 回复", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        items(result.items, key = { it.id }, contentType = { "article" }) { article ->
+            Column(if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(160), placementSpec = tween(220), fadeOutSpec = tween(120))) {
+                Column(Modifier.fillMaxWidth().motionClickable { c.go("article/${article.id}") }.padding(horizontal = 20.dp, vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) { if(article.pinned) Icon(Icons.Outlined.PushPin, "置顶", Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary); Text(categories[article.category].orEmpty(), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium); if(article.locked) Icon(Icons.Outlined.Lock, "已锁定", Modifier.size(14.dp)) }
+                    Text(article.title, style = MaterialTheme.typography.titleMedium)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("${article.user.username} · ${displayDate(article.createAt)}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant); Text("${article.numComments} 回复", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                }
+                HorizontalDivider(Modifier.padding(horizontal = 20.dp), color = MaterialTheme.colorScheme.outlineVariant)
             }
-            HorizontalDivider(Modifier.padding(horizontal = 20.dp), color = MaterialTheme.colorScheme.outlineVariant)
         }
         item { PageControls(page, result.pageNumber, changePage) }
     }
 }
-@Composable fun MarkdownText(c: AppController, text: String, modifier: Modifier = Modifier) {
-    val context = LocalContext.current; val color = MaterialTheme.colorScheme.onSurface.toArgb(); val linkColor = MaterialTheme.colorScheme.primary.toArgb()
-    val markwon = remember(context) { Markwon.builder(context).usePlugin(TablePlugin.create(context)).usePlugin(ImagesPlugin.create()).usePlugin(object : AbstractMarkwonPlugin() { override fun configureConfiguration(builder: MarkwonConfiguration.Builder) { builder.linkResolver { _, link -> if(BookLinks.parse(link) != null) c.openLink(link) else c.external(link) } } }).build() }
-    AndroidView(factory = { TextView(it).apply { textSize = 16f; setLineSpacing(6f, 1.1f); setTextIsSelectable(true) } }, modifier = modifier.fillMaxWidth(), update = { it.setTextColor(color); it.setLinkTextColor(linkColor); markwon.setMarkdown(it, text) })
+@Composable private fun rememberMarkdownRenderer(c: AppController): Markwon {
+    val context = LocalContext.current
+    return remember(context, c) { Markwon.builder(context).usePlugin(TablePlugin.create(context)).usePlugin(ImagesPlugin.create()).usePlugin(object : AbstractMarkwonPlugin() { override fun configureConfiguration(builder: MarkwonConfiguration.Builder) { builder.linkResolver { _, link -> if(BookLinks.parse(link) != null) c.openLink(link) else c.external(link) } } }).build() }
+}
+@Composable fun MarkdownText(c: AppController, text: String, modifier: Modifier = Modifier, renderer: Markwon? = null) {
+    val color = MaterialTheme.colorScheme.onSurface.toArgb(); val linkColor = MaterialTheme.colorScheme.primary.toArgb()
+    val markwon = renderer ?: rememberMarkdownRenderer(c)
+    val rendered = remember(markwon, text) { markwon.toMarkdown(text) }
+    AndroidView(factory = { TextView(it).apply { textSize = 16f; setLineSpacing(6f, 1.1f); setTextIsSelectable(true) } }, modifier = modifier.fillMaxWidth(), update = { view ->
+        if(view.currentTextColor != color) view.setTextColor(color)
+        if(view.linkTextColors.defaultColor != linkColor) view.setLinkTextColor(linkColor)
+        if(view.tag !== rendered) {
+            markwon.setParsedMarkdown(view, rendered)
+            view.tag = rendered
+        }
+    })
 }
 @Composable fun ArticleScreen(c: AppController, id: String) {
     val profile by c.session.profile.collectAsStateWithLifecycle(); val state by c.store.state.collectAsStateWithLifecycle()
-    var tab by remember { mutableIntStateOf(0) }; var deletion by remember { mutableStateOf(false) }
+    var tab by rememberSaveable(id) { mutableIntStateOf(0) }; var deletion by remember { mutableStateOf(false) }
+    val tabState = rememberSaveableStateHolder()
+    val reducedMotion = LocalReducedMotion.current
     Screen("文章", c::back, actions = { IconButton(onClick = { c.share("https://n.novelia.cc/forum/$id") }) { Icon(Icons.Outlined.Share, "分享文章") } }) { padding ->
         AsyncContent(id, load = { c.api.get<Article>("article/$id") }, modifier = Modifier.padding(padding)) { article, _ ->
             Column {
                 PrimaryTabRow(tab) { listOf("文章内容", "讨论 ${article.numComments}").forEachIndexed { i, label -> Tab(tab == i, { tab = i }, text = { Text(label) }) } }
-                if(tab == 0) LazyColumn(contentPadding = PaddingValues(20.dp)) {
-                    item { Text(categories[article.category].orEmpty(), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary); Spacer(Modifier.height(12.dp)); Text(article.title, style = MaterialTheme.typography.headlineMedium); Spacer(Modifier.height(12.dp)); Text("${article.user.username} · ${displayDate(article.createAt)} · ${article.numViews} 次浏览", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant); Spacer(Modifier.height(24.dp)) }
-                    item { MarkdownText(c, article.content) }
-                    item { Row(Modifier.padding(top = 24.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        val saved = state.savedArticles.any { it.id == id }
-                        OutlinedButton(onClick = { c.store.update { it.copy(savedArticles = if(saved) it.savedArticles.filterNot { a -> a.id == id } else it.savedArticles + article.copy(id = id)) } }) { Text(if(saved) "取消收藏" else "收藏文章") }
-                        if(profile?.username == article.user.username) { TextButton(onClick = { c.go("compose?article=$id") }) { Text("编辑") }; TextButton(onClick = { deletion = true }) { Text("删除") } }
-                    } }
-                } else CommentsPanel(c, "article-$id", article.locked)
+                MotionContent(tab, Modifier.weight(1f), animateInitial = false) {
+                    tabState.SaveableStateProvider(tab) {
+                        if(tab == 0) LazyColumn(contentPadding = PaddingValues(20.dp)) {
+                            item { Text(categories[article.category].orEmpty(), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary); Spacer(Modifier.height(12.dp)); Text(article.title, style = MaterialTheme.typography.headlineMedium); Spacer(Modifier.height(12.dp)); Text("${article.user.username} · ${displayDate(article.createAt)} · ${article.numViews} 次浏览", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant); Spacer(Modifier.height(24.dp)) }
+                            item { MarkdownText(c, article.content) }
+                            item { Row(Modifier.padding(top = 24.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                val saved = state.savedArticles.any { it.id == id }
+                                OutlinedButton(onClick = { c.store.update { it.copy(savedArticles = if(saved) it.savedArticles.filterNot { a -> a.id == id } else it.savedArticles + article.copy(id = id)) } }) {
+                                    Crossfade(saved, animationSpec = tween(if(reducedMotion) 0 else 160), label = "articleBookmark") { isSaved ->
+                                        Icon(if(isSaved) Icons.Outlined.BookmarkAdded else Icons.Outlined.BookmarkAdd, null, Modifier.size(18.dp))
+                                    }
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(if(saved) "取消收藏" else "收藏文章")
+                                }
+                                if(profile?.username == article.user.username) { TextButton(onClick = { c.go("compose?article=$id") }) { Text("编辑") }; TextButton(onClick = { deletion = true }) { Text("删除") } }
+                            } }
+                        } else CommentsPanel(c, "article-$id", article.locked)
+                    }
+                }
             }
         }
     }
@@ -88,17 +133,22 @@ val categories = linkedMapOf("General" to "小说交流", "Guide" to "使用指�
     val key = "article:${article?.id ?: "new"}"
     val draft = remember(key) { c.store.state.value.drafts[key] }
     val saved = remember(key) { draft?.let { runCatching { appJson.decodeFromString<Map<String, String>>(it) }.getOrNull() } }
-    var title by rememberSaveable(key) { mutableStateOf(saved?.get("title") ?: article?.title.orEmpty()) }; var content by rememberSaveable(key) { mutableStateOf(saved?.get("content") ?: article?.content.orEmpty()) }; var category by rememberSaveable(key) { mutableStateOf(saved?.get("category") ?: article?.category ?: "General") }; var preview by remember { mutableStateOf(false) }; var sending by remember { mutableStateOf(false) }
+    var title by rememberSaveable(key) { mutableStateOf(saved?.get("title") ?: article?.title.orEmpty()) }; var content by rememberSaveable(key) { mutableStateOf(saved?.get("content") ?: article?.content.orEmpty()) }; var category by rememberSaveable(key) { mutableStateOf(saved?.get("category") ?: article?.category ?: "General") }; var preview by rememberSaveable(key) { mutableStateOf(false) }; var sending by remember { mutableStateOf(false) }
+    val editorState = rememberSaveableStateHolder()
     LaunchedEffect(title, content, category) { kotlinx.coroutines.delay(700); c.store.update { it.copy(drafts = it.drafts + (key to appJson.encodeToString(mapOf("title" to title, "content" to content, "category" to category)))) } }
     Screen(if(article == null) "写一篇帖子" else "编辑帖子", c::back, actions = { TextButton(onClick = { preview = !preview }) { Text(if(preview) "编辑" else "预览") } }) { padding ->
-        Column(Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            if(preview) { Text(title, style = MaterialTheme.typography.headlineMedium); MarkdownText(c, content) }
-            else {
-                OutlinedTextField(title, { if(it.length <= 80) title = it }, label = { Text("标题") }, supportingText = { Text("${title.length} / 80") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-                ChoiceRow("分类", categories.values.toList(), categories.keys.indexOf(category)) { category = categories.keys.elementAt(it) }
-                OutlinedTextField(content, { if(it.length <= 20000) content = it }, label = { Text("正文 · 支持 Markdown") }, supportingText = { Text("草稿自动保存在此设备 · ${content.length} / 20000") }, modifier = Modifier.fillMaxWidth(), minLines = 12)
+        MotionContent(preview, Modifier.padding(padding).fillMaxSize(), animateInitial = false) {
+            editorState.SaveableStateProvider(preview) {
+                Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    if(preview) { Text(title, style = MaterialTheme.typography.headlineMedium); MarkdownText(c, content) }
+                    else {
+                        OutlinedTextField(title, { if(it.length <= 80) title = it }, label = { Text("标题") }, supportingText = { Text("${title.length} / 80") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                        ChoiceRow("分类", categories.values.toList(), categories.keys.indexOf(category)) { category = categories.keys.elementAt(it) }
+                        OutlinedTextField(content, { if(it.length <= 20000) content = it }, label = { Text("正文 · 支持 Markdown") }, supportingText = { Text("草稿自动保存在此设备 · ${content.length} / 20000") }, modifier = Modifier.fillMaxWidth(), minLines = 12)
+                    }
+                    Button(onClick = { c.requireLogin { c.action { sending = true; try { val body = mapOf("title" to title.trim(), "content" to content.trim(), "category" to category); val result = if(article == null) c.api.post("article", body) else c.api.put("article/${article.id}", body); c.store.update { it.copy(drafts = it.drafts - key) }; c.back(); c.go("article/${article?.id ?: result.trim().trim('"')}") } finally { sending = false } } } }, enabled = !sending && title.trim().length in 2..80 && content.trim().length in 2..20000, modifier = Modifier.fillMaxWidth()) { Text(if(sending) "正在提交…" else if(article == null) "发布到社区" else "保存修改") }
+                }
             }
-            Button(onClick = { c.requireLogin { c.action { sending = true; try { val body = mapOf("title" to title.trim(), "content" to content.trim(), "category" to category); val result = if(article == null) c.api.post("article", body) else c.api.put("article/${article.id}", body); c.store.update { it.copy(drafts = it.drafts - key) }; c.back(); c.go("article/${article?.id ?: result.trim().trim('"')}") } finally { sending = false } } } }, enabled = !sending && title.trim().length in 2..80 && content.trim().length in 2..20000, modifier = Modifier.fillMaxWidth()) { Text(if(sending) "正在提交…" else if(article == null) "发布到社区" else "保存修改") }
         }
     }
 }
@@ -106,19 +156,25 @@ val categories = linkedMapOf("General" to "小说交流", "Guide" to "使用指�
     var page by rememberSaveable(site, parent) { mutableIntStateOf(0) }; var version by remember { mutableIntStateOf(0) }; var text by rememberSaveable(site, parent) { mutableStateOf(c.store.state.value.drafts["comment:$site:$parent"].orEmpty()) }; var reply by remember { mutableStateOf<Comment?>(null) }; var sending by remember { mutableStateOf(false) }; var deleting by remember { mutableStateOf<Comment?>(null) }
     val profile by c.session.profile.collectAsStateWithLifecycle()
     val preferences by c.store.state.collectAsStateWithLifecycle()
+    val reducedMotion = LocalReducedMotion.current
     if(!site.startsWith("article-") && preferences.hideNovelComments) { EmptyState("小说评论已隐藏", "可以在阅读与外观设置中重新开启。", Icons.Outlined.CommentsDisabled); return }
+    val markdownRenderer = rememberMarkdownRenderer(c)
     Column(Modifier.fillMaxSize()) {
-        AsyncContent(listOf(site, parent, page, version), load = { c.api.get<Page<Comment>>("comment", buildMap { put("site", site); put("page", "$page"); put("pageSize", "20"); parent?.let { put("parentId", it) } }) }, modifier = Modifier.weight(1f)) { result, _ ->
+        AsyncContent(listOf(site, parent, page, profile?.username), refreshKey = version, load = { c.api.get<Page<Comment>>("comment", buildMap { put("site", site); put("page", "$page"); put("pageSize", "20"); parent?.let { put("parentId", it) } }) }, modifier = Modifier.weight(1f)) { result, _ ->
+            val comments = remember(result.items, preferences.blockedUsers) { result.items.filter { it.user.username !in preferences.blockedUsers } }
             LazyColumn(contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)) {
-                if(result.items.isEmpty()) item { EmptyState("还没有讨论", "读完之后，来分享你的感想吧。", Icons.Outlined.ChatBubbleOutline) }
-                items(result.items.filter { it.user.username !in preferences.blockedUsers }, key = { it.id }) { comment ->
-                    Column(Modifier.padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text(comment.user.username, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary); Text(displayDate(comment.createAt), style = MaterialTheme.typography.labelSmall) }
-                        if(comment.hidden) Text("这条评论已被隐藏", style = MaterialTheme.typography.bodyMedium) else MarkdownText(c, comment.content)
-                        Row { if(parent == null) TextButton(onClick = { reply = comment }) { Text(if(comment.numReplies > 0) "${comment.numReplies} 条回复 · 查看/回复" else if(locked) "查看回复" else "回复") }; if(comment.user.username == profile?.username) TextButton(onClick = { deleting = comment }) { Text("删除") } else TextButton(onClick = { c.store.update { it.copy(blockedUsers = it.blockedUsers + comment.user.username) } }) { Text("屏蔽用户") } }
-                        comment.replies.filter { it.user.username !in preferences.blockedUsers }.take(2).forEach { child -> Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.medium) { Text("${child.user.username}：${if(child.hidden) "评论已隐藏" else child.content}", Modifier.padding(12.dp), style = MaterialTheme.typography.bodyMedium) } }
+                if(comments.isEmpty()) item { EmptyState("还没有讨论", "读完之后，来分享你的感想吧。", Icons.Outlined.ChatBubbleOutline) }
+                items(comments, key = { it.id }, contentType = { "comment" }) { comment ->
+                    Column(if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(160), placementSpec = tween(220), fadeOutSpec = tween(120))) {
+                        Column(Modifier.padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text(comment.user.username, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary); Text(displayDate(comment.createAt), style = MaterialTheme.typography.labelSmall) }
+                            if(comment.hidden) Text("这条评论已被隐藏", style = MaterialTheme.typography.bodyMedium) else MarkdownText(c, comment.content, renderer = markdownRenderer)
+                            Row { if(parent == null) TextButton(onClick = { reply = comment }) { Text(if(comment.numReplies > 0) "${comment.numReplies} 条回复 · 查看/回复" else if(locked) "查看回复" else "回复") }; if(comment.user.username == profile?.username) TextButton(onClick = { deleting = comment }) { Text("删除") } else TextButton(onClick = { c.store.update { it.copy(blockedUsers = it.blockedUsers + comment.user.username) } }) { Text("屏蔽用户") } }
+                            val replies = remember(comment.replies, preferences.blockedUsers) { comment.replies.asSequence().filter { it.user.username !in preferences.blockedUsers }.take(2).toList() }
+                            replies.forEach { child -> key(child.id) { Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.medium) { Text("${child.user.username}：${if(child.hidden) "评论已隐藏" else child.content}", Modifier.padding(12.dp), style = MaterialTheme.typography.bodyMedium) } } }
+                        }
+                        HorizontalDivider()
                     }
-                    HorizontalDivider()
                 }
                 item { PageControls(page, result.pageNumber) { page = it } }
             }

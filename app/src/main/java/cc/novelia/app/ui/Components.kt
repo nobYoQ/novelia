@@ -2,10 +2,13 @@
 package cc.novelia.app.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.*
@@ -15,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -23,7 +27,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cc.novelia.app.data.*
 import coil.compose.AsyncImage
+import coil.decode.DataSource
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -32,40 +40,99 @@ import java.time.format.DateTimeFormatter
     Scaffold(topBar = { TopAppBar(title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) }, navigationIcon = { if(back != null) IconButton(onClick = back) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "返回") } }, actions = actions) }, content = content)
 }
 @Composable fun EmptyState(title: String, message: String, icon: ImageVector = Icons.Outlined.AutoStories, action: String? = null, onAction: () -> Unit = {}) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 40.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = RoundedCornerShape(28.dp), modifier = Modifier.size(88.dp)) { Box(contentAlignment = Alignment.Center) { Icon(icon, null, Modifier.size(36.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer) } }
-        Text(title, style = MaterialTheme.typography.titleLarge)
-        Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        if(action != null) FilledTonalButton(onClick = onAction) { Text(action) }
+    MotionContent(Unit, Modifier.fillMaxWidth()) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 40.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = RoundedCornerShape(28.dp), modifier = Modifier.size(88.dp)) { Box(contentAlignment = Alignment.Center) { Icon(icon, null, Modifier.size(36.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer) } }
+            Text(title, style = MaterialTheme.typography.titleLarge)
+            Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if(action != null) FilledTonalButton(onClick = onAction) { Text(action) }
+        }
     }
 }
-@Composable fun <T> AsyncContent(key: Any?, load: suspend () -> T, modifier: Modifier = Modifier, content: @Composable (T, () -> Unit) -> Unit) {
+val LocalReducedMotion = staticCompositionLocalOf { false }
+
+@Composable fun <T> AsyncContent(key: Any?, load: suspend () -> T, modifier: Modifier = Modifier, refreshKey: Any? = Unit, content: @Composable (T, () -> Unit) -> Unit) {
     var refresh by remember(key) { mutableIntStateOf(0) }
-    val result by produceState<Result<T>?>(null, key, refresh) {
-        value = null
-        value = try { Result.success(load()) } catch(e: CancellationException) { throw e } catch(e: Exception) { Result.failure(e) }
+    var result by remember(key) { mutableStateOf<Result<T>?>(null) }
+    var loading by remember(key) { mutableStateOf(true) }
+    var refreshError by remember(key) { mutableStateOf<Exception?>(null) }
+    val currentLoad by rememberUpdatedState(load)
+    LaunchedEffect(key, refreshKey, refresh) {
+        loading = true
+        refreshError = null
+        try {
+            val loaded = currentLoad()
+            currentCoroutineContext().ensureActive()
+            result = Result.success(loaded)
+        } catch(e: CancellationException) {
+            throw e
+        } catch(e: Exception) {
+            currentCoroutineContext().ensureActive()
+            if(result?.isSuccess == true) refreshError = e else result = Result.failure(e)
+        }
+        loading = false
     }
+    val retry: () -> Unit = { if(!loading) refresh++ }
     Box(modifier.fillMaxSize()) {
         val current = result
         when {
             current == null -> Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) { CircularProgressIndicator(); Text("正在加载…", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            current.isFailure -> EmptyState("暂时无法加载", current.exceptionOrNull().friendlyMessage(), Icons.Outlined.CloudOff, "重试", { refresh++ })
-            else -> content(current.getOrThrow()) { refresh++ }
+            current.isFailure -> if(loading) CircularProgressIndicator(Modifier.align(Alignment.Center)) else EmptyState("暂时无法加载", current.exceptionOrNull().friendlyMessage(), Icons.Outlined.CloudOff, "重试", retry)
+            else -> {
+                // Keep the same composition during refresh so list positions and editor state survive.
+                MotionContent(key, Modifier.fillMaxSize()) {
+                    content(current.getOrThrow(), retry)
+                }
+                if(loading) LinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter))
+                refreshError?.let { error ->
+                    MotionContent(error, Modifier.align(Alignment.BottomCenter).padding(12.dp)) {
+                        Snackbar(action = { TextButton(onClick = retry) { Text("重试") } }) {
+                            Text("刷新未完成：${error.friendlyMessage()}")
+                        }
+                    }
+                }
+            }
         }
     }
+}
+
+@Composable fun rememberDebouncedQuery(query: String): String {
+    val settled by produceState(query, query) {
+        if(query.isNotBlank()) delay(180)
+        value = query
+    }
+    return settled
 }
 fun Throwable?.friendlyMessage(): String = when(this) { is ApiException -> message; is java.net.UnknownHostException -> "网络不可用，请检查连接。已缓存的章节仍可在书架中阅读。"; is java.net.SocketTimeoutException -> "连接超时，请稍后重试"; is IllegalArgumentException -> message?.take(200) ?: "输入内容或文件格式不符合要求"; else -> "操作未完成，请检查网络或文件内容后重试" }
 @Composable fun BookCover(book: BookCard, modifier: Modifier = Modifier) {
     Box(modifier.width(76.dp).height(104.dp).clip(RoundedCornerShape(12.dp)).background(Brush.linearGradient(listOf(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.secondaryContainer))), contentAlignment = Alignment.Center) {
-        if(book.cover != null) AsyncImage(book.cover, "${book.title} 封面", Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        if(book.cover != null) {
+            val reducedMotion = LocalReducedMotion.current
+            var loaded by remember(book.cover) { mutableStateOf(false) }
+            var memoryCached by remember(book.cover) { mutableStateOf(false) }
+            val coverAlpha = remember(book.cover) { Animatable(0f) }
+            LaunchedEffect(book.cover, loaded, memoryCached, reducedMotion) {
+                if(!loaded) coverAlpha.snapTo(0f)
+                else if(reducedMotion || memoryCached) coverAlpha.snapTo(1f)
+                else coverAlpha.animateTo(1f, tween(180))
+            }
+            AsyncImage(
+                book.cover, "${book.title} 封面",
+                Modifier.fillMaxSize().graphicsLayer { alpha = if(reducedMotion || memoryCached) 1f else coverAlpha.value },
+                contentScale = ContentScale.Crop,
+                onLoading = { loaded = false; memoryCached = false },
+                onSuccess = { memoryCached = it.result.dataSource == DataSource.MEMORY_CACHE; loaded = true },
+                onError = { loaded = false; memoryCached = false },
+            )
+        }
         else Column(Modifier.padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(Icons.Outlined.AutoStories, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
             Spacer(Modifier.height(8.dp)); Text(book.title.take(8), fontSize = 12.sp, lineHeight = 17.sp, maxLines = 3, color = MaterialTheme.colorScheme.onPrimaryContainer)
         }
     }
 }
-@Composable fun BookRow(book: BookCard, onClick: () -> Unit, trailing: @Composable (() -> Unit)? = null) {
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+@Composable fun BookRow(book: BookCard, onClick: () -> Unit, modifier: Modifier = Modifier, trailing: @Composable (() -> Unit)? = null) {
+    Row(modifier.fillMaxWidth().motionClickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
         BookCover(book)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(book.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -83,13 +150,35 @@ fun Throwable?.friendlyMessage(): String = when(this) { is ApiException -> messa
     }
 }
 @Composable fun ChoiceRow(label: String, options: List<String>, selected: Int, onSelect: (Int) -> Unit) {
+    val reducedMotion = LocalReducedMotion.current
     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
         Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { options.forEachIndexed { i, title -> FilterChip(selected == i, onClick = { onSelect(i) }, label = { Text(title) }) } }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            options.forEachIndexed { i, title ->
+                key(i, title) {
+                    val interactionSource = remember { MutableInteractionSource() }
+                    val checked = selected == i
+                    val checkProgress = animateFloatAsState(if(checked) 1f else 0f, tween(if(reducedMotion) 0 else 160), label = "choice check")
+                    FilterChip(
+                        checked, onClick = { onSelect(i) }, label = { Text(title) },
+                        modifier = Modifier.pressFeedback(interactionSource), interactionSource = interactionSource,
+                        leadingIcon = {
+                            // Reserve the slot so selecting a chip cannot move its neighbours.
+                            Icon(Icons.Outlined.Check, null, Modifier.size(18.dp).graphicsLayer {
+                                val progress = if(reducedMotion) if(checked) 1f else 0f else checkProgress.value
+                                alpha = progress
+                                scaleX = .7f + .3f * progress
+                                scaleY = scaleX
+                            })
+                        },
+                    )
+                }
+            }
+        }
     }
 }
 @Composable fun MenuRow(title: String, description: String, icon: ImageVector, onClick: () -> Unit, trailing: @Composable (() -> Unit)? = null) {
-    ListItem(headlineContent = { Text(title) }, supportingContent = { if(description.isNotEmpty()) Text(description) }, leadingContent = { Icon(icon, null, tint = MaterialTheme.colorScheme.primary) }, trailingContent = trailing, modifier = Modifier.clickable(onClick = onClick).heightIn(min = 64.dp))
+    ListItem(headlineContent = { Text(title) }, supportingContent = { if(description.isNotEmpty()) Text(description) }, leadingContent = { Icon(icon, null, tint = MaterialTheme.colorScheme.primary) }, trailingContent = trailing, modifier = Modifier.motionClickable(onClick = onClick).heightIn(min = 64.dp))
 }
 @Composable fun TextPrompt(title: String, label: String, initial: String = "", onDismiss: () -> Unit, onSave: (String) -> Unit) {
     var text by remember { mutableStateOf(initial) }
@@ -98,4 +187,5 @@ fun Throwable?.friendlyMessage(): String = when(this) { is ApiException -> messa
 @Composable fun ConfirmDialog(title: String, message: String, onDismiss: () -> Unit, onConfirm: () -> Unit) {
     AlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = { Text(message) }, confirmButton = { TextButton(onClick = { onConfirm(); onDismiss() }) { Text("确认") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } })
 }
-fun displayDate(seconds: Long): String = runCatching { DateTimeFormatter.ofPattern("yyyy.MM.dd").format(Instant.ofEpochSecond(seconds).atZone(ZoneId.systemDefault())) }.getOrDefault("")
+private val dateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy.MM.dd")
+fun displayDate(seconds: Long): String = runCatching { dateFormatter.format(Instant.ofEpochSecond(seconds).atZone(ZoneId.systemDefault())) }.getOrDefault("")

@@ -40,6 +40,10 @@ class Session(context: Context) {
         val payload = appJson.parseToJsonElement(Base64.decode(value.split('.')[1], Base64.URL_SAFE or Base64.NO_WRAP).toString(Charsets.UTF_8)).jsonObject
         return Profile(payload.getValue("sub").jsonPrimitive.content, payload.getValue("role").jsonPrimitive.content, payload.getValue("crat").jsonPrimitive.long, payload.getValue("exp").jsonPrimitive.long)
     }
+    @Synchronized fun refreshIfCurrent(previousToken: String?): Boolean {
+        if (token != previousToken) return token != null
+        return refreshBlocking()
+    }
     @Synchronized fun refreshBlocking(): Boolean {
         val cookie = CookieManager.getInstance().getCookie(AUTH_URL) ?: run { if(mutable.value?.expiresAt?.let { it < System.currentTimeMillis() / 1000 } == true) clear(); return false }
         val request = Request.Builder().url("$AUTH_URL/api/v1/auth/refresh?app=n").header("Cookie", cookie).header("Origin", "https://n.novelia.cc").post(ByteArray(0).toRequestBody()).build()

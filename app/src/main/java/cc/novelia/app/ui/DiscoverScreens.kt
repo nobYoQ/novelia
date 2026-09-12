@@ -1,6 +1,8 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,6 +24,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.*
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 
 @Composable fun DiscoverScreen(c: AppController, initialQuery: String) {
     var query by rememberSaveable(initialQuery) { mutableStateOf(initialQuery) }
@@ -31,6 +34,7 @@ import kotlinx.coroutines.coroutineScope
     var filterOpen by remember { mutableStateOf(false) }
     var advanced by remember { mutableStateOf(false) }
     var source by rememberSaveable { mutableStateOf("") }; var type by rememberSaveable { mutableIntStateOf(0) }; var translate by rememberSaveable { mutableIntStateOf(0) }; var sort by rememberSaveable { mutableIntStateOf(0) }; var level by rememberSaveable { mutableIntStateOf(0) }
+    val reducedMotion = LocalReducedMotion.current
     val local by c.store.state.collectAsStateWithLifecycle(); val profile by c.session.profile.collectAsStateWithLifecycle()
     fun search() {
         c.store.rememberSearch(query); page = 0
@@ -40,45 +44,58 @@ import kotlinx.coroutines.coroutineScope
         Column(Modifier.padding(padding)) {
             OutlinedTextField(query, { query = it }, label = { Text("书名、作者或书源链接") }, leadingIcon = { Icon(Icons.Outlined.Search, null) }, trailingIcon = { IconButton(onClick = ::search) { Icon(Icons.Outlined.ArrowForward, "搜索") } }, singleLine = true, keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { search() }), modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp), shape = MaterialTheme.shapes.extraLarge)
             PrimaryTabRow(category) { listOf("为你发现", "网络小说", "文库小说").forEachIndexed { i, label -> Tab(category == i, onClick = { category = i; page = 0 }, text = { Text(label) }) } }
-            if(category == 0) {
-                AsyncContent("recommend", load = { coroutineScope { val web = async { c.api.webList(0, sort = 1) }; val wenku = async { c.api.wenkuList(0) }; web.await().items.map { it.card() } to wenku.await().items.map { it.card() } } }) { (web, wenku), refresh ->
-                    LazyColumn(contentPadding = PaddingValues(bottom = 20.dp)) {
-                        item {
-                            Card(Modifier.fillMaxWidth().padding(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
-                                Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    Text("在故事里，\n遇见另一个世界。", style = MaterialTheme.typography.headlineLarge)
-                                    Text("浏览六大书源，随时继续你的阅读。", style = MaterialTheme.typography.bodyMedium)
-                                    FilledTonalButton(onClick = { c.go("rank") }) { Icon(Icons.Outlined.Leaderboard, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("看看排行榜") }
+            MotionContent(category, Modifier.weight(1f), animateInitial = false) {
+                Column(Modifier.fillMaxSize()) {
+                    if(category == 0) {
+                        AsyncContent(listOf("recommend", profile?.username), load = { coroutineScope { val web = async { c.api.webList(0, sort = 1) }; val wenku = async { c.api.wenkuList(0) }; web.await().items.map { it.card() } to wenku.await().items.map { it.card() } } }) { (web, wenku), refresh ->
+                            val visibleWeb = remember(web, local.blockedBooks, local.blockedTags) { web.asSequence().filter { visibleBook(it, local) }.take(8).toList() }
+                            val visibleWenku = remember(wenku, local.blockedBooks, local.blockedTags) { wenku.asSequence().filter { visibleBook(it, local) }.take(6).toList() }
+                            LazyColumn(contentPadding = PaddingValues(bottom = 20.dp)) {
+                                item(key = "rank-hero", contentType = "hero") {
+                                    Card(Modifier.fillMaxWidth().padding(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+                                        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                            Text("热门小说排行榜", style = MaterialTheme.typography.headlineLarge)
+                                            Text("查看各书源榜单，快速挑选想读的小说。", style = MaterialTheme.typography.bodyMedium)
+                                            FilledTonalButton(onClick = { c.go("rank") }) { Icon(Icons.Outlined.Leaderboard, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("看看排行榜") }
+                                        }
+                                    }
                                 }
+                                if(local.recentSearches.isNotEmpty()) item(key = "recent-searches", contentType = "searches") {
+                                    Column(if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(160), placementSpec = tween(220), fadeOutSpec = tween(120))) {
+                                        SectionTitle("最近搜索", "清空") { c.store.update { it.copy(recentSearches = emptyList()) } }
+                                        Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { local.recentSearches.take(8).forEach { value -> AssistChip(onClick = { query = value; search() }, label = { Text(value.take(20)) }) } }
+                                    }
+                                }
+                                if(local.savedSearches.isNotEmpty()) item(key = "saved-searches", contentType = "searches") { SectionTitle("保存的搜索"); Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { local.savedSearches.forEach { value -> InputChip(true, onClick = { query = value; search() }, label = { Text(value.take(20)) }, trailingIcon = { IconButton(onClick = { c.store.update { it.copy(savedSearches = it.savedSearches - value) } }, modifier = Modifier.size(48.dp)) { Icon(Icons.Outlined.Close, "删除搜索", Modifier.size(16.dp)) } }) } } }
+                                item(key = "web-heading", contentType = "heading") { SectionTitle("热门网络小说", "更多") { category = 1; sort = 1 } }
+                                items(visibleWeb, key = { "web-${it.ref.key}" }, contentType = { "book" }) { BookRow(it, { c.book(it.ref) }, if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(160), placementSpec = tween(220), fadeOutSpec = tween(120))) }
+                                item(key = "wenku-heading", contentType = "heading") { SectionTitle("文库新近更新", "更多") { category = 2 } }
+                                items(visibleWenku, key = { "wenku-${it.ref.key}" }, contentType = { "book" }) { BookRow(it, { c.book(it.ref) }, if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(160), placementSpec = tween(220), fadeOutSpec = tween(120))) }
+                                item(key = "refresh", contentType = "controls") { TextButton(onClick = refresh, Modifier.fillMaxWidth()) { Text("刷新推荐") } }
                             }
                         }
-                        if(local.recentSearches.isNotEmpty()) item {
-                            SectionTitle("最近搜索", "清空") { c.store.update { it.copy(recentSearches = emptyList()) } }
-                            Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { local.recentSearches.take(8).forEach { value -> AssistChip(onClick = { query = value; search() }, label = { Text(value.take(20)) }) } }
+                    } else {
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(if(submitted.isBlank()) "浏览全部" else "搜索：$submitted", Modifier.weight(1f), maxLines = 1, style = MaterialTheme.typography.labelLarge)
+                            IconButton(onClick = { if(submitted.isNotBlank()) { c.store.update { it.copy(savedSearches = (it.savedSearches + submitted).distinct()) }; c.message("已保存搜索条件") } }, enabled = submitted.isNotBlank()) {
+                                Crossfade(submitted.isNotBlank() && submitted in local.savedSearches, animationSpec = tween(if(reducedMotion) 0 else 160), label = "savedSearch") { isSaved ->
+                                    Icon(if(isSaved) Icons.Outlined.BookmarkAdded else Icons.Outlined.BookmarkAdd, if(isSaved) "搜索已保存" else "保存搜索")
+                                }
+                            }
+                            TextButton(onClick = { filterOpen = true }) { Icon(Icons.Outlined.Tune, null, Modifier.size(18.dp)); Text(" 筛选") }
                         }
-                        if(local.savedSearches.isNotEmpty()) item { SectionTitle("保存的搜索"); Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { local.savedSearches.forEach { value -> InputChip(true, onClick = { query = value; search() }, label = { Text(value.take(20)) }, trailingIcon = { IconButton(onClick = { c.store.update { it.copy(savedSearches = it.savedSearches - value) } }, modifier = Modifier.size(24.dp)) { Icon(Icons.Outlined.Close, "删除搜索", Modifier.size(16.dp)) } }) } } }
-                        item { SectionTitle("热门网络小说", "更多") { category = 1; sort = 1 } }
-                        items(web.filter { visibleBook(it, local) }.take(8), key = { "web-${it.ref.key}" }) { BookRow(it, { c.book(it.ref) }) }
-                        item { SectionTitle("文库新近更新", "更多") { category = 2 } }
-                        items(wenku.filter { visibleBook(it, local) }.take(6), key = { "wenku-${it.ref.key}" }) { BookRow(it, { c.book(it.ref) }) }
-                        item { TextButton(onClick = refresh, Modifier.fillMaxWidth()) { Text("刷新推荐") } }
-                    }
-                }
-            } else {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(if(submitted.isBlank()) "浏览全部" else "搜索：$submitted", Modifier.weight(1f), maxLines = 1, style = MaterialTheme.typography.labelLarge)
-                    IconButton(onClick = { if(submitted.isNotBlank()) { c.store.update { it.copy(savedSearches = (it.savedSearches + submitted).distinct()) }; c.message("已保存搜索条件") } }, enabled = submitted.isNotBlank()) { Icon(Icons.Outlined.BookmarkAdd, "保存搜索") }
-                    TextButton(onClick = { filterOpen = true }) { Icon(Icons.Outlined.Tune, null, Modifier.size(18.dp)); Text(" 筛选") }
-                }
-                AsyncContent(listOf(category, page, submitted, source, type, translate, sort, level), load = {
-                    if(category == 1) c.api.webList(page, submitted, source, type, if(profile?.canEdit == true) level else 1, translate, sort).let { Page(it.pageNumber, it.items.map(WebOutline::card)) }
-                    else c.api.wenkuList(page, submitted, level).let { Page(it.pageNumber, it.items.map(WenkuOutline::card)) }
-                }) { result, refresh ->
-                    val books = result.items.filter { visibleBook(it, local) }
-                    LazyColumn {
-                        if(books.isEmpty()) item { EmptyState("没有找到匹配的作品", "试试其他关键词，或调整筛选与屏蔽条件。", Icons.Outlined.SearchOff, "重新加载", refresh) }
-                        items(books, key = { it.ref.key }) { BookRow(it, { c.book(it.ref) }) }
-                        item { PageControls(page, result.pageNumber) { page = it } }
+                        AsyncContent(listOf(category, page, submitted, source, type, translate, sort, level, profile?.username, profile?.canEdit), load = {
+                            if(filterOpen) delay(180)
+                            if(category == 1) c.api.webList(page, submitted, source, type, if(profile?.canEdit == true) level else 1, translate, sort).let { Page(it.pageNumber, it.items.map(WebOutline::card)) }
+                            else c.api.wenkuList(page, submitted, level).let { Page(it.pageNumber, it.items.map(WenkuOutline::card)) }
+                        }) { result, refresh ->
+                            val books = remember(result.items, local.blockedBooks, local.blockedTags) { result.items.filter { visibleBook(it, local) } }
+                            LazyColumn {
+                                if(books.isEmpty()) item { EmptyState("没有找到匹配的作品", "试试其他关键词，或调整筛选与屏蔽条件。", Icons.Outlined.SearchOff, "重新加载", refresh) }
+                                items(books, key = { it.ref.key }, contentType = { "book" }) { BookRow(it, { c.book(it.ref) }, if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(160), placementSpec = tween(220), fadeOutSpec = tween(120))) }
+                                item { PageControls(page, result.pageNumber) { page = it } }
+                            }
+                        }
                     }
                 }
             }
@@ -88,8 +105,9 @@ import kotlinx.coroutines.coroutineScope
         Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
             Text("筛选作品", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.titleLarge)
             if(category == 1) {
+                val selectedSources = remember(source) { source.split(',').filter(String::isNotEmpty).toSet() }
                 Text("书源（可多选）", Modifier.padding(start = 20.dp, top = 16.dp), style = MaterialTheme.typography.labelLarge)
-                FlowRow(Modifier.padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { providers.forEach { (id, title) -> FilterChip(id in source.split(','), onClick = { source = source.split(',').filter(String::isNotEmpty).toMutableSet().apply { if(!add(id)) remove(id) }.joinToString(","); page = 0 }, label = { Text(title) }) } }
+                FlowRow(Modifier.padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { providers.forEach { (id, title) -> FilterChip(id in selectedSources, onClick = { source = selectedSources.toMutableSet().apply { if(!add(id)) remove(id) }.joinToString(","); page = 0 }, label = { Text(title) }) } }
                 ChoiceRow("连载状态", listOf("全部", "连载中", "已完结", "短篇"), type) { type = it; page = 0 }
                 ChoiceRow("已有译文", listOf("全部", "GPT", "Sakura"), translate) { translate = it; page = 0 }
                 ChoiceRow("排序", listOf("更新", "点击", "相关"), sort) { sort = it; page = 0 }
@@ -125,7 +143,7 @@ fun visibleBook(book: BookCard, state: LibraryState) = book.ref.key !in state.bl
 @Composable fun PageControls(page: Int, count: Int, onChange: (Int) -> Unit) {
     Row(Modifier.fillMaxWidth().padding(20.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         OutlinedButton(onClick = { onChange(page - 1) }, enabled = page > 0) { Text("上一页") }
-        Text("${page + 1} / ${count.coerceAtLeast(1)}", style = MaterialTheme.typography.labelLarge)
+        MotionContent(page, animateInitial = false) { Text("${page + 1} / ${count.coerceAtLeast(1)}", style = MaterialTheme.typography.labelLarge) }
         OutlinedButton(onClick = { onChange(page + 1) }, enabled = page + 1 < count) { Text("下一页") }
     }
 }
@@ -142,9 +160,10 @@ private val syosetuGenres = listOf("恋爱：异世界", "恋爱：现实世界"
     Screen("排行榜", c::back, actions = { IconButton(onClick = { filters = true }) { Icon(Icons.Outlined.Tune, "榜单条件") } }) { padding ->
         Column(Modifier.padding(padding)) {
             ChoiceRow("平台", listOf("成为小说家吧", "Kakuyomu"), source) { source = it; range = 0; genre = 0; status = 0; page = 0 }
-            Text("${params["type"] ?: genres[genre]} · ${ranges[range]} · ${states[status]}", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
+            MotionContent(listOf(source, kind, genre, range, status), animateInitial = false) { Text("${params["type"] ?: genres[genre]} · ${ranges[range]} · ${states[status]}", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge) }
             AsyncContent(listOf(provider, params), load = { c.api.get<Page<WebOutline>>("novel/rank/$provider", params) }) { result, _ ->
-                LazyColumn { if(result.items.isEmpty()) item { EmptyState("这个榜单暂时没有作品", "可以切换周期或流派；榜单数据由原站获取。") }; items(result.items, key = { it.novelId }) { BookRow(it.card(), { c.book(it.card().ref) }) }; item { PageControls(page, result.pageNumber) { page = it } } }
+                val cards = remember(result.items) { result.items.map(WebOutline::card) }
+                LazyColumn { if(cards.isEmpty()) item { EmptyState("这个榜单暂时没有作品", "可以切换周期或流派；榜单数据由原站获取。") }; items(cards, key = { it.ref.key }, contentType = { "book" }) { book -> BookRow(book, { c.book(book.ref) }) }; item { PageControls(page, result.pageNumber) { page = it } } }
             }
         }
     }

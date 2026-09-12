@@ -5,12 +5,24 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalContext
 import androidx.core.view.WindowCompat
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+
+internal fun android.content.Context.activityOrNull(): android.app.Activity? {
+    var current = this
+    while (current is android.content.ContextWrapper) {
+        if (current is android.app.Activity) return current
+        val base = current.baseContext
+        if (base === current) return null
+        current = base
+    }
+    return current as? android.app.Activity
+}
 
 private val LightColors = lightColorScheme(
     primary = Color(0xFF006C4C), onPrimary = Color.White, primaryContainer = Color(0xFFADF2CF), onPrimaryContainer = Color(0xFF002115),
@@ -31,7 +43,8 @@ private val DarkColors = darkColorScheme(
 @Composable fun NoveliaTheme(theme: String, content: @Composable () -> Unit) {
     val dark = theme == "dark" || (theme == "system" && isSystemInDarkTheme())
     val view = LocalView.current
-    SideEffect { (view.context as? android.app.Activity)?.let { activity -> WindowCompat.getInsetsController(activity.window, view).apply { isAppearanceLightStatusBars = !dark; isAppearanceLightNavigationBars = !dark } } }
+    val activity = LocalContext.current.activityOrNull()
+    SideEffect { activity?.let { WindowCompat.getInsetsController(it.window, view).apply { isAppearanceLightStatusBars = !dark; isAppearanceLightNavigationBars = !dark } } }
     MaterialTheme(colorScheme = if(dark) DarkColors else LightColors, typography = Typography(
         headlineLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold, fontSize = 32.sp, lineHeight = 40.sp),
         titleLarge = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 22.sp, lineHeight = 30.sp),

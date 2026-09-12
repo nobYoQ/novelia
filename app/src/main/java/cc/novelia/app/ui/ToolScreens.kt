@@ -18,28 +18,40 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.*
 import cc.novelia.app.files.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
 
 @Composable fun ToolsScreen(c: AppController) {
     var tool by remember { mutableIntStateOf(0) }; var input by remember { mutableStateOf("") }; var output by remember { mutableStateOf("") }; var resultBytes by remember { mutableStateOf<ByteArray?>(null) }; var fileName by remember { mutableStateOf("result.txt") }; var busy by remember { mutableStateOf(false) }; var picked by remember { mutableStateOf<Pair<String, ByteArray>?>(null) }; var error by remember { mutableStateOf<String?>(null) }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let { c.action { picked = withContext(Dispatchers.IO) { readDocument(c, it) }; if(tool >= 2) input = DocumentTools.decodeText(picked!!.second) } } }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let { c.action { val file = withContext(Dispatchers.IO) { readDocument(c, it) }; picked = file; if(tool >= 2) input = withContext(Dispatchers.Default) { DocumentTools.decodeText(file.second) } } } }
     val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri -> val bytes = resultBytes; if(uri != null && bytes != null) c.action("结果已导出") { withContext(Dispatchers.IO) { c.app.contentResolver.openOutputStream(uri)?.use { it.write(bytes) } ?: error("无法写入文件") } } }
     Screen("文件工具", c::back) { padding -> Column(Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
         MenuRow("个人术语表", "保存在此设备，可导入与导出 JSON", Icons.Outlined.Translate, { c.go("glossary/local/personal") })
-        ChoiceRow("工具", listOf("EPUB 转 TXT", "EPUB 图片压缩", "OCR 换行整理", "片假名统计"), tool) { tool = it; output = ""; resultBytes = null; error = null }
+        ChoiceRow("工具", listOf("EPUB 转 TXT", "EPUB 图片压缩", "OCR 换行整理", "片假名统计"), tool) { if (!busy) { tool = it; output = ""; resultBytes = null; error = null } }
         Text(listOf("按 EPUB 阅读顺序提取正文并导出为文本。", "优化 EPUB 中的图片，保留卷目与原始文件结构。", "合并 OCR 引入的段内换行。请预览后再导出。", "提取片假名词组并统计频率，辅助整理术语。结果不等同于人名判定。")[tool], Modifier.padding(20.dp), style = MaterialTheme.typography.bodyMedium)
-        OutlinedButton(onClick = { picker.launch(arrayOf("*/*")) }, Modifier.fillMaxWidth().padding(horizontal = 20.dp)) { Icon(Icons.Outlined.FileOpen, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(picked?.first ?: "选择文件") }
-        if(tool >= 2) OutlinedTextField(input, { input = it }, label = { Text("粘贴或编辑文本") }, minLines = 7, maxLines = 14, modifier = Modifier.fillMaxWidth().padding(20.dp))
-        Button(onClick = { c.action { busy = true; error = null; try { withContext(Dispatchers.Default) {
-            when(tool) {
-                0 -> { val file = requireNotNull(picked) { "请先选择 EPUB" }; output = DocumentTools.epubToTxt(file.second); resultBytes = output.toByteArray(); fileName = file.first.substringBeforeLast('.') + ".txt" }
-                1 -> { val file = requireNotNull(picked) { "请先选择 EPUB" }; resultBytes = EpubCompressor.compress(file.second); output = "原文件：${file.second.size / 1024} KB\n处理后：${resultBytes!!.size / 1024} KB"; fileName = file.first.substringBeforeLast('.') + ".compressed.epub" }
-                2 -> { output = DocumentTools.repairOcr(input); resultBytes = output.toByteArray(); fileName = "OCR整理.txt" }
-                3 -> { output = DocumentTools.katakana(input).joinToString("\n") { "${it.first}\t${it.second}" }; resultBytes = ("词语\t频次\n$output").toByteArray(); fileName = "片假名统计.tsv" }
+        OutlinedButton(onClick = { picker.launch(arrayOf("*/*")) }, Modifier.fillMaxWidth().padding(horizontal = 20.dp), enabled = !busy) { Icon(Icons.Outlined.FileOpen, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(picked?.first ?: "选择文件") }
+        if(tool >= 2) OutlinedTextField(input, { input = it }, enabled = !busy, label = { Text("粘贴或编辑文本") }, minLines = 7, maxLines = 14, modifier = Modifier.fillMaxWidth().padding(20.dp))
+        Button(onClick = {
+            val selectedTool = tool; val selectedFile = picked; val selectedInput = input
+            busy = true; error = null
+            c.action {
+                try {
+                    val result = withContext(Dispatchers.Default) {
+                        when(selectedTool) {
+                            0 -> { val file = requireNotNull(selectedFile) { "请先选择 EPUB" }; val text = DocumentTools.epubToTxt(file.second); Triple(text, text.toByteArray(Charsets.UTF_8), file.first.substringBeforeLast('.') + ".txt") }
+                            1 -> { val file = requireNotNull(selectedFile) { "请先选择 EPUB" }; val bytes = EpubCompressor.compress(file.second); Triple("原文件：${file.second.size / 1024} KB\n处理后：${bytes.size / 1024} KB", bytes, file.first.substringBeforeLast('.') + ".compressed.epub") }
+                            2 -> { val text = DocumentTools.repairOcr(selectedInput); Triple(text, text.toByteArray(Charsets.UTF_8), "OCR整理.txt") }
+                            else -> { val text = DocumentTools.katakana(selectedInput).joinToString("\n") { "${it.first}\t${it.second}" }; Triple(text, ("词语\t频次\n$text").toByteArray(Charsets.UTF_8), "片假名统计.tsv") }
+                        }
+                    }
+                    output = result.first; resultBytes = result.second; fileName = result.third
+                } catch(e: CancellationException) { throw e }
+                catch(e: Exception) { error = e.message ?: "处理失败" }
+                finally { busy = false }
             }
-        } } catch(e: Exception) { error = e.message ?: "处理失败" } finally { busy = false } } }, enabled = !busy && (if(tool < 2) picked != null else input.isNotBlank()), modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) { Text(if(busy) "处理中…" else "开始处理") }
+        }, enabled = !busy && (if(tool < 2) picked != null else input.isNotBlank()), modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) { Text(if(busy) "处理中…" else "开始处理") }
         if(busy) LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 20.dp))
         error?.let { Text(it, Modifier.padding(20.dp), color = MaterialTheme.colorScheme.error) }
         if(resultBytes != null) { SectionTitle("结果预览", "导出文件") { exporter.launch(fileName) }; Text(output.take(12000).ifBlank { "没有找到匹配的内容" } + if(output.length > 12000) "\n…预览已截取，导出包含全部内容。" else "", Modifier.padding(20.dp), style = MaterialTheme.typography.bodyMedium) }

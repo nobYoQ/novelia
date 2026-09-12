@@ -33,6 +33,7 @@ class UpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             delay(1500)
         }
         app.store.update { it.copy(drafts = it.drafts + ("updates:last" to "${System.currentTimeMillis()}|$count|$failed")) }
+        app.store.flush()
         if(count > 0) AppNotifications.show(app, 201, "书架里有新的故事", "$count 本小说有新章节或译文，打开书架查看。")
         return if(books.isNotEmpty() && failed == books.size) Result.retry() else Result.success()
     }

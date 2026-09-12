@@ -1,5 +1,6 @@
 .gradle/
 .gradle-home/
+.kotlin/
 .reference/
 .android/
 .idea/
@@ -10,3 +11,12 @@ local.properties
 *.keystore
 captures/
 artifacts/
+
+# Local release bundles and generated Android packages
+/releases/
+*.apk
+*.aab
+*.apks
+*.idsig
+*.apk.sha256
+*.aab.sha256

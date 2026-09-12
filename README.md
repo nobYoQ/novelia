@@ -1,6 +1,6 @@
 # Novelia Android
 
-面向 [轻小说机翻机器人](https://n.novelia.cc/) 的非官方原生安卓客户端，首版 `0.1.0`。使用 Kotlin、Jetpack Compose 与 Material 3，支持 Android 8.0（API 26）及以上。
+面向 [轻小说机翻机器人](https://n.novelia.cc/) 的非官方原生安卓客户端，当前版本 `0.1.2`。使用 Kotlin、Jetpack Compose 与 Material 3，支持 Android 8.0（API 26）及以上。
 
 ## 使用
 
@@ -28,6 +28,7 @@
 ```powershell
 ./build.ps1
 ./build.ps1 -Tasks @('assembleDebug', 'testDebugUnitTest', 'lintDebug')
+./build.ps1 -Tasks @('assembleRelease', 'testReleaseUnitTest', 'lintRelease')
 ```
 
 `build.ps1` 优先使用已配置的 JDK 或 Android Studio JBR，将 Gradle 缓存放入本项目 `.gradle-home`。在 `local.properties` 中配置 Android SDK，例如 `sdk.dir=D\:/Android/sdk`。该文件不应提交。
@@ -37,12 +38,18 @@
 输出位置：
 
 - 首版交付包：`releases/Novelia-0.1.0-debug.apk`，同目录提供 SHA-256 校验文件。
+- 本地自用 Release：`releases/Novelia-0.1.2-release.apk`，启用 R8 优化与混淆，使用与 Debug 包相同的本地测试证书签名，可直接安装。
+- 未签名 Release：`releases/Novelia-0.1.2-release-unsigned.apk`；同目录保留校验文件和混淆映射。
 - 应用：`app/build/outputs/apk/debug/app-debug.apk`
 - 设备测试包：`app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk`
 - JVM 测试报告：`app/build/reports/tests/testDebugUnitTest/index.html`
 - 静态检查：`app/build/reports/lint-results-debug.html`
 
-提供的是 **Debug 签名测试包**。正式商店分发前需配置自己的发布签名、应用标识/品牌授权与域名 App Links 验证；本仓库没有发布私钥。
+`releases/`、构建输出、APK/AAB 安装包、签名旁文件及安装包校验文件仅保留在本地，由 `.gitignore` 排除，不纳入源码提交。首次克隆仓库需自行构建；分发安装包时应使用独立的发布附件。
+
+Debug APK 使用**开发测试签名**。正式商店分发前需配置自己的发布签名、应用标识/品牌授权与域名 App Links 验证；本仓库没有发布私钥。
+
+Gradle 的 Release 构建当前未配置签名，原始输出 `app/build/outputs/apk/release/app-release-unsigned.apk` 不能直接安装。本地交付目录中的 `Novelia-0.1.2-release.apk` 已单独使用本地测试证书签名，可用于本地自用并覆盖同证书的旧版本安装，保留应用数据；正式发布时应改用自己的发布证书。混淆映射为 `app/build/outputs/mapping/release/mapping.txt`。
 
 ## 验证
 
@@ -84,3 +91,5 @@ adb shell am instrument -w -r -e class cc.novelia.app.AppFlowTest cc.novelia.app
 - 管理员控制台、翻译中心及相关生成流程不在此版本内。
 
 原始规划见 [android-app-plan.md](docs/android-app-plan.md)，版本验收说明见 [v0.1-verification.md](docs/v0.1-verification.md)。
+
+本轮性能、缓存与动效改进及缓存预算见 [performance-optimization.md](docs/performance-optimization.md)。
