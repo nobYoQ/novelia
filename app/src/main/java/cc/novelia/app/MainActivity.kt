@@ -106,6 +106,7 @@ class MainActivity : ComponentActivity() {
                                 composable("glossary/{provider}/{id}") { GlossaryScreen(controller, BookRef(it.arguments!!.getString("provider")!!, it.arguments!!.getString("id")!!)) }
                                 composable("edit/{provider}/{id}") { EditBookScreen(controller, BookRef(it.arguments!!.getString("provider")!!, it.arguments!!.getString("id")!!)) }
                                 composable("about") { AboutScreen(controller) }
+                                composable("web?url={url}") { SiteWebScreen(controller, it.arguments?.getString("url").orEmpty()) }
                             }
                         }
                     }

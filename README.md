@@ -1,6 +1,14 @@
 # Novelia Android
 
-面向 [轻小说机翻机器人](https://n.novelia.cc/) 的非官方原生安卓客户端，当前版本 `0.1.3`。使用 Kotlin、Jetpack Compose 与 Material 3，支持 Android 8.0（API 26）及以上。
+面向 [轻小说机翻机器人](https://n.novelia.cc/) 的非官方原生安卓客户端，当前版本 `0.1.4`。使用 Kotlin、Jetpack Compose 与 Material 3，支持 Android 8.0（API 26）及以上。
+
+## 0.1.4 更新
+
+- 适配原站剧透、评分和折叠语法，支持正文图片长按放大。
+- 帖子和评论新增 Markdown 快捷工具栏，改善键盘遮挡与正文滚动，移除实时预览。
+- 修复链接打开、WebView 定位和逐级返回，新增原生帖内目录跳转。
+
+交互和验证说明见 [帖子与评论 Markdown](docs/markdown-editing.md)。
 
 ## 使用
 
@@ -40,8 +48,8 @@
 输出位置：
 
 - 首版交付包：`releases/Novelia-0.1.0-debug.apk`，同目录提供 SHA-256 校验文件。
-- 本地自用 Release：`releases/Novelia-0.1.3-release.apk`，启用 R8 优化与混淆，使用与 Debug 包相同的本地测试证书签名，可直接安装。
-- 未签名 Release：`releases/Novelia-0.1.3-release-unsigned.apk`；同目录保留校验文件和混淆映射。
+- 本地自用 Release：`releases/Novelia-0.1.4-release.apk`，启用 R8 优化与混淆，使用与 Debug 包相同的本地测试证书签名，可直接安装。
+- 未签名 Release：`releases/Novelia-0.1.4-release-unsigned.apk`；同目录保留校验文件和混淆映射。
 - 应用：`app/build/outputs/apk/debug/app-debug.apk`
 - 设备测试包：`app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk`
 - JVM 测试报告：`app/build/reports/tests/testDebugUnitTest/index.html`
@@ -51,7 +59,7 @@
 
 Debug APK 使用**开发测试签名**。正式商店分发前需配置自己的发布签名、应用标识/品牌授权与域名 App Links 验证；本仓库没有发布私钥。
 
-Gradle 的 Release 构建当前未配置签名，原始输出 `app/build/outputs/apk/release/app-release-unsigned.apk` 不能直接安装。本地交付目录中的 `Novelia-0.1.3-release.apk` 已单独使用本地测试证书签名，可用于本地自用并覆盖同证书的旧版本安装，保留应用数据；正式发布时应改用自己的发布证书。混淆映射为 `app/build/outputs/mapping/release/mapping.txt`。
+Gradle 的 Release 构建当前未配置签名，原始输出 `app/build/outputs/apk/release/app-release-unsigned.apk` 不能直接安装。本地交付目录中的 `Novelia-0.1.4-release.apk` 已单独使用本地测试证书签名，可用于本地自用并覆盖同证书的旧版本安装，保留应用数据；正式发布时应改用自己的发布证书。混淆映射为 `app/build/outputs/mapping/release/mapping.txt`。
 
 ## 验证
 

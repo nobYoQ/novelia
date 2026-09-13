@@ -24,7 +24,9 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
     val metadataCache get() = app.metadataCache
     var afterLogin: (() -> Unit)? = null
     private var celebration: Job? = null
-    fun go(route: String) { nav.navigate(route) { launchSingleTop = true } }
+    // Different arguments of the same destination still need separate history entries.
+    // Root-tab switching manages its own singleTop/restoreState in MainActivity.
+    fun go(route: String, replaceTop: Boolean = false) { nav.navigate(route) { launchSingleTop = replaceTop } }
     fun back() { nav.popBackStack() }
     fun book(ref: BookRef) {
         if (ref.isLocal) action {
@@ -40,6 +42,15 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
             is SiteLink.Book -> if(link.chapterId != null) read(link.ref, link.chapterId) else book(link.ref)
             is SiteLink.Post -> go("article/${link.id}")
             null -> go("discover?query=${Uri.encode(text)}")
+        }
+    }
+    fun openMarkdownLink(destination: String, documentUrl: String? = null) {
+        val url = MarkdownLinks.resolve(destination, documentUrl) ?: run { message("不支持此链接类型"); return }
+        val route = MarkdownLinks.nativeRoute(url)
+        when {
+            route != null -> go(route)
+            MarkdownLinks.isInternal(url) -> go("web?url=${Uri.encode(url)}")
+            else -> external(url)
         }
     }
     fun message(text: String) { scope.launch { snackbar.showSnackbar(text) } }

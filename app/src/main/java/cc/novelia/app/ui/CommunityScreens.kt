@@ -1,12 +1,12 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui
 
-import android.widget.TextView
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -17,17 +17,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.*
-import io.noties.markwon.AbstractMarkwonPlugin
-import io.noties.markwon.Markwon
-import io.noties.markwon.MarkwonConfiguration
-import io.noties.markwon.ext.tables.TablePlugin
-import io.noties.markwon.image.ImagesPlugin
 import kotlinx.serialization.encodeToString
 
 val categories = linkedMapOf("General" to "小说交流", "Guide" to "使用指南", "Support" to "反馈建议")
@@ -76,23 +69,6 @@ val categories = linkedMapOf("General" to "小说交流", "Guide" to "使用指�
         item { PageControls(page, result.pageNumber, changePage) }
     }
 }
-@Composable private fun rememberMarkdownRenderer(c: AppController): Markwon {
-    val context = LocalContext.current
-    return remember(context, c) { Markwon.builder(context).usePlugin(TablePlugin.create(context)).usePlugin(ImagesPlugin.create()).usePlugin(object : AbstractMarkwonPlugin() { override fun configureConfiguration(builder: MarkwonConfiguration.Builder) { builder.linkResolver { _, link -> if(BookLinks.parse(link) != null) c.openLink(link) else c.external(link) } } }).build() }
-}
-@Composable fun MarkdownText(c: AppController, text: String, modifier: Modifier = Modifier, renderer: Markwon? = null) {
-    val color = MaterialTheme.colorScheme.onSurface.toArgb(); val linkColor = MaterialTheme.colorScheme.primary.toArgb()
-    val markwon = renderer ?: rememberMarkdownRenderer(c)
-    val rendered = remember(markwon, text) { markwon.toMarkdown(text) }
-    AndroidView(factory = { TextView(it).apply { textSize = 16f; setLineSpacing(6f, 1.1f); setTextIsSelectable(true) } }, modifier = modifier.fillMaxWidth(), update = { view ->
-        if(view.currentTextColor != color) view.setTextColor(color)
-        if(view.linkTextColors.defaultColor != linkColor) view.setLinkTextColor(linkColor)
-        if(view.tag !== rendered) {
-            markwon.setParsedMarkdown(view, rendered)
-            view.tag = rendered
-        }
-    })
-}
 @Composable fun ArticleScreen(c: AppController, id: String) {
     val profile by c.session.profile.collectAsStateWithLifecycle(); val state by c.store.state.collectAsStateWithLifecycle()
     var tab by rememberSaveable(id) { mutableIntStateOf(0) }; var deletion by remember { mutableStateOf(false) }
@@ -104,9 +80,12 @@ val categories = linkedMapOf("General" to "小说交流", "Guide" to "使用指�
                 PrimaryTabRow(tab) { listOf("文章内容", "讨论 ${article.numComments}").forEachIndexed { i, label -> Tab(tab == i, { tab = i }, text = { Text(label) }) } }
                 MotionContent(tab, Modifier.weight(1f), animateInitial = false) {
                     tabState.SaveableStateProvider(tab) {
-                        if(tab == 0) LazyColumn(contentPadding = PaddingValues(20.dp)) {
+                        if(tab == 0) {
+                        val articleScroll = rememberLazyListState()
+                        LazyColumn(state = articleScroll, contentPadding = PaddingValues(20.dp)) {
                             item { Text(categories[article.category].orEmpty(), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary); Spacer(Modifier.height(12.dp)); Text(article.title, style = MaterialTheme.typography.headlineMedium); Spacer(Modifier.height(12.dp)); Text("${article.user.username} · ${displayDate(article.createAt)} · ${article.numViews} 次浏览", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant); Spacer(Modifier.height(24.dp)) }
-                            item { MarkdownText(c, article.content) }
+                            item { MarkdownText(c, article.content, documentUrl = "https://n.novelia.cc/forum/$id",
+                                onAnchorScroll = { top -> articleScroll.scrollToItem(1, top) }) }
                             item { Row(Modifier.padding(top = 24.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 val saved = state.savedArticles.any { it.id == id }
                                 OutlinedButton(onClick = { c.store.update { it.copy(savedArticles = if(saved) it.savedArticles.filterNot { a -> a.id == id } else it.savedArticles + article.copy(id = id)) } }) {
@@ -118,6 +97,7 @@ val categories = linkedMapOf("General" to "小说交流", "Guide" to "使用指�
                                 }
                                 if(profile?.username == article.user.username) { TextButton(onClick = { c.go("compose?article=$id") }) { Text("编辑") }; TextButton(onClick = { deletion = true }) { Text("删除") } }
                             } }
+                        }
                         } else CommentsPanel(c, "article-$id", article.locked)
                     }
                 }
@@ -129,26 +109,33 @@ val categories = linkedMapOf("General" to "小说交流", "Guide" to "使用指�
 @Composable fun ComposeArticleScreen(c: AppController, articleId: String?) {
     if(articleId.isNullOrBlank()) ArticleEditor(c, null) else AsyncContent(articleId, { c.api.get<Article>("article/$articleId") }) { article, _ -> ArticleEditor(c, article.copy(id = articleId)) }
 }
-@Composable private fun ArticleEditor(c: AppController, article: Article?) {
+@Composable internal fun ArticleEditor(c: AppController, article: Article?) {
     val key = "article:${article?.id ?: "new"}"
     val draft = remember(key) { c.store.state.value.drafts[key] }
     val saved = remember(key) { draft?.let { runCatching { appJson.decodeFromString<Map<String, String>>(it) }.getOrNull() } }
     var title by rememberSaveable(key) { mutableStateOf(saved?.get("title") ?: article?.title.orEmpty()) }; var content by rememberSaveable(key) { mutableStateOf(saved?.get("content") ?: article?.content.orEmpty()) }; var category by rememberSaveable(key) { mutableStateOf(saved?.get("category") ?: article?.category ?: "General") }; var preview by rememberSaveable(key) { mutableStateOf(false) }; var sending by remember { mutableStateOf(false) }
     val editorState = rememberSaveableStateHolder()
+
+    val renderer = rememberMarkdownRenderer(c)
+    val focusManager = LocalFocusManager.current
     LaunchedEffect(title, content, category) { kotlinx.coroutines.delay(700); c.store.update { it.copy(drafts = it.drafts + (key to appJson.encodeToString(mapOf("title" to title, "content" to content, "category" to category)))) } }
-    Screen(if(article == null) "写一篇帖子" else "编辑帖子", c::back, actions = { TextButton(onClick = { preview = !preview }) { Text(if(preview) "编辑" else "预览") } }) { padding ->
-        MotionContent(preview, Modifier.padding(padding).fillMaxSize(), animateInitial = false) {
+    Screen(if(article == null) "写一篇帖子" else "编辑帖子", c::back, actions = { TextButton(onClick = { focusManager.clearFocus(); preview = !preview }) { Text(if(preview) "编辑" else "预览") } }) { padding ->
+        BoxWithConstraints(Modifier.padding(padding).consumeWindowInsets(padding).imePadding().fillMaxSize()) {
+        // Bound the inner text scroll area to the space left above the keyboard, including landscape.
+        val editorHeight = maxHeight.coerceIn(1.dp, 420.dp)
+        MotionContent(preview, Modifier.fillMaxSize(), animateInitial = false) {
             editorState.SaveableStateProvider(preview) {
                 Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    if(preview) { Text(title, style = MaterialTheme.typography.headlineMedium); MarkdownText(c, content) }
+                    if(preview) { Text(title, style = MaterialTheme.typography.headlineMedium); MarkdownText(c, content, renderer = renderer, documentUrl = article?.id?.let { "https://n.novelia.cc/forum/$it" }) }
                     else {
                         OutlinedTextField(title, { if(it.length <= 80) title = it }, label = { Text("标题") }, supportingText = { Text("${title.length} / 80") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                         ChoiceRow("分类", categories.values.toList(), categories.keys.indexOf(category)) { category = categories.keys.elementAt(it) }
-                        OutlinedTextField(content, { if(it.length <= 20000) content = it }, label = { Text("正文 · 支持 Markdown") }, supportingText = { Text("草稿自动保存在此设备 · ${content.length} / 20000") }, modifier = Modifier.fillMaxWidth(), minLines = 12)
+                        MarkdownEditor(content, { content = it }, editorHeight)
                     }
-                    Button(onClick = { c.requireLogin { c.action { sending = true; try { val body = mapOf("title" to title.trim(), "content" to content.trim(), "category" to category); val result = if(article == null) c.api.post("article", body) else c.api.put("article/${article.id}", body); c.store.update { it.copy(drafts = it.drafts - key) }; c.back(); c.go("article/${article?.id ?: result.trim().trim('"')}") } finally { sending = false } } } }, enabled = !sending && title.trim().length in 2..80 && content.trim().length in 2..20000, modifier = Modifier.fillMaxWidth()) { Text(if(sending) "正在提交…" else if(article == null) "发布到社区" else "保存修改") }
+                    Button(onClick = { c.requireLogin { c.action { sending = true; try { val body = mapOf("title" to title.trim(), "content" to content.trim(), "category" to category); val result = if(article == null) c.api.post("article", body) else c.api.put("article/${article.id}", body); c.store.update { it.copy(drafts = it.drafts - key) }; c.back(); c.go("article/${article?.id ?: result.trim().trim('"')}", replaceTop = article != null && c.nav.currentDestination?.route == "article/{id}" && c.nav.currentBackStackEntry?.arguments?.getString("id") == article.id) } finally { sending = false } } } }, enabled = !sending && title.trim().length in 2..80 && content.trim().length in 2..20000, modifier = Modifier.fillMaxWidth()) { Text(if(sending) "正在提交…" else if(article == null) "发布到社区" else "保存修改") }
                 }
             }
+        }
         }
     }
 }
@@ -159,6 +146,7 @@ val categories = linkedMapOf("General" to "小说交流", "Guide" to "使用指�
     val reducedMotion = LocalReducedMotion.current
     if(!site.startsWith("article-") && preferences.hideNovelComments) { EmptyState("小说评论已隐藏", "可以在阅读与外观设置中重新开启。", Icons.Outlined.CommentsDisabled); return }
     val markdownRenderer = rememberMarkdownRenderer(c)
+    val documentUrl = remember(site) { MarkdownLinks.commentDocumentUrl(site) }
     Column(Modifier.fillMaxSize()) {
         AsyncContent(listOf(site, parent, page, profile?.username), refreshKey = version, load = { c.api.get<Page<Comment>>("comment", buildMap { put("site", site); put("page", "$page"); put("pageSize", "20"); parent?.let { put("parentId", it) } }) }, modifier = Modifier.weight(1f)) { result, _ ->
             val comments = remember(result.items, preferences.blockedUsers) { result.items.filter { it.user.username !in preferences.blockedUsers } }
@@ -168,10 +156,10 @@ val categories = linkedMapOf("General" to "小说交流", "Guide" to "使用指�
                     Column(if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(160), placementSpec = tween(220), fadeOutSpec = tween(120))) {
                         Column(Modifier.padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text(comment.user.username, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary); Text(displayDate(comment.createAt), style = MaterialTheme.typography.labelSmall) }
-                            if(comment.hidden) Text("这条评论已被隐藏", style = MaterialTheme.typography.bodyMedium) else MarkdownText(c, comment.content, renderer = markdownRenderer)
+                            if(comment.hidden) Text("这条评论已被隐藏", style = MaterialTheme.typography.bodyMedium) else MarkdownText(c, comment.content, renderer = markdownRenderer, documentUrl = documentUrl)
                             Row { if(parent == null) TextButton(onClick = { reply = comment }) { Text(if(comment.numReplies > 0) "${comment.numReplies} 条回复 · 查看/回复" else if(locked) "查看回复" else "回复") }; if(comment.user.username == profile?.username) TextButton(onClick = { deleting = comment }) { Text("删除") } else TextButton(onClick = { c.store.update { it.copy(blockedUsers = it.blockedUsers + comment.user.username) } }) { Text("屏蔽用户") } }
                             val replies = remember(comment.replies, preferences.blockedUsers) { comment.replies.asSequence().filter { it.user.username !in preferences.blockedUsers }.take(2).toList() }
-                            replies.forEach { child -> key(child.id) { Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.medium) { Text("${child.user.username}：${if(child.hidden) "评论已隐藏" else child.content}", Modifier.padding(12.dp), style = MaterialTheme.typography.bodyMedium) } } }
+                            replies.forEach { child -> key(child.id) { Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.medium) { Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) { Text(child.user.username, style = MaterialTheme.typography.labelMedium); if(child.hidden) Text("评论已隐藏", style = MaterialTheme.typography.bodyMedium) else MarkdownText(c, child.content, renderer = markdownRenderer, documentUrl = documentUrl) } } } }
                         }
                         HorizontalDivider()
                     }
@@ -180,9 +168,10 @@ val categories = linkedMapOf("General" to "小说交流", "Guide" to "使用指�
             }
         }
         if(locked) Text("此讨论已锁定，暂时不能回复。", Modifier.padding(20.dp), style = MaterialTheme.typography.bodyMedium)
-        else Row(Modifier.fillMaxWidth().imePadding().padding(12.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(text, { text = it.take(10000); c.store.update { s -> s.copy(drafts = s.drafts + ("comment:$site:$parent" to text)) } }, label = { Text(if(parent == null) "写下评论" else "回复这条评论") }, modifier = Modifier.weight(1f), maxLines = 4)
+        else Box(Modifier.fillMaxWidth().imePadding().padding(12.dp)) {
+            MarkdownCommentInput(text, { text = it; c.store.update { s -> s.copy(drafts = s.drafts + ("comment:$site:$parent" to text)) } }, if(parent == null) "写下评论" else "回复这条评论") {
             FilledIconButton(onClick = { c.requireLogin { c.action { sending = true; try { val body = buildMap { put("site", site); put("content", text.trim()); parent?.let { put("parent", it) } }; c.api.post("comment", body); text = ""; c.store.update { it.copy(drafts = it.drafts - "comment:$site:$parent") }; version++ } finally { sending = false } } } }, enabled = text.isNotBlank() && !sending) { Icon(Icons.Outlined.Send, "发送评论") }
+            }
         }
     }
     reply?.let { comment -> ModalBottomSheet(onDismissRequest = { reply = null }) { Column(Modifier.fillMaxHeight(.85f)) { Text("回复 ${comment.user.username}", Modifier.padding(20.dp), style = MaterialTheme.typography.titleLarge); CommentsPanel(c, site, locked, comment.id) } } }
