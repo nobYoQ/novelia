@@ -83,11 +83,7 @@ import kotlin.math.roundToInt
     val eInk = settings.eInkMode
     CompositionLocalProvider(LocalReducedMotion provides (LocalReducedMotion.current || eInk), LocalEInkMode provides eInk,
         LocalRippleConfiguration provides if(eInk) null else LocalRippleConfiguration.current) {
-        MaterialTheme(colorScheme = if(settings.resolvedTheme == "monochrome") lightColorScheme(primary = Color.Black, onPrimary = Color.White,
-            surface = Color.White, onSurface = Color.Black, background = Color.White, onBackground = Color.Black,
-            secondaryContainer = Color.White, onSecondaryContainer = Color.Black, outline = Color.Black) else MaterialTheme.colorScheme) {
-            ReaderContent(c, ref, chapterId)
-        }
+        ReaderContent(c, ref, chapterId)
     }
 }
 
@@ -98,12 +94,12 @@ import kotlin.math.roundToInt
     var speechSheet by remember { mutableStateOf(false) }
     val speechStatus by ReadAloudService.status.collectAsStateWithLifecycle()
     val context = LocalContext.current; val activity = context.activityOrNull()
-    val colors = MaterialTheme.colorScheme
+    val colors = readerColors(settings.resolvedTheme, MaterialTheme.colorScheme)
     val reducedMotion = LocalReducedMotion.current
     val focusManager = LocalFocusManager.current
-    val background = when(settings.resolvedTheme) { "monochrome" -> Color.White; "paper" -> Color(0xFFF4ECD8); "dark" -> Color(0xFF141A16); "light" -> Color(0xFFFAFAF6); else -> colors.surface }
-    val foreground = when(settings.resolvedTheme) { "monochrome" -> Color.Black; "dark" -> Color(0xFFDDE5DC); "paper", "light" -> Color(0xFF282E27); else -> colors.onSurface }
-    val toolbarBackground = background.copy(alpha = 1f - settings.resolvedToolbarTransparency)
+    val background = colors.background
+    val foreground = colors.foreground
+    val toolbarBackground = colors.toolbar.copy(alpha = 1f - settings.resolvedToolbarTransparency)
     SideEffect { activity?.let { WindowCompat.getInsetsController(it.window, it.window.decorView).apply { isAppearanceLightStatusBars = background.luminance() > .5f; isAppearanceLightNavigationBars = background.luminance() > .5f } } }
     DisposableEffect(settings.keepScreenOn, settings.brightness) {
         val old = activity?.window?.attributes?.screenBrightness
@@ -231,6 +227,8 @@ import kotlin.math.roundToInt
                 catch(_: Exception) { /* Local progress remains available when history sync fails. */ }
             }
         }
+        // Keep reader-specific colors inside the page; all settings sheets inherit the app theme.
+        ReaderPageTheme(settings.resolvedTheme == "monochrome") {
         Box(Modifier.fillMaxSize().background(background).focusRequester(focus).onPreviewKeyEvent { event ->
             val direction = readerKeyDirection(event.nativeKeyEvent.keyCode, settings.volumeKeys)
             if(volumeKeysActive && direction != 0) {
@@ -289,8 +287,12 @@ import kotlin.math.roundToInt
                         exit = if(reducedMotion) ExitTransition.None else fadeOut(tween(100)) + shrinkVertically(tween(180), shrinkTowards = Alignment.Top)
                     ) {
                         Row(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            OutlinedTextField(query, { query = it }, label = { Text("搜索本章段落") }, singleLine = true, modifier = Modifier.weight(1f), enabled = search)
-                            TextButton(onClick = ::findNext, enabled = search && query.isNotBlank() && !finding) { Text(if(finding) "查找中" else "查找") }
+                            OutlinedTextField(query, { query = it }, label = { Text("搜索本章段落") }, singleLine = true, modifier = Modifier.weight(1f), enabled = search,
+                                colors = OutlinedTextFieldDefaults.colors(focusedTextColor = foreground, unfocusedTextColor = foreground,
+                                    focusedBorderColor = foreground, unfocusedBorderColor = foreground.copy(alpha = .5f),
+                                    focusedLabelColor = foreground, unfocusedLabelColor = foreground.copy(alpha = .7f), cursorColor = foreground))
+                            TextButton(onClick = ::findNext, enabled = search && query.isNotBlank() && !finding,
+                                colors = ButtonDefaults.textButtonColors(contentColor = foreground, disabledContentColor = foreground.copy(alpha = .38f))) { Text(if(finding) "查找中" else "查找") }
                         }
                     }
                 }
@@ -322,6 +324,7 @@ import kotlin.math.roundToInt
                 }
             }
             }
+        }
         }
         if(toc) ReaderSheet(onDismissRequest = { toc = false }) {
             AsyncContent(ref.key, load = { withContext(Dispatchers.IO) { if(ref.isLocal) c.store.document(ref.id).chapters.map { TocItem(it.title, it.title, it.id) } else c.detail<WebDetail>("novel/${ref.key}").toc } }, modifier = Modifier.fillMaxHeight(.8f)) { list, _ -> TocPanel(c, ref, list, chapterId) { id -> toc = false; openChapter(id) } }

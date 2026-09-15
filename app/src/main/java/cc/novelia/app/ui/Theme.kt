@@ -8,6 +8,8 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.view.WindowCompat
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -40,6 +42,26 @@ private val DarkColors = darkColorScheme(
     surfaceVariant = Color(0xFF404942), onSurfaceVariant = Color(0xFFBFC9C0), outline = Color(0xFF89938A), outlineVariant = Color(0xFF404942),
     surfaceContainerLowest = Color(0xFF0B100D), surfaceContainerLow = Color(0xFF191E1A), surfaceContainer = Color(0xFF1D221E), surfaceContainerHigh = Color(0xFF272C28), surfaceContainerHighest = Color(0xFF323732)
 )
+
+/** Reading surfaces are separate from the app theme used by preferences and other sheets. */
+internal data class ReaderColors(val background: Color, val foreground: Color, val toolbar: Color)
+
+internal fun readerColors(theme: String, appColors: ColorScheme): ReaderColors = when(theme) {
+    "paper" -> ReaderColors(Color(0xFFF4ECD8), Color(0xFF282E27), Color(0xFFDED2B8))
+    "light" -> ReaderColors(Color(0xFFE8F2E5), Color(0xFF263C2B), Color(0xFFCDDEC8))
+    "dark" -> ReaderColors(Color(0xFF141A16), Color(0xFFDDE5DC), Color(0xFF050A07))
+    "monochrome" -> ReaderColors(Color.White, Color.Black, Color(0xFFE0E0E0))
+    else -> ReaderColors(appColors.surface, appColors.onSurface,
+        lerp(appColors.surface, Color.Black, if(appColors.surface.luminance() > .5f) .10f else .55f))
+}
+
+@Composable internal fun ReaderPageTheme(monochrome: Boolean, content: @Composable () -> Unit) {
+    MaterialTheme(colorScheme = if(monochrome) lightColorScheme(primary = Color.Black, onPrimary = Color.White,
+        surface = Color.White, onSurface = Color.Black, background = Color.White, onBackground = Color.Black,
+        secondaryContainer = Color.White, onSecondaryContainer = Color.Black, outline = Color.Black) else MaterialTheme.colorScheme,
+        content = content)
+}
+
 @Composable fun NoveliaTheme(theme: String, content: @Composable () -> Unit) {
     val dark = theme == "dark" || (theme == "system" && isSystemInDarkTheme())
     val view = LocalView.current
