@@ -80,14 +80,14 @@ val LocalReducedMotion = staticCompositionLocalOf { false }
     Box(modifier.fillMaxSize()) {
         val current = result
         when {
-            current == null -> Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) { CircularProgressIndicator(); Text("正在加载…", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            current.isFailure -> if(loading) CircularProgressIndicator(Modifier.align(Alignment.Center)) else EmptyState("暂时无法加载", current.exceptionOrNull().friendlyMessage(), Icons.Outlined.CloudOff, "重试", retry, sticker = MidoriSticker.Concerned)
+            current == null -> Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) { if(!LocalEInkMode.current) CircularProgressIndicator(); Text("正在加载…", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            current.isFailure -> if(loading) { if(LocalEInkMode.current) Text("正在加载…", Modifier.align(Alignment.Center)) else CircularProgressIndicator(Modifier.align(Alignment.Center)) } else EmptyState("暂时无法加载", current.exceptionOrNull().friendlyMessage(), Icons.Outlined.CloudOff, "重试", retry, sticker = MidoriSticker.Concerned)
             else -> {
                 // Keep the same composition during refresh so list positions and editor state survive.
                 MotionContent(key, Modifier.fillMaxSize()) {
                     content(current.getOrThrow(), retry)
                 }
-                if(loading) LinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter))
+                if(loading) { if(LocalEInkMode.current) Text("正在刷新…", Modifier.align(Alignment.TopCenter)) else LinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter)) }
                 refreshError?.let { error ->
                     MotionContent(error, Modifier.align(Alignment.BottomCenter).padding(12.dp)) {
                         Snackbar(modifier = Modifier.heightIn(min = 64.dp), action = { TextButton(onClick = retry) { Text("重试") } }) {

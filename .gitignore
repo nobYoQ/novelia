@@ -20,3 +20,5 @@ artifacts/
 *.idsig
 *.apk.sha256
 *.aab.sha256
+
+resource/

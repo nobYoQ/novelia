@@ -51,6 +51,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.Role
@@ -78,6 +79,20 @@ import java.util.UUID
 @Composable fun ReaderScreen(c: AppController, ref: BookRef, chapterId: String) {
     val local by c.store.state.collectAsStateWithLifecycle()
     val settings = local.bookSettings[ref.key] ?: local.reader
+    val eInk = settings.eInkMode
+    CompositionLocalProvider(LocalReducedMotion provides (LocalReducedMotion.current || eInk), LocalEInkMode provides eInk,
+        LocalRippleConfiguration provides if(eInk) null else LocalRippleConfiguration.current) {
+        MaterialTheme(colorScheme = if(settings.resolvedTheme == "monochrome") lightColorScheme(primary = Color.Black, onPrimary = Color.White,
+            surface = Color.White, onSurface = Color.Black, background = Color.White, onBackground = Color.Black,
+            secondaryContainer = Color.White, onSecondaryContainer = Color.Black, outline = Color.Black) else MaterialTheme.colorScheme) {
+            ReaderContent(c, ref, chapterId)
+        }
+    }
+}
+
+@Composable private fun ReaderContent(c: AppController, ref: BookRef, chapterId: String) {
+    val local by c.store.state.collectAsStateWithLifecycle()
+    val settings = local.bookSettings[ref.key] ?: local.reader
     var menu by remember { mutableStateOf(true) }; var preferences by remember { mutableStateOf(false) }; var toc by remember { mutableStateOf(false) }; var search by remember { mutableStateOf(false) }; var query by rememberSaveable { mutableStateOf("") }; var version by remember { mutableIntStateOf(0) }
     var speechSheet by remember { mutableStateOf(false) }
     val speechStatus by ReadAloudService.status.collectAsStateWithLifecycle()
@@ -85,8 +100,8 @@ import java.util.UUID
     val colors = MaterialTheme.colorScheme
     val reducedMotion = LocalReducedMotion.current
     val focusManager = LocalFocusManager.current
-    val background = when(settings.theme) { "paper" -> Color(0xFFF4ECD8); "dark" -> Color(0xFF141A16); "light" -> Color(0xFFFAFAF6); else -> colors.surface }
-    val foreground = when(settings.theme) { "dark" -> Color(0xFFDDE5DC); "paper", "light" -> Color(0xFF282E27); else -> colors.onSurface }
+    val background = when(settings.resolvedTheme) { "monochrome" -> Color.White; "paper" -> Color(0xFFF4ECD8); "dark" -> Color(0xFF141A16); "light" -> Color(0xFFFAFAF6); else -> colors.surface }
+    val foreground = when(settings.resolvedTheme) { "monochrome" -> Color.Black; "dark" -> Color(0xFFDDE5DC); "paper", "light" -> Color(0xFF282E27); else -> colors.onSurface }
     SideEffect { activity?.let { WindowCompat.getInsetsController(it.window, it.window.decorView).apply { isAppearanceLightStatusBars = background.luminance() > .5f; isAppearanceLightNavigationBars = background.luminance() > .5f } } }
     DisposableEffect(settings.keepScreenOn, settings.brightness) {
         val old = activity?.window?.attributes?.screenBrightness
@@ -104,15 +119,22 @@ import java.util.UUID
         if(paragraphs == null) {
             Box(Modifier.fillMaxSize().background(background), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    CircularProgressIndicator(color = foreground)
+                    if(!settings.eInkMode) CircularProgressIndicator(color = foreground)
                     Text("正在整理正文…", color = foreground)
                 }
             }
             return@AsyncContent
         }
         key(ref, chapterId) {
-        val position = remember(ref, chapterId) { local.positions[ref.key]?.takeIf { it.chapterId == chapterId } }
+        val position = remember(ref, chapterId) {
+            if(c.nav.currentBackStackEntry?.savedStateHandle?.remove<Boolean>("readerStartAtEnd") == true) Position(chapterId, Int.MAX_VALUE)
+            else local.positions[ref.key]?.takeIf { it.chapterId == chapterId }
+        }
         val scroll = rememberLazyListState(position?.index ?: 0, position?.offset ?: 0); val scope = rememberCoroutineScope(); val focus = remember { FocusRequester() }
+        val eInk = remember { EInkPageState(position) }
+        val firstParagraph by remember(settings.staticPagination, eInk, scroll) { derivedStateOf {
+            if(settings.staticPagination) eInk.paragraph else (scroll.firstVisibleItemIndex - 1).coerceAtLeast(0)
+        } }
         val percent by remember(scroll, paragraphs.size) { derivedStateOf { (((scroll.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0).toFloat() / (paragraphs.size + 1).coerceAtLeast(1)) * 100).toInt().coerceIn(0, 100) } }
         val hasFallback = remember(paragraphs) { paragraphs.any { it.fallback } }
         var selected by remember { mutableStateOf<ReadingParagraph?>(null) }; var note by remember { mutableStateOf<ReadingParagraph?>(null) }
@@ -124,13 +146,14 @@ import java.util.UUID
         val density = LocalDensity.current
         val safeTop = WindowInsets.safeDrawing.getTop(density)
         val safeBottom = WindowInsets.safeDrawing.getBottom(density)
-        val volumeKeysActive = settings.volumeKeys && !preferences && !search && !toc && !speechSheet && selected == null && note == null
+        val volumeKeysActive = !preferences && !search && !toc && !speechSheet && selected == null && note == null
         LaunchedEffect(volumeKeysActive) { if(volumeKeysActive) runCatching { focus.requestFocus() } }
         fun savePosition() {
-            if(leaving || scroll.layoutInfo.totalItemsCount == 0 || c.store.state.value.historyPaused) return
-            val next = Position(chapterId, scroll.firstVisibleItemIndex, scroll.firstVisibleItemScrollOffset, chapter.title)
+            if(leaving || (if(settings.staticPagination) eInk.pages.isEmpty() else scroll.layoutInfo.totalItemsCount == 0) || c.store.state.value.historyPaused) return
+            val next = if(settings.staticPagination) Position(chapterId, eInk.paragraph + 1, 0, chapter.title, textOffset = eInk.textOffset)
+                else Position(chapterId, scroll.firstVisibleItemIndex, scroll.firstVisibleItemScrollOffset, chapter.title)
             val previous = lastSavedPosition
-            if(previous == null || previous.chapterId != next.chapterId || previous.index != next.index || previous.offset != next.offset || previous.title != next.title) {
+            if(previous == null || previous.chapterId != next.chapterId || previous.index != next.index || previous.offset != next.offset || previous.textOffset != next.textOffset || previous.title != next.title) {
                 c.store.savePosition(ref, next)
                 lastSavedPosition = next
             }
@@ -143,6 +166,21 @@ import java.util.UUID
             c.read(ref, id)
         }
         fun page(direction: Int) {
+            if(settings.staticPagination) {
+                if(direction > 0 && !eInk.canGoForward && eInk.pages.isNotEmpty()) chapter.nextId?.let(::openChapter)
+                else if(direction < 0 && !eInk.canGoBack && eInk.pages.isNotEmpty()) chapter.prevId?.let { id ->
+                    if(!leaving) {
+                        savePosition()
+                        // A previous-page turn lands at the end of the preceding chapter.
+                        leaving = true
+                        c.nav.popBackStack()
+                        c.read(ref, id)
+                        c.nav.currentBackStackEntry?.savedStateHandle?.set("readerStartAtEnd", true)
+                    }
+                }
+                else { eInk.move(direction); savePosition() }
+                return
+            }
             val topCovered = if(menu) (topOverlayHeight - safeTop).coerceAtLeast(0) else 0
             val bottomCovered = (bottomOverlayHeight - safeBottom).coerceAtLeast(0)
             val distance = (scroll.layoutInfo.viewportSize.height - topCovered - bottomCovered).coerceAtLeast(1) * .85f
@@ -151,14 +189,15 @@ import java.util.UUID
         fun findNext() {
             if(query.isBlank() || finding) return
             val term = query
-            val after = scroll.firstVisibleItemIndex - 1
+            val after = firstParagraph
             finding = true
             scope.launch {
                 try {
                     val match = withContext(Dispatchers.Default) { findNextReadingParagraph(paragraphs, term, after) }
                     if(match >= 0) {
                         val offset = -(topOverlayHeight - safeTop).coerceAtLeast(0)
-                        if(reducedMotion) scroll.scrollToItem(match + 1, offset) else scroll.animateScrollToItem(match + 1, offset)
+                        if(settings.staticPagination) { eInk.find(match); savePosition() }
+                        else if(reducedMotion) scroll.scrollToItem(match + 1, offset) else scroll.animateScrollToItem(match + 1, offset)
                     } else c.message("没有找到匹配文字")
                 } finally { finding = false }
             }
@@ -180,6 +219,11 @@ import java.util.UUID
                 if(settled != null) { delay(500); latestSavePosition() }
             }
         }
+        LaunchedEffect(settings.staticPagination) {
+            if(settings.staticPagination && scroll.layoutInfo.totalItemsCount > 0) eInk.find((scroll.firstVisibleItemIndex - 1).coerceAtLeast(0))
+            else if(!settings.staticPagination && eInk.pages.isNotEmpty()) scroll.scrollToItem(eInk.paragraph + 1)
+        }
+        LaunchedEffect(eInk.pageIndex, eInk.pages, settings.staticPagination) { if(settings.staticPagination) latestSavePosition() }
         LaunchedEffect(chapterId) {
             if(c.session.profile.value != null && !ref.isLocal && !local.historyPaused) {
                 try { c.cloudMutation("PUT", "user/read-history/${ref.key}", chapterId, "text/plain") }
@@ -187,16 +231,26 @@ import java.util.UUID
                 catch(_: Exception) { /* Local progress remains available when history sync fails. */ }
             }
         }
-        Box(Modifier.fillMaxSize().background(background)) {
-            // Toolbars overlay the page so showing them never remeasures or shifts the reading position.
-            LazyColumn(state = scroll, modifier = Modifier.align(Alignment.TopCenter).fillMaxHeight()
+        Box(Modifier.fillMaxSize().background(background).focusRequester(focus).onPreviewKeyEvent { event ->
+            val direction = readerKeyDirection(event.nativeKeyEvent.keyCode, settings.volumeKeys)
+            if(volumeKeysActive && direction != 0) {
+                if(event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) page(direction)
+                true
+            } else false
+        }.focusable()) {
+            // Flowing text keeps its scroll offset. E-ink text reflows to the unobscured
+            // viewport while retaining the character at the start of the current page.
+            if(settings.staticPagination) EInkPage(paragraphs, settings, eInk,
+                Modifier.testTag("reader-page").align(Alignment.TopCenter).fillMaxHeight().windowInsetsPadding(WindowInsets.safeDrawing)
+                    .widthIn(max = settings.width.dp).fillMaxWidth().padding(horizontal = 24.dp)
+                    .padding(top = with(density) { (if(menu) (topOverlayHeight - safeTop).coerceAtLeast(0) else 0).toDp() },
+                        bottom = with(density) { (bottomOverlayHeight - safeBottom).coerceAtLeast(0).toDp() }),
+                imageModel = { it.imageUrl ?: it.localImageId?.takeIf { ref.isLocal }?.let { id -> c.store.documentImage(ref.id, id) } },
+                onToggleMenu = { menu = !menu }, onSelect = { selected = it }, onPage = ::page,
+                background = background, foreground = foreground)
+            else LazyColumn(state = scroll, modifier = Modifier.testTag("reader-scroll").align(Alignment.TopCenter).fillMaxHeight()
                 .windowInsetsPadding(WindowInsets.safeDrawing).widthIn(max = settings.width.dp).fillMaxWidth()
-                .focusRequester(focus).onPreviewKeyEvent { event ->
-                    if(volumeKeysActive && (event.key == Key.VolumeUp || event.key == Key.VolumeDown)) {
-                        if(event.type == KeyEventType.KeyDown) page(if(event.key == Key.VolumeDown) 1 else -1)
-                        true
-                    } else false
-                }.focusable(), contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 88.dp, bottom = if(settings.paged) 156.dp else 104.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                , contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 88.dp, bottom = if(settings.showPageButtons) 156.dp else 104.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 item("title", contentType = "title") {
                     Column(Modifier.fillMaxWidth().clickable(onClickLabel = "显示或收起阅读工具栏") { menu = !menu }) {
                         Text(chapter.title, Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium, color = foreground)
@@ -241,33 +295,34 @@ import java.util.UUID
                 }
             }
             Column(Modifier.align(Alignment.BottomCenter).onSizeChanged { bottomOverlayHeight = it.height }) {
-                if(settings.paged) Row(Modifier.fillMaxWidth().padding(12.dp).then(if(!menu) Modifier.navigationBarsPadding() else Modifier), horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally)) {
-                    FilledTonalButton(onClick = { page(-1) }, enabled = scroll.canScrollBackward) { Text("上一屏") }
-                    FilledTonalButton(onClick = { page(1) }, enabled = scroll.canScrollForward) { Text("下一屏") }
+                if(settings.showPageButtons) Row(Modifier.fillMaxWidth().background(background).padding(horizontal = 12.dp, vertical = 4.dp).then(if(!menu) Modifier.navigationBarsPadding() else Modifier), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedButton(onClick = { page(-1) }, colors = ButtonDefaults.outlinedButtonColors(contentColor = foreground, disabledContentColor = foreground.copy(alpha = .38f)), enabled = if(settings.staticPagination) eInk.canGoBack || (eInk.pages.isNotEmpty() && chapter.prevId != null) else scroll.canScrollBackward) { Text(if(settings.staticPagination) "上一页" else "上一屏") }
+                    if(settings.staticPagination) Text("${eInk.pageIndex + 1} / ${eInk.pages.size.coerceAtLeast(1)}", color = foreground, style = MaterialTheme.typography.labelMedium)
+                    OutlinedButton(onClick = { page(1) }, colors = ButtonDefaults.outlinedButtonColors(contentColor = foreground, disabledContentColor = foreground.copy(alpha = .38f)), enabled = if(settings.staticPagination) eInk.canGoForward || (eInk.pages.isNotEmpty() && chapter.nextId != null) else scroll.canScrollForward) { Text(if(settings.staticPagination) "下一页" else "下一屏") }
                 }
                 AnimatedVisibility(menu, enter = if(reducedMotion) EnterTransition.None else fadeIn(tween(180)) + slideInVertically(tween(220)) { it }, exit = if(reducedMotion) ExitTransition.None else fadeOut(tween(140)) + slideOutVertically(tween(180)) { it }) {
                     Surface(color = background, contentColor = foreground, tonalElevation = 2.dp) {
                         Column(Modifier.navigationBarsPadding()) {
                             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                 IconButton(onClick = { chapter.prevId?.let(::openChapter) }, enabled = chapter.prevId != null && !leaving) { Icon(Icons.Outlined.SkipPrevious, "上一章") }
-                                TextButton(onClick = { toc = true }) { Icon(Icons.Outlined.FormatListBulleted, null, Modifier.size(18.dp)); Text(" 目录") }
-                                IconButton(onClick = { note = paragraphs.getOrNull((scroll.firstVisibleItemIndex - 1).coerceAtLeast(0)) }, enabled = paragraphs.isNotEmpty()) { Icon(Icons.Outlined.BookmarkAdd, "添加书签或笔记") }
+                                TextButton(onClick = { toc = true }, colors = ButtonDefaults.textButtonColors(contentColor = foreground)) { Icon(Icons.Outlined.FormatListBulleted, null, Modifier.size(18.dp)); Text(" 目录") }
+                                IconButton(onClick = { note = paragraphs.getOrNull(firstParagraph) }, enabled = paragraphs.isNotEmpty()) { Icon(Icons.Outlined.BookmarkAdd, "添加书签或笔记") }
                                 IconButton(onClick = { speechSheet = true }) {
                                     if(speechStatus == ReadAloudService.SLEEP_TIMER_FINISHED) StickerAccent(MidoriSticker.Sleep, speechStatus, Modifier.size(40.dp).semantics { contentDescription = "朗读定时已结束，打开朗读设置" })
                                     else Icon(Icons.Outlined.VolumeUp, "朗读本章")
                                 }
                                 IconButton(onClick = { chapter.nextId?.let(::openChapter) }, enabled = chapter.nextId != null && !leaving) { Icon(Icons.Outlined.SkipNext, "下一章") }
                             }
-                            Text("${if(cached) "本地内容 · " else ""}$percent% · 点击正文收起工具栏", Modifier.align(Alignment.CenterHorizontally).padding(bottom = 8.dp), style = MaterialTheme.typography.labelSmall, color = foreground.copy(alpha = .65f))
+                            Text(if(settings.staticPagination) "${if(settings.eInkMode) "电子纸" else "分页阅读"} · 点击正文收起工具栏" else "${if(cached) "本地内容 · " else ""}$percent% · 点击正文收起工具栏", Modifier.align(Alignment.CenterHorizontally).padding(bottom = 8.dp), style = MaterialTheme.typography.labelSmall, color = foreground)
                         }
                     }
                 }
             }
         }
-        if(toc) ModalBottomSheet(onDismissRequest = { toc = false }) {
+        if(toc) ReaderSheet(onDismissRequest = { toc = false }) {
             AsyncContent(ref.key, load = { withContext(Dispatchers.IO) { if(ref.isLocal) c.store.document(ref.id).chapters.map { TocItem(it.title, it.title, it.id) } else c.detail<WebDetail>("novel/${ref.key}").toc } }, modifier = Modifier.fillMaxHeight(.8f)) { list, _ -> TocPanel(c, ref, list, chapterId) { id -> toc = false; openChapter(id) } }
         }
-        if(speechSheet) ModalBottomSheet(onDismissRequest = { speechSheet = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        if(speechSheet) ReaderSheet(onDismissRequest = { speechSheet = false }) {
             Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text("系统朗读", style = MaterialTheme.typography.titleLarge)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -276,7 +331,7 @@ import java.util.UUID
                 }
                 Text("${settings.speechRate}× · ${settings.speechMinutes} 分钟后停止", style = MaterialTheme.typography.labelLarge)
                 Button(onClick = {
-                    val first = (scroll.firstVisibleItemIndex - 1).coerceAtLeast(0)
+                    val first = firstParagraph
                     val originalIndex = paragraphs.getOrNull(first)?.index ?: 0
                     val japanese = settings.speechLanguage == "jp" || (settings.speechLanguage == "auto" && settings.mode.startsWith("jp"))
                     val text = (if(japanese) chapter.paragraphs.drop(originalIndex) else paragraphs.drop(first).mapNotNull { it.parts.firstOrNull { p -> !p.secondary }?.text }).filterNot { it.startsWith("novelia-image:") || it.startsWith("<图片>") }
@@ -290,7 +345,7 @@ import java.util.UUID
                 }
             }
         }
-        selected?.let { paragraph -> ModalBottomSheet(onDismissRequest = { selected = null }) {
+        selected?.let { paragraph -> ReaderSheet(onDismissRequest = { selected = null }) {
             Column(Modifier.padding(20.dp)) {
                 SelectionContainer { Text(paragraph.parts.joinToString("\n\n") { it.text }, Modifier.heightIn(max = 240.dp).verticalScroll(rememberScrollState())) }
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { TextButton(onClick = { c.share(paragraph.parts.joinToString("\n\n") { it.text }); selected = null }) { Text("分享段落") }; TextButton(onClick = { note = paragraph; selected = null }) { Text("书签 / 笔记") } }
@@ -299,7 +354,7 @@ import java.util.UUID
         note?.let { paragraph -> var text by remember { mutableStateOf("") }; AlertDialog(onDismissRequest = { note = null }, title = { Text("保存书签或笔记") }, text = { OutlinedTextField(text, { text = it }, label = { Text("笔记（可留空）") }, minLines = 3) }, confirmButton = { TextButton(onClick = { c.store.update { it.copy(notes = it.notes + Note(UUID.randomUUID().toString(), ref.key, chapterId, paragraph.index, paragraph.parts.firstOrNull()?.text.orEmpty(), text)) }; note = null; c.message("已保存到我的笔记") }) { Text("保存") } }, dismissButton = { TextButton(onClick = { note = null }) { Text("取消") } }) }
         }
     }
-    if(preferences) ModalBottomSheet(onDismissRequest = { preferences = false }) { ReaderPreferences(settings, local.bookSettings.containsKey(ref.key), { perBook -> c.store.update { it.copy(bookSettings = if(perBook) it.bookSettings + (ref.key to settings) else it.bookSettings - ref.key) } }) { value -> c.store.update { if(it.bookSettings.containsKey(ref.key)) it.copy(bookSettings = it.bookSettings + (ref.key to value)) else it.copy(reader = value) } } }
+    if(preferences) ReaderSheet(onDismissRequest = { preferences = false }) { ReaderPreferences(settings, local.bookSettings.containsKey(ref.key), { perBook -> c.store.update { it.copy(bookSettings = if(perBook) it.bookSettings + (ref.key to settings) else it.bookSettings - ref.key) } }) { value -> c.store.update { if(it.bookSettings.containsKey(ref.key)) it.copy(bookSettings = it.bookSettings + (ref.key to value)) else it.copy(reader = value) } } }
 }
 
 @Composable private fun ReaderTextParagraph(paragraph: ReadingParagraph, settings: ReaderSettings, foreground: Color, onToggleMenu: () -> Unit, onSelect: () -> Unit) {
@@ -346,6 +401,16 @@ import java.util.UUID
     Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = 28.dp)) {
         Text("阅读偏好", Modifier.padding(20.dp), style = MaterialTheme.typography.titleLarge)
         if(perBook != null) TogglePreference("仅应用于这本书", "为当前小说保存独立设置", perBook, onPerBook)
+        TogglePreference("电子纸阅读模式", "首次开启使用自动分页并启用翻页操作；关闭恢复之前的设置，再次开启沿用上次电子纸设置。保留主题，关闭过渡动画。", value.eInkMode) { onChange(value.withEInkMode(it)) }
+        ChoiceRow("分页模式", listOf("连续滚动", "自动分页"), if(value.staticPagination) 1 else 0) { onChange(value.withPaginationMode(if(it == 1) "auto" else "scroll")) }
+        Text(if(value.staticPagination) "按屏幕大小提前排成独立页面，每次翻动一页。" else "整章连续排列，上下滑动浏览，不提前拆成独立页面。",
+            Modifier.padding(horizontal = 20.dp, vertical = 4.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if(value.staticPagination) Column(Modifier.padding(start = 20.dp, end = 12.dp)) {
+            Text("自动分页手势", Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.labelLarge)
+            TogglePreference("滚动翻页", "向上滑动下一页，向下滑动上一页", value.scrollPageTurn) { onChange(value.copy(scrollPageTurn = it)) }
+            TogglePreference("左右翻页", "向左滑动下一页，向右滑动上一页", value.horizontalPageTurn) { onChange(value.copy(horizontalPageTurn = it)) }
+        }
+        TogglePreference("显示翻页按钮", if(value.staticPagination) "显示上一页、下一页和页码" else "显示上一屏、下一屏，每次移动约一屏正文", value.showPageButtons) { onChange(value.copy(showPageButtons = it)) }
         ChoiceRow("显示语言", listOf("中文", "日文", "中日", "日中"), listOf("zh", "jp", "zh-jp", "jp-zh").indexOf(value.mode)) { onChange(value.copy(mode = listOf("zh", "jp", "zh-jp", "jp-zh")[it])) }
         ChoiceRow("优先译文", listOf("Sakura", "GPT", "有道"), listOf("sakura", "gpt", "youdao").indexOf(value.engines.firstOrNull())) { val engine = listOf("sakura", "gpt", "youdao")[it]; onChange(value.copy(engines = listOf(engine) + value.engines.filterNot { e -> e == engine })) }
         TogglePreference("并列展示译文", "关闭时按优先顺序回退", value.parallel) { onChange(value.copy(parallel = it)) }
@@ -353,14 +418,13 @@ import java.util.UUID
         ReaderSlider("行距 ${"%.1f".format(value.lineHeight)}", value.lineHeight, 1.3f..2.6f) { onChange(value.copy(lineHeight = it)) }
         ReaderSlider("内容宽度 ${value.width.toInt()} dp", value.width, 300f..900f) { onChange(value.copy(width = it)) }
         ReaderSlider("辅文本不透明度 ${(value.secondaryAlpha * 100).toInt()}%", value.secondaryAlpha, .45f..1f) { onChange(value.copy(secondaryAlpha = it)) }
-        ChoiceRow("阅读主题", listOf("跟随应用", "纸张", "浅色", "深色"), listOf("system", "paper", "light", "dark").indexOf(value.theme)) { onChange(value.copy(theme = listOf("system", "paper", "light", "dark")[it])) }
+        ChoiceRow("阅读主题", listOf("跟随应用", "纸张", "浅色", "深色", "黑白"), listOf("system", "paper", "light", "dark", "monochrome").indexOf(value.resolvedTheme)) { onChange(value.withTheme(listOf("system", "paper", "light", "dark", "monochrome")[it])) }
         TogglePreference("加粗文字", "中等字重", value.weight) { onChange(value.copy(weight = it)) }
         TogglePreference("首行缩进", "统一为两个全角空格", value.indent) { onChange(value.copy(indent = it)) }
         TogglePreference("繁体显示", "将简体译文转换为繁体", value.traditional) { onChange(value.copy(traditional = it)) }
         TogglePreference("辅文本下划线", "用于双语对照", value.underline) { onChange(value.copy(underline = it)) }
         TogglePreference("屏幕常亮", "仅在阅读器中生效", value.keepScreenOn) { onChange(value.copy(keepScreenOn = it)) }
         TogglePreference("音量键翻页", "音量键控制阅读位置", value.volumeKeys) { onChange(value.copy(volumeKeys = it)) }
-        TogglePreference("显示翻页按钮", "单手切换阅读位置", value.paged) { onChange(value.copy(paged = it)) }
         TogglePreference("跟随系统亮度", "关闭后可单独调整", value.brightness < 0) { onChange(value.copy(brightness = if(it) -1f else .5f)) }
         AnimatedVisibility(value.brightness >= 0,
             enter = if(reducedMotion) EnterTransition.None else fadeIn(tween(160)) + expandVertically(tween(220), expandFrom = Alignment.Top),

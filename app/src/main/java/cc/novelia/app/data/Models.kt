@@ -71,14 +71,51 @@ import kotlinx.serialization.Serializable
     val canPost get() = role in listOf("admin", "member")
     val canEdit get() = canPost && (role == "admin" || System.currentTimeMillis() / 1000 - createdAt >= 30L * 86400)
 }
+/** The settings changed by the e-ink preset, saved separately for each side of its toggle. */
+@Serializable data class ReaderPagingState(
+    val paginationMode: String = "scroll", val scrollPageTurn: Boolean = false,
+    val horizontalPageTurn: Boolean = false, val showPageButtons: Boolean = false, val volumeKeys: Boolean = false
+)
 @Serializable data class ReaderSettings(
     val mode: String = "zh", val engines: List<String> = listOf("sakura", "gpt", "youdao"), val parallel: Boolean = false,
     val fontSize: Float = 19f, val lineHeight: Float = 1.8f, val weight: Boolean = false, val width: Float = 720f,
     val indent: Boolean = true, val theme: String = "system", val secondaryAlpha: Float = .65f, val underline: Boolean = false,
-    val keepScreenOn: Boolean = false, val volumeKeys: Boolean = false, val paged: Boolean = false,
-    val brightness: Float = -1f, val speechRate: Float = 1f, val speechMinutes: Int = 30, val traditional: Boolean = false, val speechLanguage: String = "auto"
-)
-@Serializable data class Position(val chapterId: String, val index: Int = 0, val offset: Int = 0, val title: String = "", val updatedAt: Long = System.currentTimeMillis())
+    val keepScreenOn: Boolean = false, val volumeKeys: Boolean = false, val paged: Boolean = false, val eInkMode: Boolean = false,
+    val monochrome: Boolean = false, val scrollPageTurn: Boolean = eInkMode, val horizontalPageTurn: Boolean = eInkMode,
+    val brightness: Float = -1f, val speechRate: Float = 1f, val speechMinutes: Int = 30, val traditional: Boolean = false, val speechLanguage: String = "auto",
+    // Defaults migrate the old implicit paging mode and always-visible static-page buttons.
+    val paginationMode: String = if(eInkMode || scrollPageTurn || horizontalPageTurn) "auto" else "scroll",
+    val showPageButtons: Boolean = paged || paginationMode == "auto",
+    val beforeEInk: ReaderPagingState? = null, val eInkPreferences: ReaderPagingState? = null
+) {
+    // Compatibility with settings saved before black-and-white became a theme choice.
+    val resolvedTheme get() = if(monochrome) "monochrome" else theme
+    fun withTheme(selected: String) = copy(theme = selected, monochrome = false)
+    val staticPagination get() = paginationMode == "auto"
+    fun withPaginationMode(selected: String): ReaderSettings {
+        // Give the first switch from a scrolling reader usable gestures. Existing choices survive mode changes.
+        val needsGestures = selected == "auto" && !staticPagination && !scrollPageTurn && !horizontalPageTurn && !showPageButtons
+        return copy(paginationMode = selected, scrollPageTurn = scrollPageTurn || needsGestures,
+            horizontalPageTurn = horizontalPageTurn || needsGestures)
+    }
+    private fun pagingState() = ReaderPagingState(paginationMode, scrollPageTurn, horizontalPageTurn, showPageButtons, volumeKeys)
+    private fun withPagingState(state: ReaderPagingState) = copy(paginationMode = state.paginationMode,
+        scrollPageTurn = state.scrollPageTurn, horizontalPageTurn = state.horizontalPageTurn,
+        showPageButtons = state.showPageButtons, volumeKeys = state.volumeKeys)
+    fun withEInkMode(enabled: Boolean): ReaderSettings {
+        if(enabled == eInkMode) return this
+        return if(enabled) {
+            val target = eInkPreferences ?: ReaderPagingState(paginationMode = "auto", scrollPageTurn = true,
+                horizontalPageTurn = true, showPageButtons = true, volumeKeys = true)
+            withPagingState(target).copy(eInkMode = true, beforeEInk = pagingState())
+        } else {
+            // Older versions never recorded the prior mode. Fall back to the original scrolling defaults.
+            val target = beforeEInk ?: ReaderPagingState(showPageButtons = paged)
+            withPagingState(target).copy(eInkMode = false, beforeEInk = null, eInkPreferences = pagingState())
+        }
+    }
+}
+@Serializable data class Position(val chapterId: String, val index: Int = 0, val offset: Int = 0, val title: String = "", val updatedAt: Long = System.currentTimeMillis(), val textOffset: Int = 0)
 @Serializable data class SavedBook(val book: BookCard, val folder: String = "默认收藏", val pinned: Boolean = false, val status: String = "在读", val addedAt: Long = System.currentTimeMillis(), val hasUpdates: Boolean = false)
 @Serializable data class Note(val id: String, val key: String, val chapterId: String, val paragraph: Int, val quote: String, val text: String, val createdAt: Long = System.currentTimeMillis())
 @Serializable data class LocalChapter(val id: String, val title: String, val paragraphs: List<String>)
@@ -91,11 +128,11 @@ import kotlinx.serialization.Serializable
     val downloads: List<DownloadEntry> = emptyList(), val blockedBooks: Set<String> = emptySet(), val blockedTags: Set<String> = emptySet(),
     val recentSearches: List<String> = emptyList(), val savedSearches: List<String> = emptyList(), val savedArticles: List<Article> = emptyList(),
     val drafts: Map<String, String> = emptyMap(), val reader: ReaderSettings = ReaderSettings(), val bookSettings: Map<String, ReaderSettings> = emptyMap(),
-    val theme: String = "system", val reducedMotion: Boolean = false, val historyPaused: Boolean = false,
+    val theme: String = "system", val reducedMotion: Boolean = false, val historyPaused: Boolean = false, val autoCollapseCloudFilters: Boolean = true,
     val pending: List<PendingAction> = emptyList(), val updateNotifications: Boolean = false,
     val blockedUsers: Set<String> = emptySet(), val hideNovelComments: Boolean = false, val wifiOnly: Boolean = false,
     val personalGlossaries: Map<String, Map<String, String>> = emptyMap()
 )
-@Serializable data class SettingsBackup(val version: Int = 1, val reader: ReaderSettings = ReaderSettings(), val theme: String = "system", val reducedMotion: Boolean = false, val blockedBooks: Set<String> = emptySet(), val blockedTags: Set<String> = emptySet(), val blockedUsers: Set<String> = emptySet(), val hideNovelComments: Boolean = false, val wifiOnly: Boolean = false)
+@Serializable data class SettingsBackup(val version: Int = 1, val reader: ReaderSettings = ReaderSettings(), val theme: String = "system", val reducedMotion: Boolean = false, val blockedBooks: Set<String> = emptySet(), val blockedTags: Set<String> = emptySet(), val blockedUsers: Set<String> = emptySet(), val hideNovelComments: Boolean = false, val wifiOnly: Boolean = false, val autoCollapseCloudFilters: Boolean = true)
 
 val providers = linkedMapOf("kakuyomu" to "Kakuyomu", "syosetu" to "成为小说家吧", "novelup" to "Novelup", "hameln" to "Hameln", "pixiv" to "Pixiv", "alphapolis" to "Alphapolis")

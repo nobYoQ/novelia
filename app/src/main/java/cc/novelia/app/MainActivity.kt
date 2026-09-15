@@ -40,8 +40,8 @@ class MainActivity : ComponentActivity() {
                 NoveliaTheme("system") { Surface(Modifier.fillMaxSize()) { Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) { CircularProgressIndicator() } } }
                 return@setContent
             }
-            val appearance by remember(app) { app.store.state.map { it.theme to it.reducedMotion }.distinctUntilChanged() }
-                .collectAsStateWithLifecycle(initialValue = remember(app) { app.store.state.value.let { it.theme to it.reducedMotion } })
+            val appearance by remember(app) { app.store.state.map { Triple(it.theme, it.reducedMotion || it.reader.eInkMode, it.bookSettings.filterValues { value -> value.eInkMode }.keys) }.distinctUntilChanged() }
+                .collectAsStateWithLifecycle(initialValue = remember(app) { app.store.state.value.let { Triple(it.theme, it.reducedMotion || it.reader.eInkMode, it.bookSettings.filterValues { value -> value.eInkMode }.keys) } })
             val link by incoming.collectAsStateWithLifecycle()
             CompositionLocalProvider(LocalReducedMotion provides appearance.second) {
             NoveliaTheme(appearance.first) {
@@ -71,19 +71,25 @@ class MainActivity : ComponentActivity() {
                             } }
                             val duration = if(appearance.second) 0 else 220
                             val travel = with(LocalDensity.current) { 24.dp.roundToPx() }
+                            fun staticReader(entry: androidx.navigation.NavBackStackEntry): Boolean = entry.destination.route?.startsWith("reader/") == true &&
+                                "${entry.arguments?.getString("provider")}/${entry.arguments?.getString("id")}" in appearance.third
                             NavHost(nav, startDestination = "shelf", modifier = Modifier.weight(1f), enterTransition = {
+                                if(duration == 0 || staticReader(initialState) || staticReader(targetState)) return@NavHost EnterTransition.None
                                 val from = roots.indexOf(initialState.destination.route)
                                 val to = roots.indexOf(targetState.destination.route)
                                 val direction = if(from >= 0 && to >= 0 && to < from) -1 else 1
                                 fadeIn(tween(duration)) + slideInHorizontally(tween(duration, easing = FastOutSlowInEasing)) { direction * travel }
                             }, exitTransition = {
+                                if(duration == 0 || staticReader(initialState) || staticReader(targetState)) return@NavHost ExitTransition.None
                                 val from = roots.indexOf(initialState.destination.route)
                                 val to = roots.indexOf(targetState.destination.route)
                                 val direction = if(from >= 0 && to >= 0 && to < from) -1 else 1
                                 fadeOut(tween(duration * 2 / 3)) + slideOutHorizontally(tween(duration, easing = FastOutSlowInEasing)) { -direction * travel / 2 }
                             }, popEnterTransition = {
+                                if(duration == 0 || staticReader(initialState) || staticReader(targetState)) return@NavHost EnterTransition.None
                                 fadeIn(tween(duration)) + slideInHorizontally(tween(duration, easing = FastOutSlowInEasing)) { -travel / 2 }
                             }, popExitTransition = {
+                                if(duration == 0 || staticReader(initialState) || staticReader(targetState)) return@NavHost ExitTransition.None
                                 fadeOut(tween(duration * 2 / 3)) + slideOutHorizontally(tween(duration, easing = FastOutSlowInEasing)) { travel }
                             }) {
                                 composable("shelf") { ShelfScreen(controller) }

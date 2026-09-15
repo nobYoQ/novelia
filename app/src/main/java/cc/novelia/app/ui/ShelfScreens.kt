@@ -192,43 +192,6 @@ fun readDocument(c: AppController, uri: Uri): Pair<String, ByteArray> {
     ) { content() }
 }
 
-@Composable fun CloudShelf(c: AppController) {
-    val profile by c.session.profile.collectAsStateWithLifecycle()
-    var kind by rememberSaveable { mutableIntStateOf(0) }; var folderId by rememberSaveable { mutableStateOf("") }; var page by rememberSaveable { mutableIntStateOf(0) }; var version by remember { mutableIntStateOf(0) }; var create by remember { mutableStateOf(false) }; var rename by remember { mutableStateOf<Folder?>(null) }; var deleting by remember { mutableStateOf<Folder?>(null) }; var sort by rememberSaveable { mutableStateOf("update") }
-    if(profile == null) { EmptyState("连接你的云端书架", "登录原站账号，访问网络小说和文库收藏。", Icons.Outlined.CloudQueue, "登录", { c.go("login") }); return }
-    val path = if(kind == 0) "user/favored-web" else "user/favored-wenku"
-    Column {
-        ChoiceRow("收藏类型", listOf("网络小说", "文库小说"), kind) { kind = it; folderId = ""; page = 0 }
-        AsyncContent(profile?.username, load = { c.api.get<CloudFolders>("user/favored") }, refreshKey = version) { folders, refresh ->
-            val list = if(kind == 0) folders.favoredWeb else folders.favoredWenku
-            val current = list.find { it.id == folderId } ?: list.firstOrNull()
-            Column {
-                Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    list.forEach { folder -> FilterChip(current?.id == folder.id, { folderId = folder.id; page = 0 }, label = { Text(folder.title) }) }
-                    AssistChip(onClick = { create = true }, label = { Text("新建") }, leadingIcon = { Icon(Icons.Outlined.Add, null) })
-                }
-                if(current != null) {
-                    Row(Modifier.padding(horizontal = 12.dp)) {
-                        TextButton(onClick = { rename = current }) { Text("重命名") }; TextButton(onClick = { deleting = current }) { Text("删除收藏夹") }
-                        TextButton(onClick = { sort = if(sort == "update") "create" else "update"; page = 0 }) { Text(if(sort == "update") "按更新" else "按收藏") }
-                    }
-                    AsyncContent(listOf(profile?.username, current.id, page, kind, sort), refreshKey = version, load = {
-                        val params = buildMap { put("page", "$page"); put("pageSize", "20"); put("sort", sort); if(kind == 0) { put("provider", providers.keys.joinToString(",")); put("level", if(profile?.canEdit == true) "0" else "1"); put("type", "0"); put("translate", "0"); put("query", "") } }
-                        if(kind == 0) c.api.get<Page<WebOutline>>("$path/${current.id}", params).let { Page(it.pageNumber, it.items.map(WebOutline::card)) } else c.api.get<Page<WenkuOutline>>("$path/${current.id}", params).let { Page(it.pageNumber, it.items.map(WenkuOutline::card)) }
-                    }) { result, _ -> LazyColumn {
-                        if(result.items.isEmpty()) item { EmptyState("收藏夹还是空的", "在书籍详情页选择云端收藏，即可加入这里。") }
-                        items(result.items, key = { it.ref.key }, contentType = { "book" }) { book -> BookRow(book, { c.book(book.ref) }, trailing = { IconButton(onClick = { c.action("已移出收藏夹") { c.cloudMutation("DELETE", "$path/${current.id}/${if(kind == 0) book.ref.key else book.ref.id}"); version++ } }) { Icon(Icons.Outlined.BookmarkRemove, "取消云端收藏") } }) }
-                        item { PageControls(page, result.pageNumber) { page = it } }
-                    } }
-                } else EmptyState("创建第一个云端收藏夹", "收藏夹与原站同步。", action = "新建收藏夹", onAction = { create = true })
-            }
-        }
-    }
-    if(create) TextPrompt("新建云端收藏夹", "名称", onDismiss = { create = false }) { title -> c.action { c.api.post(path, mapOf("title" to title)); version++ } }
-    rename?.let { folder -> TextPrompt("重命名收藏夹", "名称", folder.title, { rename = null }) { title -> c.action { c.api.put("$path/${folder.id}", mapOf("title" to title)); version++ } } }
-    deleting?.let { folder -> ConfirmDialog("删除「${folder.title}」？", "该云端收藏夹及其中的收藏记录会被移除，小说内容不受影响。", { deleting = null }) { c.action { c.api.request("DELETE", "$path/${folder.id}"); folderId = ""; version++ } } }
-}
-
 @Composable fun FavoriteSheet(c: AppController, book: BookCard, dismiss: () -> Unit) {
     val state by c.store.state.collectAsStateWithLifecycle(); val profile by c.session.profile.collectAsStateWithLifecycle()
     var cloud by remember { mutableStateOf(false) }
