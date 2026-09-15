@@ -1,0 +1,166 @@
+package cc.novelia.app
+
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.*
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import cc.novelia.app.data.*
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.*
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import java.io.File
+
+@RunWith(AndroidJUnit4::class)
+class ReaderToolbarOverlayTest {
+    @get:Rule val compose = createAndroidComposeRule<MainActivity>()
+
+    @Test fun automaticPagesKeepExactTextPageCountAndAnchorUnderOverlays() = verifyOverlay("auto")
+
+    @Test fun continuousScrollingKeepsTextCoordinatesAndPositionUnderOverlays() = verifyOverlay("scroll")
+
+    private fun verifyOverlay(mode: String) = withReader(ReaderSettings(paginationMode = mode, showPageButtons = true)) { app, ref ->
+        val bodyTag = if(mode == "auto") "reader-page" else "reader-scroll"
+        val next = if(mode == "auto") "下一页" else "下一屏"
+        // Verify both the chapter start and a position inside a long paragraph.
+        repeat(2) { page ->
+            if(page > 0) {
+                compose.onNodeWithText(next).performClick()
+                compose.waitUntil(10_000) { app.store.state.value.positions.getValue(ref.key).let { it.index > 0 && (mode == "scroll" || it.textOffset > 0) } }
+            }
+            val before = snapshot(bodyTag)
+            val counter = if(mode == "auto") pageCounter() else null
+            val anchor = app.store.state.value.positions.getValue(ref.key)
+            for(reduced in listOf(false, true)) {
+                compose.runOnIdle { app.store.update { it.copy(reducedMotion = reduced) } }
+                repeat(2) {
+                    compose.mainClock.autoAdvance = false
+                    try {
+                        compose.onNodeWithTag(bodyTag).performTouchInput { click(center) }
+                        compose.mainClock.advanceTimeBy(96)
+                        assertEquals("正文在工具栏动画途中不得移动或重新分页", before, snapshot(bodyTag))
+                        compose.mainClock.advanceTimeBy(400)
+                    } finally { compose.mainClock.autoAdvance = true }
+                    assertEquals(before, snapshot(bodyTag))
+                    if(counter != null) assertEquals(counter, pageCounter())
+                    assertAnchorEquals(anchor, app.store.state.value.positions.getValue(ref.key))
+                    if(it == 0) compose.onNodeWithContentDescription("阅读设置").assertDoesNotExist()
+                    else compose.onNodeWithContentDescription("阅读设置").assertIsDisplayed()
+                }
+            }
+            for(transparency in listOf(0f, .6f, 1f)) {
+                compose.runOnIdle { app.store.update { it.copy(reader = it.reader.copy(toolbarTransparency = transparency)) } }
+                assertEquals(before, snapshot(bodyTag))
+                if(counter != null) assertEquals(counter, pageCounter())
+            }
+            compose.runOnIdle { app.store.update { it.copy(reader = it.reader.copy(showPageButtons = false)) } }
+            assertEquals(before, snapshot(bodyTag))
+            compose.onNodeWithText(next).assertDoesNotExist()
+            compose.onNodeWithContentDescription("搜索本章").performClick()
+            compose.onNodeWithText("搜索本章段落").assertIsDisplayed()
+            assertEquals("展开搜索栏不得压缩正文", before, snapshot(bodyTag))
+            compose.onNodeWithText("搜索本章段落").performClick().performTextInput("测试")
+            assertEquals("搜索输入不得改变正文布局", before, snapshot(bodyTag))
+            compose.onNodeWithContentDescription("搜索本章").performClick()
+            compose.runOnIdle { app.store.update { it.copy(reader = it.reader.copy(showPageButtons = true, toolbarTransparency = .25f)) } }
+            assertEquals(before, snapshot(bodyTag))
+            assertAnchorEquals(anchor, app.store.state.value.positions.getValue(ref.key))
+        }
+        screenshot("toolbar-overlay-$mode")
+    }
+
+    @Test fun transparencySliderPersistsPerBookWithoutChangingGlobalDefaultsOrPage() =
+        withReader(ReaderSettings().withEInkMode(true)) { app, ref ->
+            compose.onNodeWithText("下一页").performClick()
+            compose.waitUntil(10_000) { (app.store.state.value.positions[ref.key]?.textOffset ?: 0) > 0 }
+            val before = snapshot("reader-page")
+            val counter = pageCounter()
+            compose.onNodeWithContentDescription("阅读设置").performClick()
+            compose.onNodeWithText("仅应用于这本书").performClick()
+            val slider = compose.onNodeWithTag("reader-toolbar-transparency")
+            slider.performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) { it(.6f) }
+            compose.onNodeWithText("工具栏透明度 60%").assertIsDisplayed()
+            screenshot("toolbar-transparency-preference")
+            compose.onNodeWithText("关闭面板").performClick()
+            assertEquals(before, snapshot("reader-page"))
+            assertEquals(counter, pageCounter())
+            compose.runOnIdle {
+                assertEquals(.25f, app.store.state.value.reader.toolbarTransparency, 0f)
+                assertEquals(.6f, app.store.state.value.bookSettings.getValue(ref.key).toolbarTransparency, .001f)
+            }
+            runBlocking { app.store.flush() }
+            val persisted = LocalStore(compose.activity).state.value
+            assertEquals(.6f, persisted.bookSettings.getValue(ref.key).toolbarTransparency, .001f)
+            compose.onNodeWithContentDescription("返回").performClick()
+            compose.onNodeWithText("工具栏覆盖测试").performClick()
+            compose.waitUntil(15_000) { compose.onAllNodesWithTag("reader-page-counter").fetchSemanticsNodes().isNotEmpty() }
+            assertEquals(before, snapshot("reader-page"))
+            assertEquals(counter, pageCounter())
+            compose.onNodeWithContentDescription("阅读设置").performClick()
+            compose.onNodeWithTag("reader-toolbar-transparency").performScrollTo()
+                .assertRangeInfoEquals(androidx.compose.ui.semantics.ProgressBarRangeInfo(.6f, 0f..1f))
+            compose.onNodeWithText("仅应用于这本书").performScrollTo().performClick()
+            compose.onNodeWithTag("reader-toolbar-transparency").performScrollTo()
+                .assertRangeInfoEquals(androidx.compose.ui.semantics.ProgressBarRangeInfo(.25f, 0f..1f))
+            compose.onNodeWithText("关闭面板").performClick()
+        }
+
+    private fun withReader(settings: ReaderSettings, block: (NoveliaApplication, BookRef) -> Unit) {
+        compose.waitUntil(15_000) { compose.onAllNodesWithText("本地文件").fetchSemanticsNodes().isNotEmpty() }
+        val app = compose.activity.application as NoveliaApplication
+        val previous = app.store.state.value
+        val ref = BookRef("local", "toolbar-overlay-regression")
+        try {
+            compose.runOnIdle {
+                app.store.update { it.copy(reader = settings, reducedMotion = false, bookSettings = it.bookSettings - ref.key,
+                    positions = it.positions - ref.key, historyPaused = false) }
+                app.store.saveDocument(LocalDocument(ref.id, "工具栏覆盖测试", "txt", listOf(
+                    LocalChapter("first", "第一章 林间旅途", List(6) { paragraph ->
+                        (1..80).joinToString("") { "第${paragraph + 1}段第${it}句，旅人沿着森林小路前行，寻找远处的小镇。" }
+                    }))))
+                app.store.saveBook(BookCard(ref, "工具栏覆盖测试"))
+            }
+            compose.onNodeWithText("本地文件").performClick()
+            compose.onNodeWithText("工具栏覆盖测试").performClick()
+            compose.waitUntil(15_000) { app.store.state.value.positions[ref.key]?.chapterId == "first" }
+            compose.waitForIdle()
+            block(app, ref)
+        } finally {
+            compose.mainClock.autoAdvance = true
+            compose.runOnIdle { app.store.update { previous } }
+        }
+    }
+
+    private fun snapshot(tag: String): List<Pair<String, Rect>> {
+        compose.waitForIdle()
+        val matching = compose.onAllNodes(hasAnyAncestor(hasTestTag(tag)) and
+            SemanticsMatcher.keyIsDefined(SemanticsProperties.Text), useUnmergedTree = true)
+        // LazyColumn also exposes cached, unplaced items; compare only the text actually on screen.
+        val nodes = matching.fetchSemanticsNodes().filterIndexed { index, _ -> matching[index].isDisplayed() }
+        assertTrue("正文应已加载", nodes.isNotEmpty())
+        return nodes.map { it.config[SemanticsProperties.Text].joinToString { text -> text.text } to it.boundsInRoot }
+    }
+
+    private fun pageCounter() = compose.onNodeWithTag("reader-page-counter").fetchSemanticsNode().config[SemanticsProperties.Text].single().text
+
+    private fun assertAnchorEquals(expected: Position, actual: Position) {
+        assertEquals(expected.chapterId, actual.chapterId)
+        assertEquals(expected.index, actual.index)
+        assertEquals(expected.offset, actual.offset)
+        assertEquals(expected.textOffset, actual.textOffset)
+    }
+
+    private fun screenshot(name: String) {
+        compose.waitForIdle()
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val file = File(instrumentation.targetContext.getExternalFilesDir("screenshots"), "$name.png")
+        instrumentation.uiAutomation.takeScreenshot().let { bitmap ->
+            file.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            bitmap.recycle()
+        }
+    }
+}

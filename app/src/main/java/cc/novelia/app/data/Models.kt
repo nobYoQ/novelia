@@ -86,8 +86,10 @@ import kotlinx.serialization.Serializable
     // Defaults migrate the old implicit paging mode and always-visible static-page buttons.
     val paginationMode: String = if(eInkMode || scrollPageTurn || horizontalPageTurn) "auto" else "scroll",
     val showPageButtons: Boolean = paged || paginationMode == "auto",
-    val beforeEInk: ReaderPagingState? = null, val eInkPreferences: ReaderPagingState? = null
+    val beforeEInk: ReaderPagingState? = null, val eInkPreferences: ReaderPagingState? = null,
+    val toolbarTransparency: Float = .25f
 ) {
+    val resolvedToolbarTransparency get() = if(toolbarTransparency.isFinite()) toolbarTransparency.coerceIn(0f, 1f) else .25f
     // Compatibility with settings saved before black-and-white became a theme choice.
     val resolvedTheme get() = if(monochrome) "monochrome" else theme
     fun withTheme(selected: String) = copy(theme = selected, monochrome = false)

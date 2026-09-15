@@ -6,6 +6,26 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ReaderPreferencesTest {
+    @Test fun toolbarTransparencyMigratesAndPersistsAcrossModesBooksAndBackups() {
+        assertEquals(.25f, appJson.decodeFromString<ReaderSettings>("{}").toolbarTransparency, 0f)
+        for (transparency in listOf(0f, .25f, .6f, 1f)) {
+            val settings = ReaderSettings(toolbarTransparency = transparency)
+            assertEquals(transparency, settings.withEInkMode(true).withEInkMode(false).toolbarTransparency, 0f)
+            assertEquals(transparency, settings.withPaginationMode("auto").toolbarTransparency, 0f)
+            val backup = SettingsBackup(reader = settings)
+            assertEquals(backup, appJson.decodeFromString<SettingsBackup>(appJson.encodeToString(backup)))
+            val library = LibraryState(reader = settings, bookSettings = mapOf("local/book" to settings.copy(toolbarTransparency = .8f)))
+            assertEquals(library, appJson.decodeFromString<LibraryState>(appJson.encodeToString(library)))
+        }
+    }
+
+    @Test fun importedToolbarTransparencyStaysWithinValidRenderingLimits() {
+        assertEquals(0f, ReaderSettings(toolbarTransparency = -1f).resolvedToolbarTransparency, 0f)
+        assertEquals(1f, ReaderSettings(toolbarTransparency = 2f).resolvedToolbarTransparency, 0f)
+        assertEquals(.25f, ReaderSettings(toolbarTransparency = Float.NaN).resolvedToolbarTransparency, 0f)
+        assertEquals(.25f, ReaderSettings(toolbarTransparency = Float.POSITIVE_INFINITY).resolvedToolbarTransparency, 0f)
+    }
+
     @Test fun eInkToggleRestoresBothProfilesWithoutOverwritingOtherPreferences() {
         val normal = ReaderSettings(paginationMode = "scroll", showPageButtons = false, scrollPageTurn = false,
             horizontalPageTurn = true, volumeKeys = false, theme = "paper")

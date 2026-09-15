@@ -71,11 +71,16 @@ class AppFlowTest {
             compose.onNodeWithText("已完成").assertIsDisplayed()
             compose.onNodeWithText("导入阅读").assertIsDisplayed()
             screenshot("download-complete")
+            // Dismiss the completion overlay before tapping rows near the bottom of the next screen.
+            if(compose.onAllNodesWithContentDescription("关闭提示").fetchSemanticsNodes().isNotEmpty()) {
+                compose.onNodeWithContentDescription("关闭提示").performClick()
+            }
             compose.onNodeWithContentDescription("返回").performClick()
         } finally {
             compose.runOnIdle { app.store.update { it.copy(downloads = originalDownloads) } }
         }
-        compose.onNodeWithText("阅读与外观").performClick()
+        compose.onNodeWithText("阅读与外观").performScrollTo().performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("应用主题").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("深色", useUnmergedTree = true).performClick()
         compose.onNodeWithText("减少动态效果").performClick()
         compose.runOnIdle {
@@ -86,6 +91,7 @@ class AppFlowTest {
         }
         screenshot("dark-settings")
         } catch (error: Throwable) {
+            screenshot("app-flow-failure")
             android.util.Log.e("NoveliaFlowTest", "Local reading regression failed before activity teardown", error)
             throw error
         }

@@ -75,6 +75,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
+import kotlin.math.roundToInt
 
 @Composable fun ReaderScreen(c: AppController, ref: BookRef, chapterId: String) {
     val local by c.store.state.collectAsStateWithLifecycle()
@@ -102,6 +103,7 @@ import java.util.UUID
     val focusManager = LocalFocusManager.current
     val background = when(settings.resolvedTheme) { "monochrome" -> Color.White; "paper" -> Color(0xFFF4ECD8); "dark" -> Color(0xFF141A16); "light" -> Color(0xFFFAFAF6); else -> colors.surface }
     val foreground = when(settings.resolvedTheme) { "monochrome" -> Color.Black; "dark" -> Color(0xFFDDE5DC); "paper", "light" -> Color(0xFF282E27); else -> colors.onSurface }
+    val toolbarBackground = background.copy(alpha = 1f - settings.resolvedToolbarTransparency)
     SideEffect { activity?.let { WindowCompat.getInsetsController(it.window, it.window.decorView).apply { isAppearanceLightStatusBars = background.luminance() > .5f; isAppearanceLightNavigationBars = background.luminance() > .5f } } }
     DisposableEffect(settings.keepScreenOn, settings.brightness) {
         val old = activity?.window?.attributes?.screenBrightness
@@ -142,10 +144,10 @@ import java.util.UUID
         var lastSavedPosition by remember { mutableStateOf<Position?>(null) }
         var finding by remember { mutableStateOf(false) }
         var topOverlayHeight by remember { mutableIntStateOf(0) }
-        var bottomOverlayHeight by remember { mutableIntStateOf(0) }
         val density = LocalDensity.current
-        val safeTop = WindowInsets.safeDrawing.getTop(density)
-        val safeBottom = WindowInsets.safeDrawing.getBottom(density)
+        // Search and its keyboard are overlays too; only system bars/cutouts bound the reading viewport.
+        val readingInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
+        val safeTop = readingInsets.getTop(density)
         val volumeKeysActive = !preferences && !search && !toc && !speechSheet && selected == null && note == null
         LaunchedEffect(volumeKeysActive) { if(volumeKeysActive) runCatching { focus.requestFocus() } }
         fun savePosition() {
@@ -181,9 +183,7 @@ import java.util.UUID
                 else { eInk.move(direction); savePosition() }
                 return
             }
-            val topCovered = if(menu) (topOverlayHeight - safeTop).coerceAtLeast(0) else 0
-            val bottomCovered = (bottomOverlayHeight - safeBottom).coerceAtLeast(0)
-            val distance = (scroll.layoutInfo.viewportSize.height - topCovered - bottomCovered).coerceAtLeast(1) * .85f
+            val distance = scroll.layoutInfo.viewportSize.height.coerceAtLeast(1) * .85f
             scope.launch { if(reducedMotion) scroll.scrollBy(distance * direction) else scroll.animateScrollBy(distance * direction) }
         }
         fun findNext() {
@@ -238,19 +238,18 @@ import java.util.UUID
                 true
             } else false
         }.focusable()) {
-            // Flowing text keeps its scroll offset. E-ink text reflows to the unobscured
-            // viewport while retaining the character at the start of the current page.
+            // Both modes have a fixed viewport. Toolbars are sibling overlays and must
+            // never contribute padding or constraints to the text's layout.
             if(settings.staticPagination) EInkPage(paragraphs, settings, eInk,
-                Modifier.testTag("reader-page").align(Alignment.TopCenter).fillMaxHeight().windowInsetsPadding(WindowInsets.safeDrawing)
+                Modifier.testTag("reader-page").align(Alignment.TopCenter).fillMaxHeight().windowInsetsPadding(readingInsets)
                     .widthIn(max = settings.width.dp).fillMaxWidth().padding(horizontal = 24.dp)
-                    .padding(top = with(density) { (if(menu) (topOverlayHeight - safeTop).coerceAtLeast(0) else 0).toDp() },
-                        bottom = with(density) { (bottomOverlayHeight - safeBottom).coerceAtLeast(0).toDp() }),
+                    .padding(vertical = 16.dp),
                 imageModel = { it.imageUrl ?: it.localImageId?.takeIf { ref.isLocal }?.let { id -> c.store.documentImage(ref.id, id) } },
                 onToggleMenu = { menu = !menu }, onSelect = { selected = it }, onPage = ::page,
                 background = background, foreground = foreground)
             else LazyColumn(state = scroll, modifier = Modifier.testTag("reader-scroll").align(Alignment.TopCenter).fillMaxHeight()
-                .windowInsetsPadding(WindowInsets.safeDrawing).widthIn(max = settings.width.dp).fillMaxWidth()
-                , contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 88.dp, bottom = if(settings.showPageButtons) 156.dp else 104.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                .windowInsetsPadding(readingInsets).widthIn(max = settings.width.dp).fillMaxWidth()
+                , contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 item("title", contentType = "title") {
                     Column(Modifier.fillMaxWidth().clickable(onClickLabel = "显示或收起阅读工具栏") { menu = !menu }) {
                         Text(chapter.title, Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium, color = foreground)
@@ -275,14 +274,16 @@ import java.util.UUID
                 }
             }
             AnimatedVisibility(menu, Modifier.align(Alignment.TopCenter), enter = if(reducedMotion) EnterTransition.None else fadeIn(tween(180)) + slideInVertically(tween(220)) { -it }, exit = if(reducedMotion) ExitTransition.None else fadeOut(tween(140)) + slideOutVertically(tween(180)) { -it }) {
-                Column(Modifier.background(background).onSizeChanged { topOverlayHeight = it.height }) {
+                Surface(Modifier.testTag("reader-top-toolbar"), color = toolbarBackground, contentColor = foreground) {
+                // This height is used only to place search results below the overlay.
+                Column(Modifier.onSizeChanged { topOverlayHeight = it.height }) {
                     TopAppBar(title = { Text(chapter.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium) }, navigationIcon = {
                         IconButton(onClick = { if(!leaving) { savePosition(); leaving = true; c.back() } }) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "返回") }
                     }, actions = {
                         if(!ref.isLocal) IconButton(onClick = { version++ }, enabled = !leaving) { Icon(Icons.Outlined.Refresh, "刷新本章译文") }
                         IconButton(onClick = { if(search) focusManager.clearFocus(); search = !search }) { Icon(Icons.Outlined.Search, "搜索本章") }
                         IconButton(onClick = { preferences = true }) { Icon(Icons.Outlined.TextFields, "阅读设置") }
-                    }, colors = TopAppBarDefaults.topAppBarColors(containerColor = background, titleContentColor = foreground, actionIconContentColor = foreground, navigationIconContentColor = foreground))
+                    }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent, scrolledContainerColor = Color.Transparent, titleContentColor = foreground, actionIconContentColor = foreground, navigationIconContentColor = foreground))
                     AnimatedVisibility(search,
                         enter = if(reducedMotion) EnterTransition.None else fadeIn(tween(160)) + expandVertically(tween(220), expandFrom = Alignment.Top),
                         exit = if(reducedMotion) ExitTransition.None else fadeOut(tween(100)) + shrinkVertically(tween(180), shrinkTowards = Alignment.Top)
@@ -293,15 +294,17 @@ import java.util.UUID
                         }
                     }
                 }
+                }
             }
-            Column(Modifier.align(Alignment.BottomCenter).onSizeChanged { bottomOverlayHeight = it.height }) {
-                if(settings.showPageButtons) Row(Modifier.fillMaxWidth().background(background).padding(horizontal = 12.dp, vertical = 4.dp).then(if(!menu) Modifier.navigationBarsPadding() else Modifier), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
+            Surface(Modifier.align(Alignment.BottomCenter).testTag("reader-bottom-toolbar"), color = toolbarBackground, contentColor = foreground) {
+            Column {
+                if(settings.showPageButtons) Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).then(if(!menu) Modifier.navigationBarsPadding() else Modifier), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
                     OutlinedButton(onClick = { page(-1) }, colors = ButtonDefaults.outlinedButtonColors(contentColor = foreground, disabledContentColor = foreground.copy(alpha = .38f)), enabled = if(settings.staticPagination) eInk.canGoBack || (eInk.pages.isNotEmpty() && chapter.prevId != null) else scroll.canScrollBackward) { Text(if(settings.staticPagination) "上一页" else "上一屏") }
-                    if(settings.staticPagination) Text("${eInk.pageIndex + 1} / ${eInk.pages.size.coerceAtLeast(1)}", color = foreground, style = MaterialTheme.typography.labelMedium)
+                    if(settings.staticPagination) Text("${eInk.pageIndex + 1} / ${eInk.pages.size.coerceAtLeast(1)}", Modifier.testTag("reader-page-counter"), color = foreground, style = MaterialTheme.typography.labelMedium)
                     OutlinedButton(onClick = { page(1) }, colors = ButtonDefaults.outlinedButtonColors(contentColor = foreground, disabledContentColor = foreground.copy(alpha = .38f)), enabled = if(settings.staticPagination) eInk.canGoForward || (eInk.pages.isNotEmpty() && chapter.nextId != null) else scroll.canScrollForward) { Text(if(settings.staticPagination) "下一页" else "下一屏") }
                 }
                 AnimatedVisibility(menu, enter = if(reducedMotion) EnterTransition.None else fadeIn(tween(180)) + slideInVertically(tween(220)) { it }, exit = if(reducedMotion) ExitTransition.None else fadeOut(tween(140)) + slideOutVertically(tween(180)) { it }) {
-                    Surface(color = background, contentColor = foreground, tonalElevation = 2.dp) {
+                    Surface(color = Color.Transparent, contentColor = foreground) {
                         Column(Modifier.navigationBarsPadding()) {
                             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                 IconButton(onClick = { chapter.prevId?.let(::openChapter) }, enabled = chapter.prevId != null && !leaving) { Icon(Icons.Outlined.SkipPrevious, "上一章") }
@@ -317,6 +320,7 @@ import java.util.UUID
                         }
                     }
                 }
+            }
             }
         }
         if(toc) ReaderSheet(onDismissRequest = { toc = false }) {
@@ -411,6 +415,10 @@ import java.util.UUID
             TogglePreference("左右翻页", "向左滑动下一页，向右滑动上一页", value.horizontalPageTurn) { onChange(value.copy(horizontalPageTurn = it)) }
         }
         TogglePreference("显示翻页按钮", if(value.staticPagination) "显示上一页、下一页和页码" else "显示上一屏、下一屏，每次移动约一屏正文", value.showPageButtons) { onChange(value.copy(showPageButtons = it)) }
+        ReaderSlider("工具栏透明度 ${(value.resolvedToolbarTransparency * 100).roundToInt()}%", value.resolvedToolbarTransparency, 0f..1f,
+            modifier = Modifier.testTag("reader-toolbar-transparency")) { onChange(value.copy(toolbarTransparency = it)) }
+        Text("0% 为不透明，100% 为背景完全透明；文字和图标保持清晰。工具栏覆盖正文，显示或收起不会改变排版。",
+            Modifier.padding(horizontal = 20.dp, vertical = 4.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         ChoiceRow("显示语言", listOf("中文", "日文", "中日", "日中"), listOf("zh", "jp", "zh-jp", "jp-zh").indexOf(value.mode)) { onChange(value.copy(mode = listOf("zh", "jp", "zh-jp", "jp-zh")[it])) }
         ChoiceRow("优先译文", listOf("Sakura", "GPT", "有道"), listOf("sakura", "gpt", "youdao").indexOf(value.engines.firstOrNull())) { val engine = listOf("sakura", "gpt", "youdao")[it]; onChange(value.copy(engines = listOf(engine) + value.engines.filterNot { e -> e == engine })) }
         TogglePreference("并列展示译文", "关闭时按优先顺序回退", value.parallel) { onChange(value.copy(parallel = it)) }
@@ -438,4 +446,4 @@ import java.util.UUID
     }
 }
 @Composable fun TogglePreference(title: String, subtitle: String, value: Boolean, onChange: (Boolean) -> Unit) { ListItem(headlineContent = { Text(title) }, supportingContent = if(subtitle.isNotBlank()) ({ Text(subtitle) }) else null, trailingContent = { Switch(value, onCheckedChange = null) }, modifier = Modifier.toggleable(value = value, role = Role.Switch, onValueChange = onChange)) }
-@Composable private fun ReaderSlider(label: String, value: Float, range: ClosedFloatingPointRange<Float>, enabled: Boolean = true, onChange: (Float) -> Unit) { Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) { Text(label, style = MaterialTheme.typography.labelLarge); Slider(value, onChange, valueRange = range, enabled = enabled) } }
+@Composable private fun ReaderSlider(label: String, value: Float, range: ClosedFloatingPointRange<Float>, modifier: Modifier = Modifier, enabled: Boolean = true, onChange: (Float) -> Unit) { Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) { Text(label, style = MaterialTheme.typography.labelLarge); Slider(value, onChange, modifier = modifier, valueRange = range, enabled = enabled) } }
