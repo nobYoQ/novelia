@@ -27,6 +27,10 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         initialization
+        applicationScope.launch {
+            initialization.await()
+            cc.novelia.app.files.DownloadFiles.cleanup(store.downloadsDir)
+        }
     }
 
     fun persistState() {

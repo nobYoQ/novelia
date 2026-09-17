@@ -40,58 +40,82 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
 
 @Stable internal class EInkPageState(initial: Position?) {
-    var pages by mutableStateOf<List<StaticPage>>(emptyList())
+    // The renderer binds this exact list to its measured text snapshot. Equal line
+    // values from a new measurement still need to replace the previous list instance.
+    var pages by mutableStateOf<List<StaticPage>>(emptyList(), referentialEqualityPolicy())
         private set
     var pageIndex by mutableIntStateOf(0)
         private set
+    var ready by mutableStateOf(false)
+        private set
     private var anchorParagraph = ((initial?.index ?: 1) - 1).coerceAtLeast(0)
     private var anchorOffset = initial?.textOffset ?: 0
+    private var sourceParagraph: Int? = null
+    private var content = emptyList<ReadingParagraph>()
     val current get() = pages.getOrNull(pageIndex)
     val paragraph get() = current?.lines?.firstOrNull()?.paragraph ?: anchorParagraph
     val textOffset get() = current?.lines?.firstOrNull()?.start ?: anchorOffset
+    val sourceIndex get() = content.getOrNull(paragraph)?.index ?: sourceParagraph
     val canGoBack get() = pageIndex > 0
     val canGoForward get() = pageIndex + 1 < pages.size
 
-    fun install(next: List<StaticPage>) {
+    fun install(next: List<StaticPage>, paragraphs: List<ReadingParagraph> = content) {
+        sourceParagraph?.let { source ->
+            anchorParagraph = paragraphs.indexOfFirst { it.index >= source }.takeIf { it >= 0 }
+                ?: paragraphs.lastIndex.coerceAtLeast(0)
+        }
+        content = paragraphs
+        sourceParagraph = paragraphs.getOrNull(anchorParagraph)?.index
         pages = next
         // Keep the requested character through every intermediate viewport measurement.
         // Snapping the anchor to each temporary page start progressively loses position.
         pageIndex = pageForAnchor(next, anchorParagraph, anchorOffset)
+        ready = true
     }
+    fun invalidate() { ready = false }
     fun move(direction: Int) {
-        if (pages.isNotEmpty()) {
+        if (ready && pages.isNotEmpty()) {
             pageIndex = (pageIndex + direction).coerceIn(0, pages.lastIndex)
             anchorParagraph = paragraph
             anchorOffset = textOffset
+            sourceParagraph = content.getOrNull(anchorParagraph)?.index
         }
     }
-    fun find(paragraph: Int) {
+    fun find(paragraph: Int, offset: Int = 0, source: Int? = null) {
         anchorParagraph = paragraph
-        anchorOffset = 0
-        pageIndex = pageForAnchor(pages, paragraph, 0)
+        anchorOffset = offset.coerceAtLeast(0)
+        sourceParagraph = source ?: content.getOrNull(paragraph)?.index
+        pageIndex = pageForAnchor(pages, paragraph, anchorOffset)
     }
 }
 
-internal data class MeasuredEInkChapter(val layouts: Map<Int, StaticLayout>, val pages: List<StaticPage>)
+internal data class MeasuredEInkChapter(val paragraphs: List<ReadingParagraph>, val layouts: Map<Int, StaticLayout>, val pages: List<StaticPage>)
+private data class EInkMeasureInput(val paragraphs: List<ReadingParagraph>, val typography: List<Any>, val width: Int, val height: Int, val density: Float, val fontScale: Float)
+private data class EInkMeasurement(val input: EInkMeasureInput, val chapter: MeasuredEInkChapter)
 
 /** Apply secondary opacity to the current theme's paint without storing a fixed color. */
 private class SecondaryOpacity(private val alpha: Float) : CharacterStyle(), UpdateAppearance {
     override fun updateDrawState(paint: TextPaint) { paint.alpha = (paint.alpha * alpha).toInt().coerceIn(0, 255) }
 }
 
-internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: ReaderSettings, width: Int, height: Int, density: Float, fontScale: Float): MeasuredEInkChapter {
+internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: ReaderSettings, width: Int, height: Int, density: Float, fontScale: Float, checkCancelled: () -> Unit = {}): MeasuredEInkChapter {
     val layouts = mutableMapOf<Int, StaticLayout>()
     val lines = mutableListOf<PageLine>()
     paragraphs.forEachIndexed { index, paragraph ->
+        checkCancelled()
         if (paragraph.imageUrl != null || paragraph.localImageId != null) {
             lines += PageLine(index, 0, 0, height, image = true)
         } else {
             val text = SpannableStringBuilder()
             paragraph.parts.forEachIndexed { partIndex, part ->
+                checkCancelled()
                 if (partIndex > 0) text.append("\n\n")
                 if (settings.parallel && part.source in listOf("sakura", "gpt", "youdao")) text.append(part.source.uppercase()).append("\n")
                 val start = text.length
@@ -113,10 +137,13 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
                 .setAlignment(Layout.Alignment.ALIGN_NORMAL).setIncludePad(false)
                 .setLineSpacing(0f, settings.lineHeight).build()
             layouts[index] = layout
-            for (line in 0 until layout.lineCount) lines += PageLine(index, layout.getLineStart(line), layout.getLineEnd(line), layout.getLineBottom(line) - layout.getLineTop(line))
+            for (line in 0 until layout.lineCount) {
+                if (line % 32 == 0) checkCancelled()
+                lines += PageLine(index, layout.getLineStart(line), layout.getLineEnd(line), layout.getLineBottom(line) - layout.getLineTop(line))
+            }
         }
     }
-    return MeasuredEInkChapter(layouts, paginateLines(lines, height, (20 * density).toInt()))
+    return MeasuredEInkChapter(paragraphs, layouts, paginateLines(lines, height, (20 * density).toInt(), checkCancelled))
 }
 
 /** Draw pre-measured full lines; swipes commit one page on release, with no scrolling frames. */
@@ -143,22 +170,30 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
         val height = constraints.maxHeight.coerceAtLeast(1)
         // Reflow only for typography/content/viewport changes. Turning a page reuses all layouts.
         val typography = listOf(settings.fontSize, settings.lineHeight, settings.weight, settings.indent, settings.parallel, settings.underline, settings.secondaryAlpha)
-        val measured by produceState<MeasuredEInkChapter?>(null, paragraphs, typography, width, height, density) {
-            value = null
+        val input = EInkMeasureInput(paragraphs, typography, width, height, density.density, density.fontScale)
+        val measured by produceState<EInkMeasurement?>(null, input) {
+            // Coalesce viewport changes and repeated preference updates before measuring.
+            if(value != null) delay(120)
             if (width != Constraints.Infinity && height != Constraints.Infinity) {
-                val next = withContext(Dispatchers.Default) { measureEInkChapter(paragraphs, settings, width, height, density.density, density.fontScale) }
-                state.install(next.pages)
-                value = next
+                val next = withContext(Dispatchers.Default) {
+                    val jobContext = currentCoroutineContext()
+                    measureEInkChapter(paragraphs, settings, width, height, density.density, density.fontScale) { jobContext.ensureActive() }
+                }
+                state.install(next.pages, next.paragraphs)
+                value = EInkMeasurement(input, next)
             }
         }
-        val chapter = measured
+        // produceState retains the previous value until its new effect starts. Never pair
+        // that value (or the previous state's page) with this composition's new content.
+        val chapter = measured?.takeIf { it.input == input && state.pages === it.chapter.pages }?.chapter
+        SideEffect { if(chapter == null) state.invalidate() }
         if (chapter == null) Text("正在分页…", Modifier.align(Alignment.Center), color = foreground)
         else {
             val page = state.current
             Column(Modifier.fillMaxSize().combinedClickable(onClickLabel = "显示或收起阅读工具栏", onClick = onToggleMenu)) {
                 page?.lines?.groupBy { it.paragraph }?.entries?.forEachIndexed { groupIndex, (index, lines) ->
                     if (groupIndex > 0) Spacer(Modifier.height(20.dp))
-                    val paragraph = paragraphs[index]
+                    val paragraph = chapter.paragraphs[index]
                     if (lines.first().image) {
                         val model = imageModel(paragraph)
                         val request = remember(context, model) { ImageRequest.Builder(context).data(model).crossfade(false).build() }

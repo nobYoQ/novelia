@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -17,14 +18,31 @@ import cc.novelia.app.data.*
 import cc.novelia.app.files.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
 
 @Composable fun ToolsScreen(c: AppController) {
     var tool by remember { mutableIntStateOf(0) }; var input by remember { mutableStateOf("") }; var output by remember { mutableStateOf("") }; var resultBytes by remember { mutableStateOf<ByteArray?>(null) }; var fileName by remember { mutableStateOf("result.txt") }; var busy by remember { mutableStateOf(false) }; var picked by remember { mutableStateOf<Pair<String, ByteArray>?>(null) }; var error by remember { mutableStateOf<String?>(null) }
+    val exportFiles = remember(c.store) { PendingExportFiles(c.store.exportsDir) }
+    var pendingExportId by rememberSaveable { mutableStateOf<String?>(null) }
+    var preparingExport by remember { mutableStateOf(false) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let { c.action { val file = withContext(Dispatchers.IO) { readDocument(c, it) }; picked = file; if(tool >= 2) input = withContext(Dispatchers.Default) { DocumentTools.decodeText(file.second) } } } }
-    val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri -> val bytes = resultBytes; if(uri != null && bytes != null) c.action("结果已导出") { withContext(Dispatchers.IO) { c.app.contentResolver.openOutputStream(uri)?.use { it.write(bytes) } ?: error("无法写入文件") } } }
+    val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+        val id = pendingExportId
+        pendingExportId = null
+        if(id == null) {
+            if(uri != null) c.message("待导出结果已不存在，请重新处理文件后再导出")
+        } else c.action(if(uri != null) "结果已导出" else null) {
+            withContext(Dispatchers.IO) {
+                val workContext = coroutineContext
+                val destination: (() -> java.io.OutputStream?)? = uri?.let { target -> { c.app.contentResolver.openOutputStream(target) } }
+                exportFiles.finish(id, destination) { workContext.ensureActive() }
+            }
+        }
+    }
     Screen("文件工具", c::back) { padding -> AppScrollColumn(modifier = Modifier.padding(padding), contentModifier = Modifier.padding(bottom = 24.dp)) {
         MenuRow("个人术语表", "保存在此设备，可导入与导出 JSON", Icons.Outlined.Translate, { c.go("glossary/local/personal") })
         ChoiceRow("工具", listOf("EPUB 转 TXT", "EPUB 图片压缩", "OCR 换行整理", "片假名统计"), tool) { if (!busy) { tool = it; output = ""; resultBytes = null; error = null } }
@@ -40,7 +58,7 @@ import kotlinx.serialization.json.*
                         when(selectedTool) {
                             0 -> { val file = requireNotNull(selectedFile) { "请先选择 EPUB" }; val text = DocumentTools.epubToTxt(file.second); Triple(text, text.toByteArray(Charsets.UTF_8), file.first.substringBeforeLast('.') + ".txt") }
                             1 -> { val file = requireNotNull(selectedFile) { "请先选择 EPUB" }; val bytes = EpubCompressor.compress(file.second); Triple("原文件：${file.second.size / 1024} KB\n处理后：${bytes.size / 1024} KB", bytes, file.first.substringBeforeLast('.') + ".compressed.epub") }
-                            2 -> { val text = DocumentTools.repairOcr(selectedInput); Triple(text, text.toByteArray(Charsets.UTF_8), "OCR整理.txt") }
+                            2 -> { val text = DocumentTools.repairOcr(selectedInput) { coroutineContext.ensureActive() }; Triple(text, text.toByteArray(Charsets.UTF_8), "OCR整理.txt") }
                             else -> { val text = DocumentTools.katakana(selectedInput).joinToString("\n") { "${it.first}\t${it.second}" }; Triple(text, ("词语\t频次\n$text").toByteArray(Charsets.UTF_8), "片假名统计.tsv") }
                         }
                     }
@@ -52,29 +70,103 @@ import kotlinx.serialization.json.*
         }, enabled = !busy && (if(tool < 2) picked != null else input.isNotBlank()), modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) { Text(if(busy) "处理中…" else "开始处理") }
         if(busy) LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 20.dp))
         error?.let { Text(it, Modifier.padding(20.dp), color = MaterialTheme.colorScheme.error) }
-        if(resultBytes != null) { SectionTitle("结果预览", "导出文件") { exporter.launch(fileName) }; Text(output.take(12000).ifBlank { "没有找到匹配的内容" } + if(output.length > 12000) "\n…预览已截取，导出包含全部内容。" else "", Modifier.padding(20.dp), style = MaterialTheme.typography.bodyMedium) }
+        if(resultBytes != null) {
+            Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 14.dp, bottom = 6.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Text("结果预览", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                TextButton(enabled = !preparingExport && pendingExportId == null, onClick = {
+                val bytes = resultBytes
+                if(bytes != null && !preparingExport && pendingExportId == null) {
+                    val name = fileName
+                    preparingExport = true
+                    c.action {
+                        var stagedId: String? = null
+                        var launched = false
+                        try {
+                            withContext(Dispatchers.IO) {
+                                val workContext = coroutineContext
+                                stagedId = exportFiles.create(bytes) { workContext.ensureActive() }
+                            }
+                            pendingExportId = stagedId
+                            exporter.launch(name)
+                            launched = true
+                        } finally {
+                            preparingExport = false
+                            if(!launched) {
+                                pendingExportId = null
+                                stagedId?.let { id -> withContext(NonCancellable + Dispatchers.IO) { exportFiles.finish(id, null) } }
+                            }
+                        }
+                    }
+                }
+                }) { Text(if(preparingExport) "准备导出…" else if(pendingExportId != null) "等待选择位置…" else "导出文件") }
+            }
+            Text(output.take(12000).ifBlank { "没有找到匹配的内容" } + if(output.length > 12000) "\n…预览已截取，导出包含全部内容。" else "", Modifier.padding(20.dp), style = MaterialTheme.typography.bodyMedium)
+        }
     } }
 }
 
 @Composable fun GlossaryScreen(c: AppController, ref: BookRef) {
     var data by remember { mutableStateOf<Map<String, String>?>(null) }; var original by remember { mutableStateOf<Map<String, String>>(emptyMap()) }; var query by remember { mutableStateOf("") }; var editing by remember { mutableStateOf<Pair<String, String>?>(null) }; var add by remember { mutableStateOf(false) }; var saving by remember { mutableStateOf(false) }
+    val exportFiles = remember(c.store) { PendingExportFiles(c.store.exportsDir) }
+    var pendingExportId by rememberSaveable(ref.key) { mutableStateOf<String?>(null) }
+    var preparingExport by remember(ref.key) { mutableStateOf(false) }
     val profile by c.session.profile.collectAsStateWithLifecycle()
     val canEdit = ref.isLocal || profile?.canEdit == true
+    val settledQuery = rememberDebouncedQuery(query)
+    val entries = remember(data, settledQuery) { data.orEmpty().entries.filter { it.key.contains(settledQuery, true) || it.value.contains(settledQuery, true) } }
     val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let { c.action("术语表已载入，请检查后保存") { val (_, bytes) = withContext(Dispatchers.IO) { readDocument(c, it) }; val parsed = appJson.decodeFromString<Map<String, String>>(bytes.toString(Charsets.UTF_8)); require(parsed.size <= 5000 && parsed.keys.none(String::isBlank)); data = data.orEmpty() + parsed } } }
-    val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri -> uri?.let { c.action("术语表已导出") { withContext(Dispatchers.IO) { c.app.contentResolver.openOutputStream(it)?.use { output -> output.write(appJson.encodeToString(data.orEmpty()).toByteArray()) } ?: error("无法写入文件") } } } }
+    val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        val id = pendingExportId
+        pendingExportId = null
+        if(id == null) {
+            if(uri != null) c.message("待导出术语表已不存在，请重新选择导出")
+        } else c.action(if(uri != null) "术语表已导出" else null) {
+            withContext(Dispatchers.IO) {
+                val workContext = coroutineContext
+                val destination: (() -> java.io.OutputStream?)? = uri?.let { target -> { c.app.contentResolver.openOutputStream(target) } }
+                exportFiles.finish(id, destination) { workContext.ensureActive() }
+            }
+        }
+    }
     Screen("术语表", c::back, actions = {
-        IconButton(onClick = { exporter.launch("${ref.id}.glossary.json") }, enabled = data != null) { Icon(Icons.Outlined.IosShare, "导出 JSON") }
+        IconButton(onClick = {
+            val submittedData = data?.toMap()
+            if(submittedData != null && !preparingExport && pendingExportId == null) {
+                preparingExport = true
+                c.action {
+                    var stagedId: String? = null
+                    var launched = false
+                    try {
+                        withContext(Dispatchers.IO) {
+                            val workContext = coroutineContext
+                            val bytes = appJson.encodeToString(submittedData).toByteArray(Charsets.UTF_8)
+                            stagedId = exportFiles.create(bytes) { workContext.ensureActive() }
+                        }
+                        pendingExportId = stagedId
+                        exporter.launch("${ref.id}.glossary.json")
+                        launched = true
+                    } finally {
+                        preparingExport = false
+                        if(!launched) {
+                            pendingExportId = null
+                            stagedId?.let { id -> withContext(NonCancellable + Dispatchers.IO) { exportFiles.finish(id, null) } }
+                        }
+                    }
+                }
+            }
+        }, enabled = data != null && !preparingExport && pendingExportId == null) {
+            Icon(Icons.Outlined.IosShare, if(preparingExport) "正在准备导出" else if(pendingExportId != null) "等待选择导出位置" else "导出 JSON")
+        }
         if(canEdit) { IconButton(onClick = { importer.launch(arrayOf("application/json", "text/plain", "*/*")) }) { Icon(Icons.Outlined.FileOpen, "导入 JSON") }; IconButton(onClick = { add = true }) { Icon(Icons.Outlined.Add, "添加词条") } }
     }) { padding -> AsyncContent(ref.key, load = { if(ref.isLocal) c.store.state.value.personalGlossaries[ref.key].orEmpty() else if(ref.isWenku) c.api.get<WenkuDetail>("wenku/${ref.id}").glossary else c.api.get<WebDetail>("novel/${ref.key}").glossary }, modifier = Modifier.padding(padding)) { glossary, _ ->
         LaunchedEffect(glossary) { if(data == null) { data = glossary; original = glossary } }
         Column {
             OutlinedTextField(query, { query = it }, label = { Text("查找原文或译名") }, modifier = Modifier.fillMaxWidth().padding(20.dp), singleLine = true)
             AppLazyColumn(Modifier.weight(1f)) {
-                val entries = data.orEmpty().entries.filter { it.key.contains(query, true) || it.value.contains(query, true) }
                 if(entries.isEmpty()) item { EmptyState("暂时没有匹配词条", "术语表用于统一作品中的人名和专有名词。", Icons.Outlined.Translate) }
                 items(entries, key = { it.key }) { item -> ListItem(headlineContent = { Text(item.key) }, supportingContent = { Text(item.value) }, trailingContent = { if(canEdit) Row { IconButton(onClick = { editing = item.key to item.value }) { Icon(Icons.Outlined.Edit, "编辑词条") }; IconButton(onClick = { data = data.orEmpty() - item.key }) { Icon(Icons.Outlined.DeleteOutline, "删除词条") } } }) }
             }
-            if(canEdit) Button(onClick = { c.action("术语表已保存") { saving = true; try { if(ref.isLocal) c.store.update { it.copy(personalGlossaries = it.personalGlossaries + (ref.key to data.orEmpty())) } else { val latest = if(ref.isWenku) c.api.get<WenkuDetail>("wenku/${ref.id}").glossary else c.api.get<WebDetail>("novel/${ref.key}").glossary; if(latest != original) throw ApiException(409, "原站术语表已被他人更新，请重新进入此页后再编辑"); c.api.put(if(ref.isWenku) "wenku/${ref.id}/glossary" else "novel/${ref.key}/glossary", data.orEmpty()) }; original = data.orEmpty() } finally { saving = false } } }, enabled = data != original && !saving, modifier = Modifier.fillMaxWidth().padding(20.dp)) { Text(if(saving) "保存中…" else if(ref.isLocal) "保存到此设备" else "保存到原站") }
+            if(canEdit) Button(onClick = { c.action("术语表已保存") { saving = true; val submittedData = data.orEmpty().toMap(); val submittedOriginal = original; try { if(ref.isLocal) c.store.update { it.copy(personalGlossaries = it.personalGlossaries + (ref.key to submittedData)) } else { val latest = if(ref.isWenku) c.api.get<WenkuDetail>("wenku/${ref.id}").glossary else c.api.get<WebDetail>("novel/${ref.key}").glossary; if(latest != submittedOriginal) throw ApiException(409, "原站术语表已被他人更新，请重新进入此页后再编辑"); c.api.put(if(ref.isWenku) "wenku/${ref.id}/glossary" else "novel/${ref.key}/glossary", submittedData) }; original = submittedData } finally { saving = false } } }, enabled = data != null && data != original && !saving, modifier = Modifier.fillMaxWidth().padding(20.dp)) { Text(if(saving) "保存中…" else if(ref.isLocal) "保存到此设备" else "保存到原站") }
             else Text("维护术语表需要符合原站编辑权限；当前可浏览和导出。", Modifier.padding(20.dp), style = MaterialTheme.typography.bodySmall)
         }
     } }

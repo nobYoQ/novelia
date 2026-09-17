@@ -41,4 +41,20 @@ class MarkdownTest {
         assertTrue(spoilers("![图片](https://example.com/image.png)！普通感叹号!").isEmpty())
     }
 
+    @Test fun exhaustedSpoilerMarkersFallBackToLiteralMarkdown() {
+        val input = "!!" + ('\u2000'..'\u2bff').filter {
+            Character.getType(it) == Character.OTHER_PUNCTUATION.toInt()
+        }.joinToString("")
+        // This is the original short audit reproducer, not a large-input stress test.
+        assertEquals(50, input.length)
+        assertTrue(spoilers(input).isEmpty())
+        val plain = StringBuilder()
+        parser.parse(input).accept(object : AbstractVisitor() {
+            override fun visit(text: Text) { plain.append(text.literal) }
+        })
+        assertEquals(input, plain.toString())
+        val entities = "!!" + input.drop(2).map { "&#${it.code};" }.joinToString("")
+        assertTrue(spoilers(entities).isEmpty())
+    }
+
 }

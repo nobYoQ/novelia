@@ -30,7 +30,8 @@ import kotlinx.coroutines.delay
     var page by rememberSaveable { mutableIntStateOf(0) }
     var filterOpen by remember { mutableStateOf(false) }
     var advanced by remember { mutableStateOf(false) }
-    var source by rememberSaveable { mutableStateOf("") }; var type by rememberSaveable { mutableIntStateOf(0) }; var translate by rememberSaveable { mutableIntStateOf(0) }; var sort by rememberSaveable { mutableIntStateOf(0) }; var level by rememberSaveable { mutableIntStateOf(0) }
+    var source by rememberSaveable { mutableStateOf("") }; var type by rememberSaveable { mutableIntStateOf(0) }; var translate by rememberSaveable { mutableIntStateOf(0) }; var sort by rememberSaveable { mutableIntStateOf(0) }
+    var webLevel by rememberSaveable { mutableIntStateOf(0) }; var wenkuLevel by rememberSaveable { mutableIntStateOf(0) }
     val reducedMotion = LocalReducedMotion.current
     val local by c.store.state.collectAsStateWithLifecycle(); val profile by c.session.profile.collectAsStateWithLifecycle()
     fun search() {
@@ -81,10 +82,12 @@ import kotlinx.coroutines.delay
                             }
                             TextButton(onClick = { filterOpen = true }) { Icon(Icons.Outlined.Tune, null, Modifier.size(18.dp)); Text(" 筛选") }
                         }
-                        AsyncContent(listOf(category, page, submitted, source, type, translate, sort, level, profile?.username, profile?.canEdit), load = {
+                        val effectiveWebLevel = if(profile?.canEdit == true) webLevel.coerceIn(0, 2) else 1
+                        val effectiveWenkuLevel = wenkuLevel.coerceIn(0, if(profile?.canEdit == true) 6 else 4)
+                        AsyncContent(listOf(category, page, submitted, source, type, translate, sort, effectiveWebLevel, effectiveWenkuLevel, profile?.username, profile?.canEdit), load = {
                             if(filterOpen) delay(180)
-                            if(category == 1) c.api.webList(page, submitted, source, type, if(profile?.canEdit == true) level else 1, translate, sort).let { Page(it.pageNumber, it.items.map(WebOutline::card)) }
-                            else c.api.wenkuList(page, submitted, level).let { Page(it.pageNumber, it.items.map(WenkuOutline::card)) }
+                            if(category == 1) c.api.webList(page, submitted, source, type, effectiveWebLevel, translate, sort).let { Page(it.pageNumber, it.items.map(WebOutline::card)) }
+                            else c.api.wenkuList(page, submitted, effectiveWenkuLevel).let { Page(it.pageNumber, it.items.map(WenkuOutline::card)) }
                         }) { result, refresh ->
                             val books = remember(result.items, local.blockedBooks, local.blockedTags) { result.items.filter { visibleBook(it, local) } }
                             AppLazyColumn {
@@ -108,8 +111,8 @@ import kotlinx.coroutines.delay
                 ChoiceRow("连载状态", listOf("全部", "连载中", "已完结", "短篇"), type) { type = it; page = 0 }
                 ChoiceRow("已有译文", listOf("全部", "GPT", "Sakura"), translate) { translate = it; page = 0 }
                 ChoiceRow("排序", listOf("更新", "点击", "相关"), sort) { sort = it; page = 0 }
-                if(profile?.canEdit == true) ChoiceRow("分级", listOf("全部", "一般向", "R18"), level.coerceAtMost(2)) { level = it; page = 0 }
-            } else ChoiceRow("文库分类", if(profile?.canEdit == true) listOf("全部小说", "轻小说", "轻文学", "文学", "非小说", "R18男性向", "R18女性向") else listOf("全部小说", "轻小说", "轻文学", "文学", "非小说"), level) { level = it; page = 0 }
+                if(profile?.canEdit == true) ChoiceRow("分级", listOf("全部", "一般向", "R18"), webLevel.coerceIn(0, 2)) { webLevel = it; page = 0 }
+            } else ChoiceRow("文库分类", if(profile?.canEdit == true) listOf("全部小说", "轻小说", "轻文学", "文学", "非小说", "R18男性向", "R18女性向") else listOf("全部小说", "轻小说", "轻文学", "文学", "非小说"), wenkuLevel.coerceIn(0, if(profile?.canEdit == true) 6 else 4)) { wenkuLevel = it; page = 0 }
             Text("高级搜索", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = MaterialTheme.typography.titleMedium)
             FilledTonalButton(onClick = { filterOpen = false; advanced = true }, Modifier.padding(horizontal = 20.dp)) { Text("构建查询条件") }
             Text("搜索框支持原站查询表达式。规则与示例可在站内使用教程中查看。", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.bodyMedium)

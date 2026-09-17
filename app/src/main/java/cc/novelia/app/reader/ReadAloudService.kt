@@ -17,16 +17,25 @@ import cc.novelia.app.MainActivity
 import cc.novelia.app.R
 import cc.novelia.app.data.ReaderSettings
 import cc.novelia.app.data.appJson
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.serialization.encodeToString
 import java.io.File
 import java.util.Locale
+import java.util.UUID
+import java.util.concurrent.atomic.AtomicLong
 
 class ReadAloudService : Service() {
     private var engine: TextToSpeech? = null
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var loadJob: Job? = null
+    private var loading = false
+    private var activeRequest = ""
+    private var currentUtterance: String? = null
+    private var utteranceSequence = 0L
     private var paragraphs = emptyList<String>(); private var index = 0; private var ready = false; private var paused = false; private var title = "朗读"; private var rate = 1f; private var language = Locale.SIMPLIFIED_CHINESE
     private val handler = Handler(Looper.getMainLooper())
-    private val stopTimer = Runnable { paused = true; status.value = SLEEP_TIMER_FINISHED; stopSelf() }
+    private val stopTimer = Runnable { stopPlayback(SLEEP_TIMER_FINISHED) }
     private lateinit var focus: AudioFocusRequest
     override fun onCreate() {
         super.onCreate()
@@ -37,50 +46,110 @@ class ReadAloudService : Service() {
             if(ready) configureAndSpeak() else { status.value = "系统朗读引擎不可用，请在系统设置中安装语音"; stopSelf() }
         } }
         engine?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-            override fun onStart(utteranceId: String?) { if(!paused) status.value = "正在朗读：$title" }
-            override fun onDone(utteranceId: String?) { handler.post { if(!paused) { index++; speak() } } }
-            @Deprecated("Deprecated in Java") override fun onError(utteranceId: String?) { status.value = "朗读失败，请检查系统语音包"; stopSelf() }
+            override fun onStart(utteranceId: String?) { handler.post { if(!paused && isCurrentUtterance(utteranceId)) status.value = "正在朗读：$title" } }
+            override fun onDone(utteranceId: String?) { handler.post { if(!paused && isCurrentUtterance(utteranceId)) { index++; speak() } } }
+            @Deprecated("Deprecated in Java") override fun onError(utteranceId: String?) { handler.post { if(isCurrentUtterance(utteranceId)) { status.value = "朗读失败，请检查系统语音包"; stopSelf() } } }
         })
     }
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when(intent?.action) {
-            "stop" -> { status.value = "朗读已停止"; stopSelf() }
+            "stop" -> { requestGeneration.incrementAndGet(); stopPlayback("朗读已停止") }
             "pause" -> pause()
             "resume" -> { paused = false; configureAndSpeak() }
             "start" -> {
-                paragraphs = runCatching { appJson.decodeFromString<List<String>>(File(cacheDir, "tts-queue.json").readText()) }.getOrDefault(emptyList()).flatMap { it.chunked(3500) }
+                loadJob?.cancel(); currentUtterance = null; engine?.stop(); paragraphs = emptyList(); loading = true
                 index = 0; title = intent.getStringExtra("title") ?: "小说朗读"; rate = intent.getFloatExtra("rate", 1f); language = if(intent.getBooleanExtra("japanese", false)) Locale.JAPAN else Locale.SIMPLIFIED_CHINESE; paused = false
+                // Promote immediately as Android requires, then perform all IO off the main thread.
                 startForeground(100, notification()); handler.removeCallbacks(stopTimer); handler.postDelayed(stopTimer, intent.getIntExtra("minutes", 30) * 60000L)
-                if(ready) configureAndSpeak()
+                val requestId = intent.getStringExtra("queue")
+                if(requestId == null || !QUEUE_ID.matches(requestId)) { status.value = "朗读内容不可用，请重新开始"; stopSelf(); return START_NOT_STICKY }
+                activeRequest = requestId
+                loadJob = serviceScope.launch {
+                    try {
+                        val queue = withContext(Dispatchers.IO) {
+                            val file = queueFile(applicationContext, requestId)
+                            try { appJson.decodeFromString<List<String>>(file.readText(Charsets.UTF_8)) }
+                            finally { file.delete() }
+                        }
+                        if(queue.isEmpty()) { status.value = EMPTY_QUEUE; stopSelf(); return@launch }
+                        paragraphs = queue; loading = false
+                        configureAndSpeak()
+                    } catch(e: CancellationException) { throw e }
+                    catch(_: Exception) { status.value = "朗读内容不可用，请重新开始"; stopSelf() }
+                    finally { withContext(NonCancellable + Dispatchers.IO) { queueFile(applicationContext, requestId).delete() } }
+                }
             }
             else -> stopSelf()
         }
         return START_NOT_STICKY
     }
     private fun configureAndSpeak() {
-        if(!ready || paragraphs.isEmpty()) return
+        if(!ready || loading || paused || paragraphs.isEmpty()) return
         val result = engine?.setLanguage(language)
         if(result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) { status.value = "缺少${if(language == Locale.JAPAN) "日文" else "中文"}语音包，请在系统文字转语音设置中安装"; stopSelf(); return }
         if(getSystemService(AudioManager::class.java).requestAudioFocus(focus) != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) { pause(); return }
         engine?.setSpeechRate(rate); speak(); getSystemService(NotificationManager::class.java).notify(100, notification())
     }
-    private fun speak() { if(index >= paragraphs.size) { status.value = "本章朗读完成"; stopSelf() } else if(!paused) engine?.speak(paragraphs[index], TextToSpeech.QUEUE_FLUSH, null, "$index") }
-    private fun pause() { paused = true; engine?.stop(); status.value = "朗读已暂停"; getSystemService(NotificationManager::class.java).notify(100, notification()) }
+    private fun isCurrentUtterance(id: String?) = id != null && id == currentUtterance && !loading && !paused
+    private fun speak() {
+        if(index >= paragraphs.size) stopPlayback("本章朗读完成")
+        else if(!paused) {
+            val id = "$activeRequest:$index:${++utteranceSequence}"
+            currentUtterance = id
+            engine?.speak(paragraphs[index], TextToSpeech.QUEUE_FLUSH, null, id)
+        }
+    }
+    private fun stopPlayback(message: String) {
+        paused = true; activeRequest = ""; currentUtterance = null; loadJob?.cancel(); engine?.stop()
+        status.value = message
+        stopSelf()
+    }
+    private fun pause() { paused = true; currentUtterance = null; engine?.stop(); status.value = "朗读已暂停"; getSystemService(NotificationManager::class.java).notify(100, notification()) }
     private fun notification(): Notification {
         fun pending(action: String) = PendingIntent.getService(this, action.hashCode(), Intent(this, ReadAloudService::class.java).setAction(action), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        return NotificationCompat.Builder(this, "reading").setSmallIcon(R.drawable.ic_launcher).setContentTitle(title).setContentText(if(paused) "朗读已暂停" else "正在朗读").setOngoing(!paused)
+        return NotificationCompat.Builder(this, "reading").setSmallIcon(R.drawable.ic_launcher).setContentTitle(title).setContentText(if(paused) "朗读已暂停" else if(loading) "正在准备朗读…" else "正在朗读").setOngoing(!paused)
             .setContentIntent(PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
             .addAction(0, if(paused) "继续" else "暂停", pending(if(paused) "resume" else "pause")).addAction(0, "停止", pending("stop")).build()
     }
-    override fun onDestroy() { handler.removeCallbacksAndMessages(null); engine?.stop(); engine?.shutdown(); getSystemService(AudioManager::class.java).abandonAudioFocusRequest(focus); stopForeground(STOP_FOREGROUND_REMOVE); super.onDestroy() }
+    override fun onDestroy() { serviceScope.cancel(); handler.removeCallbacksAndMessages(null); engine?.stop(); engine?.shutdown(); getSystemService(AudioManager::class.java).abandonAudioFocusRequest(focus); stopForeground(STOP_FOREGROUND_REMOVE); super.onDestroy() }
     override fun onBind(intent: Intent?): IBinder? = null
     companion object {
         const val SLEEP_TIMER_FINISHED = "朗读定时已结束"
+        const val EMPTY_QUEUE = "当前内容没有可朗读的文字"
         val status = MutableStateFlow("")
-        fun start(context: Context, paragraphs: List<String>, title: String, settings: ReaderSettings) {
-            File(context.cacheDir, "tts-queue.json").writeText(appJson.encodeToString(paragraphs))
+        private val requestGeneration = AtomicLong()
+        private val QUEUE_ID = Regex("[a-f0-9-]{36}")
+        private fun queueFile(context: Context, id: String) = File(context.cacheDir, "tts-queue-$id.json")
+        suspend fun start(context: Context, title: String, settings: ReaderSettings, content: () -> List<String>) {
+            val generation = requestGeneration.incrementAndGet()
+            val appContext = context.applicationContext
+            val id = UUID.randomUUID().toString()
+            val file = queueFile(appContext, id)
+            var submitted = false
             status.value = "正在准备朗读…"
-            ContextCompat.startForegroundService(context, Intent(context, ReadAloudService::class.java).setAction("start").putExtra("title", title).putExtra("rate", settings.speechRate).putExtra("minutes", settings.speechMinutes).putExtra("japanese", settings.speechLanguage == "jp" || (settings.speechLanguage == "auto" && settings.mode.startsWith("jp"))))
+            try {
+                val hasText = withContext(Dispatchers.IO) {
+                    val jobContext = currentCoroutineContext()
+                    val queue = prepareSpeechQueue(content()) { jobContext.ensureActive() }
+                    if(queue.isEmpty()) false else { file.writeText(appJson.encodeToString(queue), Charsets.UTF_8); true }
+                }
+                if(requestGeneration.get() != generation) return
+                if(!hasText) {
+                    status.value = EMPTY_QUEUE
+                    appContext.stopService(Intent(appContext, ReadAloudService::class.java))
+                    return
+                }
+                ContextCompat.startForegroundService(appContext, Intent(appContext, ReadAloudService::class.java).setAction("start").putExtra("queue", id).putExtra("title", title).putExtra("rate", settings.speechRate).putExtra("minutes", settings.speechMinutes).putExtra("japanese", settings.speechLanguage == "jp" || (settings.speechLanguage == "auto" && settings.mode.startsWith("jp"))))
+                submitted = true
+            } catch(e: CancellationException) {
+                if(requestGeneration.get() == generation) status.value = "朗读准备已取消"
+                throw e
+            } catch(e: Exception) {
+                if(requestGeneration.get() == generation) status.value = "朗读准备失败，请重试"
+                throw e
+            } finally {
+                if(!submitted) withContext(NonCancellable + Dispatchers.IO) { file.delete() }
+            }
         }
     }
 }

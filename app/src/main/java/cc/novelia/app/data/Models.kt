@@ -123,7 +123,7 @@ import kotlinx.serialization.Serializable
 @Serializable data class Note(val id: String, val key: String, val chapterId: String, val paragraph: Int, val quote: String, val text: String, val createdAt: Long = System.currentTimeMillis())
 @Serializable data class LocalChapter(val id: String, val title: String, val paragraphs: List<String>)
 @Serializable data class LocalDocument(val id: String, val name: String, val format: String, val chapters: List<LocalChapter>, val importedAt: Long = System.currentTimeMillis(), val images: Map<String, String> = emptyMap(), val coverImage: String? = null, val sourceHash: String = "")
-@Serializable data class DownloadEntry(val id: String, val title: String, val fileName: String, val url: String, val status: String = "等待下载", val progress: Int = 0, val error: String? = null, val sourceBook: BookRef? = null)
+@Serializable data class DownloadEntry(val id: String, val title: String, val fileName: String, val url: String, val status: String = "等待下载", val progress: Int = 0, val error: String? = null, val sourceBook: BookRef? = null, val workId: String? = null)
 @Serializable data class PendingAction(val id: String, val account: String, val method: String, val path: String, val body: String? = null, val contentType: String = "application/json")
 @Serializable data class LibraryState(
     val books: List<SavedBook> = emptyList(), val folders: List<String> = listOf("默认收藏"),

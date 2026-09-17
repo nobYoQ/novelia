@@ -71,7 +71,8 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
     }
     fun share(text: String) { app.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text), "分享").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
     suspend inline fun <reified T> detail(path: String, forceNetwork: Boolean = false): T = withContext(Dispatchers.IO) {
-        val account = session.profile.value?.username ?: "guest"
+        val binding = session.capture()
+        val account = binding.account ?: "guest"
         val key = hashName("$account:$path")
         val mutation = api.lastMutationAt
         val generation = store.cacheGeneration.value
@@ -82,7 +83,7 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
         }
         try {
             val fetchedAt = System.currentTimeMillis()
-            val raw = api.request("GET", path)
+            val raw = api.request("GET", path, binding = binding)
             val parsed = appJson.decodeFromString<T>(raw)
             if (mutation == api.lastMutationAt && generation == store.cacheGeneration.value && account == (session.profile.value?.username ?: "guest")) {
                 runCatching { store.withCacheGeneration(generation) { metadataCache.write(key, raw, fetchedAt) } }
@@ -107,19 +108,19 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
         }
     }
     suspend fun cloudMutation(method: String, path: String, body: String? = null, contentType: String = "application/json") {
-        val account = session.profile.value?.username ?: throw ApiException(401, "请先登录")
-        try { api.request(method, path, body, contentType = contentType) }
-        catch(e: IOException) {
-            if(e is ApiException || method !in listOf("PUT", "DELETE")) throw e
-            store.update { current -> current.copy(pending = current.pending.filterNot { it.path == path && it.account == account } + PendingAction(UUID.randomUUID().toString(), account, method, path, body, contentType)) }
-            message("网络不可用，操作已加入待同步列表")
+        val binding = session.capture()
+        val account = binding.account ?: throw ApiException(401, "请先登录")
+        val action = PendingAction(UUID.randomUUID().toString(), account, method, path, body, contentType)
+        val queued = api.cloudMutations.submit(action, { transform -> store.update { it.copy(pending = transform(it.pending)) } }, { session.ensureCurrent(binding) }) { item ->
+            api.request(item.method, item.path, item.body, contentType = item.contentType, binding = binding)
         }
+        if (queued) message("网络不可用，操作已加入待同步列表")
     }
     fun syncPending() = action("同步完成") {
-        val account = session.profile.value?.username ?: throw ApiException(401, "请先登录")
-        for(item in store.state.value.pending.filter { it.account == account }) {
-            api.request(item.method, item.path, item.body, contentType = item.contentType)
-            store.update { it.copy(pending = it.pending.filterNot { p -> p.id == item.id }) }
+        val binding = session.capture()
+        val account = binding.account ?: throw ApiException(401, "请先登录")
+        api.cloudMutations.replay(account, { store.state.value.pending }, { transform -> store.update { it.copy(pending = transform(it.pending)) } }) { item ->
+            api.request(item.method, item.path, item.body, contentType = item.contentType, binding = binding)
         }
     }
 }

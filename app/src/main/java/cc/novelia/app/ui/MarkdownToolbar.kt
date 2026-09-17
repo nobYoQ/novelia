@@ -11,8 +11,9 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextRange
@@ -33,7 +34,7 @@ internal fun TextFieldValue.format(template: MarkdownTemplate, limit: Int): Text
     Surface(modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.small) {
         Row(Modifier.appHorizontalScroll(rememberScrollState())) {
             MarkdownTemplate.entries.forEach { template ->
-                IconButton(onClick = { onFormat(template) }, modifier = Modifier.size(48.dp).focusProperties { canFocus = false }) {
+                IconButton(onClick = { onFormat(template) }, modifier = Modifier.size(48.dp)) {
                     Icon(when (template) {
                         MarkdownTemplate.Bold -> Icons.Outlined.FormatBold
                         MarkdownTemplate.Italic -> Icons.Outlined.FormatItalic
@@ -45,7 +46,7 @@ internal fun TextFieldValue.format(template: MarkdownTemplate, limit: Int): Text
                     }, "插入${template.label}")
                 }
             }
-            IconButton(onClick = { help = true }, modifier = Modifier.size(48.dp).focusProperties { canFocus = false }) {
+            IconButton(onClick = { help = true }, modifier = Modifier.size(48.dp)) {
                 Icon(Icons.Outlined.HelpOutline, "Markdown 格式帮助")
             }
         }
@@ -63,14 +64,27 @@ internal fun TextFieldValue.format(template: MarkdownTemplate, limit: Int): Text
 
 @Composable internal fun MarkdownCommentInput(text: String, onTextChange: (String) -> Unit, label: String, sendButton: @Composable () -> Unit) {
     var source by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue(text)) }
+    var toolbarSelection by remember(text) { mutableStateOf<TextFieldValue?>(null) }
     val current = if (source.text == text) source else TextFieldValue(text, TextRange(source.selection.start.coerceAtMost(text.length), source.selection.end.coerceAtMost(text.length)))
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     fun change(value: TextFieldValue) { if (value.text.length <= 10000) { source = value; onTextChange(value.text) } }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        MarkdownToolbar({ change(current.format(it, 10000)); focus.requestFocus(); keyboard?.show() })
+        MarkdownToolbar({
+            val selected = toolbarSelection?.takeIf { it.text == current.text } ?: current
+            toolbarSelection = null
+            change(selected.format(it, 10000))
+            focus.requestFocus()
+            keyboard?.show()
+        })
         Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(current, ::change, label = { Text(label) }, modifier = Modifier.weight(1f).focusRequester(focus).testTag("comment-body"), maxLines = 4)
+            OutlinedTextField(current, ::change, label = { Text(label) }, modifier = Modifier.weight(1f).focusRequester(focus).testTag("comment-body")
+                .onFocusChanged { if(it.isFocused) toolbarSelection = null }
+                .onPreviewKeyEvent {
+                    // TextField collapses selection on blur. Capture it before Tab transfers focus.
+                    if(it.type == KeyEventType.KeyDown && it.key == Key.Tab && !it.isCtrlPressed && !it.isAltPressed && !it.isMetaPressed) toolbarSelection = current
+                    false
+                }, maxLines = 4)
             sendButton()
         }
     }

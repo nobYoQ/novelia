@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -29,8 +30,10 @@ import java.util.UUID
 @Composable fun DownloadSheet(c: AppController, book: BookCard, volume: String?, dismiss: () -> Unit) {
     val settings = remember(book.ref) { c.store.state.value.reader }
     var mode by remember { mutableStateOf(if(settings.mode == "jp" && book.ref.isWenku) "zh" else settings.mode) }; var type by remember { mutableStateOf("epub") }; var engine by remember { mutableStateOf(settings.engines.first()) }; var parallel by remember { mutableStateOf(false) }
-    AppSheet(onDismissRequest = dismiss) {
-        Column(Modifier.padding(bottom = 28.dp)) {
+    // This form can exceed one screen at large font sizes. A half-expanded sheet would
+    // hide part of its measured scroll viewport from focus/accessibility scroll requests.
+    AppSheet(onDismissRequest = dismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        AppScrollColumn(contentModifier = Modifier.padding(bottom = 28.dp)) {
             Text("下载小说", Modifier.padding(20.dp), style = MaterialTheme.typography.titleLarge)
             Text(volume ?: book.title, Modifier.padding(horizontal = 20.dp), maxLines = 2)
             val modes = if(book.ref.isWenku) listOf("zh", "zh-jp", "jp-zh") else listOf("zh", "jp", "zh-jp", "jp-zh")
@@ -49,10 +52,17 @@ import java.util.UUID
     }
 }
 @Composable fun DownloadsScreen(c: AppController) {
-    val state by c.store.state.collectAsStateWithLifecycle(); var export by remember { mutableStateOf<DownloadEntry?>(null) }; var remove by remember { mutableStateOf<DownloadEntry?>(null) }
+    val state by c.store.state.collectAsStateWithLifecycle(); var exportId by rememberSaveable { mutableStateOf<String?>(null) }; var remove by remember { mutableStateOf<DownloadEntry?>(null) }
     val reducedMotion = LocalReducedMotion.current
     var importing by remember { mutableStateOf(setOf<String>()) }
-    val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri -> val entry = export; if(uri != null && entry != null) c.action("文件已导出") { withContext(Dispatchers.IO) { c.app.contentResolver.openOutputStream(uri)?.use { output -> File(c.store.downloadsDir, entry.fileName).inputStream().use { it.copyTo(output) } } ?: error("无法写入") } }; export = null }
+    val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+        val pendingId = exportId
+        exportId = null
+        if(uri != null) c.action("文件已导出") {
+            val entry = c.store.state.value.downloads.firstOrNull { it.id == pendingId } ?: error("下载任务已不存在，请重新选择文件")
+            withContext(Dispatchers.IO) { c.app.contentResolver.openOutputStream(uri)?.use { output -> File(c.store.downloadsDir, entry.fileName).inputStream().use { it.copyTo(output) } } ?: error("无法写入") }
+        }
+    }
     Screen("下载管理", c::back) { padding -> AppLazyColumn(Modifier.padding(padding), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         if(state.downloads.isEmpty()) item { EmptyState("还没有下载任务", "在作品详情或文库分卷中下载小说，完成后可以导出或导入阅读。", Icons.Outlined.Download) }
         items(state.downloads, key = { it.id }, contentType = { "download" }) { entry ->
@@ -88,7 +98,7 @@ import java.util.UUID
                                 } finally { importing = importing - entry.id }
                             }
                         }) { Text(if(entry.id in importing) "正在导入…" else "导入阅读") }
-                        TextButton(onClick = { export = entry; exporter.launch(entry.fileName.substringAfter("${entry.id}-")) }) { Text("导出文件") }
+                        TextButton(onClick = { exportId = entry.id; exporter.launch(entry.fileName.substringAfter("${entry.id}-")) }) { Text("导出文件") }
                         TextButton(onClick = { val uri = FileProvider.getUriForFile(c.app, "${c.app.packageName}.files", File(c.store.downloadsDir, entry.fileName)); c.app.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("application/octet-stream").putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), "分享文件").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }) { Text("分享") }
                     }
                     else -> TextButton(onClick = { c.action { DownloadWorker.enqueue(c.app, entry) } }) { Text("重新下载") }
@@ -97,5 +107,5 @@ import java.util.UUID
             }
         } } }
     } }
-    remove?.let { entry -> ConfirmDialog("删除下载？", "移除该任务及其下载文件，已导入书架的副本不受影响。", { remove = null }) { c.action { DownloadWorker.pause(c.app, entry.id); withContext(Dispatchers.IO) { File(c.store.downloadsDir, entry.fileName).delete(); File(c.store.downloadsDir, "${entry.id}.part").delete() }; c.store.update { it.copy(downloads = it.downloads.filterNot { d -> d.id == entry.id }) }; c.store.flush() } } }
+    remove?.let { entry -> ConfirmDialog("删除下载？", "移除该任务及其下载文件，已导入书架的副本不受影响。", { remove = null }) { c.action { DownloadWorker.remove(c.app, entry.id) } } }
 }

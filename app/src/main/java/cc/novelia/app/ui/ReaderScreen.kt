@@ -46,6 +46,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
@@ -60,6 +62,7 @@ import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -75,6 +78,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
@@ -136,6 +140,23 @@ import kotlin.math.roundToInt
         }
         val scroll = rememberLazyListState(position?.index ?: 0, position?.offset ?: 0); val scope = rememberCoroutineScope(); val focus = remember { FocusRequester() }
         val eInk = remember { EInkPageState(position) }
+        val layoutGeneration = remember(paragraphs, settings.fontSize, settings.lineHeight, settings.width, settings.indent, settings.parallel, settings.weight, settings.staticPagination) { Any() }
+        val scrollLayouts = remember(layoutGeneration) { mutableStateMapOf<Int, ParagraphScrollLayout>() }
+        var previousPagination by remember { mutableStateOf(settings.staticPagination) }
+        var restoringAnchor by remember { mutableStateOf(false) }
+        var initialAnchorRestored by remember { mutableStateOf(false) }
+        var pendingScrollRestore by remember { mutableStateOf<ReadingRestoreAnchor?>(null) }
+        var restoredScrollAnchor by remember { mutableStateOf<RestoredScrollAnchor?>(null) }
+        fun scrollTextOffset(source: Int?): Int {
+            if(scroll.firstVisibleItemIndex == 0) return 0
+            val restored = restoredScrollAnchor
+            // The two renderers may wrap a character onto different lines. Preserve the
+            // requested character until the reader actually moves, avoiding a whole-page
+            // retreat when switching back from a line that starts just before that anchor.
+            if(restored != null && restored.layoutGeneration === layoutGeneration && restored.itemIndex == scroll.firstVisibleItemIndex && restored.pixelOffset == scroll.firstVisibleItemScrollOffset)
+                return restored.textOffset
+            return source?.let { scrollLayouts[it]?.textOffsetAt(scroll.firstVisibleItemScrollOffset) } ?: 0
+        }
         val firstParagraph by remember(settings.staticPagination, eInk, scroll) { derivedStateOf {
             if(settings.staticPagination) eInk.paragraph else (scroll.firstVisibleItemIndex - 1).coerceAtLeast(0)
         } }
@@ -153,9 +174,13 @@ import kotlin.math.roundToInt
         val volumeKeysActive = !preferences && !search && !toc && !speechSheet && selected == null && note == null
         LaunchedEffect(volumeKeysActive) { if(volumeKeysActive) runCatching { focus.requestFocus() } }
         fun savePosition() {
-            if(leaving || (if(settings.staticPagination) eInk.pages.isEmpty() else scroll.layoutInfo.totalItemsCount == 0) || c.store.state.value.historyPaused) return
+            if(leaving || restoringAnchor || previousPagination != settings.staticPagination || (if(settings.staticPagination) !eInk.ready else scroll.layoutInfo.totalItemsCount == 0) || c.store.state.value.historyPaused) return
             val next = if(settings.staticPagination) Position(chapterId, eInk.paragraph + 1, 0, chapter.title, textOffset = eInk.textOffset)
-                else Position(chapterId, scroll.firstVisibleItemIndex, scroll.firstVisibleItemScrollOffset, chapter.title)
+                else {
+                    val paragraph = paragraphs.getOrNull(scroll.firstVisibleItemIndex - 1)
+                    val textOffset = scrollTextOffset(paragraph?.index)
+                    Position(chapterId, scroll.firstVisibleItemIndex, scroll.firstVisibleItemScrollOffset, chapter.title, textOffset = textOffset)
+                }
             val previous = lastSavedPosition
             if(previous == null || previous.chapterId != next.chapterId || previous.index != next.index || previous.offset != next.offset || previous.textOffset != next.textOffset || previous.title != next.title) {
                 c.store.savePosition(ref, next)
@@ -176,6 +201,7 @@ import kotlin.math.roundToInt
         }
         fun page(direction: Int) {
             if(settings.staticPagination) {
+                if(!eInk.ready) return
                 if(direction > 0 && !eInk.canGoForward && eInk.pages.isNotEmpty()) chapter.nextId?.let { openChapter(it) }
                 else if(direction < 0 && !eInk.canGoBack && eInk.pages.isNotEmpty()) chapter.prevId?.let { id ->
                     // A previous-page turn lands at the end of the preceding chapter.
@@ -207,7 +233,9 @@ import kotlin.math.roundToInt
             if(!leaving) { savePosition(); leaving = true; c.back() }
         }
         val lifecycleOwner = LocalLifecycleOwner.current
-        val latestSavePosition by rememberUpdatedState(::savePosition)
+        // Local callable references compare by declaration, so rememberUpdatedState can
+        // retain a reference whose captured settings belong to the previous reading mode.
+        val latestSavePosition by rememberUpdatedState<() -> Unit>({ savePosition() })
         DisposableEffect(lifecycleOwner, ref, chapterId) {
             val observer = LifecycleEventObserver { _, event -> if(event == Lifecycle.Event.ON_STOP) latestSavePosition() }
             lifecycleOwner.lifecycle.addObserver(observer)
@@ -220,11 +248,49 @@ import kotlin.math.roundToInt
                 if(settled != null) { delay(500); latestSavePosition() }
             }
         }
-        LaunchedEffect(settings.staticPagination) {
-            if(settings.staticPagination && scroll.layoutInfo.totalItemsCount > 0) eInk.find((scroll.firstVisibleItemIndex - 1).coerceAtLeast(0))
-            else if(!settings.staticPagination && eInk.pages.isNotEmpty()) scroll.scrollToItem(eInk.paragraph + 1)
+        // Capture continuously while the scrolling layout is still mounted. Its geometry
+        // disappears on a mode switch, so do not try to read it after disposal.
+        var scrollAnchor by remember { mutableStateOf(Triple((position?.index ?: 1) - 1, position?.textOffset ?: 0, paragraphs.getOrNull((position?.index ?: 1) - 1)?.index)) }
+        LaunchedEffect(scroll, scrollLayouts, settings.staticPagination) {
+            if(!settings.staticPagination) snapshotFlow {
+                val index = (scroll.firstVisibleItemIndex - 1).coerceAtLeast(0)
+                val source = paragraphs.getOrNull(index)?.index
+                Triple(index, scrollTextOffset(source), source)
+            }.collect { if(!restoringAnchor) scrollAnchor = it }
         }
-        LaunchedEffect(eInk.pageIndex, eInk.pages, settings.staticPagination) { if(settings.staticPagination) latestSavePosition() }
+        LaunchedEffect(settings.staticPagination, layoutGeneration) {
+            val changed = previousPagination != settings.staticPagination
+            restoringAnchor = true
+            try {
+                if(settings.staticPagination && changed) {
+                    eInk.find(scrollAnchor.first, scrollAnchor.second, scrollAnchor.third)
+                    pendingScrollRestore = null
+                } else if(!settings.staticPagination) {
+                    if(pendingScrollRestore == null) pendingScrollRestore = if(changed && eInk.pages.isNotEmpty()) ReadingRestoreAnchor(eInk.paragraph, eInk.sourceIndex, eInk.textOffset)
+                        else position?.takeIf { !initialAnchorRestored && it.textOffset > 0 && it.offset == 0 }?.let { ReadingRestoreAnchor((it.index - 1).coerceAtLeast(0), null, it.textOffset) }
+                    val target = pendingScrollRestore
+                    if(target != null) {
+                        val index = (target.sourceIndex?.let { source -> paragraphs.indexOfFirst { it.index >= source }.takeIf { it >= 0 } }
+                            ?: target.paragraph).coerceIn(0, paragraphs.lastIndex.coerceAtLeast(0))
+                        scroll.scrollToItem(index + 1)
+                        val paragraph = paragraphs.getOrNull(index)
+                        if(target.textOffset > 0 && paragraph != null && paragraph.imageUrl == null && paragraph.localImageId == null) {
+                            val layout = snapshotFlow { scrollLayouts[paragraph.index] }.first { it != null && it.parts.size == paragraph.parts.size }!!
+                            scroll.scrollToItem(index + 1, layout.scrollOffsetAt(target.textOffset))
+                        }
+                        if(scroll.firstVisibleItemIndex == index + 1) {
+                            restoredScrollAnchor = RestoredScrollAnchor(layoutGeneration, index + 1, scroll.firstVisibleItemScrollOffset, target.textOffset)
+                            scrollAnchor = Triple(index, target.textOffset, paragraph?.index)
+                        }
+                        pendingScrollRestore = null
+                    }
+                }
+                previousPagination = settings.staticPagination
+                initialAnchorRestored = true
+            } finally { restoringAnchor = false }
+            latestSavePosition()
+        }
+        LaunchedEffect(eInk.pageIndex, eInk.pages, eInk.ready, settings.staticPagination) { if(settings.staticPagination) latestSavePosition() }
         LaunchedEffect(chapterId) {
             if(c.session.profile.value != null && !ref.isLocal && !local.historyPaused) {
                 try { c.cloudMutation("PUT", "user/read-history/${ref.key}", chapterId, "text/plain") }
@@ -248,7 +314,7 @@ import kotlin.math.roundToInt
                     .widthIn(max = settings.width.dp).fillMaxWidth().padding(horizontal = 24.dp)
                     .padding(vertical = 16.dp),
                 imageModel = { it.imageUrl ?: it.localImageId?.takeIf { ref.isLocal }?.let { id -> c.store.documentImage(ref.id, id) } },
-                onToggleMenu = { menu = !menu }, onSelect = { selected = it }, onPage = ::page,
+                onToggleMenu = { menu = !menu }, onSelect = { selected = it }, onPage = { page(it) },
                 background = background, foreground = foreground)
             else LazyColumn(state = scroll, modifier = Modifier.testTag("reader-scroll").align(Alignment.TopCenter).fillMaxHeight()
                 .windowInsetsPadding(readingInsets).widthIn(max = settings.width.dp).fillMaxWidth()
@@ -262,11 +328,17 @@ import kotlin.math.roundToInt
                     }
                 }
                 itemsIndexed(paragraphs, key = { _, p -> "paragraph-${p.index}" }, contentType = { _, p -> if(p.imageUrl != null || p.localImageId != null) "image" else "paragraph" }) { _, paragraph ->
+                    DisposableEffect(paragraph.index, scrollLayouts) {
+                        onDispose { scrollLayouts.remove(paragraph.index) }
+                    }
                     val image = remember(ref, paragraph.imageUrl, paragraph.localImageId) {
                         paragraph.imageUrl ?: paragraph.localImageId?.takeIf { ref.isLocal }?.let { c.store.documentImage(ref.id, it) }
                     }
                     if(image != null) ReaderIllustration(image, foreground) { menu = !menu }
-                    else ReaderTextParagraph(paragraph, settings, foreground, { menu = !menu }, { selected = paragraph })
+                    else ReaderTextParagraph(paragraph, settings, layoutGeneration, foreground, { menu = !menu }, { selected = paragraph }) { part, lines ->
+                        val existing = scrollLayouts[paragraph.index] ?: ParagraphScrollLayout()
+                        if(existing.parts[part] != lines) scrollLayouts[paragraph.index] = existing.copy(parts = existing.parts + (part to lines))
+                    }
                 }
                 item("end", contentType = "footer") {
                     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -296,7 +368,7 @@ import kotlin.math.roundToInt
                                 colors = OutlinedTextFieldDefaults.colors(focusedTextColor = foreground, unfocusedTextColor = foreground,
                                     focusedBorderColor = foreground, unfocusedBorderColor = foreground.copy(alpha = .5f),
                                     focusedLabelColor = foreground, unfocusedLabelColor = foreground.copy(alpha = .7f), cursorColor = foreground))
-                            TextButton(onClick = ::findNext, enabled = search && query.isNotBlank() && !finding,
+                            TextButton(onClick = { findNext() }, enabled = search && query.isNotBlank() && !finding,
                                 colors = ButtonDefaults.textButtonColors(contentColor = foreground, disabledContentColor = foreground.copy(alpha = .38f))) { Text(if(finding) "查找中" else "查找") }
                         }
                     }
@@ -306,9 +378,12 @@ import kotlin.math.roundToInt
             Surface(Modifier.align(Alignment.BottomCenter).testTag("reader-bottom-toolbar"), color = toolbarBackground, contentColor = foreground) {
             Column {
                 if(settings.showPageButtons) Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).then(if(!menu) Modifier.navigationBarsPadding() else Modifier), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedButton(onClick = { page(-1) }, colors = ButtonDefaults.outlinedButtonColors(contentColor = foreground, disabledContentColor = foreground.copy(alpha = .38f)), enabled = if(settings.staticPagination) eInk.canGoBack || (eInk.pages.isNotEmpty() && chapter.prevId != null) else scroll.canScrollBackward) { Text(if(settings.staticPagination) "上一页" else "上一屏") }
-                    if(settings.staticPagination) Text("${eInk.pageIndex + 1} / ${eInk.pages.size.coerceAtLeast(1)}", Modifier.testTag("reader-page-counter"), color = foreground, style = MaterialTheme.typography.labelMedium)
-                    OutlinedButton(onClick = { page(1) }, colors = ButtonDefaults.outlinedButtonColors(contentColor = foreground, disabledContentColor = foreground.copy(alpha = .38f)), enabled = if(settings.staticPagination) eInk.canGoForward || (eInk.pages.isNotEmpty() && chapter.nextId != null) else scroll.canScrollForward) { Text(if(settings.staticPagination) "下一页" else "下一屏") }
+                    OutlinedButton(onClick = { page(-1) }, colors = ButtonDefaults.outlinedButtonColors(contentColor = foreground, disabledContentColor = foreground.copy(alpha = .38f)), enabled = if(settings.staticPagination) eInk.ready && (eInk.canGoBack || (eInk.pages.isNotEmpty() && chapter.prevId != null)) else scroll.canScrollBackward) { Text(if(settings.staticPagination) "上一页" else "上一屏") }
+                    if(settings.staticPagination) {
+                        if(eInk.ready) Text("${eInk.pageIndex + 1} / ${eInk.pages.size.coerceAtLeast(1)}", Modifier.testTag("reader-page-counter"), color = foreground, style = MaterialTheme.typography.labelMedium)
+                        else Text("正在分页…", color = foreground, style = MaterialTheme.typography.labelMedium)
+                    }
+                    OutlinedButton(onClick = { page(1) }, colors = ButtonDefaults.outlinedButtonColors(contentColor = foreground, disabledContentColor = foreground.copy(alpha = .38f)), enabled = if(settings.staticPagination) eInk.ready && (eInk.canGoForward || (eInk.pages.isNotEmpty() && chapter.nextId != null)) else scroll.canScrollForward) { Text(if(settings.staticPagination) "下一页" else "下一屏") }
                 }
                 AnimatedVisibility(menu, enter = if(reducedMotion) EnterTransition.None else fadeIn(tween(180)) + slideInVertically(tween(220)) { it }, exit = if(reducedMotion) ExitTransition.None else fadeOut(tween(140)) + slideOutVertically(tween(180)) { it }) {
                     Surface(color = Color.Transparent, contentColor = foreground) {
@@ -346,9 +421,16 @@ import kotlin.math.roundToInt
                     val first = firstParagraph
                     val originalIndex = paragraphs.getOrNull(first)?.index ?: 0
                     val japanese = settings.speechLanguage == "jp" || (settings.speechLanguage == "auto" && settings.mode.startsWith("jp"))
-                    val text = (if(japanese) chapter.paragraphs.drop(originalIndex) else paragraphs.drop(first).mapNotNull { it.parts.firstOrNull { p -> !p.secondary }?.text }).filterNot { it.startsWith("novelia-image:") || it.startsWith("<图片>") }
-                    runCatching { ReadAloudService.start(context, text, chapter.title, settings) }.onFailure { c.message(it.friendlyMessage()) }
-                }, Modifier.fillMaxWidth()) { Text("从这里开始朗读") }
+                    scope.launch {
+                        try {
+                            ReadAloudService.start(context, chapter.title, settings) {
+                                if(japanese) chapter.paragraphs.drop(originalIndex)
+                                else paragraphs.drop(first).mapNotNull { it.parts.firstOrNull { p -> !p.secondary }?.text }
+                            }
+                        } catch(e: CancellationException) { throw e }
+                        catch(e: Exception) { c.message(e.friendlyMessage()) }
+                    }
+                }, Modifier.fillMaxWidth(), enabled = speechStatus != "正在准备朗读…") { Text(if(speechStatus == "正在准备朗读…") "正在准备朗读…" else "从这里开始朗读") }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     TextButton(onClick = { context.startService(Intent(context, ReadAloudService::class.java).setAction("pause")) }, enabled = speechStatus.startsWith("正在朗读")) { Text("暂停") }
                     TextButton(onClick = { context.startService(Intent(context, ReadAloudService::class.java).setAction("resume")) }, enabled = speechStatus == "朗读已暂停") { Text("继续") }
@@ -369,14 +451,30 @@ import kotlin.math.roundToInt
     if(preferences) ReaderSheet(onDismissRequest = { preferences = false }) { ReaderPreferences(settings, local.bookSettings.containsKey(ref.key), { perBook -> c.store.update { it.copy(bookSettings = if(perBook) it.bookSettings + (ref.key to settings) else it.bookSettings - ref.key) } }) { value -> c.store.update { if(it.bookSettings.containsKey(ref.key)) it.copy(bookSettings = it.bookSettings + (ref.key to value)) else it.copy(reader = value) } } }
 }
 
-@Composable private fun ReaderTextParagraph(paragraph: ReadingParagraph, settings: ReaderSettings, foreground: Color, onToggleMenu: () -> Unit, onSelect: () -> Unit) {
+@Composable private fun ReaderTextParagraph(paragraph: ReadingParagraph, settings: ReaderSettings, layoutGeneration: Any, foreground: Color, onToggleMenu: () -> Unit, onSelect: () -> Unit,
+    onLayout: (Int, List<ReadingAnchorLine>) -> Unit) {
+    val starts = remember(paragraph, settings.indent, settings.parallel) { paragraphPartStarts(paragraph, settings) }
+    val latestLayout by rememberUpdatedState(onLayout)
     Column(Modifier.fillMaxWidth().heightIn(min = 48.dp).combinedClickable(
         onClickLabel = "显示或收起阅读工具栏", onClick = onToggleMenu,
         onLongClickLabel = "选择段落、分享或添加笔记", onLongClick = onSelect
     ), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        paragraph.parts.forEach { part ->
+        paragraph.parts.forEachIndexed { partIndex, part ->
+            val measurement = remember(layoutGeneration, paragraph) { ScrollPartMeasurement() }
+            fun reportLayout() {
+                val layout = measurement.layout ?: return
+                val top = measurement.top ?: return
+                if(measurement.reportedLayout === layout && measurement.reportedTop == top) return
+                measurement.reportedLayout = layout
+                measurement.reportedTop = top
+                latestLayout(partIndex, (0 until layout.lineCount).map { line ->
+                    ReadingAnchorLine(starts[partIndex] + layout.getLineStart(line), starts[partIndex] + layout.getLineEnd(line), top + layout.getLineTop(line).roundToInt())
+                })
+            }
             if(settings.parallel && (part.source == "sakura" || part.source == "gpt" || part.source == "youdao")) Text(part.source.uppercase(), style = MaterialTheme.typography.labelSmall, color = foreground.copy(alpha = .65f))
             Text((if(settings.indent) "　　" else "") + part.text,
+                modifier = Modifier.onGloballyPositioned { measurement.top = it.positionInParent().y.roundToInt(); reportLayout() },
+                onTextLayout = { measurement.layout = it; reportLayout() },
                 fontSize = (if(part.secondary) settings.fontSize - 1 else settings.fontSize).sp,
                 lineHeight = (settings.fontSize * settings.lineHeight).sp,
                 fontWeight = if(settings.weight) FontWeight.Medium else FontWeight.Normal,
@@ -385,6 +483,16 @@ import kotlin.math.roundToInt
         }
     }
 }
+
+private class ScrollPartMeasurement {
+    var layout: TextLayoutResult? = null
+    var top: Int? = null
+    var reportedLayout: TextLayoutResult? = null
+    var reportedTop: Int? = null
+}
+
+private data class RestoredScrollAnchor(val layoutGeneration: Any, val itemIndex: Int, val pixelOffset: Int, val textOffset: Int)
+private data class ReadingRestoreAnchor(val paragraph: Int, val sourceIndex: Int?, val textOffset: Int)
 
 @Composable internal fun ReaderIllustration(model: Any, foreground: Color, onToggleMenu: () -> Unit) {
     val context = LocalContext.current
@@ -471,6 +579,11 @@ import kotlin.math.roundToInt
                 Text("${(value * 100).roundToInt() / 100f}", style = MaterialTheme.typography.labelLarge)
                 OutlinedButton(onClick = { onChange((value + step).coerceIn(range)) }, enabled = enabled && value < range.endInclusive) { Icon(Icons.Outlined.Add, "增大 $label") }
             }
-        } else Slider(value, onChange, modifier = modifier, valueRange = range, enabled = enabled)
+        } else {
+            // Keep thumb feedback immediate while committing expensive typography changes once.
+            var draft by remember(value) { mutableFloatStateOf(value) }
+            Slider(draft, { draft = it }, modifier = modifier, valueRange = range, enabled = enabled,
+                onValueChangeFinished = { onChange(draft) })
+        }
     }
 }

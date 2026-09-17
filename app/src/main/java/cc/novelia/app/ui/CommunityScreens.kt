@@ -116,7 +116,9 @@ val categories = linkedMapOf("General" to "小说交流", "Guide" to "使用指�
 
     val renderer = rememberMarkdownRenderer(c)
     val focusManager = LocalFocusManager.current
-    LaunchedEffect(title, content, category) { kotlinx.coroutines.delay(700); c.store.update { it.copy(drafts = it.drafts + (key to appJson.encodeToString(mapOf("title" to title, "content" to content, "category" to category)))) } }
+    fun draftSnapshot() = appJson.encodeToString(mapOf("title" to title, "content" to content, "category" to category))
+    val draftPersistence = rememberDraftPersistence(c.store, key, ::draftSnapshot)
+    LaunchedEffect(title, content, category) { kotlinx.coroutines.delay(700); draftPersistence.save() }
     Screen(if(article == null) "写一篇帖子" else "编辑帖子", c::back, actions = { TextButton(onClick = { focusManager.clearFocus(); preview = !preview }) { Text(if(preview) "编辑" else "预览") } }) { padding ->
         BoxWithConstraints(Modifier.padding(padding).consumeWindowInsets(padding).imePadding().fillMaxSize()) {
         // Bound the inner text scroll area to the space left above the keyboard, including landscape.
@@ -130,7 +132,7 @@ val categories = linkedMapOf("General" to "小说交流", "Guide" to "使用指�
                         ChoiceRow("分类", categories.values.toList(), categories.keys.indexOf(category)) { category = categories.keys.elementAt(it) }
                         MarkdownEditor(content, { content = it }, editorHeight)
                     }
-                    Button(onClick = { c.requireLogin { c.action { sending = true; try { val body = mapOf("title" to title.trim(), "content" to content.trim(), "category" to category); val result = if(article == null) c.api.post("article", body) else c.api.put("article/${article.id}", body); c.store.update { it.copy(drafts = it.drafts - key) }; c.back(); c.go("article/${article?.id ?: result.trim().trim('"')}", replaceTop = article != null && c.nav.currentDestination?.route == "article/{id}" && c.nav.currentBackStackEntry?.arguments?.getString("id") == article.id) } finally { sending = false } } } }, enabled = !sending && title.trim().length in 2..80 && content.trim().length in 2..20000, modifier = Modifier.fillMaxWidth()) { Text(if(sending) "正在提交…" else if(article == null) "发布到社区" else "保存修改") }
+                    Button(onClick = { c.requireLogin { c.action { sending = true; try { val submittedDraft = draftSnapshot(); val body = mapOf("title" to title.trim(), "content" to content.trim(), "category" to category); val result = if(article == null) c.api.post("article", body) else c.api.put("article/${article.id}", body); draftPersistence.submittedSuccessfully(submittedDraft); c.back(); c.go("article/${article?.id ?: result.trim().trim('"')}", replaceTop = article != null && c.nav.currentDestination?.route == "article/{id}" && c.nav.currentBackStackEntry?.arguments?.getString("id") == article.id) } finally { sending = false } } } }, enabled = !sending && title.trim().length in 2..80 && content.trim().length in 2..20000, modifier = Modifier.fillMaxWidth()) { Text(if(sending) "正在提交…" else if(article == null) "发布到社区" else "保存修改") }
                 }
             }
         }
@@ -168,7 +170,7 @@ val categories = linkedMapOf("General" to "小说交流", "Guide" to "使用指�
         if(locked) Text("此讨论已锁定，暂时不能回复。", Modifier.padding(20.dp), style = MaterialTheme.typography.bodyMedium)
         else Box(Modifier.fillMaxWidth().imePadding().padding(12.dp)) {
             MarkdownCommentInput(text, { text = it; c.store.update { s -> s.copy(drafts = s.drafts + ("comment:$site:$parent" to text)) } }, if(parent == null) "写下评论" else "回复这条评论") {
-            FilledIconButton(onClick = { c.requireLogin { c.action { sending = true; try { val body = buildMap { put("site", site); put("content", text.trim()); parent?.let { put("parent", it) } }; c.api.post("comment", body); text = ""; c.store.update { it.copy(drafts = it.drafts - "comment:$site:$parent") }; version++ } finally { sending = false } } } }, enabled = text.isNotBlank() && !sending) { Icon(Icons.Outlined.Send, "发送评论") }
+            FilledIconButton(onClick = { c.requireLogin { c.action { sending = true; try { val submittedText = text; val body = buildMap { put("site", site); put("content", submittedText.trim()); parent?.let { put("parent", it) } }; c.api.post("comment", body); if(text == submittedText) { text = ""; c.store.update { it.copy(drafts = it.drafts - "comment:$site:$parent") } }; version++ } finally { sending = false } } } }, enabled = text.isNotBlank() && !sending) { Icon(Icons.Outlined.Send, "发送评论") }
             }
         }
     }

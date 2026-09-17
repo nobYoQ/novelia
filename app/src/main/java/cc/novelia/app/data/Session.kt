@@ -6,8 +6,6 @@ import android.security.keystore.KeyProperties
 import android.util.Base64
 import android.webkit.CookieManager
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -21,7 +19,7 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-class Session(context: Context) {
+class Session(context: Context) : AuthenticationSession {
     private val preferences = context.getSharedPreferences("session", Context.MODE_PRIVATE)
     private val key: SecretKey by lazy {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
@@ -29,44 +27,66 @@ class Session(context: Context) {
             init(KeyGenParameterSpec.Builder("novelia.session", KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT).setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).build())
         }.generateKey()
     }
-    @Volatile var token: String? = runCatching { preferences.getString("value", null)?.let { encrypted ->
+    private val initialToken: String? = runCatching { preferences.getString("value", null)?.let { encrypted ->
         val bytes = Base64.decode(encrypted, Base64.NO_WRAP)
         Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, bytes.copyOfRange(0, 12))) }.doFinal(bytes.copyOfRange(12, bytes.size)).toString(Charsets.UTF_8)
-    } }.getOrNull(); private set
-    private val mutable = MutableStateFlow(token?.let { runCatching { parse(it) }.getOrNull() })
-    val profile = mutable.asStateFlow()
+    } }.getOrNull()
+    private val state = SessionState(initialToken, initialToken?.let { runCatching { parse(it) }.getOrNull() })
+    val token: String? get() = state.token
+    val profile = state.profile
+    private val refreshLock = Any()
     private val client = OkHttpClient.Builder().followRedirects(false).build()
     private fun parse(value: String): Profile {
         val payload = appJson.parseToJsonElement(Base64.decode(value.split('.')[1], Base64.URL_SAFE or Base64.NO_WRAP).toString(Charsets.UTF_8)).jsonObject
         return Profile(payload.getValue("sub").jsonPrimitive.content, payload.getValue("role").jsonPrimitive.content, payload.getValue("crat").jsonPrimitive.long, payload.getValue("exp").jsonPrimitive.long)
     }
-    @Synchronized fun refreshIfCurrent(previousToken: String?): Boolean {
-        if (token != previousToken) return token != null
-        return refreshBlocking()
+    override fun capture(): SessionBinding = state.capture()
+    override fun tokenFor(binding: SessionBinding): String? = state.tokenFor(binding)
+    override fun refreshIfCurrent(binding: SessionBinding, previousToken: String?): Boolean = synchronized(refreshLock) {
+        val current = tokenFor(binding)
+        if (current != previousToken) return@synchronized current != null
+        refreshBlocking(binding, allowAccountChange = false)
     }
-    @Synchronized fun refreshBlocking(): Boolean {
-        val cookie = CookieManager.getInstance().getCookie(AUTH_URL) ?: run { if(mutable.value?.expiresAt?.let { it < System.currentTimeMillis() / 1000 } == true) clear(); return false }
+    fun refreshBlocking(): Boolean {
+        val binding = capture()
+        return synchronized(refreshLock) { refreshBlocking(binding, allowAccountChange = true) }
+    }
+    private fun refreshBlocking(binding: SessionBinding, allowAccountChange: Boolean): Boolean {
+        ensureCurrent(binding)
+        val cookie = CookieManager.getInstance().getCookie(AUTH_URL) ?: run {
+            if(profile.value?.expiresAt?.let { it < System.currentTimeMillis() / 1000 } == true) state.clear(binding) { preferences.edit().clear().apply() }
+            return false
+        }
         val request = Request.Builder().url("$AUTH_URL/api/v1/auth/refresh?app=n").header("Cookie", cookie).header("Origin", "https://n.novelia.cc").post(ByteArray(0).toRequestBody()).build()
         client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) { if (response.code == 401) clear(); return false }
+            if (!response.isSuccessful) { if (response.code == 401) state.clear(binding) { preferences.edit().clear().apply() }; return false }
             val value = response.body?.string()?.trim() ?: return false
             val user = parse(value)
-            val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, key) }
-            preferences.edit().putString("value", Base64.encodeToString(cipher.iv + cipher.doFinal(value.toByteArray()), Base64.NO_WRAP)).apply()
-            response.headers.values("Set-Cookie").forEach { CookieManager.getInstance().setCookie(AUTH_URL, it) }
-            CookieManager.getInstance().flush()
-            token = value; mutable.value = user
-            return true
+            return state.commit(binding, value, user, allowAccountChange) {
+                val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, key) }
+                preferences.edit().putString("value", Base64.encodeToString(cipher.iv + cipher.doFinal(value.toByteArray()), Base64.NO_WRAP)).apply()
+                response.headers.values("Set-Cookie").forEach { CookieManager.getInstance().setCookie(AUTH_URL, it) }
+                CookieManager.getInstance().flush()
+            }
         }
     }
-    suspend fun refresh() = withContext(Dispatchers.IO) { refreshBlocking() }
-    suspend fun logout() = withContext(Dispatchers.IO) {
-        try {
-            CookieManager.getInstance().getCookie(AUTH_URL)?.let { cookie ->
-                client.newCall(Request.Builder().url("$AUTH_URL/api/v1/auth/logout").header("Cookie", cookie).post(ByteArray(0).toRequestBody()).build()).execute().close()
-            }
-        } finally { clear(); CookieManager.getInstance().removeAllCookies(null); CookieManager.getInstance().flush() }
+    suspend fun refresh(): Boolean {
+        val binding = capture()
+        return withContext(Dispatchers.IO) { synchronized(refreshLock) { refreshBlocking(binding, allowAccountChange = true) } }
     }
-    fun clear() { token = null; mutable.value = null; preferences.edit().clear().apply() }
+    suspend fun logout() = withContext(Dispatchers.IO) {
+        var cookie: String? = null
+        // Invalidate refreshes immediately. A slow logout response must never clear a later login.
+        state.clear {
+            cookie = CookieManager.getInstance().getCookie(AUTH_URL)
+            preferences.edit().clear().apply()
+            CookieManager.getInstance().removeAllCookies(null)
+            CookieManager.getInstance().flush()
+        }
+        cookie?.let {
+            client.newCall(Request.Builder().url("$AUTH_URL/api/v1/auth/logout").header("Cookie", it).post(ByteArray(0).toRequestBody()).build()).execute().close()
+        }
+    }
+    fun clear() { state.clear { preferences.edit().clear().apply() } }
     companion object { const val AUTH_URL = "https://auth.novelia.cc" }
 }

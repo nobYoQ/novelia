@@ -1,6 +1,16 @@
 # Novelia Android
 
-面向 [轻小说机翻机器人](https://n.novelia.cc/) 的非官方原生安卓客户端，当前版本 `0.1.4`。使用 Kotlin、Jetpack Compose 与 Material 3，支持 Android 8.0（API 26）及以上。
+面向 [轻小说机翻机器人](https://n.novelia.cc/) 的非官方原生安卓客户端，当前版本 `0.1.6`。使用 Kotlin、Jetpack Compose 与 Material 3，支持 Android 8.0（API 26）及以上。
+
+2026-09-17 项目审查的修复范围与验证记录见 [审查问题修复](docs/audit-fixes-2026-09-17.md)。
+
+## 0.1.6 更新
+
+- 电子纸交互覆盖全应用，文库支持挂载本地分卷、折叠浏览与持久化排序。
+- 修复阅读模式切换的进度恢复、分页加载、工具栏显隐和 Markdown 剧透显示。
+- 完善账号隔离、离线同步、草稿保存、下载与导出恢复，优化大文件导入和朗读。
+
+完整更新说明见 [0.1.6 更新记录](docs/release-notes-0.1.6.md)。
 
 ## 0.1.4 更新
 
@@ -56,8 +66,8 @@
 输出位置：
 
 - 首版交付包：`releases/Novelia-0.1.0-debug.apk`，同目录提供 SHA-256 校验文件。
-- 本地自用 Release：`releases/Novelia-0.1.5-release.apk`，启用 R8 优化与混淆，使用与 Debug 包相同的本地测试证书签名，可直接安装。
-- 未签名 Release：`releases/Novelia-0.1.5-release-unsigned.apk`；同目录保留校验文件和混淆映射。
+- 本地自用 Release：`releases/Novelia-0.1.6-release.apk`，启用 R8 优化与混淆，使用与 Debug 包相同的本地测试证书签名，可直接安装。
+- 未签名 Release：`releases/Novelia-0.1.6-release-unsigned.apk`；同目录保留校验文件和混淆映射。
 - 应用：`app/build/outputs/apk/debug/app-debug.apk`
 - 设备测试包：`app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk`
 - JVM 测试报告：`app/build/reports/tests/testDebugUnitTest/index.html`
@@ -67,7 +77,7 @@
 
 Debug APK 使用**开发测试签名**。正式商店分发前需配置自己的发布签名、应用标识/品牌授权与域名 App Links 验证；本仓库没有发布私钥。
 
-Gradle 的 Release 构建当前未配置签名，原始输出 `app/build/outputs/apk/release/app-release-unsigned.apk` 不能直接安装。本地交付目录中的 `Novelia-0.1.5-release.apk` 已单独使用本地测试证书签名，可用于本地自用并覆盖同证书的旧版本安装，保留应用数据；正式发布时应改用自己的发布证书。混淆映射为 `app/build/outputs/mapping/release/mapping.txt`。
+Gradle 的 Release 构建当前未配置签名，原始输出 `app/build/outputs/apk/release/app-release-unsigned.apk` 不能直接安装。本地交付目录中的 `Novelia-0.1.6-release.apk` 已单独使用本地测试证书签名，可用于本地自用并覆盖同证书的旧版本安装，保留应用数据；正式发布时应改用自己的发布证书。混淆映射为 `app/build/outputs/mapping/release/mapping.txt`。
 
 ## 验证
 
@@ -102,6 +112,7 @@ adb shell am instrument -w -r -e class cc.novelia.app.AppFlowTest cc.novelia.app
 - **登录后的真实账号写入尚未进行生产端到端验收**；没有在原站创建测试账号、帖子、评论或文件。登录、收藏、编辑与上传页面已接入接口，但仍需使用你自己的账号验证。
 - 原站扩展负责的书源抓取/验证码处理、日亚一键导入仍应在原站完成。App 支持已收录作品、手动文库资料维护和明确的错误反馈。
 - 本地 EPUB 使用原生流式正文与插图展示，不复现所有出版商 CSS、固定版式或脚本。EPUB 转 TXT 会有意省略插图。
+- 本地导入支持最大 64 MiB 的 EPUB/TXT/SRT；EPUB 按条目读取、插图直接落盘，解压总量最多 192 MiB，单个正文文件最多 8 MiB，整本文字最多约 1,600 万字符。超过限制会提示拆分；下载文件仍可保留、导出或交给其他阅读器打开。
 - 下载暂停后重新下载；不宣称服务器支持断点续传。大型任务可能受 Android 后台调度限制，可在下载列表重试。
 - 书架检查约每六小时执行，受网络、电量和系统调度影响；不是服务器实时推送。
 - 朗读依赖系统提供的中文/日文语音包；缺失时会提示。拒绝通知权限不影响阅读和文件保存。

@@ -5,7 +5,7 @@ data class PageLine(val paragraph: Int, val start: Int, val end: Int, val height
 data class StaticPage(val lines: List<PageLine>)
 
 /** Pack complete lines only. Images occupy their own page, scaled by the renderer. */
-fun paginateLines(lines: List<PageLine>, height: Int, paragraphGap: Int): List<StaticPage> {
+fun paginateLines(lines: List<PageLine>, height: Int, paragraphGap: Int, checkCancelled: () -> Unit = {}): List<StaticPage> {
     require(height > 0)
     val pages = mutableListOf<StaticPage>()
     var page = mutableListOf<PageLine>()
@@ -16,6 +16,7 @@ fun paginateLines(lines: List<PageLine>, height: Int, paragraphGap: Int): List<S
         used = 0
     }
     for (line in lines) {
+        checkCancelled()
         require(line.height > 0 && line.end >= line.start)
         if (line.image) { flush(); pages += StaticPage(listOf(line)); continue }
         val gap = if (page.isNotEmpty() && page.last().paragraph != line.paragraph) paragraphGap.coerceAtLeast(0) else 0

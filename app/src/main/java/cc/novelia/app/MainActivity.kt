@@ -36,7 +36,10 @@ private fun LibraryState.appearance() = AppAppearance(theme, reducedMotion || re
 class MainActivity : ComponentActivity() {
     private val incoming = MutableStateFlow<String?>(null)
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState); enableEdgeToEdge(); receive(intent)
+        super.onCreate(savedInstanceState); enableEdgeToEdge()
+        // Navigation restores itself. Only replay an intent that had not yet been consumed.
+        if (savedInstanceState == null) receive(intent)
+        else incoming.value = savedInstanceState.getString("novelia.pendingLink")
         setContent {
             val app = application as NoveliaApplication
             val initialized by produceState(false, app) { app.initialization.await(); value = true }
@@ -127,7 +130,11 @@ class MainActivity : ComponentActivity() {
         }
     }
     override fun onStop() { super.onStop(); (application as NoveliaApplication).persistState() }
-    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); receive(intent) }
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString("novelia.pendingLink", incoming.value)
+        super.onSaveInstanceState(outState)
+    }
+    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); receive(intent) }
     private fun receive(intent: Intent) { incoming.value = intent.dataString ?: intent.getStringExtra(Intent.EXTRA_TEXT) }
 }
 

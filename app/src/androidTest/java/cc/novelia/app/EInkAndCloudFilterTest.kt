@@ -27,6 +27,33 @@ import org.junit.runner.RunWith
 class EInkAndCloudFilterTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun replacingContentWithFewerParagraphsNeverUsesOldPageIndices() {
+        val state = EInkPageState(null)
+        val first = ReadingParagraph(0, listOf(TextPart("保留的正文", "日文")))
+        var paragraphs by mutableStateOf(listOf(first, ReadingParagraph(1, listOf(TextPart("将被移除的译文".repeat(100), "gpt")))))
+        compose.setContent {
+            MaterialTheme {
+                EInkPage(paragraphs, ReaderSettings(), state, Modifier.width(327.dp).height(420.dp),
+                    imageModel = { null }, onToggleMenu = {}, onSelect = {}, onPage = state::move)
+            }
+        }
+        compose.waitUntil(10_000) { state.pages.size > 1 }
+        compose.runOnIdle { state.find(1) }
+        compose.runOnIdle { paragraphs = listOf(first) }
+        compose.waitUntil(10_000) { state.pages.size == 1 && state.paragraph == 0 }
+        compose.onNodeWithText("保留的正文", substring = true).assertIsDisplayed()
+    }
+
+    @Test fun reflowChecksCancellationBeforeMeasuringEveryParagraph() {
+        var checks = 0
+        try {
+            measureEInkChapter(List(30) { ReadingParagraph(it, listOf(TextPart("正文", "gpt"))) }, ReaderSettings(), 300, 400, 1f, 1f) {
+                if(++checks == 5) throw kotlinx.coroutines.CancellationException()
+            }
+            fail("Expected cancellation")
+        } catch(_: kotlinx.coroutines.CancellationException) { assertEquals(5, checks) }
+    }
+
     @Test fun paginationModesContainGesturesAndKeepButtonPreference() {
         var settings by mutableStateOf(ReaderSettings())
         compose.setContent { MaterialTheme { ReaderPreferences(settings) { settings = it } } }

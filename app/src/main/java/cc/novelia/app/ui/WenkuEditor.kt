@@ -28,19 +28,22 @@ import java.time.ZoneOffset
     val draft = remember(id) { c.store.state.value.drafts[draftKey]?.let { runCatching { appJson.decodeFromString<WenkuDetail>(it) }.getOrNull() } ?: original }
     var title by rememberSaveable(id) { mutableStateOf(draft.title) }; var titleZh by rememberSaveable(id) { mutableStateOf(draft.titleZh) }; var authors by rememberSaveable(id) { mutableStateOf(draft.authors.joinToString("\n")) }; var artists by rememberSaveable(id) { mutableStateOf(draft.artists.joinToString("\n")) }; var intro by rememberSaveable(id) { mutableStateOf(draft.introduction) }; var cover by rememberSaveable(id) { mutableStateOf(draft.cover.orEmpty()) }; var tags by rememberSaveable(id) { mutableStateOf(draft.keywords.joinToString("\n")) }; var level by rememberSaveable(id) { mutableStateOf(draft.level) }; var volumes by remember { mutableStateOf(draft.volumes) }; var volumeEditor by remember { mutableStateOf<Int?>(null) }; var saving by remember { mutableStateOf(false) }; var duplicate by remember { mutableStateOf<List<WenkuOutline>?>(null) }; var ignoreDuplicate by remember { mutableStateOf(false) }
     fun values() = WenkuDetail(title = title.trim(), titleZh = titleZh.trim(), cover = cover.trim().ifBlank { null }, authors = authors.lines().map(String::trim).filter(String::isNotBlank), artists = artists.lines().map(String::trim).filter(String::isNotBlank), keywords = tags.lines().map(String::trim).filter(String::isNotBlank), level = level, introduction = intro.trim(), volumes = volumes)
-    LaunchedEffect(title, titleZh, authors, artists, intro, cover, tags, level, volumes) { kotlinx.coroutines.delay(700); c.store.update { it.copy(drafts = it.drafts + (draftKey to appJson.encodeToString(values()))) } }
+    val draftPersistence = rememberDraftPersistence(c.store, draftKey) { appJson.encodeToString(values()) }
+    LaunchedEffect(title, titleZh, authors, artists, intro, cover, tags, level, volumes) { kotlinx.coroutines.delay(700); draftPersistence.save() }
     fun submit() { c.action { saving = true; try {
+        val submitted = values()
+        val submittedDraft = appJson.encodeToString(submitted)
         if(id == null && !ignoreDuplicate) {
-            val found = c.api.wenkuList(0, title.trim()).items
+            val found = c.api.wenkuList(0, submitted.title).items
             if(found.isNotEmpty()) { duplicate = found; return@action }
         }
-        val data = appJson.encodeToJsonElement(values()).jsonObject.filterKeys { it in setOf("title", "titleZh", "cover", "authors", "artists", "level", "introduction", "keywords", "volumes") }
+        val data = submitted.editablePayload()
         if(id != null) {
             val latest = c.api.get<WenkuDetail>("wenku/$id")
-            if(latest.title != original.title || latest.titleZh != original.titleZh || latest.introduction != original.introduction || latest.volumes != original.volumes) throw ApiException(409, "条目已被更新，请重新进入后核对再保存")
+            if(latest.editablePayload() != original.editablePayload()) throw ApiException(409, "条目已被更新，请重新进入后核对再保存")
         }
         val result = if(id == null) c.api.post("wenku", JsonObject(data)) else c.api.put("wenku/$id", JsonObject(data))
-        c.store.update { it.copy(drafts = it.drafts - draftKey) }; c.back(); c.book(BookRef("wenku", id ?: result.trim().trim('"'))); c.message("文库条目已保存")
+        draftPersistence.submittedSuccessfully(submittedDraft); c.back(); c.book(BookRef("wenku", id ?: result.trim().trim('"'))); c.message("文库条目已保存")
     } finally { saving = false } } }
     Screen(if(id == null) "新建文库条目" else "编辑文库条目", c::back) { padding -> AppScrollColumn(modifier = Modifier.padding(padding), contentModifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("草稿自动保存在此设备。保存会更新原站资料。", style = MaterialTheme.typography.bodySmall)

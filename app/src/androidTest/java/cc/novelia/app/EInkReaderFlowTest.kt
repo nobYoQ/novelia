@@ -96,12 +96,28 @@ class EInkReaderFlowTest {
             compose.waitForIdle()
             compose.waitUntil(10_000) { app.store.state.value.positions.getValue(ref.key).textOffset > firstOffset }
             val saved = app.store.state.value.positions.getValue(ref.key)
+            // A multi-screen paragraph must keep its character anchor through both modes.
+            compose.onNodeWithContentDescription("阅读设置").performClick()
+            compose.onNodeWithText("连续滚动").performScrollTo().performClick()
+            compose.onNodeWithText("关闭面板").performClick()
+            compose.waitUntil(10_000) { (app.store.state.value.positions[ref.key]?.offset ?: 0) > 0 }
+            compose.runOnIdle {
+                val current = app.store.state.value.positions.getValue(ref.key)
+                assertEquals(saved.index, current.index)
+                assertEquals(saved.textOffset, current.textOffset)
+            }
+            compose.onNodeWithContentDescription("阅读设置").performClick()
+            compose.onNodeWithText("自动分页").performScrollTo().performClick()
+            compose.onNodeWithText("关闭面板").performClick()
+            compose.waitUntil(10_000) { (app.store.state.value.positions[ref.key]?.textOffset ?: 0) > 0 && app.store.state.value.positions[ref.key]?.offset == 0 }
+            compose.runOnIdle { assertEquals(saved.textOffset, app.store.state.value.positions.getValue(ref.key).textOffset) }
             screenshot("eink-reader")
+            val restored = app.store.state.value.positions.getValue(ref.key)
             compose.onNodeWithContentDescription("返回").performClick()
             compose.onNodeWithText("电子纸分页测试").performClick()
             compose.waitUntil(15_000) { compose.onAllNodesWithContentDescription("搜索本章").fetchSemanticsNodes().isNotEmpty() }
             compose.waitForIdle()
-            compose.runOnIdle { assertEquals(saved.textOffset, app.store.state.value.positions.getValue(ref.key).textOffset) }
+            compose.runOnIdle { assertEquals(restored.textOffset, app.store.state.value.positions.getValue(ref.key).textOffset) }
             compose.onNodeWithContentDescription("搜索本章").performClick()
             compose.onNodeWithText("搜索本章段落").performTextInput("独特的终点")
             compose.onNodeWithText("查找").performClick()

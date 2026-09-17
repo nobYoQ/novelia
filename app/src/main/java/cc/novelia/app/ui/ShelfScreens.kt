@@ -39,18 +39,17 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.*
 import cc.novelia.app.files.DocumentTools
+import cc.novelia.app.files.importDocumentUri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 suspend fun importDocument(c: AppController, uri: Uri) = withContext(Dispatchers.IO) {
-    val (name, bytes) = readDocument(c, uri)
-    val doc = DocumentTools.parse(name, bytes)
-    val duplicate = c.store.state.value.books.filter { it.book.ref.isLocal }.firstOrNull { runCatching { c.store.document(it.book.ref.id).sourceHash == doc.sourceHash }.getOrDefault(false) }
-    if(duplicate != null) { c.message("「${duplicate.book.title}」已在书架中"); return@withContext false }
-    c.store.saveDocument(doc)
-    c.store.documentSource(doc.id, doc.format).writeBytes(bytes)
-    c.store.saveBook(BookCard(BookRef("local", doc.id), doc.name, cover = doc.coverImage?.let { c.store.documentImage(doc.id, it).absolutePath }, subtitle = "${doc.format.uppercase()} · ${doc.chapters.size} 章"))
-    true
+    val result = importDocumentUri(c.store, uri)
+    if(!result.imported) {
+        val existing = c.store.state.value.books.firstOrNull { it.book.ref == result.ref }
+        c.message(existing?.let { "「${it.book.title}」已在书架中" } ?: "这份文件已在书架中")
+    }
+    result.imported
 }
 fun readDocument(c: AppController, uri: Uri): Pair<String, ByteArray> {
     val resolver = c.app.contentResolver
@@ -66,11 +65,33 @@ fun readDocument(c: AppController, uri: Uri): Pair<String, ByteArray> {
     val state by c.store.state.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableIntStateOf(0) }; var query by rememberSaveable { mutableStateOf("") }; var folder by rememberSaveable { mutableStateOf("全部") }; var sort by rememberSaveable { mutableIntStateOf(0) }
     var createFolder by remember { mutableStateOf(false) }; var selected by remember { mutableStateOf<SavedBook?>(null) }; var managing by remember { mutableStateOf(false) }; var selection by remember { mutableStateOf(setOf<String>()) }; var bulkMove by remember { mutableStateOf(false) }
-    var renameFolder by remember { mutableStateOf(false) }; var deleteFolder by remember { mutableStateOf(false) }; var localExport by remember { mutableStateOf<BookRef?>(null) }
+    var renameFolder by remember { mutableStateOf(false) }; var deleteFolder by remember { mutableStateOf(false) }; var localExportId by rememberSaveable { mutableStateOf<String?>(null) }
     var queueingDownloads by remember { mutableStateOf(false) }
     var volumeManager by remember { mutableStateOf<SavedBook?>(null) }
     var volumeParentPicker by remember { mutableStateOf<SavedBook?>(null) }
-    val sourceExporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri -> val ref = localExport; if(uri != null && ref != null) c.action("原文件已导出") { withContext(Dispatchers.IO) { val doc = c.store.document(ref.id); val source = c.store.documentSource(ref.id, doc.format); val bytes = if(source.exists()) source.readBytes() else doc.chapters.joinToString("\n\n") { it.paragraphs.joinToString("\n\n") }.toByteArray(); c.app.contentResolver.openOutputStream(uri)?.use { it.write(bytes) } ?: error("无法写入文件") } }; localExport = null }
+    val sourceExporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+        val pendingId = localExportId
+        localExportId = null
+        if(uri != null) c.action("原文件已导出") {
+            val id = requireNotNull(pendingId) { "待导出的小说已不存在，请重新选择" }
+            withContext(Dispatchers.IO) {
+                val doc = c.store.document(id)
+                val source = c.store.documentSource(id, doc.format)
+                c.app.contentResolver.openOutputStream(uri)?.use { output ->
+                    if(source.exists()) source.inputStream().use { it.copyTo(output) }
+                    else output.bufferedWriter(Charsets.UTF_8).use { writer ->
+                        doc.chapters.forEachIndexed { index, chapter ->
+                            if(index > 0) writer.write("\n\n")
+                            chapter.paragraphs.forEachIndexed { paragraphIndex, text ->
+                                if(paragraphIndex > 0) writer.write("\n\n")
+                                writer.write(text)
+                            }
+                        }
+                    }
+                } ?: error("无法写入文件")
+            }
+        }
+    }
     var importing by remember { mutableStateOf(false) }
     val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if(uris.isNotEmpty()) c.action {
@@ -240,7 +261,7 @@ fun readDocument(c: AppController, uri: Uri): Pair<String, ByteArray> {
         if(saved.book.ref.isWenku) MenuRow("管理挂载分卷", "选择已导入的分卷，在本书下方展开阅读", Icons.Outlined.LibraryAdd, { selected = null; volumeManager = saved })
         if(saved.book.ref.isLocal) MenuRow(if(parent == null) "挂载到文库小说" else "更换或取消挂载", parent?.let { "当前挂载：${it.book.title}" } ?: "归入指定的文库收藏", Icons.Outlined.DriveFileMove, { selected = null; volumeParentPicker = saved })
         if(saved.book.ref.isLocal) MenuRow("本地术语表", "维护此文件的专有名词", Icons.Outlined.Translate, { selected = null; c.go("glossary/${saved.book.ref.key}") })
-        if(saved.book.ref.isLocal) MenuRow("导出原文件", "保留导入时的格式与内容", Icons.Outlined.IosShare, { c.action { val doc = withContext(Dispatchers.IO) { c.store.document(saved.book.ref.id) }; localExport = saved.book.ref; selected = null; sourceExporter.launch("${doc.name}.${doc.format}") } })
+        if(saved.book.ref.isLocal) MenuRow("导出原文件", "保留导入时的格式与内容", Icons.Outlined.IosShare, { c.action { val doc = withContext(Dispatchers.IO) { c.store.document(saved.book.ref.id) }; localExportId = saved.book.ref.id; selected = null; sourceExporter.launch("${doc.name}.${doc.format}") } })
         MenuRow("移出书架", "不会删除下载文件或阅读记录", Icons.Outlined.RemoveCircleOutline, { c.store.removeBook(saved.book.ref); selected = null })
         if(saved.book.ref.isLocal) MenuRow("删除本地小说", "删除此文件的导入副本", Icons.Outlined.DeleteOutline, { selected = null; c.action { withContext(Dispatchers.IO) { c.store.removeDocument(saved.book.ref.id) } } })
     } } }

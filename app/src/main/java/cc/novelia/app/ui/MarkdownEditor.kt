@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -23,6 +24,7 @@ import androidx.compose.ui.unit.dp
 /** Keep one source buffer, including the IME composition and selection, while resizing. */
 @Composable internal fun MarkdownEditor(text: String, onTextChange: (String) -> Unit, maxEditorHeight: Dp) {
     var source by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue(text)) }
+    var toolbarSelection by remember(text) { mutableStateOf<TextFieldValue?>(null) }
     val current = if (source.text == text) source else TextFieldValue(text,
         TextRange(source.selection.start.coerceAtMost(text.length), source.selection.end.coerceAtMost(text.length)))
     val bringIntoView = remember { BringIntoViewRequester() }
@@ -42,7 +44,9 @@ import androidx.compose.ui.unit.dp
         Text("正文 · 支持 Markdown", style = MaterialTheme.typography.labelLarge)
         Column(Modifier.fillMaxWidth().bringIntoViewRequester(bringIntoView), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         MarkdownToolbar({
-            val formatted = current.format(it, 20000)
+            val selected = toolbarSelection?.takeIf { it.text == current.text } ?: current
+            toolbarSelection = null
+            val formatted = selected.format(it, 20000)
             source = formatted
             onTextChange(formatted.text)
             focus.requestFocus()
@@ -52,7 +56,12 @@ import androidx.compose.ui.unit.dp
             if (it.text.length <= 20000) { source = it; onTextChange(it.text) }
         }, modifier = Modifier.fillMaxWidth().heightIn(max = inputHeight).testTag("article-body")
             .focusRequester(focus)
-            .onFocusChanged { focused = it.isFocused },
+            .onFocusChanged { focused = it.isFocused; if(it.isFocused) toolbarSelection = null }
+            .onPreviewKeyEvent {
+                // Preserve the selected range before TextField clears it during keyboard focus exit.
+                if(it.type == KeyEventType.KeyDown && it.key == Key.Tab && !it.isCtrlPressed && !it.isAltPressed && !it.isMetaPressed) toolbarSelection = current
+                false
+            },
             placeholder = { Text("写下你的想法…") }, minLines = minOf(6, visibleLines), maxLines = visibleLines,
             textStyle = MaterialTheme.typography.bodyLarge)
         }

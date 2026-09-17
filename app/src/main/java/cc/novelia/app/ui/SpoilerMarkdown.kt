@@ -68,8 +68,14 @@ internal fun configureSpoilerParser(builder: Parser.Builder) {
             } else {
                 // Pick punctuation absent from this input, including decoded character entities.
                 val decoded = Escaping.unescapeString(input)
-                val marker = ('\u2000'..'\u2bff').first { char ->
+                val marker = ('\u2000'..'\u2bff').firstOrNull { char ->
                     Character.getType(char) == Character.OTHER_PUNCTUATION.toInt() && char !in input && char !in decoded
+                }
+                // Untrusted text can contain every candidate. Keep it readable as ordinary
+                // Markdown instead of crashing while looking for a spare delimiter.
+                if (marker == null) {
+                    InlineParserImpl(context).parse(input, block)
+                    return@InlineParser
                 }
                 val adapted = buildString {
                     var index = 0
@@ -151,7 +157,9 @@ internal class SpoilerTextView(context: Context) : TextView(context) {
     override fun bringPointIntoView(offset: Int): Boolean = false
 
     private val mask = Paint().apply { color = Color.BLACK }
+    private val revealedBackground = Paint().apply { color = Color.WHITE }
     private val maskPath = Path()
+    private val revealedPath = Path()
     var refreshMarkdown: (() -> Unit)? = null
     var documentUrl: String? = null
     var openAnchor: ((String) -> Boolean)? = null
@@ -218,13 +226,30 @@ internal class SpoilerTextView(context: Context) : TextView(context) {
         super.onDetachedFromWindow()
     }
 
-    override fun onDraw(canvas: Canvas) {
-        super.onDraw(canvas)
+    override fun draw(canvas: Canvas) {
+        super.draw(canvas)
         val spanned = text as? Spanned ?: return
         val textLayout = layout ?: return
         canvas.save()
         canvas.translate(totalPaddingLeft.toFloat(), totalPaddingTop.toFloat())
-        spanned.getSpans(0, spanned.length, SpoilerSpan::class.java).filterNot { it.revealed }.forEach {
+        val spoilers = spanned.getSpans(0, spanned.length, SpoilerSpan::class.java)
+        // Native focus highlighting is drawn after onDraw, and can tint revealed white
+        // backgrounds gray. Finish only spoiler ranges after the full View draw, keeping
+        // the surrounding keyboard focus feedback. Merge clips to redraw the layout once.
+        revealedPath.reset()
+        spoilers.filter { it.revealed }.forEach {
+            maskPath.reset()
+            textLayout.getSelectionPath(spanned.getSpanStart(it), spanned.getSpanEnd(it), maskPath)
+            revealedPath.addPath(maskPath)
+        }
+        if(!revealedPath.isEmpty) {
+            canvas.save()
+            canvas.clipPath(revealedPath)
+            canvas.drawPaint(revealedBackground)
+            textLayout.draw(canvas)
+            canvas.restore()
+        }
+        spoilers.filterNot { it.revealed }.forEach {
             maskPath.reset()
             textLayout.getSelectionPath(spanned.getSpanStart(it), spanned.getSpanEnd(it), maskPath)
             canvas.drawPath(maskPath, mask)

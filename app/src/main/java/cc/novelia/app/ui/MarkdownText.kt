@@ -50,8 +50,8 @@ import kotlin.coroutines.resume
     val color = MaterialTheme.colorScheme.onSurface.toArgb()
     val linkColor = MaterialTheme.colorScheme.primary.toArgb()
     val markwon = renderer ?: rememberMarkdownRenderer(c)
-    val document = remember(markwon, text) { markwon.parse(text) }
-    val anchors = remember(document) { MarkdownAnchors(document) }
+    val document = remember(markwon, text) { try { markwon.parse(text) } catch (_: RuntimeException) { null } }
+    val anchors = remember(document) { document?.let(::MarkdownAnchors) }
     var anchorRequest by remember(document) { mutableStateOf<AnchorRequest?>(null) }
     val bringIntoView = remember { BringIntoViewRequester() }
     val scrollToAnchor by rememberUpdatedState(onAnchorScroll)
@@ -89,7 +89,7 @@ import kotlin.coroutines.resume
         view.documentUrl = documentUrl
         view.openAnchor = { link ->
             val fragment = MarkdownLinks.localFragment(link, documentUrl)
-            val heading = fragment?.takeIf { it.isNotEmpty() }?.let(anchors::find)
+            val heading = fragment?.takeIf { it.isNotEmpty() }?.let { anchors?.find(it) }
             if (fragment != null && (fragment.isEmpty() || heading != null)) {
                 anchorRequest = AnchorRequest(view, heading)
                 true
@@ -98,13 +98,20 @@ import kotlin.coroutines.resume
         if (view.currentTextColor != color) view.setTextColor(color)
         if (view.linkTextColors.defaultColor != linkColor) view.setLinkTextColor(linkColor)
         view.refreshMarkdown = {
-            markwon.setParsedMarkdown(view, markwon.render(document))
+            try {
+                if (document == null) view.text = text
+                else markwon.setParsedMarkdown(view, markwon.render(document))
+            } catch (_: RuntimeException) {
+                // Parsing and plugin rendering are separate failure boundaries.
+                view.text = text
+            }
             view.movementMethod = movement
         }
         view.openImage = { expandedImage = it }
-        if (view.tag !== document) {
+        val renderKey = document ?: text
+        if (view.tag !== renderKey) {
             view.refreshMarkdown?.invoke()
-            view.tag = document
+            view.tag = renderKey
         }
         view.movementMethod = movement
     })

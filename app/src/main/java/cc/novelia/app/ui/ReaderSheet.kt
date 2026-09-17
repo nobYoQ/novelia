@@ -17,7 +17,7 @@ val LocalEInkMode = staticCompositionLocalOf { false }
     AppSheet(onDismissRequest, rememberModalBottomSheetState(skipPartiallyExpanded = true), content)
 }
 
-@Composable internal fun AppSheet(onDismissRequest: () -> Unit, sheetState: SheetState = rememberModalBottomSheetState(), content: @Composable ColumnScope.() -> Unit) {
+@Composable internal fun AppSheet(onDismissRequest: () -> Unit, sheetState: SheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), content: @Composable ColumnScope.() -> Unit) {
     if (!LocalEInkMode.current) ModalBottomSheet(onDismissRequest = onDismissRequest, sheetState = sheetState, content = content)
     else Dialog(onDismissRequest, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         val window = (LocalView.current.parent as? DialogWindowProvider)?.window

@@ -19,7 +19,8 @@ import java.util.concurrent.TimeUnit
 class UpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val app = applicationContext as NoveliaApplication
-        val books = app.store.state.value.books.filter { !it.book.ref.isLocal }.take(60)
+        val library = app.store.state.value
+        val books = booksForUpdate(library.books, library.drafts["updates:cursor"])
         var count = 0; var failed = 0
         for(saved in books) {
             if(isStopped) return Result.failure()
@@ -30,9 +31,13 @@ class UpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 if(changed) count++
                 app.store.update { state -> state.copy(books = state.books.map { b -> if(b.book.ref == ref) b.copy(book = updated, hasUpdates = b.hasUpdates || changed) else b }) }
             } catch(e: kotlinx.coroutines.CancellationException) { throw e } catch(e: Exception) { failed++ }
+            // Persist progress before yielding. If the OS stops a long run, the next one begins
+            // with the books that would otherwise remain permanently at the end of the shelf.
+            app.store.update { it.copy(drafts = it.drafts + ("updates:cursor" to saved.book.ref.key)) }
+            app.store.flush()
             delay(1500)
         }
-        app.store.update { it.copy(drafts = it.drafts + ("updates:last" to "${System.currentTimeMillis()}|$count|$failed")) }
+        app.store.update { it.copy(drafts = (it.drafts - "updates:cursor") + ("updates:last" to "${System.currentTimeMillis()}|$count|$failed")) }
         app.store.flush()
         if(count > 0) AppNotifications.show(app, 201, "书架里有新的故事", "$count 本小说有新章节或译文，打开书架查看。")
         return if(books.isNotEmpty() && failed == books.size) Result.retry() else Result.success()

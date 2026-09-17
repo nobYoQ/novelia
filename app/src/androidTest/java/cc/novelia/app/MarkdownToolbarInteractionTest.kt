@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.ui.test.ExperimentalTestApi::class)
+
 package cc.novelia.app
 
 import androidx.compose.foundation.layout.*
@@ -6,6 +8,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.input.InputModeManager
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.text.TextRange
@@ -53,4 +59,38 @@ class MarkdownToolbarInteractionTest {
 
     @Test fun articleToolbarKeepsSelectionAndFocus() = exercise(false)
     @Test fun commentToolbarKeepsSelectionAndResetsAfterSending() = exercise(true)
+
+    @Test fun toolbarCanBeReachedAndActivatedWithKeyboard() = exerciseKeyboard(comment = true)
+    @Test fun articleToolbarKeepsSelectionWhenActivatedWithKeyboard() = exerciseKeyboard(comment = false)
+
+    private fun exerciseKeyboard(comment: Boolean) {
+        lateinit var inputModeManager: InputModeManager
+        compose.setContent {
+            inputModeManager = LocalInputModeManager.current
+            NoveliaTheme("light") {
+                var text by remember { mutableStateOf("选中的文字") }
+                if(comment) MarkdownCommentInput(text, { text = it }, "写下评论") {}
+                else MarkdownEditor(text, { text = it }, 420.dp)
+            }
+        }
+        compose.runOnIdle {
+            org.junit.Assert.assertTrue(inputModeManager.requestInputMode(InputMode.Keyboard))
+        }
+        val field = compose.onNodeWithTag(if(comment) "comment-body" else "article-body")
+        field.performTextInputSelection(TextRange(0, 5))
+        field.assertIsFocused()
+        // Start at a known focus target and use actual Shift+Tab events. Clearing Android
+        // focus first may itself restore a target, so moveFocus(Next) would skip that target.
+        listOf("Markdown 格式帮助", "插入折叠内容", "插入评分", "插入剧透", "插入链接", "插入删除线", "插入斜体", "插入粗体").forEach { description ->
+            compose.onRoot().performKeyInput {
+                keyDown(Key.ShiftLeft)
+                pressKey(Key.Tab)
+                keyUp(Key.ShiftLeft)
+            }
+            compose.onNodeWithContentDescription(description).assertIsFocused()
+        }
+        compose.onNodeWithContentDescription("插入粗体").assertIsFocused()
+            .performKeyInput { pressKey(Key.Enter) }
+        field.assertTextContains("**选中的文字**").assertIsFocused()
+    }
 }

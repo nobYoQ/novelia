@@ -44,6 +44,11 @@ class LocalStore(val context: Context) {
     private val documentLock = Any()
     private val chapterMemory = WeightedMemoryCache<String, Chapter>(24, 12L * 1024 * 1024, ::chapterWeight)
     private val documentMemory = WeightedMemoryCache<String, LocalDocument>(4, 32L * 1024 * 1024, ::documentWeight)
+    private val sourceIndex by lazy {
+        val file = File(documentsDir, "source-index.json")
+        val initial = runCatching { appJson.decodeFromString<Map<String, String>>(AtomicFile(file).openRead().bufferedReader(Charsets.UTF_8).use { it.readText() }) }.getOrDefault(emptyMap())
+        DocumentHashIndex(initial, { document(it).sourceHash }, { atomicText(file, appJson.encodeToString(it)) })
+    }
     private val chapterIndex = ChapterCacheIndex(cacheDir, 256L * 1024 * 1024)
     private val mutableCacheGeneration = MutableStateFlow(0L)
     val cacheGeneration = mutableCacheGeneration.asStateFlow()
@@ -87,6 +92,10 @@ class LocalStore(val context: Context) {
         val stored = document.copy(images = emptyMap())
         atomicText(File(documentsDir, "$id.json"), appJson.encodeToString(stored))
         documentMemory.put(id, stored)
+        sourceIndex.record(id, stored.sourceHash)
+    }
+    fun findDocumentByHash(hash: String, checkCancelled: () -> Unit = {}): BookRef? = synchronized(documentLock) {
+        sourceIndex.find(hash, state.value.books.mapNotNull { it.book.ref.takeIf(BookRef::isLocal)?.id }, checkCancelled)?.let { BookRef("local", it) }
     }
     fun documentImage(id: String, hash: String): File { require(hash.matches(Regex("[a-f0-9]{64}"))); return File(documentsDir, "${safeId(id)}-images/$hash") }
     fun documentSource(id: String, format: String): File { require(format in listOf("epub", "txt", "srt")); return File(documentsDir, "${safeId(id)}.$format") }
@@ -100,6 +109,7 @@ class LocalStore(val context: Context) {
     fun removeDocument(id: String) = synchronized(documentLock) {
         val key = safeId(id)
         documentMemory.remove(key)
+        sourceIndex.remove(key)
         File(documentsDir, "$key.json").delete()
         File(documentsDir, "$key-images").listFiles()?.forEach { it.delete() }
         File(documentsDir, "$key-images").delete()
