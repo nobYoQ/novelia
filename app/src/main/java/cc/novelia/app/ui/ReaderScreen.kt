@@ -28,7 +28,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.*
@@ -56,6 +55,10 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -81,8 +84,8 @@ import kotlin.math.roundToInt
     val local by c.store.state.collectAsStateWithLifecycle()
     val settings = local.bookSettings[ref.key] ?: local.reader
     val eInk = settings.eInkMode
-    CompositionLocalProvider(LocalReducedMotion provides (LocalReducedMotion.current || eInk), LocalEInkMode provides eInk,
-        LocalRippleConfiguration provides if(eInk) null else LocalRippleConfiguration.current) {
+    val appEInk = LocalEInkMode.current || eInk
+    AppInteractionMode(appEInk, LocalReducedMotion.current || eInk) {
         ReaderContent(c, ref, chapterId)
     }
 }
@@ -90,7 +93,10 @@ import kotlin.math.roundToInt
 @Composable private fun ReaderContent(c: AppController, ref: BookRef, chapterId: String) {
     val local by c.store.state.collectAsStateWithLifecycle()
     val settings = local.bookSettings[ref.key] ?: local.reader
-    var menu by remember { mutableStateOf(true) }; var preferences by remember { mutableStateOf(false) }; var toc by remember { mutableStateOf(false) }; var search by remember { mutableStateOf(false) }; var query by rememberSaveable { mutableStateOf("") }; var version by remember { mutableIntStateOf(0) }
+    var menu by rememberSaveable(ref.key) {
+        mutableStateOf(c.nav.currentBackStackEntry?.savedStateHandle?.remove<Boolean>("readerMenuVisible") ?: true)
+    }
+    var preferences by remember { mutableStateOf(false) }; var toc by remember { mutableStateOf(false) }; var search by remember { mutableStateOf(false) }; var query by rememberSaveable { mutableStateOf("") }; var version by remember { mutableIntStateOf(0) }
     var speechSheet by remember { mutableStateOf(false) }
     val speechStatus by ReadAloudService.status.collectAsStateWithLifecycle()
     val context = LocalContext.current; val activity = context.activityOrNull()
@@ -117,7 +123,7 @@ import kotlin.math.roundToInt
         if(paragraphs == null) {
             Box(Modifier.fillMaxSize().background(background), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    if(!settings.eInkMode) CircularProgressIndicator(color = foreground)
+                    if(!LocalEInkMode.current) CircularProgressIndicator(color = foreground)
                     Text("正在整理正文…", color = foreground)
                 }
             }
@@ -156,25 +162,24 @@ import kotlin.math.roundToInt
                 lastSavedPosition = next
             }
         }
-        fun openChapter(id: String) {
+        fun openChapter(id: String, startAtEnd: Boolean = false) {
             if(leaving || id == chapterId) return
             savePosition()
             leaving = true
             c.nav.popBackStack()
             c.read(ref, id)
+            c.nav.currentBackStackEntry?.savedStateHandle?.apply {
+                // Chapter navigation recreates the reader; carry its toolbar state forward.
+                set("readerMenuVisible", menu)
+                if(startAtEnd) set("readerStartAtEnd", true)
+            }
         }
         fun page(direction: Int) {
             if(settings.staticPagination) {
-                if(direction > 0 && !eInk.canGoForward && eInk.pages.isNotEmpty()) chapter.nextId?.let(::openChapter)
+                if(direction > 0 && !eInk.canGoForward && eInk.pages.isNotEmpty()) chapter.nextId?.let { openChapter(it) }
                 else if(direction < 0 && !eInk.canGoBack && eInk.pages.isNotEmpty()) chapter.prevId?.let { id ->
-                    if(!leaving) {
-                        savePosition()
-                        // A previous-page turn lands at the end of the preceding chapter.
-                        leaving = true
-                        c.nav.popBackStack()
-                        c.read(ref, id)
-                        c.nav.currentBackStackEntry?.savedStateHandle?.set("readerStartAtEnd", true)
-                    }
+                    // A previous-page turn lands at the end of the preceding chapter.
+                    openChapter(id, startAtEnd = true)
                 }
                 else { eInk.move(direction); savePosition() }
                 return
@@ -309,14 +314,14 @@ import kotlin.math.roundToInt
                     Surface(color = Color.Transparent, contentColor = foreground) {
                         Column(Modifier.navigationBarsPadding()) {
                             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                IconButton(onClick = { chapter.prevId?.let(::openChapter) }, enabled = chapter.prevId != null && !leaving) { Icon(Icons.Outlined.SkipPrevious, "上一章") }
+                                IconButton(onClick = { chapter.prevId?.let { openChapter(it) } }, enabled = chapter.prevId != null && !leaving) { Icon(Icons.Outlined.SkipPrevious, "上一章") }
                                 TextButton(onClick = { toc = true }, colors = ButtonDefaults.textButtonColors(contentColor = foreground)) { Icon(Icons.Outlined.FormatListBulleted, null, Modifier.size(18.dp)); Text(" 目录") }
                                 IconButton(onClick = { note = paragraphs.getOrNull(firstParagraph) }, enabled = paragraphs.isNotEmpty()) { Icon(Icons.Outlined.BookmarkAdd, "添加书签或笔记") }
                                 IconButton(onClick = { speechSheet = true }) {
                                     if(speechStatus == ReadAloudService.SLEEP_TIMER_FINISHED) StickerAccent(MidoriSticker.Sleep, speechStatus, Modifier.size(40.dp).semantics { contentDescription = "朗读定时已结束，打开朗读设置" })
                                     else Icon(Icons.Outlined.VolumeUp, "朗读本章")
                                 }
-                                IconButton(onClick = { chapter.nextId?.let(::openChapter) }, enabled = chapter.nextId != null && !leaving) { Icon(Icons.Outlined.SkipNext, "下一章") }
+                                IconButton(onClick = { chapter.nextId?.let { openChapter(it) } }, enabled = chapter.nextId != null && !leaving) { Icon(Icons.Outlined.SkipNext, "下一章") }
                             }
                             Text(if(settings.staticPagination) "${if(settings.eInkMode) "电子纸" else "分页阅读"} · 点击正文收起工具栏" else "${if(cached) "本地内容 · " else ""}$percent% · 点击正文收起工具栏", Modifier.align(Alignment.CenterHorizontally).padding(bottom = 8.dp), style = MaterialTheme.typography.labelSmall, color = foreground)
                         }
@@ -330,7 +335,7 @@ import kotlin.math.roundToInt
             AsyncContent(ref.key, load = { withContext(Dispatchers.IO) { if(ref.isLocal) c.store.document(ref.id).chapters.map { TocItem(it.title, it.title, it.id) } else c.detail<WebDetail>("novel/${ref.key}").toc } }, modifier = Modifier.fillMaxHeight(.8f)) { list, _ -> TocPanel(c, ref, list, chapterId) { id -> toc = false; openChapter(id) } }
         }
         if(speechSheet) ReaderSheet(onDismissRequest = { speechSheet = false }) {
-            Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            AppScrollColumn(contentModifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text("系统朗读", style = MaterialTheme.typography.titleLarge)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     if(speechStatus == ReadAloudService.SLEEP_TIMER_FINISHED) StickerAccent(MidoriSticker.Sleep, speechStatus, Modifier.size(64.dp))
@@ -354,7 +359,7 @@ import kotlin.math.roundToInt
         }
         selected?.let { paragraph -> ReaderSheet(onDismissRequest = { selected = null }) {
             Column(Modifier.padding(20.dp)) {
-                SelectionContainer { Text(paragraph.parts.joinToString("\n\n") { it.text }, Modifier.heightIn(max = 240.dp).verticalScroll(rememberScrollState())) }
+                SelectionContainer { Text(paragraph.parts.joinToString("\n\n") { it.text }, Modifier.heightIn(max = 240.dp).appVerticalScroll(rememberScrollState())) }
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { TextButton(onClick = { c.share(paragraph.parts.joinToString("\n\n") { it.text }); selected = null }) { Text("分享段落") }; TextButton(onClick = { note = paragraph; selected = null }) { Text("书签 / 笔记") } }
             }
         } }
@@ -396,7 +401,7 @@ import kotlin.math.roundToInt
                 onLongClickLabel = "放大查看插图", onLongClick = { expanded = true }), contentAlignment = Alignment.Center) {
             AsyncImage(request, "小说插图", Modifier.fillMaxSize(), contentScale = ContentScale.Fit,
                 onLoading = { loading = true; failed = false }, onSuccess = { loading = false; failed = false }, onError = { loading = false; failed = true })
-            if(loading) CircularProgressIndicator(Modifier.size(28.dp), color = foreground.copy(alpha = .65f), strokeWidth = 2.dp)
+            if(loading) { if(LocalEInkMode.current) Text("正在加载插图…", color = foreground) else CircularProgressIndicator(Modifier.size(28.dp), color = foreground.copy(alpha = .65f), strokeWidth = 2.dp) }
             if(failed) Text("插图暂时无法加载", Modifier.padding(24.dp), style = MaterialTheme.typography.bodyMedium, color = foreground.copy(alpha = .7f))
         }
     }
@@ -405,10 +410,10 @@ import kotlin.math.roundToInt
 
 @Composable fun ReaderPreferences(value: ReaderSettings, perBook: Boolean? = null, onPerBook: (Boolean) -> Unit = {}, onChange: (ReaderSettings) -> Unit) {
     val reducedMotion = LocalReducedMotion.current
-    Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = 28.dp)) {
+    AppScrollColumn(contentModifier = Modifier.padding(bottom = 28.dp)) {
         Text("阅读偏好", Modifier.padding(20.dp), style = MaterialTheme.typography.titleLarge)
         if(perBook != null) TogglePreference("仅应用于这本书", "为当前小说保存独立设置", perBook, onPerBook)
-        TogglePreference("电子纸阅读模式", "首次开启使用自动分页并启用翻页操作；关闭恢复之前的设置，再次开启沿用上次电子纸设置。保留主题，关闭过渡动画。", value.eInkMode) { onChange(value.withEInkMode(it)) }
+        TogglePreference("电子纸阅读模式", "首次开启使用自动分页。作为默认偏好时，全应用改为按屏翻动和按钮排序；仅应用于这本书时只影响当前阅读器。保留主题，关闭后恢复普通交互。", value.eInkMode) { onChange(value.withEInkMode(it)) }
         ChoiceRow("分页模式", listOf("连续滚动", "自动分页"), if(value.staticPagination) 1 else 0) { onChange(value.withPaginationMode(if(it == 1) "auto" else "scroll")) }
         Text(if(value.staticPagination) "按屏幕大小提前排成独立页面，每次翻动一页。" else "整章连续排列，上下滑动浏览，不提前拆成独立页面。",
             Modifier.padding(horizontal = 20.dp, vertical = 4.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -448,5 +453,24 @@ import kotlin.math.roundToInt
         ChoiceRow("朗读定时停止", listOf("15 分钟", "30 分钟", "60 分钟"), listOf(15, 30, 60).indexOf(value.speechMinutes)) { onChange(value.copy(speechMinutes = listOf(15, 30, 60)[it])) }
     }
 }
-@Composable fun TogglePreference(title: String, subtitle: String, value: Boolean, onChange: (Boolean) -> Unit) { ListItem(headlineContent = { Text(title) }, supportingContent = if(subtitle.isNotBlank()) ({ Text(subtitle) }) else null, trailingContent = { Switch(value, onCheckedChange = null) }, modifier = Modifier.toggleable(value = value, role = Role.Switch, onValueChange = onChange)) }
-@Composable private fun ReaderSlider(label: String, value: Float, range: ClosedFloatingPointRange<Float>, modifier: Modifier = Modifier, enabled: Boolean = true, onChange: (Float) -> Unit) { Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) { Text(label, style = MaterialTheme.typography.labelLarge); Slider(value, onChange, modifier = modifier, valueRange = range, enabled = enabled) } }
+@Composable fun TogglePreference(title: String, subtitle: String, value: Boolean, onChange: (Boolean) -> Unit) { ListItem(headlineContent = { Text(title) }, supportingContent = if(subtitle.isNotBlank()) ({ Text(subtitle) }) else null, trailingContent = {
+    if(LocalEInkMode.current) Icon(if(value) Icons.Outlined.ToggleOn else Icons.Outlined.ToggleOff, null, Modifier.size(48.dp), tint = if(value) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+    else Switch(value, onCheckedChange = null)
+}, modifier = Modifier.toggleable(value = value, role = Role.Switch, onValueChange = onChange)) }
+@Composable private fun ReaderSlider(label: String, value: Float, range: ClosedFloatingPointRange<Float>, modifier: Modifier = Modifier, enabled: Boolean = true, onChange: (Float) -> Unit) {
+    Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+        Text(label, style = MaterialTheme.typography.labelLarge)
+        if(LocalEInkMode.current) {
+            val step = when { range.endInclusive - range.start > 100f -> 20f; range.endInclusive - range.start > 10f -> 1f; else -> .05f }
+            Row(modifier.fillMaxWidth().semantics {
+                progressBarRangeInfo = ProgressBarRangeInfo(value.coerceIn(range), range)
+                if(!enabled) disabled()
+                setProgress { next -> if(enabled && next.isFinite()) { onChange(next.coerceIn(range)); true } else false }
+            }, horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                OutlinedButton(onClick = { onChange((value - step).coerceIn(range)) }, enabled = enabled && value > range.start) { Icon(Icons.Outlined.Remove, "减小 $label") }
+                Text("${(value * 100).roundToInt() / 100f}", style = MaterialTheme.typography.labelLarge)
+                OutlinedButton(onClick = { onChange((value + step).coerceIn(range)) }, enabled = enabled && value < range.endInclusive) { Icon(Icons.Outlined.Add, "增大 $label") }
+            }
+        } else Slider(value, onChange, modifier = modifier, valueRange = range, enabled = enabled)
+    }
+}

@@ -4,11 +4,9 @@ package cc.novelia.app.ui
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -54,7 +52,7 @@ val categories = linkedMapOf("General" to "小说交流", "Guide" to "使用指�
 }
 @Composable private fun ArticleList(c: AppController, result: Page<Article>, page: Int, changePage: (Int) -> Unit) {
     val reducedMotion = LocalReducedMotion.current
-    LazyColumn {
+    AppLazyColumn {
         if(result.items.isEmpty()) item { EmptyState("这里暂时没有文章", "试试其他分类，或调整搜索词。", Icons.Outlined.Forum) }
         items(result.items, key = { it.id }, contentType = { "article" }) { article ->
             Column(if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(160), placementSpec = tween(220), fadeOutSpec = tween(120))) {
@@ -82,7 +80,7 @@ val categories = linkedMapOf("General" to "小说交流", "Guide" to "使用指�
                     tabState.SaveableStateProvider(tab) {
                         if(tab == 0) {
                         val articleScroll = rememberLazyListState()
-                        LazyColumn(state = articleScroll, contentPadding = PaddingValues(20.dp)) {
+                        AppLazyColumn(state = articleScroll, contentPadding = PaddingValues(20.dp)) {
                             item { Text(categories[article.category].orEmpty(), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary); Spacer(Modifier.height(12.dp)); Text(article.title, style = MaterialTheme.typography.headlineMedium); Spacer(Modifier.height(12.dp)); Text("${article.user.username} · ${displayDate(article.createAt)} · ${article.numViews} 次浏览", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant); Spacer(Modifier.height(24.dp)) }
                             item { MarkdownText(c, article.content, documentUrl = "https://n.novelia.cc/forum/$id",
                                 onAnchorScroll = { top -> articleScroll.scrollToItem(1, top) }) }
@@ -125,7 +123,7 @@ val categories = linkedMapOf("General" to "小说交流", "Guide" to "使用指�
         val editorHeight = maxHeight.coerceIn(1.dp, 420.dp)
         MotionContent(preview, Modifier.fillMaxSize(), animateInitial = false) {
             editorState.SaveableStateProvider(preview) {
-                Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                AppScrollColumn(contentModifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     if(preview) { Text(title, style = MaterialTheme.typography.headlineMedium); MarkdownText(c, content, renderer = renderer, documentUrl = article?.id?.let { "https://n.novelia.cc/forum/$it" }) }
                     else {
                         OutlinedTextField(title, { if(it.length <= 80) title = it }, label = { Text("标题") }, supportingText = { Text("${title.length} / 80") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
@@ -150,7 +148,7 @@ val categories = linkedMapOf("General" to "小说交流", "Guide" to "使用指�
     Column(Modifier.fillMaxSize()) {
         AsyncContent(listOf(site, parent, page, profile?.username), refreshKey = version, load = { c.api.get<Page<Comment>>("comment", buildMap { put("site", site); put("page", "$page"); put("pageSize", "20"); parent?.let { put("parentId", it) } }) }, modifier = Modifier.weight(1f)) { result, _ ->
             val comments = remember(result.items, preferences.blockedUsers) { result.items.filter { it.user.username !in preferences.blockedUsers } }
-            LazyColumn(contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)) {
+            AppLazyColumn(contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)) {
                 if(comments.isEmpty()) item { EmptyState("还没有讨论", "读完之后，来分享你的感想吧。", Icons.Outlined.ChatBubbleOutline) }
                 items(comments, key = { it.id }, contentType = { "comment" }) { comment ->
                     Column(if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(160), placementSpec = tween(220), fadeOutSpec = tween(120))) {
@@ -174,6 +172,6 @@ val categories = linkedMapOf("General" to "小说交流", "Guide" to "使用指�
             }
         }
     }
-    reply?.let { comment -> ModalBottomSheet(onDismissRequest = { reply = null }) { Column(Modifier.fillMaxHeight(.85f)) { Text("回复 ${comment.user.username}", Modifier.padding(20.dp), style = MaterialTheme.typography.titleLarge); CommentsPanel(c, site, locked, comment.id) } } }
+    reply?.let { comment -> AppSheet(onDismissRequest = { reply = null }) { Column(Modifier.fillMaxHeight(.85f)) { Text("回复 ${comment.user.username}", Modifier.padding(20.dp), style = MaterialTheme.typography.titleLarge); CommentsPanel(c, site, locked, comment.id) } } }
     deleting?.let { comment -> ConfirmDialog("删除评论？", "这条评论将从原站移除。", { deleting = null }) { c.action { c.api.request("DELETE", "comment/${comment.id}"); version++ } } }
 }

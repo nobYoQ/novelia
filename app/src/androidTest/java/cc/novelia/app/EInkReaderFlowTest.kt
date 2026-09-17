@@ -117,7 +117,10 @@ class EInkReaderFlowTest {
             compose.waitUntil(10_000) { compose.onAllNodesWithText("独特的终点标记。", substring = true).fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithContentDescription("返回").performClick()
             compose.onNodeWithText("我的").performClick()
-            compose.onNodeWithText("阅读与外观").performClick()
+            repeat(5) {
+                if(compose.onAllNodesWithText("阅读与外观").fetchSemanticsNodes().isEmpty()) compose.onNodeWithText("下一屏").performClick()
+            }
+            compose.onNodeWithText("阅读与外观").performScrollTo().performClick()
             compose.onNodeWithText("滚动时自动收起筛选").performScrollTo().assertIsDisplayed()
             val oldCollapse = app.store.state.value.autoCollapseCloudFilters
             compose.onNodeWithText("滚动时自动收起筛选").performClick()

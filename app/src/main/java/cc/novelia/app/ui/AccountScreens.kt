@@ -8,11 +8,9 @@ import android.webkit.*
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -62,7 +60,7 @@ import kotlinx.serialization.encodeToString
     DisposableEffect(web) { onDispose { web.stopLoading(); web.destroy(); c.afterLogin = null } }
     Screen("登录 Novelia", c::back, actions = { TextButton(onClick = ::complete, enabled = !busy) { Text(if(busy) "验证中…" else "完成登录") } }) { padding -> Column(Modifier.padding(padding)) {
         Text("使用原站统一账号登录、注册或找回密码。密码由认证网站直接处理。", Modifier.padding(horizontal = 20.dp, vertical = 12.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        if(loading || busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+        if(loading || busy) { if(LocalEInkMode.current) Text(if(busy) "验证中…" else "正在加载认证页面…", Modifier.padding(horizontal = 20.dp)) else LinearProgressIndicator(Modifier.fillMaxWidth()) }
         error?.let { Text(it, Modifier.padding(16.dp), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium); TextButton(onClick = { error = null; loading = true; web.reload() }) { Text("重新加载认证页") } }
         AndroidView(factory = { web }, modifier = Modifier.weight(1f).fillMaxWidth())
     } }
@@ -73,7 +71,7 @@ import kotlinx.serialization.encodeToString
     val companionVisible by remember { derivedStateOf {
         listState.layoutInfo.visibleItemsInfo.any { it.key == "profile-card" }
     } }
-    Screen("我的") { padding -> LazyColumn(Modifier.padding(padding), state = listState, contentPadding = PaddingValues(bottom = 24.dp)) {
+    Screen("我的") { padding -> AppLazyColumn(Modifier.padding(padding), state = listState, contentPadding = PaddingValues(bottom = 24.dp)) {
         item(key = "profile-card") { Card(Modifier.fillMaxWidth().padding(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
             Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 MidoriCompanion(visible = companionVisible)
@@ -101,7 +99,8 @@ import kotlinx.serialization.encodeToString
     val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> c.message(if(granted) "已允许通知" else "可在系统设置中开启通知") }
     val exportSettings = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri -> uri?.let { c.action("设置已导出") { val s = c.store.state.value; val backup = SettingsBackup(reader = s.reader, theme = s.theme, reducedMotion = s.reducedMotion, blockedBooks = s.blockedBooks, blockedTags = s.blockedTags, blockedUsers = s.blockedUsers, hideNovelComments = s.hideNovelComments, wifiOnly = s.wifiOnly, autoCollapseCloudFilters = s.autoCollapseCloudFilters); withContext(Dispatchers.IO) { c.app.contentResolver.openOutputStream(it)?.use { output -> output.write(appJson.encodeToString(backup).toByteArray()) } ?: error("无法写入文件") } } } }
     val importSettings = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let { c.action("设置已导入") { val backup = withContext(Dispatchers.IO) { appJson.decodeFromString<SettingsBackup>(readDocument(c, it).second.toString(Charsets.UTF_8)) }; require(backup.version == 1 && backup.theme in listOf("system", "light", "dark") && backup.reader.fontSize in 14f..32f && backup.reader.lineHeight in 1.3f..2.6f && backup.reader.width in 300f..900f && backup.reader.engines.toSet() == setOf("sakura", "gpt", "youdao")); c.store.update { s -> s.copy(reader = backup.reader, theme = backup.theme, reducedMotion = backup.reducedMotion, blockedBooks = backup.blockedBooks, blockedTags = backup.blockedTags, blockedUsers = backup.blockedUsers, hideNovelComments = backup.hideNovelComments, wifiOnly = backup.wifiOnly, autoCollapseCloudFilters = backup.autoCollapseCloudFilters) } } } }
-    Screen("阅读与外观", c::back) { padding -> LazyColumn(Modifier.padding(padding)) {
+    Screen("阅读与外观", c::back) { padding -> AppLazyColumn(Modifier.padding(padding)) {
+        item { TogglePreference("电子纸阅读模式", "全应用按屏翻动，关闭滚动惯性和动画，使用按钮调整分卷顺序", state.reader.eInkMode) { value -> c.store.update { it.copy(reader = it.reader.withEInkMode(value)) } } }
         item { ChoiceRow("应用主题", listOf("跟随系统", "浅色", "深色"), listOf("system", "light", "dark").indexOf(state.theme)) { index -> c.store.update { it.copy(theme = listOf("system", "light", "dark")[index]) } } }
         item { TogglePreference("减少动态效果", "", state.reducedMotion) { value -> c.store.update { it.copy(reducedMotion = value) } } }
         item { TogglePreference("滚动时自动收起筛选", "云端收藏：向下浏览列表时收起，点击摘要展开", state.autoCollapseCloudFilters) { value -> c.store.update { it.copy(autoCollapseCloudFilters = value) } } }
@@ -115,7 +114,7 @@ import kotlinx.serialization.encodeToString
         item { MenuRow("导入普通设置", "从 Novelia 设置文件恢复偏好", Icons.Outlined.FileOpen, { importSettings.launch(arrayOf("application/json", "*/*")) }) }
         item { MetaParagraph("本地数据", "小说文件、书签和偏好保存在此设备。系统文件选择器负责导入和导出，无需申请全部存储空间权限。卸载应用会删除这些数据，请先导出需要保留的文件。") }
     } }
-    if(reader) ModalBottomSheet(onDismissRequest = { reader = false }) { ReaderPreferences(state.reader) { value -> c.store.update { it.copy(reader = value) } } }
+    if(reader) AppSheet(onDismissRequest = { reader = false }) { ReaderPreferences(state.reader) { value -> c.store.update { it.copy(reader = value) } } }
     if(clear) ConfirmDialog("清理阅读与图片缓存？", "已缓存的网络章节、详情和图片会被删除，之后需要联网加载。本地导入的小说和下载文件不受影响。", { clear = false }) {
         clearing = true
         c.action("缓存已清理") {
@@ -132,7 +131,7 @@ import kotlinx.serialization.encodeToString
 }
 @Composable fun NotesScreen(c: AppController) {
     val state by c.store.state.collectAsStateWithLifecycle(); var editing by remember { mutableStateOf<Note?>(null) }
-    Screen("书签与笔记", c::back) { padding -> LazyColumn(Modifier.padding(padding), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Screen("书签与笔记", c::back) { padding -> AppLazyColumn(Modifier.padding(padding), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         if(state.notes.isEmpty()) item { EmptyState("记下喜欢的句子", "在阅读器长按段落，或点击书签按钮保存。", Icons.Outlined.EditNote) }
         items(state.notes.sortedByDescending { it.createdAt }, key = { it.id }) { note -> Card { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(note.quote, maxLines = 5, style = MaterialTheme.typography.bodyMedium); if(note.text.isNotBlank()) Text(note.text, color = MaterialTheme.colorScheme.primary)
@@ -144,7 +143,7 @@ import kotlinx.serialization.encodeToString
 @Composable fun BlockedScreen(c: AppController) {
     val state by c.store.state.collectAsStateWithLifecycle(); var add by remember { mutableStateOf(false) }
     var addUser by remember { mutableStateOf(false) }
-    Screen("屏蔽管理", c::back, actions = { IconButton(onClick = { add = true }) { Icon(Icons.Outlined.Add, "屏蔽标签") } }) { padding -> LazyColumn(Modifier.padding(padding)) {
+    Screen("屏蔽管理", c::back, actions = { IconButton(onClick = { add = true }) { Icon(Icons.Outlined.Add, "屏蔽标签") } }) { padding -> AppLazyColumn(Modifier.padding(padding)) {
         item { MetaParagraph("本地屏蔽", "只影响此设备的发现列表；不会更改原站收藏。") }
         item { SectionTitle("用户", "添加用户") { addUser = true } }
         items(state.blockedUsers.toList()) { user -> MenuRow(user, "点击取消屏蔽", Icons.Outlined.PersonOff, { c.store.update { it.copy(blockedUsers = it.blockedUsers - user) } }) }
@@ -158,7 +157,7 @@ import kotlinx.serialization.encodeToString
     if(addUser) TextPrompt("屏蔽用户", "输入原站用户名", onDismiss = { addUser = false }) { user -> c.store.update { it.copy(blockedUsers = it.blockedUsers + user) } }
 }
 @Composable fun AboutScreen(c: AppController) {
-    Screen("帮助与关于", c::back) { padding -> LazyColumn(Modifier.padding(padding)) {
+    Screen("帮助与关于", c::back) { padding -> AppLazyColumn(Modifier.padding(padding)) {
         item { AboutIdentity() }
         item { MenuRow("原站使用教程", "账号规则、检索语法与资源说明", Icons.Outlined.HelpOutline, { c.go("article/64f3d63f794cbb1321145c07") }) }
         item { MenuRow("反馈与建议", "在原站社区查看和提交反馈", Icons.Outlined.Forum, { c.go("community") }) }

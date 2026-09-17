@@ -7,7 +7,6 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -57,14 +56,14 @@ import kotlin.math.abs
                 PrimaryTabRow(tab) { listOf("简介", "分卷", "讨论").forEachIndexed { i, title -> Tab(tab == i, { tab = i }, text = { Text(title) }) } }
                 MotionContent(tab, Modifier.weight(1f).fillMaxWidth(), animateInitial = false) {
                     tabState.SaveableStateProvider(tab) { when(tab) {
-                        0 -> LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+                        0 -> AppLazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
                             item { BookHero(book, "${detail.level} · ${detail.volumes.size} 卷", isSaved, { favorite = book }) }
                             item { MetaParagraph("简介", detail.introduction) }
                             item { TagList(detail.keywords, c) }
                             item { MetaParagraph("出版信息", listOfNotNull(detail.authors.takeIf { it.isNotEmpty() }?.joinToString(prefix = "作者："), detail.artists.takeIf { it.isNotEmpty() }?.joinToString(prefix = "插画："), detail.publisher, detail.imprint).joinToString("\n")) }
                             if(detail.webIds.isNotEmpty()) item { SectionTitle("关联网络版"); detail.webIds.forEach { id -> TextButton(onClick = { c.book(BookRef.fromKey(id)) }, Modifier.padding(horizontal = 12.dp)) { Text(id) } } }
                         }
-                        1 -> LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+                        1 -> AppLazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
                             if(profile == null) item { EmptyState("登录后查看文库文件", "文库的资源目录与下载遵循原站权限。", action = "登录", onAction = { c.go("login") }) }
                             if(detail.volumeJp.isNotEmpty()) item { SectionTitle("已有译文的分卷") }
                             items(detail.volumeJp, key = { "jp-${it.volumeId}" }, contentType = { "translated-volume" }) { volume ->
@@ -93,7 +92,7 @@ import kotlin.math.abs
                 PrimaryTabRow(tab) { listOf("简介", "目录 $chapterCount", "讨论").forEachIndexed { i, title -> Tab(tab == i, { tab = i }, text = { Text(title) }) } }
                 MotionContent(tab, Modifier.weight(1f).fillMaxWidth(), animateInitial = false) {
                     tabState.SaveableStateProvider(tab) { when(tab) {
-                        0 -> LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+                        0 -> AppLazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
                             item { BookHero(book, "${detail.type} · ${providers[ref.provider]}", isSaved, { favorite = book }) }
                             item { Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 Button(onClick = { start?.let { val localChapter = state.positions[ref.key]?.chapterId; val cloudChapter = detail.lastReadChapterId; if(localChapter != null && cloudChapter != null && localChapter != cloudChapter) progressChoice = Triple(book, localChapter, cloudChapter) else { c.store.saveBook(book); c.read(ref, it) } } }, enabled = start != null, modifier = Modifier.weight(1f)) { Icon(Icons.Outlined.MenuBook, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(if(state.positions.containsKey(ref.key) || detail.lastReadChapterId != null) "继续阅读" else "开始阅读") }
@@ -177,7 +176,7 @@ import kotlin.math.abs
                 }
             }, enabled = !caching && hasChapters) { Text(if(caching) "正在缓存…" else "缓存前 20 章") }
         }
-        LazyColumn(state = scroll, modifier = Modifier.weight(1f)) {
+        AppLazyColumn(state = scroll, modifier = Modifier.weight(1f)) {
             items(list, key = { it.value.chapterId?.let { id -> "chapter-$id" } ?: "section-${it.index}" }, contentType = { if(it.value.chapterId == null) "section" else "chapter" }) { entry ->
                 val item = entry.value
                 val itemMotion = if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(180), placementSpec = tween(220), fadeOutSpec = tween(120))

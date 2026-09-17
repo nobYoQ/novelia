@@ -48,7 +48,7 @@ class EInkAndCloudFilterTest {
     }
 
     @Test fun filterAnimationResizesGraduallyAndReducedMotionFinishesImmediately() {
-        var expanded by mutableStateOf(true)
+        var expanded by mutableStateOf(false)
         var reduced by mutableStateOf(false)
         compose.setContent {
             MaterialTheme {
@@ -60,25 +60,28 @@ class EInkAndCloudFilterTest {
             }
         }
         fun height() = compose.onNodeWithTag("filters").getUnclippedBoundsInRoot().let { it.bottom - it.top }
+        val collapsedHeight = height()
+        compose.runOnIdle { expanded = true }
+        compose.waitForIdle()
         val fullHeight = height()
         compose.mainClock.autoAdvance = false
         compose.runOnIdle { expanded = false }
         compose.mainClock.advanceTimeBy(80)
-        assertTrue(height() < fullHeight && height() > 56.dp)
+        assertTrue(height() < fullHeight && height() > collapsedHeight)
         compose.runOnIdle { reduced = true }
         compose.mainClock.advanceTimeByFrame()
-        assertEquals(56.dp, height())
+        assertEquals(collapsedHeight, height())
         compose.runOnIdle { expanded = true }
         compose.mainClock.advanceTimeByFrame()
         assertEquals(fullHeight, height())
         compose.runOnIdle { expanded = false }
         compose.mainClock.advanceTimeByFrame()
-        assertEquals(56.dp, height())
+        assertEquals(collapsedHeight, height())
         compose.runOnIdle { reduced = false }
         compose.mainClock.advanceTimeByFrame()
         compose.runOnIdle { expanded = true }
         compose.mainClock.advanceTimeBy(80)
-        assertTrue(height() > 56.dp && height() < fullHeight)
+        assertTrue(height() > collapsedHeight && height() < fullHeight)
         compose.mainClock.autoAdvance = true
         compose.waitForIdle()
         assertEquals(fullHeight, height())

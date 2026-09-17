@@ -23,11 +23,15 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.*
 import cc.novelia.app.data.BookRef
+import cc.novelia.app.data.LibraryState
 import cc.novelia.app.ui.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
+
+private data class AppAppearance(val theme: String, val reducedMotion: Boolean, val eInk: Boolean, val eInkBooks: Set<String>)
+private fun LibraryState.appearance() = AppAppearance(theme, reducedMotion || reader.eInkMode, reader.eInkMode, bookSettings.filterValues { it.eInkMode }.keys)
 
 class MainActivity : ComponentActivity() {
     private val incoming = MutableStateFlow<String?>(null)
@@ -40,11 +44,11 @@ class MainActivity : ComponentActivity() {
                 NoveliaTheme("system") { Surface(Modifier.fillMaxSize()) { Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) { CircularProgressIndicator() } } }
                 return@setContent
             }
-            val appearance by remember(app) { app.store.state.map { Triple(it.theme, it.reducedMotion || it.reader.eInkMode, it.bookSettings.filterValues { value -> value.eInkMode }.keys) }.distinctUntilChanged() }
-                .collectAsStateWithLifecycle(initialValue = remember(app) { app.store.state.value.let { Triple(it.theme, it.reducedMotion || it.reader.eInkMode, it.bookSettings.filterValues { value -> value.eInkMode }.keys) } })
+            val appearance by remember(app) { app.store.state.map { it.appearance() }.distinctUntilChanged() }
+                .collectAsStateWithLifecycle(initialValue = remember(app) { app.store.state.value.appearance() })
             val link by incoming.collectAsStateWithLifecycle()
-            CompositionLocalProvider(LocalReducedMotion provides appearance.second) {
-            NoveliaTheme(appearance.first) {
+            AppInteractionMode(appearance.eInk, appearance.reducedMotion) {
+            NoveliaTheme(appearance.theme) {
                 val nav = rememberNavController(); val scope = rememberCoroutineScope(); val snackbar = remember { SnackbarHostState() }
                 val controller = remember { AppController(app, nav, scope, snackbar) }
                 LaunchedEffect(app) { app.store.persistenceError.filterNotNull().collect { snackbar.showSnackbar(it) } }
@@ -58,6 +62,7 @@ class MainActivity : ComponentActivity() {
                 val showNavigation = route in roots
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     val wide = maxWidth >= 600.dp
+                    val compactRail = maxHeight < 480.dp
                     Scaffold(snackbarHost = { StickerSnackbarHost(snackbar) }, bottomBar = {
                         if(showNavigation && !wide) NavigationBar { tabs.forEach { (target, label, icon) ->
                             val selected = route?.startsWith(target) == true
@@ -65,14 +70,14 @@ class MainActivity : ComponentActivity() {
                         } }
                     }) { padding ->
                         Row(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding())) {
-                            if(wide && showNavigation) NavigationRail { Spacer(Modifier.height(40.dp)); tabs.forEach { (target, label, icon) ->
+                            if(wide && showNavigation) NavigationRail { Spacer(Modifier.height(if(compactRail) 12.dp else 40.dp)); tabs.forEach { (target, label, icon) ->
                                 val selected = route?.startsWith(target) == true
-                                NavigationRailItem(selected, { if(!selected) switchTab(target) }, { NavigationIcon(icon, label, selected) }, label = { Text(label) })
+                                NavigationRailItem(selected, { if(!selected) switchTab(target) }, { NavigationIcon(icon, label, selected) }, label = if(compactRail) null else { { Text(label) } })
                             } }
-                            val duration = if(appearance.second) 0 else 220
+                            val duration = if(appearance.reducedMotion) 0 else 220
                             val travel = with(LocalDensity.current) { 24.dp.roundToPx() }
                             fun staticReader(entry: androidx.navigation.NavBackStackEntry): Boolean = entry.destination.route?.startsWith("reader/") == true &&
-                                "${entry.arguments?.getString("provider")}/${entry.arguments?.getString("id")}" in appearance.third
+                                "${entry.arguments?.getString("provider")}/${entry.arguments?.getString("id")}" in appearance.eInkBooks
                             NavHost(nav, startDestination = "shelf", modifier = Modifier.weight(1f), enterTransition = {
                                 if(duration == 0 || staticReader(initialState) || staticReader(targetState)) return@NavHost EnterTransition.None
                                 val from = roots.indexOf(initialState.destination.route)

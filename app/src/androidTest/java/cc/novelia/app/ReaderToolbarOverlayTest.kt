@@ -23,6 +23,73 @@ class ReaderToolbarOverlayTest {
 
     @Test fun continuousScrollingKeepsTextCoordinatesAndPositionUnderOverlays() = verifyOverlay("scroll")
 
+    @Test fun continuousScrollingKeepsToolbarHiddenAcrossChapters() = verifyChapterNavigation(ReaderSettings(paginationMode = "scroll"))
+
+    @Test fun automaticPagesKeepToolbarHiddenAcrossChapters() = verifyChapterNavigation(ReaderSettings(paginationMode = "auto"))
+
+    @Test fun eInkPagesKeepToolbarHiddenAcrossChapters() = verifyChapterNavigation(ReaderSettings().withEInkMode(true))
+
+    @Test fun eInkScrollingKeepsToolbarHiddenAcrossChapters() = verifyChapterNavigation(ReaderSettings().withEInkMode(true).withPaginationMode("scroll"))
+
+    private fun verifyChapterNavigation(settings: ReaderSettings) = withReader(settings.copy(showPageButtons = settings.staticPagination), listOf(
+        LocalChapter("first", "第一章 林间旅途", listOf("旅人沿着森林小路前行，寻找远处的小镇。".repeat(60))),
+        LocalChapter("second", "第二章 归来", listOf("星光照亮归途。")),
+        LocalChapter("third", "第三章 新的旅程", listOf("新的故事开始了。"))
+    )) { app, ref ->
+        val bodyTag = if(settings.staticPagination) "reader-page" else "reader-scroll"
+        compose.onNodeWithContentDescription("阅读设置").assertIsDisplayed()
+        compose.onNodeWithTag(bodyTag).performTouchInput { click(center) }
+        assertToolbarHidden()
+
+        if(settings.staticPagination) {
+            val pageCount = pageCounter().substringAfter('/').trim().toInt()
+            repeat(pageCount) { compose.onNodeWithText("下一页").performClick() }
+        } else {
+            compose.onNodeWithTag(bodyTag).performScrollToNode(hasText("阅读下一章"))
+            compose.onNodeWithText("阅读下一章").performClick()
+        }
+        waitForChapter(app, ref, "second")
+        assertToolbarHidden()
+
+        if(settings.staticPagination) {
+            compose.onNodeWithText("上一页").performClick()
+            waitForChapter(app, ref, "first")
+            assertToolbarHidden()
+            val pages = pageCounter().split('/').map { it.trim().toInt() }
+            assertEquals("向前跨章应落在上一章末页", pages[1], pages[0])
+            compose.onNodeWithText("下一页").performClick()
+            waitForChapter(app, ref, "second")
+            assertToolbarHidden()
+        }
+
+        // Explicitly showing the toolbar still works, and chapter buttons retain that state.
+        if(settings.staticPagination) compose.onNodeWithTag(bodyTag).performTouchInput { click(center) }
+        else compose.onNodeWithText("星光照亮归途。", substring = true).performClick()
+        compose.onNodeWithContentDescription("阅读设置").assertIsDisplayed()
+        compose.onNodeWithContentDescription("上一章").performClick()
+        waitForChapter(app, ref, "first")
+        compose.onNodeWithContentDescription("阅读设置").assertIsDisplayed()
+        compose.onNodeWithContentDescription("下一章").performClick()
+        waitForChapter(app, ref, "second")
+        compose.onNodeWithContentDescription("阅读设置").assertIsDisplayed()
+        compose.onNodeWithText("目录", substring = true).performClick()
+        compose.onNodeWithText("第三章 新的旅程").performClick()
+        waitForChapter(app, ref, "third")
+        compose.onNodeWithContentDescription("阅读设置").assertIsDisplayed()
+    }
+
+    private fun assertToolbarHidden() {
+        compose.waitForIdle()
+        compose.onNodeWithTag("reader-top-toolbar").assertDoesNotExist()
+        compose.onNodeWithContentDescription("阅读设置").assertDoesNotExist()
+        compose.onNodeWithContentDescription("下一章").assertDoesNotExist()
+    }
+
+    private fun waitForChapter(app: NoveliaApplication, ref: BookRef, chapterId: String) {
+        compose.waitUntil(15_000) { app.store.state.value.positions[ref.key]?.chapterId == chapterId }
+        compose.waitForIdle()
+    }
+
     private fun verifyOverlay(mode: String) = withReader(ReaderSettings(paginationMode = mode, showPageButtons = true)) { app, ref ->
         val bodyTag = if(mode == "auto") "reader-page" else "reader-scroll"
         val next = if(mode == "auto") "下一页" else "下一屏"
@@ -109,7 +176,11 @@ class ReaderToolbarOverlayTest {
             compose.onNodeWithText("关闭面板").performClick()
         }
 
-    private fun withReader(settings: ReaderSettings, block: (NoveliaApplication, BookRef) -> Unit) {
+    private fun withReader(settings: ReaderSettings, chapters: List<LocalChapter> = listOf(
+        LocalChapter("first", "第一章 林间旅途", List(6) { paragraph ->
+            (1..80).joinToString("") { "第${paragraph + 1}段第${it}句，旅人沿着森林小路前行，寻找远处的小镇。" }
+        })
+    ), block: (NoveliaApplication, BookRef) -> Unit) {
         compose.waitUntil(15_000) { compose.onAllNodesWithText("本地文件").fetchSemanticsNodes().isNotEmpty() }
         val app = compose.activity.application as NoveliaApplication
         val previous = app.store.state.value
@@ -118,10 +189,7 @@ class ReaderToolbarOverlayTest {
             compose.runOnIdle {
                 app.store.update { it.copy(reader = settings, reducedMotion = false, bookSettings = it.bookSettings - ref.key,
                     positions = it.positions - ref.key, historyPaused = false) }
-                app.store.saveDocument(LocalDocument(ref.id, "工具栏覆盖测试", "txt", listOf(
-                    LocalChapter("first", "第一章 林间旅途", List(6) { paragraph ->
-                        (1..80).joinToString("") { "第${paragraph + 1}段第${it}句，旅人沿着森林小路前行，寻找远处的小镇。" }
-                    }))))
+                app.store.saveDocument(LocalDocument(ref.id, "工具栏覆盖测试", "txt", chapters))
                 app.store.saveBook(BookCard(ref, "工具栏覆盖测试"))
             }
             compose.onNodeWithText("本地文件").performClick()

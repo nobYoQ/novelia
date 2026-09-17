@@ -22,7 +22,11 @@ import cc.novelia.app.data.MarkdownLinks
     val context = LocalContext.current
     var loading by remember(destination) { mutableStateOf(true) }
     var failed by remember(destination) { mutableStateOf(false) }
-    val web = remember(destination) { WebView(context).apply {
+    val eInk = LocalEInkMode.current
+    var canGoBack by remember(destination) { mutableStateOf(false) }
+    var canGoForward by remember(destination) { mutableStateOf(false) }
+    val web = remember(destination) { PagedSiteWebView(context).apply {
+        onPageAvailabilityChanged = { back, forward -> canGoBack = back; canGoForward = forward }
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
         settings.allowFileAccess = false
@@ -34,6 +38,8 @@ import cc.novelia.app.data.MarkdownLinks
             }
             override fun onPageFinished(view: WebView, url: String?) {
                 loading = false
+                applyMotionPreference()
+                canGoBack = canScrollVertically(-1); canGoForward = canScrollVertically(1)
                 if (url != null && MarkdownLinks.isInternal(url) && !android.net.Uri.parse(url).fragment.isNullOrEmpty()) {
                     // The SPA fetches article content after the document load. Its router
                     // may try to find the heading before it exists on a cold navigation.
@@ -51,9 +57,11 @@ import cc.novelia.app.data.MarkdownLinks
                 return true
             }
         }
+        setOnScrollChangeListener { _, _, _, _, _ -> canGoBack = canScrollVertically(-1); canGoForward = canScrollVertically(1) }
         MarkdownLinks.resolve(destination)?.takeIf(MarkdownLinks::isInternal)?.let(::loadUrl)
             ?: run { loading = false; failed = true }
     } }
+    SideEffect { web.eInkMode = eInk }
     fun back() { if (web.canGoBack()) web.goBack() else c.back() }
     // SPA pushState/hash changes do not always trigger onPageFinished; inspect
     // WebView's current history for both the system and toolbar back actions.
@@ -61,12 +69,13 @@ import cc.novelia.app.data.MarkdownLinks
     DisposableEffect(web) { onDispose { web.stopLoading(); web.destroy() } }
     Screen("原站页面", ::back) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
-            if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+            if (loading) { if(eInk) Text("正在加载…", Modifier.padding(horizontal = 16.dp)) else LinearProgressIndicator(Modifier.fillMaxWidth()) }
             if (failed) Row(Modifier.padding(16.dp)) {
                 Text("页面加载失败，请检查网络。", Modifier.weight(1f))
                 TextButton(onClick = { web.reload() }) { Text("重试") }
             }
             AndroidView(factory = { web }, modifier = Modifier.weight(1f).fillMaxWidth())
+            if(eInk) ScreenPageButtons(canGoBack, canGoForward, web::page)
         }
     }
 }

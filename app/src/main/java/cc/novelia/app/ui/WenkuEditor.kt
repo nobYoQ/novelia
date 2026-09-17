@@ -3,7 +3,6 @@ package cc.novelia.app.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -43,7 +42,7 @@ import java.time.ZoneOffset
         val result = if(id == null) c.api.post("wenku", JsonObject(data)) else c.api.put("wenku/$id", JsonObject(data))
         c.store.update { it.copy(drafts = it.drafts - draftKey) }; c.back(); c.book(BookRef("wenku", id ?: result.trim().trim('"'))); c.message("文库条目已保存")
     } finally { saving = false } } }
-    Screen(if(id == null) "新建文库条目" else "编辑文库条目", c::back) { padding -> Column(Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Screen(if(id == null) "新建文库条目" else "编辑文库条目", c::back) { padding -> AppScrollColumn(modifier = Modifier.padding(padding), contentModifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("草稿自动保存在此设备。保存会更新原站资料。", style = MaterialTheme.typography.bodySmall)
         OutlinedTextField(title, { title = it }, label = { Text("原文标题") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(titleZh, { titleZh = it }, label = { Text("中文标题") }, modifier = Modifier.fillMaxWidth())
@@ -62,7 +61,7 @@ import java.time.ZoneOffset
     volumeEditor?.let { index ->
         val existing = volumes.getOrNull(index) ?: WenkuVolume()
         var asin by remember(index) { mutableStateOf(existing.asin) }; var name by remember(index) { mutableStateOf(existing.title) }; var translated by remember(index) { mutableStateOf(existing.titleZh.orEmpty()) }; var image by remember(index) { mutableStateOf(existing.cover.orEmpty()) }; var publisher by remember(index) { mutableStateOf(existing.publisher.orEmpty()) }; var imprint by remember(index) { mutableStateOf(existing.imprint.orEmpty()) }; var date by remember(index) { mutableStateOf(existing.publishAt?.let { java.time.Instant.ofEpochSecond(it).atOffset(ZoneOffset.UTC).toLocalDate().toString() }.orEmpty()) }
-        AlertDialog(onDismissRequest = { volumeEditor = null }, title = { Text("出版分卷") }, text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        AlertDialog(onDismissRequest = { volumeEditor = null }, title = { Text("出版分卷") }, text = { AppScrollColumn(contentModifier = Modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedTextField(asin, { asin = it.trim() }, label = { Text("ASIN") }); OutlinedTextField(name, { name = it }, label = { Text("原文卷名") }); OutlinedTextField(translated, { translated = it }, label = { Text("中文卷名") }); OutlinedTextField(image, { image = it }, label = { Text("封面 HTTPS 链接") }); OutlinedTextField(publisher, { publisher = it }, label = { Text("出版社") }); OutlinedTextField(imprint, { imprint = it }, label = { Text("文库品牌") }); OutlinedTextField(date, { date = it }, label = { Text("出版日期 YYYY-MM-DD") })
         } }, confirmButton = { TextButton(onClick = { val timestamp = date.takeIf(String::isNotBlank)?.let { runCatching { LocalDate.parse(it).atStartOfDay().toEpochSecond(ZoneOffset.UTC) }.getOrNull() }; if(date.isNotBlank() && timestamp == null) { c.message("请填写有效的出版日期") } else { val volume = existing.copy(asin = asin, title = name, titleZh = translated.ifBlank { null }, cover = image.ifBlank { null }, publisher = publisher.ifBlank { null }, imprint = imprint.ifBlank { null }, publishAt = timestamp); volumes = if(index < 0) volumes + volume else volumes.toMutableList().apply { set(index, volume) }; volumeEditor = null } }, enabled = asin.isNotBlank() && name.isNotBlank() && (image.isBlank() || image.startsWith("https://"))) { Text("保存分卷") } }, dismissButton = { TextButton(onClick = { volumeEditor = null }) { Text("取消") } })
     }
@@ -71,7 +70,7 @@ import java.time.ZoneOffset
             onDismissRequest = { duplicate = null },
             title = { Text("发现可能重复的条目") },
             text = {
-                Column(Modifier.verticalScroll(rememberScrollState())) {
+                AppScrollColumn(contentModifier = Modifier) {
                     Text("请先确认以下作品不是你要创建的文库。")
                     matches.forEach { book ->
                         TextButton(onClick = { duplicate = null; c.book(BookRef("wenku", book.id)) }) {

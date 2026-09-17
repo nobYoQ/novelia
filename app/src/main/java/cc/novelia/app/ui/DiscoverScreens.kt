@@ -3,14 +3,11 @@ package cc.novelia.app.ui
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -50,7 +47,7 @@ import kotlinx.coroutines.delay
                         AsyncContent(listOf("recommend", profile?.username), load = { coroutineScope { val web = async { c.api.webList(0, sort = 1) }; val wenku = async { c.api.wenkuList(0) }; web.await().items.map { it.card() } to wenku.await().items.map { it.card() } } }) { (web, wenku), refresh ->
                             val visibleWeb = remember(web, local.blockedBooks, local.blockedTags) { web.asSequence().filter { visibleBook(it, local) }.take(8).toList() }
                             val visibleWenku = remember(wenku, local.blockedBooks, local.blockedTags) { wenku.asSequence().filter { visibleBook(it, local) }.take(6).toList() }
-                            LazyColumn(contentPadding = PaddingValues(bottom = 20.dp)) {
+                            AppLazyColumn(contentPadding = PaddingValues(bottom = 20.dp)) {
                                 item(key = "rank-hero", contentType = "hero") {
                                     Card(Modifier.fillMaxWidth().padding(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
                                         Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -63,10 +60,10 @@ import kotlinx.coroutines.delay
                                 if(local.recentSearches.isNotEmpty()) item(key = "recent-searches", contentType = "searches") {
                                     Column(if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(160), placementSpec = tween(220), fadeOutSpec = tween(120))) {
                                         SectionTitle("最近搜索", "清空") { c.store.update { it.copy(recentSearches = emptyList()) } }
-                                        Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { local.recentSearches.take(8).forEach { value -> AssistChip(onClick = { query = value; search() }, label = { Text(value.take(20)) }) } }
+                                        Row(Modifier.appHorizontalScroll(rememberScrollState()).padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { local.recentSearches.take(8).forEach { value -> AssistChip(onClick = { query = value; search() }, label = { Text(value.take(20)) }) } }
                                     }
                                 }
-                                if(local.savedSearches.isNotEmpty()) item(key = "saved-searches", contentType = "searches") { SectionTitle("保存的搜索"); Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { local.savedSearches.forEach { value -> InputChip(true, onClick = { query = value; search() }, label = { Text(value.take(20)) }, trailingIcon = { IconButton(onClick = { c.store.update { it.copy(savedSearches = it.savedSearches - value) } }, modifier = Modifier.size(48.dp)) { Icon(Icons.Outlined.Close, "删除搜索", Modifier.size(16.dp)) } }) } } }
+                                if(local.savedSearches.isNotEmpty()) item(key = "saved-searches", contentType = "searches") { SectionTitle("保存的搜索"); Row(Modifier.appHorizontalScroll(rememberScrollState()).padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { local.savedSearches.forEach { value -> InputChip(true, onClick = { query = value; search() }, label = { Text(value.take(20)) }, trailingIcon = { IconButton(onClick = { c.store.update { it.copy(savedSearches = it.savedSearches - value) } }, modifier = Modifier.size(48.dp)) { Icon(Icons.Outlined.Close, "删除搜索", Modifier.size(16.dp)) } }) } } }
                                 item(key = "web-heading", contentType = "heading") { SectionTitle("热门网络小说", "更多") { category = 1; sort = 1 } }
                                 items(visibleWeb, key = { "web-${it.ref.key}" }, contentType = { "book" }) { BookRow(it, { c.book(it.ref) }, if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(160), placementSpec = tween(220), fadeOutSpec = tween(120))) }
                                 item(key = "wenku-heading", contentType = "heading") { SectionTitle("文库新近更新", "更多") { category = 2 } }
@@ -90,7 +87,7 @@ import kotlinx.coroutines.delay
                             else c.api.wenkuList(page, submitted, level).let { Page(it.pageNumber, it.items.map(WenkuOutline::card)) }
                         }) { result, refresh ->
                             val books = remember(result.items, local.blockedBooks, local.blockedTags) { result.items.filter { visibleBook(it, local) } }
-                            LazyColumn {
+                            AppLazyColumn {
                                 if(books.isEmpty()) item { EmptyState("没有找到匹配的作品", "试试其他关键词，或调整筛选与屏蔽条件。", Icons.Outlined.SearchOff, "重新加载", refresh, sticker = MidoriSticker.Curious) }
                                 items(books, key = { it.ref.key }, contentType = { "book" }) { BookRow(it, { c.book(it.ref) }, if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(160), placementSpec = tween(220), fadeOutSpec = tween(120))) }
                                 item { PageControls(page, result.pageNumber) { page = it } }
@@ -101,8 +98,8 @@ import kotlinx.coroutines.delay
             }
         }
     }
-    if(filterOpen) ModalBottomSheet(onDismissRequest = { filterOpen = false }) {
-        Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+    if(filterOpen) AppSheet(onDismissRequest = { filterOpen = false }) {
+        AppScrollColumn(contentModifier = Modifier.padding(bottom = 24.dp)) {
             Text("筛选作品", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.titleLarge)
             if(category == 1) {
                 val selectedSources = remember(source) { source.split(',').filter(String::isNotEmpty).toSet() }
@@ -125,7 +122,7 @@ import kotlinx.coroutines.delay
 @Composable private fun AdvancedSearchSheet(initial: String, dismiss: () -> Unit, apply: (String) -> Unit) {
     var all by remember { mutableStateOf("") }; var any by remember { mutableStateOf("") }; var exact by remember { mutableStateOf("") }; var excluded by remember { mutableStateOf("") }; var tags by remember { mutableStateOf("") }; var excludedTags by remember { mutableStateOf("") }; var minimum by remember { mutableStateOf("") }; var maximum by remember { mutableStateOf("") }
     val expression = SearchExpression.build(all, any, exact, excluded, tags, excludedTags, minimum, maximum)
-    ModalBottomSheet(onDismissRequest = dismiss) { Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    AppSheet(onDismissRequest = dismiss) { AppScrollColumn(contentModifier = Modifier.padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("高级搜索", style = MaterialTheme.typography.titleLarge)
         Text("多个词用空格分隔。生成的表达式可以继续在搜索框中编辑。", style = MaterialTheme.typography.bodySmall)
         OutlinedTextField(all, { all = it }, label = { Text("全部包含（AND）") }, modifier = Modifier.fillMaxWidth())
@@ -163,11 +160,11 @@ private val syosetuGenres = listOf("恋爱：异世界", "恋爱：现实世界"
             MotionContent(listOf(source, kind, genre, range, status), animateInitial = false) { Text("${params["type"] ?: genres[genre]} · ${ranges[range]} · ${states[status]}", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge) }
             AsyncContent(listOf(provider, params), load = { c.api.get<Page<WebOutline>>("novel/rank/$provider", params) }) { result, _ ->
                 val cards = remember(result.items) { result.items.map(WebOutline::card) }
-                LazyColumn { if(cards.isEmpty()) item { EmptyState("这个榜单暂时没有作品", "可以切换周期或流派；榜单数据由原站获取。") }; items(cards, key = { it.ref.key }, contentType = { "book" }) { book -> BookRow(book, { c.book(book.ref) }) }; item { PageControls(page, result.pageNumber) { page = it } } }
+                AppLazyColumn { if(cards.isEmpty()) item { EmptyState("这个榜单暂时没有作品", "可以切换周期或流派；榜单数据由原站获取。") }; items(cards, key = { it.ref.key }, contentType = { "book" }) { book -> BookRow(book, { c.book(book.ref) }) }; item { PageControls(page, result.pageNumber) { page = it } } }
             }
         }
     }
-    if(filters) ModalBottomSheet(onDismissRequest = { filters = false }) { Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+    if(filters) AppSheet(onDismissRequest = { filters = false }) { AppScrollColumn(contentModifier = Modifier.padding(bottom = 24.dp)) {
         if(source == 0) ChoiceRow("榜单", listOf("流派", "综合", "异世界转生/转移"), kind) { kind = it; genre = 0; page = 0 }
         if(source == 1 || kind != 1) ChoiceRow("流派", genres, genre) { genre = it; page = 0 }
         ChoiceRow("周期", ranges, range) { range = it; page = 0 }; ChoiceRow("状态", states, status) { status = it; page = 0 }

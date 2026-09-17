@@ -14,7 +14,11 @@ import androidx.compose.ui.window.DialogWindowProvider
 val LocalEInkMode = staticCompositionLocalOf { false }
 
 @Composable internal fun ReaderSheet(onDismissRequest: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
-    if (!LocalEInkMode.current) ModalBottomSheet(onDismissRequest = onDismissRequest, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), content = content)
+    AppSheet(onDismissRequest, rememberModalBottomSheetState(skipPartiallyExpanded = true), content)
+}
+
+@Composable internal fun AppSheet(onDismissRequest: () -> Unit, sheetState: SheetState = rememberModalBottomSheetState(), content: @Composable ColumnScope.() -> Unit) {
+    if (!LocalEInkMode.current) ModalBottomSheet(onDismissRequest = onDismissRequest, sheetState = sheetState, content = content)
     else Dialog(onDismissRequest, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         val window = (LocalView.current.parent as? DialogWindowProvider)?.window
         SideEffect { window?.setWindowAnimations(0) }

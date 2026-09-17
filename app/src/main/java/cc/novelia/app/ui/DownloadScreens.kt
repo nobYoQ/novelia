@@ -9,7 +9,6 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
@@ -30,7 +29,7 @@ import java.util.UUID
 @Composable fun DownloadSheet(c: AppController, book: BookCard, volume: String?, dismiss: () -> Unit) {
     val settings = remember(book.ref) { c.store.state.value.reader }
     var mode by remember { mutableStateOf(if(settings.mode == "jp" && book.ref.isWenku) "zh" else settings.mode) }; var type by remember { mutableStateOf("epub") }; var engine by remember { mutableStateOf(settings.engines.first()) }; var parallel by remember { mutableStateOf(false) }
-    ModalBottomSheet(onDismissRequest = dismiss) {
+    AppSheet(onDismissRequest = dismiss) {
         Column(Modifier.padding(bottom = 28.dp)) {
             Text("下载小说", Modifier.padding(20.dp), style = MaterialTheme.typography.titleLarge)
             Text(volume ?: book.title, Modifier.padding(horizontal = 20.dp), maxLines = 2)
@@ -44,7 +43,7 @@ import java.util.UUID
                 val filename = "$mode.$name"
                 val engines = listOf(engine) + listOf("sakura", "gpt", "youdao").filterNot { it == engine }
                 val url = c.api.downloadUrl(book.ref, volume, mode, engines, parallel, type, filename)
-                c.action { DownloadWorker.enqueue(c.app, DownloadEntry(id, volume ?: book.title, "$id-$filename", url)); dismiss(); c.message("已加入下载列表"); c.go("downloads") }
+                c.action { DownloadWorker.enqueue(c.app, DownloadEntry(id, volume ?: book.title, "$id-$filename", url, sourceBook = book.ref)); dismiss(); c.message("已加入下载列表"); c.go("downloads") }
             }, Modifier.fillMaxWidth().padding(horizontal = 20.dp)) { Icon(Icons.Outlined.Download, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("开始下载") }
         }
     }
@@ -52,8 +51,9 @@ import java.util.UUID
 @Composable fun DownloadsScreen(c: AppController) {
     val state by c.store.state.collectAsStateWithLifecycle(); var export by remember { mutableStateOf<DownloadEntry?>(null) }; var remove by remember { mutableStateOf<DownloadEntry?>(null) }
     val reducedMotion = LocalReducedMotion.current
+    var importing by remember { mutableStateOf(setOf<String>()) }
     val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri -> val entry = export; if(uri != null && entry != null) c.action("文件已导出") { withContext(Dispatchers.IO) { c.app.contentResolver.openOutputStream(uri)?.use { output -> File(c.store.downloadsDir, entry.fileName).inputStream().use { it.copyTo(output) } } ?: error("无法写入") } }; export = null }
-    Screen("下载管理", c::back) { padding -> LazyColumn(Modifier.padding(padding), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Screen("下载管理", c::back) { padding -> AppLazyColumn(Modifier.padding(padding), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         if(state.downloads.isEmpty()) item { EmptyState("还没有下载任务", "在作品详情或文库分卷中下载小说，完成后可以导出或导入阅读。", Icons.Outlined.Download) }
         items(state.downloads, key = { it.id }, contentType = { "download" }) { entry ->
             val itemMotion = if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(180), placementSpec = tween(220), fadeOutSpec = tween(120))
@@ -77,7 +77,17 @@ import java.util.UUID
                     "下载中", "等待下载" -> TextButton(onClick = { c.action { DownloadWorker.pause(c.app, entry.id) } }) { Text("暂停") }
                     "已完成" -> {
                         TextButton(onClick = { val file = File(c.store.downloadsDir, entry.fileName); val uri = FileProvider.getUriForFile(c.app, "${c.app.packageName}.files", file); val mime = if(file.extension.lowercase() == "epub") "application/epub+zip" else "text/plain"; runCatching { c.app.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)) }.onFailure { c.message("没有找到可打开该文件的应用，可选择导入阅读") } }) { Text("打开") }
-                        TextButton(onClick = { c.action("已导入书架", MidoriSticker.Approve) { withContext(Dispatchers.IO) { val doc = DocumentTools.parse(entry.fileName, File(c.store.downloadsDir, entry.fileName).readBytes()).copy(name = entry.title); c.store.saveDocument(doc); c.store.saveBook(BookCard(BookRef("local", doc.id), doc.name, cover = doc.coverImage?.let { c.store.documentImage(doc.id, it).absolutePath }, subtitle = "离线文件 · ${doc.chapters.size} 章")) } } }) { Text("导入阅读") }
+                        TextButton(enabled = entry.id !in importing, onClick = {
+                            importing = importing + entry.id
+                            c.action {
+                                try {
+                                    val ref = importDownloadedDocument(c.store, entry)
+                                    val saved = c.store.state.value.books.firstOrNull { it.book.ref == ref }
+                                    val parent = c.store.state.value.books.firstOrNull { it.book.ref.key == saved?.parentWenkuKey }
+                                    c.celebrate(if(parent == null) "已导入书架" else "已导入并挂载到「${parent.book.title}」", MidoriSticker.Approve)
+                                } finally { importing = importing - entry.id }
+                            }
+                        }) { Text(if(entry.id in importing) "正在导入…" else "导入阅读") }
                         TextButton(onClick = { export = entry; exporter.launch(entry.fileName.substringAfter("${entry.id}-")) }) { Text("导出文件") }
                         TextButton(onClick = { val uri = FileProvider.getUriForFile(c.app, "${c.app.packageName}.files", File(c.store.downloadsDir, entry.fileName)); c.app.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("application/octet-stream").putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), "分享文件").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }) { Text("分享") }
                     }

@@ -5,6 +5,8 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -48,6 +50,7 @@ internal fun IllustrationViewer(model: Any, onDismiss: () -> Unit) {
     var viewport by remember { mutableStateOf(Size.Zero) }
     var transform by remember(model, retry) { mutableStateOf(IllustrationTransform()) }
     val ready = !loading && !failed
+    val eInk = LocalEInkMode.current
     fun zoom(factor: Float, anchor: Offset = Offset(viewport.width / 2, viewport.height / 2), pan: Offset = Offset.Zero) {
         if(ready) transform = transformIllustration(transform, viewport, imageSize, anchor, factor, pan)
     }
@@ -55,6 +58,7 @@ internal fun IllustrationViewer(model: Any, onDismiss: () -> Unit) {
         val view = LocalView.current
         SideEffect {
             (view.parent as? DialogWindowProvider)?.window?.let { window ->
+                if(eInk) window.setWindowAnimations(0)
                 WindowCompat.getInsetsController(window, view).apply {
                     isAppearanceLightStatusBars = false
                     isAppearanceLightNavigationBars = false
@@ -74,8 +78,8 @@ internal fun IllustrationViewer(model: Any, onDismiss: () -> Unit) {
                     }
                     .testTag("illustration-viewport")
                     .semantics { stateDescription = "${(transform.scale * 100).roundToInt()}%" }
-                    .pointerInput(ready, imageSize, viewport) {
-                        if(ready) detectTransformGestures { centroid, pan, scale, _ -> zoom(scale, centroid, pan) }
+                    .pointerInput(ready, imageSize, viewport, eInk) {
+                        if(ready && !eInk) detectTransformGestures { centroid, pan, scale, _ -> zoom(scale, centroid, pan) }
                     }
                     .pointerInput(ready, imageSize, viewport) {
                         if(ready) detectTapGestures(onDoubleTap = { point ->
@@ -94,13 +98,21 @@ internal fun IllustrationViewer(model: Any, onDismiss: () -> Unit) {
                         },
                         onError = { loading = false; failed = true },
                     ) }
-                    if(loading) CircularProgressIndicator(Modifier.size(32.dp), color = Color.White)
+                    if(loading) { if(eInk) Text("正在加载插图…") else CircularProgressIndicator(Modifier.size(32.dp), color = Color.White) }
                     if(failed) Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("插图暂时无法加载", color = Color.White)
                         FilledTonalButton(onClick = { retry++ }) { Text("重试") }
                     }
                 }
                 val buttonColors = IconButtonDefaults.iconButtonColors(contentColor = Color.White, disabledContentColor = Color.White.copy(alpha = .35f))
+                if(eInk && transform.scale > 1f) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                    listOf(Triple(Icons.Outlined.KeyboardArrowUp, "查看插图上方", Offset(0f, viewport.height * .7f)),
+                        Triple(Icons.Outlined.KeyboardArrowDown, "查看插图下方", Offset(0f, -viewport.height * .7f)),
+                        Triple(Icons.AutoMirrored.Outlined.KeyboardArrowLeft, "查看插图左侧", Offset(viewport.width * .7f, 0f)),
+                        Triple(Icons.AutoMirrored.Outlined.KeyboardArrowRight, "查看插图右侧", Offset(-viewport.width * .7f, 0f))).forEach { (icon, label, pan) ->
+                        IconButton(onClick = { zoom(1f, pan = pan) }, enabled = ready, colors = buttonColors) { Icon(icon, label) }
+                    }
+                }
                 Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { zoom(1 / 1.5f) }, enabled = ready && transform.scale > 1f, colors = buttonColors) { Icon(Icons.Outlined.ZoomOut, "缩小插图") }
                     Text("${(transform.scale * 100).roundToInt()}%", style = MaterialTheme.typography.labelLarge)

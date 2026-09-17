@@ -62,7 +62,7 @@ class LocalStore(val context: Context) {
     fun saveBook(book: BookCard, folder: String = "默认收藏") = update { current ->
         current.copy(books = current.books.filterNot { it.book.ref == book.ref } + (current.books.find { it.book.ref == book.ref }?.copy(book = book, folder = folder) ?: SavedBook(book, folder)))
     }
-    fun removeBook(ref: BookRef) = update { it.copy(books = it.books.filterNot { b -> b.book.ref == ref }) }
+    fun removeBook(ref: BookRef) = update { it.withoutBook(ref) }
     fun rememberSearch(query: String) { if (query.isNotBlank()) update { it.copy(recentSearches = (listOf(query) + it.recentSearches.filterNot { old -> old == query }).take(20)) } }
     fun savePosition(ref: BookRef, position: Position) = update { if (it.historyPaused) it else it.copy(positions = it.positions + (ref.key to position)) }
     fun chapterFile(ref: BookRef, chapter: String) = File(cacheDir, hashName("${ref.key}/$chapter") + ".json")

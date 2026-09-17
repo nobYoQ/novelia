@@ -10,15 +10,12 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -93,7 +90,7 @@ import cc.novelia.app.data.*
             Column(Modifier.fillMaxSize()) {
                 CollapsibleCloudFilters(expanded, { expanded = !expanded }, summary, filterHeight) {
                     ChoiceRow("收藏类型", listOf("网络小说", "文库小说"), kind) { kind = it; folderId = ""; page = 0 }
-                    Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.appHorizontalScroll(rememberScrollState()).padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         choices.forEach { folder -> FilterChip(current?.id == folder.id, { folderId = folder.id; page = 0 }, label = { Text(folder.title) }) }
                         AssistChip(onClick = { create = true }, label = { Text("新建") }, leadingIcon = { Icon(Icons.Outlined.Add, null) })
                     }
@@ -135,7 +132,8 @@ import cc.novelia.app.data.*
                     AsyncContent(requestKey, refreshKey = version, modifier = Modifier.weight(1f), load = {
                         c.api.cloudFavorites(kind == 1, current.id, page, sort, filter)
                     }) { result, retry ->
-                        LazyColumn(state = listState, modifier = Modifier.fillMaxSize().nestedScroll(collapse)) {
+                        AppLazyColumn(state = listState, modifier = Modifier.fillMaxSize().nestedScroll(collapse),
+                            onPageTurn = { direction -> if(direction > 0 && local.autoCollapseCloudFilters) expanded = false }) {
                             if (result.items.isEmpty()) item {
                                 EmptyState("没有匹配的收藏", "可调整筛选、切换收藏夹，或在书籍详情中添加云端收藏。", action = "重新加载", onAction = retry)
                             }
@@ -169,7 +167,7 @@ import cc.novelia.app.data.*
     val arrowRotation by animateFloatAsState(if(expanded) 180f else 0f,
         tween(if(reducedMotion) 0 else 280, easing = FastOutSlowInEasing), label = "filter arrow")
     val filterContent: @Composable () -> Unit = {
-        Column(Modifier.heightIn(max = maxHeight).verticalScroll(scroll)) { content() }
+        AppScrollColumn(Modifier.heightIn(max = maxHeight), state = scroll) { content() }
     }
     Surface(modifier, tonalElevation = 1.dp) {
         Column {

@@ -4,10 +4,8 @@ package cc.novelia.app.ui
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -27,7 +25,7 @@ import kotlinx.serialization.json.*
     var tool by remember { mutableIntStateOf(0) }; var input by remember { mutableStateOf("") }; var output by remember { mutableStateOf("") }; var resultBytes by remember { mutableStateOf<ByteArray?>(null) }; var fileName by remember { mutableStateOf("result.txt") }; var busy by remember { mutableStateOf(false) }; var picked by remember { mutableStateOf<Pair<String, ByteArray>?>(null) }; var error by remember { mutableStateOf<String?>(null) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let { c.action { val file = withContext(Dispatchers.IO) { readDocument(c, it) }; picked = file; if(tool >= 2) input = withContext(Dispatchers.Default) { DocumentTools.decodeText(file.second) } } } }
     val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri -> val bytes = resultBytes; if(uri != null && bytes != null) c.action("结果已导出") { withContext(Dispatchers.IO) { c.app.contentResolver.openOutputStream(uri)?.use { it.write(bytes) } ?: error("无法写入文件") } } }
-    Screen("文件工具", c::back) { padding -> Column(Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+    Screen("文件工具", c::back) { padding -> AppScrollColumn(modifier = Modifier.padding(padding), contentModifier = Modifier.padding(bottom = 24.dp)) {
         MenuRow("个人术语表", "保存在此设备，可导入与导出 JSON", Icons.Outlined.Translate, { c.go("glossary/local/personal") })
         ChoiceRow("工具", listOf("EPUB 转 TXT", "EPUB 图片压缩", "OCR 换行整理", "片假名统计"), tool) { if (!busy) { tool = it; output = ""; resultBytes = null; error = null } }
         Text(listOf("按 EPUB 阅读顺序提取正文并导出为文本。", "优化 EPUB 中的图片，保留卷目与原始文件结构。", "合并 OCR 引入的段内换行。请预览后再导出。", "提取片假名词组并统计频率，辅助整理术语。结果不等同于人名判定。")[tool], Modifier.padding(20.dp), style = MaterialTheme.typography.bodyMedium)
@@ -71,7 +69,7 @@ import kotlinx.serialization.json.*
         LaunchedEffect(glossary) { if(data == null) { data = glossary; original = glossary } }
         Column {
             OutlinedTextField(query, { query = it }, label = { Text("查找原文或译名") }, modifier = Modifier.fillMaxWidth().padding(20.dp), singleLine = true)
-            LazyColumn(Modifier.weight(1f)) {
+            AppLazyColumn(Modifier.weight(1f)) {
                 val entries = data.orEmpty().entries.filter { it.key.contains(query, true) || it.value.contains(query, true) }
                 if(entries.isEmpty()) item { EmptyState("暂时没有匹配词条", "术语表用于统一作品中的人名和专有名词。", Icons.Outlined.Translate) }
                 items(entries, key = { it.key }) { item -> ListItem(headlineContent = { Text(item.key) }, supportingContent = { Text(item.value) }, trailingContent = { if(canEdit) Row { IconButton(onClick = { editing = item.key to item.value }) { Icon(Icons.Outlined.Edit, "编辑词条") }; IconButton(onClick = { data = data.orEmpty() - item.key }) { Icon(Icons.Outlined.DeleteOutline, "删除词条") } } }) }
@@ -94,7 +92,7 @@ import kotlinx.serialization.json.*
         else AsyncContent(ref.key, load = { appJson.parseToJsonElement(c.api.request("GET", if(ref.isWenku) "wenku/${ref.id}" else "novel/${ref.key}")).jsonObject }, modifier = Modifier.padding(padding)) { original, _ ->
             fun field(key: String) = original[key]?.jsonPrimitive?.contentOrNull.orEmpty()
             var title by remember { mutableStateOf(field(if(ref.isWenku) "titleZh" else "titleZh")) }; var jp by remember { mutableStateOf(field(if(ref.isWenku) "title" else "titleJp")) }; var intro by remember { mutableStateOf(field(if(ref.isWenku) "introduction" else "introductionZh")) }; var linked by remember { mutableStateOf(field("wenkuId")) }; var authors by remember { mutableStateOf(original["authors"]?.jsonArray?.mapNotNull { (it as? JsonPrimitive)?.content }?.joinToString("\n").orEmpty()) }; var tags by remember { mutableStateOf(original["keywords"]?.jsonArray?.joinToString("\n") { it.jsonPrimitive.content }.orEmpty()) }; var saving by remember { mutableStateOf(false) }
-            Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            AppScrollColumn(contentModifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text("修改会同步到原站，请仅提交已核实的信息。", style = MaterialTheme.typography.bodyMedium)
                 OutlinedTextField(title, { title = it }, label = { Text("中文标题") }, modifier = Modifier.fillMaxWidth())
                 if(ref.isWenku) { OutlinedTextField(jp, { jp = it }, label = { Text("原文标题") }, modifier = Modifier.fillMaxWidth()); OutlinedTextField(authors, { authors = it }, label = { Text("作者，每行一位") }, modifier = Modifier.fillMaxWidth()); OutlinedTextField(tags, { tags = it }, label = { Text("标签，每行一个") }, modifier = Modifier.fillMaxWidth()) }
