@@ -139,11 +139,14 @@ import cc.novelia.app.data.*
                             }
                             items(result.items, key = { it.ref.key }, contentType = { "book" }) { book ->
                                 BookRow(book, { c.book(book.ref) }, trailing = {
-                                    IconButton(onClick = { c.action("已取消云端收藏") {
+                                    IconButton(onClick = { c.action {
                                         // The server deletes by user + novel; `all` is also valid for this route.
-                                        c.cloudMutation("DELETE", "$path/${current.id}/${if (kind == 0) book.ref.key else book.ref.id}")
-                                        if (result.items.size == 1 && page > 0) page--
-                                        version++
+                                        val queued = c.cloudMutation("DELETE", "$path/${current.id}/${if (kind == 0) book.ref.key else book.ref.id}")
+                                        if(!queued) {
+                                            if (result.items.size == 1 && page > 0) page--
+                                            version++
+                                            c.message("已取消云端收藏")
+                                        }
                                     } }) { Icon(Icons.Outlined.BookmarkRemove, "取消云端收藏") }
                                 })
                             }

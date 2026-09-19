@@ -54,7 +54,14 @@ class MainActivity : ComponentActivity() {
             NoveliaTheme(appearance.theme) {
                 val nav = rememberNavController(); val scope = rememberCoroutineScope(); val snackbar = remember { SnackbarHostState() }
                 val controller = remember { AppController(app, nav, scope, snackbar) }
+                val recoveryIssue by app.store.recoveryIssue.collectAsStateWithLifecycle()
                 LaunchedEffect(app) { app.store.persistenceError.filterNotNull().collect { snackbar.showSnackbar(it) } }
+                if(recoveryIssue != null) {
+                    Scaffold(snackbarHost = { StickerSnackbarHost(snackbar) }) { padding ->
+                        Box(Modifier.fillMaxSize().padding(padding)) { LibraryBackupScreen(controller) }
+                    }
+                    return@NoveliaTheme
+                }
                 LaunchedEffect(link) { link?.let { controller.openLink(it); incoming.value = null } }
                 LaunchedEffect(Unit) { runCatching { app.session.refresh() } }
                 val entry by nav.currentBackStackEntryAsState(); val route = entry?.destination?.route
@@ -112,6 +119,9 @@ class MainActivity : ComponentActivity() {
                                 composable("compose?article={article}") { ComposeArticleScreen(controller, it.arguments?.getString("article")) }
                                 composable("login") { LoginScreen(controller) }
                                 composable("settings") { SettingsScreen(controller) }
+                                composable("backup") { LibraryBackupScreen(controller) }
+                                composable("sync") { CloudSyncScreen(controller) }
+                                composable("updates") { BookUpdatesScreen(controller) }
                                 composable("downloads") { DownloadsScreen(controller) }
                                 composable("tools") { ToolsScreen(controller) }
                                 composable("notes") { NotesScreen(controller) }

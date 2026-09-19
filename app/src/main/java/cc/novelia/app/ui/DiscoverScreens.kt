@@ -29,13 +29,16 @@ import kotlinx.coroutines.delay
     var category by rememberSaveable { mutableIntStateOf(if(initialQuery.isNotBlank()) 1 else 0) }
     var page by rememberSaveable { mutableIntStateOf(0) }
     var filterOpen by remember { mutableStateOf(false) }
-    var advanced by remember { mutableStateOf(false) }
+    var assistantExpanded by rememberSaveable { mutableStateOf(false) }
     var source by rememberSaveable { mutableStateOf("") }; var type by rememberSaveable { mutableIntStateOf(0) }; var translate by rememberSaveable { mutableIntStateOf(0) }; var sort by rememberSaveable { mutableIntStateOf(0) }
     var webLevel by rememberSaveable { mutableIntStateOf(0) }; var wenkuLevel by rememberSaveable { mutableIntStateOf(0) }
     val reducedMotion = LocalReducedMotion.current
     val local by c.store.state.collectAsStateWithLifecycle(); val profile by c.session.profile.collectAsStateWithLifecycle()
+    val keywords by c.app.keywords.state.collectAsStateWithLifecycle()
+    val keywordPersistenceError by c.app.keywords.persistenceError.collectAsStateWithLifecycle()
     fun search() {
         c.store.rememberSearch(query); page = 0
+        if(category != 2) c.app.keywords.markUsed(SearchExpression.tagsIn(query))
         if(BookLinks.parse(query) != null) c.openLink(query) else { submitted = query.trim(); if(category == 0) category = 1 }
     }
     Screen("发现", actions = { if(category == 2) IconButton(onClick = { c.requireLogin { c.go("wenku-new") } }) { Icon(Icons.Outlined.Add, "新建文库条目") }; IconButton(onClick = { c.go("rank") }) { Icon(Icons.Outlined.Leaderboard, "排行榜") } }) { padding ->
@@ -58,10 +61,12 @@ import kotlinx.coroutines.delay
                                         }
                                     }
                                 }
-                                if(local.recentSearches.isNotEmpty()) item(key = "recent-searches", contentType = "searches") {
-                                    Column(if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(160), placementSpec = tween(220), fadeOutSpec = tween(120))) {
-                                        SectionTitle("最近搜索", "清空") { c.store.update { it.copy(recentSearches = emptyList()) } }
-                                        Row(Modifier.appHorizontalScroll(rememberScrollState()).padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { local.recentSearches.take(8).forEach { value -> AssistChip(onClick = { query = value; search() }, label = { Text(value.take(20)) }) } }
+                                if(local.recentSearches.isNotEmpty()) {
+                                    item(key = "recent-searches", contentType = "searches") {
+                                        Column(if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(160), placementSpec = tween(220), fadeOutSpec = tween(120))) {
+                                            SectionTitle("最近搜索", "清空") { c.store.update { it.copy(recentSearches = emptyList()) } }
+                                            Row(Modifier.appHorizontalScroll(rememberScrollState()).padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { local.recentSearches.take(8).forEach { value -> AssistChip(onClick = { query = value; search() }, label = { Text(value.take(20)) }) } }
+                                        }
                                     }
                                 }
                                 if(local.savedSearches.isNotEmpty()) item(key = "saved-searches", contentType = "searches") { SectionTitle("保存的搜索"); Row(Modifier.appHorizontalScroll(rememberScrollState()).padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { local.savedSearches.forEach { value -> InputChip(true, onClick = { query = value; search() }, label = { Text(value.take(20)) }, trailingIcon = { IconButton(onClick = { c.store.update { it.copy(savedSearches = it.savedSearches - value) } }, modifier = Modifier.size(48.dp)) { Icon(Icons.Outlined.Close, "删除搜索", Modifier.size(16.dp)) } }) } } }
@@ -73,6 +78,12 @@ import kotlinx.coroutines.delay
                             }
                         }
                     } else {
+                        if(category == 1) {
+                            SearchAssistantPanel(query, keywords, assistantExpanded, { assistantExpanded = it },
+                                onApply = { expression -> query = expression; search() },
+                                onSaveTranslation = c.app.keywords::setTranslation,
+                                onHelp = { c.go("article/64f3d63f794cbb1321145c07") }, persistenceError = keywordPersistenceError)
+                        }
                         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(if(submitted.isBlank()) "浏览全部" else "搜索：$submitted", Modifier.weight(1f), maxLines = 1, style = MaterialTheme.typography.labelLarge)
                             IconButton(onClick = { if(submitted.isNotBlank()) { c.store.update { it.copy(savedSearches = (it.savedSearches + submitted).distinct()) }; c.message("已保存搜索条件") } }, enabled = submitted.isNotBlank()) {
@@ -113,31 +124,12 @@ import kotlinx.coroutines.delay
                 ChoiceRow("排序", listOf("更新", "点击", "相关"), sort) { sort = it; page = 0 }
                 if(profile?.canEdit == true) ChoiceRow("分级", listOf("全部", "一般向", "R18"), webLevel.coerceIn(0, 2)) { webLevel = it; page = 0 }
             } else ChoiceRow("文库分类", if(profile?.canEdit == true) listOf("全部小说", "轻小说", "轻文学", "文学", "非小说", "R18男性向", "R18女性向") else listOf("全部小说", "轻小说", "轻文学", "文学", "非小说"), wenkuLevel.coerceIn(0, if(profile?.canEdit == true) 6 else 4)) { wenkuLevel = it; page = 0 }
-            Text("高级搜索", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = MaterialTheme.typography.titleMedium)
-            FilledTonalButton(onClick = { filterOpen = false; advanced = true }, Modifier.padding(horizontal = 20.dp)) { Text("构建查询条件") }
+            if(category == 1) FilledTonalButton(onClick = { filterOpen = false; assistantExpanded = true }, Modifier.padding(horizontal = 20.dp)) { Text("展开辅助搜索") }
             Text("搜索框支持原站查询表达式。规则与示例可在站内使用教程中查看。", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.bodyMedium)
             TextButton(onClick = { c.go("article/64f3d63f794cbb1321145c07"); filterOpen = false }, Modifier.padding(horizontal = 12.dp)) { Text("查看搜索语法") }
             Button(onClick = { filterOpen = false }, Modifier.fillMaxWidth().padding(horizontal = 20.dp)) { Text("查看结果") }
         }
     }
-    if(advanced) AdvancedSearchSheet(query, { advanced = false }) { expression -> query = expression; advanced = false; search() }
-}
-@Composable private fun AdvancedSearchSheet(initial: String, dismiss: () -> Unit, apply: (String) -> Unit) {
-    var all by remember { mutableStateOf("") }; var any by remember { mutableStateOf("") }; var exact by remember { mutableStateOf("") }; var excluded by remember { mutableStateOf("") }; var tags by remember { mutableStateOf("") }; var excludedTags by remember { mutableStateOf("") }; var minimum by remember { mutableStateOf("") }; var maximum by remember { mutableStateOf("") }
-    val expression = SearchExpression.build(all, any, exact, excluded, tags, excludedTags, minimum, maximum)
-    AppSheet(onDismissRequest = dismiss) { AppScrollColumn(contentModifier = Modifier.padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("高级搜索", style = MaterialTheme.typography.titleLarge)
-        Text("多个词用空格分隔。生成的表达式可以继续在搜索框中编辑。", style = MaterialTheme.typography.bodySmall)
-        OutlinedTextField(all, { all = it }, label = { Text("全部包含（AND）") }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(any, { any = it }, label = { Text("任意包含（OR）") }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(exact, { exact = it }, label = { Text("精确短语") }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(excluded, { excluded = it }, label = { Text("排除关键词") }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(tags, { tags = it }, label = { Text("包含标签") }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(excludedTags, { excludedTags = it }, label = { Text("排除标签") }, modifier = Modifier.fillMaxWidth())
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { OutlinedTextField(minimum, { minimum = it.filter(Char::isDigit).take(6) }, label = { Text("章节数大于") }, modifier = Modifier.weight(1f)); OutlinedTextField(maximum, { maximum = it.filter(Char::isDigit).take(6) }, label = { Text("章节数小于") }, modifier = Modifier.weight(1f)) }
-        Text(expression.ifBlank { "填写条件后在此预览表达式" }, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
-        Button(onClick = { apply(expression) }, enabled = expression.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("应用并搜索") }
-    } }
 }
 fun visibleBook(book: BookCard, state: LibraryState) = book.ref.key !in state.blockedBooks && book.tags.none { it in state.blockedTags }
 @Composable fun PageControls(page: Int, count: Int, onChange: (Int) -> Unit) {

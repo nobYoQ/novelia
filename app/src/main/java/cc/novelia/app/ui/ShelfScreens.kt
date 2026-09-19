@@ -125,6 +125,7 @@ fun readDocument(c: AppController, uri: Uri): Pair<String, ByteArray> {
     }
     val downloadableSelection = remember(books, selection) { books.filter { it.book.ref.key in selection && !it.book.ref.isLocal && !it.book.ref.isWenku } }
     Screen("书架", actions = {
+        IconButton(onClick = { c.go("updates") }) { Icon(Icons.Outlined.NewReleases, "查看书架更新") }
         IconButton(onClick = { UpdateWorker.checkNow(c.app); c.message("已开始检查书架更新") }) { Icon(Icons.Outlined.Sync, "检查更新") }
         IconButton(onClick = { c.go("history") }) { Icon(Icons.Outlined.History, "阅读历史") }
         IconButton(onClick = { importer.launch(arrayOf("*/*")) }, enabled = !importing) { Icon(Icons.Outlined.FileOpen, "导入本地文件") }
@@ -220,7 +221,7 @@ fun readDocument(c: AppController, uri: Uri): Pair<String, ByteArray> {
                                         { VolumeDragHandle(reorder, saved.book.ref.key, saved.book.title) }
                                     } else null)
                                 else Column(itemMotion.testTag("shelf-book-${saved.book.ref.key}").drawBehind { drawRect(selectionColor.value) }) {
-                                    BookRow(if(saved.hasUpdates) saved.book.copy(subtitle = "有更新 · ${saved.book.subtitle}") else saved.book, onOpen, trailing = trailing)
+                                    BookRow(if(saved.hasUpdates) saved.book.copy(subtitle = state.bookUpdates[saved.book.ref.key]?.summary?.ifBlank { null } ?: "有更新 · ${saved.book.subtitle}") else saved.book, onOpen, trailing = trailing)
                                     if(saved.book.ref.isWenku && !managing) {
                                         val rotation by animateFloatAsState(if(row.expanded) 180f else 0f, tween(if(reducedMotion) 0 else 220), label = "wenku-volume-disclosure")
                                         TextButton(onClick = {
@@ -252,7 +253,7 @@ fun readDocument(c: AppController, uri: Uri): Pair<String, ByteArray> {
     } }, confirmButton = {})
     selected?.let { saved -> AppSheet(onDismissRequest = { selected = null }) { AppScrollColumn(modifier = Modifier.navigationBarsPadding(), contentModifier = Modifier.padding(bottom = 28.dp)) {
         Text(saved.book.title, Modifier.padding(20.dp), style = MaterialTheme.typography.titleLarge, maxLines = 2)
-        if(saved.hasUpdates) MenuRow("标记更新已读", "清除本书的更新提示", Icons.Outlined.DoneAll, { c.store.update { it.copy(books = it.books.map { b -> if(b.book.ref == saved.book.ref) b.copy(hasUpdates = false) else b }) }; selected = null })
+        if(saved.hasUpdates) MenuRow("标记更新已读", "清除本书的更新提示", Icons.Outlined.DoneAll, { c.store.update { it.copy(books = it.books.map { b -> if(b.book.ref == saved.book.ref) b.copy(hasUpdates = false) else b }, bookUpdates = it.bookUpdates - saved.book.ref.key) }; selected = null })
         MenuRow(if(saved.pinned) "取消置顶" else "置顶", "在书架顶部显示", Icons.Outlined.PushPin, { c.store.update { it.copy(books = it.books.map { b -> if(b.book.ref == saved.book.ref) b.copy(pinned = !b.pinned) else b }) }; selected = null })
         ChoiceRow("阅读状态", listOf("在读", "想读", "读完"), listOf("在读", "想读", "读完").indexOf(saved.status)) { status -> c.store.update { it.copy(books = it.books.map { b -> if(b.book.ref == saved.book.ref) b.copy(status = listOf("在读", "想读", "读完")[status]) else b }) }; selected = null }
         val parent = state.books.firstOrNull { it.book.ref.isWenku && it.book.ref.key == saved.parentWenkuKey }
@@ -296,7 +297,12 @@ fun readDocument(c: AppController, uri: Uri): Pair<String, ByteArray> {
             else AsyncContent(profile?.username, load = { c.api.get<CloudFolders>("user/favored") }, modifier = Modifier.heightIn(max = 360.dp)) { data, _ ->
                 val folders = if(book.ref.isWenku) data.favoredWenku else data.favoredWeb
                 Column { if(folders.isEmpty()) Text("请先在书架的云端收藏中创建收藏夹。", Modifier.padding(20.dp)); folders.forEach { folder -> MenuRow(folder.title, "与原站同步", Icons.Outlined.CloudQueue, {
-                    c.action("已加入云端收藏") { val path = if(book.ref.isWenku) "user/favored-wenku/${folder.id}/${book.ref.id}" else "user/favored-web/${folder.id}/${book.ref.key}"; c.cloudMutation("PUT", path); c.store.saveBook(book); dismiss() }
+                    c.action {
+                        val path = if(book.ref.isWenku) "user/favored-wenku/${folder.id}/${book.ref.id}" else "user/favored-web/${folder.id}/${book.ref.key}"
+                        val queued = c.cloudMutation("PUT", path)
+                        c.store.saveBook(book); dismiss()
+                        if(!queued) c.message("已加入云端收藏")
+                    }
                 }) } }
             }
         }

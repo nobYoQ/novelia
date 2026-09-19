@@ -1,8 +1,18 @@
 # Novelia Android
 
-面向 [轻小说机翻机器人](https://n.novelia.cc/) 的非官方原生安卓客户端，当前版本 `0.1.6`。使用 Kotlin、Jetpack Compose 与 Material 3，支持 Android 8.0（API 26）及以上。
+面向 [轻小说机翻机器人](https://n.novelia.cc/) 的非官方原生安卓客户端，当前版本 `0.1.7`。使用 Kotlin、Jetpack Compose 与 Material 3，支持 Android 8.0（API 26）及以上。
 
 2026-09-17 项目审查的修复范围与验证记录见 [审查问题修复](docs/audit-fixes-2026-09-17.md)。
+
+## 0.1.7 更新
+
+- 阅读资料 ZIP 备份与合并恢复，涵盖书架、进度、笔记、本地正文、插图、分卷关系和标签译名；本地库损坏时保护原文件并提供恢复入口。
+- 网络小说详情显示继续阅读的章序和章名；支持后续章节预读、选择范围缓存、整本离线搜索及按分卷顺序接续阅读。
+- 联网自动同步当前账号的收藏与进度，提供失败原因和重试；追更区分新增章节、各引擎译文补齐和新增分卷文件。
+- 网络小说新增可折叠辅助搜索面板，支持表达式预览、标签联想、包含／排除和自定义中文译名；浏览时自动积累标签。
+- 连续滚动支持章节末尾继续上滑进入下一章；自动分页常显页码与本章百分比。
+
+完整更新说明见 [0.1.7 更新记录](docs/release-notes-0.1.7.md)。使用方式、恢复合并规则和离线范围见 [阅读资料、离线阅读与辅助搜索更新](docs/reading-library-upgrade.md)。
 
 ## 0.1.6 更新
 
@@ -47,6 +57,8 @@
 
 阅读设置提供「连续滚动」与「自动分页」两种分页模式；自动分页下可分别设置上下、左右翻页手势。「显示翻页按钮」适用于两种模式，分别显示上一屏／下一屏或上一页／下一页。「电子纸阅读模式」保留主题并关闭过渡，首次开启使用自动分页，关闭恢复开启前的翻页设置，再次开启沿用上次电子纸设置；「阅读主题」包含互斥的「黑白」选项。支持音量键、方向键及 Page Up / Page Down。云端收藏新增多收藏夹下的「全部收藏」及原站完整筛选；筛选区向下浏览时平滑收起，点击摘要展开，动画受减少动态效果控制，自动收起开关位于「我的 → 阅读与外观」。详见 [电子纸与云端收藏](docs/eink-and-cloud-favorites.md)。
 
+连续滚动到本章末尾后，继续向上滑动一段距离并松手即可进入下一章。自动分页底部常显「当前页 / 本章总页数」及本章百分比，收起工具栏或关闭翻页按钮后仍可查看；百分比按当前页占总页数计算，末页为 100%。
+
 ## 构建
 
 所需环境：JDK 17、Android SDK Platform 36、Build Tools 35.0.0，首次构建需要连接 Google Maven、Maven Central 和 Gradle 分发服务。
@@ -66,8 +78,8 @@
 输出位置：
 
 - 首版交付包：`releases/Novelia-0.1.0-debug.apk`，同目录提供 SHA-256 校验文件。
-- 本地自用 Release：`releases/Novelia-0.1.6-release.apk`，启用 R8 优化与混淆，使用与 Debug 包相同的本地测试证书签名，可直接安装。
-- 未签名 Release：`releases/Novelia-0.1.6-release-unsigned.apk`；同目录保留校验文件和混淆映射。
+- 本地自用 Release：`releases/Novelia-0.1.7-release.apk`，启用 R8 优化与混淆，使用与 Debug 包相同的本地测试证书签名，可直接安装。
+- 未签名 Release：`releases/Novelia-0.1.7-release-unsigned.apk`；同目录保留校验文件和混淆映射。
 - 应用：`app/build/outputs/apk/debug/app-debug.apk`
 - 设备测试包：`app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk`
 - JVM 测试报告：`app/build/reports/tests/testDebugUnitTest/index.html`
@@ -77,7 +89,7 @@
 
 Debug APK 使用**开发测试签名**。正式商店分发前需配置自己的发布签名、应用标识/品牌授权与域名 App Links 验证；本仓库没有发布私钥。
 
-Gradle 的 Release 构建当前未配置签名，原始输出 `app/build/outputs/apk/release/app-release-unsigned.apk` 不能直接安装。本地交付目录中的 `Novelia-0.1.6-release.apk` 已单独使用本地测试证书签名，可用于本地自用并覆盖同证书的旧版本安装，保留应用数据；正式发布时应改用自己的发布证书。混淆映射为 `app/build/outputs/mapping/release/mapping.txt`。
+Gradle 的 Release 构建当前未配置签名，原始输出 `app/build/outputs/apk/release/app-release-unsigned.apk` 不能直接安装。本地交付目录中的 `Novelia-0.1.7-release.apk` 已单独使用本地测试证书签名，可用于本地自用并覆盖同证书的旧版本安装，保留应用数据；正式发布时应改用自己的发布证书。混淆映射为 `app/build/outputs/mapping/release/mapping.txt`。
 
 ## 验证
 

@@ -1,0 +1,88 @@
+package cc.novelia.app.data
+
+import android.content.Context
+import androidx.work.*
+import cc.novelia.app.NoveliaApplication
+import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+
+private val syncRunLock = Mutex()
+
+/** Both manual and automatic retries use the application's resource ordering and session binding. */
+suspend fun synchronizePending(app: NoveliaApplication, manual: Boolean = false): CloudReplayResult = syncRunLock.withLock {
+    app.initialization.await()
+    check(app.store.recoveryIssue.value == null) { "请先恢复本地阅读资料" }
+    val binding = app.session.capture()
+    val account = binding.account ?: throw ApiException(401, "请先登录")
+    val before = app.store.state.value.syncStatus[account] ?: CloudSyncStatus()
+    val attemptedAt = System.currentTimeMillis()
+    app.store.update { it.copy(syncStatus = it.syncStatus + (account to before.copy(lastAttemptAt = attemptedAt))) }
+    try {
+        val result = app.api.cloudMutations.replayEligible(account, { app.store.state.value.pending },
+            { transform -> app.store.update { it.copy(pending = transform(it.pending)) } },
+            if(manual) emptySet() else before.blockedActions
+        ) { action ->
+            app.session.ensureCurrent(binding)
+            app.api.request(action.method, action.path, action.body, contentType = action.contentType, binding = binding)
+        }
+        app.session.ensureCurrent(binding)
+        app.store.update { state ->
+            val remaining = state.pending.filter { it.account == account }.map { it.id }.toSet()
+            val failures = (before.failures + result.failures).filterKeys { it in remaining }
+            val blocked = ((if(manual) emptySet() else before.blockedActions) + result.blockedActions).intersect(remaining)
+            val status = CloudSyncStatus(attemptedAt,
+                if(result.completed > 0 || remaining.isEmpty()) System.currentTimeMillis() else before.lastSuccessAt,
+                failures, blocked, result.requiresLogin)
+            state.copy(syncStatus = state.syncStatus + (account to status))
+        }
+        result
+    } finally {
+        // Preserve removals even when WorkManager or an account switch cancels the running job.
+        withContext(NonCancellable) { app.store.flush() }
+    }
+}
+
+class CloudSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    override suspend fun doWork(): Result {
+        val app = applicationContext as NoveliaApplication
+        app.initialization.await()
+        if(!app.store.state.value.autoSync || app.store.recoveryIssue.value != null) return Result.success()
+        val account = app.session.profile.value?.username ?: return Result.success()
+        if(inputData.getString("account")?.let { it != account } == true) return Result.success()
+        if(app.store.state.value.pending.none { it.account == account }) return Result.success()
+        return try {
+            val result = synchronizePending(app)
+            val state = app.store.state.value
+            val blocked = state.syncStatus[account]?.blockedActions.orEmpty()
+            val more = state.pending.any { it.account == account && it.id !in blocked }
+            if(!result.requiresLogin && (result.retry || more)) Result.retry() else Result.success()
+        } catch(_: SessionChangedException) { Result.success() }
+        catch(error: CancellationException) { throw error }
+        catch(_: Exception) { Result.retry() }
+    }
+
+    companion object {
+        private const val TAG = "automatic-cloud-sync"
+        private const val PERIODIC = "automatic-cloud-sync-fallback"
+        fun configure(context: Context, enabled: Boolean) {
+            val manager = WorkManager.getInstance(context)
+            if(!enabled) { manager.cancelAllWorkByTag(TAG); return }
+            // A fallback also covers process death or a new intent arriving as one-time work ends.
+            val periodic = PeriodicWorkRequestBuilder<CloudSyncWorker>(15, TimeUnit.MINUTES)
+                .addTag(TAG).setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS).build()
+            manager.enqueueUniquePeriodicWork(PERIODIC, ExistingPeriodicWorkPolicy.KEEP, periodic)
+        }
+        fun enqueue(context: Context, account: String) {
+            val request = OneTimeWorkRequestBuilder<CloudSyncWorker>()
+                .addTag(TAG).setInputData(workDataOf("account" to account))
+                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS).build()
+            WorkManager.getInstance(context).enqueueUniqueWork("cloud-sync-${hashName(account)}", ExistingWorkPolicy.KEEP, request)
+        }
+    }
+}

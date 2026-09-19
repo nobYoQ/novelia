@@ -14,11 +14,17 @@ import cc.novelia.app.MainActivity
 import cc.novelia.app.NoveliaApplication
 import cc.novelia.app.R
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.TimeUnit
 
 class UpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
-    override suspend fun doWork(): Result {
+    override suspend fun doWork(): Result = checkLock.withLock { checkBooks() }
+    private suspend fun checkBooks(): Result {
         val app = applicationContext as NoveliaApplication
+        app.initialization.await()
+        if(app.store.recoveryIssue.value != null) return Result.failure()
+        val binding = app.session.capture()
         val library = app.store.state.value
         val books = booksForUpdate(library.books, library.drafts["updates:cursor"])
         var count = 0; var failed = 0
@@ -26,11 +32,27 @@ class UpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             if(isStopped) return Result.failure()
             try {
                 val ref = saved.book.ref
-                val updated = if(ref.isWenku) app.api.get<WenkuDetail>("wenku/${ref.id}").let { it.card(ref).copy(total = it.volumeJp.size + it.volumeZh.size) } else app.api.get<WebDetail>("novel/${ref.key}").card(ref)
-                val changed = updated.total > saved.book.total || updated.translated > saved.book.translated
-                if(changed) count++
-                app.store.update { state -> state.copy(books = state.books.map { b -> if(b.book.ref == ref) b.copy(book = updated, hasUpdates = b.hasUpdates || changed) else b }) }
-            } catch(e: kotlinx.coroutines.CancellationException) { throw e } catch(e: Exception) { failed++ }
+                val raw = app.api.request("GET", if(ref.isWenku) "wenku/${ref.id}" else "novel/${ref.key}", binding = binding)
+                val updated = if(ref.isWenku) appJson.decodeFromString<WenkuDetail>(raw).also(app.api::observeKeywords).card(ref)
+                    else appJson.decodeFromString<WebDetail>(raw).also(app.api::observeKeywords).card(ref)
+                app.session.ensureCurrent(binding)
+                val current = updated.updateSnapshot(System.currentTimeMillis())
+                app.store.update { state ->
+                    val existing = state.books.firstOrNull { it.book.ref == ref } ?: return@update state
+                    val previous = state.updateSnapshots[ref.key] ?: existing.book.updateSnapshot()
+                    val delta = detectBookUpdate(previous, current, ref.isWenku)
+                    val prior = state.bookUpdates[ref.key].takeIf { existing.hasUpdates }
+                    val changes = if(delta.hasChanges) prior?.accumulate(delta) ?: delta else prior
+                    if(delta.relevantTo(state.bookSettings[ref.key] ?: state.reader)) count++
+                    state.copy(
+                        books = state.books.map { b -> if(b.book.ref == ref) b.copy(book = updated, hasUpdates = b.hasUpdates || delta.hasChanges) else b },
+                        updateSnapshots = state.updateSnapshots + (ref.key to current),
+                        bookUpdates = if(changes != null) state.bookUpdates + (ref.key to changes) else state.bookUpdates - ref.key
+                    )
+                }
+            } catch(e: kotlinx.coroutines.CancellationException) { throw e }
+            catch(_: SessionChangedException) { return Result.success() }
+            catch(e: Exception) { failed++ }
             // Persist progress before yielding. If the OS stops a long run, the next one begins
             // with the books that would otherwise remain permanently at the end of the shelf.
             app.store.update { it.copy(drafts = it.drafts + ("updates:cursor" to saved.book.ref.key)) }
@@ -43,6 +65,7 @@ class UpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         return if(books.isNotEmpty() && failed == books.size) Result.retry() else Result.success()
     }
     companion object {
+        private val checkLock = Mutex()
         fun schedule(app: NoveliaApplication, enabled: Boolean) {
             val work = WorkManager.getInstance(app)
             if(!enabled) { work.cancelUniqueWork("bookshelf-updates"); return }

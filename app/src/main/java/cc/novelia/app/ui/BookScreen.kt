@@ -33,7 +33,7 @@ import kotlin.math.abs
     val state by c.store.state.collectAsStateWithLifecycle(); val profile by c.session.profile.collectAsStateWithLifecycle()
     val isSaved = remember(state.books, ref) { state.books.any { it.book.ref == ref } }
     val reducedMotion = LocalReducedMotion.current
-    var progressChoice by remember { mutableStateOf<Triple<BookCard, String, String>?>(null) }
+    var progressChoice by remember { mutableStateOf<Triple<BookCard, ReadingDestination, ReadingDestination>?>(null) }
     var uploadBusy by remember { mutableStateOf(false) }
     val uploader = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let { c.action("分卷上传完成") { uploadBusy = true; try { withContext(Dispatchers.IO) { val (name, bytes) = readDocument(c, it); require(name.substringAfterLast('.').lowercase() in listOf("epub", "txt") && bytes.size <= 40 * 1024 * 1024) { "文库上传支持不超过 40 MB 的 EPUB / TXT" }; val file = File(c.app.cacheDir, "upload-${System.nanoTime()}"); try { file.writeBytes(bytes); c.api.uploadVolume(ref, name, file) } finally { file.delete() } }; version++ } finally { uploadBusy = false } } } }
     Screen(if(ref.isWenku) "文库详情" else "作品详情", c::back, actions = {
@@ -87,7 +87,11 @@ import kotlin.math.abs
             val refresh: () -> Unit = { version++ }
             var tab by rememberSaveable(ref.key) { mutableIntStateOf(0) }
             val tabState = rememberSaveableStateHolder()
-            val start = state.positions[ref.key]?.chapterId ?: detail.lastReadChapterId ?: detail.toc.firstOrNull { it.chapterId != null }?.chapterId
+            val localDestination = remember(detail.toc, state.positions[ref.key]?.chapterId) { readingDestination(detail.toc, state.positions[ref.key]?.chapterId) }
+            val cloudDestination = remember(detail.toc, detail.lastReadChapterId) { readingDestination(detail.toc, detail.lastReadChapterId) }
+            val destination = remember(detail.toc, localDestination, cloudDestination) { resumeDestination(detail.toc, localDestination?.chapterId, cloudDestination?.chapterId) }
+            val start = destination?.chapterId
+            val continuing = localDestination != null || cloudDestination != null
             Column(Modifier.fillMaxSize()) {
                 PrimaryTabRow(tab) { listOf("简介", "目录 $chapterCount", "讨论").forEachIndexed { i, title -> Tab(tab == i, { tab = i }, text = { Text(title) }) } }
                 MotionContent(tab, Modifier.weight(1f).fillMaxWidth(), animateInitial = false) {
@@ -95,9 +99,11 @@ import kotlin.math.abs
                         0 -> AppLazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
                             item { BookHero(book, "${detail.type} · ${providers[ref.provider]}", isSaved, { favorite = book }) }
                             item { Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Button(onClick = { start?.let { val localChapter = state.positions[ref.key]?.chapterId; val cloudChapter = detail.lastReadChapterId; if(localChapter != null && cloudChapter != null && localChapter != cloudChapter) progressChoice = Triple(book, localChapter, cloudChapter) else { c.store.saveBook(book); c.read(ref, it) } } }, enabled = start != null, modifier = Modifier.weight(1f)) { Icon(Icons.Outlined.MenuBook, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(if(state.positions.containsKey(ref.key) || detail.lastReadChapterId != null) "继续阅读" else "开始阅读") }
+                                Button(onClick = { start?.let { if(localDestination != null && cloudDestination != null && localDestination.chapterId != cloudDestination.chapterId) progressChoice = Triple(book, localDestination, cloudDestination) else { c.store.saveBook(book); c.read(ref, it) } } }, enabled = start != null, modifier = Modifier.weight(1f)) { Icon(Icons.Outlined.MenuBook, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(if(continuing) "继续阅读 · 第 ${destination?.number} 章" else "开始阅读") }
                                 FilledTonalIconButton(onClick = { download = book to null }) { Icon(Icons.Outlined.Download, "下载小说") }
                             } }
+                            destination?.let { target -> item { Text(target.title, Modifier.padding(horizontal = 24.dp, vertical = 8.dp), style = MaterialTheme.typography.bodyMedium) } }
+                            if(!continuing && (state.positions.containsKey(ref.key) || detail.lastReadChapterId != null)) item { Text("原进度章节已不在目录中，将从第一章开始。", Modifier.padding(horizontal = 24.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                             item { Row(Modifier.fillMaxWidth().padding(20.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                                 Stat("章节", "${book.total}"); Stat("字数", detail.totalCharacters?.let { if(it > 10000) "${it / 10000}万" else "$it" } ?: "—"); Stat("浏览", "${detail.visited}")
                             } }
@@ -117,7 +123,7 @@ import kotlin.math.abs
     }
     favorite?.let { FavoriteSheet(c, it) { favorite = null } }
     download?.let { (book, volume) -> DownloadSheet(c, book, volume) { download = null } }
-    progressChoice?.let { (book, localChapter, cloudChapter) -> AlertDialog(onDismissRequest = { progressChoice = null }, title = { Text("选择继续阅读的位置") }, text = { Text("本机与原站记录的章节不同，请选择这次从哪里继续。") }, confirmButton = { TextButton(onClick = { progressChoice = null; c.store.saveBook(book); c.read(ref, cloudChapter) }) { Text("原站进度：$cloudChapter") } }, dismissButton = { TextButton(onClick = { progressChoice = null; c.store.saveBook(book); c.read(ref, localChapter) }) { Text("本机进度：$localChapter") } }) }
+    progressChoice?.let { (book, localChapter, cloudChapter) -> AlertDialog(onDismissRequest = { progressChoice = null }, title = { Text("选择继续阅读的位置") }, text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { Text("本机与原站记录的章节不同，请选择这次从哪里继续。"); Text("本机：${localChapter.label}"); Text("原站：${cloudChapter.label}") } }, confirmButton = { TextButton(onClick = { progressChoice = null; c.store.saveBook(book); c.read(ref, cloudChapter.chapterId) }) { Text("原站进度") } }, dismissButton = { TextButton(onClick = { progressChoice = null; c.store.saveBook(book); c.read(ref, localChapter.chapterId) }) { Text("本机进度") } }) }
 }
 @Composable private fun Stat(label: String, value: String) { Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(value, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary); Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
 @Composable private fun BookHero(book: BookCard, subtitle: String, isSaved: Boolean, favorite: () -> Unit) {
@@ -148,10 +154,15 @@ import kotlin.math.abs
     }
 }
 @Composable fun MetaParagraph(label: String, text: String) { if(text.isNotBlank()) { SectionTitle(label); SelectionContainer { Text(text, Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = MaterialTheme.typography.bodyLarge) } } }
-@Composable private fun TagList(tags: List<String>, c: AppController) { FlowRow(Modifier.padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { tags.forEach { tag -> SuggestionChip(onClick = { c.go("discover?query=${android.net.Uri.encode(tag)}") }, label = { Text(tag) }) } } }
 @Composable fun TocPanel(c: AppController, ref: BookRef, toc: List<TocItem>, current: String?, onRead: (String) -> Unit) {
     var search by rememberSaveable(ref.key) { mutableStateOf("") }; var reversed by rememberSaveable(ref.key) { mutableStateOf(false) }
-    var caching by remember(ref.key) { mutableStateOf(false) }
+    var cacheDialog by remember(ref.key) { mutableStateOf(false) }
+    var cacheRevision by remember(ref.key) { mutableIntStateOf(0) }
+    val cacheGeneration by c.store.cacheGeneration.collectAsStateWithLifecycle()
+    var cachedIds by remember(ref.key) { mutableStateOf<Set<String>>(emptySet()) }
+    LaunchedEffect(ref, toc, cacheRevision, cacheGeneration) {
+        cachedIds = withContext(Dispatchers.IO) { toc.mapNotNull { item -> item.chapterId?.takeIf { ref.isLocal || c.store.chapterFile(ref, it).isFile } }.toSet() }
+    }
     val settledSearch = rememberDebouncedQuery(search)
     val indexedToc = remember(toc) { toc.withIndex().toList() }
     val list = remember(indexedToc, settledSearch, reversed) {
@@ -166,24 +177,18 @@ import kotlin.math.abs
         Row(Modifier.padding(horizontal = 12.dp)) {
             TextButton(onClick = { reversed = !reversed }) { Text(if(reversed) "倒序" else "正序") }
             TextButton(onClick = { scope.launch { if(reducedMotion || abs(currentIndex - scroll.firstVisibleItemIndex) > 100) scroll.scrollToItem(currentIndex) else scroll.animateScrollToItem(currentIndex) } }, enabled = currentIndex >= 0) { Text("定位当前") }
-            if(!ref.isLocal) TextButton(onClick = {
-                caching = true
-                c.action("章节已缓存，可离线阅读") {
-                    try {
-                        val chapters = list.asSequence().map { it.value }.filter { it.chapterId != null }.take(20).toList()
-                        withContext(Dispatchers.IO) { for(item in chapters) { val id = item.chapterId!!; if(c.store.cachedChapter(ref, id) == null) c.store.cacheChapter(ref, id, c.api.chapter(ref, id)) } }
-                    } finally { caching = false }
-                }
-            }, enabled = !caching && hasChapters) { Text(if(caching) "正在缓存…" else "缓存前 20 章") }
+            if(!ref.isLocal) TextButton(onClick = { cacheDialog = true }, enabled = hasChapters) { Text("缓存章节") }
         }
+        if(!ref.isLocal) Text(remember(toc, cachedIds) { offlineRangeLabel(toc, cachedIds) }, Modifier.padding(horizontal = 20.dp, vertical = 4.dp), style = MaterialTheme.typography.labelMedium)
         AppLazyColumn(state = scroll, modifier = Modifier.weight(1f)) {
             items(list, key = { it.value.chapterId?.let { id -> "chapter-$id" } ?: "section-${it.index}" }, contentType = { if(it.value.chapterId == null) "section" else "chapter" }) { entry ->
                 val item = entry.value
                 val itemMotion = if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(180), placementSpec = tween(220), fadeOutSpec = tween(120))
                 if(item.chapterId == null) Box(itemMotion) { SectionTitle(item.title) }
-                else ListItem(headlineContent = { Text(item.title, color = if(item.chapterId == current) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) }, leadingContent = { Icon(if(item.chapterId == current) Icons.Outlined.Bookmark else Icons.Outlined.Article, null) }, trailingContent = { Icon(Icons.Outlined.ChevronRight, null) }, modifier = itemMotion.fillMaxWidth().motionClickable { onRead(item.chapterId) })
+                else ListItem(headlineContent = { Text(item.title, color = if(item.chapterId == current) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) }, supportingContent = if(!ref.isLocal && item.chapterId in cachedIds) ({ Text("可离线阅读") }) else null, leadingContent = { Icon(if(item.chapterId == current) Icons.Outlined.Bookmark else Icons.Outlined.Article, null) }, trailingContent = { Icon(Icons.Outlined.ChevronRight, null) }, modifier = itemMotion.fillMaxWidth().motionClickable { onRead(item.chapterId) })
             }
             if(list.isEmpty()) item { EmptyState("没有匹配的章节", "可以修改搜索词，或刷新书籍目录。") }
         }
     }
+    if(cacheDialog) ChapterCacheDialog(c, ref, toc, current, onChanged = { cacheRevision++ }, onDismiss = { cacheDialog = false; cacheRevision++ })
 }

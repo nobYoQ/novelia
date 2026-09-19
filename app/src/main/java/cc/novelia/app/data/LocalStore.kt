@@ -8,6 +8,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.NonCancellable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -26,12 +27,26 @@ fun hashName(value: String): String {
 /** Small user state is atomically persisted; chapter/document payloads live in separate files. */
 class LocalStore(val context: Context) {
     private val stateFile = AtomicFile(File(context.filesDir, "library.json"))
-    private val mutable = MutableStateFlow(runCatching { appJson.decodeFromString<LibraryState>(stateFile.openRead().bufferedReader(Charsets.UTF_8).use { it.readText() }) }.getOrDefault(LibraryState()))
-    private val persistence = StatePersistence<LibraryState>(CoroutineScope(SupervisorJob() + Dispatchers.IO)) { next ->
-        val text = appJson.encodeToString(next)
-        val output = stateFile.startWrite()
-        try { output.write(text.toByteArray(Charsets.UTF_8)); stateFile.finishWrite(output) }
-        catch (error: Exception) { stateFile.failWrite(output); throw error }
+    private val lastGoodFile = File(context.filesDir, "library-last-good.json")
+    private val initial = loadLibraryState(
+        exists = File(context.filesDir, "library.json").exists() || File(context.filesDir, "library.json.bak").exists() ||
+            lastGoodFile.exists() || File(lastGoodFile.path + ".bak").exists(),
+        read = { stateFile.openRead().bufferedReader(Charsets.UTF_8).use { it.readText() } },
+        readLastGood = { AtomicFile(lastGoodFile).openRead().bufferedReader(Charsets.UTF_8).use { it.readText() } }
+    )
+    private val mutable = MutableStateFlow(initial.state)
+    private val mutableRecoveryIssue = MutableStateFlow(initial.issue)
+    val recoveryIssue = mutableRecoveryIssue.asStateFlow()
+    private data class Revision(val number: Long, val state: LibraryState)
+    private var revision = 0L
+    private val diskLock = Any()
+    private val persistence = StatePersistence<Revision>(CoroutineScope(SupervisorJob() + Dispatchers.IO)) { next ->
+        synchronized(diskLock) {
+            // A restore invalidates every queued snapshot created before its atomic commit.
+            val eligible = synchronized(this) { next.number == revision && mutableRecoveryIssue.value == null }
+            // UI updates never wait for normal JSON encoding or filesystem writes.
+            if (eligible) writeState(next.state)
+        }
     }
     val state = mutable.asStateFlow()
     val persistenceError = persistence.error
@@ -55,10 +70,45 @@ class LocalStore(val context: Context) {
 
     /** State changes are immediate; JSON encoding and atomic writes run on a single IO writer. */
     @Synchronized fun update(transform: (LibraryState) -> LibraryState) {
+        // Callers include UI callbacks and reader disposal; keep the protected state read-only
+        // instead of throwing from those callbacks. A persistent recovery banner explains this.
+        if (mutableRecoveryIssue.value != null) return
         val next = transform(mutable.value)
         if (next == mutable.value) return
-        persistence.submit(next)
+        persistence.submit(Revision(++revision, next))
         mutable.value = next
+    }
+
+    private fun writeState(next: LibraryState) {
+        val text = appJson.encodeToString(next)
+        val output = stateFile.startWrite()
+        try { output.write(text.toByteArray(Charsets.UTF_8)); stateFile.finishWrite(output) }
+        catch (error: Exception) { stateFile.failWrite(output); throw error }
+        // A second copy is best effort: a failure must not misreport an already committed library.
+        runCatching { atomicText(lastGoodFile, text) }
+    }
+
+    /** Only this explicit recovery boundary may replace a protected, unreadable library. */
+    internal suspend fun commitRestore(transform: (LibraryState) -> LibraryState) = withContext(Dispatchers.IO + NonCancellable) {
+        persistence.flush()
+        synchronized(diskLock) {
+            synchronized(this@LocalStore) {
+                val next = transform(mutable.value)
+                if (mutableRecoveryIssue.value != null) {
+                    val damaged = File(context.filesDir, "library.json")
+                    if (damaged.exists()) damaged.copyTo(File(context.filesDir, "library-damaged-${java.util.UUID.randomUUID()}.json"))
+                }
+                writeState(next)
+                revision += 1
+                mutable.value = next
+                mutableRecoveryIssue.value = null
+            }
+        }
+    }
+
+    suspend fun recoverLastGood() {
+        require(recoveryIssue.value?.hasLastGood == true) { "没有可用的最后良好副本，请选择备份文件恢复" }
+        commitRestore { it }
     }
 
     /** Await this at lifecycle and background-work boundaries that require durable state. */
@@ -87,6 +137,7 @@ class LocalStore(val context: Context) {
     }
 
     fun saveDocument(document: LocalDocument) = synchronized(documentLock) {
+        check(recoveryIssue.value == null) { "本地资料已保护，请先前往资料备份与恢复" }
         val id = safeId(document.id)
         document.images.forEach { (hash, data) -> documentImage(document.id, hash).apply { parentFile?.mkdirs() }.writeBytes(java.util.Base64.getDecoder().decode(data)) }
         val stored = document.copy(images = emptyMap())
@@ -107,6 +158,7 @@ class LocalStore(val context: Context) {
     }
 
     fun removeDocument(id: String) = synchronized(documentLock) {
+        check(recoveryIssue.value == null) { "本地资料已保护，请先前往资料备份与恢复" }
         val key = safeId(id)
         documentMemory.remove(key)
         sourceIndex.remove(key)
@@ -126,6 +178,7 @@ class LocalStore(val context: Context) {
         (cacheDir.listFiles()?.toList().orEmpty() + metadataDir.listFiles()?.toList().orEmpty())
             .filter { it.isFile }.forEach { it.delete() }
         chapterIndex.reset()
+        clearChapterFreshness(this)
         mutableCacheGeneration.value += 1
     }
 

@@ -1,5 +1,6 @@
 package cc.novelia.app
 
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -30,6 +31,146 @@ class ReaderToolbarOverlayTest {
     @Test fun eInkPagesKeepToolbarHiddenAcrossChapters() = verifyChapterNavigation(ReaderSettings().withEInkMode(true))
 
     @Test fun eInkScrollingKeepsToolbarHiddenAcrossChapters() = verifyChapterNavigation(ReaderSettings().withEInkMode(true).withPaginationMode("scroll"))
+
+    @Test fun automaticPageProgressStaysVisibleWithoutButtonsAndResetsAcrossChapters() = withReader(
+        ReaderSettings(paginationMode = "auto", showPageButtons = false, scrollPageTurn = true),
+        listOf(
+            LocalChapter("first", "第一章 长途", listOf("旅人沿着森林小路前行，寻找远处的小镇。".repeat(100))),
+            LocalChapter("second", "第二章 归来", listOf("星光照亮归途，旅人在小镇停下脚步。".repeat(40)))
+        )
+    ) { app, ref ->
+        val firstPageCount = pageNumbers().second
+        assertTrue("测试首章应超过一页", firstPageCount > 1)
+        assertChapterProgress(1, firstPageCount)
+        compose.onNodeWithText("下一页").assertDoesNotExist()
+        compose.onNodeWithTag("reader-page").performTouchInput { click(center) }
+        assertToolbarHidden()
+        assertChapterProgress(1, firstPageCount)
+        screenshot("reader-progress-hidden")
+
+        for(expectedPage in 2..firstPageCount) {
+            compose.onNodeWithTag("reader-page").performTouchInput {
+                swipe(start = Offset(centerX, height * .7f), end = Offset(centerX, height * .3f))
+            }
+            compose.waitUntil(10_000) { pageNumbers().first == expectedPage }
+            assertChapterProgress(expectedPage, firstPageCount)
+            assertToolbarHidden()
+        }
+        compose.onNodeWithTag("reader-chapter-progress").assertTextEquals("本章 100%")
+        compose.onNodeWithTag("reader-page").performTouchInput {
+            swipe(start = Offset(centerX, height * .7f), end = Offset(centerX, height * .3f))
+        }
+        waitForChapter(app, ref, "second")
+        compose.waitUntil(10_000) { pageNumbers().first == 1 }
+        val secondPageCount = pageNumbers().second
+        assertTrue("不同长度的章节应重新计算总页数", secondPageCount < firstPageCount)
+        assertChapterProgress(1, secondPageCount)
+        assertToolbarHidden()
+        compose.onNodeWithText("下一页").assertDoesNotExist()
+    }
+
+    @Test fun continuousScrollingTurnsChapterOnlyAfterReleasingAnExtraPullAtTheEnd() = withReader(
+        ReaderSettings(paginationMode = "scroll", showPageButtons = false),
+        listOf(
+            LocalChapter("first", "第一章 长途", List(30) { "第 ${it + 1} 段，旅人沿着森林小路前行。".repeat(8) }),
+            LocalChapter("second", "第二章 归来", listOf("星光照亮归途。")),
+            LocalChapter("third", "第三章 新的旅程", listOf("新的故事开始了。"))
+        )
+    ) { app, ref ->
+        compose.onNodeWithTag("reader-scroll").performTouchInput { click(center) }
+        assertToolbarHidden()
+        scrollToChapterEnd()
+        compose.onNodeWithText("阅读下一章").assertIsDisplayed()
+        assertChapterUnchanged(app, ref, "first")
+
+        val density = compose.activity.resources.displayMetrics.density
+        val pull = 120f * density
+        compose.onNodeWithTag("reader-scroll").performTouchInput {
+            down(center)
+            moveBy(Offset(0f, -pull), delayMillis = 200)
+            moveBy(Offset(0f, 16f * density), delayMillis = 200)
+            up()
+        }
+        assertChapterUnchanged(app, ref, "first")
+        scrollToChapterEnd()
+        compose.onNodeWithTag("reader-scroll").performTouchInput {
+            down(center)
+            moveBy(Offset(0f, -pull), delayMillis = 300)
+            up()
+        }
+        waitForChapter(app, ref, "second")
+        assertChapterUnchanged(app, ref, "second")
+        assertToolbarHidden()
+    }
+
+    @Test fun shortChaptersIgnoreShortReverseAndCancelledPullsAndStopAtTheLastChapter() = withReader(
+        ReaderSettings(paginationMode = "scroll", showPageButtons = false),
+        listOf(
+            LocalChapter("first", "第一章 短章", listOf("短章正文。")),
+            LocalChapter("second", "第二章 终章", listOf("故事到这里结束。"))
+        )
+    ) { app, ref ->
+        compose.onNodeWithText("短章正文。", substring = true).performClick()
+        assertToolbarHidden()
+        scrollToChapterEnd()
+        assertChapterUnchanged(app, ref, "first")
+        val density = compose.activity.resources.displayMetrics.density
+        val body = compose.onNodeWithTag("reader-scroll")
+        body.performTouchInput {
+            down(center)
+            moveBy(Offset(0f, -48f * density), delayMillis = 300)
+            up()
+        }
+        assertChapterUnchanged(app, ref, "first")
+        body.performTouchInput {
+            down(center)
+            moveBy(Offset(0f, 120f * density), delayMillis = 300)
+            up()
+        }
+        assertChapterUnchanged(app, ref, "first")
+        body.performTouchInput {
+            down(center)
+            moveBy(Offset(0f, -120f * density), delayMillis = 300)
+            cancel()
+        }
+        assertChapterUnchanged(app, ref, "first")
+        body.performTouchInput {
+            down(center)
+            moveBy(Offset(0f, -96f * density), delayMillis = 200)
+            moveTo(center, delayMillis = 200)
+            up()
+        }
+        assertChapterUnchanged(app, ref, "first")
+        body.performTouchInput {
+            down(center)
+            moveBy(Offset(0f, -120f * density), delayMillis = 200)
+            moveBy(Offset(0f, 16f * density), delayMillis = 200)
+            up()
+        }
+        assertChapterUnchanged(app, ref, "first")
+        body.performTouchInput {
+            down(center)
+            moveBy(Offset(0f, -120f * density), delayMillis = 200)
+            down(pointerId = 1, position = center + Offset(40f * density, 0f))
+            up(pointerId = 1)
+            up()
+        }
+        assertChapterUnchanged(app, ref, "first")
+        body.performTouchInput {
+            down(center)
+            moveBy(Offset(0f, -120f * density), delayMillis = 300)
+            up()
+        }
+        waitForChapter(app, ref, "second")
+        assertToolbarHidden()
+        compose.onNodeWithTag("reader-scroll").performTouchInput {
+            down(center)
+            moveBy(Offset(0f, -120f * density), delayMillis = 300)
+            up()
+        }
+        assertChapterUnchanged(app, ref, "second")
+        compose.onNodeWithText("阅读下一章").assertDoesNotExist()
+    }
 
     private fun verifyChapterNavigation(settings: ReaderSettings) = withReader(settings.copy(showPageButtons = settings.staticPagination), listOf(
         LocalChapter("first", "第一章 林间旅途", listOf("旅人沿着森林小路前行，寻找远处的小镇。".repeat(60))),
@@ -88,6 +229,24 @@ class ReaderToolbarOverlayTest {
     private fun waitForChapter(app: NoveliaApplication, ref: BookRef, chapterId: String) {
         compose.waitUntil(15_000) { app.store.state.value.positions[ref.key]?.chapterId == chapterId }
         compose.waitForIdle()
+    }
+
+    private fun assertChapterUnchanged(app: NoveliaApplication, ref: BookRef, chapterId: String) {
+        compose.mainClock.advanceTimeBy(500)
+        compose.waitForIdle()
+        compose.runOnIdle { assertEquals(chapterId, app.store.state.value.positions[ref.key]?.chapterId) }
+    }
+
+    private fun scrollToChapterEnd() {
+        compose.onNodeWithTag("reader-scroll").performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 100_000f) }
+        compose.waitForIdle()
+    }
+
+    private fun pageNumbers(): Pair<Int, Int> = pageCounter().split('/').map { it.trim().toInt() }.let { it[0] to it[1] }
+
+    private fun assertChapterProgress(page: Int, total: Int) {
+        compose.onNodeWithTag("reader-page-counter").assertIsDisplayed().assertTextEquals("$page / $total")
+        compose.onNodeWithTag("reader-chapter-progress").assertIsDisplayed().assertTextEquals("本章 ${page * 100 / total}%")
     }
 
     private fun verifyOverlay(mode: String) = withReader(ReaderSettings(paginationMode = mode, showPageButtons = true)) { app, ref ->

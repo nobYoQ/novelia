@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit
 
 open class ApiException(val status: Int, override val message: String) : IOException(message)
 
-class NoveliaApi(val session: AuthenticationSession?, val baseUrl: String = "https://n.novelia.cc/api/", val transport: OkHttpClient = OkHttpClient.Builder().connectTimeout(20, TimeUnit.SECONDS).readTimeout(60, TimeUnit.SECONDS).followRedirects(false).build(), private val onMutation: (Long) -> Unit = {}) {
+class NoveliaApi(val session: AuthenticationSession?, val baseUrl: String = "https://n.novelia.cc/api/", val transport: OkHttpClient = OkHttpClient.Builder().connectTimeout(20, TimeUnit.SECONDS).readTimeout(60, TimeUnit.SECONDS).followRedirects(false).build(), private val onMutation: (Long) -> Unit = {}, private val onKeywords: (Collection<String>) -> Unit = {}) {
     val cloudMutations = CloudMutationQueue()
     @Volatile var lastMutationAt: Long = 0L
         private set
@@ -67,7 +67,19 @@ class NoveliaApi(val session: AuthenticationSession?, val baseUrl: String = "htt
     }
     suspend inline fun <reified T> get(path: String, params: Map<String, String> = emptyMap()): T {
         val raw = request("GET", path, params = params)
-        return withContext(Dispatchers.Default) { appJson.decodeFromString<T>(raw) }
+        return withContext(Dispatchers.Default) { appJson.decodeFromString<T>(raw).also { observeKeywords(it) } }
+    }
+    /** Learn only from content already requested by the user; never fetch a global tag list. */
+    fun observeKeywords(value: Any?) {
+        val keywords = when(value) {
+            is Page<*> -> { value.items.forEach(::observeKeywords); return }
+            is WebOutline -> value.keywords
+            is WebDetail -> value.keywords
+            is WenkuDetail -> value.keywords
+            is BookCard -> value.tags
+            else -> return
+        }
+        if(keywords.isNotEmpty()) runCatching { onKeywords(keywords) }
     }
     suspend inline fun <reified T> put(path: String, value: T): String = request("PUT", path, appJson.encodeToString(value))
     suspend inline fun <reified T> post(path: String, value: T): String = request("POST", path, appJson.encodeToString(value))

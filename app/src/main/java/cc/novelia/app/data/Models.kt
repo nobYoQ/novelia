@@ -18,7 +18,7 @@ import kotlinx.serialization.Serializable
     val extra: String? = null, val favored: String? = null, val lastReadAt: Long? = null,
     val total: Int = 0, val jp: Int = 0, val youdao: Int = 0, val gpt: Int = 0, val sakura: Int = 0, val updateAt: Long? = null
 ) {
-    fun card() = BookCard(BookRef(providerId, novelId), titleZh?.takeIf { it.isNotBlank() } ?: titleJp, titleJp, subtitle = "$type · $total 章", tags = keywords, translated = maxOf(gpt, sakura, youdao), total = total, favored = favored, updateAt = updateAt)
+    fun card() = BookCard(BookRef(providerId, novelId), titleZh?.takeIf { it.isNotBlank() } ?: titleJp, titleJp, subtitle = "$type · $total 章", tags = keywords, translated = maxOf(gpt, sakura, youdao), total = total, favored = favored, updateAt = updateAt, translations = mapOf("gpt" to gpt, "sakura" to sakura, "youdao" to youdao))
 }
 @Serializable data class WenkuOutline(val id: String = "", val title: String = "", val titleZh: String = "", val cover: String? = null, val favored: String? = null) {
     fun card() = BookCard(BookRef("wenku", id), titleZh.ifBlank { title }, title, cover, "文库小说", favored = favored)
@@ -26,7 +26,8 @@ import kotlinx.serialization.Serializable
 @Serializable data class BookCard(
     val ref: BookRef, val title: String, val originalTitle: String = "", val cover: String? = null,
     val subtitle: String = "", val tags: List<String> = emptyList(), val translated: Int = 0, val total: Int = 0,
-    val favored: String? = null, val updateAt: Long? = null
+    val favored: String? = null, val updateAt: Long? = null,
+    val translations: Map<String, Int> = emptyMap(), val volumeIds: List<String> = emptyList()
 )
 @Serializable data class TocItem(val titleJp: String = "", val titleZh: String? = null, val chapterId: String? = null, val createAt: Long? = null) {
     val title get() = titleZh?.takeIf { it.isNotBlank() } ?: titleJp
@@ -39,7 +40,7 @@ import kotlinx.serialization.Serializable
     val favored: String? = null, val lastReadChapterId: String? = null, val jp: Int = 0, val youdao: Int = 0, val gpt: Int = 0, val sakura: Int = 0
 ) {
     val title get() = titleZh?.takeIf { it.isNotBlank() } ?: titleJp
-    fun card(ref: BookRef) = BookCard(ref, title, titleJp, subtitle = authors.joinToString { it.name }, tags = keywords, total = toc.count { it.chapterId != null }, translated = maxOf(gpt, sakura, youdao), favored = favored)
+    fun card(ref: BookRef) = BookCard(ref, title, titleJp, subtitle = authors.joinToString { it.name }, tags = keywords, total = toc.count { it.chapterId != null }, translated = maxOf(gpt, sakura, youdao), favored = favored, translations = mapOf("gpt" to gpt, "sakura" to sakura, "youdao" to youdao))
 }
 @Serializable data class Chapter(
     val titleJp: String = "", val titleZh: String? = null, val novelTitleJp: String? = null, val novelTitleZh: String? = null,
@@ -55,7 +56,9 @@ import kotlinx.serialization.Serializable
     val level: String = "一般向", val introduction: String = "", val webIds: List<String> = emptyList(),
     val volumes: List<WenkuVolume> = emptyList(), val glossary: Map<String, String> = emptyMap(), val visited: Long = 0,
     val favored: String? = null, val volumeZh: List<String> = emptyList(), val volumeJp: List<JapaneseVolume> = emptyList()
-) { fun card(ref: BookRef) = BookCard(ref, titleZh.ifBlank { title }, title, cover, authors.joinToString(), keywords, total = volumeJp.size + volumeZh.size, favored = favored) }
+) { fun card(ref: BookRef) = BookCard(ref, titleZh.ifBlank { title }, title, cover, authors.joinToString(), keywords, total = volumeJp.size + volumeZh.size, favored = favored,
+    translations = mapOf("gpt" to volumeJp.sumOf { it.gpt }, "sakura" to volumeJp.sumOf { it.sakura }, "youdao" to volumeJp.sumOf { it.youdao }),
+    volumeIds = volumeJp.map { "jp:${it.volumeId}" } + volumeZh.map { "zh:$it" }) }
 @Serializable data class Folder(val id: String = "", val title: String = "")
 @Serializable data class CloudFolders(val favoredWeb: List<Folder> = emptyList(), val favoredWenku: List<Folder> = emptyList())
 @Serializable data class Article(
@@ -87,7 +90,8 @@ import kotlinx.serialization.Serializable
     val paginationMode: String = if(eInkMode || scrollPageTurn || horizontalPageTurn) "auto" else "scroll",
     val showPageButtons: Boolean = paged || paginationMode == "auto",
     val beforeEInk: ReaderPagingState? = null, val eInkPreferences: ReaderPagingState? = null,
-    val toolbarTransparency: Float = .25f
+    val toolbarTransparency: Float = .25f,
+    val prefetchChapters: Int = 3, val prefetchWifiOnly: Boolean = true
 ) {
     val resolvedToolbarTransparency get() = if(toolbarTransparency.isFinite()) toolbarTransparency.coerceIn(0f, 1f) else .25f
     // Compatibility with settings saved before black-and-white became a theme choice.
@@ -134,7 +138,10 @@ import kotlinx.serialization.Serializable
     val theme: String = "system", val reducedMotion: Boolean = false, val historyPaused: Boolean = false, val autoCollapseCloudFilters: Boolean = true,
     val pending: List<PendingAction> = emptyList(), val updateNotifications: Boolean = false,
     val blockedUsers: Set<String> = emptySet(), val hideNovelComments: Boolean = false, val wifiOnly: Boolean = false,
-    val personalGlossaries: Map<String, Map<String, String>> = emptyMap()
+    val personalGlossaries: Map<String, Map<String, String>> = emptyMap(),
+    val autoSync: Boolean = true, val syncStatus: Map<String, CloudSyncStatus> = emptyMap(),
+    val updateSnapshots: Map<String, BookUpdateSnapshot> = emptyMap(),
+    val bookUpdates: Map<String, BookUpdateInfo> = emptyMap()
 )
 @Serializable data class SettingsBackup(val version: Int = 1, val reader: ReaderSettings = ReaderSettings(), val theme: String = "system", val reducedMotion: Boolean = false, val blockedBooks: Set<String> = emptySet(), val blockedTags: Set<String> = emptySet(), val blockedUsers: Set<String> = emptySet(), val hideNovelComments: Boolean = false, val wifiOnly: Boolean = false, val autoCollapseCloudFilters: Boolean = true)
 

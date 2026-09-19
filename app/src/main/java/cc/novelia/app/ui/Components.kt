@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.*
 import coil.compose.AsyncImage
 import coil.decode.DataSource
@@ -53,6 +54,28 @@ import java.time.format.DateTimeFormatter
     }
 }
 val LocalReducedMotion = staticCompositionLocalOf { false }
+
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable fun TagList(tags: List<String>, c: AppController) {
+    val entries by c.app.keywords.state.collectAsStateWithLifecycle()
+    val persistenceError by c.app.keywords.persistenceError.collectAsStateWithLifecycle()
+    val lookup = remember(entries) { entries.associateBy { it.original } }
+    var editing by remember { mutableStateOf<KeywordEntry?>(null) }
+    FlowRow(Modifier.padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        tags.distinct().forEach { tag ->
+            val entry = lookup[tag] ?: KeywordEntry(tag)
+            InputChip(false, onClick = {
+                c.app.keywords.markUsed(listOf(tag))
+                val expression = if(KeywordCatalog.canSearch(tag)) "$tag$" else tag
+                c.go("discover?query=${android.net.Uri.encode(expression)}")
+            }, label = { Text(entry.label) }, trailingIcon = {
+                IconButton(onClick = { editing = entry }, modifier = Modifier.size(48.dp)) { Icon(Icons.Outlined.Edit, "编辑标签翻译 $tag", Modifier.size(16.dp)) }
+            })
+        }
+    }
+    persistenceError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 20.dp)) }
+    editing?.let { KeywordEditorDialog(it, { editing = null }, c.app.keywords::setTranslation) }
+}
 
 @Composable fun <T> AsyncContent(key: Any?, load: suspend () -> T, modifier: Modifier = Modifier, refreshKey: Any? = Unit, content: @Composable (T, () -> Unit) -> Unit) {
     var refresh by remember(key) { mutableIntStateOf(0) }

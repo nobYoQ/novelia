@@ -78,13 +78,14 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
         val generation = store.cacheGeneration.value
         if (!forceNetwork) {
             metadataCache.read(key, maxAgeMillis = 5 * 60_000L, newerThan = mutation)?.let { raw ->
-                runCatching { appJson.decodeFromString<T>(raw) }.getOrNull()?.let { return@withContext it }
+                runCatching { appJson.decodeFromString<T>(raw) }.getOrNull()?.let { api.observeKeywords(it); return@withContext it }
             }
         }
         try {
             val fetchedAt = System.currentTimeMillis()
             val raw = api.request("GET", path, binding = binding)
             val parsed = appJson.decodeFromString<T>(raw)
+            api.observeKeywords(parsed)
             if (mutation == api.lastMutationAt && generation == store.cacheGeneration.value && account == (session.profile.value?.username ?: "guest")) {
                 runCatching { store.withCacheGeneration(generation) { metadataCache.write(key, raw, fetchedAt) } }
             }
@@ -92,7 +93,7 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
         } catch (e: IOException) {
             if (e is ApiException) throw e
             val cached = metadataCache.read(key) ?: throw e
-            runCatching { appJson.decodeFromString<T>(cached) }.getOrElse { throw e }
+            runCatching { appJson.decodeFromString<T>(cached).also { api.observeKeywords(it) } }.getOrElse { throw e }
         }
     }
     suspend fun chapter(ref: BookRef, id: String, forceNetwork: Boolean = false): Pair<Chapter, Boolean> = withContext(Dispatchers.IO) {
@@ -100,27 +101,37 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
             val doc = store.document(ref.id); val index = doc.chapters.indexOfFirst { it.id == id }.coerceAtLeast(0); val c = doc.chapters[index]
             Chapter(c.title, c.title, doc.name, doc.name, doc.chapters.getOrNull(index - 1)?.id, doc.chapters.getOrNull(index + 1)?.id, c.paragraphs, c.paragraphs) to true
         } else {
+            val binding = session.capture()
             val generation = store.cacheGeneration.value
             val cached = store.cachedChapter(ref, id)
             if(cached != null && !forceNetwork) return@withContext cached to true
-            try { api.chapter(ref, id).also { chapter -> runCatching { store.withCacheGeneration(generation) { store.cacheChapter(ref, id, chapter) } } } to false }
-            catch(e: IOException) { cached?.let { it to true } ?: throw e }
+            try {
+                val chapter = appJson.decodeFromString<Chapter>(api.request("GET", "novel/${ref.key}/chapter/${encodeSegment(id)}", binding = binding))
+                session.ensureCurrent(binding)
+                runCatching { store.withCacheGeneration(generation) { store.cacheChapter(ref, id, chapter); recordChapterFreshness(store, ref, id) } }
+                chapter to false
+            } catch(e: IOException) {
+                session.ensureCurrent(binding)
+                if(forceNetwork || e is ApiException) throw e
+                cached?.let { it to true } ?: throw e
+            }
         }
     }
-    suspend fun cloudMutation(method: String, path: String, body: String? = null, contentType: String = "application/json") {
+    /** Returns true when the intent is still queued for a later synchronization. */
+    suspend fun cloudMutation(method: String, path: String, body: String? = null, contentType: String = "application/json"): Boolean {
         val binding = session.capture()
         val account = binding.account ?: throw ApiException(401, "请先登录")
         val action = PendingAction(UUID.randomUUID().toString(), account, method, path, body, contentType)
         val queued = api.cloudMutations.submit(action, { transform -> store.update { it.copy(pending = transform(it.pending)) } }, { session.ensureCurrent(binding) }) { item ->
             api.request(item.method, item.path, item.body, contentType = item.contentType, binding = binding)
         }
-        if (queued) message("网络不可用，操作已加入待同步列表")
+        if (queued) message("操作已保存，等待同步")
+        return queued
     }
-    fun syncPending() = action("同步完成") {
-        val binding = session.capture()
-        val account = binding.account ?: throw ApiException(401, "请先登录")
-        api.cloudMutations.replay(account, { store.state.value.pending }, { transform -> store.update { it.copy(pending = transform(it.pending)) } }) { item ->
-            api.request(item.method, item.path, item.body, contentType = item.contentType, binding = binding)
-        }
+    fun syncPending() = action {
+        val account = session.profile.value?.username ?: throw ApiException(401, "请先登录")
+        val result = synchronizePending(app, manual = true)
+        val remaining = store.state.value.pending.count { it.account == account }
+        message(if(remaining == 0) "同步完成" else "已同步 ${result.completed} 项，仍有 $remaining 项待处理，可在同步状态中查看原因")
     }
 }

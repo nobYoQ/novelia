@@ -36,7 +36,7 @@ import kotlinx.serialization.encodeToString
     fun complete() {
         if(busy) return
         busy = true; scope.launch {
-            try { if(c.session.refresh()) { c.back(); c.afterLogin?.let { c.afterLogin = null; it() }; c.message("已登录") } else error = "尚未取得登录会话。请在下方完成登录，再点「完成登录」。" }
+            try { if(c.session.refresh()) { if(c.store.state.value.autoSync) c.session.profile.value?.username?.let { CloudSyncWorker.enqueue(c.app, it) }; c.back(); c.afterLogin?.let { c.afterLogin = null; it() }; c.message("已登录") } else error = "尚未取得登录会话。请在下方完成登录，再点「完成登录」。" }
             catch(e: Exception) { error = e.friendlyMessage() } finally { busy = false }
         }
     }
@@ -87,7 +87,9 @@ import kotlinx.serialization.encodeToString
         item { MenuRow("阅读与外观", "字号、主题、动效与朗读", Icons.Outlined.Tune, { c.go("settings") }) }
         item { MenuRow("屏蔽管理", "管理作品和标签屏蔽", Icons.Outlined.Block, { c.go("blocked") }) }
         val pending = state.pending.count { it.account == profile?.username }
-        if(pending > 0) item { MenuRow("待同步操作", "$pending 项 · 点击重试同步", Icons.Outlined.SyncProblem, c::syncPending) }
+        item { MenuRow("同步状态", if(pending > 0) "$pending 项待处理 · 查看原因与重试" else "自动同步、状态与重试", Icons.Outlined.Sync, { c.go("sync") }) }
+        item { MenuRow("阅读资料备份", "书架、进度、笔记、本地小说与标签词典", Icons.Outlined.Backup, { c.go("backup") }) }
+        item { MenuRow("书架更新", "新增章节、译文与分卷", Icons.Outlined.NewReleases, { c.go("updates") }) }
         item { MenuRow("帮助与关于", "使用说明、版本与反馈", Icons.Outlined.Info, { c.go("about") }) }
     } }
     if(logout) ConfirmDialog("退出当前账号？", "本地小说、下载和笔记仍保留在此设备。云端操作需要重新登录。", { logout = false }) { c.action("已退出登录") { c.session.logout() } }
@@ -111,6 +113,7 @@ import kotlinx.serialization.encodeToString
         item { TogglePreference("隐藏小说评论", "论坛文章评论仍然显示", state.hideNovelComments) { value -> c.store.update { it.copy(hideNovelComments = value) } } }
         item { MenuRow("阅读与图片缓存", if(clearing) "正在清理…" else size?.let { "已使用 ${"%.1f".format(it / 1024.0 / 1024.0)} MB · 点击清理" } ?: "正在计算缓存大小…", Icons.Outlined.Storage, { if (!clearing) clear = true }) }
         item { MenuRow("导出普通设置", "阅读偏好、外观与屏蔽名单，不含账号会话", Icons.Outlined.IosShare, { exportSettings.launch("novelia-settings.json") }) }
+        item { MenuRow("备份与恢复阅读资料", "迁移书架、阅读进度、笔记和本地小说", Icons.Outlined.Backup, { c.go("backup") }) }
         item { MenuRow("导入普通设置", "从 Novelia 设置文件恢复偏好", Icons.Outlined.FileOpen, { importSettings.launch(arrayOf("application/json", "*/*")) }) }
         item { MetaParagraph("本地数据", "小说文件、书签和偏好保存在此设备。系统文件选择器负责导入和导出，无需申请全部存储空间权限。卸载应用会删除这些数据，请先导出需要保留的文件。") }
     } }
