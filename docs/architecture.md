@@ -9,8 +9,8 @@
 | 目录 | 责任 | 主要入口 |
 | --- | --- | --- |
 | `app/src/main/java/cc/novelia/app` | Application、Activity、生命周期与导航装配 | [NoveliaApplication.kt](../app/src/main/java/cc/novelia/app/NoveliaApplication.kt)、[MainActivity.kt](../app/src/main/java/cc/novelia/app/MainActivity.kt) |
-| `data/` | DTO、持久状态、会话、HTTP、同步与缓存 | [Models.kt](../app/src/main/java/cc/novelia/app/data/Models.kt)、[LocalStore.kt](../app/src/main/java/cc/novelia/app/data/LocalStore.kt)、[NoveliaApi.kt](../app/src/main/java/cc/novelia/app/data/NoveliaApi.kt) |
-| `ui/` | Compose 页面、控制器、交互状态、Markdown/WebView 桥接 | [AppController.kt](../app/src/main/java/cc/novelia/app/ui/AppController.kt)、[Components.kt](../app/src/main/java/cc/novelia/app/ui/Components.kt) |
+| `data/` | 按 13 个职责包组织 DTO、持久状态、会话、HTTP、同步与缓存 | [model/](../app/src/main/java/cc/novelia/app/data/model)、[LocalStore.kt](../app/src/main/java/cc/novelia/app/data/storage/LocalStore.kt)、[NoveliaApi.kt](../app/src/main/java/cc/novelia/app/data/network/NoveliaApi.kt) |
+| `ui/` | 按功能划分的 Compose 页面，以及导航、共享组件、主题、Markdown/WebView 桥接 | [源码目录导航](source-layout.md)、[AppController.kt](../app/src/main/java/cc/novelia/app/ui/navigation/AppController.kt)、[Screen.kt](../app/src/main/java/cc/novelia/app/ui/components/Screen.kt) |
 | `reader/` | 阅读投影、锚点、静态分页、搜索、系统 TTS | [Paragraphs.kt](../app/src/main/java/cc/novelia/app/reader/Paragraphs.kt)、[ReadAloudService.kt](../app/src/main/java/cc/novelia/app/reader/ReadAloudService.kt) |
 | `files/` | 文件解析、转换、下载、导出和清理 | [EpubReader.kt](../app/src/main/java/cc/novelia/app/files/EpubReader.kt)、[DownloadWorker.kt](../app/src/main/java/cc/novelia/app/files/DownloadWorker.kt) |
 | `app/src/test/` | JVM 单元和本地 HTTP 合约测试 | [测试指南](testing.md) |
@@ -19,6 +19,8 @@
 | `gradle/`、`scripts/` | Wrapper、许可生成、手动发行附件 | [发布维护](release-and-maintenance.md) |
 
 `app` 依赖 `benchmark` 作为 Baseline Profile 的生成来源，但 `benchmark` 不是应用运行时库。自动 profile 生成默认关闭。
+
+`ui/` 使用 17 个子包组织源码，目录与 Kotlin package 一致。`shelf`、`discover`、`book`、`reader`、`community` 等功能包各自保留页面与专用组件；`components`、`navigation`、`theme`、`markdown`、`feedback` 承担跨界面职责。这些是同一 Gradle 模块内的源码边界，不是独立构建模块。阅读器的 Compose 界面位于 `ui/reader/`，正文投影、搜索和 TTS 等核心实现仍位于顶层 `reader/`。
 
 ## 启动与状态流
 
@@ -75,13 +77,15 @@ flowchart TD
 
 | 需求 | 首先查看 |
 | --- | --- |
-| 本地/云端书架、收藏夹、分卷 | [AdaptiveLibrary.kt](../app/src/main/java/cc/novelia/app/ui/AdaptiveLibrary.kt)、[CloudShelf.kt](../app/src/main/java/cc/novelia/app/ui/CloudShelf.kt)、[WenkuVolumes.kt](../app/src/main/java/cc/novelia/app/data/WenkuVolumes.kt) |
-| 发现、排行榜、筛选、查询表达式 | [DiscoverScreens.kt](../app/src/main/java/cc/novelia/app/ui/DiscoverScreens.kt)、[SearchExpression.kt](../app/src/main/java/cc/novelia/app/data/SearchExpression.kt)、[SearchAssistantPanel.kt](../app/src/main/java/cc/novelia/app/ui/SearchAssistantPanel.kt) |
-| 书籍详情、文库编辑、术语 | [BookScreen.kt](../app/src/main/java/cc/novelia/app/ui/BookScreen.kt)、[WenkuEditor.kt](../app/src/main/java/cc/novelia/app/ui/WenkuEditor.kt)、[WenkuVolumeSheets.kt](../app/src/main/java/cc/novelia/app/ui/WenkuVolumeSheets.kt) |
-| 社区文章、评论、草稿 | [CommunityScreens.kt](../app/src/main/java/cc/novelia/app/ui/CommunityScreens.kt)、[EditorDraft.kt](../app/src/main/java/cc/novelia/app/ui/EditorDraft.kt)、[MarkdownEditor.kt](../app/src/main/java/cc/novelia/app/ui/MarkdownEditor.kt) |
-| 阅读偏好、账号与帮助 | [AccountScreens.kt](../app/src/main/java/cc/novelia/app/ui/AccountScreens.kt)、[ReaderSheet.kt](../app/src/main/java/cc/novelia/app/ui/ReaderSheet.kt) |
-| 更新检查与提醒 | [BookUpdates.kt](../app/src/main/java/cc/novelia/app/data/BookUpdates.kt)、[UpdateWorker.kt](../app/src/main/java/cc/novelia/app/data/UpdateWorker.kt)、[UpdateCheckOrder.kt](../app/src/main/java/cc/novelia/app/data/UpdateCheckOrder.kt) |
-| 备份与损坏恢复 | [LibraryBackupScreen.kt](../app/src/main/java/cc/novelia/app/ui/LibraryBackupScreen.kt)、[LibraryBackupService.kt](../app/src/main/java/cc/novelia/app/data/LibraryBackupService.kt)、[LibraryRecovery.kt](../app/src/main/java/cc/novelia/app/data/LibraryRecovery.kt) |
+| 本地/云端书架、收藏夹、分卷 | [AdaptiveLibrary.kt](../app/src/main/java/cc/novelia/app/ui/shelf/AdaptiveLibrary.kt)、[CloudShelf.kt](../app/src/main/java/cc/novelia/app/ui/shelf/CloudShelf.kt)、[WenkuVolumes.kt](../app/src/main/java/cc/novelia/app/data/library/WenkuVolumes.kt) |
+| 发现、排行榜、筛选、查询表达式 | [DiscoverScreen.kt](../app/src/main/java/cc/novelia/app/ui/discover/DiscoverScreen.kt)、[RankScreen.kt](../app/src/main/java/cc/novelia/app/ui/discover/RankScreen.kt)、[SearchExpression.kt](../app/src/main/java/cc/novelia/app/data/catalog/SearchExpression.kt)、[SearchAssistantPanel.kt](../app/src/main/java/cc/novelia/app/ui/discover/SearchAssistantPanel.kt) |
+| 书籍详情、文库编辑、术语 | [BookScreen.kt](../app/src/main/java/cc/novelia/app/ui/book/BookScreen.kt)、[WenkuEditor.kt](../app/src/main/java/cc/novelia/app/ui/book/WenkuEditor.kt)、[GlossaryScreen.kt](../app/src/main/java/cc/novelia/app/ui/book/GlossaryScreen.kt) |
+| 社区列表与文章 | [CommunityScreen.kt](../app/src/main/java/cc/novelia/app/ui/community/CommunityScreen.kt)、[ArticleScreen.kt](../app/src/main/java/cc/novelia/app/ui/community/ArticleScreen.kt) |
+| 发帖、评论、草稿 | [ComposeArticleScreen.kt](../app/src/main/java/cc/novelia/app/ui/community/ComposeArticleScreen.kt)、[CommentsPanel.kt](../app/src/main/java/cc/novelia/app/ui/community/CommentsPanel.kt)、[EditorDraft.kt](../app/src/main/java/cc/novelia/app/ui/markdown/EditorDraft.kt) |
+| 阅读偏好与设置 | [SettingsScreen.kt](../app/src/main/java/cc/novelia/app/ui/settings/SettingsScreen.kt)、[ReaderPreferences.kt](../app/src/main/java/cc/novelia/app/ui/reader/ReaderPreferences.kt) |
+| 账号、登录与帮助 | [ProfileScreen.kt](../app/src/main/java/cc/novelia/app/ui/account/ProfileScreen.kt)、[LoginScreen.kt](../app/src/main/java/cc/novelia/app/ui/account/LoginScreen.kt)、[AboutScreen.kt](../app/src/main/java/cc/novelia/app/ui/about/AboutScreen.kt) |
+| 更新检查与提醒 | [BookUpdates.kt](../app/src/main/java/cc/novelia/app/data/updates/BookUpdates.kt)、[UpdateWorker.kt](../app/src/main/java/cc/novelia/app/data/updates/UpdateWorker.kt)、[UpdateCheckOrder.kt](../app/src/main/java/cc/novelia/app/data/updates/UpdateCheckOrder.kt) |
+| 备份与损坏恢复 | [LibraryBackupScreen.kt](../app/src/main/java/cc/novelia/app/ui/settings/LibraryBackupScreen.kt)、[LibraryBackupService.kt](../app/src/main/java/cc/novelia/app/data/backup/LibraryBackupService.kt)、[LibraryRecovery.kt](../app/src/main/java/cc/novelia/app/data/storage/LibraryRecovery.kt) |
 
 ## 需要保持的边界
 

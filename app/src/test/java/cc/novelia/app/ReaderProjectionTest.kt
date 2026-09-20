@@ -1,7 +1,7 @@
 package cc.novelia.app
 
-import cc.novelia.app.data.Chapter
-import cc.novelia.app.data.ReaderSettings
+import cc.novelia.app.data.model.Chapter
+import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.reader.findNextReadingParagraph
 import cc.novelia.app.reader.prepareReadingParagraphs
 import cc.novelia.app.reader.projectParagraphs

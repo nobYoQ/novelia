@@ -2,7 +2,11 @@ package cc.novelia.app.files
 
 import android.net.Uri
 import android.provider.OpenableColumns
-import cc.novelia.app.data.*
+import cc.novelia.app.data.library.withVolumeParent
+import cc.novelia.app.data.model.BookCard
+import cc.novelia.app.data.model.BookRef
+import cc.novelia.app.data.model.DownloadEntry
+import cc.novelia.app.data.storage.LocalStore
 import java.io.File
 import java.io.InputStream
 import kotlinx.coroutines.Dispatchers

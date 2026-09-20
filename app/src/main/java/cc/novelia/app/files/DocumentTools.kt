@@ -1,13 +1,7 @@
 package cc.novelia.app.files
 
-import cc.novelia.app.data.LocalChapter
-import cc.novelia.app.data.LocalDocument
-import org.jsoup.Jsoup
-import org.jsoup.parser.Parser
-import org.jsoup.nodes.Element
-import org.jsoup.nodes.Node
-import org.jsoup.nodes.TextNode
-import org.jsoup.select.NodeVisitor
+import cc.novelia.app.data.model.LocalChapter
+import cc.novelia.app.data.model.LocalDocument
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.InputStream
@@ -15,6 +9,12 @@ import java.nio.ByteBuffer
 import java.nio.charset.CodingErrorAction
 import java.util.UUID
 import java.util.zip.ZipInputStream
+import org.jsoup.Jsoup
+import org.jsoup.nodes.Element
+import org.jsoup.nodes.Node
+import org.jsoup.nodes.TextNode
+import org.jsoup.parser.Parser
+import org.jsoup.select.NodeVisitor
 
 /** Imports are bounded both compressed and expanded. No archive paths are written to disk. */
 object DocumentTools {

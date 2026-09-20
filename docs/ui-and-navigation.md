@@ -6,13 +6,16 @@
 
 应用采用单 Activity + Jetpack Compose + Navigation Compose。当前代码由 Composable、`AppController` 和应用级数据服务协作，不存在一套每页独立 ViewModel 的框架；扩展功能时应先遵循现有边界，避免同时维护两份页面和业务状态。
 
+界面源码按 [17 个功能与共享子包](source-layout.md) 分类，独立页面各有文件。修改页面时先进入对应的 `ui/<功能>/`；页面专用面板、排序和展示逻辑与页面相邻，跨页面组件在 `ui/components/`。导航控制器、主题、Markdown 和反馈分别放在 `navigation/`、`theme/`、`markdown/` 和 `feedback/`。
+
 | 位置 | 职责 |
 | --- | --- |
 | [MainActivity.kt](../app/src/main/java/cc/novelia/app/MainActivity.kt) | 等待书库初始化、提供主题和交互模式、处理外部 Intent、建立导航图、展示全局 Snackbar 和收藏面板 |
-| [AppController.kt](../app/src/main/java/cc/novelia/app/ui/AppController.kt) | 页面共享的导航、登录续办、消息、书籍/章节入口、详情缓存与云操作入口 |
+| [AppController.kt](../app/src/main/java/cc/novelia/app/ui/navigation/AppController.kt) | 页面共享的导航、登录续办、消息、书籍/章节入口、详情缓存与云操作入口 |
 | [NoveliaApplication.kt](../app/src/main/java/cc/novelia/app/NoveliaApplication.kt) | 持有 `store`、`api`、`session` 等应用级服务 |
-| [Components.kt](../app/src/main/java/cc/novelia/app/ui/Components.kt) | `Screen`、`AsyncContent`、空态、书籍行、封面、选择项、错误提示等通用组件 |
-| [Models.kt](../app/src/main/java/cc/novelia/app/data/Models.kt) | `LibraryState`、阅读偏好、进度等持久化模型 |
+| [Screen.kt](../app/src/main/java/cc/novelia/app/ui/components/Screen.kt)、[AsyncContent.kt](../app/src/main/java/cc/novelia/app/ui/components/AsyncContent.kt) | 页面容器、异步加载与刷新状态 |
+| [BookComponents.kt](../app/src/main/java/cc/novelia/app/ui/components/BookComponents.kt)、[PreferenceComponents.kt](../app/src/main/java/cc/novelia/app/ui/components/PreferenceComponents.kt) | 书籍行与封面、选择项、菜单行及确认输入组件；其他共享组件见 `ui/components/` |
+| [LibraryModels.kt](../app/src/main/java/cc/novelia/app/data/model/LibraryModels.kt)、[ReaderSettings.kt](../app/src/main/java/cc/novelia/app/data/model/ReaderSettings.kt) | `LibraryState`、阅读偏好、进度等持久化模型 |
 
 启动时，`MainActivity` 等待 `app.initialization`，然后才创建正常页面。`ReportDrawnWhen` 同样受初始化状态控制。如果 `store.recoveryIssue` 不为空，主界面进入书库备份/恢复界面，避免在需要恢复的数据上继续正常操作。新增启动逻辑不能绕过这一分支。
 
@@ -62,7 +65,7 @@ c.openMarkdownLink(url, baseUrl)  // Markdown 链接的统一解析与分派
 
 Activity 接受 `intent.dataString`，没有时再取 `Intent.EXTRA_TEXT`。待处理链接放在 `MutableStateFlow` 中；处理后清空。Activity 重建时仅恢复尚未消费的 `novelia.pendingLink`，不会再次处理已经打开过的启动链接。
 
-`openLink` 经 [BookLinks.kt](../app/src/main/java/cc/novelia/app/data/BookLinks.kt) 解析书籍或帖子，无法识别的文本进入发现页搜索。Markdown 使用 [MarkdownLinks.kt](../app/src/main/java/cc/novelia/app/data/MarkdownLinks.kt) 的独立规则：
+`openLink` 经 [BookLinks.kt](../app/src/main/java/cc/novelia/app/data/catalog/BookLinks.kt) 解析书籍或帖子，无法识别的文本进入发现页搜索。Markdown 使用 [MarkdownLinks.kt](../app/src/main/java/cc/novelia/app/data/markdown/MarkdownLinks.kt) 的独立规则：
 
 1. 根据文档地址解析相对路径、根路径或 `www.` 链接，只接受具备主机名、无 URL 用户信息的 HTTP(S) 地址。
 2. 已支持的书籍、章节、帖子及部分原站列表页面转为原生路由。
@@ -90,7 +93,7 @@ Activity 接受 `intent.dataString`，没有时再取 `Intent.EXTRA_TEXT`。待�
 
 ### 异步内容与刷新
 
-[AsyncContent](../app/src/main/java/cc/novelia/app/ui/Components.kt) 使用三个触发因素：实体 `key`、外部 `refreshKey` 和内部重试计数。
+[AsyncContent](../app/src/main/java/cc/novelia/app/ui/components/AsyncContent.kt) 使用三个触发因素：实体 `key`、外部 `refreshKey` 和内部重试计数。
 
 - 实体键变化：建立新的结果状态，避免展示上一实体的结果。
 - 同一实体刷新：保留成功内容和它的组合实例，在上方显示刷新进度。
@@ -114,15 +117,15 @@ Activity 接受 `intent.dataString`，没有时再取 `Intent.EXTRA_TEXT`。待�
 
 因为侧边导航也占宽度，不能只根据整个窗口宽度断言某个子页面一定进入双栏。
 
-[AdaptiveLibrary.kt](../app/src/main/java/cc/novelia/app/ui/AdaptiveLibrary.kt) 用 `movableContentOf` 在调整窗口时移动仍存活的组合，并用 `SaveableStateProvider("shelf")`、`SaveableStateProvider("detail:$key")` 保存隐藏面板状态。窄屏选中详情时隐藏底部导航；返回先清除选中项。窄屏直接点击本地小说仍保持一次点击进入正文。
+[AdaptiveLibrary.kt](../app/src/main/java/cc/novelia/app/ui/shelf/AdaptiveLibrary.kt) 用 `movableContentOf` 在调整窗口时移动仍存活的组合，并用 `SaveableStateProvider("shelf")`、`SaveableStateProvider("detail:$key")` 保存隐藏面板状态。窄屏选中详情时隐藏底部导航；返回先清除选中项。窄屏直接点击本地小说仍保持一次点击进入正文。
 
-修改这部分时，必须验证“宽屏选中一本书 → 缩窄 → 返回 → 再扩大”以及实体切换，不能仅检查两张静态截图。对应测试是 [AdaptiveLibraryTest](../app/src/androidTest/java/cc/novelia/app/AdaptiveLibraryTest.kt)、[ReaderAdaptiveUiTest](../app/src/androidTest/java/cc/novelia/app/ReaderAdaptiveUiTest.kt) 和 [LibraryInteractionTest](../app/src/androidTest/java/cc/novelia/app/LibraryInteractionTest.kt)。
+修改这部分时，必须验证“宽屏选中一本书 → 缩窄 → 返回 → 再扩大”以及实体切换，不能仅检查两张静态截图。对应测试是 [AdaptiveLibraryTest](../app/src/androidTest/java/cc/novelia/app/ui/shelf/AdaptiveLibraryTest.kt)、[ReaderAdaptiveUiTest](../app/src/androidTest/java/cc/novelia/app/ui/reader/ReaderAdaptiveUiTest.kt) 和 [LibraryInteractionTest](../app/src/androidTest/java/cc/novelia/app/ui/shelf/LibraryInteractionTest.kt)。
 
 ## 5. 主题、电子纸与减少动效
 
-[Theme.kt](../app/src/main/java/cc/novelia/app/ui/Theme.kt) 定义普通界面的浅色/深色配色和文字层级。阅读页的 `readerColors()` 单独支持跟随应用、纸张、浅色、深色和黑白主题，设置面板保持应用主题。不要以切换全局 `MaterialTheme` 的方式实现一页正文背景。
+[Theme.kt](../app/src/main/java/cc/novelia/app/ui/theme/Theme.kt) 定义普通界面的浅色/深色配色和文字层级。阅读页的 `readerColors()` 单独支持跟随应用、纸张、浅色、深色和黑白主题，设置面板保持应用主题。不要以切换全局 `MaterialTheme` 的方式实现一页正文背景。
 
-[AppInteractionMode.kt](../app/src/main/java/cc/novelia/app/ui/AppInteractionMode.kt) 将下列条件合并为静态交互：电子纸、用户减少动效、系统动画关闭、Compose 动画缩放为零。通过 `LocalEInkMode`、`LocalReducedMotion`、ripple、indication 和 overscroll 的 CompositionLocal 传播。
+[AppInteractionMode.kt](../app/src/main/java/cc/novelia/app/ui/theme/AppInteractionMode.kt) 将下列条件合并为静态交互：电子纸、用户减少动效、系统动画关闭、Compose 动画缩放为零。通过 `LocalEInkMode`、`LocalReducedMotion`、ripple、indication 和 overscroll 的 CompositionLocal 传播。
 
 二者影响范围不同：
 
@@ -135,10 +138,11 @@ Activity 接受 `intent.dataString`，没有时再取 `Intent.EXTRA_TEXT`。待�
 
 | 需求 | 组件/文件 |
 | --- | --- |
-| 页面内容变化、按压反馈 | [Motion.kt](../app/src/main/java/cc/novelia/app/ui/Motion.kt) 的 `MotionContent`、`motionClickable`、`pressFeedback`、`AppMotion` |
-| 长列表、普通滚动区 | [AppPaging.kt](../app/src/main/java/cc/novelia/app/ui/AppPaging.kt) 的 `AppLazyColumn`、`AppScrollColumn`、`appVerticalScroll` |
-| 弹窗、确认框、菜单 | [AppDialogs.kt](../app/src/main/java/cc/novelia/app/ui/AppDialogs.kt) 的 `AppDialog`、`AppAlertDialog`、`AppDropdownMenu` |
-| 底部面板 | [ReaderSheet.kt](../app/src/main/java/cc/novelia/app/ui/ReaderSheet.kt) 的 `AppSheet` / `ReaderSheet` |
+| 页面内容变化、按压反馈 | [Motion.kt](../app/src/main/java/cc/novelia/app/ui/theme/Motion.kt) 的 `MotionContent`、`motionClickable`、`pressFeedback`、`AppMotion` |
+| 长列表、普通滚动区 | [AppPaging.kt](../app/src/main/java/cc/novelia/app/ui/components/AppPaging.kt) 的 `AppLazyColumn`、`AppScrollColumn`、`appVerticalScroll` |
+| 弹窗、确认框、菜单 | [AppDialogs.kt](../app/src/main/java/cc/novelia/app/ui/components/AppDialogs.kt) 的 `AppDialog`、`AppAlertDialog`、`AppDropdownMenu` |
+| 通用底部面板 | [AppSheet.kt](../app/src/main/java/cc/novelia/app/ui/components/AppSheet.kt) 的 `AppSheet` |
+| 阅读器面板 | [ReaderSheet.kt](../app/src/main/java/cc/novelia/app/ui/reader/ReaderSheet.kt) 的 `ReaderSheet` |
 
 静态模式下 `AppSheet` 使用有关闭按钮的对话框；窗口动画也必须由 `AppDialog` 单独关闭，单纯把 Compose 动画时间设为零不够。`AppPaging` 禁止惯性滑动，以抬手后一次翻一屏的方式输入，保留最多 48 dp、且不超过视口 20% 的重叠；同时提供按钮、PageUp/PageDown、滚轮节流和无障碍语义。
 
@@ -148,54 +152,54 @@ Activity 接受 `intent.dataString`，没有时再取 `Intent.EXTRA_TEXT`。待�
 
 ### 渲染管线
 
-[MarkdownText.kt](../app/src/main/java/cc/novelia/app/ui/MarkdownText.kt) 使用 Markwon/CommonMark 解析及 Android `TextView` 渲染，通过 `AndroidView` 嵌入 Compose；不是用 WebView 渲染 Markdown。渲染器包含表格、图片、站点扩展和剧透支持。调用方可以共享 `rememberMarkdownRenderer(c)`，避免为一列评论重复创建渲染器。
+[MarkdownText.kt](../app/src/main/java/cc/novelia/app/ui/markdown/MarkdownText.kt) 使用 Markwon/CommonMark 解析及 Android `TextView` 渲染，通过 `AndroidView` 嵌入 Compose；不是用 WebView 渲染 Markdown。渲染器包含表格、图片、站点扩展和剧透支持。调用方可以共享 `rememberMarkdownRenderer(c)`，避免为一列评论重复创建渲染器。
 
 | 能力 | 实现与约束 |
 | --- | --- |
-| 评分、折叠块、删除线、裸链接 | [SiteMarkdownParser.kt](../app/src/main/java/cc/novelia/app/ui/SiteMarkdownParser.kt)、[SiteMarkdownPlugin.kt](../app/src/main/java/cc/novelia/app/ui/SiteMarkdownPlugin.kt)；扩展在 AST 层处理，保留代码块、行内代码、引用定义与已链接图片 |
-| 剧透显示与点击 | [SpoilerMarkdown.kt](../app/src/main/java/cc/novelia/app/ui/SpoilerMarkdown.kt) |
-| 文档内标题锚点 | [MarkdownAnchors.kt](../app/src/main/java/cc/novelia/app/ui/MarkdownAnchors.kt)；先等待实际文字布局，再滚动到标题 |
-| 工具栏与文本选择 | [MarkdownEditor.kt](../app/src/main/java/cc/novelia/app/ui/MarkdownEditor.kt)、[MarkdownToolbar.kt](../app/src/main/java/cc/novelia/app/ui/MarkdownToolbar.kt) |
-| 插入模板 | [MarkdownTemplates.kt](../app/src/main/java/cc/novelia/app/data/MarkdownTemplates.kt) |
-| 点击链接或图片 | 链接按 `documentUrl` 解析；图片地址处理器当前使用原站默认基地址，点击后用 [IllustrationViewer.kt](../app/src/main/java/cc/novelia/app/ui/IllustrationViewer.kt) 查看 |
+| 评分、折叠块、删除线、裸链接 | [SiteMarkdownParser.kt](../app/src/main/java/cc/novelia/app/ui/markdown/SiteMarkdownParser.kt)、[SiteMarkdownPlugin.kt](../app/src/main/java/cc/novelia/app/ui/markdown/SiteMarkdownPlugin.kt)；扩展在 AST 层处理，保留代码块、行内代码、引用定义与已链接图片 |
+| 剧透显示与点击 | [SpoilerMarkdown.kt](../app/src/main/java/cc/novelia/app/ui/markdown/SpoilerMarkdown.kt) |
+| 文档内标题锚点 | [MarkdownAnchors.kt](../app/src/main/java/cc/novelia/app/ui/markdown/MarkdownAnchors.kt)；先等待实际文字布局，再滚动到标题 |
+| 工具栏与文本选择 | [MarkdownEditor.kt](../app/src/main/java/cc/novelia/app/ui/markdown/MarkdownEditor.kt)、[MarkdownToolbar.kt](../app/src/main/java/cc/novelia/app/ui/markdown/MarkdownToolbar.kt) |
+| 插入模板 | [MarkdownTemplates.kt](../app/src/main/java/cc/novelia/app/data/markdown/MarkdownTemplates.kt) |
+| 点击链接或图片 | 链接按 `documentUrl` 解析；图片地址处理器当前使用原站默认基地址，点击后用 [IllustrationViewer.kt](../app/src/main/java/cc/novelia/app/ui/components/IllustrationViewer.kt) 查看 |
 
 增加语法时应同时考虑解析、Span 渲染、触摸命中、锚点和工具栏输出，不能只对全文做字符串替换。折叠块 `::: details 标题` 支持嵌套，`::: star 数值` 的值限制在 0–5，`~~文字~~` 由专用节点表示；具体兼容行为以解析器和测试为准。
 
 ### 网页兜底
 
-[SiteWebScreen.kt](../app/src/main/java/cc/novelia/app/ui/SiteWebScreen.kt) 承接没有原生等价页的原站地址。为支持原站 SPA，启用 JavaScript 和 DOM storage；关闭文件/content 访问及混合内容，没有原生 JavaScript bridge。链接仍经统一分派，外站交给系统浏览器。页面离开时停止加载并销毁 WebView。
+[SiteWebScreen.kt](../app/src/main/java/cc/novelia/app/ui/web/SiteWebScreen.kt) 承接没有原生等价页的原站地址。为支持原站 SPA，启用 JavaScript 和 DOM storage；关闭文件/content 访问及混合内容，没有原生 JavaScript bridge。链接仍经统一分派，外站交给系统浏览器。页面离开时停止加载并销毁 WebView。
 
-系统返回和工具栏返回都先检查 WebView 当前历史；不能只缓存 `onPageFinished` 时的历史状态，因为 SPA 可以 `pushState`。电子纸和减少动效由 [PagedSiteWebView.kt](../app/src/main/java/cc/novelia/app/ui/PagedSiteWebView.kt) 处理。跨页锚点脚本只读取当前页面 fragment，并在用户操作、页面变化或超时后终止查找。
+系统返回和工具栏返回都先检查 WebView 当前历史；不能只缓存 `onPageFinished` 时的历史状态，因为 SPA 可以 `pushState`。电子纸和减少动效由 [PagedSiteWebView.kt](../app/src/main/java/cc/novelia/app/ui/web/PagedSiteWebView.kt) 处理。跨页锚点脚本只读取当前页面 fragment，并在用户操作、页面变化或超时后终止查找。
 
 ### 编辑与草稿
 
-[CommunityScreens.kt](../app/src/main/java/cc/novelia/app/ui/CommunityScreens.kt) 包含列表、文章、编辑器和评论。文章草稿键为 `article:<id>` 或 `article:new`，评论为 `comment:<site>:<parent>`。文章编辑和预览通过 `SaveableStateHolder` 保存各自状态，输入区根据键盘和剩余高度设定边界。
+社区列表和文章详情分别位于 [CommunityScreen.kt](../app/src/main/java/cc/novelia/app/ui/community/CommunityScreen.kt) 与 [ArticleScreen.kt](../app/src/main/java/cc/novelia/app/ui/community/ArticleScreen.kt)；文章编辑器位于 [ComposeArticleScreen.kt](../app/src/main/java/cc/novelia/app/ui/community/ComposeArticleScreen.kt)，评论位于 [CommentsPanel.kt](../app/src/main/java/cc/novelia/app/ui/community/CommentsPanel.kt)。文章草稿键为 `article:<id>` 或 `article:new`，评论为 `comment:<site>:<parent>`。文章编辑和预览通过 `SaveableStateHolder` 保存各自状态，输入区根据键盘和剩余高度设定边界。
 
-[EditorDraft.kt](../app/src/main/java/cc/novelia/app/ui/EditorDraft.kt) 的 `DraftPersistence` 是编辑器必须保留的约束：离开时读取实时输入；提交成功后仅当当前文本仍等于提交快照时清理草稿。请求期间新增的文字不得被成功回调清掉。文章另有 700 ms 防抖保存，评论在修改时更新草稿。
+[EditorDraft.kt](../app/src/main/java/cc/novelia/app/ui/markdown/EditorDraft.kt) 的 `DraftPersistence` 是编辑器必须保留的约束：离开时读取实时输入；提交成功后仅当当前文本仍等于提交快照时清理草稿。请求期间新增的文字不得被成功回调清掉。文章另有 700 ms 防抖保存，评论在修改时更新草稿。
 
 发布权限与本地编辑能力分开：没有 `canPost` 的账号仍能编辑、预览和保留草稿，提交时再次校验权限。帖子和评论写操作当前直接请求服务端，不应在文档或 UI 中把它们描述成可离线发布的队列。屏蔽用户、隐藏小说评论和已锁定讨论也应在新增展示入口保持一致。
 
 ## 7. 新增界面的实施顺序
 
-1. 找到所属屏幕文件和数据层模型，确定是短暂 UI 状态还是需持久化的数据。
+1. 按 [源码归档规则](source-layout.md) 找到所属功能包、屏幕文件和数据层模型，确定是短暂 UI 状态还是需持久化的数据；新页面使用独立文件并保持 package 与目录一致。
 2. 在导航图注册路由；从 `AppController` 或已有回调进入，正确编码参数并保留返回行为。
 3. 用生命周期感知状态收集、`AsyncContent` 和明确的协程调度完成加载；账号有关的键和结果校验不能省略。
 4. 复用 `Screen`、通用列表和弹窗；同时处理加载、空态、首次失败、刷新失败及重试。
 5. 检查窄屏、横屏、大字号、键盘、宽屏、电子纸和减少动效；检查语义和实体键。
 6. 在接近改动边界的现有测试中添加有意义的回归用例，再更新文档。
 
-素材相关组件为 [MidoriCompanion.kt](../app/src/main/java/cc/novelia/app/ui/MidoriCompanion.kt)、[StickerFeedback.kt](../app/src/main/java/cc/novelia/app/ui/StickerFeedback.kt)。这些组件的存在不代表贴纸获得开源授权；授权状态以根目录 [NOTICE.md](../NOTICE.md) 为准。
+素材相关组件为 [MidoriCompanion.kt](../app/src/main/java/cc/novelia/app/ui/feedback/MidoriCompanion.kt)、[StickerFeedback.kt](../app/src/main/java/cc/novelia/app/ui/feedback/StickerFeedback.kt)。这些组件的存在不代表贴纸获得开源授权；授权状态以根目录 [NOTICE.md](../NOTICE.md) 为准。
 
 ## 8. 回归测试定位
 
 | 修改范围 | 优先检查的现有测试 |
 | --- | --- |
-| 通用加载和刷新 | [AsyncContentTest](../app/src/androidTest/java/cc/novelia/app/AsyncContentTest.kt) |
+| 通用加载和刷新 | [AsyncContentTest](../app/src/androidTest/java/cc/novelia/app/ui/components/AsyncContentTest.kt) |
 | 链接解析 | [ReaderAndLinksTest](../app/src/test/java/cc/novelia/app/ReaderAndLinksTest.kt)、[MarkdownTest](../app/src/test/java/cc/novelia/app/MarkdownTest.kt) |
-| 主题、动画、弹窗 | [MotionTest](../app/src/androidTest/java/cc/novelia/app/MotionTest.kt)、[ReducedMotionSheetTest](../app/src/androidTest/java/cc/novelia/app/ReducedMotionSheetTest.kt)、[StaticOverlayTest](../app/src/androidTest/java/cc/novelia/app/StaticOverlayTest.kt) |
-| 全局电子纸分页 | [AppPagingTest](../app/src/androidTest/java/cc/novelia/app/AppPagingTest.kt)、[EInkAndCloudFilterTest](../app/src/androidTest/java/cc/novelia/app/EInkAndCloudFilterTest.kt) |
-| Markdown 语法与锚点 | [SiteMarkdownTest](../app/src/test/java/cc/novelia/app/SiteMarkdownTest.kt)、[MarkdownAnchorsTest](../app/src/test/java/cc/novelia/app/MarkdownAnchorsTest.kt)、[SiteMarkdownInteractionTest](../app/src/androidTest/java/cc/novelia/app/SiteMarkdownInteractionTest.kt) |
-| Markdown 编辑与草稿 | [EditorStateRegressionTest](../app/src/test/java/cc/novelia/app/EditorStateRegressionTest.kt)、[EditorDraftLifecycleTest](../app/src/androidTest/java/cc/novelia/app/EditorDraftLifecycleTest.kt)、[MarkdownToolbarInteractionTest](../app/src/androidTest/java/cc/novelia/app/MarkdownToolbarInteractionTest.kt)、[ArticleEditorLayoutTest](../app/src/androidTest/java/cc/novelia/app/ArticleEditorLayoutTest.kt) |
-| 原站网页返回和链接 | [SiteWebNavigationTest](../app/src/androidTest/java/cc/novelia/app/SiteWebNavigationTest.kt) |
+| 主题、动画、弹窗 | [MotionTest](../app/src/androidTest/java/cc/novelia/app/ui/theme/MotionTest.kt)、[ReducedMotionSheetTest](../app/src/androidTest/java/cc/novelia/app/ui/components/ReducedMotionSheetTest.kt)、[StaticOverlayTest](../app/src/androidTest/java/cc/novelia/app/ui/components/StaticOverlayTest.kt) |
+| 全局电子纸分页 | [AppPagingTest](../app/src/androidTest/java/cc/novelia/app/ui/components/AppPagingTest.kt)、[EInkAndCloudFilterTest](../app/src/androidTest/java/cc/novelia/app/ui/reader/EInkAndCloudFilterTest.kt) |
+| Markdown 语法与锚点 | [SiteMarkdownTest](../app/src/test/java/cc/novelia/app/SiteMarkdownTest.kt)、[MarkdownAnchorsTest](../app/src/test/java/cc/novelia/app/MarkdownAnchorsTest.kt)、[SiteMarkdownInteractionTest](../app/src/androidTest/java/cc/novelia/app/ui/markdown/SiteMarkdownInteractionTest.kt) |
+| Markdown 编辑与草稿 | [EditorStateRegressionTest](../app/src/test/java/cc/novelia/app/EditorStateRegressionTest.kt)、[EditorDraftLifecycleTest](../app/src/androidTest/java/cc/novelia/app/ui/markdown/EditorDraftLifecycleTest.kt)、[MarkdownToolbarInteractionTest](../app/src/androidTest/java/cc/novelia/app/ui/markdown/MarkdownToolbarInteractionTest.kt)、[ArticleEditorLayoutTest](../app/src/androidTest/java/cc/novelia/app/ui/community/ArticleEditorLayoutTest.kt) |
+| 原站网页返回和链接 | [SiteWebNavigationTest](../app/src/androidTest/java/cc/novelia/app/ui/web/SiteWebNavigationTest.kt) |
 
 测试文件存在不等于每次文档更新都执行过设备测试；具体执行命令、设备前提和结果应写入对应改动的 PR 验证说明，参见 [CONTRIBUTING.md](../CONTRIBUTING.md)。

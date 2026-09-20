@@ -1,8 +1,8 @@
 package cc.novelia.app
 
-import cc.novelia.app.data.Chapter
-import cc.novelia.app.data.ReaderSettings
-import cc.novelia.app.data.TocItem
+import cc.novelia.app.data.model.Chapter
+import cc.novelia.app.data.model.ReaderSettings
+import cc.novelia.app.data.model.TocItem
 import cc.novelia.app.reader.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking

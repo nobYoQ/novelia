@@ -1,6 +1,6 @@
 package cc.novelia.app
 
-import cc.novelia.app.data.ReaderSettings
+import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.reader.*
 import kotlinx.coroutines.CancellationException
 import org.junit.Assert.*

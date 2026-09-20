@@ -1,6 +1,7 @@
 package cc.novelia.app
 
-import cc.novelia.app.data.*
+import cc.novelia.app.data.updates.BookUpdateInfo
+import cc.novelia.app.data.updates.accumulate
 import org.junit.Assert.*
 import org.junit.Test
 

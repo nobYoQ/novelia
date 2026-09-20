@@ -15,10 +15,10 @@
 | WorkManager 下载及任务操作 | [DownloadWorker.kt](../app/src/main/java/cc/novelia/app/files/DownloadWorker.kt) |
 | 下载锁、临时文件与完成提交 | [DownloadFiles.kt](../app/src/main/java/cc/novelia/app/files/DownloadFiles.kt) |
 | 工具结果的待导出文件 | [PendingExportFiles.kt](../app/src/main/java/cc/novelia/app/files/PendingExportFiles.kt) |
-| 书架导入及原件导出 | [ShelfScreens.kt](../app/src/main/java/cc/novelia/app/ui/ShelfScreens.kt) |
-| 下载表单、下载管理 | [DownloadScreens.kt](../app/src/main/java/cc/novelia/app/ui/DownloadScreens.kt) |
-| 文件工具、术语表导入导出 | [ToolScreens.kt](../app/src/main/java/cc/novelia/app/ui/ToolScreens.kt) |
-| 文档目录和持久化接口 | [LocalStore.kt](../app/src/main/java/cc/novelia/app/data/LocalStore.kt) |
+| 书架导入及原件导出 | [ShelfScreen.kt](../app/src/main/java/cc/novelia/app/ui/shelf/ShelfScreen.kt)、[DocumentAccess.kt](../app/src/main/java/cc/novelia/app/ui/components/DocumentAccess.kt) |
+| 下载表单、下载管理 | [DownloadSheet.kt](../app/src/main/java/cc/novelia/app/ui/downloads/DownloadSheet.kt)、[DownloadsScreen.kt](../app/src/main/java/cc/novelia/app/ui/downloads/DownloadsScreen.kt) |
+| 文件工具、术语表导入导出 | [ToolsScreen.kt](../app/src/main/java/cc/novelia/app/ui/tools/ToolsScreen.kt)、[GlossaryScreen.kt](../app/src/main/java/cc/novelia/app/ui/book/GlossaryScreen.kt) |
+| 文档目录和持久化接口 | [LocalStore.kt](../app/src/main/java/cc/novelia/app/data/storage/LocalStore.kt) |
 
 ## 本地导入流程
 
@@ -80,7 +80,7 @@ SRT 按空行划分字幕块，生成一个标题为“字幕”的章节。序�
 | EPUB 单张插图 | 16 MiB | 跳过该图片 |
 | 磁盘导入 TXT/SRT 正文、EPUB 累计正文 | 16 × 1024 × 1024 个字符 | 拒绝；不是字节限制 |
 | 网络下载文件 | 512 MiB | 检查响应长度及实际累计字节，超限失败 |
-| 文库上传 | 40 MiB，仅 EPUB/TXT | [BookScreen](../app/src/main/java/cc/novelia/app/ui/BookScreen.kt) 在发送前拒绝 |
+| 文库上传 | 40 MiB，仅 EPUB/TXT | [BookScreen](../app/src/main/java/cc/novelia/app/ui/book/BookScreen.kt) 在发送前拒绝 |
 
 下载允许的文件可能超过导入上限。因此，“已完成”只代表文件下载完成，不能保证应用内能够导入阅读；用户仍可导出或交给其他应用打开。
 
@@ -90,9 +90,9 @@ SRT 按空行划分字幕块，生成一个标题为“字幕”的章节。序�
 
 ### 创建任务
 
-下载表单收集内容模式、译文顺序、是否并列译文和输出格式，通过 [NoveliaApi.downloadUrl](../app/src/main/java/cc/novelia/app/data/NoveliaApi.kt) 请求原站生成已有内容的文件。它不创建新的翻译任务。网络小说可选 EPUB/TXT；文库分卷沿用原分卷格式。
+下载表单收集内容模式、译文顺序、是否并列译文和输出格式，通过 [NoveliaApi.downloadUrl](../app/src/main/java/cc/novelia/app/data/network/NoveliaApi.kt) 请求原站生成已有内容的文件。它不创建新的翻译任务。网络小说可选 EPUB/TXT；文库分卷沿用原分卷格式。
 
-表单为任务创建 UUID，替换文件名中的路径及常见非法字符，并添加任务 ID 前缀。`DownloadEntry` 记录文件名、URL、展示状态、进度、错误、可选父作品及当前 `workId`，模型定义见 [Models.kt](../app/src/main/java/cc/novelia/app/data/Models.kt)。
+表单为任务创建 UUID，替换文件名中的路径及常见非法字符，并添加任务 ID 前缀。`DownloadEntry` 记录文件名、URL、展示状态、进度、错误、可选父作品及当前 `workId`，模型定义见 [DownloadEntry.kt](../app/src/main/java/cc/novelia/app/data/model/DownloadEntry.kt)。
 
 `enqueue` 创建一次性 `DownloadWorker`，输入为任务 ID 与入队时的账号名，以 `download-<id>` 为唯一任务名，使用 `ExistingWorkPolicy.REPLACE`。它先持久化“等待下载”和新的 `workId`，再提交 WorkManager。网络约束为 `CONNECTED`，或启用“仅 Wi-Fi”时的 `UNMETERED`；后者实际表达 Android 的“非按流量计费网络”约束。
 
@@ -194,9 +194,9 @@ Manifest 没有申请广泛的存储读写权限，也没有将应用注册成�
 | [DownloadFilesTest](../app/src/test/java/cc/novelia/app/DownloadFilesTest.kt) | 活跃临时文件保护、删除与完成提交竞争、旧任务提交拒绝、任务间互不阻塞 |
 | [PendingExportFilesTest](../app/src/test/java/cc/novelia/app/PendingExportFilesTest.kt) | 仅凭已保存 ID 恢复导出、取消/失败清理、缺失文件、非法 ID、准备过程取消 |
 | [RetiredModelsTest](../app/src/test/java/cc/novelia/app/files/RetiredModelsTest.kt) | 旧模型清理与其他目录保留、重复清理 |
-| [FileToolsUpgradeTest](../app/src/androidTest/java/cc/novelia/app/FileToolsUpgradeTest.kt) | Android 界面中恢复旧校对文本 |
-| [DownloadSheetLayoutTest](../app/src/androidTest/java/cc/novelia/app/DownloadSheetLayoutTest.kt) | 下载表单布局与滚动可访问性 |
-| [DownloadLiveTest](../app/src/androidTest/java/cc/novelia/app/DownloadLiveTest.kt) | 真实服务生成 EPUB、WorkManager 下载及解析；需显式 `live=true` |
+| [FileToolsUpgradeTest](../app/src/androidTest/java/cc/novelia/app/ui/tools/FileToolsUpgradeTest.kt) | Android 界面中恢复旧校对文本 |
+| [DownloadSheetLayoutTest](../app/src/androidTest/java/cc/novelia/app/ui/downloads/DownloadSheetLayoutTest.kt) | 下载表单布局与滚动可访问性 |
+| [DownloadLiveTest](../app/src/androidTest/java/cc/novelia/app/integration/DownloadLiveTest.kt) | 真实服务生成 EPUB、WorkManager 下载及解析；需显式 `live=true` |
 
 可从仓库根目录选择运行纯 JVM 回归测试：
 

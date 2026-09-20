@@ -58,7 +58,7 @@ flowchart LR
 
 ## 第三方许可维护
 
-[gradle/open-source-notices.gradle.kts](../gradle/open-source-notices.gradle.kts) 解析实际 `releaseRuntimeClasspath`，汇总坐标、版本和 JAR/AAR 中的 LICENSE/NOTICE，并合入项目 LICENSE、NOTICE 与 `licenses/` 中的文本。生成文件进入 APK 的 `assets/open-source/NOTICE.txt`，由 [OpenSourceLicensesScreen.kt](../app/src/main/java/cc/novelia/app/ui/OpenSourceLicensesScreen.kt) 离线显示。
+[gradle/open-source-notices.gradle.kts](../gradle/open-source-notices.gradle.kts) 解析实际 `releaseRuntimeClasspath`，汇总坐标、版本和 JAR/AAR 中的 LICENSE/NOTICE，并合入项目 LICENSE、NOTICE 与 `licenses/` 中的文本。生成文件进入 APK 的 `assets/open-source/NOTICE.txt`，由 [OpenSourceLicensesScreen.kt](../app/src/main/java/cc/novelia/app/ui/about/OpenSourceLicensesScreen.kt) 离线显示。
 
 更新依赖后重新生成并人工复核，检查未携带全文的依赖是否需要补充许可证文本和来源。清单包含传递依赖，不代表 R8 最终保留了每个类；也不意味着外部素材已获得授权。维护方法见 [licenses/README.md](../licenses/README.md)。
 

@@ -2,11 +2,13 @@
 
 [返回开发手册](README.md)
 
-本文说明当前 Android 客户端的数据组织方式、落盘顺序和恢复边界。阅读入口是 [Models.kt](../app/src/main/java/cc/novelia/app/data/Models.kt)、[LocalStore.kt](../app/src/main/java/cc/novelia/app/data/LocalStore.kt) 和 [NoveliaApplication.kt](../app/src/main/java/cc/novelia/app/NoveliaApplication.kt)。网络会话与待同步操作另见 [网络、认证与同步](network-and-sync.md)。
+本文说明当前 Android 客户端的数据组织方式、落盘顺序和恢复边界。阅读入口是 [LibraryModels.kt](../app/src/main/java/cc/novelia/app/data/model/LibraryModels.kt)、[LocalStore.kt](../app/src/main/java/cc/novelia/app/data/storage/LocalStore.kt) 和 [NoveliaApplication.kt](../app/src/main/java/cc/novelia/app/NoveliaApplication.kt)。数据源码的 13 个职责目录见 [源码目录导航](source-layout.md)，网络会话与待同步操作另见 [网络、认证与同步](network-and-sync.md)。
 
 ## 1. 数据归属与核心类型
 
 应用自己的阅读资料使用 Kotlin Serialization JSON 和私有目录文件保存，没有使用 Room 来保存书架。WorkManager、WebView 等依赖仍可能维护自己的内部数据库；不要把“书架使用 JSON”理解成整个应用没有数据库。
+
+模型按领域存放于 `data/model/`：书籍标识和摘要在 [BookModels.kt](../app/src/main/java/cc/novelia/app/data/model/BookModels.kt)，网络小说及文库响应分别在 [WebNovelModels.kt](../app/src/main/java/cc/novelia/app/data/model/WebNovelModels.kt)、[WenkuModels.kt](../app/src/main/java/cc/novelia/app/data/model/WenkuModels.kt)，本地文档在 [LocalDocument.kt](../app/src/main/java/cc/novelia/app/data/model/LocalDocument.kt)，阅读设置在 [ReaderSettings.kt](../app/src/main/java/cc/novelia/app/data/model/ReaderSettings.kt)。`appJson` 和 `hashName` 位于 [StorageFormat.kt](../app/src/main/java/cc/novelia/app/data/storage/StorageFormat.kt)；拆包保留了 JSON 字段、默认值、文件名与哈希规则。
 
 | 类型 | 用途与关键关系 |
 | --- | --- |
@@ -23,7 +25,7 @@
 
 `LibraryState` 是**设备共享资料**，不会在退出登录时自动清空，也没有为每个账号建立独立书架目录。账号隔离主要作用于认证请求、云端待办及元数据缓存。新增账号相关字段时应明确是否需要以账号为键，不能只依赖“当前登录用户”。
 
-本地文库分卷由 `SavedBook.parentWenkuKey` 关联父作品，`volumeOrder` 保存子书籍键。相关纯函数位于 [WenkuVolumes.kt](../app/src/main/java/cc/novelia/app/data/WenkuVolumes.kt) 与 [ReadingContinuity.kt](../app/src/main/java/cc/novelia/app/data/ReadingContinuity.kt)。删除或移动分卷时应通过现有函数维护父子关系，避免留下悬空排序键。
+本地文库分卷由 `SavedBook.parentWenkuKey` 关联父作品，`volumeOrder` 保存子书籍键。相关纯函数位于 [WenkuVolumes.kt](../app/src/main/java/cc/novelia/app/data/library/WenkuVolumes.kt) 与 [ReadingContinuity.kt](../app/src/main/java/cc/novelia/app/data/library/ReadingContinuity.kt)。删除或移动分卷时应通过现有函数维护父子关系，避免留下悬空排序键。
 
 ## 2. 文件布局
 
@@ -67,15 +69,15 @@ UI / Worker
     → 尽力更新 library-last-good.json 并回收旧长文本
 ```
 
-[StatePersistence.kt](../app/src/main/java/cc/novelia/app/data/StatePersistence.kt) 使用单写入器、合并通道和 `Mutex`：默认等待 100 ms 合并快速变化；写入失败保留最新快照，约 1 秒后重试，并通过 `persistenceError` 提供错误状态。`update` 返回代表内存已改变，**不代表磁盘已提交**。生命周期、后台任务、导出前等需要持久化边界的代码，应在 IO 协程等待 `store.flush()`。
+[StatePersistence.kt](../app/src/main/java/cc/novelia/app/data/storage/StatePersistence.kt) 使用单写入器、合并通道和 `Mutex`：默认等待 100 ms 合并快速变化；写入失败保留最新快照，约 1 秒后重试，并通过 `persistenceError` 提供错误状态。`update` 返回代表内存已改变，**不代表磁盘已提交**。生命周期、后台任务、导出前等需要持久化边界的代码，应在 IO 协程等待 `store.flush()`。
 
 `flush()` 会传播写盘失败。进程被系统终止前仍可能存在未落盘窗口，因此不能以“异步保存最终会重试”为理由省略关键边界。应用生命周期调用 `NoveliaApplication.persistState()`；Worker 在成功、取消或结束边界也各自处理刷新。
 
-[LibraryStateCodec.kt](../app/src/main/java/cc/novelia/app/data/LibraryStateCodec.kt) 将文章与草稿移出小快照，使频繁阅读进度更新不必重写长正文。载荷先写，主快照后写；两份状态副本提交后，常规回收保留当前和上一份长文本载荷。若启动时发现损坏，或存在损坏快照文件，会保留载荷历史供恢复使用。
+[LibraryStateCodec.kt](../app/src/main/java/cc/novelia/app/data/storage/LibraryStateCodec.kt) 将文章与草稿移出小快照，使频繁阅读进度更新不必重写长正文。载荷先写，主快照后写；两份状态副本提交后，常规回收保留当前和上一份长文本载荷。若启动时发现损坏，或存在损坏快照文件，会保留载荷历史供恢复使用。
 
 ## 4. 损坏保护与恢复
 
-[LibraryRecovery.kt](../app/src/main/java/cc/novelia/app/data/LibraryRecovery.kt) 区分首次启动和“已有文件但读取失败”：
+[LibraryRecovery.kt](../app/src/main/java/cc/novelia/app/data/storage/LibraryRecovery.kt) 区分首次启动和“已有文件但读取失败”：
 
 1. 没有任何状态文件时才创建默认资料。
 2. 主文件解码失败时尝试最后良好副本；载荷哈希失败也视为读取失败。
@@ -90,7 +92,7 @@ UI / Worker
 
 ### 文档分块
 
-[DocumentStorage.kt](../app/src/main/java/cc/novelia/app/data/DocumentStorage.kt) 接收含完整正文的 `LocalDocument`，先写每个章节的内容寻址文件，最后提交目录。目录保留章节 ID/标题，但正文置空，并用 `chapterFiles` 映射 ID 到哈希。
+[DocumentStorage.kt](../app/src/main/java/cc/novelia/app/data/documents/DocumentStorage.kt) 接收含完整正文的 `LocalDocument`，先写每个章节的内容寻址文件，最后提交目录。目录保留章节 ID/标题，但正文置空，并用 `chapterFiles` 映射 ID 到哈希。
 
 - 目录导航用 `documentIndex(id)`，单章阅读用 `documentChapter(id, chapterId)`。
 - `document(id)` 会拼装全书正文，只适合明确需要完整载荷的导出、备份等工作。
@@ -98,19 +100,19 @@ UI / Worker
 - 读取正文时检查内容哈希及章节 ID/标题一致性；文档 ID 和图片哈希都有限定格式，不能把外部文件名直接拼成私有目录路径。
 - 旧版单 JSON 文档第一次读取时尝试迁移。若迁移遇到 `IOException`，仍返回可读的旧格式，避免磁盘不足导致旧书无法打开。
 
-[DocumentHashIndex.kt](../app/src/main/java/cc/novelia/app/data/DocumentHashIndex.kt) 用源文件哈希辅助重复导入识别。恢复流程会额外核对完整正文与图片，不能只凭源哈希就认为损坏文档与备份相同。
+[DocumentHashIndex.kt](../app/src/main/java/cc/novelia/app/data/documents/DocumentHashIndex.kt) 用源文件哈希辅助重复导入识别。恢复流程会额外核对完整正文与图片，不能只凭源哈希就认为损坏文档与备份相同。
 
 ### 缓存预算和失效
 
-[LocalCache.kt](../app/src/main/java/cc/novelia/app/data/LocalCache.kt) 的内存缓存同时限制项数和估算字节权重：网络章节 24 项/12 MiB，文档目录 4 项/32 MiB，本地章节 12 项/12 MiB。这些是估算预算，不是精确堆内存占用。
+[LocalCache.kt](../app/src/main/java/cc/novelia/app/data/cache/LocalCache.kt) 的内存缓存同时限制项数和估算字节权重：网络章节 24 项/12 MiB，文档目录 4 项/32 MiB，本地章节 12 项/12 MiB。这些是估算预算，不是精确堆内存占用。
 
-网络章节磁盘缓存按访问顺序淘汰，文件修改时间用于近似访问时间，并非获取译文的时间。译文新鲜度必须从 [ChapterFreshness.kt](../app/src/main/java/cc/novelia/app/data/ChapterFreshness.kt) 读取。元数据缓存则使用文件修改时间表示获取时间，不能混用两套语义。
+网络章节磁盘缓存按访问顺序淘汰，文件修改时间用于近似访问时间，并非获取译文的时间。译文新鲜度必须从 [ChapterFreshness.kt](../app/src/main/java/cc/novelia/app/data/chapters/ChapterFreshness.kt) 读取。元数据缓存则使用文件修改时间表示获取时间，不能混用两套语义。
 
 `clearCache()` 会清空网络章节和元数据、清新鲜度记录、递增 `cacheGeneration` 并取消旧代次章节请求。响应写回必须通过 `withCacheGeneration`，否则用户清完缓存后，旧请求可能再次填回已清理的数据。清缓存不会删除本地导入文档、书架和下载成品。
 
 ## 6. 备份格式与合并语义
 
-阅读资料备份由 [LibraryBackupService.kt](../app/src/main/java/cc/novelia/app/data/LibraryBackupService.kt) 调度，[LibraryBackupArchive.kt](../app/src/main/java/cc/novelia/app/data/LibraryBackupArchive.kt) 负责 ZIP 流、白名单路径和内容校验。
+阅读资料备份由 [LibraryBackupService.kt](../app/src/main/java/cc/novelia/app/data/backup/LibraryBackupService.kt) 调度，[LibraryBackupArchive.kt](../app/src/main/java/cc/novelia/app/data/backup/LibraryBackupArchive.kt) 负责 ZIP 流、白名单路径和内容校验。
 
 备份根索引为 `manifest.json`，`format = "novelia-library"`、`version = 1`，包含时间、净化后的 `LibraryState`、本地文档清单、缺失文档清单、关键词词典和每个文件的字节数/SHA-256。当前分块文档导出为含完整正文的便携 JSON，图片独立存放。可选包含 EPUB/TXT/SRT 原件。
 
@@ -137,7 +139,7 @@ UI / Worker
 
 文件先安装、资料最后提交，提交前失败会回滚本次安装文件。资料提交成功但标签词典保存失败时，会保留暂存目录并返回部分成功提示供重试；不能把这种结果显示为“资料恢复全部失败”。
 
-“导出普通设置”是另一个 `SettingsBackup(version = 1)` JSON 格式，只包含部分阅读/外观/屏蔽设置。它不能代替完整阅读资料备份，导入校验范围也与完整备份不同。入口见 [AccountScreens.kt](../app/src/main/java/cc/novelia/app/ui/AccountScreens.kt)。系统自动备份在 [AndroidManifest.xml](../app/src/main/AndroidManifest.xml) 和 [data_extraction_rules.xml](../app/src/main/res/xml/data_extraction_rules.xml) 中禁用，迁移资料应走应用显式导出流程。
+“导出普通设置”是另一个 `SettingsBackup(version = 1)` JSON 格式，只包含部分阅读/外观/屏蔽设置。它不能代替完整阅读资料备份，导入校验范围也与完整备份不同。入口见 [SettingsScreen.kt](../app/src/main/java/cc/novelia/app/ui/settings/SettingsScreen.kt)。系统自动备份在 [AndroidManifest.xml](../app/src/main/AndroidManifest.xml) 和 [data_extraction_rules.xml](../app/src/main/res/xml/data_extraction_rules.xml) 中禁用，迁移资料应走应用显式导出流程。
 
 ## 7. 增加字段或新存储的步骤
 
@@ -157,11 +159,11 @@ UI / Worker
 
 | 范围 | 测试入口 |
 | --- | --- |
-| 合并写入、失败重试、flush 顺序 | [StatePersistenceTest](../app/src/test/java/cc/novelia/app/data/StatePersistenceTest.kt) |
-| 长文本分离、旧快照、损坏载荷 | [LibraryStateCodecTest](../app/src/test/java/cc/novelia/app/data/LibraryStateCodecTest.kt) |
-| 分块文档、哈希验证与迁移 | [DocumentStorageTest](../app/src/test/java/cc/novelia/app/data/DocumentStorageTest.kt)、[DocumentHashIndexTest](../app/src/test/java/cc/novelia/app/data/DocumentHashIndexTest.kt) |
-| 备份格式、路径、限额和合并 | [LibraryBackupTest](../app/src/test/java/cc/novelia/app/data/LibraryBackupTest.kt) |
-| 内存/磁盘缓存与新鲜度 | [LocalCacheTest](../app/src/test/java/cc/novelia/app/data/LocalCacheTest.kt)、[MetadataCacheTest](../app/src/test/java/cc/novelia/app/MetadataCacheTest.kt)、[TranslationFreshnessTest](../app/src/test/java/cc/novelia/app/TranslationFreshnessTest.kt) |
+| 合并写入、失败重试、flush 顺序 | [StatePersistenceTest](../app/src/test/java/cc/novelia/app/data/storage/StatePersistenceTest.kt) |
+| 长文本分离、旧快照、损坏载荷 | [LibraryStateCodecTest](../app/src/test/java/cc/novelia/app/data/storage/LibraryStateCodecTest.kt) |
+| 分块文档、哈希验证与迁移 | [DocumentStorageTest](../app/src/test/java/cc/novelia/app/data/documents/DocumentStorageTest.kt)、[DocumentHashIndexTest](../app/src/test/java/cc/novelia/app/data/documents/DocumentHashIndexTest.kt) |
+| 备份格式、路径、限额和合并 | [LibraryBackupTest](../app/src/test/java/cc/novelia/app/data/backup/LibraryBackupTest.kt) |
+| 内存/磁盘缓存与新鲜度 | [LocalCacheTest](../app/src/test/java/cc/novelia/app/data/cache/LocalCacheTest.kt)、[MetadataCacheTest](../app/src/test/java/cc/novelia/app/MetadataCacheTest.kt)、[TranslationFreshnessTest](../app/src/test/java/cc/novelia/app/TranslationFreshnessTest.kt) |
 | 设置兼容、分卷关系、阅读连续性 | [ReaderPreferencesTest](../app/src/test/java/cc/novelia/app/ReaderPreferencesTest.kt)、[WenkuVolumesTest](../app/src/test/java/cc/novelia/app/WenkuVolumesTest.kt)、[ReadingContinuityTest](../app/src/test/java/cc/novelia/app/ReadingContinuityTest.kt) |
 
 涉及 Android 文件选择器、低存储空间、进程终止或卸载重装的行为，还需要设备验证。单元测试通过不代表已经覆盖真实系统文件提供方和所有生命周期中断点。

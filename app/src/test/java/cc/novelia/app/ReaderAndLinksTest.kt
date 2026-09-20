@@ -1,6 +1,13 @@
 package cc.novelia.app
 
-import cc.novelia.app.data.*
+import cc.novelia.app.data.catalog.BookLinks
+import cc.novelia.app.data.catalog.SearchExpression
+import cc.novelia.app.data.catalog.SiteLink
+import cc.novelia.app.data.model.BookRef
+import cc.novelia.app.data.model.Chapter
+import cc.novelia.app.data.model.ReaderSettings
+import cc.novelia.app.data.model.WebDetail
+import cc.novelia.app.data.storage.appJson
 import cc.novelia.app.reader.projectParagraphs
 import org.junit.Assert.*
 import org.junit.Test

@@ -1,6 +1,10 @@
 package cc.novelia.app
 
-import cc.novelia.app.data.*
+import cc.novelia.app.data.model.Page
+import cc.novelia.app.data.model.WebDetail
+import cc.novelia.app.data.model.WebOutline
+import cc.novelia.app.data.model.WenkuDetail
+import cc.novelia.app.data.network.NoveliaApi
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer

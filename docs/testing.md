@@ -14,6 +14,8 @@
 
 当前没有 CI，提交者和维护者需手动执行检查。测试数量会随代码变化，不把固定数字当作门禁；报告中的成功、失败、跳过应分别记录。历史通过记录不能代表当前提交通过。
 
+测试目录与 package 保持一致，分类地图见 [源码目录导航](source-layout.md)。JVM 的 `data/` 测试按生产职责分包；设备测试按 `ui/` 界面与组件、`data/backup/`、`integration/`、`performance/` 分类。`--tests`、instrumentation 的 `class` 参数和 IDE 运行配置应使用当前位置对应的全名，应用 ID 与 runner 无需随目录整理修改。
+
 ## 常规检查
 
 以下 PowerShell 7 命令在仓库根执行，环境配置见 [构建指南](getting-started.md)。
@@ -32,26 +34,27 @@
 
 ```powershell
 ./build.ps1 -Tasks @(':app:testDebugUnitTest', '--tests', 'cc.novelia.app.ApiContractTest')
-./build.ps1 -Tasks @(':app:testDebugUnitTest', '--tests', 'cc.novelia.app.data.SessionIsolationTest')
+./build.ps1 -Tasks @(':app:testDebugUnitTest', '--tests', 'cc.novelia.app.data.auth.SessionIsolationTest')
 ```
 
 JVM 报告在 `app/build/reports/tests/testDebugUnitTest/`，XML 结果在 `app/build/test-results/testDebugUnitTest/`。Lint 报告为 `app/build/reports/lint-results-debug.html`；Release 路径替换构建类型。警告不等于检查失败，但新增警告应被解释或修复。
 
 ## 按改动选择回归测试
 
-下列为代表性测试，不是目录中全部测试。定位具体函数后再选择关联范围。
+下列为代表性测试，不是目录中全部测试。表内类名均省略 `cc.novelia.app.` 前缀；定位具体函数后再选择关联范围。
 
 | 改动 | 优先测试 |
 | --- | --- |
-| 请求与会话 | `ApiContractTest`、`NetworkPerformanceTest`、`data.SessionIsolationTest`、`data.SharedRequestTest` |
-| 云端收藏和待同步 | `CloudFavoritesTest`、`data.CloudMutationQueueTest`、`data.CloudSyncPolicyTest`、`data.CloudSyncRuntimeTest`、`data.BoundCloudSyncTest` |
-| 书库状态与恢复 | `data.StatePersistenceTest`、`data.LibraryStateCodecTest`、`data.LibraryBackupTest`、`data.LocalCacheTest`、`MetadataCacheTest` |
-| 文档存储与导入 | `data.DocumentStorageTest`、`data.DocumentHashIndexTest`、`FileImportRegressionTest`、`DocumentToolsTest` |
+| 请求与会话 | `ApiContractTest`、`NetworkPerformanceTest`、`data.auth.SessionIsolationTest`、`data.network.SharedRequestTest` |
+| 云端收藏和待同步 | `CloudFavoritesTest`、`data.sync.CloudMutationQueueTest`、`data.sync.CloudSyncPolicyTest`、`data.sync.CloudSyncRuntimeTest`、`data.sync.BoundCloudSyncTest` |
+| 书库状态与恢复 | `data.storage.StatePersistenceTest`、`data.storage.LibraryStateCodecTest`、`data.backup.LibraryBackupTest`、`data.cache.LocalCacheTest`、`MetadataCacheTest` |
+| 文档存储与导入 | `data.documents.DocumentStorageTest`、`data.documents.DocumentHashIndexTest`、`FileImportRegressionTest`、`DocumentToolsTest` |
 | 下载/导出生命周期 | `DownloadFilesTest`、`PendingExportFilesTest`、`DownloadCelebrationTest` |
 | 阅读投影/进度 | `ReaderProjectionTest`、`ReaderPreferencesTest`、`ReadingContinuityTest`、`ReaderChapterLoadTest`、`ReaderSafetyTest` |
 | 分页/搜索/插图 | `StaticPaginationTest`、`ReaderExactSearchTest`、`ReaderChapterOverscrollTest`、`IllustrationTransformTest` |
 | 搜索、关键词、书源 | `ReaderAndLinksTest`、`SearchExpressionBoundaryTest`、`KeywordCatalogTest`、`KeywordObservationTest` |
-| 分卷与更新检查 | `WenkuVolumesTest`、`BookUpdatesTest`、`TranslationFreshnessTest`、`data.UpdateCheckOrderTest` |
+| 分卷与更新检查 | `WenkuVolumesTest`、`BookUpdatesTest`、`TranslationFreshnessTest`、`data.updates.UpdateCheckOrderTest` |
+| 旧后台任务升级兼容 | `data.compat.LegacyWorkerCompatibilityTest`：检查两个旧 Worker 类名可反射加载且保留 WorkManager 构造签名 |
 | Markdown 与编辑器 | `MarkdownTest`、`SiteMarkdownTest`、`MarkdownAnchorsTest`、`MarkdownTemplatesTest`、`EditorStateRegressionTest` |
 
 新测试应表达用户能遇到的错误或关键不变量。例如账号切换时旧响应不得写入当前界面、损坏 ZIP 不得覆盖可用书库、双语投影改变后仍定位同一原文段落。不要只断言实现刚赋给自身的值。
@@ -65,7 +68,7 @@ JVM 报告在 `app/build/reports/tests/testDebugUnitTest/`，XML 结果在 `app/
 ```powershell
 adb devices
 $env:ANDROID_SERIAL = '<专用测试设备序列号>'
-./build.ps1 -Tasks @(':app:connectedDebugAndroidTest', '-Pandroid.testInstrumentationRunnerArguments.class=cc.novelia.app.AppFlowTest')
+./build.ps1 -Tasks @(':app:connectedDebugAndroidTest', '-Pandroid.testInstrumentationRunnerArguments.class=cc.novelia.app.ui.reader.AppFlowTest')
 ```
 
 全量设备任务为 `:app:connectedDebugAndroidTest`。若只构建和安装测试包：
@@ -74,20 +77,22 @@ $env:ANDROID_SERIAL = '<专用测试设备序列号>'
 ./build.ps1 -Tasks @(':app:assembleDebug', ':app:assembleDebugAndroidTest')
 adb -s '<设备序列号>' install -r app/build/outputs/apk/debug/app-debug.apk
 adb -s '<设备序列号>' install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
-adb -s '<设备序列号>' shell am instrument -w -r -e class cc.novelia.app.AppFlowTest cc.novelia.app.test/androidx.test.runner.AndroidJUnitRunner
+adb -s '<设备序列号>' shell am instrument -w -r -e class cc.novelia.app.ui.reader.AppFlowTest cc.novelia.app.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
 Gradle 设备 HTML 报告位于 `app/build/reports/androidTests/connected/` 下，细分目录以当前 AGP 输出为准。直接 `am instrument` 的结果在命令输出中；部分测试另写截图到应用外部文件目录。`INSTRUMENTATION_FAILED` 或测试中止不能当成通过，默认跳过的联调也不能计为已验证。
 
 | 场景 | 代表性设备测试 |
 | --- | --- |
-| 基本导航与阅读 | `AppFlowTest`、`ReadingContinuityUiTest`、`BookSyncUiTest` |
-| 书架与分卷 | `AdaptiveLibraryTest`、`LibraryInteractionTest`、`WenkuVolumeFlowTest` |
-| 电子纸/静态弹层 | `EInkReaderFlowTest`、`EInkAndCloudFilterTest`、`StaticOverlayTest`、`ReducedMotionSheetTest` |
-| 阅读器布局和插图 | `ReaderAdaptiveUiTest`、`ReaderToolbarOverlayTest`、`IllustrationViewerTest` |
-| 编辑与 Markdown | `ArticleEditorLayoutTest`、`EditorDraftLifecycleTest`、`MarkdownToolbarInteractionTest`、`SiteMarkdownInteractionTest` |
-| 备份与文件工具 | `LibraryBackupFlowTest`、`FileToolsUpgradeTest`、`DownloadSheetLayoutTest` |
-| 列表与筛选 | `AppPagingTest`、`AsyncContentTest`、`FilterPositionTest`、`SearchAssistantTest` |
+| 基本导航与阅读 | `ui.reader.AppFlowTest`、`ui.reader.ReadingContinuityUiTest`、`ui.shelf.BookSyncUiTest` |
+| 书架与分卷 | `ui.shelf.AdaptiveLibraryTest`、`ui.shelf.LibraryInteractionTest`、`ui.shelf.WenkuVolumeFlowTest` |
+| 电子纸/静态弹层 | `ui.reader.EInkReaderFlowTest`、`ui.reader.EInkAndCloudFilterTest`、`ui.components.StaticOverlayTest`、`ui.components.ReducedMotionSheetTest` |
+| 阅读器布局和插图 | `ui.reader.ReaderAdaptiveUiTest`、`ui.reader.ReaderToolbarOverlayTest`、`ui.reader.IllustrationViewerTest` |
+| 编辑与 Markdown | `ui.community.ArticleEditorLayoutTest`、`ui.markdown.EditorDraftLifecycleTest`、`ui.markdown.MarkdownToolbarInteractionTest`、`ui.markdown.SiteMarkdownInteractionTest` |
+| 备份与文件工具 | `data.backup.LibraryBackupFlowTest`、`ui.tools.FileToolsUpgradeTest`、`ui.downloads.DownloadSheetLayoutTest` |
+| 列表与筛选 | `ui.components.AppPagingTest`、`ui.components.AsyncContentTest`、`ui.discover.FilterPositionTest`、`ui.discover.SearchAssistantTest` |
+
+上表同样省略 `cc.novelia.app.` 前缀。全量任务可能包含被默认跳过的联调用例；`SiteWebNavigationTest` 的联调用例仍通过 `liveSite` 单独控制，不因放入 `ui/web/` 而自动启用。
 
 ## 可选真实站点联调
 
@@ -95,15 +100,15 @@ Gradle 设备 HTML 报告位于 `app/build/reports/androidTests/connected/` 下�
 
 | 测试类 | 开关 | 内容 |
 | --- | --- | --- |
-| [LiveReadOnlyTest](../app/src/androidTest/java/cc/novelia/app/LiveReadOnlyTest.kt) | `live=true` | 公开目录、详情与已有章节 |
-| [DownloadLiveTest](../app/src/androidTest/java/cc/novelia/app/DownloadLiveTest.kt) | `live=true` | 请求并解析已有译文的 EPUB 下载 |
-| [AuthPageTest](../app/src/androidTest/java/cc/novelia/app/AuthPageTest.kt) | `live=true` | 认证页面表单可见性，不填写凭据 |
-| [SiteWebNavigationTest](../app/src/androidTest/java/cc/novelia/app/SiteWebNavigationTest.kt) | `liveSite=true` | 部分用例访问原站教程、链接、锚点和图片，其余用例不受此开关控制 |
+| [LiveReadOnlyTest](../app/src/androidTest/java/cc/novelia/app/integration/LiveReadOnlyTest.kt) | `live=true` | 公开目录、详情与已有章节 |
+| [DownloadLiveTest](../app/src/androidTest/java/cc/novelia/app/integration/DownloadLiveTest.kt) | `live=true` | 请求并解析已有译文的 EPUB 下载 |
+| [AuthPageTest](../app/src/androidTest/java/cc/novelia/app/integration/AuthPageTest.kt) | `live=true` | 认证页面表单可见性，不填写凭据 |
+| [SiteWebNavigationTest](../app/src/androidTest/java/cc/novelia/app/ui/web/SiteWebNavigationTest.kt) | `liveSite=true` | 部分用例访问原站教程、链接、锚点和图片，其余用例不受此开关控制 |
 
 例如只选公开阅读测试：
 
 ```powershell
-./build.ps1 -Tasks @(':app:connectedDebugAndroidTest', '-Pandroid.testInstrumentationRunnerArguments.class=cc.novelia.app.LiveReadOnlyTest', '-Pandroid.testInstrumentationRunnerArguments.live=true')
+./build.ps1 -Tasks @(':app:connectedDebugAndroidTest', '-Pandroid.testInstrumentationRunnerArguments.class=cc.novelia.app.integration.LiveReadOnlyTest', '-Pandroid.testInstrumentationRunnerArguments.live=true')
 ```
 
 上述测试不代表真实账号发帖、评论、上传、云端收藏变更的生产端到端验收。新增联调不能偷偷引入写操作；这类验收需要明确授权、专用账号和单独的执行计划。

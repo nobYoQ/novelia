@@ -6,17 +6,18 @@
 
 | 文件 | 负责内容 |
 | --- | --- |
-| [ReaderScreen.kt](../app/src/main/java/cc/novelia/app/ui/ReaderScreen.kt) | 阅读状态协调、滚动正文、工具栏、设置、章节切换、搜索定位和生命周期 |
-| [ReaderChapterLoad.kt](../app/src/main/java/cc/novelia/app/ui/ReaderChapterLoad.kt) | 保留当前正文的下一章节加载状态机 |
-| [ReaderTocPane.kt](../app/src/main/java/cc/novelia/app/ui/ReaderTocPane.kt) | 目录显示、筛选、倒序和定位 |
+| [ReaderScreen.kt](../app/src/main/java/cc/novelia/app/ui/reader/ReaderScreen.kt) | 阅读状态协调、滚动正文、工具栏、设置、章节切换、搜索定位和生命周期 |
+| [ReaderChapterLoad.kt](../app/src/main/java/cc/novelia/app/ui/reader/ReaderChapterLoad.kt) | 保留当前正文的下一章节加载状态机 |
+| [ReaderTocPane.kt](../app/src/main/java/cc/novelia/app/ui/reader/ReaderTocPane.kt) | 目录显示、筛选、倒序和定位 |
+| [ReaderPreferences.kt](../app/src/main/java/cc/novelia/app/ui/reader/ReaderPreferences.kt) | 默认与单书共用的阅读偏好设置界面 |
 | [Paragraphs.kt](../app/src/main/java/cc/novelia/app/reader/Paragraphs.kt) | 原文/译文投影、逐段回退、图片标记、繁体转换 |
 | [ReadingAnchors.kt](../app/src/main/java/cc/novelia/app/reader/ReadingAnchors.kt) | 精确文本匹配、段内字符坐标、滚动行几何 |
 | [StaticPagination.kt](../app/src/main/java/cc/novelia/app/reader/StaticPagination.kt) | 纯 Kotlin 整行分页、字符锚点到页码、翻页键映射 |
-| [EInkPage.kt](../app/src/main/java/cc/novelia/app/ui/EInkPage.kt) | 静态分页状态、Android 文字测量、Canvas 绘制 |
+| [EInkPage.kt](../app/src/main/java/cc/novelia/app/ui/reader/EInkPage.kt) | 静态分页状态、Android 文字测量、Canvas 绘制 |
 | [BookTextSearch.kt](../app/src/main/java/cc/novelia/app/reader/BookTextSearch.kt) | 按实际显示文本搜索多章 |
-| [OfflineReadingPanels.kt](../app/src/main/java/cc/novelia/app/ui/OfflineReadingPanels.kt) | 离线缓存范围和整本搜索 UI |
-| [ReaderChapterOverscroll.kt](../app/src/main/java/cc/novelia/app/ui/ReaderChapterOverscroll.kt) | 滚动模式章末上拉切章 |
-| [IllustrationViewer.kt](../app/src/main/java/cc/novelia/app/ui/IllustrationViewer.kt) | 全屏图片查看 |
+| [OfflineReadingPanels.kt](../app/src/main/java/cc/novelia/app/ui/reader/OfflineReadingPanels.kt) | 离线缓存范围和整本搜索 UI |
+| [ReaderChapterOverscroll.kt](../app/src/main/java/cc/novelia/app/ui/reader/ReaderChapterOverscroll.kt) | 滚动模式章末上拉切章 |
+| [IllustrationViewer.kt](../app/src/main/java/cc/novelia/app/ui/components/IllustrationViewer.kt) | 全屏图片查看 |
 | [ReadAloudService.kt](../app/src/main/java/cc/novelia/app/reader/ReadAloudService.kt)、[SpeechQueue.kt](../app/src/main/java/cc/novelia/app/reader/SpeechQueue.kt) | 系统 TTS 前台服务和句子队列 |
 
 ```mermaid
@@ -41,7 +42,7 @@ flowchart TD
 
 实际配置为 `local.bookSettings[ref.key] ?: local.reader`。开启“仅应用于这本书”会为当前书保存完整设置副本，关闭则删除副本、重新继承默认值。它不是逐字段继承模型；修改全局偏好不会自动更新已有单书副本。
 
-[ReaderSettings](../app/src/main/java/cc/novelia/app/data/Models.kt) 包含以下相关配置：
+[ReaderSettings](../app/src/main/java/cc/novelia/app/data/model/ReaderSettings.kt) 包含以下相关配置：
 
 | 类别 | 主要字段与含义 |
 | --- | --- |
@@ -55,13 +56,13 @@ flowchart TD
 
 `staticPagination` 仅判断 `paginationMode == "auto"`，不要把它等同于 `eInkMode`。电子纸首次开启使用自动分页和可用的翻页控制，关闭时恢复 `beforeEInk`，并保存电子纸内的选择供下次使用。旧字段 `paged`、`monochrome` 仍参与历史配置兼容；新增偏好应有默认值，调整这些字段前先读 [ReaderPreferencesTest](../app/src/test/java/cc/novelia/app/ReaderPreferencesTest.kt)。
 
-设置 UI 位于 `ReaderScreen.kt` 的 `ReaderPreferences`。普通滑杆先维护临时值，松手时再提交昂贵的排版变化；电子纸改用步进按钮。亮度和常亮标志只在阅读器中生效，并在 `DisposableEffect` 清理时恢复。
+设置 UI 位于 [ReaderPreferences.kt](../app/src/main/java/cc/novelia/app/ui/reader/ReaderPreferences.kt) 的 `ReaderPreferences`，由阅读器和 [SettingsScreen.kt](../app/src/main/java/cc/novelia/app/ui/settings/SettingsScreen.kt) 复用。普通滑杆先维护临时值，松手时再提交昂贵的排版变化；电子纸改用步进按钮。亮度和常亮标志只在阅读器中生效，并在 `DisposableEffect` 清理时恢复。
 
 ## 3. 章节加载、缓存与切换
 
 ### 首次进入
 
-`ReaderContent` 通过 `AsyncContent(listOf(ref, chapterId), refreshKey = version)` 调用 [AppController.chapter](../app/src/main/java/cc/novelia/app/ui/AppController.kt)。返回值为 `Pair<Chapter, Boolean>`，布尔值表示本地/缓存内容来源，不代表“内容最新”或“已经离线保存整本”。
+`ReaderContent` 通过 `AsyncContent(listOf(ref, chapterId), refreshKey = version)` 调用 [AppController.chapter](../app/src/main/java/cc/novelia/app/ui/navigation/AppController.kt)。返回值为 `Pair<Chapter, Boolean>`，布尔值表示本地/缓存内容来源，不代表“内容最新”或“已经离线保存整本”。
 
 - 本地书：读取文档索引与章节正文，构造 `Chapter`，前后章来自本地索引。
 - 在线书：非强制刷新时先用现有章节缓存；缺失时通过 `chapterRequests.load` 共享请求。
@@ -85,9 +86,9 @@ flowchart TD
 
 ### 预读与译文更新
 
-自动预读由 [ChapterOffline.kt](../app/src/main/java/cc/novelia/app/data/ChapterOffline.kt) 执行。在阅读器生命周期达到 `STARTED` 后等待 600 ms，再按设置顺序读取后续章节。离开前台、取消协程或缓存代次变化时应停止；预读失败不能中断前台正文。
+自动预读由 [ChapterOffline.kt](../app/src/main/java/cc/novelia/app/data/chapters/ChapterOffline.kt) 执行。在阅读器生命周期达到 `STARTED` 后等待 600 ms，再按设置顺序读取后续章节。离开前台、取消协程或缓存代次变化时应停止；预读失败不能中断前台正文。
 
-“本书有新的译文”根据缓存写入时间和所选引擎的更新时间判断，参见 [ChapterFreshness.kt](../app/src/main/java/cc/novelia/app/data/ChapterFreshness.kt)。它是刷新入口提示，不意味着所有段落必定有新译文。手动刷新先记录当前锚点，再增加 `version`，成功重新投影后恢复位置。
+“本书有新的译文”根据缓存写入时间和所选引擎的更新时间判断，参见 [ChapterFreshness.kt](../app/src/main/java/cc/novelia/app/data/chapters/ChapterFreshness.kt)。它是刷新入口提示，不意味着所有段落必定有新译文。手动刷新先记录当前锚点，再增加 `version`，成功重新投影后恢复位置。
 
 ## 4. 译文投影与逐段回退
 
@@ -146,7 +147,7 @@ UI 在 `Dispatchers.Default` 执行正文准备，依赖章节和语言/引擎/�
 
 正文使用有稳定原始索引键的 `LazyColumn`，标题、正文、图片和章末有各自的 `contentType`。普通翻屏按钮移动视口高度约 85%；减少动效时直接移动，否则使用短动画。
 
-章末上拉由 [ReaderChapterOverscroll.kt](../app/src/main/java/cc/novelia/app/ui/ReaderChapterOverscroll.kt) 接管列表在末尾剩余的拖动距离，阈值 56 dp。仅未中断的单指触摸在松手时可提交；多指、指针取消、选择手势和禁用修饰符不能触发切章。列表原生 overscroll 关闭，避免先吞掉末尾距离。测试新手势时必须覆盖“达到阈值后取消”和“反向撤回”。
+章末上拉由 [ReaderChapterOverscroll.kt](../app/src/main/java/cc/novelia/app/ui/reader/ReaderChapterOverscroll.kt) 接管列表在末尾剩余的拖动距离，阈值 56 dp。仅未中断的单指触摸在松手时可提交；多指、指针取消、选择手势和禁用修饰符不能触发切章。列表原生 overscroll 关闭，避免先吞掉末尾距离。测试新手势时必须覆盖“达到阈值后取消”和“反向撤回”。
 
 ### 自动分页
 
@@ -170,7 +171,7 @@ UI 在 `Dispatchers.Default` 执行正文准备，依赖章节和语言/引擎/�
 
 ### 整本搜索
 
-[BookSearchPanel](../app/src/main/java/cc/novelia/app/ui/OfflineReadingPanels.kt) 是离线范围搜索：
+[BookSearchPanel](../app/src/main/java/cc/novelia/app/ui/reader/OfflineReadingPanels.kt) 是离线范围搜索：
 
 - 本地书读取本地目录与章节。
 - 在线书读取当前账号的离线目录快照及已缓存章节，不为搜索请求缺失章节。
@@ -182,7 +183,7 @@ UI 在 `Dispatchers.Default` 执行正文准备，依赖章节和语言/引擎/�
 
 滚动插图先预留宽度 1.35 倍、限制在 180–900 dp 的显示框，下载解码完成后不会推动后续段落。静态分页中插图独占一页。两种模式都有失败重试和长按放大入口。
 
-[IllustrationViewer](../app/src/main/java/cc/novelia/app/ui/IllustrationViewer.kt) 将解码尺寸限制为 4096×4096，使用 [IllustrationTransform.kt](../app/src/main/java/cc/novelia/app/reader/IllustrationTransform.kt) 处理缩放中心和平移边界。普通模式支持捏合/拖动、双击与按钮；电子纸使用缩放及方向按钮，避免连续手势绘制。视口变化时重置变换。
+[IllustrationViewer](../app/src/main/java/cc/novelia/app/ui/components/IllustrationViewer.kt) 将解码尺寸限制为 4096×4096，使用 [IllustrationTransform.kt](../app/src/main/java/cc/novelia/app/reader/IllustrationTransform.kt) 处理缩放中心和平移边界。普通模式支持捏合/拖动、双击与按钮；电子纸使用缩放及方向按钮，避免连续手势绘制。视口变化时重置变换。
 
 段落长按面板支持系统文本选择、分享和创建笔记。笔记保存 `BookRef.key`、章节 ID、原始段落索引、文本摘录及可选笔记，并附书名/章节名。它不是 `Position.index`，不要用滚动列表的标题偏移污染笔记定位。
 
@@ -205,15 +206,15 @@ UI 在 `Dispatchers.Default` 执行正文准备，依赖章节和语言/引擎/�
 | 修改范围 | 优先运行/扩展的测试 |
 | --- | --- |
 | 原文、译文回退、繁体 | [ReaderProjectionTest](../app/src/test/java/cc/novelia/app/ReaderProjectionTest.kt)、[ReaderAndLinksTest](../app/src/test/java/cc/novelia/app/ReaderAndLinksTest.kt) |
-| 偏好迁移、电子纸切换 | [ReaderPreferencesTest](../app/src/test/java/cc/novelia/app/ReaderPreferencesTest.kt)、[EInkReaderFlowTest](../app/src/androidTest/java/cc/novelia/app/EInkReaderFlowTest.kt) |
+| 偏好迁移、电子纸切换 | [ReaderPreferencesTest](../app/src/test/java/cc/novelia/app/ReaderPreferencesTest.kt)、[EInkReaderFlowTest](../app/src/androidTest/java/cc/novelia/app/ui/reader/EInkReaderFlowTest.kt) |
 | 切章取消/失败/重试 | [ReaderChapterLoadTest](../app/src/test/java/cc/novelia/app/ReaderChapterLoadTest.kt) |
 | 章末上拉 | [ReaderChapterOverscrollTest](../app/src/test/java/cc/novelia/app/ReaderChapterOverscrollTest.kt) |
 | 分页、锚点、翻页键 | [StaticPaginationTest](../app/src/test/java/cc/novelia/app/StaticPaginationTest.kt)、[ReaderExactSearchTest](../app/src/test/java/cc/novelia/app/ReaderExactSearchTest.kt) |
 | 精确搜索、边界/取消、朗读队列 | [ReaderExactSearchTest](../app/src/test/java/cc/novelia/app/ReaderExactSearchTest.kt)、[ReaderSafetyTest](../app/src/test/java/cc/novelia/app/ReaderSafetyTest.kt) |
-| 阅读连续性和分卷 | [ReadingContinuityTest](../app/src/test/java/cc/novelia/app/ReadingContinuityTest.kt)、[ReadingContinuityUiTest](../app/src/androidTest/java/cc/novelia/app/ReadingContinuityUiTest.kt) |
-| 工具栏不改变排版 | [ReaderToolbarOverlayTest](../app/src/androidTest/java/cc/novelia/app/ReaderToolbarOverlayTest.kt) |
-| 宽屏目录、窗口调整 | [ReaderAdaptiveUiTest](../app/src/androidTest/java/cc/novelia/app/ReaderAdaptiveUiTest.kt) |
-| 图片缩放和平移 | [IllustrationTransformTest](../app/src/test/java/cc/novelia/app/IllustrationTransformTest.kt)、[IllustrationViewerTest](../app/src/androidTest/java/cc/novelia/app/IllustrationViewerTest.kt) |
+| 阅读连续性和分卷 | [ReadingContinuityTest](../app/src/test/java/cc/novelia/app/ReadingContinuityTest.kt)、[ReadingContinuityUiTest](../app/src/androidTest/java/cc/novelia/app/ui/reader/ReadingContinuityUiTest.kt) |
+| 工具栏不改变排版 | [ReaderToolbarOverlayTest](../app/src/androidTest/java/cc/novelia/app/ui/reader/ReaderToolbarOverlayTest.kt) |
+| 宽屏目录、窗口调整 | [ReaderAdaptiveUiTest](../app/src/androidTest/java/cc/novelia/app/ui/reader/ReaderAdaptiveUiTest.kt) |
+| 图片缩放和平移 | [IllustrationTransformTest](../app/src/test/java/cc/novelia/app/IllustrationTransformTest.kt)、[IllustrationViewerTest](../app/src/androidTest/java/cc/novelia/app/ui/reader/IllustrationViewerTest.kt) |
 
 例如只验证纯阅读规则，可在仓库根目录用 PowerShell 7 执行：
 

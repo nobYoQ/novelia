@@ -1,6 +1,8 @@
 package cc.novelia.app
 
-import cc.novelia.app.data.*
+import cc.novelia.app.data.markdown.MarkdownEdit
+import cc.novelia.app.data.markdown.MarkdownTemplate
+import cc.novelia.app.data.markdown.applyMarkdownTemplate
 import org.junit.Assert.*
 import org.junit.Test
 

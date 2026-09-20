@@ -8,7 +8,7 @@
 
 | 数据 | 当前处理 | 开发注意点 |
 | --- | --- | --- |
-| 访问令牌 | [Session.kt](../app/src/main/java/cc/novelia/app/data/Session.kt) 用 Android Keystore 的 AES-GCM 密钥加密后写入私有 SharedPreferences | 不进入日志、普通状态、备份、崩溃描述或截图 |
+| 访问令牌 | [Session.kt](../app/src/main/java/cc/novelia/app/data/auth/Session.kt) 用 Android Keystore 的 AES-GCM 密钥加密后写入私有 SharedPreferences | 不进入日志、普通状态、备份、崩溃描述或截图 |
 | 认证 Cookie | 由 WebView `CookieManager` 管理，会话刷新使用认证站点 Cookie | 不把 Cookie 描述为同样受上述令牌加密机制保护；不要读取导出到调试文件 |
 | 本地书库、笔记、草稿、文件 | 应用私有存储和专用导出路径 | 设备共享资料不等于多账号独立数据库，退出登录也不会删除本地资料 |
 | 待同步操作 | 本地持久队列带账号归属，执行时绑定登录代次 | 包含写入内容，不能随普通设置或迁移备份导出重放 |
@@ -20,7 +20,7 @@ Keystore 加密只覆盖会话令牌，不代表小说、笔记或整个应用�
 
 登录页面嵌入原站统一认证，密码由认证网站处理；客户端收到通过来源校验的固定消息后触发会话刷新，刷新成功才完成登录。令牌中的用户、角色和过期信息用于界面与会话管理，客户端解析不是服务端授权替代品。
 
-修改 [AccountScreens.kt](../app/src/main/java/cc/novelia/app/ui/AccountScreens.kt)、[Session.kt](../app/src/main/java/cc/novelia/app/data/Session.kt) 或 [SessionState.kt](../app/src/main/java/cc/novelia/app/data/SessionState.kt) 时保持：
+修改 [LoginScreen.kt](../app/src/main/java/cc/novelia/app/ui/account/LoginScreen.kt)、[Session.kt](../app/src/main/java/cc/novelia/app/data/auth/Session.kt) 或 [SessionState.kt](../app/src/main/java/cc/novelia/app/data/auth/SessionState.kt) 时保持：
 
 - Web 消息校验 origin、主框架和预期消息内容；不把任意网页字符串作为登录成功凭据。
 - 请求开始捕获 `SessionBinding`，响应和持久化提交前校验账号及登录代次。退出后同名账号再次登录也是新会话。
@@ -28,15 +28,15 @@ Keystore 加密只覆盖会话令牌，不代表小说、笔记或整个应用�
 - 退出登录立即失效旧会话，慢请求不能在退出后重新落盘旧令牌或清除后来的新登录。
 - `canPost` / `canEdit` 等界面判断不构成权限保证，403 必须保留含义，不转换为“离线稍后重试”。
 
-相应回归重点是 [SessionIsolationTest.kt](../app/src/test/java/cc/novelia/app/data/SessionIsolationTest.kt)。云端待同步策略还见 [网络与同步](network-and-sync.md)。
+相应回归重点是 [SessionIsolationTest.kt](../app/src/test/java/cc/novelia/app/data/auth/SessionIsolationTest.kt)。云端待同步策略还见 [网络与同步](network-and-sync.md)。
 
 ## 网络、链接与 WebView
 
 [Manifest](../app/src/main/AndroidManifest.xml) 禁止应用明文流量；API 和认证客户端关闭自动重定向。图片加载等路径有自己的配置，不能推断整个应用所有 HTTP 客户端都采用同一重定向策略。
 
-认证 WebView 和站点 WebView 有各自受信任来源和导航规则，入口见 [AccountScreens.kt](../app/src/main/java/cc/novelia/app/ui/AccountScreens.kt)、[SiteWebScreen.kt](../app/src/main/java/cc/novelia/app/ui/SiteWebScreen.kt)、[PagedSiteWebView.kt](../app/src/main/java/cc/novelia/app/ui/PagedSiteWebView.kt)。调整规则时应审查主框架/子框架区别、JavaScript 桥、文件访问、混合内容和站外跳转，不把导航白名单误称为完整子资源防火墙。
+认证 WebView 和站点 WebView 有各自受信任来源和导航规则，入口见 [LoginScreen.kt](../app/src/main/java/cc/novelia/app/ui/account/LoginScreen.kt)、[SiteWebScreen.kt](../app/src/main/java/cc/novelia/app/ui/web/SiteWebScreen.kt)、[PagedSiteWebView.kt](../app/src/main/java/cc/novelia/app/ui/web/PagedSiteWebView.kt)。调整规则时应审查主框架/子框架区别、JavaScript 桥、文件访问、混合内容和站外跳转，不把导航白名单误称为完整子资源防火墙。
 
-API 请求的 Bearer 令牌只能用于本项目预期的受信任接口；不要用认证请求方法抓取任意用户输入 URL。当前下载仅校验初始 URL，随后允许重定向；扩展时应单独审查跳转链和最终目标，不能宣称已有逐跳来源校验。Markdown 链接经 [MarkdownLinks.kt](../app/src/main/java/cc/novelia/app/data/MarkdownLinks.kt) 处理，书源文本经 [BookLinks.kt](../app/src/main/java/cc/novelia/app/data/BookLinks.kt) 处理；不要绕过它们直接启动任意 URI Scheme。
+API 请求的 Bearer 令牌只能用于本项目预期的受信任接口；不要用认证请求方法抓取任意用户输入 URL。当前下载仅校验初始 URL，随后允许重定向；扩展时应单独审查跳转链和最终目标，不能宣称已有逐跳来源校验。Markdown 链接经 [MarkdownLinks.kt](../app/src/main/java/cc/novelia/app/data/markdown/MarkdownLinks.kt) 处理，书源文本经 [BookLinks.kt](../app/src/main/java/cc/novelia/app/data/catalog/BookLinks.kt) 处理；不要绕过它们直接启动任意 URI Scheme。
 
 调试认证故障时记录错误类别和 HTTP 状态即可，不记录 Authorization、Cookie、完整令牌、认证响应体或用户输入密码。诊断中不添加忽略 TLS 错误的逻辑。
 

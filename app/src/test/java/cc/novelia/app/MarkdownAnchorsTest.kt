@@ -1,7 +1,11 @@
 package cc.novelia.app
 
-import cc.novelia.app.data.MarkdownLinks
-import cc.novelia.app.ui.*
+import cc.novelia.app.data.markdown.MarkdownLinks
+import cc.novelia.app.ui.markdown.DetailsNode
+import cc.novelia.app.ui.markdown.MarkdownAnchors
+import cc.novelia.app.ui.markdown.configureSiteMarkdownParser
+import cc.novelia.app.ui.markdown.configureSpoilerParser
+import cc.novelia.app.ui.markdown.prepareSiteMarkdown
 import org.commonmark.parser.Parser
 import org.junit.Assert.*
 import org.junit.Test

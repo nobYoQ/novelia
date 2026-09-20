@@ -1,6 +1,6 @@
 package cc.novelia.app
 
-import cc.novelia.app.ui.ReaderChapterOverscrollGesture
+import cc.novelia.app.ui.reader.ReaderChapterOverscrollGesture
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

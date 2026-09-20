@@ -1,6 +1,8 @@
 package cc.novelia.app
 
-import cc.novelia.app.data.NoveliaApi
+import cc.novelia.app.data.network.NoveliaApi
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
@@ -13,8 +15,6 @@ import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.SocketPolicy
 import org.junit.Assert.*
 import org.junit.Test
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 
 class NetworkPerformanceTest {
     @Test fun cancellingRequestStopsTheUnderlyingCall() = runBlocking {

@@ -1,6 +1,6 @@
 package cc.novelia.app.reader
 
-import cc.novelia.app.data.ReaderSettings
+import cc.novelia.app.data.model.ReaderSettings
 
 /** Character ranges are relative to one displayed language/translation, before indentation. */
 data class ReadingTextMatch(val paragraph: Int, val part: Int, val start: Int, val end: Int)

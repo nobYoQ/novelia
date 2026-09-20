@@ -4,7 +4,7 @@
 
 ## 从问题到 PR
 
-先根据 [架构地图](architecture.md) 找到实现与测试。较大功能先在 Issue 中讨论行为、数据兼容和范围；外部贡献者从 Fork 建立分支，通过 PR 合入 `main`。一个 PR 聚焦一个问题，避免混入格式化、依赖升级和无关重构。
+先根据 [源码目录导航](source-layout.md) 和 [架构地图](architecture.md) 找到实现与测试。较大功能先在 Issue 中讨论行为、数据兼容和范围；外部贡献者从 Fork 建立分支，通过 PR 合入 `main`。一个 PR 聚焦一个问题，避免混入格式化、依赖升级和无关重构。
 
 开发时在专用模拟器或测试设备使用虚构书籍与测试账号。复现记录应包含构建版本、系统 API、入口、预期、实际结果和是否开启电子纸/减少动效。可用合成的小说短文与 MockWebServer 响应复现的问题，不需要请求生产站点。
 
@@ -24,7 +24,7 @@
 
 ## 添加一个页面
 
-1. 在 `ui/` 中按功能创建或扩展页面，沿用 `Screen`、`AppLazyColumn`、统一弹窗和主题组件；先确定它属于根标签还是详情页。
+1. 先确定页面属于根标签还是详情页，再按 [归档规则](source-layout.md) 在 `ui/<功能>/` 中创建独立的 `XxxScreen.kt`，或扩展已有页面。同一功能的面板和展示逻辑就近放置；沿用 `ui/components/` 中的 `Screen`、`AppLazyColumn`、统一弹窗和 `ui/theme/` 的主题组件。
 2. 在 [MainActivity.kt](../app/src/main/java/cc/novelia/app/MainActivity.kt) 注册路由，入口通过 `AppController.go` 或现有语义方法进入。可变字符串参数需要编码；具有不同参数的详情应保留独立历史记录。
 3. 明确状态归属：页面瞬时状态留在 Compose；重建后应保留的轻量状态使用合适的保存方式；跨页面持久数据进 `LocalStore`；会话只交给 `Session`。
 4. 需要登录的动作使用现有登录继续机制，网络结果应用前保持账号绑定校验；取消登录时不保留失效回调。
@@ -38,8 +38,8 @@
 
 | 环节 | 应检查的内容 |
 | --- | --- |
-| 模型 | [Models.kt](../app/src/main/java/cc/novelia/app/data/Models.kt) 中字段默认值能否读取旧 JSON；是否属于全局、单书或临时状态 |
-| 编解码 | [LibraryStateCodec.kt](../app/src/main/java/cc/novelia/app/data/LibraryStateCodec.kt) 中是否有验证/兼容要求；未知值如何处理 |
+| 模型 | [LibraryModels.kt](../app/src/main/java/cc/novelia/app/data/model/LibraryModels.kt)、[ReaderSettings.kt](../app/src/main/java/cc/novelia/app/data/model/ReaderSettings.kt) 等领域模型中的字段默认值能否读取旧 JSON；是否属于全局、单书或临时状态 |
+| 编解码 | [LibraryStateCodec.kt](../app/src/main/java/cc/novelia/app/data/storage/LibraryStateCodec.kt) 中是否有验证/兼容要求；未知值如何处理 |
 | 界面 | 默认偏好与单书设置是否都能正确显示；重置、预设和电子纸切换是否影响该字段 |
 | 投影/排版 | 是否使缓存或分页结果失效；切换设置后如何保持阅读锚点 |
 | 导入导出 | 普通设置备份、阅读资料备份是否应该包含它，导入时是否检查范围 |
@@ -49,7 +49,7 @@
 
 ## 添加 API 或云端写操作
 
-1. 确认原站接口的真实方法、路径、字段、权限、分页和副作用。当前客户端的合约入口是 [NoveliaApi.kt](../app/src/main/java/cc/novelia/app/data/NoveliaApi.kt) 与页面调用；原站源码只是核对材料，不是本客户端构建依赖。
+1. 确认原站接口的真实方法、路径、字段、权限、分页和副作用。当前客户端的合约入口是 [NoveliaApi.kt](../app/src/main/java/cc/novelia/app/data/network/NoveliaApi.kt) 与页面调用；原站源码只是核对材料，不是本客户端构建依赖。
 2. 为 DTO 选择合理默认值，区分空值、空列表和字段缺失。用 MockWebServer 检查 URL 编码、请求体、响应解析与错误状态，参考 [ApiContractTest.kt](../app/src/test/java/cc/novelia/app/ApiContractTest.kt)。
 3. 通过统一认证请求入口发起请求，长操作在开始时捕获会话绑定，成功后写入本地状态前复核。不要另建一个会无条件复制当前令牌的全局拦截器。
 4. 读取接口考虑缓存键是否含账号、何时失效、旧请求是否会覆盖新结果。写操作成功要沿用变更通知，避免页面继续显示写前缓存。
@@ -61,7 +61,7 @@
 
 现有六类网络书源是 `kakuyomu`、`syosetu`、`novelup`、`hameln`、`pixiv`、`alphapolis`。原站负责收录和内容 API；客户端增加名称并不意味着服务器已支持该书源。
 
-服务端具备支持后，检查 [Models.kt](../app/src/main/java/cc/novelia/app/data/Models.kt) 的 `providers`、[BookLinks.kt](../app/src/main/java/cc/novelia/app/data/BookLinks.kt) 的链接解析和反向来源链接、[SearchExpression.kt](../app/src/main/java/cc/novelia/app/data/SearchExpression.kt) 与发现页筛选。同步检查章节 ID 格式、详情路由、下载和分享。涉及系统接收域名时还要审查 Manifest；应用内部能够解析链接不代表系统已验证 App Link。
+服务端具备支持后，检查 [Providers.kt](../app/src/main/java/cc/novelia/app/data/catalog/Providers.kt) 的 `providers`、[BookLinks.kt](../app/src/main/java/cc/novelia/app/data/catalog/BookLinks.kt) 的链接解析和反向来源链接、[SearchExpression.kt](../app/src/main/java/cc/novelia/app/data/catalog/SearchExpression.kt) 与发现页筛选。同步检查章节 ID 格式、详情路由、下载和分享。涉及系统接收域名时还要审查 Manifest；应用内部能够解析链接不代表系统已验证 App Link。
 
 书源测试应覆盖规范链接、尾斜杠、分享文本、大小写/编码、缺失 ID 和不受信任域名。不要用抓取器绕过原站权限来补齐未支持的功能。
 

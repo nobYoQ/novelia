@@ -1,9 +1,9 @@
 package cc.novelia.app
 
-import cc.novelia.app.data.WenkuDetail
-import cc.novelia.app.data.WenkuVolume
-import cc.novelia.app.ui.DraftPersistence
-import cc.novelia.app.ui.editablePayload
+import cc.novelia.app.data.model.WenkuDetail
+import cc.novelia.app.data.model.WenkuVolume
+import cc.novelia.app.ui.book.editablePayload
+import cc.novelia.app.ui.markdown.DraftPersistence
 import org.junit.Assert.*
 import org.junit.Test
 

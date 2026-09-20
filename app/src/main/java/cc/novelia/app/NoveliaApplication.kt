@@ -1,29 +1,29 @@
 package cc.novelia.app
 
 import android.app.Application
-import cc.novelia.app.data.LocalStore
-import cc.novelia.app.data.MetadataCache
-import cc.novelia.app.data.NoveliaApi
-import cc.novelia.app.data.Session
-import cc.novelia.app.data.KeywordStore
-import cc.novelia.app.data.CloudSyncWorker
-import cc.novelia.app.data.UpdateWorker
+import cc.novelia.app.data.auth.Session
+import cc.novelia.app.data.catalog.KeywordStore
+import cc.novelia.app.data.model.User
+import cc.novelia.app.data.network.NoveliaApi
+import cc.novelia.app.data.storage.LocalStore
+import cc.novelia.app.data.sync.CloudSyncWorker
+import cc.novelia.app.data.updates.UpdateWorker
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
+import java.io.File
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
-import java.io.File
+import kotlinx.coroutines.launch
 
 class NoveliaApplication : Application(), ImageLoaderFactory {
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

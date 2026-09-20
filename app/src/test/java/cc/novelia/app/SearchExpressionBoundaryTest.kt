@@ -1,7 +1,7 @@
 package cc.novelia.app
 
-import cc.novelia.app.data.KeywordCatalog
-import cc.novelia.app.data.SearchExpression
+import cc.novelia.app.data.catalog.KeywordCatalog
+import cc.novelia.app.data.catalog.SearchExpression
 import org.junit.Assert.*
 import org.junit.Test
 

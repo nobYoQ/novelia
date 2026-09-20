@@ -1,7 +1,12 @@
 package cc.novelia.app
 
-import cc.novelia.app.data.*
-import cc.novelia.app.ui.*
+import cc.novelia.app.data.model.LibraryState
+import cc.novelia.app.data.model.PendingAction
+import cc.novelia.app.data.sync.CloudSyncStatus
+import cc.novelia.app.data.sync.pendingBookKey
+import cc.novelia.app.data.sync.updateCloudPending
+import cc.novelia.app.ui.components.BookSyncPhase
+import cc.novelia.app.ui.components.bookSyncStates
 import org.junit.Assert.*
 import org.junit.Test
 

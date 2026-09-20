@@ -1,7 +1,18 @@
 package cc.novelia.app
 
-import cc.novelia.app.data.*
-import cc.novelia.app.ui.*
+import cc.novelia.app.data.library.withoutBook
+import cc.novelia.app.data.model.BookCard
+import cc.novelia.app.data.model.BookRef
+import cc.novelia.app.data.model.LibraryState
+import cc.novelia.app.data.model.Note
+import cc.novelia.app.data.model.PendingAction
+import cc.novelia.app.data.model.Position
+import cc.novelia.app.data.model.SavedBook
+import cc.novelia.app.ui.components.stableCoverVariant
+import cc.novelia.app.ui.downloads.downloadRecoveryLabel
+import cc.novelia.app.ui.notes.presentNotes
+import cc.novelia.app.ui.shelf.pendingFavoriteAction
+import cc.novelia.app.ui.shelf.restoreRemovedShelfBook
 import org.junit.Assert.*
 import org.junit.Test
 

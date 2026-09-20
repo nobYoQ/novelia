@@ -1,12 +1,7 @@
 package cc.novelia.app
 
-import cc.novelia.app.data.LibraryState
-import cc.novelia.app.data.SettingsBackup
-import cc.novelia.app.data.appJson
-import cc.novelia.app.ui.configureSpoilerParser
-import cc.novelia.app.ui.SpoilerNode
-import cc.novelia.app.ui.*
-
+import cc.novelia.app.ui.markdown.SpoilerNode
+import cc.novelia.app.ui.markdown.configureSpoilerParser
 import org.commonmark.node.AbstractVisitor
 import org.commonmark.node.CustomNode
 import org.commonmark.node.Text

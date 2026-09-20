@@ -1,7 +1,7 @@
 package cc.novelia.app
 
-import cc.novelia.app.data.DownloadEntry
-import cc.novelia.app.ui.newlyCompletedDownloads
+import cc.novelia.app.data.model.DownloadEntry
+import cc.novelia.app.ui.feedback.newlyCompletedDownloads
 import org.junit.Assert.*
 import org.junit.Test
 

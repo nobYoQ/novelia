@@ -2,7 +2,7 @@
 
 `ReadingBenchmark` 测量应用冷启动和书架/外观设置导航的帧时间。`ReadingBaselineProfile.startup` 只收集启动路径，`localNavigation` 单独收集非启动路径，避免把设置页面放进 startup profile。设置入口不在首屏时会先滚动查找。
 
-`PerformanceScenarioTest` 是独立的离线数据与排版测量：
+[PerformanceScenarioTest](../app/src/androidTest/java/cc/novelia/app/performance/PerformanceScenarioTest.kt) 位于设备测试的 `performance/` 包，是独立的离线数据与排版测量：
 
 | 场景 | 测量阶段 |
 | --- | --- |
@@ -16,7 +16,7 @@
 PowerShell 7 中运行诊断矩阵（调试构建只用于验证测量流程）：
 
 ```powershell
-.\gradlew.bat :app:connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=cc.novelia.app.PerformanceScenarioTest' '-Pandroid.testInstrumentationRunnerArguments.performanceIterations=3'
+.\gradlew.bat :app:connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=cc.novelia.app.performance.PerformanceScenarioTest' '-Pandroid.testInstrumentationRunnerArguments.performanceIterations=3'
 ```
 
 JSON 与文本报告写入应用外部文件目录 `performance/scenarios-<运行ID>.json` / `.txt`，instrumentation 结果返回准确路径。日志标签 `NoveliaPerformance` 会打印当前阶段、字数、视口和重复编号，便于定位耗时阶段。报告包含设备型号、API、ABI、低内存设备标记、RAM、构建版本、是否可调试、每阶段耗时和前后 Java/native heap、PSS。
@@ -24,3 +24,5 @@ JSON 与文本报告写入应用外部文件目录 `performance/scenarios-<运�
 前后内存快照不等于峰值；测试没有强制 GC，也没有清空操作系统文件缓存。“冷”仅指新建 `LocalStore` 后尚未填充的进程内章节缓存。数据/排版耗时不等于用户可见首帧或滚动流畅度，后两者用 Macrobenchmark 的启动和帧指标评估。
 
 用模拟器验证测试是否完整执行即可。发布性能结论应在同一台低端真机上，保持 release 构建、供电、温度、系统字体、屏幕和编译状态一致，保留完整报告并比较多次分布。生成 Baseline Profile 也不等于已经获得性能提升，必须保留前后实测数据。
+
+UI 和 data 拆包后，已清理旧包描述符及相关不稳定的编译器/R8 合成名称。迁移后的覆盖尚待专用设备重新采集，具体状态和命令见 [性能 Profile 维护](../docs/baseline-profiles.md)；现有 Profile 的手工清理不能当作重新测量结果。

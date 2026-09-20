@@ -3,17 +3,18 @@ package cc.novelia.app.files
 import android.content.Context
 import androidx.work.*
 import cc.novelia.app.NoveliaApplication
-import cc.novelia.app.data.DownloadEntry
-import cc.novelia.app.data.ApiException
+import cc.novelia.app.data.model.DownloadEntry
+import cc.novelia.app.data.network.ApiException
+import cc.novelia.app.data.updates.AppNotifications
+import java.io.File
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
-import okhttp3.Request
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import java.io.File
-import java.util.concurrent.TimeUnit
+import okhttp3.Request
 
 class DownloadWorker(context: Context, parameters: WorkerParameters) : CoroutineWorker(context, parameters) {
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
@@ -67,7 +68,7 @@ class DownloadWorker(context: Context, parameters: WorkerParameters) : Coroutine
                 !isStopped && app.store.state.value.downloads.any { it.id == id && it.workId == workId && it.fileName == entry.fileName && it.status != "已暂停" }
             }) {
                 update(app, id, "已完成", 100)
-                cc.novelia.app.data.AppNotifications.show(app, id.hashCode(), "下载已完成", entry.title)
+                cc.novelia.app.data.updates.AppNotifications.show(app, id.hashCode(), "下载已完成", entry.title)
             }
             if (!committed) return@withContext Result.failure()
             try { app.store.flush() } catch (_: java.io.IOException) { return@withContext Result.retry() }

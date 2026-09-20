@@ -1,6 +1,9 @@
 package cc.novelia.app
 
-import cc.novelia.app.data.*
+import cc.novelia.app.data.model.LibraryState
+import cc.novelia.app.data.model.ReaderSettings
+import cc.novelia.app.data.model.SettingsBackup
+import cc.novelia.app.data.storage.appJson
 import kotlinx.serialization.encodeToString
 import org.junit.Assert.*
 import org.junit.Test

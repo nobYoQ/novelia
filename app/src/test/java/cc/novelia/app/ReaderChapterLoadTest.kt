@@ -1,7 +1,8 @@
 package cc.novelia.app
 
-import cc.novelia.app.ui.ReaderChapterLoad
-import cc.novelia.app.ui.ReaderChapterTarget
+import cc.novelia.app.ui.reader.ReaderChapterLoad
+import cc.novelia.app.ui.reader.ReaderChapterTarget
+import java.io.IOException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
@@ -11,7 +12,6 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import org.junit.Assert.*
 import org.junit.Test
-import java.io.IOException
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ReaderChapterLoadTest {

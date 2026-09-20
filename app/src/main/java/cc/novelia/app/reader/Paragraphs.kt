@@ -1,7 +1,7 @@
 package cc.novelia.app.reader
 
-import cc.novelia.app.data.Chapter
-import cc.novelia.app.data.ReaderSettings
+import cc.novelia.app.data.model.Chapter
+import cc.novelia.app.data.model.ReaderSettings
 import com.ibm.icu.text.Transliterator
 
 data class TextPart(val text: String, val source: String, val secondary: Boolean = false)

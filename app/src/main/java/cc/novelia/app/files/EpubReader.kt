@@ -1,17 +1,17 @@
 package cc.novelia.app.files
 
-import cc.novelia.app.data.LocalChapter
+import cc.novelia.app.data.model.LocalChapter
+import java.io.File
+import java.io.FilterInputStream
+import java.io.InputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.Node
 import org.jsoup.nodes.TextNode
 import org.jsoup.parser.Parser
 import org.jsoup.select.NodeVisitor
-import java.io.File
-import java.io.InputStream
-import java.io.FilterInputStream
-import java.util.zip.ZipEntry
-import java.util.zip.ZipFile
 
 internal data class EpubContents(val chapters: List<LocalChapter>, val cover: String?)
 

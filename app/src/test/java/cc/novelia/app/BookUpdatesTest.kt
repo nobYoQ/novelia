@@ -1,6 +1,17 @@
 package cc.novelia.app
 
-import cc.novelia.app.data.*
+import cc.novelia.app.data.model.BookCard
+import cc.novelia.app.data.model.BookRef
+import cc.novelia.app.data.model.JapaneseVolume
+import cc.novelia.app.data.model.ReaderSettings
+import cc.novelia.app.data.model.WebOutline
+import cc.novelia.app.data.model.WenkuDetail
+import cc.novelia.app.data.storage.appJson
+import cc.novelia.app.data.updates.BookUpdateInfo
+import cc.novelia.app.data.updates.BookUpdateSnapshot
+import cc.novelia.app.data.updates.accumulate
+import cc.novelia.app.data.updates.detectBookUpdate
+import cc.novelia.app.data.updates.updateSnapshot
 import org.junit.Assert.*
 import org.junit.Test
 

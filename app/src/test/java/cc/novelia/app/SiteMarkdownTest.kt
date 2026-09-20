@@ -1,7 +1,16 @@
 package cc.novelia.app
 
-import cc.novelia.app.data.*
-import cc.novelia.app.ui.*
+import cc.novelia.app.data.markdown.MarkdownLinks
+import cc.novelia.app.data.model.LibraryState
+import cc.novelia.app.data.model.SettingsBackup
+import cc.novelia.app.data.storage.appJson
+import cc.novelia.app.ui.markdown.DetailsNode
+import cc.novelia.app.ui.markdown.RatingNode
+import cc.novelia.app.ui.markdown.SpoilerNode
+import cc.novelia.app.ui.markdown.StrikeNode
+import cc.novelia.app.ui.markdown.configureSiteMarkdownParser
+import cc.novelia.app.ui.markdown.configureSpoilerParser
+import cc.novelia.app.ui.markdown.prepareSiteMarkdown
 import org.commonmark.node.*
 import org.commonmark.parser.Parser
 import org.junit.Assert.*

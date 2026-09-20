@@ -15,15 +15,15 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import cc.novelia.app.MainActivity
 import cc.novelia.app.R
-import cc.novelia.app.data.ReaderSettings
-import cc.novelia.app.data.appJson
-import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.serialization.encodeToString
+import cc.novelia.app.data.model.ReaderSettings
+import cc.novelia.app.data.storage.appJson
 import java.io.File
 import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicLong
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.serialization.encodeToString
 
 class ReadAloudService : Service() {
     private var engine: TextToSpeech? = null

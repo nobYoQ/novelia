@@ -6,11 +6,12 @@ Novelia 是原站的非官方 Android 客户端。客户端提供阅读、收藏
 
 ## 推荐阅读顺序
 
-首次参与开发，依次阅读「环境搭建 → 架构 → 开发流程 → 测试」，然后按修改范围选择模块文档。
+首次参与开发，依次阅读「环境搭建 → 源码目录 → 架构 → 开发流程 → 测试」，然后按修改范围选择模块文档。
 
 | 文档 | 解决的问题 |
 | --- | --- |
 | [环境搭建与构建](getting-started.md) | 从干净检出到本地运行；工具版本、Gradle、构建变体和输出 |
+| [源码目录导航与归档规则](source-layout.md) | 17 个 UI 子包、13 个数据职责包、设备测试分类及文件放置约定 |
 | [架构与代码地图](architecture.md) | 两个 Gradle 模块、应用生命周期、状态流和功能入口 |
 | [日常开发与扩展](development.md) | 如何添加页面、偏好、API、书源及依赖；PR 维护要求 |
 | [界面与导航](ui-and-navigation.md) | 路由、Compose 状态、自适应布局、主题、动效与 Markdown |
@@ -20,6 +21,7 @@ Novelia 是原站的非官方 Android 客户端。客户端提供阅读、收藏
 | [文件与下载](files-and-downloads.md) | EPUB/TXT/SRT、后台下载、导出、图片压缩和解析限制 |
 | [测试与验收](testing.md) | JVM、设备、只读联调、修改范围与测试的对应关系 |
 | [性能测量](performance.md) | 数据场景、Macrobenchmark、Baseline Profile 和结果解释 |
+| [性能 Profile 维护](baseline-profiles.md) | 类与文件迁移后的旧规则处理、重新采集和当前覆盖范围 |
 | [安全与隐私开发约束](security-and-privacy.md) | 会话、WebView、文件、日志、导出和权限的审查点 |
 | [发布与维护](release-and-maintenance.md) | GitHub 协作、版本管理、手动发布、许可证与发布阻塞项 |
 | [排障指南](troubleshooting.md) | 环境、网络、同步、文件、阅读器和安装故障定位 |

@@ -6,7 +6,7 @@
 
 ## 离线数据与排版场景
 
-[PerformanceScenarioTest.kt](../app/src/androidTest/java/cc/novelia/app/PerformanceScenarioTest.kt) 在独立临时目录中生成数据，使用 ContextWrapper 隔离数据路径，测量后刷新并清理本次夹具。它没有使用真实书库作为性能数据源。
+[PerformanceScenarioTest.kt](../app/src/androidTest/java/cc/novelia/app/performance/PerformanceScenarioTest.kt) 在独立临时目录中生成数据，使用 ContextWrapper 隔离数据路径，测量后刷新并清理本次夹具。它没有使用真实书库作为性能数据源。
 
 | 场景 | 分别测量 |
 | --- | --- |
@@ -18,7 +18,7 @@
 在专用已连接设备上运行：
 
 ```powershell
-./build.ps1 -Tasks @(':app:connectedDebugAndroidTest', '-Pandroid.testInstrumentationRunnerArguments.class=cc.novelia.app.PerformanceScenarioTest', '-Pandroid.testInstrumentationRunnerArguments.performanceIterations=3')
+./build.ps1 -Tasks @(':app:connectedDebugAndroidTest', '-Pandroid.testInstrumentationRunnerArguments.class=cc.novelia.app.performance.PerformanceScenarioTest', '-Pandroid.testInstrumentationRunnerArguments.performanceIterations=3')
 ```
 
 此命令用于验证测量流程和定位热点，Debug 构建结果不能直接作为正式包性能结论。报告写到应用外部文件目录 `performance/scenarios-<运行ID>.json` 和 `.txt`，instrumentation 返回实际路径，`NoveliaPerformance` 日志标记阶段。保留原始报告后再做对比。
@@ -50,6 +50,8 @@ benchmark 模块要求 API 28 及以上。采集使用专用设备与可安装�
 ```
 
 ## Baseline Profile
+
+已提交的采集文件位于 `app/src/release/generated/baselineProfiles/`，状态与操作见 [Profile 维护](baseline-profiles.md)。UI 与 data 包、文件拆分后，已移除旧 UI、旧 data、主 Activity 相关描述符，并清理 NoveliaApplication 中不稳定的 R8 合成名称，保留其余依赖及未迁移代码规则。当前未连接采集设备，迁移后的 UI 与数据层覆盖需要在专用设备上重新采集；不能把构建通过或手工过滤视作性能测量完成。
 
 `ReadingBaselineProfile.startup` 只收集启动路径，并设置 `includeInStartupProfile=true`；`localNavigation` 收集本地导航和设置，明确不纳入 startup profile。这样启动 DEX 布局与非启动路径的 profile 责任保持清楚。
 
