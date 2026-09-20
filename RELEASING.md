@@ -2,6 +2,8 @@
 
 本项目通过 [GitHub Releases](https://github.com/nobYoQ/novelia/releases) 分发 APK，安装包不提交到 Git。当前不配置 CI 或自动发布工作流；以下操作由维护者在可信设备执行。
 
+日常本地打包使用 `./build-debug.ps1` 或 `./build-release.ps1`，详见 [本地构建指南](docs/getting-started.md)。本地 Release 默认使用 Debug 测试证书，输出到 `artifacts/packages/`，允许未提交改动且无需标签；它不等于本页的正式发行流程。正式附件仍由 `scripts/prepare-release.ps1` 准备。
+
 ## 首次发布前
 
 - [ ] 确认贴纸的公开分发授权或完成替换。它们不适用本项目 GPL-3.0；此事项仍待处理。
@@ -23,7 +25,7 @@
 
 ## 配置签名
 
-普通 Release 构建仍默认未签名，便于贡献者检查。只有显式使用 `-PreleaseSigning=true` 才读取以下进程环境变量：
+直接调用 Gradle 或通过 `build.ps1` 执行 Release 任务时默认未签名，便于贡献者检查。根目录 `build-release.ps1` 默认显式开启本地测试签名，可通过 `-Unsigned` 改为未签名。只有显式使用 `-PreleaseSigning=true` 才读取以下进程环境变量：
 
 | 环境变量 | 内容 |
 | --- | --- |

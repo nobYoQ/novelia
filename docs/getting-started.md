@@ -32,28 +32,30 @@ sdk.dir=D\:/Android/sdk
 Windows 推荐在仓库根目录执行：
 
 ```powershell
-./build.ps1
+./build-debug.ps1
+./build-release.ps1
 ```
 
-默认执行 `:app:assembleDebug` 和 `:app:testDebugUnitTest`。提交前常用检查：
+前者生成 Debug APK，后者生成使用 Debug 测试证书签名、启用 R8 和资源收缩的本地 Release APK，均可用于本机安装测试。默认只执行对应 `assemble`；提交前可同时运行该变体的 JVM 单元测试和 Lint：
 
 ```powershell
-./build.ps1 -Tasks @(':app:assembleDebug', ':app:testDebugUnitTest', ':app:lintDebug')
+./build-debug.ps1 -Verify
+./build-release.ps1 -Verify
 ```
 
-脚本优先采用 `JAVA_HOME/bin/java.exe`，如果变量已设置但无效会立即报错。未设置时依次查找脚本中列出的 Android Studio JBR 路径，再查找 PATH。它将 `GRADLE_USER_HOME` 和 `ANDROID_USER_HOME` 指向当前仓库的 `.gradle-home/`、`.android/`，工作目录切换到仓库根并在结束时还原。该缓存与直接调用 Wrapper 的默认用户缓存可能不同。
+两个根目录入口通过 [build-package.ps1](../scripts/build-package.ps1) 复用 [build.ps1](../build.ps1)。后者优先采用 `JAVA_HOME/bin/java.exe`，如果变量已设置但无效会立即报错。未设置时依次查找脚本中列出的 Android Studio JBR 路径，再查找 PATH。它将 `GRADLE_USER_HOME` 和 `ANDROID_USER_HOME` 指向当前仓库的 `.gradle-home/`、`.android/`，工作目录切换到仓库根并在结束时还原。该缓存与直接调用 Wrapper 的默认用户缓存可能不同。
 
 `JAVA_HOME` 必须指向 JDK 根目录。需要临时指定 JDK 时，在当前 PowerShell 会话中按本机路径配置；不必改构建脚本：
 
 ```powershell
 $env:JAVA_HOME = 'C:/Program Files/Java/jdk-17'
-./build.ps1
+./build-debug.ps1
 ```
 
 已有完整依赖缓存时可用离线模式；首次构建不能依靠离线模式下载缺失依赖：
 
 ```powershell
-./build.ps1 -Offline
+./build-debug.ps1 -Offline
 ```
 
 Linux / macOS 直接使用仓库 Wrapper。`sh` 调用也适用于未保留执行位的源码 ZIP：
@@ -64,7 +66,36 @@ sh ./gradlew --no-daemon :app:assembleDebug :app:testDebugUnitTest :app:lintDebu
 
 标准 Windows Wrapper 入口为 `./gradlew.bat`；它要求调用环境已配置 JDK/SDK，不执行 `build.ps1` 的 JBR 查找和缓存目录设置。仓库不需要 `.reference/`、`resource/`、`artifacts/` 等本地忽略目录才能构建。
 
-## 运行与构建产物
+## 本地打包参数与产物
+
+| 参数 | 支持入口 | 默认值与用途 |
+| --- | --- | --- |
+| `-Abi` | Debug / Release | `universal`；可选 `arm64-v8a`、`armeabi-v7a`、`x86_64`、`x86` |
+| `-Offline` | Debug / Release | 关闭；仅使用已有 Gradle 依赖缓存 |
+| `-Verify` | Debug / Release | 关闭；增加对应变体的 JVM 单元测试和 Lint，不运行设备测试 |
+| `-Unsigned` | Release | 关闭；生成不可直接安装的未签名 Release APK |
+
+```powershell
+# 面向 ARM64 设备的本地 Release 包，并执行检查
+./build-release.ps1 -Abi arm64-v8a -Verify
+
+# 依赖已缓存时，生成未签名 Release 包
+./build-release.ps1 -Unsigned -Offline
+```
+
+脚本从 [version.properties](../version.properties) 读取版本，根据 APK 元数据收集当次产物。文件名格式为 `Novelia-<版本>-<模式>-<ABI>.apk`，校验文件追加 `.sha256`；Release 的 R8 映射使用相同主文件名并追加 `-mapping.txt`。
+
+| 模式 | 入口 | 归档目录 |
+| --- | --- | --- |
+| `debug` | `build-debug.ps1` | `artifacts/packages/debug/` |
+| `release-local` | `build-release.ps1` | `artifacts/packages/release-local/` |
+| `release-unsigned` | `build-release.ps1 -Unsigned` | `artifacts/packages/release-unsigned/` |
+
+构建日志写入 `artifacts/logs/build-<模式>-<ABI>-<时间戳>.log`。本地脚本允许工作区有未提交修改，无需版本标签；重复构建会覆盖同版本、模式和 ABI 的归档文件，日志另存。它们不安装应用、不生成正式发行附件，也不上传文件。需要保留某次本地安装包时应另行归档。
+
+正式分发使用 [prepare-release.ps1](../scripts/prepare-release.ps1)：要求干净工作区、匹配版本的标签和正式证书，输出到 `releases/`，详见 [发布指南](../RELEASING.md)。本地 Release 的测试证书不适合公开发行。
+
+## 运行与 Gradle 构建产物
 
 选择 Android Studio 的 `app` 配置启动模拟器或专用测试设备；命令行可在确认目标设备后安装 Debug 包：
 
@@ -78,7 +109,7 @@ adb -s '<设备序列号>' install -r app/build/outputs/apk/debug/app-debug.apk
 | 产物 | 位置 |
 | --- | --- |
 | Debug APK | `app/build/outputs/apk/debug/app-debug.apk` |
-| Release APK | `app/build/outputs/apk/release/`，默认是未签名产物 |
+| Release APK | `app/build/outputs/apk/release/`；是否签名取决于本次构建参数 |
 | JVM HTML 报告 | `app/build/reports/tests/testDebugUnitTest/index.html` |
 | Lint HTML 报告 | `app/build/reports/lint-results-debug.html` |
 | 生成的完整许可说明 | `app/build/generated/openSourceAssets/open-source/NOTICE.txt` |
@@ -87,6 +118,8 @@ adb -s '<设备序列号>' install -r app/build/outputs/apk/debug/app-debug.apk
 构建目录是生成文件，实际 APK 文件名以该目录的 `output-metadata.json` 为准。版本号统一来自 [version.properties](../version.properties)；应用包名为 `cc.novelia.app`，Debug 未设置包名后缀，不能与同包名正式版作为两个独立应用共存。
 
 ## 构建变体与参数
+
+[build.ps1](../build.ps1) 保留通用 Gradle 入口；不带参数时执行 `:app:assembleDebug` 和 `:app:testDebugUnitTest`，不归档 APK。通过 `-Tasks` 可执行任意所需任务：
 
 ```powershell
 # 不需要签名凭据的 Release 检查
@@ -99,9 +132,9 @@ adb -s '<设备序列号>' install -r app/build/outputs/apk/debug/app-debug.apk
 ./build.ps1 -Tasks @(':app:generateOpenSourceNotices')
 ```
 
-Release 开启 R8 压缩和资源收缩。`targetAbi` 只接受 `arm64-v8a`、`armeabi-v7a`、`x86_64`、`x86`；未传时不额外限制 ABI。`universal` 是发布附件脚本的参数值，不是 Gradle `targetAbi` 的合法值。
+Release 开启 R8 压缩和资源收缩。`targetAbi` 接受 `universal`、`arm64-v8a`、`armeabi-v7a`、`x86_64`、`x86`；`universal` 表示不额外限制 ABI。本地打包脚本始终显式传入该属性，覆盖机器级的隐式 ABI 设置，保证归档文件名与构建目标一致。
 
-普通贡献和测试不需要原站账号或发布私钥。正式分发使用 `-PreleaseSigning=true` 及环境变量；本地测试的 `-PlocalReleaseSigning=true` 使用 Debug 签名，两者互斥。不要把测试签名包当正式发行，详细步骤只在 [RELEASING.md](../RELEASING.md) 维护。
+普通贡献和测试不需要原站账号或发布私钥。直接运行 Gradle 或通过 `build.ps1` 执行 `assembleRelease` 时默认未签名；`build-release.ps1` 则默认传入 `-PlocalReleaseSigning=true`，使用 Debug 签名。正式分发使用 `-PreleaseSigning=true` 及环境变量，两种签名选项互斥。正式步骤只在 [RELEASING.md](../RELEASING.md) 维护。
 
 ## 常见工作入口
 

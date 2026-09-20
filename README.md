@@ -34,12 +34,19 @@
 用 Android Studio 打开本目录，或使用 PowerShell 7：
 
 ```powershell
-./build.ps1
-./build.ps1 -Tasks @(':app:assembleDebug', ':app:testDebugUnitTest', ':app:lintDebug')
-./build.ps1 -Tasks @(':app:assembleRelease', ':app:testReleaseUnitTest', ':app:lintRelease')
+./build-debug.ps1
+./build-release.ps1
 ```
 
-`build.ps1` 优先使用 `JAVA_HOME`，未设置时依次尝试 Android Studio JBR 和 PATH；无效的 `JAVA_HOME` 会报错。Gradle 缓存放入本项目 `.gradle-home`。在 `local.properties` 中配置 Android SDK，例如 `sdk.dir=D\:/Android/sdk`。该文件不应提交。
+这两个入口分别生成 Debug 包和使用测试证书签名的本地 Release 包，后者保留 R8 压缩与资源收缩。默认生成通用 APK；可加 `-Abi arm64-v8a` 选择设备架构，已有缓存时加 `-Offline`，需要同时运行对应单元测试和 Lint 时加 `-Verify`。例如：
+
+```powershell
+./build-release.ps1 -Abi arm64-v8a -Verify -Offline
+```
+
+APK 与 SHA-256 校验文件输出到 `artifacts/packages/debug/` 或 `artifacts/packages/release-local/`，Release 同时保留 R8 映射；日志在 `artifacts/logs/`。这些入口允许未提交的本地改动，重复构建会覆盖同版本、模式和 ABI 的产物，不会自动安装或上传。完整参数与未签名构建见 [环境搭建与构建](docs/getting-started.md)。
+
+构建入口复用 `build.ps1`：优先使用 `JAVA_HOME`，未设置时依次尝试 Android Studio JBR 和 PATH；无效的 `JAVA_HOME` 会报错。Gradle 缓存放入本项目 `.gradle-home`。在 `local.properties` 中配置 Android SDK，例如 `sdk.dir=D\:/Android/sdk`。该文件不应提交。
 
 标准 Gradle Wrapper 也已提供；可在配置好 JDK/SDK 的环境中使用 `gradlew`。当前固定 AGP 8.13.2、Gradle 8.13、Kotlin 2.2.21、Compose BOM 2025.12.00。
 
@@ -49,7 +56,7 @@ Linux / macOS（`sh` 调用也适用于没有执行位的源码 ZIP）：
 sh ./gradlew --no-daemon :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
 ```
 
-Debug APK 位于 `app/build/outputs/apk/debug/app-debug.apk`。默认 Release 未签名，不能直接安装；正式签名、旧版迁移和发行附件准备见 [RELEASING.md](RELEASING.md)。版本号和版本码统一在 `version.properties` 维护。
+仍可用 `./build.ps1 -Tasks @(':app:assembleDebug', ':app:testDebugUnitTest', ':app:lintDebug')` 自选 Gradle 任务；不带参数的 `build.ps1` 保持执行 Debug 构建和单元测试。直接调用 Gradle 或通过 `build.ps1` 执行 `assembleRelease` 时默认未签名。正式 GitHub 发行使用独立的 [发布流程](RELEASING.md)，不要上传本地测试签名包。版本号和版本码统一在 `version.properties` 维护。
 
 `releases/`、构建输出、APK/AAB 安装包、签名旁文件及安装包校验文件由 `.gitignore` 排除，不纳入源码提交。正式安装包上传为 GitHub Release 附件。
 

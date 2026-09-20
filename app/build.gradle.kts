@@ -31,8 +31,10 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
         providers.gradleProperty("targetAbi").orNull?.let { requestedAbi ->
-            require(requestedAbi in setOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")) { "Unsupported targetAbi" }
-            ndk { abiFilters += requestedAbi }
+            require(requestedAbi in setOf("universal", "arm64-v8a", "armeabi-v7a", "x86_64", "x86")) { "Unsupported targetAbi" }
+            if (requestedAbi != "universal") {
+                ndk { abiFilters += requestedAbi }
+            }
         }
     }
     if (releaseSigning) {

@@ -21,16 +21,18 @@
 以下 PowerShell 7 命令在仓库根执行，环境配置见 [构建指南](getting-started.md)。
 
 ```powershell
-./build.ps1 -Tasks @(':app:assembleDebug', ':app:testDebugUnitTest', ':app:lintDebug')
+./build-debug.ps1 -Verify
 ```
 
-修改依赖、混淆、资源、序列化、发布配置或准备发行时增加：
+这会运行 Debug 构建、JVM 单元测试和 Lint，并归档 APK 与日志。不加 `-Verify` 时只打包；不会运行设备测试。修改依赖、混淆、资源、序列化、发布配置或准备发行时增加：
 
 ```powershell
-./build.ps1 -Tasks @(':app:assembleRelease', ':app:testReleaseUnitTest', ':app:lintRelease')
+./build-release.ps1 -Verify
 ```
 
-普通 Release 构建未签名，以上检查不需要证书。聚焦某一逻辑测试可以减少反馈时间：
+这个入口生成使用 Debug 测试证书签名的本地 Release 包，不需要发布私钥。若只需未签名产物可加 `-Unsigned`。参数与归档位置见 [构建指南](getting-started.md)。
+
+`build.ps1 -Tasks` 仍可直接组合 Gradle 任务，例如 `@(':app:assembleRelease', ':app:testReleaseUnitTest', ':app:lintRelease')` 默认生成未签名 Release。聚焦某一逻辑测试可以减少反馈时间：
 
 ```powershell
 ./build.ps1 -Tasks @(':app:testDebugUnitTest', '--tests', 'cc.novelia.app.ApiContractTest')

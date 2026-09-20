@@ -1,11 +1,14 @@
 #requires -Version 7.0
-param([string[]]$Tasks = @(':app:assembleDebug', ':app:testDebugUnitTest'), [switch]$Offline)
+[CmdletBinding()]
+param(
+    [string[]]$Tasks = @(':app:assembleDebug', ':app:testDebugUnitTest'),
+    [switch]$Offline,
+    [string]$LogPath
+)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $PSNativeCommandUseErrorActionPreference = $false
 $rootPath = $PSScriptRoot
-$env:GRADLE_USER_HOME = Join-Path $rootPath '.gradle-home'
-$env:ANDROID_USER_HOME = Join-Path $rootPath '.android'
 $jdkCandidates = @($env:JAVA_HOME, 'D:\Android Studio\jbr', 'C:\Program Files\Android\Android Studio\jbr')
 $javaExecutable = $null
 if ($env:JAVA_HOME -and -not (Test-Path -LiteralPath (Join-Path $env:JAVA_HOME 'bin/java.exe'))) {
@@ -22,10 +25,26 @@ if (-not $javaExecutable) {
     if ($javaCommand) { $javaExecutable = $javaCommand.Source }
 }
 if (-not $javaExecutable) { throw '需要 JDK 17 或更新版本，请设置 JAVA_HOME。' }
+if ($LogPath) {
+    $LogPath = [IO.Path]::GetFullPath($LogPath)
+    [IO.Directory]::CreateDirectory((Split-Path -Parent $LogPath)) | Out-Null
+}
 $arguments = @('-classpath', (Join-Path $rootPath 'gradle/wrapper/gradle-wrapper.jar'), 'org.gradle.wrapper.GradleWrapperMain', '--no-daemon', '--console=plain') + $Tasks
 if ($Offline) { $arguments += '--offline' }
+$previousGradleHome = $env:GRADLE_USER_HOME
+$previousAndroidHome = $env:ANDROID_USER_HOME
 Push-Location -LiteralPath $rootPath
 try {
-    & $javaExecutable @arguments
+    $env:GRADLE_USER_HOME = Join-Path $rootPath '.gradle-home'
+    $env:ANDROID_USER_HOME = Join-Path $rootPath '.android'
+    if ($LogPath) {
+        & $javaExecutable @arguments 2>&1 | Tee-Object -FilePath $LogPath
+    } else {
+        & $javaExecutable @arguments
+    }
     if ($LASTEXITCODE -ne 0) { throw "Gradle 构建失败，退出码 $LASTEXITCODE" }
-} finally { Pop-Location }
+} finally {
+    $env:GRADLE_USER_HOME = $previousGradleHome
+    $env:ANDROID_USER_HOME = $previousAndroidHome
+    Pop-Location
+}

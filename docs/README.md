@@ -10,7 +10,7 @@ Novelia 是原站的非官方 Android 客户端。客户端提供阅读、收藏
 
 | 文档 | 解决的问题 |
 | --- | --- |
-| [环境搭建与构建](getting-started.md) | 从干净检出到本地运行；工具版本、Gradle、构建变体和输出 |
+| [环境搭建与构建](getting-started.md) | 从干净检出到本地运行；Debug / Release 一键打包、Gradle、自选参数和输出 |
 | [源码目录导航与归档规则](source-layout.md) | 17 个 UI 子包、13 个数据职责包、设备测试分类及文件放置约定 |
 | [架构与代码地图](architecture.md) | 两个 Gradle 模块、应用生命周期、状态流和功能入口 |
 | [日常开发与扩展](development.md) | 如何添加页面、偏好、API、书源及依赖；PR 维护要求 |
