@@ -2,11 +2,10 @@
 package cc.novelia.app.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.ExpandLess
-import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -44,6 +43,8 @@ fun SearchAssistantPanel(
     var category by rememberSaveable { mutableStateOf("全部") }
     var editing by remember { mutableStateOf<KeywordEntry?>(null) }
     var replacing by remember { mutableStateOf(false) }
+    // Keep the editing position when the panel leaves composition after a collapse.
+    val panelScroll = rememberScrollState()
     val generated = SearchExpression.build(all, any, exact, excluded, includedTags.joinToString(" "), excludedTags.joinToString(" "), minimum, maximum)
     val invalidBounds = minimum.toIntOrNull()?.let { min -> maximum.toIntOrNull()?.let { max -> min >= max } } == true
     val conflicts = SearchExpression.conflictingTags(query, generated)
@@ -61,13 +62,14 @@ fun SearchAssistantPanel(
             TextButton(onClick = { onExpandedChange(!expanded) }, modifier = Modifier.fillMaxWidth().testTag("search-assistant-toggle")) {
                 Text("辅助搜索", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
                 if(generated.isNotBlank() && !expanded) Text("有待应用条件", style = MaterialTheme.typography.labelSmall)
-                Icon(if(expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, if(expanded) "收起辅助搜索" else "展开辅助搜索")
+                FilterPanelExpandIcon(expanded, if(expanded) "收起辅助搜索" else "展开辅助搜索")
             }
             persistenceError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 16.dp)) }
-            if(expanded) {
+            FilterPanelVisibility(expanded) {
                 val panelHeight = (LocalConfiguration.current.screenHeightDp * .43f).coerceIn(140f, 400f).dp
                 AppScrollColumn(
                     modifier = Modifier.fillMaxWidth().heightIn(max = panelHeight).testTag("search-assistant-content"),
+                    state = panelScroll,
                     contentModifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
@@ -136,7 +138,7 @@ fun SearchAssistantPanel(
             onInclude = { includedTags = (includedTags + entry.original).distinct(); excludedTags = excludedTags - entry.original; editing = null },
             onExclude = { excludedTags = (excludedTags + entry.original).distinct(); includedTags = includedTags - entry.original; editing = null })
     }
-    if(replacing) AlertDialog(onDismissRequest = { replacing = false }, title = { Text("替换手工搜索条件？") },
+    if(replacing) AppAlertDialog(onDismissRequest = { replacing = false }, title = { Text("替换手工搜索条件？") },
         text = { Text("当前搜索框：\n$query\n\n替换为：\n$generated") },
         confirmButton = { TextButton(onClick = { replacing = false; apply(generated) }) { Text("替换并搜索") } },
         dismissButton = { TextButton(onClick = { replacing = false }) { Text("保留原内容") } })
@@ -153,7 +155,7 @@ fun KeywordEditorDialog(
     var translation by rememberSaveable(entry.original) { mutableStateOf(entry.translation) }
     val tooLong = translation.length > KeywordCatalog.MAX_TEXT_LENGTH || entry.original.length > KeywordCatalog.MAX_TEXT_LENGTH
     fun saveChanges() { if(translation != entry.translation) onSave(entry.original, translation) }
-    AlertDialog(onDismissRequest = onDismiss, title = { Text(entry.original) },
+    AppAlertDialog(onDismissRequest = onDismiss, title = { Text(entry.original) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(translation, { translation = it }, label = { Text("中文翻译（可留空）") }, isError = tooLong,

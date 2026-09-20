@@ -180,7 +180,7 @@ internal class VolumeReorderState(
                     onDrag = { change, amount -> change.consume(); state.drag(amount.y) }
                 )
             }) { Icon(Icons.Outlined.DragHandle, "拖动排序 $title") }
-        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+        AppDropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
             DropdownMenuItem(text = { Text("上移一位") }, enabled = index > 0, onClick = { menu = false; state.moveOne(key, -1) })
             DropdownMenuItem(text = { Text("下移一位") }, enabled = index in 0 until siblings.lastIndex, onClick = { menu = false; state.moveOne(key, 1) })
         }

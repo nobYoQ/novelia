@@ -124,9 +124,11 @@ import kotlinx.serialization.Serializable
 @Serializable data class Position(val chapterId: String, val index: Int = 0, val offset: Int = 0, val title: String = "", val updatedAt: Long = System.currentTimeMillis(), val textOffset: Int = 0)
 @Serializable data class SavedBook(val book: BookCard, val folder: String = "默认收藏", val pinned: Boolean = false, val status: String = "在读", val addedAt: Long = System.currentTimeMillis(), val hasUpdates: Boolean = false,
     val parentWenkuKey: String? = null, val volumesExpanded: Boolean = false, val volumeOrder: List<String> = emptyList())
-@Serializable data class Note(val id: String, val key: String, val chapterId: String, val paragraph: Int, val quote: String, val text: String, val createdAt: Long = System.currentTimeMillis())
+@Serializable data class Note(val id: String, val key: String, val chapterId: String, val paragraph: Int, val quote: String, val text: String, val createdAt: Long = System.currentTimeMillis(), val bookTitle: String = "", val chapterTitle: String = "")
 @Serializable data class LocalChapter(val id: String, val title: String, val paragraphs: List<String>)
-@Serializable data class LocalDocument(val id: String, val name: String, val format: String, val chapters: List<LocalChapter>, val importedAt: Long = System.currentTimeMillis(), val images: Map<String, String> = emptyMap(), val coverImage: String? = null, val sourceHash: String = "")
+@Serializable data class LocalDocument(val id: String, val name: String, val format: String, val chapters: List<LocalChapter>, val importedAt: Long = System.currentTimeMillis(), val images: Map<String, String> = emptyMap(), val coverImage: String? = null, val sourceHash: String = "",
+    /** Content-addressed chapter files; empty for the portable/legacy full-document format. */
+    val chapterFiles: Map<String, String> = emptyMap())
 @Serializable data class DownloadEntry(val id: String, val title: String, val fileName: String, val url: String, val status: String = "等待下载", val progress: Int = 0, val error: String? = null, val sourceBook: BookRef? = null, val workId: String? = null)
 @Serializable data class PendingAction(val id: String, val account: String, val method: String, val path: String, val body: String? = null, val contentType: String = "application/json")
 @Serializable data class LibraryState(

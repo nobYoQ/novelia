@@ -2,6 +2,7 @@
 package cc.novelia.app.ui
 
 import android.graphics.Typeface
+import android.animation.ValueAnimator
 import android.text.Layout
 import android.text.SpannableStringBuilder
 import android.text.StaticLayout
@@ -17,6 +18,9 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
@@ -123,7 +128,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
                 text.append(part.text)
                 if (part.secondary) {
                     text.setSpan(SecondaryOpacity(settings.secondaryAlpha), start, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-                    text.setSpan(AbsoluteSizeSpan(((settings.fontSize - 1) * density * fontScale).toInt()), start, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    text.setSpan(AbsoluteSizeSpan((readerPartFontSize(settings, true) * density * fontScale).toInt()), start, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                     if (settings.underline) text.setSpan(UnderlineSpan(), start, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                 }
             }
@@ -152,10 +157,22 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
     modifier: Modifier = Modifier, imageModel: (ReadingParagraph) -> Any?,
     onToggleMenu: () -> Unit, onSelect: (ReadingParagraph) -> Unit, onPage: (Int) -> Unit,
     background: Color = Color.White, foreground: Color = Color.Black,
+    activeMatch: ReadingTextMatch? = null,
 ) {
     val density = LocalDensity.current
     val context = LocalContext.current
     var expandedImage by remember { mutableStateOf<Any?>(null) }
+    val animate = !settings.eInkMode && !LocalEInkMode.current && !LocalReducedMotion.current && ValueAnimator.areAnimatorsEnabled()
+    val pageShift = remember { Animatable(0f) }
+    var lastPage by remember { mutableStateOf<Pair<List<StaticPage>, Int>?>(null) }
+    LaunchedEffect(state.pages, state.pageIndex, animate) {
+        val previous = lastPage
+        lastPage = state.pages to state.pageIndex
+        if(animate && previous != null && previous.first === state.pages && previous.second != state.pageIndex) {
+            pageShift.snapTo(if(state.pageIndex > previous.second) 1f else -1f)
+            pageShift.animateTo(0f, tween(AppMotion.Page))
+        } else pageShift.snapTo(0f)
+    }
     val latestPage by rememberUpdatedState(onPage)
     BoxWithConstraints(modifier.background(background).clipToBounds().pointerInput(settings.scrollPageTurn, settings.horizontalPageTurn) {
         var x = 0f; var y = 0f
@@ -190,17 +207,26 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
         if (chapter == null) Text("正在分页…", Modifier.align(Alignment.Center), color = foreground)
         else {
             val page = state.current
-            Column(Modifier.fillMaxSize().combinedClickable(onClickLabel = "显示或收起阅读工具栏", onClick = onToggleMenu)) {
+            Column(Modifier.fillMaxSize().graphicsLayer {
+                // A new turn cancels the prior effect and immediately displays the latest page.
+                translationX = if(animate) pageShift.value * 12.dp.toPx() else 0f
+                alpha = if(animate) 1f - abs(pageShift.value) * .12f else 1f
+            }.combinedClickable(onClickLabel = "显示或收起阅读工具栏", onClick = onToggleMenu)) {
                 page?.lines?.groupBy { it.paragraph }?.entries?.forEachIndexed { groupIndex, (index, lines) ->
                     if (groupIndex > 0) Spacer(Modifier.height(20.dp))
                     val paragraph = chapter.paragraphs[index]
                     if (lines.first().image) {
                         val model = imageModel(paragraph)
-                        val request = remember(context, model) { ImageRequest.Builder(context).data(model).crossfade(false).build() }
+                        var retry by remember(model) { mutableIntStateOf(0) }
+                        val request = remember(context, model, retry) { ImageRequest.Builder(context).data(model).setParameter("readerRetry", retry).crossfade(false).build() }
                         var failed by remember(model) { mutableStateOf(false) }
                         Box(Modifier.fillMaxSize().combinedClickable(onClick = onToggleMenu, onLongClickLabel = "放大查看插图", onLongClick = { expandedImage = model }), contentAlignment = Alignment.Center) {
-                            AsyncImage(request, "小说插图", Modifier.fillMaxSize(), contentScale = ContentScale.Fit, onError = { failed = true })
-                            if (failed) Text("插图暂时无法加载", color = foreground)
+                            AsyncImage(request, "小说插图", Modifier.fillMaxSize(), contentScale = ContentScale.Fit,
+                                onLoading = { failed = false }, onSuccess = { failed = false }, onError = { failed = true })
+                            if(failed) Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("插图暂时无法加载", color = foreground)
+                                TextButton(onClick = { retry++ }) { Text("重新加载插图", color = foreground) }
+                            }
                         }
                     } else {
                         val layout = chapter.layouts.getValue(index)
@@ -219,6 +245,13 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
                                 native.save()
                                 native.scale(drawScale, drawScale)
                                 native.translate(0f, -top.toFloat())
+                                activeMatch?.takeIf { it.paragraph == index && it.end > it.start }?.let { match ->
+                                    val start = match.textOffset(paragraph, settings).coerceIn(0, layout.text.length)
+                                    val end = (start + match.end - match.start).coerceIn(start, layout.text.length)
+                                    val path = android.graphics.Path()
+                                    layout.getSelectionPath(start, end, path)
+                                    native.drawPath(path, android.graphics.Paint().apply { color = foreground.copy(alpha = .2f).toArgb() })
+                                }
                                 layout.paint.color = foreground.toArgb()
                                 layout.draw(native)
                                 native.restore()

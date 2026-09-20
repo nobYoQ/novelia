@@ -13,11 +13,18 @@ import kotlin.math.abs
 internal class PagedSiteWebView(context: Context) : WebView(context) {
     var onPageAvailabilityChanged: (Boolean, Boolean) -> Unit = { _, _ -> }
     private var availablePages: Pair<Boolean, Boolean>? = null
+    var reducedMotion = false
+        set(value) {
+            if(field == value) return
+            field = value
+            overScrollMode = if(value || eInkMode) OVER_SCROLL_NEVER else OVER_SCROLL_IF_CONTENT_SCROLLS
+            applyMotionPreference()
+        }
     var eInkMode = false
         set(value) {
             if(field == value) return
             field = value
-            overScrollMode = if(value) OVER_SCROLL_NEVER else OVER_SCROLL_IF_CONTENT_SCROLLS
+            overScrollMode = if(value || reducedMotion) OVER_SCROLL_NEVER else OVER_SCROLL_IF_CONTENT_SCROLLS
             isVerticalScrollBarEnabled = !value
             settings.setSupportZoom(!value)
             applyMotionPreference()
@@ -40,7 +47,7 @@ internal class PagedSiteWebView(context: Context) : WebView(context) {
     }
 
     fun applyMotionPreference() {
-        evaluateJavascript(if(eInkMode) """
+        evaluateJavascript(if(eInkMode || reducedMotion) """
             (() => {
                 if (document.getElementById('novelia-eink-motion')) return;
                 const style = document.createElement('style');

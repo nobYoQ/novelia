@@ -34,7 +34,7 @@ import java.io.File
     var message by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     fun close() { job?.cancel(); onDismiss() }
-    AlertDialog(onDismissRequest = ::close, title = { Text("选择离线缓存范围") }, text = {
+    AppAlertDialog(onDismissRequest = ::close, title = { Text("选择离线缓存范围") }, text = {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("共 $count 章，按目录正序编号。每批最多 200 章，已有缓存会跳过；总缓存预算 256 MB，超出时较旧内容会自动清理。")
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -42,6 +42,7 @@ import java.io.File
                 OutlinedTextField(last, { last = it.filter(Char::isDigit).take(7) }, label = { Text("结束章") }, singleLine = true, enabled = !busy, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f).testTag("cache-last"))
             }
             if(!busy) TogglePreference("仅 Wi-Fi 缓存", "离开 Wi-Fi 后停止后续请求", wifiOnly) { wifiOnly = it }
+            // Determinate progress follows completed work directly, without a repeating animation.
             if(busy) { if(!LocalEInkMode.current) LinearProgressIndicator(progress = { completed.toFloat() / total.coerceAtLeast(1) }, modifier = Modifier.fillMaxWidth()); Text("正在缓存 $completed / $total 章") }
             if(message.isNotBlank()) Text(message)
         }
@@ -79,7 +80,7 @@ private data class SearchScope(val toc: List<TocItem>, val document: LocalDocume
         try {
         scope = withContext(Dispatchers.IO) {
             if(ref.isLocal) {
-                val document = c.store.document(ref.id)
+                val document = c.store.documentIndex(ref.id)
                 SearchScope(document.chapters.map { TocItem(it.title, it.title, it.id) }, document, document.chapters.map { it.id }.toSet())
             } else {
                 val account = c.session.capture().account ?: "guest"
@@ -112,10 +113,9 @@ private data class SearchScope(val toc: List<TocItem>, val document: LocalDocume
                     job = tasks.launch {
                         try {
                             val found = withContext(Dispatchers.Default) {
-                                val localChapters = source.document?.chapters?.associateBy { it.id }
                                 searchBookText(source.toc, term, settings, load = { id ->
                                     currentCoroutineContext().ensureActive()
-                                    if(localChapters != null) localChapters[id]?.let { Chapter(titleJp = it.title, paragraphs = it.paragraphs, youdaoParagraphs = it.paragraphs) }
+                                    if(ref.isLocal) withContext(Dispatchers.IO) { c.store.documentChapter(ref.id, id).let { Chapter(titleJp = it.title, paragraphs = it.paragraphs, youdaoParagraphs = it.paragraphs) } }
                                     else if(id in source.cachedIds) withContext(Dispatchers.IO) { c.store.cachedChapter(ref, id) } else null
                                 })
                             }
@@ -131,9 +131,9 @@ private data class SearchScope(val toc: List<TocItem>, val document: LocalDocume
         if(busy) Text("正在搜索…")
         failure?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         result?.let { found ->
-            Text("已搜索 ${found.scannedChapters} 章 · 找到 ${found.matches.size} 个段落${if(found.truncated) " · 达到结果或正文上限，请缩小搜索词" else ""}", style = MaterialTheme.typography.labelMedium)
+            Text("已搜索 ${found.scannedChapters} 章 · 找到 ${found.matches.size} 处匹配${if(found.truncated) " · 达到结果或正文上限，请缩小搜索词" else ""}", style = MaterialTheme.typography.labelMedium)
             AppLazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 24.dp)) {
-                items(found.matches, key = { "${it.chapterId}/${it.paragraph}" }) { match ->
+                items(found.matches, key = { "${it.chapterId}/${it.paragraph}/${it.part}/${it.start}" }) { match ->
                     ListItem(headlineContent = { Text(match.chapterLabel) }, supportingContent = { Text(match.snippet) }, modifier = Modifier.motionClickable { onOpen(match) })
                 }
                 if(found.matches.isEmpty()) item { Text("搜索范围内没有匹配文字。", Modifier.padding(vertical = 16.dp)) }

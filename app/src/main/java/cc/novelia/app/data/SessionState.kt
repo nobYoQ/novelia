@@ -12,7 +12,7 @@ interface AuthenticationSession {
     fun capture(): SessionBinding
     fun tokenFor(binding: SessionBinding): String?
     fun ensureCurrent(binding: SessionBinding) { tokenFor(binding) }
-    fun refreshIfCurrent(binding: SessionBinding, previousToken: String?): Boolean
+    suspend fun refreshIfCurrent(binding: SessionBinding, previousToken: String?): Boolean
 }
 
 /** Keeps refresh commits and sign-out atomic without holding a lock during network IO. */

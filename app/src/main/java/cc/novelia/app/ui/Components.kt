@@ -102,14 +102,14 @@ val LocalReducedMotion = staticCompositionLocalOf { false }
     Box(modifier.fillMaxSize()) {
         val current = result
         when {
-            current == null -> Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) { if(!LocalEInkMode.current) CircularProgressIndicator(); Text("正在加载…", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            current.isFailure -> if(loading) { if(LocalEInkMode.current) Text("正在加载…", Modifier.align(Alignment.Center)) else CircularProgressIndicator(Modifier.align(Alignment.Center)) } else EmptyState("暂时无法加载", current.exceptionOrNull().friendlyMessage(), Icons.Outlined.CloudOff, "重试", retry, sticker = MidoriSticker.Concerned)
+            current == null -> Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) { if(!appReducedMotion()) CircularProgressIndicator(); Text("正在加载…", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            current.isFailure -> if(loading) { if(appReducedMotion()) Text("正在加载…", Modifier.align(Alignment.Center)) else CircularProgressIndicator(Modifier.align(Alignment.Center)) } else EmptyState("暂时无法加载", current.exceptionOrNull().friendlyMessage(), Icons.Outlined.CloudOff, "重试", retry, sticker = MidoriSticker.Concerned)
             else -> {
                 // Keep the same composition during refresh so list positions and editor state survive.
-                MotionContent(key, Modifier.fillMaxSize()) {
+                MotionContent(key, Modifier.fillMaxSize(), animateInitial = false) {
                     content(current.getOrThrow(), retry)
                 }
-                if(loading) { if(LocalEInkMode.current) Text("正在刷新…", Modifier.align(Alignment.TopCenter)) else LinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter)) }
+                if(loading) { if(appReducedMotion()) Text("正在刷新…", Modifier.align(Alignment.TopCenter)) else LinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter)) }
                 refreshError?.let { error ->
                     MotionContent(error, Modifier.align(Alignment.BottomCenter).padding(12.dp)) {
                         Snackbar(modifier = Modifier.heightIn(min = 64.dp), action = { TextButton(onClick = retry) { Text("重试") } }) {
@@ -141,13 +141,13 @@ fun Throwable?.friendlyMessage(): String = when(this) { is ApiException -> messa
     }, contentAlignment = Alignment.Center) {
         DefaultBookCover(book, Modifier.matchParentSize().clearAndSetSemantics {})
         if(source != null) {
-            val reducedMotion = LocalReducedMotion.current
+            val reducedMotion = appReducedMotion()
             var memoryCached by remember(source) { mutableStateOf(false) }
             val coverAlpha = remember(source) { Animatable(0f) }
             LaunchedEffect(source, loaded, memoryCached, reducedMotion) {
                 if(!loaded) coverAlpha.snapTo(0f)
                 else if(reducedMotion || memoryCached) coverAlpha.snapTo(1f)
-                else coverAlpha.animateTo(1f, tween(180))
+                else coverAlpha.animateTo(1f, tween(AppMotion.Release))
             }
             AsyncImage(
                 source, null,
@@ -168,6 +168,7 @@ fun Throwable?.friendlyMessage(): String = when(this) { is ApiException -> messa
             Text(book.subtitle.ifBlank { providers[book.ref.provider] ?: "本地小说" }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if(book.total > 0) Text(if(book.ref.isWenku) "${book.total} 个分卷文件" else "${book.translated} / ${book.total} 章有译文", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
             else if(book.originalTitle != book.title) Text(book.originalTitle, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            BookSyncIndicator(book.ref)
         }
         trailing?.invoke()
     }
@@ -179,7 +180,7 @@ fun Throwable?.friendlyMessage(): String = when(this) { is ApiException -> messa
     }
 }
 @Composable fun ChoiceRow(label: String, options: List<String>, selected: Int, onSelect: (Int) -> Unit) {
-    val reducedMotion = LocalReducedMotion.current
+    val reducedMotion = appReducedMotion()
     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
         Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -187,7 +188,7 @@ fun Throwable?.friendlyMessage(): String = when(this) { is ApiException -> messa
                 key(i, title) {
                     val interactionSource = remember { MutableInteractionSource() }
                     val checked = selected == i
-                    val checkProgress = animateFloatAsState(if(checked) 1f else 0f, tween(if(reducedMotion) 0 else 160), label = "choice check")
+                    val checkProgress = animateFloatAsState(if(checked) 1f else 0f, tween(if(reducedMotion) 0 else AppMotion.Quick), label = "choice check")
                     FilterChip(
                         checked, onClick = { onSelect(i) }, label = { Text(title) },
                         modifier = Modifier.pressFeedback(interactionSource), interactionSource = interactionSource,
@@ -211,10 +212,10 @@ fun Throwable?.friendlyMessage(): String = when(this) { is ApiException -> messa
 }
 @Composable fun TextPrompt(title: String, label: String, initial: String = "", onDismiss: () -> Unit, onSave: (String) -> Unit) {
     var text by remember { mutableStateOf(initial) }
-    AlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = { OutlinedTextField(text, { text = it }, label = { Text(label) }, modifier = Modifier.fillMaxWidth(), minLines = 1, maxLines = 6) }, confirmButton = { TextButton(onClick = { onSave(text.trim()); onDismiss() }, enabled = text.isNotBlank()) { Text("保存") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } })
+    AppAlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = { OutlinedTextField(text, { text = it }, label = { Text(label) }, modifier = Modifier.fillMaxWidth(), minLines = 1, maxLines = 6) }, confirmButton = { TextButton(onClick = { onSave(text.trim()); onDismiss() }, enabled = text.isNotBlank()) { Text("保存") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } })
 }
 @Composable fun ConfirmDialog(title: String, message: String, onDismiss: () -> Unit, onConfirm: () -> Unit) {
-    AlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = { Text(message) }, confirmButton = { TextButton(onClick = { onConfirm(); onDismiss() }) { Text("确认") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } })
+    AppAlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = { Text(message) }, confirmButton = { TextButton(onClick = { onConfirm(); onDismiss() }) { Text("确认") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } })
 }
 private val dateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy.MM.dd")
 fun displayDate(seconds: Long): String = runCatching { dateFormatter.format(Instant.ofEpochSecond(seconds).atZone(ZoneId.systemDefault())) }.getOrDefault("")

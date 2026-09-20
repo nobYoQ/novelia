@@ -84,20 +84,29 @@ class ReaderToolbarOverlayTest {
         assertChapterUnchanged(app, ref, "first")
 
         val density = compose.activity.resources.displayMetrics.density
-        val pull = 120f * density
+        val pull = 80f * density
         compose.onNodeWithTag("reader-scroll").performTouchInput {
             down(center)
             moveBy(Offset(0f, -pull), delayMillis = 200)
-            moveBy(Offset(0f, 16f * density), delayMillis = 200)
+            moveBy(Offset(0f, 48f * density), delayMillis = 200)
             up()
         }
         assertChapterUnchanged(app, ref, "first")
         scrollToChapterEnd()
+        val footerTop = compose.onNodeWithText("本章完").fetchSemanticsNode().boundsInRoot.top
         compose.onNodeWithTag("reader-scroll").performTouchInput {
             down(center)
-            moveBy(Offset(0f, -pull), delayMillis = 300)
-            up()
+            moveBy(Offset(0f, -32f * density), delayMillis = 100)
         }
+        compose.onNodeWithText("继续上拉加载下一章").assertExists()
+        compose.runOnIdle { assertEquals("first", app.store.state.value.positions[ref.key]?.chapterId) }
+        compose.onNodeWithTag("reader-scroll").performTouchInput { moveBy(Offset(0f, -48f * density), delayMillis = 150) }
+        compose.onNodeWithText("松手加载下一章").assertIsDisplayed()
+        val pulledFooterTop = compose.onNodeWithText("本章完").fetchSemanticsNode().boundsInRoot.top
+        assertTrue("短距离上拉时正文应跟随手指移动", footerTop - pulledFooterTop > 30f * density)
+        compose.runOnIdle { assertEquals("达到阈值但未松手不能切章", "first", app.store.state.value.positions[ref.key]?.chapterId) }
+        screenshot("reader-pull-ready")
+        compose.onNodeWithTag("reader-scroll").performTouchInput { up() }
         waitForChapter(app, ref, "second")
         assertChapterUnchanged(app, ref, "second")
         assertToolbarHidden()
@@ -143,8 +152,8 @@ class ReaderToolbarOverlayTest {
         assertChapterUnchanged(app, ref, "first")
         body.performTouchInput {
             down(center)
-            moveBy(Offset(0f, -120f * density), delayMillis = 200)
-            moveBy(Offset(0f, 16f * density), delayMillis = 200)
+            moveBy(Offset(0f, -80f * density), delayMillis = 200)
+            moveBy(Offset(0f, 40f * density), delayMillis = 200)
             up()
         }
         assertChapterUnchanged(app, ref, "first")
@@ -170,6 +179,67 @@ class ReaderToolbarOverlayTest {
         }
         assertChapterUnchanged(app, ref, "second")
         compose.onNodeWithText("阅读下一章").assertDoesNotExist()
+    }
+
+    @Test fun eInkScrollingShowsPullFeedbackAndLoadsOnReleaseWithMotionDisabled() = withReader(
+        ReaderSettings().withEInkMode(true).withPaginationMode("scroll").copy(showPageButtons = false),
+        listOf(
+            LocalChapter("first", "第一章 短章", listOf("短章正文。")),
+            LocalChapter("second", "第二章 终章", listOf("故事到这里结束。"))
+        )
+    ) { app, ref ->
+        compose.runOnIdle { app.store.update { it.copy(reducedMotion = true) } }
+        compose.onNodeWithText("短章正文。", substring = true).performClick()
+        assertToolbarHidden()
+        scrollToChapterEnd()
+        val density = compose.activity.resources.displayMetrics.density
+        val body = compose.onNodeWithTag("reader-scroll")
+        body.performTouchInput { down(center); moveBy(Offset(0f, -80f * density), delayMillis = 200) }
+        compose.onNodeWithText("松手加载下一章").assertIsDisplayed()
+        compose.runOnIdle { assertEquals("first", app.store.state.value.positions[ref.key]?.chapterId) }
+        body.performTouchInput { cancel() }
+        compose.onNodeWithTag("reader-next-chapter-pull").assertDoesNotExist()
+        assertChapterUnchanged(app, ref, "first")
+        body.performTouchInput { down(center); moveBy(Offset(0f, -80f * density), delayMillis = 200); up() }
+        waitForChapter(app, ref, "second")
+    }
+
+    @Test fun pullReturnStopsWhenMotionIsDisabledOrAnotherTouchBegins() = withReader(
+        ReaderSettings(paginationMode = "scroll", showPageButtons = false),
+        listOf(
+            LocalChapter("first", "第一章 短章", listOf("短章正文。")),
+            LocalChapter("second", "第二章 终章", listOf("故事到这里结束。"))
+        )
+    ) { app, ref ->
+        compose.onNodeWithText("短章正文。", substring = true).performClick()
+        assertToolbarHidden()
+        scrollToChapterEnd()
+        val density = compose.activity.resources.displayMetrics.density
+        val body = compose.onNodeWithTag("reader-scroll")
+        for(disableMotion in listOf(true, false)) {
+            compose.runOnIdle { app.store.update { it.copy(reducedMotion = false) } }
+            compose.waitForIdle()
+            val restingTop = compose.onNodeWithText("本章完").fetchSemanticsNode().boundsInRoot.top
+            compose.mainClock.autoAdvance = false
+            try {
+                body.performTouchInput { down(center); moveBy(Offset(0f, -80f * density), delayMillis = 200) }
+                compose.mainClock.advanceTimeBy(64)
+                body.performTouchInput { cancel() }
+                compose.mainClock.advanceTimeBy(64)
+                val returningTop = compose.onNodeWithText("本章完").fetchSemanticsNode().boundsInRoot.top
+                assertTrue("应在回弹尚未完成时改变交互状态", restingTop - returningTop > density)
+                if(disableMotion) compose.runOnIdle { app.store.update { it.copy(reducedMotion = true) } }
+                else body.performTouchInput { down(center) }
+                compose.mainClock.advanceTimeBy(32)
+                compose.onNodeWithTag("reader-next-chapter-pull").assertDoesNotExist()
+                assertEquals("关闭动画或再次按下应立即结束旧回弹", restingTop,
+                    compose.onNodeWithText("本章完").fetchSemanticsNode().boundsInRoot.top, .5f)
+                if(!disableMotion) body.performTouchInput { cancel() }
+                compose.mainClock.advanceTimeBy(300)
+                assertEquals(restingTop, compose.onNodeWithText("本章完").fetchSemanticsNode().boundsInRoot.top, .5f)
+            } finally { compose.mainClock.autoAdvance = true }
+        }
+        assertChapterUnchanged(app, ref, "first")
     }
 
     private fun verifyChapterNavigation(settings: ReaderSettings) = withReader(settings.copy(showPageButtons = settings.staticPagination), listOf(

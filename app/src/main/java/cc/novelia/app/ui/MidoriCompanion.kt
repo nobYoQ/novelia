@@ -1,6 +1,5 @@
 package cc.novelia.app.ui
 
-import android.animation.ValueAnimator
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -68,7 +67,7 @@ private val StickerHeartPink = Color(0xFFE15C86)
 @Composable
 internal fun stickerMotionEnabled(): Boolean {
     val durationScale = rememberCoroutineScope().coroutineContext[MotionDurationScale]
-    return !LocalReducedMotion.current && ValueAnimator.areAnimatorsEnabled() &&
+    return !appReducedMotion() &&
         (durationScale?.scaleFactor ?: 1f) > 0f
 }
 
@@ -104,17 +103,17 @@ fun MidoriCompanion(modifier: Modifier = Modifier, visible: Boolean = true) {
         hearts.snapTo(1f)
         if(!animate || !reacting) return@LaunchedEffect
         launch {
-            pop.animateTo(.88f, tween(75))
+            pop.animateTo(.88f, tween(AppMotion.StickerPress))
             pop.animateTo(1f, keyframes {
-                durationMillis = 360
+                durationMillis = AppMotion.StickerReaction
                 .88f at 0 using FastOutSlowInEasing
                 1.12f at 140 using FastOutSlowInEasing
                 .97f at 260 using FastOutSlowInEasing
-                1f at 360
+                1f at AppMotion.StickerReaction
             })
         }
         hearts.snapTo(0f)
-        hearts.animateTo(1f, tween(950))
+        hearts.animateTo(1f, tween(AppMotion.StickerHearts))
     }
 
     // A gentle sway followed by a rest, only while the card is visible and the app is resumed.
@@ -122,12 +121,12 @@ fun MidoriCompanion(modifier: Modifier = Modifier, visible: Boolean = true) {
         rememberInfiniteTransition(label = "midori idle").animateFloat(
             initialValue = 0f, targetValue = 0f,
             animationSpec = infiniteRepeatable(keyframes {
-                durationMillis = 4400
+                durationMillis = AppMotion.StickerIdle
                 0f at 0 using FastOutSlowInEasing
                 -4f at 800 using FastOutSlowInEasing
                 4f at 2000 using FastOutSlowInEasing
                 0f at 2800
-                0f at 4400
+                0f at AppMotion.StickerIdle
             }), label = "midori sway",
         )
     } else null
@@ -140,7 +139,7 @@ fun MidoriCompanion(modifier: Modifier = Modifier, visible: Boolean = true) {
             }
             .clickable(
                 interactionSource = interactionSource,
-                indication = ripple(bounded = false, radius = 56.dp),
+                indication = if(reducedMotion) null else ripple(bounded = false, radius = 56.dp),
                 enabled = active, role = Role.Button, onClickLabel = "打个招呼，切换表情",
             ) {
                 reactionIndex = (reactionIndex + 1) % HappyReactions.size

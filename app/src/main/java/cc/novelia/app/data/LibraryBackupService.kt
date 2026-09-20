@@ -2,6 +2,7 @@ package cc.novelia.app.data
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -10,6 +11,8 @@ import kotlinx.serialization.encodeToString
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
+import java.nio.file.Files
+import java.nio.file.FileAlreadyExistsException
 import java.util.UUID
 
 /** All archive IO is staged on disk; UI state retains only the opaque staging ID. */
@@ -18,6 +21,8 @@ class LibraryBackupService(private val store: LocalStore, private val keywords: 
 
     suspend fun export(output: OutputStream, includeOriginals: Boolean) = withContext(Dispatchers.IO) {
         store.flush(); keywords.flush()
+        val exportStage = File(store.exportsDir, "backup-${UUID.randomUUID()}").apply { mkdirs() }
+        try {
         val work = coroutineContext
         val snapshot = store.state.value.forBackup()
         val files = linkedMapOf<String, File>()
@@ -27,8 +32,10 @@ class LibraryBackupService(private val store: LocalStore, private val keywords: 
             require(id.matches(Regex("[a-zA-Z0-9-]{1,128}"))) { "本地文档标识无效，无法备份" }
             val source = File(store.documentsDir, "$id.json")
             if (!source.isFile) { missing += id; return@forEach }
-            val document = store.document(id)
-            documents += id; files["documents/$id.json"] = source
+            val document = store.document(id) { work.ensureActive() }
+            // Archives remain self-contained version 1 documents, including on older app versions.
+            val portableDocument = File(exportStage, "$id.json").apply { writeText(appJson.encodeToString(document), Charsets.UTF_8) }
+            documents += id; files["documents/$id.json"] = portableDocument
             val images = document.chapters.flatMap { it.paragraphs }.filter { it.startsWith("novelia-image:") }.map { it.removePrefix("novelia-image:") }.toSet() + listOfNotNull(document.coverImage)
             images.forEach { hash ->
                 val image = store.documentImage(id, hash)
@@ -46,6 +53,7 @@ class LibraryBackupService(private val store: LocalStore, private val keywords: 
         val manifest = LibraryBackupManifest("novelia-library", 1, System.currentTimeMillis(), portable, documents,
             missing, includeOriginals, keywords.exportSnapshot(), files.mapValues { LibraryBackupArchive.digest(it.value) { work.ensureActive() } })
         LibraryBackupArchive.write(output, manifest, files) { work.ensureActive() }
+        } finally { exportStage.deleteRecursively() }
     }
 
     suspend fun prepare(input: InputStream): BackupPreview = withContext(Dispatchers.IO) {
@@ -77,14 +85,41 @@ class LibraryBackupService(private val store: LocalStore, private val keywords: 
                     work.ensureActive()
                     // Keep only one parsed book in memory, even for a library-sized backup.
                     val document = appJson.decodeFromString<LocalDocument>(File(directory, "documents/$sourceId.json").readText(Charsets.UTF_8))
-                    val existingId = if (document.sourceHash.isNotBlank()) store.findDocumentByHash(document.sourceHash) { work.ensureActive() }?.id
-                        else current.books.asSequence().filter { it.book.ref.isLocal }.mapNotNull { runCatching { store.document(it.book.ref.id) }.getOrNull() }
-                            .firstOrNull { it.name == document.name && it.chapters == document.chapters }?.id
-                    val old = existingId?.let { runCatching { store.document(it) }.getOrNull() }
-                    val same = old != null && old.format == document.format && old.chapters == document.chapters && old.coverImage == document.coverImage &&
+                    val indexedId = if (document.sourceHash.isNotBlank()) store.findDocumentByHash(document.sourceHash) { work.ensureActive() }?.id else null
+                    val candidateIds = sequenceOf(indexedId).filterNotNull() + current.books.asSequence()
+                        .filter { it.book.ref.isLocal && it.book.ref.id != indexedId }.map { it.book.ref.id }
+                    // A protected damaged copy may share its source hash with a later repaired copy.
+                    // Prefer a complete candidate instead of repeatedly creating another restored book.
+                    val old = candidateIds.mapNotNull { candidate ->
+                        work.ensureActive()
+                        val index = runCatching { store.documentIndex(candidate) }.getOrNull() ?: return@mapNotNull null
+                        val sameSource = if (document.sourceHash.isNotBlank()) index.sourceHash == document.sourceHash else index.name == document.name
+                        if (!sameSource) return@mapNotNull null
+                        try { store.document(candidate) { work.ensureActive() } }
+                        catch (cancelled: CancellationException) { throw cancelled }
+                        catch (_: Exception) { null }
+                    }.firstOrNull { candidate ->
+                        candidate.format == document.format && candidate.chapters == document.chapters && candidate.coverImage == document.coverImage &&
                         document.chapters.flatMap { it.paragraphs }.filter { it.startsWith("novelia-image:") }
-                            .map { it.removePrefix("novelia-image:") }.plus(listOfNotNull(document.coverImage)).all { store.documentImage(old.id, it).isFile }
-                    if (same) { mapping[sourceId] = old!!.id; covers[old.id] = document.coverImage; return@forEach }
+                            .map { it.removePrefix("novelia-image:") }.plus(listOfNotNull(document.coverImage)).distinct().all { hash ->
+                                matchesBackupAsset(store.documentImage(candidate.id, hash), manifest.assets["documents/$sourceId-images/$hash"]) { work.ensureActive() }
+                            }
+                    }
+                    if (old != null) {
+                        val retained = old
+                        mapping[sourceId] = retained.id; covers[retained.id] = document.coverImage
+                        // A later backup may add originals omitted from the first restoration.
+                        listOf("epub", "txt", "srt").forEach { format ->
+                            work.ensureActive()
+                            val path = "documents/$sourceId.$format"
+                            if (path in manifest.assets) {
+                                val target = store.documentSource(retained.id, format)
+                                installMissingBackupFile(File(directory, path), target, installed) { work.ensureActive() }
+                                require(target.isFile) { "原文件恢复路径不可用，请检查存储空间后重试" }
+                            }
+                        }
+                        return@forEach
+                    }
                     // Fresh IDs eliminate overwrites even when the archive came from this device.
                     val targetId = UUID.randomUUID().toString(); mapping[sourceId] = targetId; covers[targetId] = document.coverImage
                     manifest.assets.keys.filter { it == "documents/$sourceId.json" || it.startsWith("documents/$sourceId-images/") || it in listOf("documents/$sourceId.epub", "documents/$sourceId.txt", "documents/$sourceId.srt") }.forEach { path ->
@@ -135,6 +170,31 @@ class LibraryBackupService(private val store: LocalStore, private val keywords: 
         manifest.missingDocuments.size, manifest.keywords.size, manifest.assets.values.sumOf { it.bytes }, manifest.originalsIncluded)
 
     private companion object { val restoreLock = Mutex() }
+}
+
+private fun installMissingBackupFile(source: File, target: File, installed: MutableList<File>, checkCancelled: () -> Unit) {
+    if (target.exists()) return
+    val pending = File.createTempFile("restore-original-", ".tmp", target.parentFile)
+    try {
+        source.inputStream().use { input -> pending.outputStream().use { output ->
+            val buffer = ByteArray(65536)
+            while (true) { checkCancelled(); val count = input.read(buffer); if (count < 0) break; output.write(buffer, 0, count) }
+            output.fd.sync()
+        } }
+        checkCancelled()
+        try {
+            // Same-directory move publishes only complete bytes and never replaces an existing original.
+            Files.move(pending.toPath(), target.toPath())
+            installed += target
+        } catch (_: FileAlreadyExistsException) { /* Another completed operation already supplied the original. */ }
+    } finally { pending.delete() }
+}
+
+private fun matchesBackupAsset(file: File, expected: BackupAsset?, checkCancelled: () -> Unit): Boolean {
+    if (!file.isFile || expected == null) return false
+    return try { LibraryBackupArchive.digest(file, checkCancelled) == expected }
+    catch (cancelled: CancellationException) { throw cancelled }
+    catch (_: Exception) { false }
 }
 
 internal fun remapBackupLibrary(source: LibraryState, localIds: Map<String, String>, cover: (String) -> String?): LibraryState {

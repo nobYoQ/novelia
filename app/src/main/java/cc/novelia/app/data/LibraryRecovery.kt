@@ -9,11 +9,12 @@ data class LibraryRecoveryIssue(val hasLastGood: Boolean) {
 internal data class LoadedLibrary(val state: LibraryState, val issue: LibraryRecoveryIssue? = null)
 
 /** A missing first-run file is different from an unreadable existing file. Never silently reset it. */
-internal fun loadLibraryState(exists: Boolean, read: () -> String, readLastGood: () -> String): LoadedLibrary {
+internal fun loadLibraryState(exists: Boolean, read: () -> String, readLastGood: () -> String,
+    decode: (String) -> LibraryState = { appJson.decodeFromString<LibraryState>(it) }): LoadedLibrary {
     if (!exists) return LoadedLibrary(LibraryState())
-    return try { LoadedLibrary(appJson.decodeFromString<LibraryState>(read())) }
+    return try { LoadedLibrary(decode(read())) }
     catch (_: Exception) {
-        val recovered = runCatching { appJson.decodeFromString<LibraryState>(readLastGood()) }.getOrNull()
+        val recovered = runCatching { decode(readLastGood()) }.getOrNull()
         LoadedLibrary(recovered ?: LibraryState(), LibraryRecoveryIssue(recovered != null))
     }
 }

@@ -129,7 +129,7 @@ internal object LibraryBackupArchive {
             val path = "documents/$documentId.json"
             require(path in manifest.assets) { "备份缺少解析文档" }; expected += path
             val document = appJson.decodeFromString<LocalDocument>(File(staging, path).readText(Charsets.UTF_8))
-            require(document.id == documentId && document.format in setOf("epub", "txt", "srt") && document.images.isEmpty()) { "备份解析文档无效" }
+            require(document.id == documentId && document.format in setOf("epub", "txt", "srt") && document.images.isEmpty() && document.chapterFiles.isEmpty()) { "备份解析文档无效" }
             require(document.chapters.all { it.id.isNotBlank() } && document.chapters.map { it.id }.distinct().size == document.chapters.size) { "备份章节标识无效或重复" }
             val imageIds = document.chapters.flatMap { it.paragraphs }.filter { it.startsWith("novelia-image:") }.map { it.removePrefix("novelia-image:") }.toSet() + listOfNotNull(document.coverImage)
             imageIds.forEach { hash ->

@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.ReportDrawnWhen
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.*
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -43,8 +44,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             val app = application as NoveliaApplication
             val initialized by produceState(false, app) { app.initialization.await(); value = true }
+            ReportDrawnWhen { initialized }
             if (!initialized) {
-                NoveliaTheme("system") { Surface(Modifier.fillMaxSize()) { Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) { CircularProgressIndicator() } } }
+                NoveliaTheme("system") { Surface(Modifier.fillMaxSize()) { Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) { Text("正在打开书库…") } } }
                 return@setContent
             }
             val appearance by remember(app) { app.store.state.map { it.appearance() }.distinctUntilChanged() }
@@ -54,13 +56,18 @@ class MainActivity : ComponentActivity() {
             NoveliaTheme(appearance.theme) {
                 val nav = rememberNavController(); val scope = rememberCoroutineScope(); val snackbar = remember { SnackbarHostState() }
                 val controller = remember { AppController(app, nav, scope, snackbar) }
+                val bookSync = rememberBookSyncPresentation(controller)
+                CompositionLocalProvider(LocalBookSyncPresentation provides bookSync) {
+                controller.pendingFavorite?.let { book ->
+                    FavoriteSheet(controller, book, initialCloud = controller.pendingFavoriteCloud) { controller.pendingFavorite = null }
+                }
                 val recoveryIssue by app.store.recoveryIssue.collectAsStateWithLifecycle()
                 LaunchedEffect(app) { app.store.persistenceError.filterNotNull().collect { snackbar.showSnackbar(it) } }
                 if(recoveryIssue != null) {
                     Scaffold(snackbarHost = { StickerSnackbarHost(snackbar) }) { padding ->
                         Box(Modifier.fillMaxSize().padding(padding)) { LibraryBackupScreen(controller) }
                     }
-                    return@NoveliaTheme
+                    return@CompositionLocalProvider
                 }
                 LaunchedEffect(link) { link?.let { controller.openLink(it); incoming.value = null } }
                 LaunchedEffect(Unit) { runCatching { app.session.refresh() } }
@@ -70,11 +77,12 @@ class MainActivity : ComponentActivity() {
                 val tabs = listOf(Triple("shelf", "书架", Icons.Outlined.CollectionsBookmark), Triple("discover", "发现", Icons.Outlined.Explore), Triple("community", "社区", Icons.Outlined.Forum), Triple("profile", "我的", Icons.Outlined.PersonOutline))
                 fun switchTab(target: String) { nav.navigate(target) { popUpTo(nav.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } }
                 val showNavigation = route in roots
+                var compactShelfDetail by remember { mutableStateOf(false) }
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     val wide = maxWidth >= 600.dp
                     val compactRail = maxHeight < 480.dp
                     Scaffold(snackbarHost = { StickerSnackbarHost(snackbar) }, bottomBar = {
-                        if(showNavigation && !wide) NavigationBar { tabs.forEach { (target, label, icon) ->
+                        if(showNavigation && !wide && !(route == "shelf" && compactShelfDetail)) NavigationBar { tabs.forEach { (target, label, icon) ->
                             val selected = route?.startsWith(target) == true
                             NavigationBarItem(selected, { if(!selected) switchTab(target) }, { NavigationIcon(icon, label, selected) }, label = { Text(label) })
                         } }
@@ -84,7 +92,7 @@ class MainActivity : ComponentActivity() {
                                 val selected = route?.startsWith(target) == true
                                 NavigationRailItem(selected, { if(!selected) switchTab(target) }, { NavigationIcon(icon, label, selected) }, label = if(compactRail) null else { { Text(label) } })
                             } }
-                            val duration = if(appearance.reducedMotion) 0 else 220
+                            val duration = if(appReducedMotion()) 0 else AppMotion.Standard
                             val travel = with(LocalDensity.current) { 24.dp.roundToPx() }
                             fun staticReader(entry: androidx.navigation.NavBackStackEntry): Boolean = entry.destination.route?.startsWith("reader/") == true &&
                                 "${entry.arguments?.getString("provider")}/${entry.arguments?.getString("id")}" in appearance.eInkBooks
@@ -99,15 +107,15 @@ class MainActivity : ComponentActivity() {
                                 val from = roots.indexOf(initialState.destination.route)
                                 val to = roots.indexOf(targetState.destination.route)
                                 val direction = if(from >= 0 && to >= 0 && to < from) -1 else 1
-                                fadeOut(tween(duration * 2 / 3)) + slideOutHorizontally(tween(duration, easing = FastOutSlowInEasing)) { -direction * travel / 2 }
+                                fadeOut(tween(AppMotion.Exit)) + slideOutHorizontally(tween(duration, easing = FastOutSlowInEasing)) { -direction * travel / 2 }
                             }, popEnterTransition = {
                                 if(duration == 0 || staticReader(initialState) || staticReader(targetState)) return@NavHost EnterTransition.None
                                 fadeIn(tween(duration)) + slideInHorizontally(tween(duration, easing = FastOutSlowInEasing)) { -travel / 2 }
                             }, popExitTransition = {
                                 if(duration == 0 || staticReader(initialState) || staticReader(targetState)) return@NavHost ExitTransition.None
-                                fadeOut(tween(duration * 2 / 3)) + slideOutHorizontally(tween(duration, easing = FastOutSlowInEasing)) { travel }
+                                fadeOut(tween(AppMotion.Exit)) + slideOutHorizontally(tween(duration, easing = FastOutSlowInEasing)) { travel }
                             }) {
-                                composable("shelf") { ShelfScreen(controller) }
+                                composable("shelf") { AdaptiveLibraryScreen(controller) { compactShelfDetail = it } }
                                 composable("discover?query={query}") { DiscoverScreen(controller, it.arguments?.getString("query").orEmpty()) }
                                 composable("rank") { RankScreen(controller) }
                                 composable("wenku-new") { WenkuEditorScreen(controller) }
@@ -124,6 +132,12 @@ class MainActivity : ComponentActivity() {
                                 composable("updates") { BookUpdatesScreen(controller) }
                                 composable("downloads") { DownloadsScreen(controller) }
                                 composable("tools") { ToolsScreen(controller) }
+                                // Keep saved back stacks from the removed feature restorable after an update.
+                                composable("ocr") {
+                                    LaunchedEffect(Unit) {
+                                        nav.navigate("tools") { popUpTo("ocr") { inclusive = true }; launchSingleTop = true }
+                                    }
+                                }
                                 composable("notes") { NotesScreen(controller) }
                                 composable("blocked") { BlockedScreen(controller) }
                                 composable("history") { HistoryScreen(controller) }
@@ -134,6 +148,7 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
+                }
                 }
             }
             }
@@ -149,10 +164,10 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable private fun NavigationIcon(icon: ImageVector, label: String, selected: Boolean) {
-    val reducedMotion = LocalReducedMotion.current
+    val reducedMotion = appReducedMotion()
     val emphasis = animateFloatAsState(
         targetValue = if(selected) 1f else 0f,
-        animationSpec = tween(if(reducedMotion) 0 else 180, easing = FastOutSlowInEasing),
+        animationSpec = tween(if(reducedMotion) 0 else AppMotion.Release, easing = FastOutSlowInEasing),
         label = "navigation selection",
     )
     Icon(icon, label, Modifier.graphicsLayer {

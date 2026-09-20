@@ -16,9 +16,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.saveable.SaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.*
@@ -28,17 +30,21 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.math.abs
 
-@Composable fun BookScreen(c: AppController, ref: BookRef) {
+@Composable fun BookScreen(c: AppController, ref: BookRef, onBack: () -> Unit = c::back) {
+    if(ref.isLocal) {
+        LocalBookDetailScreen(c, ref, onBack)
+        return
+    }
     var menu by remember { mutableStateOf(false) }; var favorite by remember { mutableStateOf<BookCard?>(null) }; var download by remember { mutableStateOf<Pair<BookCard, String?>?>(null) }; var version by remember { mutableIntStateOf(0) }
     val state by c.store.state.collectAsStateWithLifecycle(); val profile by c.session.profile.collectAsStateWithLifecycle()
     val isSaved = remember(state.books, ref) { state.books.any { it.book.ref == ref } }
-    val reducedMotion = LocalReducedMotion.current
+    val reducedMotion = appReducedMotion()
     var progressChoice by remember { mutableStateOf<Triple<BookCard, ReadingDestination, ReadingDestination>?>(null) }
     var uploadBusy by remember { mutableStateOf(false) }
     val uploader = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let { c.action("分卷上传完成") { uploadBusy = true; try { withContext(Dispatchers.IO) { val (name, bytes) = readDocument(c, it); require(name.substringAfterLast('.').lowercase() in listOf("epub", "txt") && bytes.size <= 40 * 1024 * 1024) { "文库上传支持不超过 40 MB 的 EPUB / TXT" }; val file = File(c.app.cacheDir, "upload-${System.nanoTime()}"); try { file.writeBytes(bytes); c.api.uploadVolume(ref, name, file) } finally { file.delete() } }; version++ } finally { uploadBusy = false } } } }
-    Screen(if(ref.isWenku) "文库详情" else "作品详情", c::back, actions = {
+    Screen(if(ref.isWenku) "文库详情" else "作品详情", onBack, actions = {
         IconButton(onClick = { c.share(ref.url) }) { Icon(Icons.Outlined.Share, "分享作品") }
-        Box { IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "更多操作") }; DropdownMenu(menu, { menu = false }) {
+        Box { IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "更多操作") }; AppDropdownMenu(menu, { menu = false }) {
             DropdownMenuItem({ Text("刷新资料") }, { version++; menu = false }, leadingIcon = { Icon(Icons.Outlined.Refresh, null) })
             DropdownMenuItem({ Text("术语表") }, { c.go("glossary/${ref.key}"); menu = false }, leadingIcon = { Icon(Icons.Outlined.Translate, null) })
             DropdownMenuItem({ Text("编辑书籍信息") }, { c.requireLogin { c.go("edit/${ref.key}") }; menu = false }, leadingIcon = { Icon(Icons.Outlined.Edit, null) })
@@ -52,10 +58,8 @@ import kotlin.math.abs
             val refresh: () -> Unit = { version++ }
             var tab by rememberSaveable(ref.key) { mutableIntStateOf(0) }
             val tabState = rememberSaveableStateHolder()
-            Column(Modifier.fillMaxSize()) {
-                PrimaryTabRow(tab) { listOf("简介", "分卷", "讨论").forEachIndexed { i, title -> Tab(tab == i, { tab = i }, text = { Text(title) }) } }
-                MotionContent(tab, Modifier.weight(1f).fillMaxWidth(), animateInitial = false) {
-                    tabState.SaveableStateProvider(tab) { when(tab) {
+            AdaptiveBookDetail(tab, { tab = it }, listOf("简介", "分卷", "讨论"), tabState) { panel ->
+                    when(panel) {
                         0 -> AppLazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
                             item { BookHero(book, "${detail.level} · ${detail.volumes.size} 卷", isSaved, { favorite = book }) }
                             item { MetaParagraph("简介", detail.introduction) }
@@ -68,18 +72,17 @@ import kotlin.math.abs
                             if(detail.volumeJp.isNotEmpty()) item { SectionTitle("已有译文的分卷") }
                             items(detail.volumeJp, key = { "jp-${it.volumeId}" }, contentType = { "translated-volume" }) { volume ->
                                 val complete = maxOf(volume.sakura, volume.gpt, volume.youdao) >= volume.total && volume.total > 0
-                                ListItem(headlineContent = { Text(volume.volumeId) }, supportingContent = { Text("Sakura ${volume.sakura} · GPT ${volume.gpt} · 有道 ${volume.youdao} / ${volume.total}") }, trailingContent = { IconButton(onClick = { download = book to volume.volumeId }, enabled = complete) { Icon(Icons.Outlined.Download, if(complete) "下载分卷" else "译文尚未完成") } }, modifier = if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(180), placementSpec = tween(220), fadeOutSpec = tween(120)))
+                                ListItem(headlineContent = { Text(volume.volumeId) }, supportingContent = { Text("Sakura ${volume.sakura} · GPT ${volume.gpt} · 有道 ${volume.youdao} / ${volume.total}") }, trailingContent = { IconButton(onClick = { download = book to volume.volumeId }, enabled = complete) { Icon(Icons.Outlined.Download, if(complete) "下载分卷" else "译文尚未完成") } }, modifier = if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(AppMotion.Release), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit)))
                             }
                             if(detail.volumeZh.isNotEmpty()) item { SectionTitle("中文文件") }
                             if(profile?.role == "admin") items(detail.volumeZh, key = { "zh-$it" }, contentType = { "chinese-volume" }) { name -> MenuRow(name, "打开原站提供的中文资源", Icons.Outlined.Description, { c.external("https://n.novelia.cc/files-wenku/${ref.id}/${encodeSegment(name)}") }) }
                             if(detail.volumes.isNotEmpty()) item { SectionTitle("出版卷目") }
-                            items(detail.volumes, key = { "published-${it.asin}" }, contentType = { "book" }) { volume -> BookRow(BookCard(ref, volume.titleZh ?: volume.title, volume.title, volume.cover, volume.publisher.orEmpty()), { volume.coverHires?.let(c::external) }, modifier = if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(180), placementSpec = tween(220), fadeOutSpec = tween(120))) }
+                            items(detail.volumes, key = { "published-${it.asin}" }, contentType = { "book" }) { volume -> BookRow(BookCard(ref, volume.titleZh ?: volume.title, volume.title, volume.cover, volume.publisher.orEmpty()), { volume.coverHires?.let(c::external) }, modifier = if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(AppMotion.Release), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit))) }
                             if(profile?.canEdit == true) item { OutlinedButton(onClick = { uploader.launch(arrayOf("*/*")) }, enabled = !uploadBusy, modifier = Modifier.fillMaxWidth().padding(20.dp)) { Text(if(uploadBusy) "正在上传…" else "上传日文分卷") } }
                             if(detail.volumes.isEmpty() && detail.volumeJp.isEmpty() && profile != null) item { EmptyState("暂时没有可用分卷", "可刷新资料，或在具有编辑权限时上传资源。", action = "刷新", onAction = refresh) }
                         }
                         2 -> CommentsPanel(c, "wenku-${ref.id}")
-                    } }
-                }
+                    }
             }
         } else AsyncContent(listOf(ref, profile?.username), refreshKey = version, load = { c.detail<WebDetail>("novel/${ref.key}", forceNetwork = version > 0) }, modifier = Modifier.padding(padding)) { detail, _ ->
             val book = remember(detail, ref) { detail.card(ref) }
@@ -92,10 +95,8 @@ import kotlin.math.abs
             val destination = remember(detail.toc, localDestination, cloudDestination) { resumeDestination(detail.toc, localDestination?.chapterId, cloudDestination?.chapterId) }
             val start = destination?.chapterId
             val continuing = localDestination != null || cloudDestination != null
-            Column(Modifier.fillMaxSize()) {
-                PrimaryTabRow(tab) { listOf("简介", "目录 $chapterCount", "讨论").forEachIndexed { i, title -> Tab(tab == i, { tab = i }, text = { Text(title) }) } }
-                MotionContent(tab, Modifier.weight(1f).fillMaxWidth(), animateInitial = false) {
-                    tabState.SaveableStateProvider(tab) { when(tab) {
+            AdaptiveBookDetail(tab, { tab = it }, listOf("简介", "目录 $chapterCount", "讨论"), tabState) { panel ->
+                    when(panel) {
                         0 -> AppLazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
                             item { BookHero(book, "${detail.type} · ${providers[ref.provider]}", isSaved, { favorite = book }) }
                             item { Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -116,21 +117,92 @@ import kotlin.math.abs
                         }
                         1 -> TocPanel(c, ref, detail.toc, start) { id -> c.store.saveBook(book); c.read(ref, id) }
                         2 -> CommentsPanel(c, "web-${ref.provider}-${ref.id}")
-                    } }
-                }
+                    }
             }
         }
     }
     favorite?.let { FavoriteSheet(c, it) { favorite = null } }
     download?.let { (book, volume) -> DownloadSheet(c, book, volume) { download = null } }
-    progressChoice?.let { (book, localChapter, cloudChapter) -> AlertDialog(onDismissRequest = { progressChoice = null }, title = { Text("选择继续阅读的位置") }, text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { Text("本机与原站记录的章节不同，请选择这次从哪里继续。"); Text("本机：${localChapter.label}"); Text("原站：${cloudChapter.label}") } }, confirmButton = { TextButton(onClick = { progressChoice = null; c.store.saveBook(book); c.read(ref, cloudChapter.chapterId) }) { Text("原站进度") } }, dismissButton = { TextButton(onClick = { progressChoice = null; c.store.saveBook(book); c.read(ref, localChapter.chapterId) }) { Text("本机进度") } }) }
+    progressChoice?.let { (book, localChapter, cloudChapter) -> AppAlertDialog(onDismissRequest = { progressChoice = null }, title = { Text("选择继续阅读的位置") }, text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { Text("本机与原站记录的章节不同，请选择这次从哪里继续。"); Text("本机：${localChapter.label}"); Text("原站：${cloudChapter.label}") } }, confirmButton = { TextButton(onClick = { progressChoice = null; c.store.saveBook(book); c.read(ref, cloudChapter.chapterId) }) { Text("原站进度") } }, dismissButton = { TextButton(onClick = { progressChoice = null; c.store.saveBook(book); c.read(ref, localChapter.chapterId) }) { Text("本机进度") } }) }
+}
+@Composable private fun LocalBookDetailScreen(c: AppController, ref: BookRef, onBack: () -> Unit) {
+    val state by c.store.state.collectAsStateWithLifecycle()
+    Screen("本地书籍", onBack) { padding ->
+        AsyncContent(ref, load = { withContext(Dispatchers.IO) { c.store.documentIndex(ref.id) } }, modifier = Modifier.padding(padding)) { document, _ ->
+            val book = state.books.firstOrNull { it.book.ref == ref }?.book ?: BookCard(ref, document.name, cover = document.coverImage, total = document.chapters.size)
+            val toc = remember(document) { document.chapters.map { TocItem(titleJp = it.title, chapterId = it.id) } }
+            val savedPosition = state.positions[ref.key]
+            val destination = remember(toc, savedPosition?.chapterId) { resumeDestination(toc, savedPosition?.chapterId, null) }
+            var tab by rememberSaveable(ref.key) { mutableIntStateOf(0) }
+            AdaptiveBookDetail(tab, { tab = it }, listOf("信息", "目录 ${toc.size}"), rememberSaveableStateHolder()) { panel ->
+                if(panel == 0) AppLazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+                    item {
+                        Row(Modifier.fillMaxWidth().padding(20.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                            BookCover(book, Modifier.width(94.dp).height(134.dp))
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Text(book.title, style = MaterialTheme.typography.titleLarge)
+                                Text("${document.format.uppercase()} · ${toc.size} 章", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                                Text("已保存在此设备，可离线阅读。", style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                    }
+                    item {
+                        Button(onClick = { destination?.let { c.read(ref, it.chapterId) } }, enabled = destination != null,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
+                            Text(if(savedPosition == null) "开始阅读" else "继续阅读 · 第 ${destination?.number} 章")
+                        }
+                        destination?.let { Text(it.title, Modifier.padding(horizontal = 24.dp, vertical = 12.dp), style = MaterialTheme.typography.bodyMedium) }
+                    }
+                    item { MenuRow("本地术语表", "维护此文件的专有名词", Icons.Outlined.Translate, { c.go("glossary/${ref.key}") }) }
+                } else TocPanel(c, ref, toc, destination?.chapterId) { c.read(ref, it) }
+            }
+        }
+    }
+}
+
+/** Keep the same saved panel keys when rotating or resizing between single and dual panes. */
+@Composable internal fun AdaptiveBookDetail(
+    selected: Int,
+    onSelect: (Int) -> Unit,
+    titles: List<String>,
+    state: SaveableStateHolder,
+    modifier: Modifier = Modifier,
+    panel: @Composable (Int) -> Unit,
+) {
+    val latestPanel by rememberUpdatedState(panel)
+    // A plain provider at two different call sites loses its live state during the same
+    // resize composition: the new registry is created before the old one is disposed.
+    // Move each panel's existing composition instead, including its scroll/field state.
+    val panels = remember(state, titles.size) {
+        List(titles.size) { index -> movableContentOf { state.SaveableStateProvider(index) { latestPanel(index) } } }
+    }
+    BoxWithConstraints(modifier.fillMaxSize()) {
+        if(maxWidth >= 840.dp) Row(Modifier.fillMaxSize().testTag("book-detail-dual-pane")) {
+            Box(Modifier.weight(.44f).fillMaxHeight().testTag("book-detail-summary")) { panels[0]() }
+            VerticalDivider()
+            Column(Modifier.weight(.56f).fillMaxHeight()) {
+                val rightPanel = selected.coerceIn(1, titles.lastIndex)
+                PrimaryTabRow(rightPanel - 1) { titles.drop(1).forEachIndexed { index, title ->
+                    Tab(rightPanel == index + 1, { onSelect(index + 1) }, text = { Text(title) })
+                } }
+                MotionContent(rightPanel, Modifier.weight(1f).fillMaxWidth(), animateInitial = false) {
+                    panels[rightPanel]()
+                }
+            }
+        } else Column(Modifier.fillMaxSize().testTag("book-detail-single-pane")) {
+            PrimaryTabRow(selected) { titles.forEachIndexed { index, title -> Tab(selected == index, { onSelect(index) }, text = { Text(title) }) } }
+            MotionContent(selected, Modifier.weight(1f).fillMaxWidth(), animateInitial = false) {
+                panels[selected]()
+            }
+        }
+    }
 }
 @Composable private fun Stat(label: String, value: String) { Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(value, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary); Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
 @Composable private fun BookHero(book: BookCard, subtitle: String, isSaved: Boolean, favorite: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val savedColor by animateColorAsState(
         if(isSaved) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-        animationSpec = tween(if(LocalReducedMotion.current) 0 else 220), label = "favorite-container"
+        animationSpec = tween(if(appReducedMotion()) 0 else AppMotion.Standard), label = "favorite-container"
     )
     Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -170,7 +242,7 @@ import kotlin.math.abs
     }
     val currentIndex = remember(list, current) { if(current == null) -1 else list.indexOfFirst { it.value.chapterId == current } }
     val hasChapters = remember(list) { list.any { it.value.chapterId != null } }
-    val reducedMotion = LocalReducedMotion.current
+    val reducedMotion = appReducedMotion()
     val scroll = rememberLazyListState(); val scope = rememberCoroutineScope()
     Column {
         OutlinedTextField(search, { search = it }, label = { Text("搜索章节") }, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), singleLine = true, leadingIcon = { Icon(Icons.Outlined.Search, null) })
@@ -183,7 +255,7 @@ import kotlin.math.abs
         AppLazyColumn(state = scroll, modifier = Modifier.weight(1f)) {
             items(list, key = { it.value.chapterId?.let { id -> "chapter-$id" } ?: "section-${it.index}" }, contentType = { if(it.value.chapterId == null) "section" else "chapter" }) { entry ->
                 val item = entry.value
-                val itemMotion = if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(180), placementSpec = tween(220), fadeOutSpec = tween(120))
+                val itemMotion = if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(AppMotion.Release), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit))
                 if(item.chapterId == null) Box(itemMotion) { SectionTitle(item.title) }
                 else ListItem(headlineContent = { Text(item.title, color = if(item.chapterId == current) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) }, supportingContent = if(!ref.isLocal && item.chapterId in cachedIds) ({ Text("可离线阅读") }) else null, leadingContent = { Icon(if(item.chapterId == current) Icons.Outlined.Bookmark else Icons.Outlined.Article, null) }, trailingContent = { Icon(Icons.Outlined.ChevronRight, null) }, modifier = itemMotion.fillMaxWidth().motionClickable { onRead(item.chapterId) })
             }

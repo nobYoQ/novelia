@@ -1,18 +1,25 @@
 package cc.novelia.app
 
 import android.graphics.Bitmap
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.data.KeywordCatalog
 import cc.novelia.app.data.KeywordEntry
 import cc.novelia.app.ui.KeywordEditorDialog
 import cc.novelia.app.ui.SearchAssistantPanel
+import cc.novelia.app.ui.AppInteractionMode
+import cc.novelia.app.ui.AppLazyColumn
+import cc.novelia.app.ui.rememberCloudFilterCollapse
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -91,5 +98,107 @@ class SearchAssistantTest {
             MaterialTheme { SearchAssistantPanel("", KeywordCatalog.common, false, {}, {}, { _, _ -> }, {}, persistenceError = "标签词库和翻译暂未保存，正在重试") }
         }
         compose.onNodeWithText("标签词库和翻译暂未保存，正在重试").assertIsDisplayed()
+    }
+
+    @Test fun onlyBrowsingResultsCollapsesAssistantAndTheSharedSwitchDisablesIt() {
+        var expanded by mutableStateOf(true)
+        var enabled by mutableStateOf(true)
+        compose.setContent {
+            MaterialTheme {
+                AppInteractionMode(false, true) {
+                    Column(Modifier.width(375.dp).fillMaxHeight()) {
+                        SearchAssistantPanel("", KeywordCatalog.common, expanded, { expanded = it }, {}, { _, _ -> }, {})
+                        val collapse = rememberCloudFilterCollapse(enabled, expanded) { expanded = false }
+                        AppLazyColumn(Modifier.weight(1f).nestedScroll(collapse), listModifier = Modifier.testTag("results")) {
+                            items(40) { Text("小说 $it", Modifier.fillMaxWidth().height(72.dp)) }
+                        }
+                    }
+                }
+            }
+        }
+        compose.onNodeWithTag("search-assistant-content").performTouchInput { swipeUp() }
+        compose.runOnIdle { assertTrue("编辑条件时滚动面板不应收起", expanded) }
+        compose.onNodeWithTag("results").performTouchInput { swipeDown() }
+        compose.runOnIdle { assertTrue("向列表顶部滚动不应收起", expanded) }
+        compose.onNodeWithTag("results").performTouchInput { swipeUp() }
+        compose.onNodeWithTag("search-assistant-content").assertDoesNotExist()
+        compose.onNodeWithTag("search-assistant-toggle").performClick()
+        compose.onNodeWithTag("search-assistant-content").assertIsDisplayed()
+        compose.runOnIdle { enabled = false }
+        compose.onNodeWithTag("results").performTouchInput { swipeUp() }
+        compose.onNodeWithTag("search-assistant-content").assertIsDisplayed()
+    }
+
+    @Test fun assistantUsesTheSameExpandableMotionAndStopsImmediatelyWhenDisabled() {
+        var expanded by mutableStateOf(false)
+        var reduced by mutableStateOf(false)
+        var eInk by mutableStateOf(false)
+        compose.setContent {
+            MaterialTheme {
+                AppInteractionMode(eInk, reduced) {
+                    SearchAssistantPanel("", KeywordCatalog.common, expanded, { expanded = it }, {}, { _, _ -> }, {},
+                        Modifier.width(375.dp).testTag("assistant"))
+                }
+            }
+        }
+        fun height() = compose.onNodeWithTag("assistant").getUnclippedBoundsInRoot().let { it.bottom - it.top }
+        val collapsedHeight = height()
+        compose.runOnIdle { expanded = true }
+        compose.waitForIdle()
+        val fullHeight = height()
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.runOnIdle { expanded = false }
+            compose.mainClock.advanceTimeBy(80)
+            assertTrue(height() < fullHeight && height() > collapsedHeight)
+            compose.runOnIdle { reduced = true }
+            compose.mainClock.advanceTimeByFrame()
+            assertEquals(collapsedHeight, height())
+            compose.runOnIdle { expanded = true }
+            compose.mainClock.advanceTimeByFrame()
+            assertEquals(fullHeight, height())
+            compose.runOnIdle { expanded = false; reduced = false; eInk = true }
+            compose.mainClock.advanceTimeByFrame()
+            assertEquals(collapsedHeight, height())
+            compose.runOnIdle { expanded = true }
+            compose.mainClock.advanceTimeByFrame()
+            val eInkHeight = height()
+            assertTrue(eInkHeight > collapsedHeight)
+            compose.mainClock.advanceTimeBy(100)
+            assertEquals("电子纸模式展开后无需等待动效", eInkHeight, height())
+            compose.runOnIdle { expanded = false }
+            compose.mainClock.advanceTimeByFrame()
+            assertEquals(collapsedHeight, height())
+            compose.runOnIdle { eInk = false }
+            compose.mainClock.advanceTimeByFrame()
+            compose.runOnIdle { expanded = true }
+            compose.mainClock.advanceTimeBy(80)
+            assertTrue(height() > collapsedHeight && height() < fullHeight)
+        } finally { compose.mainClock.autoAdvance = true }
+    }
+
+    @Test fun eInkResultPagingAlsoRespectsTheSharedAutoCollapseSwitch() {
+        var expanded by mutableStateOf(true)
+        var enabled by mutableStateOf(true)
+        compose.setContent {
+            MaterialTheme {
+                AppInteractionMode(true, false) {
+                    Column(Modifier.width(375.dp).fillMaxHeight()) {
+                        SearchAssistantPanel("", KeywordCatalog.common, expanded, { expanded = it }, {}, { _, _ -> }, {})
+                        val collapse = rememberCloudFilterCollapse(enabled, expanded) { expanded = false }
+                        AppLazyColumn(Modifier.weight(1f).nestedScroll(collapse), listModifier = Modifier.testTag("results"),
+                            onPageTurn = { direction -> if(direction > 0 && enabled) expanded = false }) {
+                            items(40) { Text("小说 $it", Modifier.fillMaxWidth().height(72.dp)) }
+                        }
+                    }
+                }
+            }
+        }
+        compose.onNodeWithTag("results").performTouchInput { swipeUp() }
+        compose.onNodeWithTag("search-assistant-content").assertDoesNotExist()
+        compose.onNodeWithTag("search-assistant-toggle").performClick()
+        compose.runOnIdle { enabled = false }
+        compose.onNodeWithTag("results").performTouchInput { swipeUp() }
+        compose.onNodeWithTag("search-assistant-content").assertIsDisplayed()
     }
 }

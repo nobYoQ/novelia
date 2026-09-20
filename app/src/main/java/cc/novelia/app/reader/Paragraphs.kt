@@ -9,11 +9,12 @@ data class ReadingParagraph(val index: Int, val parts: List<TextPart>, val fallb
 
 private val localImageMarker = Regex("novelia-image:([a-f0-9]{64})")
 
-fun projectParagraphs(chapter: Chapter, settings: ReaderSettings): List<ReadingParagraph> {
+fun projectParagraphs(chapter: Chapter, settings: ReaderSettings, checkCancelled: () -> Unit = {}): List<ReadingParagraph> {
     val engines = mapOf("sakura" to chapter.sakuraParagraphs, "gpt" to chapter.gptParagraphs, "youdao" to chapter.youdaoParagraphs)
     val count = maxOf(chapter.paragraphs.size, engines.values.maxOfOrNull { it?.size ?: 0 } ?: 0)
     val selectedEngines = settings.engines.distinct().mapNotNull { engine -> engines[engine]?.let { engine to it } }
     return buildList(count) { for(i in 0 until count) {
+        checkCancelled()
         val jp = chapter.paragraphs.getOrNull(i).orEmpty()
         if(jp.startsWith("<图片>")) {
             val url = jp.removePrefix("<图片>").trim()
@@ -47,14 +48,29 @@ fun projectParagraphs(chapter: Chapter, settings: ReaderSettings): List<ReadingP
 }
 
 /** Prepare display text once per chapter/language change, away from composition and scrolling. */
-fun prepareReadingParagraphs(chapter: Chapter, settings: ReaderSettings): List<ReadingParagraph> {
+fun prepareReadingParagraphs(chapter: Chapter, settings: ReaderSettings, checkCancelled: () -> Unit = {}): List<ReadingParagraph> {
     // ICU converters are mutable, so each preparation owns its converter instead of sharing one across threads.
     val converter by lazy { Transliterator.getInstance("Simplified-Traditional") }
-    return projectParagraphs(chapter, settings).map { paragraph ->
+    return projectParagraphs(chapter, settings, checkCancelled).map { paragraph ->
+        checkCancelled()
         if(paragraph.imageUrl != null || paragraph.localImageId != null) paragraph
         else paragraph.copy(parts = paragraph.parts.map { part ->
+            checkCancelled()
             val text = part.text.trim()
-            part.copy(text = if(settings.traditional && part.source != "日文" && !part.source.startsWith("原文")) converter.transliterate(text) else text)
+            val prepared = if(settings.traditional && part.source != "日文" && !part.source.startsWith("原文")) {
+                // Bound each ICU operation so leaving a very long chapter cancels promptly.
+                buildString(text.length) {
+                    var start = 0
+                    while(start < text.length) {
+                        checkCancelled()
+                        var end = (start + 4096).coerceAtMost(text.length)
+                        if(end < text.length && text[end - 1].isHighSurrogate() && text[end].isLowSurrogate()) end--
+                        append(converter.transliterate(text.substring(start, end)))
+                        start = end
+                    }
+                }
+            } else text
+            part.copy(text = prepared)
         })
     }
 }

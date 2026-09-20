@@ -1,14 +1,6 @@
 @file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
@@ -23,8 +15,10 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.background
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -36,16 +30,16 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.*
 
-@Composable fun CloudShelf(c: AppController) {
+@Composable fun CloudShelf(c: AppController, onOpenBook: (BookRef) -> Unit = c::book, selectedBookKey: String? = null) {
     val profile by c.session.profile.collectAsStateWithLifecycle()
     if (profile == null) {
         EmptyState("连接你的云端书架", "登录原站账号，访问网络小说和文库收藏。", Icons.Outlined.CloudQueue, "登录", { c.go("login") })
         return
     }
-    key(profile!!.username) { CloudShelfAccount(c, profile!!.username) }
+    key(profile!!.username) { CloudShelfAccount(c, profile!!.username, onOpenBook, selectedBookKey) }
 }
 
-@Composable private fun CloudShelfAccount(c: AppController, account: String) {
+@Composable private fun CloudShelfAccount(c: AppController, account: String, onOpenBook: (BookRef) -> Unit, selectedBookKey: String?) {
     val local by c.store.state.collectAsStateWithLifecycle()
     var kind by rememberSaveable { mutableIntStateOf(0) }
     var folderId by rememberSaveable { mutableStateOf("") }
@@ -62,6 +56,9 @@ import cc.novelia.app.data.*
     var level by rememberSaveable { mutableIntStateOf(0) }
     var translate by rememberSaveable { mutableIntStateOf(0) }
     var expanded by rememberSaveable { mutableStateOf(true) }
+    // A row-level or background retry can finish without this screen's own menu callback.
+    // Refresh remote results after success while AsyncContent keeps the current viewport.
+    val refreshKey = listOf(version, local.syncStatus[account]?.lastSuccessAt ?: 0L)
     LaunchedEffect(local.autoCollapseCloudFilters) { if(!local.autoCollapseCloudFilters) expanded = true }
     val focus = LocalFocusManager.current
     val path = if (kind == 0) "user/favored-web" else "user/favored-wenku"
@@ -70,7 +67,7 @@ import cc.novelia.app.data.*
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val filterHeight = maxHeight * .55f
-        AsyncContent(account, load = { c.api.get<CloudFolders>("user/favored") }, refreshKey = version) { folders, refresh ->
+        AsyncContent(account, load = { c.api.get<CloudFolders>("user/favored") }, refreshKey = refreshKey) { folders, refresh ->
             val realFolders = if (kind == 0) folders.favoredWeb else folders.favoredWenku
             val choices = cloudFolderChoices(realFolders)
             val current = choices.find { it.id == folderId } ?: choices.firstOrNull()
@@ -129,16 +126,30 @@ import cc.novelia.app.data.*
                     val requestKey = listOf(account, kind, current.id, page, sort, if (kind == 0) filter else null)
                     val listState = key(requestKey) { rememberLazyListState() }
                     val collapse = rememberCloudFilterCollapse(local.autoCollapseCloudFilters, expanded) { expanded = false }
-                    AsyncContent(requestKey, refreshKey = version, modifier = Modifier.weight(1f), load = {
+                    AsyncContent(requestKey, refreshKey = refreshKey, modifier = Modifier.weight(1f), load = {
                         c.api.cloudFavorites(kind == 1, current.id, page, sort, filter)
                     }) { result, retry ->
-                        AppLazyColumn(state = listState, modifier = Modifier.fillMaxSize().nestedScroll(collapse),
+                        AppLazyColumn(state = listState, modifier = Modifier.fillMaxSize().nestedScroll(collapse).preserveFilterResultPosition(listState),
                             onPageTurn = { direction -> if(direction > 0 && local.autoCollapseCloudFilters) expanded = false }) {
                             if (result.items.isEmpty()) item {
                                 EmptyState("没有匹配的收藏", "可调整筛选、切换收藏夹，或在书籍详情中添加云端收藏。", action = "重新加载", onAction = retry)
                             }
                             items(result.items, key = { it.ref.key }, contentType = { "book" }) { book ->
-                                BookRow(book, { c.book(book.ref) }, trailing = {
+                                val pending = pendingFavoriteAction(local.pending, account, book.ref)
+                                val cancelling = pending?.method == "DELETE"
+                                Column {
+                                val selectedBook = book.ref.key == selectedBookKey
+                                BookRow(book, { onOpenBook(book.ref) }, Modifier.semantics { selected = selectedBook }
+                                    .then(if(selectedBook) Modifier.background(MaterialTheme.colorScheme.secondaryContainer) else Modifier), trailing = {
+                                    if(cancelling) TextButton(onClick = { c.action {
+                                        val restoreFolder = book.favored?.takeIf { it != ALL_CLOUD_FAVORITES && it.isNotBlank() }
+                                            ?: current.id.takeUnless { it == ALL_CLOUD_FAVORITES }
+                                        if(restoreFolder != null) {
+                                            c.cloudMutation("PUT", "$path/$restoreFolder/${if(kind == 0) book.ref.key else book.ref.id}")
+                                            version++
+                                        } else { c.pendingFavoriteCloud = true; c.pendingFavorite = book }
+                                    } }) { Text("撤销") }
+                                    else
                                     IconButton(onClick = { c.action {
                                         // The server deletes by user + novel; `all` is also valid for this route.
                                         val queued = c.cloudMutation("DELETE", "$path/${current.id}/${if (kind == 0) book.ref.key else book.ref.id}")
@@ -149,6 +160,7 @@ import cc.novelia.app.data.*
                                         }
                                     } }) { Icon(Icons.Outlined.BookmarkRemove, "取消云端收藏") }
                                 })
+                                }
                             }
                             item { PageControls(page, result.pageNumber) { page = it } }
                         }
@@ -165,13 +177,7 @@ import cc.novelia.app.data.*
 }
 
 @Composable internal fun CollapsibleCloudFilters(expanded: Boolean, toggle: () -> Unit, summary: String, maxHeight: androidx.compose.ui.unit.Dp, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    val reducedMotion = LocalReducedMotion.current
     val scroll = rememberScrollState()
-    val arrowRotation by animateFloatAsState(if(expanded) 180f else 0f,
-        tween(if(reducedMotion) 0 else 280, easing = FastOutSlowInEasing), label = "filter arrow")
-    val filterContent: @Composable () -> Unit = {
-        AppScrollColumn(Modifier.heightIn(max = maxHeight), state = scroll) { content() }
-    }
     Surface(modifier, tonalElevation = 1.dp) {
         Column {
             Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(onClickLabel = if (expanded) "收起筛选" else "展开筛选", onClick = toggle).padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -179,17 +185,10 @@ import cc.novelia.app.data.*
                     Text(if (expanded) "筛选云端收藏" else "展开筛选", style = MaterialTheme.typography.labelLarge)
                     Text(summary, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
                 }
-                Icon(Icons.Outlined.ExpandMore, null, Modifier.graphicsLayer {
-                    rotationZ = if(reducedMotion) if(expanded) 180f else 0f else arrowRotation
-                })
+                FilterPanelExpandIcon(expanded)
             }
-            // Switching reduced motion on also finishes an already-running transition immediately.
-            if(reducedMotion) {
-                if(expanded) filterContent()
-            } else AnimatedVisibility(expanded,
-                enter = expandVertically(tween(300, easing = FastOutSlowInEasing), expandFrom = Alignment.Top) + fadeIn(tween(200)),
-                exit = shrinkVertically(tween(280, easing = FastOutSlowInEasing), shrinkTowards = Alignment.Top) + fadeOut(tween(180))) {
-                filterContent()
+            FilterPanelVisibility(expanded) {
+                AppScrollColumn(Modifier.heightIn(max = maxHeight), state = scroll) { content() }
             }
         }
     }

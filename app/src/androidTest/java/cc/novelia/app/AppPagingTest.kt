@@ -28,6 +28,46 @@ import org.junit.runner.RunWith
 class AppPagingTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun reducedMotionDisablesEmbeddedPageAnimationsWithoutChangingPagingMode() {
+        lateinit var web: PagedSiteWebView
+        var ready by mutableStateOf(false)
+        compose.setContent {
+            val context = LocalContext.current
+            val view = remember { PagedSiteWebView(context).apply {
+                web = this
+                settings.javaScriptEnabled = true
+                reducedMotion = true
+                webViewClient = object : android.webkit.WebViewClient() {
+                    override fun onPageFinished(view: android.webkit.WebView, url: String?) {
+                        applyMotionPreference(); ready = true
+                    }
+                }
+                // loadData builds a data URL: an unescaped CSS '#' would truncate that URL.
+                // This API accepts the original HTML, so the ID selector and fixture remain intact.
+                loadDataWithBaseURL(null, "<html><style>#sample{animation:pulse 2s infinite;transition:opacity 1s}@keyframes pulse{to{opacity:.5}}</style><body><p id='sample'>Motion sample</p></body></html>", "text/html", "UTF-8", null)
+            } }
+            DisposableEffect(view) { onDispose { view.destroy() } }
+            AndroidView(factory = { view }, modifier = Modifier.size(300.dp))
+        }
+        compose.waitUntil(15_000) { ready }
+        val computed = java.util.concurrent.atomic.AtomicReference<String?>(null)
+        fun assertComputedStyle(expected: String) {
+            computed.set(null)
+            compose.runOnIdle {
+                web.evaluateJavascript("(() => { const element = document.getElementById('sample'); if (!element) return 'missing HTML fixture'; const s = getComputedStyle(element); return s.animationName + '|' + s.transitionProperty; })()") { computed.set(it) }
+            }
+            compose.waitUntil(5_000) { computed.get() != null }
+            assertEquals("Embedded page computed motion styles", "\"$expected\"", computed.get())
+        }
+        assertComputedStyle("none|none")
+        compose.runOnIdle {
+            assertFalse(web.eInkMode)
+            assertEquals(android.view.View.OVER_SCROLL_NEVER, web.overScrollMode)
+            web.reducedMotion = false
+        }
+        assertComputedStyle("pulse|opacity")
+    }
+
     @Test fun lazyListStaysStillUntilReleaseThenJumpsOneScreenWithoutFling() {
         val state = LazyListState()
         var eInk by mutableStateOf(true)

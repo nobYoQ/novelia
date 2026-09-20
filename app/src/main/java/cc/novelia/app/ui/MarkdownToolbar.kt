@@ -51,7 +51,7 @@ internal fun TextFieldValue.format(template: MarkdownTemplate, limit: Int): Text
             }
         }
     }
-    if (help) AlertDialog(onDismissRequest = { help = false }, title = { Text("Markdown 格式帮助") },
+    if (help) AppAlertDialog(onDismissRequest = { help = false }, title = { Text("Markdown 格式帮助") },
         text = {
             AppScrollColumn(contentModifier = Modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("选中文字后点击图标套用格式，再次点击可取消。评分数字可改为 0～5，支持半星；折叠内容默认收起。")

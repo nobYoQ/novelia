@@ -23,6 +23,7 @@ import cc.novelia.app.data.MarkdownLinks
     var loading by remember(destination) { mutableStateOf(true) }
     var failed by remember(destination) { mutableStateOf(false) }
     val eInk = LocalEInkMode.current
+    val reducedMotion = appReducedMotion()
     var canGoBack by remember(destination) { mutableStateOf(false) }
     var canGoForward by remember(destination) { mutableStateOf(false) }
     val web = remember(destination) { PagedSiteWebView(context).apply {
@@ -61,7 +62,7 @@ import cc.novelia.app.data.MarkdownLinks
         MarkdownLinks.resolve(destination)?.takeIf(MarkdownLinks::isInternal)?.let(::loadUrl)
             ?: run { loading = false; failed = true }
     } }
-    SideEffect { web.eInkMode = eInk }
+    SideEffect { web.eInkMode = eInk; web.reducedMotion = reducedMotion }
     fun back() { if (web.canGoBack()) web.goBack() else c.back() }
     // SPA pushState/hash changes do not always trigger onPageFinished; inspect
     // WebView's current history for both the system and toolbar back actions.
@@ -69,7 +70,7 @@ import cc.novelia.app.data.MarkdownLinks
     DisposableEffect(web) { onDispose { web.stopLoading(); web.destroy() } }
     Screen("原站页面", ::back) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
-            if (loading) { if(eInk) Text("正在加载…", Modifier.padding(horizontal = 16.dp)) else LinearProgressIndicator(Modifier.fillMaxWidth()) }
+            if (loading) { if(reducedMotion) Text("正在加载…", Modifier.padding(horizontal = 16.dp)) else LinearProgressIndicator(Modifier.fillMaxWidth()) }
             if (failed) Row(Modifier.padding(16.dp)) {
                 Text("页面加载失败，请检查网络。", Modifier.weight(1f))
                 TextButton(onClick = { web.reload() }) { Text("重试") }

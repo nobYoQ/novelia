@@ -28,14 +28,19 @@ fun hashName(value: String): String {
 class LocalStore(val context: Context) {
     private val stateFile = AtomicFile(File(context.filesDir, "library.json"))
     private val lastGoodFile = File(context.filesDir, "library-last-good.json")
+    private val stateCodec = LibraryStateCodec(File(context.filesDir, "library-text"),
+        { AtomicFile(it).openRead().bufferedReader(Charsets.UTF_8).use { reader -> reader.readText() } }, ::atomicText)
     private val initial = loadLibraryState(
         exists = File(context.filesDir, "library.json").exists() || File(context.filesDir, "library.json.bak").exists() ||
             lastGoodFile.exists() || File(lastGoodFile.path + ".bak").exists(),
         read = { stateFile.openRead().bufferedReader(Charsets.UTF_8).use { it.readText() } },
-        readLastGood = { AtomicFile(lastGoodFile).openRead().bufferedReader(Charsets.UTF_8).use { it.readText() } }
+        readLastGood = { AtomicFile(lastGoodFile).openRead().bufferedReader(Charsets.UTF_8).use { it.readText() } },
+        decode = stateCodec::decode
     )
     private val mutable = MutableStateFlow(initial.state)
     private val mutableRecoveryIssue = MutableStateFlow(initial.issue)
+    // Damaged snapshots may still contain recoverable pointers; keep their payload history intact.
+    private val preserveTextHistory = initial.issue != null || context.filesDir.listFiles().orEmpty().any { it.name.startsWith("library-damaged-") }
     val recoveryIssue = mutableRecoveryIssue.asStateFlow()
     private data class Revision(val number: Long, val state: LibraryState)
     private var revision = 0L
@@ -53,20 +58,25 @@ class LocalStore(val context: Context) {
     val cacheDir = File(context.filesDir, "chapters").apply { mkdirs() }
     val documentsDir = File(context.filesDir, "documents").apply { mkdirs() }
     val metadataDir = File(context.filesDir, "metadata").apply { mkdirs() }
+    val metadataCache = MetadataCache(metadataDir)
     val downloadsDir = File(context.filesDir, "downloads").apply { mkdirs() }
     val exportsDir = File(context.filesDir, "exports").apply { mkdirs() }
     private val chapterLock = Any()
     private val documentLock = Any()
     private val chapterMemory = WeightedMemoryCache<String, Chapter>(24, 12L * 1024 * 1024, ::chapterWeight)
     private val documentMemory = WeightedMemoryCache<String, LocalDocument>(4, 32L * 1024 * 1024, ::documentWeight)
+    private val localChapterMemory = WeightedMemoryCache<String, LocalChapter>(12, 12L * 1024 * 1024) { 64 + paragraphsWeight(it.paragraphs) }
+    private val documentStorage = DocumentStorage(documentsDir,
+        { AtomicFile(it).openRead().bufferedReader(Charsets.UTF_8).use { reader -> reader.readText() } }, ::atomicText)
     private val sourceIndex by lazy {
         val file = File(documentsDir, "source-index.json")
         val initial = runCatching { appJson.decodeFromString<Map<String, String>>(AtomicFile(file).openRead().bufferedReader(Charsets.UTF_8).use { it.readText() }) }.getOrDefault(emptyMap())
-        DocumentHashIndex(initial, { document(it).sourceHash }, { atomicText(file, appJson.encodeToString(it)) })
+        DocumentHashIndex(initial, { documentIndex(it).sourceHash }, { atomicText(file, appJson.encodeToString(it)) })
     }
     private val chapterIndex = ChapterCacheIndex(cacheDir, 256L * 1024 * 1024)
     private val mutableCacheGeneration = MutableStateFlow(0L)
     val cacheGeneration = mutableCacheGeneration.asStateFlow()
+    val chapterRequests = ChapterRequests(this)
 
     /** State changes are immediate; JSON encoding and atomic writes run on a single IO writer. */
     @Synchronized fun update(transform: (LibraryState) -> LibraryState) {
@@ -79,13 +89,13 @@ class LocalStore(val context: Context) {
         mutable.value = next
     }
 
-    private fun writeState(next: LibraryState) {
-        val text = appJson.encodeToString(next)
+    private fun writeState(next: LibraryState, forcePayloadWrite: Boolean = false) {
+        val text = stateCodec.encode(next, forcePayloadWrite)
         val output = stateFile.startWrite()
         try { output.write(text.toByteArray(Charsets.UTF_8)); stateFile.finishWrite(output) }
         catch (error: Exception) { stateFile.failWrite(output); throw error }
         // A second copy is best effort: a failure must not misreport an already committed library.
-        runCatching { atomicText(lastGoodFile, text) }
+        runCatching { atomicText(lastGoodFile, text); if (!preserveTextHistory) stateCodec.compact() }
     }
 
     /** Only this explicit recovery boundary may replace a protected, unreadable library. */
@@ -98,7 +108,8 @@ class LocalStore(val context: Context) {
                     val damaged = File(context.filesDir, "library.json")
                     if (damaged.exists()) damaged.copyTo(File(context.filesDir, "library-damaged-${java.util.UUID.randomUUID()}.json"))
                 }
-                writeState(next)
+                // Explicit recovery repairs payloads even when the decoded values equal this process's cache.
+                writeState(next, forcePayloadWrite = true)
                 revision += 1
                 mutable.value = next
                 mutableRecoveryIssue.value = null
@@ -136,13 +147,14 @@ class LocalStore(val context: Context) {
         chapterIndex.written(file).forEach(chapterMemory::remove)
     }
 
-    fun saveDocument(document: LocalDocument) = synchronized(documentLock) {
+    fun saveDocument(document: LocalDocument, checkCancelled: () -> Unit = {}) = synchronized(documentLock) {
         check(recoveryIssue.value == null) { "本地资料已保护，请先前往资料备份与恢复" }
         val id = safeId(document.id)
         document.images.forEach { (hash, data) -> documentImage(document.id, hash).apply { parentFile?.mkdirs() }.writeBytes(java.util.Base64.getDecoder().decode(data)) }
         val stored = document.copy(images = emptyMap())
-        atomicText(File(documentsDir, "$id.json"), appJson.encodeToString(stored))
-        documentMemory.put(id, stored)
+        val index = documentStorage.save(stored, checkCancelled)
+        documentMemory.put(id, index)
+        localChapterMemory.clear()
         sourceIndex.record(id, stored.sourceHash)
     }
     fun findDocumentByHash(hash: String, checkCancelled: () -> Unit = {}): BookRef? = synchronized(documentLock) {
@@ -150,19 +162,27 @@ class LocalStore(val context: Context) {
     }
     fun documentImage(id: String, hash: String): File { require(hash.matches(Regex("[a-f0-9]{64}"))); return File(documentsDir, "${safeId(id)}-images/$hash") }
     fun documentSource(id: String, format: String): File { require(format in listOf("epub", "txt", "srt")); return File(documentsDir, "${safeId(id)}.$format") }
-    fun document(id: String): LocalDocument = synchronized(documentLock) {
+    /** Small chapter catalogue for reader navigation, search planning, and export metadata. */
+    fun documentIndex(id: String): LocalDocument = synchronized(documentLock) {
         val key = safeId(id)
-        documentMemory[key] ?: appJson.decodeFromString<LocalDocument>(
-            AtomicFile(File(documentsDir, "$key.json")).openRead().bufferedReader(Charsets.UTF_8).use { it.readText() }
-        ).also { documentMemory.put(key, it) }
+        documentMemory[key] ?: documentStorage.index(key).also { documentMemory.put(key, it) }
     }
+    fun documentChapter(id: String, chapterId: String): LocalChapter = synchronized(documentLock) {
+        val index = documentIndex(id)
+        val key = "${index.id}/${index.chapterFiles[chapterId] ?: chapterId}"
+        localChapterMemory[key] ?: documentStorage.chapter(index, chapterId).also { localChapterMemory.put(key, it) }
+    }
+    /** Portable full document; only explicit backup/export work should need this allocation. */
+    fun document(id: String, checkCancelled: () -> Unit = {}): LocalDocument =
+        documentStorage.full(documentIndex(id), checkCancelled)
 
     fun removeDocument(id: String) = synchronized(documentLock) {
         check(recoveryIssue.value == null) { "本地资料已保护，请先前往资料备份与恢复" }
         val key = safeId(id)
         documentMemory.remove(key)
+        localChapterMemory.clear()
         sourceIndex.remove(key)
-        File(documentsDir, "$key.json").delete()
+        documentStorage.remove(key)
         File(documentsDir, "$key-images").listFiles()?.forEach { it.delete() }
         File(documentsDir, "$key-images").delete()
         listOf("epub", "txt", "srt").forEach { documentSource(key, it).delete() }
@@ -170,16 +190,18 @@ class LocalStore(val context: Context) {
     }
 
     fun cacheSize(): Long = synchronized(chapterLock) {
-        chapterIndex.size() + (metadataDir.listFiles()?.sumOf { it.length() } ?: 0)
+        chapterIndex.size() + metadataCache.size()
     }
 
     fun clearCache() = synchronized(chapterLock) {
         chapterMemory.clear()
-        (cacheDir.listFiles()?.toList().orEmpty() + metadataDir.listFiles()?.toList().orEmpty())
+        cacheDir.listFiles()?.toList().orEmpty()
             .filter { it.isFile }.forEach { it.delete() }
+        metadataCache.clear()
         chapterIndex.reset()
         clearChapterFreshness(this)
         mutableCacheGeneration.value += 1
+        chapterRequests.invalidateBefore(mutableCacheGeneration.value)
     }
 
     fun <T> withCacheGeneration(generation: Long, block: () -> T): T? = synchronized(chapterLock) {
@@ -200,4 +222,5 @@ private fun chapterWeight(chapter: Chapter): Long = 128 + textWeight(chapter.tit
     paragraphsWeight(chapter.paragraphs) + paragraphsWeight(chapter.youdaoParagraphs) +
     paragraphsWeight(chapter.gptParagraphs) + paragraphsWeight(chapter.sakuraParagraphs)
 private fun documentWeight(document: LocalDocument): Long = 128 + textWeight(document.name) +
-    document.chapters.sumOf { 64 + textWeight(it.id) + textWeight(it.title) + paragraphsWeight(it.paragraphs) }
+    document.chapters.sumOf { 64 + textWeight(it.id) + textWeight(it.title) + paragraphsWeight(it.paragraphs) } +
+    document.chapterFiles.entries.sumOf { 64 + textWeight(it.key) + textWeight(it.value) }

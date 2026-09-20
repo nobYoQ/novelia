@@ -27,6 +27,38 @@ import org.junit.runner.RunWith
 class EInkAndCloudFilterTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun exactSearchMovesToLateLanguagePartWithoutRepaginatingForHighlight() {
+        val settings = ReaderSettings(parallel = true, indent = true, paginationMode = "auto")
+        val paragraphs = listOf(ReadingParagraph(12, listOf(
+            TextPart("前面的正文。".repeat(180), "gpt"),
+            TextPart("日文の本文。".repeat(160) + "定位目标", "日文", true))))
+        val state = EInkPageState(null)
+        var match by mutableStateOf<ReadingTextMatch?>(null)
+        compose.setContent {
+            MaterialTheme {
+                CompositionLocalProvider(LocalReducedMotion provides true, LocalDensity provides Density(1f)) {
+                    EInkPage(paragraphs, settings, state, Modifier.width(327.dp).height(420.dp),
+                        imageModel = { null }, onToggleMenu = {}, onSelect = {}, onPage = state::move, activeMatch = match)
+                }
+            }
+        }
+        compose.waitUntil(10_000) { state.ready && state.pages.size > 2 }
+        val pages = state.pages
+        compose.runOnIdle {
+            val found = findReadingTextMatches(paragraphs, "定位目标").single()
+            match = found
+            state.find(found.paragraph, found.textOffset(paragraphs[found.paragraph], settings))
+        }
+        compose.onNodeWithText("定位目标", substring = true).assertIsDisplayed()
+        compose.runOnIdle {
+            assertSame(pages, state.pages)
+            assertTrue(state.pageIndex > 1)
+            match = null
+        }
+        compose.waitForIdle()
+        compose.runOnIdle { assertSame(pages, state.pages) }
+    }
+
     @Test fun replacingContentWithFewerParagraphsNeverUsesOldPageIndices() {
         val state = EInkPageState(null)
         val first = ReadingParagraph(0, listOf(TextPart("保留的正文", "日文")))

@@ -8,16 +8,20 @@ import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.material3.LocalRippleConfiguration
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.node.DrawModifierNode
 
 @Composable internal fun AppInteractionMode(eInk: Boolean, reducedMotion: Boolean, content: @Composable () -> Unit) {
+    val durationScale = rememberCoroutineScope().coroutineContext[MotionDurationScale]
+    val static = eInk || reducedMotion || !android.animation.ValueAnimator.areAnimatorsEnabled() ||
+        (durationScale?.scaleFactor ?: 1f) == 0f
     CompositionLocalProvider(
         LocalEInkMode provides eInk,
-        LocalReducedMotion provides (reducedMotion || eInk),
-        LocalRippleConfiguration provides if(eInk) null else LocalRippleConfiguration.current,
-        LocalIndication provides if(eInk) StaticIndication else LocalIndication.current,
-        LocalOverscrollFactory provides if(eInk) null else LocalOverscrollFactory.current,
+        LocalReducedMotion provides static,
+        LocalRippleConfiguration provides if(static) null else LocalRippleConfiguration.current,
+        LocalIndication provides if(static) StaticIndication else LocalIndication.current,
+        LocalOverscrollFactory provides if(static) null else LocalOverscrollFactory.current,
         content = content
     )
 }

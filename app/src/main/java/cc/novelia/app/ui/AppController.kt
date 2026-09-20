@@ -4,6 +4,9 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.navigation.NavHostController
 import cc.novelia.app.NoveliaApplication
 import cc.novelia.app.data.*
@@ -23,7 +26,11 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
     val session get() = app.session
     val metadataCache get() = app.metadataCache
     var afterLogin: (() -> Unit)? = null
+    var pendingFavorite by mutableStateOf<BookCard?>(null)
+    var pendingFavoriteCloud by mutableStateOf(false)
     private var celebration: Job? = null
+    internal data class ReaderHandoff(val ref: BookRef, val id: String, val value: Pair<Chapter, Boolean>, val binding: SessionBinding, val generation: Long)
+    private var readerHandoff: ReaderHandoff? = null
     // Different arguments of the same destination still need separate history entries.
     // Root-tab switching manages its own singleTop/restoreState in MainActivity.
     fun go(route: String, replaceTop: Boolean = false) { nav.navigate(route) { launchSingleTop = replaceTop } }
@@ -31,12 +38,27 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
     fun book(ref: BookRef) {
         if (ref.isLocal) action {
             val chapter = store.state.value.positions[ref.key]?.chapterId ?: withContext(Dispatchers.IO) {
-                store.document(ref.id).chapters.firstOrNull()?.id ?: error("这本小说没有可阅读的章节")
+                store.documentIndex(ref.id).chapters.firstOrNull()?.id ?: error("这本小说没有可阅读的章节")
             }
             read(ref, chapter)
         } else go("book/${ref.provider}/${ref.id}")
     }
     fun read(ref: BookRef, chapter: String) = go("reader/${ref.provider}/${ref.id}/${Uri.encode(chapter)}")
+    internal suspend fun prepareReaderChapter(ref: BookRef, id: String): ReaderHandoff {
+        val binding = session.capture()
+        val generation = store.cacheGeneration.value
+        val value = chapter(ref, id)
+        session.ensureCurrent(binding)
+        return ReaderHandoff(ref, id, value, binding, generation)
+    }
+    /** Validate before leaving the current reader; consume the loaded body once, without another request. */
+    internal fun readPreparedChapter(prepared: ReaderHandoff) {
+        session.ensureCurrent(prepared.binding)
+        check(prepared.generation == store.cacheGeneration.value) { "缓存已更新，请重新加载章节" }
+        synchronized(this) { readerHandoff = prepared }
+        nav.popBackStack()
+        read(prepared.ref, prepared.id)
+    }
     fun openLink(text: String) {
         when(val link = BookLinks.parse(text)) {
             is SiteLink.Book -> if(link.chapterId != null) read(link.ref, link.chapterId) else book(link.ref)
@@ -97,8 +119,14 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
         }
     }
     suspend fun chapter(ref: BookRef, id: String, forceNetwork: Boolean = false): Pair<Chapter, Boolean> = withContext(Dispatchers.IO) {
+        val handoff = synchronized(this@AppController) {
+            readerHandoff?.takeIf { it.ref == ref && it.id == id }?.also { readerHandoff = null }
+        }
+        if(!forceNetwork && handoff != null && handoff.binding == session.capture() && handoff.generation == store.cacheGeneration.value)
+            return@withContext handoff.value
         if(ref.isLocal) {
-            val doc = store.document(ref.id); val index = doc.chapters.indexOfFirst { it.id == id }.coerceAtLeast(0); val c = doc.chapters[index]
+            val doc = store.documentIndex(ref.id); val index = doc.chapters.indexOfFirst { it.id == id }.coerceAtLeast(0)
+            val c = store.documentChapter(ref.id, doc.chapters.getOrNull(index)?.id ?: error("这本小说没有可阅读的章节"))
             Chapter(c.title, c.title, doc.name, doc.name, doc.chapters.getOrNull(index - 1)?.id, doc.chapters.getOrNull(index + 1)?.id, c.paragraphs, c.paragraphs) to true
         } else {
             val binding = session.capture()
@@ -106,9 +134,8 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
             val cached = store.cachedChapter(ref, id)
             if(cached != null && !forceNetwork) return@withContext cached to true
             try {
-                val chapter = appJson.decodeFromString<Chapter>(api.request("GET", "novel/${ref.key}/chapter/${encodeSegment(id)}", binding = binding))
+                val chapter = store.chapterRequests.load(api, session, binding, generation, ref, id)
                 session.ensureCurrent(binding)
-                runCatching { store.withCacheGeneration(generation) { store.cacheChapter(ref, id, chapter); recordChapterFreshness(store, ref, id) } }
                 chapter to false
             } catch(e: IOException) {
                 session.ensureCurrent(binding)
@@ -122,16 +149,40 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
         val binding = session.capture()
         val account = binding.account ?: throw ApiException(401, "请先登录")
         val action = PendingAction(UUID.randomUUID().toString(), account, method, path, body, contentType)
-        val queued = api.cloudMutations.submit(action, { transform -> store.update { it.copy(pending = transform(it.pending)) } }, { session.ensureCurrent(binding) }) { item ->
+        val queued = api.cloudMutations.submit(action, { transform -> store.update { it.updateCloudPending(transform) } }, { session.ensureCurrent(binding) }, onQueuedFailure = { error ->
+            store.update { state ->
+                val status = state.syncStatus[account] ?: CloudSyncStatus()
+                state.copy(syncStatus = state.syncStatus + (account to status.copy(failures = status.failures + (action.id to syncFailureMessage(error)))))
+            }
+        }) { item ->
             api.request(item.method, item.path, item.body, contentType = item.contentType, binding = binding)
+        }
+        if (!queued) store.update { state ->
+            val status = state.syncStatus[account] ?: CloudSyncStatus()
+            state.copy(syncStatus = state.syncStatus + (account to status.copy(lastSuccessAt = System.currentTimeMillis(), requiresLogin = false)))
         }
         if (queued) message("操作已保存，等待同步")
         return queued
     }
-    fun syncPending() = action {
-        val account = session.profile.value?.username ?: throw ApiException(401, "请先登录")
-        val result = synchronizePending(app, manual = true)
-        val remaining = store.state.value.pending.count { it.account == account }
-        message(if(remaining == 0) "同步完成" else "已同步 ${result.completed} 项，仍有 $remaining 项待处理，可在同步状态中查看原因")
+    fun syncBook(ref: BookRef) {
+        val binding = session.capture()
+        action {
+            session.ensureCurrent(binding)
+            synchronizePending(app, manual = true, bookKey = ref.key, binding = binding)
+            session.ensureCurrent(binding)
+            val remaining = store.state.value.pending.count { it.account == binding.account && pendingBookKey(it) == ref.key }
+            message(if (remaining == 0) "本书同步完成" else "本书仍有 $remaining 项待同步，请查看书目下方的原因")
+        }
+    }
+    fun syncPending() {
+        val binding = session.capture()
+        action {
+            session.ensureCurrent(binding)
+            val account = binding.account ?: throw ApiException(401, "请先登录")
+            val result = synchronizePending(app, manual = true, binding = binding)
+            session.ensureCurrent(binding)
+            val remaining = store.state.value.pending.count { it.account == account }
+            message(if(remaining == 0) "同步完成" else "已同步 ${result.completed} 项，仍有 $remaining 项待处理，可在同步状态中查看原因")
+        }
     }
 }

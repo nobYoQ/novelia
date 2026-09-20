@@ -23,6 +23,7 @@ internal suspend fun <T> Call.awaitBody(readResponse: (Response) -> T): T = susp
         }
 
         override fun onResponse(call: Call, response: Response) {
+            if (!continuation.isActive) { response.close(); return }
             try {
                 val result = response.use(readResponse)
                 if (continuation.isActive) continuation.resume(result)

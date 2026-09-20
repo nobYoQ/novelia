@@ -30,16 +30,25 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
     val store by lazy { LocalStore(this) }
     val session by lazy { Session(this) }
     val keywords by lazy { KeywordStore(this) }
-    val metadataCache by lazy { MetadataCache(store.metadataDir) }
-    val api by lazy { NoveliaApi(session, onMutation = { metadataCache.invalidate(it) }, onKeywords = keywords::observe) }
-    val initialization by lazy { applicationScope.async { store; session; keywords.observe(store.state.value.books.flatMap { it.book.tags }); Unit } }
+    val metadataCache get() = store.metadataCache
+    val api by lazy { NoveliaApi(session, onMutation = { metadataCache.invalidate(it) }, onKeywords = { tags -> applicationScope.launch { keywords.observe(tags) } }) }
+    val initialization by lazy { applicationScope.async { store; session; Unit } }
 
     override fun onCreate() {
         super.onCreate()
         initialization
         applicationScope.launch {
             initialization.await()
+            // The first frame does not need to load and merge the tag translation catalogue.
+            delay(500)
+            keywords.observe(store.state.value.books.flatMap { it.book.tags })
+        }
+        applicationScope.launch {
+            initialization.await()
             cc.novelia.app.files.DownloadFiles.cleanup(store.downloadsDir)
+            // Reclaim optional model downloads left by the discontinued image recognition tool.
+            // User-edited text remains in drafts and can be recovered in the ordinary text tools.
+            runCatching { cc.novelia.app.files.removeRetiredModels(noBackupFilesDir) }
         }
         applicationScope.launch {
             initialization.await()

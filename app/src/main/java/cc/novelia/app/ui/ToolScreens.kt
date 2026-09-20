@@ -25,6 +25,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
 
 @Composable fun ToolsScreen(c: AppController) {
+    val libraryState by c.store.state.collectAsStateWithLifecycle()
     var tool by remember { mutableIntStateOf(0) }; var input by remember { mutableStateOf("") }; var output by remember { mutableStateOf("") }; var resultBytes by remember { mutableStateOf<ByteArray?>(null) }; var fileName by remember { mutableStateOf("result.txt") }; var busy by remember { mutableStateOf(false) }; var picked by remember { mutableStateOf<Pair<String, ByteArray>?>(null) }; var error by remember { mutableStateOf<String?>(null) }
     val exportFiles = remember(c.store) { PendingExportFiles(c.store.exportsDir) }
     var pendingExportId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -45,8 +46,12 @@ import kotlinx.serialization.json.*
     }
     Screen("文件工具", c::back) { padding -> AppScrollColumn(modifier = Modifier.padding(padding), contentModifier = Modifier.padding(bottom = 24.dp)) {
         MenuRow("个人术语表", "保存在此设备，可导入与导出 JSON", Icons.Outlined.Translate, { c.go("glossary/local/personal") })
-        ChoiceRow("工具", listOf("EPUB 转 TXT", "EPUB 图片压缩", "OCR 换行整理", "片假名统计"), tool) { if (!busy) { tool = it; output = ""; resultBytes = null; error = null } }
-        Text(listOf("按 EPUB 阅读顺序提取正文并导出为文本。", "优化 EPUB 中的图片，保留卷目与原始文件结构。", "合并 OCR 引入的段内换行。请预览后再导出。", "提取片假名词组并统计频率，辅助整理术语。结果不等同于人名判定。")[tool], Modifier.padding(20.dp), style = MaterialTheme.typography.bodyMedium)
+        val previousText = libraryState.drafts["tool:local-ocr"].orEmpty()
+        if (previousText.isNotBlank()) TextButton(onClick = {
+            tool = 2; input = previousText; output = ""; resultBytes = null; error = null
+        }, enabled = !busy, modifier = Modifier.padding(horizontal = 20.dp)) { Text("取回上次校对文本") }
+        ChoiceRow("工具", listOf("EPUB 转 TXT", "EPUB 图片压缩", "文本换行整理", "片假名统计"), tool) { if (!busy) { tool = it; output = ""; resultBytes = null; error = null } }
+        Text(listOf("按 EPUB 阅读顺序提取正文并导出为文本。", "优化 EPUB 中的图片，保留卷目与原始文件结构。", "合并文本中多余的段内换行，按空行和部分句末、对话标点保留分段。支持选择文本文件或粘贴文本，请检查预览后再导出。", "提取片假名词组并统计频率，辅助整理术语。结果不等同于人名判定。")[tool], Modifier.padding(20.dp), style = MaterialTheme.typography.bodyMedium)
         OutlinedButton(onClick = { picker.launch(arrayOf("*/*")) }, Modifier.fillMaxWidth().padding(horizontal = 20.dp), enabled = !busy) { Icon(Icons.Outlined.FileOpen, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(picked?.first ?: "选择文件") }
         if(tool >= 2) OutlinedTextField(input, { input = it }, enabled = !busy, label = { Text("粘贴或编辑文本") }, minLines = 7, maxLines = 14, modifier = Modifier.fillMaxWidth().padding(20.dp))
         Button(onClick = {
@@ -58,7 +63,7 @@ import kotlinx.serialization.json.*
                         when(selectedTool) {
                             0 -> { val file = requireNotNull(selectedFile) { "请先选择 EPUB" }; val text = DocumentTools.epubToTxt(file.second); Triple(text, text.toByteArray(Charsets.UTF_8), file.first.substringBeforeLast('.') + ".txt") }
                             1 -> { val file = requireNotNull(selectedFile) { "请先选择 EPUB" }; val bytes = EpubCompressor.compress(file.second); Triple("原文件：${file.second.size / 1024} KB\n处理后：${bytes.size / 1024} KB", bytes, file.first.substringBeforeLast('.') + ".compressed.epub") }
-                            2 -> { val text = DocumentTools.repairOcr(selectedInput) { coroutineContext.ensureActive() }; Triple(text, text.toByteArray(Charsets.UTF_8), "OCR整理.txt") }
+                            2 -> { val text = DocumentTools.repairOcr(selectedInput) { coroutineContext.ensureActive() }; Triple(text, text.toByteArray(Charsets.UTF_8), "换行整理.txt") }
                             else -> { val text = DocumentTools.katakana(selectedInput).joinToString("\n") { "${it.first}\t${it.second}" }; Triple(text, ("词语\t频次\n$text").toByteArray(Charsets.UTF_8), "片假名统计.tsv") }
                         }
                     }
@@ -68,7 +73,7 @@ import kotlinx.serialization.json.*
                 finally { busy = false }
             }
         }, enabled = !busy && (if(tool < 2) picked != null else input.isNotBlank()), modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) { Text(if(busy) "处理中…" else "开始处理") }
-        if(busy) LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 20.dp))
+        if(busy) { if(appReducedMotion()) Text("正在处理…", Modifier.padding(horizontal = 20.dp)) else LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) }
         error?.let { Text(it, Modifier.padding(20.dp), color = MaterialTheme.colorScheme.error) }
         if(resultBytes != null) {
             Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 14.dp, bottom = 6.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
@@ -172,7 +177,7 @@ import kotlinx.serialization.json.*
     } }
     if(add || editing != null) {
         var source by remember(editing) { mutableStateOf(editing?.first.orEmpty()) }; var target by remember(editing) { mutableStateOf(editing?.second.orEmpty()) }
-        AlertDialog(onDismissRequest = { add = false; editing = null }, title = { Text(if(add) "添加词条" else "编辑词条") }, text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { OutlinedTextField(source, { source = it }, label = { Text("原文") }); OutlinedTextField(target, { target = it }, label = { Text("译名") }) } }, confirmButton = { TextButton(onClick = { data = (data.orEmpty() - (editing?.first ?: "")) + (source.trim() to target.trim()); add = false; editing = null }, enabled = source.isNotBlank() && target.isNotBlank()) { Text("保存词条") } }, dismissButton = { TextButton(onClick = { add = false; editing = null }) { Text("取消") } })
+        AppAlertDialog(onDismissRequest = { add = false; editing = null }, title = { Text(if(add) "添加词条" else "编辑词条") }, text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { OutlinedTextField(source, { source = it }, label = { Text("原文") }); OutlinedTextField(target, { target = it }, label = { Text("译名") }) } }, confirmButton = { TextButton(onClick = { data = (data.orEmpty() - (editing?.first ?: "")) + (source.trim() to target.trim()); add = false; editing = null }, enabled = source.isNotBlank() && target.isNotBlank()) { Text("保存词条") } }, dismissButton = { TextButton(onClick = { add = false; editing = null }) { Text("取消") } })
     }
 }
 

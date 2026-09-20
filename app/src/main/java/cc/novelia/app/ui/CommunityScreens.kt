@@ -24,11 +24,11 @@ import kotlinx.serialization.encodeToString
 val categories = linkedMapOf("General" to "小说交流", "Guide" to "使用指南", "Support" to "反馈建议")
 @Composable fun CommunityScreen(c: AppController) {
     var category by rememberSaveable { mutableStateOf("General") }; var page by rememberSaveable { mutableIntStateOf(0) }; var search by rememberSaveable { mutableStateOf("") }; var saved by rememberSaveable { mutableStateOf(false) }
-    val reducedMotion = LocalReducedMotion.current
+    val reducedMotion = appReducedMotion()
     val state by c.store.state.collectAsStateWithLifecycle()
     Screen("社区", actions = {
         IconToggleButton(checked = saved, onCheckedChange = { saved = it }) {
-            Crossfade(saved, animationSpec = tween(if(reducedMotion) 0 else 160), label = "savedArticles") { showingSaved ->
+            Crossfade(saved, animationSpec = tween(if(reducedMotion) 0 else AppMotion.Quick), label = "savedArticles") { showingSaved ->
                 Icon(if(showingSaved) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder, "已收藏的文章")
             }
         }
@@ -51,11 +51,11 @@ val categories = linkedMapOf("General" to "小说交流", "Guide" to "使用指�
     }
 }
 @Composable private fun ArticleList(c: AppController, result: Page<Article>, page: Int, changePage: (Int) -> Unit) {
-    val reducedMotion = LocalReducedMotion.current
+    val reducedMotion = appReducedMotion()
     AppLazyColumn {
         if(result.items.isEmpty()) item { EmptyState("这里暂时没有文章", "试试其他分类，或调整搜索词。", Icons.Outlined.Forum) }
         items(result.items, key = { it.id }, contentType = { "article" }) { article ->
-            Column(if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(160), placementSpec = tween(220), fadeOutSpec = tween(120))) {
+            Column(if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(AppMotion.Quick), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit))) {
                 Column(Modifier.fillMaxWidth().motionClickable { c.go("article/${article.id}") }.padding(horizontal = 20.dp, vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) { if(article.pinned) Icon(Icons.Outlined.PushPin, "置顶", Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary); Text(categories[article.category].orEmpty(), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium); if(article.locked) Icon(Icons.Outlined.Lock, "已锁定", Modifier.size(14.dp)) }
                     Text(article.title, style = MaterialTheme.typography.titleMedium)
@@ -71,7 +71,7 @@ val categories = linkedMapOf("General" to "小说交流", "Guide" to "使用指�
     val profile by c.session.profile.collectAsStateWithLifecycle(); val state by c.store.state.collectAsStateWithLifecycle()
     var tab by rememberSaveable(id) { mutableIntStateOf(0) }; var deletion by remember { mutableStateOf(false) }
     val tabState = rememberSaveableStateHolder()
-    val reducedMotion = LocalReducedMotion.current
+    val reducedMotion = appReducedMotion()
     Screen("文章", c::back, actions = { IconButton(onClick = { c.share("https://n.novelia.cc/forum/$id") }) { Icon(Icons.Outlined.Share, "分享文章") } }) { padding ->
         AsyncContent(id, load = { c.api.get<Article>("article/$id") }, modifier = Modifier.padding(padding)) { article, _ ->
             Column {
@@ -87,7 +87,7 @@ val categories = linkedMapOf("General" to "小说交流", "Guide" to "使用指�
                             item { Row(Modifier.padding(top = 24.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 val saved = state.savedArticles.any { it.id == id }
                                 OutlinedButton(onClick = { c.store.update { it.copy(savedArticles = if(saved) it.savedArticles.filterNot { a -> a.id == id } else it.savedArticles + article.copy(id = id)) } }) {
-                                    Crossfade(saved, animationSpec = tween(if(reducedMotion) 0 else 160), label = "articleBookmark") { isSaved ->
+                                    Crossfade(saved, animationSpec = tween(if(reducedMotion) 0 else AppMotion.Quick), label = "articleBookmark") { isSaved ->
                                         Icon(if(isSaved) Icons.Outlined.BookmarkAdded else Icons.Outlined.BookmarkAdd, null, Modifier.size(18.dp))
                                     }
                                     Spacer(Modifier.width(8.dp))
@@ -108,6 +108,7 @@ val categories = linkedMapOf("General" to "小说交流", "Guide" to "使用指�
     if(articleId.isNullOrBlank()) ArticleEditor(c, null) else AsyncContent(articleId, { c.api.get<Article>("article/$articleId") }) { article, _ -> ArticleEditor(c, article.copy(id = articleId)) }
 }
 @Composable internal fun ArticleEditor(c: AppController, article: Article?) {
+    val profile by c.session.profile.collectAsStateWithLifecycle()
     val key = "article:${article?.id ?: "new"}"
     val draft = remember(key) { c.store.state.value.drafts[key] }
     val saved = remember(key) { draft?.let { runCatching { appJson.decodeFromString<Map<String, String>>(it) }.getOrNull() } }
@@ -126,13 +127,21 @@ val categories = linkedMapOf("General" to "小说交流", "Guide" to "使用指�
         MotionContent(preview, Modifier.fillMaxSize(), animateInitial = false) {
             editorState.SaveableStateProvider(preview) {
                 AppScrollColumn(contentModifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    if(profile != null && profile?.canPost != true) Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.medium) {
+                        Text("当前账号暂不具备社区发布权限。你仍可编辑和预览，草稿会保存在此设备，获得权限后可以继续发布。", Modifier.padding(16.dp), style = MaterialTheme.typography.bodyMedium)
+                    }
                     if(preview) { Text(title, style = MaterialTheme.typography.headlineMedium); MarkdownText(c, content, renderer = renderer, documentUrl = article?.id?.let { "https://n.novelia.cc/forum/$it" }) }
                     else {
                         OutlinedTextField(title, { if(it.length <= 80) title = it }, label = { Text("标题") }, supportingText = { Text("${title.length} / 80") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                         ChoiceRow("分类", categories.values.toList(), categories.keys.indexOf(category)) { category = categories.keys.elementAt(it) }
                         MarkdownEditor(content, { content = it }, editorHeight)
                     }
-                    Button(onClick = { c.requireLogin { c.action { sending = true; try { val submittedDraft = draftSnapshot(); val body = mapOf("title" to title.trim(), "content" to content.trim(), "category" to category); val result = if(article == null) c.api.post("article", body) else c.api.put("article/${article.id}", body); draftPersistence.submittedSuccessfully(submittedDraft); c.back(); c.go("article/${article?.id ?: result.trim().trim('"')}", replaceTop = article != null && c.nav.currentDestination?.route == "article/{id}" && c.nav.currentBackStackEntry?.arguments?.getString("id") == article.id) } finally { sending = false } } } }, enabled = !sending && title.trim().length in 2..80 && content.trim().length in 2..20000, modifier = Modifier.fillMaxWidth()) { Text(if(sending) "正在提交…" else if(article == null) "发布到社区" else "保存修改") }
+                    Text("草稿自动保存在此设备。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Button(onClick = { draftPersistence.save(); c.requireLogin { c.action {
+                        check(c.session.profile.value?.canPost == true) { "当前账号暂不具备社区发布权限，草稿已保留" }
+                        sending = true
+                        try { val submittedDraft = draftSnapshot(); val body = mapOf("title" to title.trim(), "content" to content.trim(), "category" to category); val result = if(article == null) c.api.post("article", body) else c.api.put("article/${article.id}", body); draftPersistence.submittedSuccessfully(submittedDraft); c.back(); c.go("article/${article?.id ?: result.trim().trim('"')}", replaceTop = article != null && c.nav.currentDestination?.route == "article/{id}" && c.nav.currentBackStackEntry?.arguments?.getString("id") == article.id) } finally { sending = false }
+                    } } }, enabled = !sending && (profile == null || profile?.canPost == true) && title.trim().length in 2..80 && content.trim().length in 2..20000, modifier = Modifier.fillMaxWidth()) { Text(if(sending) "正在提交…" else if(profile != null && profile?.canPost != true) "暂不可发布 · 草稿已保留" else if(article == null) "发布到社区" else "保存修改") }
                 }
             }
         }
@@ -143,7 +152,7 @@ val categories = linkedMapOf("General" to "小说交流", "Guide" to "使用指�
     var page by rememberSaveable(site, parent) { mutableIntStateOf(0) }; var version by remember { mutableIntStateOf(0) }; var text by rememberSaveable(site, parent) { mutableStateOf(c.store.state.value.drafts["comment:$site:$parent"].orEmpty()) }; var reply by remember { mutableStateOf<Comment?>(null) }; var sending by remember { mutableStateOf(false) }; var deleting by remember { mutableStateOf<Comment?>(null) }
     val profile by c.session.profile.collectAsStateWithLifecycle()
     val preferences by c.store.state.collectAsStateWithLifecycle()
-    val reducedMotion = LocalReducedMotion.current
+    val reducedMotion = appReducedMotion()
     if(!site.startsWith("article-") && preferences.hideNovelComments) { EmptyState("小说评论已隐藏", "可以在阅读与外观设置中重新开启。", Icons.Outlined.CommentsDisabled); return }
     val markdownRenderer = rememberMarkdownRenderer(c)
     val documentUrl = remember(site) { MarkdownLinks.commentDocumentUrl(site) }
@@ -153,7 +162,7 @@ val categories = linkedMapOf("General" to "小说交流", "Guide" to "使用指�
             AppLazyColumn(contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)) {
                 if(comments.isEmpty()) item { EmptyState("还没有讨论", "读完之后，来分享你的感想吧。", Icons.Outlined.ChatBubbleOutline) }
                 items(comments, key = { it.id }, contentType = { "comment" }) { comment ->
-                    Column(if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(160), placementSpec = tween(220), fadeOutSpec = tween(120))) {
+                    Column(if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(AppMotion.Quick), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit))) {
                         Column(Modifier.padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text(comment.user.username, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary); Text(displayDate(comment.createAt), style = MaterialTheme.typography.labelSmall) }
                             if(comment.hidden) Text("这条评论已被隐藏", style = MaterialTheme.typography.bodyMedium) else MarkdownText(c, comment.content, renderer = markdownRenderer, documentUrl = documentUrl)

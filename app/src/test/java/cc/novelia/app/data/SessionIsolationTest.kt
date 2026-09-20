@@ -1,6 +1,10 @@
 package cc.novelia.app.data
 
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
 import okhttp3.Request
 import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
@@ -13,12 +17,36 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 class SessionIsolationTest {
+    @Test(timeout = 10_000) fun cancellingAnUnauthorizedRequestCancelsItsRefreshWithoutRetry() = runBlocking {
+        val started = CompletableDeferred<Unit>()
+        val stopped = CompletableDeferred<Unit>()
+        val state = SessionState("old", profile("alice"))
+        val session = object : AuthenticationSession {
+            override fun capture() = state.capture()
+            override fun tokenFor(binding: SessionBinding) = state.tokenFor(binding)
+            override suspend fun refreshIfCurrent(binding: SessionBinding, previousToken: String?): Boolean {
+                try { started.complete(Unit); awaitCancellation() }
+                finally { stopped.complete(Unit) }
+            }
+        }
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setResponseCode(401))
+            val api = NoveliaApi(session, server.url("/api/").toString())
+            val request = async { api.request("GET", "chapter") }
+            started.await()
+            request.cancelAndJoin()
+            stopped.await()
+            assertEquals(1, server.requestCount)
+            assertEquals("old", state.token)
+        }
+    }
+
     private class FakeSession(account: String? = "alice", token: String = "old") : AuthenticationSession {
         val state = SessionState(token, account?.let { profile(it) })
         var refreshes = 0
         override fun capture() = state.capture()
         override fun tokenFor(binding: SessionBinding) = state.tokenFor(binding)
-        override fun refreshIfCurrent(binding: SessionBinding, previousToken: String?): Boolean {
+        override suspend fun refreshIfCurrent(binding: SessionBinding, previousToken: String?): Boolean {
             val current = tokenFor(binding)
             if (current != previousToken) return current != null
             refreshes++

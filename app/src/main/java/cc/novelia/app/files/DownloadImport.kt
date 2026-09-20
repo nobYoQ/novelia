@@ -68,7 +68,7 @@ suspend fun importLocalDocument(store: LocalStore, file: File, name: String = fi
                     val destination = store.documentImage(document.id, image.name).apply { parentFile?.mkdirs() }
                     if (!image.renameTo(destination)) image.copyTo(destination, overwrite = true)
                 }
-                store.saveDocument(document)
+                store.saveDocument(document) { workContext.ensureActive() }
                 store.saveBook(BookCard(ref, document.name,
                     cover = document.coverImage?.let { store.documentImage(document.id, it).absolutePath },
                     subtitle = "${document.format.uppercase()} · ${document.chapters.size} 章"))

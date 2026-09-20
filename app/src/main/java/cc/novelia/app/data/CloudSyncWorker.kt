@@ -7,23 +7,27 @@ import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 
-private val syncRunLock = Mutex()
+private val syncRun = BoundCloudSync()
 
 /** Both manual and automatic retries use the application's resource ordering and session binding. */
-suspend fun synchronizePending(app: NoveliaApplication, manual: Boolean = false): CloudReplayResult = syncRunLock.withLock {
+suspend fun synchronizePending(app: NoveliaApplication, manual: Boolean = false, bookKey: String? = null,
+    binding: SessionBinding = app.session.capture()): CloudReplayResult = syncRun.run(binding, app.session::ensureCurrent) {
     app.initialization.await()
+    app.session.ensureCurrent(binding)
     check(app.store.recoveryIssue.value == null) { "请先恢复本地阅读资料" }
-    val binding = app.session.capture()
     val account = binding.account ?: throw ApiException(401, "请先登录")
     val before = app.store.state.value.syncStatus[account] ?: CloudSyncStatus()
+    fun selectedPending() = pendingForSync(app.store.state.value.pending, binding, bookKey)
+    val selectedIds = selectedPending().map { it.id }.toSet()
     val attemptedAt = System.currentTimeMillis()
-    app.store.update { it.copy(syncStatus = it.syncStatus + (account to before.copy(lastAttemptAt = attemptedAt))) }
+    app.store.update { state ->
+        val latest = state.syncStatus[account] ?: before
+        state.copy(syncStatus = state.syncStatus + (account to latest.copy(lastAttemptAt = attemptedAt)))
+    }
     try {
-        val result = app.api.cloudMutations.replayEligible(account, { app.store.state.value.pending },
-            { transform -> app.store.update { it.copy(pending = transform(it.pending)) } },
+        val result = app.api.cloudMutations.replayEligible(account, ::selectedPending,
+            { transform -> app.store.update { it.updateCloudPending(transform) } },
             if(manual) emptySet() else before.blockedActions
         ) { action ->
             app.session.ensureCurrent(binding)
@@ -32,8 +36,9 @@ suspend fun synchronizePending(app: NoveliaApplication, manual: Boolean = false)
         app.session.ensureCurrent(binding)
         app.store.update { state ->
             val remaining = state.pending.filter { it.account == account }.map { it.id }.toSet()
-            val failures = (before.failures + result.failures).filterKeys { it in remaining }
-            val blocked = ((if(manual) emptySet() else before.blockedActions) + result.blockedActions).intersect(remaining)
+            val latest = state.syncStatus[account] ?: before
+            val failures = (latest.failures + result.failures).filterKeys { it in remaining }
+            val blocked = ((if(manual) latest.blockedActions - selectedIds else latest.blockedActions) + result.blockedActions).intersect(remaining)
             val status = CloudSyncStatus(attemptedAt,
                 if(result.completed > 0 || remaining.isEmpty()) System.currentTimeMillis() else before.lastSuccessAt,
                 failures, blocked, result.requiresLogin)
@@ -51,11 +56,13 @@ class CloudSyncWorker(context: Context, params: WorkerParameters) : CoroutineWor
         val app = applicationContext as NoveliaApplication
         app.initialization.await()
         if(!app.store.state.value.autoSync || app.store.recoveryIssue.value != null) return Result.success()
-        val account = app.session.profile.value?.username ?: return Result.success()
+        val binding = app.session.capture()
+        val account = binding.account ?: return Result.success()
         if(inputData.getString("account")?.let { it != account } == true) return Result.success()
         if(app.store.state.value.pending.none { it.account == account }) return Result.success()
         return try {
-            val result = synchronizePending(app)
+            val result = synchronizePending(app, binding = binding)
+            app.session.ensureCurrent(binding)
             val state = app.store.state.value
             val blocked = state.syncStatus[account]?.blockedActions.orEmpty()
             val more = state.pending.any { it.account == account && it.id !in blocked }

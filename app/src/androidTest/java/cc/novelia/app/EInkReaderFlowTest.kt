@@ -36,7 +36,7 @@ class EInkReaderFlowTest {
             compose.onNodeWithText("下一屏").performClick()
             compose.waitUntil(10_000) { (app.store.state.value.positions[ref.key]?.index ?: 0) > 0 }
             compose.onNodeWithContentDescription("阅读设置").performClick()
-            compose.onNodeWithText("连续滚动").assertIsSelected()
+            compose.onNodeWithText("连续滚动").performScrollTo().assertIsSelected()
             compose.onNodeWithText("显示翻页按钮").performScrollTo().performClick()
             compose.onNodeWithText("关闭面板").performClick()
             compose.onNodeWithText("下一屏").assertDoesNotExist()
@@ -124,7 +124,7 @@ class EInkReaderFlowTest {
             compose.waitUntil(10_000) { compose.onAllNodesWithText("独特的终点标记。", substring = true).fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithContentDescription("搜索本章").performClick()
             compose.onNodeWithContentDescription("阅读设置").performClick()
-            compose.onNodeWithText("电子纸阅读模式").assertIsDisplayed()
+            compose.onNodeWithText("电子纸阅读模式").performScrollTo().assertIsDisplayed()
             screenshot("eink-settings")
             compose.onNodeWithText("关闭面板").performClick()
             compose.onNodeWithText("下一页").performClick()

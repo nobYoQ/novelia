@@ -84,10 +84,10 @@ class StickerFeaturesTest {
             compose.onNodeWithText("「森林来信」下载完成").assertIsDisplayed()
             screenshot("v2-download-complete")
             compose.onNodeWithContentDescription("关闭提示").performClick()
-            compose.onNodeWithText("导入阅读").performScrollTo().performClick()
-            compose.waitUntil(10_000) { compose.onAllNodesWithText("已导入书架").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("开始阅读").performScrollTo().performClick()
+            compose.waitUntil(10_000) { compose.onAllNodesWithText("这是插图与贴纸验收用的本地小说。", substring = true).fetchSemanticsNodes().isNotEmpty() }
             screenshot("v2-import-complete")
-            compose.onNodeWithContentDescription("关闭提示").performClick()
+            compose.onNodeWithContentDescription("返回").performClick()
             compose.onNodeWithContentDescription("返回").performClick()
             openMenu("阅读与外观")
             compose.onNodeWithText("减少动态效果").assertIsDisplayed()

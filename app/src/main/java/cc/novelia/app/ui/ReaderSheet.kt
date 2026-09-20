@@ -5,11 +5,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.compose.ui.window.DialogWindowProvider
 
 val LocalEInkMode = staticCompositionLocalOf { false }
 
@@ -18,10 +15,8 @@ val LocalEInkMode = staticCompositionLocalOf { false }
 }
 
 @Composable internal fun AppSheet(onDismissRequest: () -> Unit, sheetState: SheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), content: @Composable ColumnScope.() -> Unit) {
-    if (!LocalEInkMode.current) ModalBottomSheet(onDismissRequest = onDismissRequest, sheetState = sheetState, content = content)
-    else Dialog(onDismissRequest, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        val window = (LocalView.current.parent as? DialogWindowProvider)?.window
-        SideEffect { window?.setWindowAnimations(0) }
+    if (!appReducedMotion()) ModalBottomSheet(onDismissRequest = onDismissRequest, sheetState = sheetState, content = content)
+    else AppDialog(onDismissRequest, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxWidth(.95f).fillMaxHeight(.9f), shape = MaterialTheme.shapes.large) {
             Column {
                 TextButton(onClick = onDismissRequest, modifier = Modifier.fillMaxWidth()) { Text("关闭面板") }

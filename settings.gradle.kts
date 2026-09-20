@@ -7,3 +7,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "Novelia"
 include(":app")
+include(":benchmark")

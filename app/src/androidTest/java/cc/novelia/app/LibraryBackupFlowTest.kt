@@ -38,6 +38,82 @@ class LibraryBackupFlowTest {
         }
     }
 
+    @Test fun laterBackupAddsMissingOriginalsWithoutOverwritingExistingFilesAndRollsBackOnFailure() = runBlocking {
+        withContext(Dispatchers.IO) { fixtures { sourceContext, targetContext ->
+            val source = LocalStore(sourceContext); val sourceTags = KeywordStore(sourceContext)
+            val ref = BookRef("local", "original-upgrade")
+            source.saveDocument(LocalDocument(ref.id, "原件补全", "txt", listOf(LocalChapter("c", "正文", listOf("阅读正文"))), sourceHash = "same-source"))
+            source.saveBook(BookCard(ref, "原件补全"))
+            source.documentSource(ref.id, "txt").writeText("原始文本内容", Charsets.UTF_8)
+            val exporter = LibraryBackupService(source, sourceTags)
+            val parsedOnly = ByteArrayOutputStream().also { exporter.export(it, false) }.toByteArray()
+            val withOriginal = ByteArrayOutputStream().also { exporter.export(it, true) }.toByteArray()
+            val target = LocalStore(targetContext)
+            val service = LibraryBackupService(target, KeywordStore(targetContext))
+            assertNull(service.restore(service.prepare(ByteArrayInputStream(parsedOnly)).stagingId))
+            val retainedRef = target.state.value.books.single().book.ref
+            val original = target.documentSource(retainedRef.id, "txt")
+            assertFalse(original.exists())
+            val upgrade = service.prepare(ByteArrayInputStream(withOriginal))
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                val obstruction = File(targetContext.filesDir, "library.json.new").apply { mkdirs() }
+                File(obstruction, "blocked").writeText("force write failure")
+                try {
+                    try { service.restore(upgrade.stagingId); fail("commit must fail") }
+                    catch (_: java.io.IOException) { }
+                    assertFalse("未提交恢复必须移除补拷的原件", original.exists())
+                    assertEquals(retainedRef, target.state.value.books.single().book.ref)
+                } finally { obstruction.deleteRecursively() }
+            }
+            assertNull(service.restore(upgrade.stagingId))
+            assertEquals(retainedRef, target.state.value.books.single().book.ref)
+            assertEquals("原始文本内容", original.readText(Charsets.UTF_8))
+            original.writeText("本机已有原件必须保留", Charsets.UTF_8)
+            assertNull(service.restore(service.prepare(ByteArrayInputStream(withOriginal)).stagingId))
+            assertEquals("本机已有原件必须保留", original.readText(Charsets.UTF_8))
+        } }
+    }
+
+    @Test fun corruptExistingIllustrationRestoresACompleteCopyAndRepeatedRecoveryReusesIt() = runBlocking {
+        withContext(Dispatchers.IO) { fixtures { sourceContext, targetContext ->
+            val source = LocalStore(sourceContext); val sourceTags = KeywordStore(sourceContext)
+            val ref = BookRef("local", "image-repair")
+            val hash = "b".repeat(64); val picture = byteArrayOf(5, 8, 13, 21)
+            source.saveDocument(LocalDocument(ref.id, "图片修复", "epub", listOf(LocalChapter("c", "正文", listOf("正文", "novelia-image:$hash"))),
+                images = mapOf(hash to java.util.Base64.getEncoder().encodeToString(picture)), coverImage = hash, sourceHash = "image-source"))
+            source.saveBook(BookCard(ref, "图片修复"))
+            val bytes = ByteArrayOutputStream().also { LibraryBackupService(source, sourceTags).export(it, false) }.toByteArray()
+            val target = LocalStore(targetContext)
+            val service = LibraryBackupService(target, KeywordStore(targetContext))
+            assertNull(service.restore(service.prepare(ByteArrayInputStream(bytes)).stagingId))
+            val damaged = target.state.value.books.single().book.ref
+            target.documentImage(damaged.id, hash).writeBytes(byteArrayOf(0))
+            assertNull(service.restore(service.prepare(ByteArrayInputStream(bytes)).stagingId))
+            val repaired = target.state.value.books.single { it.book.ref != damaged }.book.ref
+            assertArrayEquals(picture, target.documentImage(repaired.id, hash).readBytes())
+            assertArrayEquals("旧副本保持原状以便人工恢复", byteArrayOf(0), target.documentImage(damaged.id, hash).readBytes())
+            assertNull(service.restore(service.prepare(ByteArrayInputStream(bytes)).stagingId))
+            assertEquals("重复恢复应复用已完整恢复的副本", 2, target.state.value.books.size)
+        } }
+    }
+
+    @Test fun restoreRepairsLongTextDeletedAfterTheSameProcessLoadedIt() = runBlocking {
+        withContext(Dispatchers.IO) { fixtures { sourceContext, targetContext ->
+            val source = LocalStore(sourceContext); val sourceTags = KeywordStore(sourceContext)
+            source.update { it.copy(drafts = mapOf("article:new" to "草稿原文"), savedArticles = listOf(Article(id = "article", content = "收藏文章原文"))) }
+            val bytes = ByteArrayOutputStream().also { LibraryBackupService(source, sourceTags).export(it, false) }.toByteArray()
+            val target = LocalStore(targetContext)
+            val service = LibraryBackupService(target, KeywordStore(targetContext))
+            assertNull(service.restore(service.prepare(ByteArrayInputStream(bytes)).stagingId))
+            File(targetContext.filesDir, "library-text").listFiles().orEmpty().forEach { assertTrue(it.delete()) }
+            assertNull(service.restore(service.prepare(ByteArrayInputStream(bytes)).stagingId))
+            val reopened = LocalStore(targetContext)
+            assertNull(reopened.recoveryIssue.value)
+            assertEquals("草稿原文", reopened.state.value.drafts["article:new"])
+            assertEquals("收藏文章原文", reopened.state.value.savedArticles.single().content)
+        } }
+    }
+
     @Test fun backupRestoresReadableVolumesImagesOriginalsProgressNotesAndTranslations() = runBlocking {
         withContext(Dispatchers.IO) { fixtures { sourceContext, targetContext ->
             val source = LocalStore(sourceContext); val sourceTags = KeywordStore(sourceContext)

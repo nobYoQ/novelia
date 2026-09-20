@@ -26,7 +26,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
@@ -51,14 +50,14 @@ internal fun IllustrationViewer(model: Any, onDismiss: () -> Unit) {
     var transform by remember(model, retry) { mutableStateOf(IllustrationTransform()) }
     val ready = !loading && !failed
     val eInk = LocalEInkMode.current
+    val reducedMotion = appReducedMotion()
     fun zoom(factor: Float, anchor: Offset = Offset(viewport.width / 2, viewport.height / 2), pan: Offset = Offset.Zero) {
         if(ready) transform = transformIllustration(transform, viewport, imageSize, anchor, factor, pan)
     }
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+    AppDialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         val view = LocalView.current
         SideEffect {
             (view.parent as? DialogWindowProvider)?.window?.let { window ->
-                if(eInk) window.setWindowAnimations(0)
                 WindowCompat.getInsetsController(window, view).apply {
                     isAppearanceLightStatusBars = false
                     isAppearanceLightNavigationBars = false
@@ -98,7 +97,7 @@ internal fun IllustrationViewer(model: Any, onDismiss: () -> Unit) {
                         },
                         onError = { loading = false; failed = true },
                     ) }
-                    if(loading) { if(eInk) Text("正在加载插图…") else CircularProgressIndicator(Modifier.size(32.dp), color = Color.White) }
+                    if(loading) { if(reducedMotion) Text("正在加载插图…") else CircularProgressIndicator(Modifier.size(32.dp), color = Color.White) }
                     if(failed) Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("插图暂时无法加载", color = Color.White)
                         FilledTonalButton(onClick = { retry++ }) { Text("重试") }

@@ -1,13 +1,24 @@
 package cc.novelia.app.data
 
 import java.io.IOException
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /** Shared by the application API, so activity recreation cannot introduce another writer. */
 class CloudMutationQueue {
+    private val running = MutableStateFlow<Map<String, PendingAction>>(emptyMap())
+    /** Runtime-only: a stopped process must never restore a stale syncing indicator. */
+    val inFlight = running.asStateFlow()
     private class Entry(val mutex: Mutex = Mutex(), var users: Int = 0)
     private val resources = mutableMapOf<Pair<String, String>, Entry>()
+
+    private suspend fun executeTracked(action: PendingAction, execute: suspend (PendingAction) -> Unit) {
+        running.update { it + (action.id to action) }
+        try { execute(action) } finally { running.update { it - action.id } }
+    }
 
     private suspend fun <T> ordered(action: PendingAction, block: suspend () -> T): T {
         val key = action.account to resource(action.path)
@@ -18,18 +29,19 @@ class CloudMutationQueue {
 
     /** Returns true only for a recoverable offline failure. Older writes are superseded atomically. */
     suspend fun submit(action: PendingAction, updatePending: ((List<PendingAction>) -> List<PendingAction>) -> Unit,
-        validate: () -> Unit = {}, execute: suspend (PendingAction) -> Unit): Boolean = ordered(action) {
+        validate: () -> Unit = {}, onQueuedFailure: (IOException) -> Unit = {}, execute: suspend (PendingAction) -> Unit): Boolean = ordered(action) {
         validate()
         val queueable = action.method in listOf("PUT", "DELETE")
         // Record the newest intent before sending. Cancellation after a remote success must not
         // leave an older queued value behind; replaying this idempotent write is safe instead.
         if (queueable) updatePending { pending -> pending.filterNot { sameResource(it, action) } + action }
-        val offline = try { execute(action); false }
+        val offline = try { executeTracked(action, execute); false }
         catch (error: IOException) {
             if ((error is ApiException && classifySyncFailure(error) != SyncFailure.RETRY) || !queueable) {
                 if (queueable) updatePending { pending -> pending.filterNot { it.id == action.id } }
                 throw error
             }
+            onQueuedFailure(error)
             true
         }
         if (!offline) updatePending { pending -> pending.filterNot { sameResource(it, action) } }
@@ -42,7 +54,7 @@ class CloudMutationQueue {
         for (action in readPending().filter { it.account == account }) ordered(action) {
             // A newer online write or another replay may have superseded this captured queue item.
             if (readPending().none { it.id == action.id }) return@ordered
-            execute(action)
+            executeTracked(action, execute)
             updatePending { pending -> pending.filterNot { it.id == action.id } }
         }
     }
@@ -60,7 +72,7 @@ class CloudMutationQueue {
             ordered(action) {
                 if(readPending().none { it.id == action.id }) return@ordered
                 try {
-                    execute(action)
+                    executeTracked(action, execute)
                     updatePending { pending -> pending.filterNot { it.id == action.id } }
                     completed++
                 } catch(error: IOException) {

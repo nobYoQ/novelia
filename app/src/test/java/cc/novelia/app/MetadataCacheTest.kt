@@ -43,4 +43,20 @@ class MetadataCacheTest {
         cache.invalidate(written)
         assertNull(MetadataCache(temporary.root).read(firstKey, now = written + 10))
     }
+
+    @Test fun replacingAndClearingCacheMaintainAccurateIncrementalSize() {
+        val cache = MetadataCache(temporary.root, maxBytes = 12)
+        cache.write(firstKey, "123456", fetchedAt = 1_000)
+        cache.write(secondKey, "abcd", fetchedAt = 2_000)
+        assertEquals(10L, cache.size())
+        cache.write(firstKey, "123", fetchedAt = 3_000)
+        assertEquals(7L, cache.size())
+        assertEquals(7L, MetadataCache(temporary.root, 12).size())
+        cache.invalidate(3_000)
+        cache.clear()
+        assertEquals(0L, cache.size())
+        cache.write(firstKey, "new", fetchedAt = 4_000)
+        assertEquals("new", cache.read(firstKey, now = 4_001))
+        assertEquals(3L, cache.size())
+    }
 }

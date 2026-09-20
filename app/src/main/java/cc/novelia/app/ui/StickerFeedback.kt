@@ -15,7 +15,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalAccessibilityManager
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -46,7 +49,7 @@ fun StickerAccent(sticker: MidoriSticker, trigger: Any? = Unit, modifier: Modifi
         played = true
         if(motion) {
             progress.snapTo(0f)
-            progress.animateTo(1f, tween(if(sticker == MidoriSticker.Sleep) 1600 else 900, easing = LinearEasing))
+            progress.animateTo(1f, tween(if(sticker == MidoriSticker.Sleep) AppMotion.StickerRest else AppMotion.Sticker, easing = LinearEasing))
         }
     }
     MidoriIllustration(sticker, modifier.graphicsLayer {
@@ -103,7 +106,7 @@ internal data class StickerSnackbarVisuals(
 
 @Composable
 fun StickerSnackbarHost(state: SnackbarHostState) {
-    SnackbarHost(state) { data ->
+    val render: @Composable (SnackbarData) -> Unit = { data ->
         val visuals = data.visuals
         if(visuals is StickerSnackbarVisuals) {
             Snackbar(
@@ -117,6 +120,20 @@ fun StickerSnackbarHost(state: SnackbarHostState) {
                 }
             }
         } else Snackbar(data)
+    }
+    if(!appReducedMotion()) SnackbarHost(state, snackbar = render)
+    else {
+        val current = state.currentSnackbarData
+        val accessibility = LocalAccessibilityManager.current
+        LaunchedEffect(current) {
+            if(current != null && current.visuals.duration != SnackbarDuration.Indefinite) {
+                val duration = if(current.visuals.duration == SnackbarDuration.Long) 10_000L else 4_000L
+                delay(accessibility?.calculateRecommendedTimeoutMillis(duration, containsIcons = true,
+                    containsText = true, containsControls = current.visuals.actionLabel != null || current.visuals.withDismissAction) ?: duration)
+                current.dismiss()
+            }
+        }
+        if(current != null) Box(Modifier.semantics { liveRegion = LiveRegionMode.Polite }) { render(current) }
     }
 }
 

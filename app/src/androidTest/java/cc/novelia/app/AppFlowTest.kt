@@ -69,7 +69,7 @@ class AppFlowTest {
             screenshot("download-progress")
             compose.runOnIdle { app.store.update { it.copy(downloads = it.downloads.map { entry -> entry.copy(status = "已完成", progress = 100) }) } }
             compose.onNodeWithText("已完成").assertIsDisplayed()
-            compose.onNodeWithText("导入阅读").assertIsDisplayed()
+            compose.onNodeWithText("开始阅读").assertIsDisplayed()
             screenshot("download-complete")
             // Dismiss the completion overlay before tapping rows near the bottom of the next screen.
             if(compose.onAllNodesWithContentDescription("关闭提示").fetchSemanticsNodes().isNotEmpty()) {

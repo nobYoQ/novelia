@@ -64,12 +64,12 @@ import java.time.ZoneOffset
     volumeEditor?.let { index ->
         val existing = volumes.getOrNull(index) ?: WenkuVolume()
         var asin by remember(index) { mutableStateOf(existing.asin) }; var name by remember(index) { mutableStateOf(existing.title) }; var translated by remember(index) { mutableStateOf(existing.titleZh.orEmpty()) }; var image by remember(index) { mutableStateOf(existing.cover.orEmpty()) }; var publisher by remember(index) { mutableStateOf(existing.publisher.orEmpty()) }; var imprint by remember(index) { mutableStateOf(existing.imprint.orEmpty()) }; var date by remember(index) { mutableStateOf(existing.publishAt?.let { java.time.Instant.ofEpochSecond(it).atOffset(ZoneOffset.UTC).toLocalDate().toString() }.orEmpty()) }
-        AlertDialog(onDismissRequest = { volumeEditor = null }, title = { Text("出版分卷") }, text = { AppScrollColumn(contentModifier = Modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        AppAlertDialog(onDismissRequest = { volumeEditor = null }, title = { Text("出版分卷") }, text = { AppScrollColumn(contentModifier = Modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedTextField(asin, { asin = it.trim() }, label = { Text("ASIN") }); OutlinedTextField(name, { name = it }, label = { Text("原文卷名") }); OutlinedTextField(translated, { translated = it }, label = { Text("中文卷名") }); OutlinedTextField(image, { image = it }, label = { Text("封面 HTTPS 链接") }); OutlinedTextField(publisher, { publisher = it }, label = { Text("出版社") }); OutlinedTextField(imprint, { imprint = it }, label = { Text("文库品牌") }); OutlinedTextField(date, { date = it }, label = { Text("出版日期 YYYY-MM-DD") })
         } }, confirmButton = { TextButton(onClick = { val timestamp = date.takeIf(String::isNotBlank)?.let { runCatching { LocalDate.parse(it).atStartOfDay().toEpochSecond(ZoneOffset.UTC) }.getOrNull() }; if(date.isNotBlank() && timestamp == null) { c.message("请填写有效的出版日期") } else { val volume = existing.copy(asin = asin, title = name, titleZh = translated.ifBlank { null }, cover = image.ifBlank { null }, publisher = publisher.ifBlank { null }, imprint = imprint.ifBlank { null }, publishAt = timestamp); volumes = if(index < 0) volumes + volume else volumes.toMutableList().apply { set(index, volume) }; volumeEditor = null } }, enabled = asin.isNotBlank() && name.isNotBlank() && (image.isBlank() || image.startsWith("https://"))) { Text("保存分卷") } }, dismissButton = { TextButton(onClick = { volumeEditor = null }) { Text("取消") } })
     }
     duplicate?.let { matches ->
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { duplicate = null },
             title = { Text("发现可能重复的条目") },
             text = {
