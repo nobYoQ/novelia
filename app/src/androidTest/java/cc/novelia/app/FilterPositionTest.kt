@@ -4,7 +4,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -14,7 +14,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
@@ -24,14 +23,14 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import cc.novelia.app.ui.CollapsibleCloudFilters
+import cc.novelia.app.ui.AppLazyColumn
 import cc.novelia.app.ui.LocalEInkMode
 import cc.novelia.app.ui.LocalReducedMotion
 import cc.novelia.app.ui.SearchAssistantPanel
-import cc.novelia.app.ui.preserveFilterResultPosition
+import cc.novelia.app.ui.AppMotion
 import cc.novelia.app.ui.rememberCloudFilterCollapse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -44,9 +43,66 @@ import org.junit.runner.RunWith
 class FilterPositionTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun cloudFilterKeepsLongListBookAtTheSameScreenPosition() = checkResultAnchor(assistant = false, reduced = false)
-    @Test fun auxiliarySearchKeepsLongListBookAtTheSameScreenPosition() = checkResultAnchor(assistant = true, reduced = false)
-    @Test fun reducedMotionFilterKeepsLongListBookAtTheSameScreenPosition() = checkResultAnchor(assistant = false, reduced = true)
+    @Test fun cloudFilterDoesNotScrollResultsWhenToggledAtTheTop() = checkTopPosition(assistant = false)
+    @Test fun auxiliarySearchDoesNotScrollResultsWhenToggledAtTheTop() = checkTopPosition(assistant = true)
+    @Test fun cloudFilterKeepsScrolledBookAttachedToTheViewportThroughoutAnimation() = checkTopPosition(assistant = false, initialIndex = 40)
+    @Test fun auxiliarySearchKeepsScrolledBookAttachedToTheViewportThroughoutAnimation() = checkTopPosition(assistant = true, initialIndex = 40)
+    @Test fun reducedMotionFilterPreservesTheScrolledBook() = checkTopPosition(assistant = false, initialIndex = 40, reduced = true)
+    @Test fun eInkAssistantPreservesTheScrolledBook() = checkTopPosition(assistant = true, initialIndex = 40, eInk = true)
+    @Test fun cloudFilterDoesNotJumpWhenToggledFromTheEnd() = checkTopPosition(assistant = false, atEnd = true)
+    @Test fun auxiliarySearchDoesNotJumpWhenToggledFromTheEnd() = checkTopPosition(assistant = true, atEnd = true)
+
+    private fun checkTopPosition(assistant: Boolean, initialIndex: Int = 0, reduced: Boolean = false, eInk: Boolean = false, atEnd: Boolean = false) {
+        var expanded by mutableStateOf(false)
+        val initialOffset = if(initialIndex == 0) 0 else 13
+        val list = LazyListState(if(atEnd) 99 else initialIndex, initialOffset)
+        compose.setContent {
+            MaterialTheme {
+                CompositionLocalProvider(LocalReducedMotion provides reduced, LocalEInkMode provides eInk) {
+                Column(Modifier.fillMaxSize()) {
+                    if(assistant) SearchAssistantPanel("", emptyList(), expanded, { expanded = it }, {}, { _, _ -> }, {})
+                    else CollapsibleCloudFilters(expanded, { expanded = !expanded }, "全部收藏", 220.dp) {
+                        Text("筛选条件", Modifier.height(220.dp))
+                    }
+                    AppLazyColumn(Modifier.weight(1f), state = list, listModifier = Modifier.testTag("result-viewport")) {
+                        items(100, key = { it }) { index ->
+                            // Discovery rows also animate placement; exercise this alongside viewport resizing.
+                            val motion = if(assistant && !reduced && !eInk) Modifier.animateItem(
+                                fadeInSpec = tween(AppMotion.Quick), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit)) else Modifier
+                            Text("书目 $index", motion.fillMaxWidth().height((96 + index % 3 * 16).dp).testTag("result-$index"))
+                        }
+                    }
+                    }
+                }
+            }
+        }
+        compose.waitForIdle()
+        // Initial scroll-to-end is clamped to fill the viewport. Keep that first visible book;
+        // shrinking the viewport is allowed to move the last book below its lower edge.
+        val anchorIndex = list.firstVisibleItemIndex
+        val anchorOffset = list.firstVisibleItemScrollOffset
+        fun relativePosition(): Float {
+            val viewport = compose.onNodeWithTag("result-viewport").getUnclippedBoundsInRoot()
+            val book = compose.onNodeWithTag("result-$anchorIndex").getUnclippedBoundsInRoot()
+            return (book.top - viewport.top).value
+        }
+        val before = relativePosition()
+        compose.mainClock.autoAdvance = false
+        // Include reversing a transition before it finishes, not just its settled endpoints.
+        for((target, frames) in listOf(true to 24, false to 24, true to 5, false to 4, true to 24, false to 24)) {
+            compose.runOnIdle { expanded = target }
+            repeat(frames) { frame ->
+                compose.mainClock.advanceTimeByFrame()
+                compose.waitForIdle()
+                compose.runOnIdle {
+                    assertEquals("Panel toggle must not skip books (expanded=$target, frame=$frame)", anchorIndex, list.firstVisibleItemIndex)
+                    assertEquals("Panel toggle must not scroll a partially hidden first book", anchorOffset, list.firstVisibleItemScrollOffset)
+                }
+                assertEquals("Book must move with its viewport on every frame (expanded=$target, frame=$frame)", before, relativePosition(), 1f)
+            }
+        }
+        compose.mainClock.autoAdvance = true
+    }
 
     @Test fun automaticCollapseDoesNotCancelTheGestureOrTriggerAnotherCollapse() {
         var expanded by mutableStateOf(true)
@@ -59,8 +115,8 @@ class FilterPositionTest {
                         Text("完整条件", Modifier.height(160.dp))
                     }
                     val collapse = rememberCloudFilterCollapse(true, expanded) { collapses++; expanded = false }
-                    LazyColumn(Modifier.weight(1f).testTag("scrolling-results")
-                        .nestedScroll(collapse).preserveFilterResultPosition(list), state = list) {
+                    AppLazyColumn(Modifier.weight(1f).testTag("scrolling-results")
+                        .nestedScroll(collapse), state = list) {
                         items(200, key = { it }) { Text("书目 $it", Modifier.height(64.dp)) }
                     }
                 }
@@ -76,44 +132,6 @@ class FilterPositionTest {
         compose.onNodeWithTag("scrolling-results").performTouchInput { swipeUp() }
         compose.waitForIdle()
         compose.runOnIdle { assertEquals(1, collapses) }
-    }
-
-    private fun checkResultAnchor(assistant: Boolean, reduced: Boolean) {
-        var expanded by mutableStateOf(false)
-        val list = LazyListState(40, 13)
-        compose.setContent {
-            MaterialTheme {
-                CompositionLocalProvider(LocalReducedMotion provides reduced, LocalDensity provides Density(1f)) {
-                    Column(Modifier.fillMaxSize()) {
-                        if(assistant) SearchAssistantPanel("", emptyList(), expanded, { expanded = it }, {}, { _, _ -> }, {})
-                        else CollapsibleCloudFilters(expanded, { expanded = !expanded }, "全部收藏", 220.dp) {
-                            Text("筛选条件", Modifier.height(220.dp))
-                        }
-                        LazyColumn(Modifier.weight(1f).preserveFilterResultPosition(list), state = list) {
-                            items(200, key = { it }) { index ->
-                                Text("书目 $index", Modifier.fillMaxWidth().height(48.dp).testTag("result-$index"))
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        fun anchor() = compose.onNodeWithTag("result-50").getUnclippedBoundsInRoot().top.value
-        val before = anchor()
-        compose.mainClock.autoAdvance = false
-        compose.runOnIdle { expanded = true }
-        compose.mainClock.advanceTimeBy(96)
-        assertEquals("Expansion must not move the visible book", before, anchor(), 2f)
-        compose.mainClock.autoAdvance = true
-        compose.waitForIdle()
-        assertEquals(before, anchor(), 2f)
-        compose.runOnIdle { expanded = false }
-        compose.waitForIdle()
-        assertEquals("Collapse must return the same long-list viewport", before, anchor(), 2f)
-        compose.runOnIdle {
-            assertEquals(40, list.firstVisibleItemIndex)
-            assertEquals(13, list.firstVisibleItemScrollOffset)
-        }
     }
 
     @Test fun auxiliarySearchRestoresItsEditingPositionAfterStaticCollapse() {

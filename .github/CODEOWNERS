@@ -1,0 +1,11 @@
+# Keep repository policy, licensing and release changes visible to the maintainer.
+/.github/ @nobYoQ
+/LICENSE @nobYoQ
+/NOTICE.md @nobYoQ
+/licenses/ @nobYoQ
+/gradle/ @nobYoQ
+/*.gradle.kts @nobYoQ
+/app/build.gradle.kts @nobYoQ
+/scripts/ @nobYoQ
+/version.properties @nobYoQ
+/RELEASING.md @nobYoQ

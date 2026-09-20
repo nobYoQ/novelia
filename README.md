@@ -1,50 +1,19 @@
 # Novelia Android
 
-当前工作区已补齐交互与动效清单：书目同步反馈和单书重试、大屏双栏、筛选位置保持、章节失败恢复及减少动效适配。保留阅读精确搜索与已有数据性能优化，继续使用不含 OCR 及模型下载的轻量安装包。逐项状态见 [优化进度清单](docs/optimization-progress.md)，最新交付与验证见 [交互与动效补全](docs/interaction-motion-completion.md)，此前记录见 [优化更新说明](docs/optimization-and-ocr.md)。
-
 面向 [轻小说机翻机器人](https://n.novelia.cc/) 的非官方原生安卓客户端，当前版本 `0.1.8`。使用 Kotlin、Jetpack Compose 与 Material 3，支持 Android 8.0（API 26）及以上。
 
-2026-09-17 项目审查的修复范围与验证记录见 [审查问题修复](docs/audit-fixes-2026-09-17.md)。
+## 下载与反馈
 
-## 0.1.8 更新
+- [GitHub 发行版](https://github.com/nobYoQ/novelia/releases)：下载 APK，查看版本说明和 SHA-256 校验文件。若没有已发布版本，请按下文自行构建。
+- [问题反馈与功能建议](https://github.com/nobYoQ/novelia/issues)：客户端问题请在本项目反馈；原站内容和账号问题请联系原站。
+- [更新记录](CHANGELOG.md) · [贡献指南](CONTRIBUTING.md) · [安全政策](SECURITY.md) · [手动发布指南](RELEASING.md)
+- [开发手册](docs/README.md)：环境搭建、架构、模块实现、测试、性能、发布与排障。
 
-- 整本搜索精确到命中文字，支持同段多处命中、前后切换和跨章定位；切章失败时保留正文与位置，可重试或取消。
-- 大屏新增“书架＋详情”和“目录＋正文”双栏，切换布局保留选择、筛选及阅读位置。
-- 书目行显示同步状态，支持单书重试和登录续接；完善删除确认、撤销及下载完成后的阅读入口。
-- 筛选展开收起时保持列表位置，统一自定义过渡及减少动效、电子纸、系统关闭动画的适配。
-- 本地正文按章读取，复用章节请求，减少重复保存和无效后台工作；保持轻量安装包，不包含 OCR。
-
-按发布格式整理的完整说明见 [0.1.8 更新记录](docs/release-notes-0.1.8.md)，实现与功能验证见 [交互与动效补全](docs/interaction-motion-completion.md)，升版和安装包校验见 [0.1.8 发布复验](docs/release-0.1.8-verification.md)。
-
-## 0.1.7 更新
-
-- 阅读资料 ZIP 备份与合并恢复，涵盖书架、进度、笔记、本地正文、插图、分卷关系和标签译名；本地库损坏时保护原文件并提供恢复入口。
-- 网络小说详情显示继续阅读的章序和章名；支持后续章节预读、选择范围缓存、整本离线搜索及按分卷顺序接续阅读。
-- 联网自动同步当前账号的收藏与进度，提供失败原因和重试；追更区分新增章节、各引擎译文补齐和新增分卷文件。
-- 网络小说新增可折叠辅助搜索面板，支持表达式预览、标签联想、包含／排除和自定义中文译名；浏览时自动积累标签。
-- 连续滚动支持章节末尾继续上滑进入下一章；自动分页常显页码与本章百分比。
-
-完整更新说明见 [0.1.7 更新记录](docs/release-notes-0.1.7.md)。使用方式、恢复合并规则和离线范围见 [阅读资料、离线阅读与辅助搜索更新](docs/reading-library-upgrade.md)。
-
-## 0.1.6 更新
-
-- 电子纸交互覆盖全应用，文库支持挂载本地分卷、折叠浏览与持久化排序。
-- 修复阅读模式切换的进度恢复、分页加载、工具栏显隐和 Markdown 剧透显示。
-- 完善账号隔离、离线同步、草稿保存、下载与导出恢复，优化大文件导入和朗读。
-
-完整更新说明见 [0.1.6 更新记录](docs/release-notes-0.1.6.md)。
-
-## 0.1.4 更新
-
-- 适配原站剧透、评分和折叠语法，支持正文图片长按放大。
-- 帖子和评论新增 Markdown 快捷工具栏，改善键盘遮挡与正文滚动，移除实时预览。
-- 修复链接打开、WebView 定位和逐级返回，新增原生帖内目录跳转。
-
-交互和验证说明见 [帖子与评论 Markdown](docs/markdown-editing.md)。
+当前正在准备首次 GitHub 发行，源码与文档已采用 GPL-3.0；贴纸公开分发授权仍待确认，详见 [来源与素材声明](NOTICE.md)。既有本地测试包与未来正式发布证书可能不同，升级前请先备份阅读资料并阅读发行说明。
 
 ## 使用
 
-安装测试 APK 后，可直接以游客身份发现作品、阅读已有章节、导入本地文件和浏览社区。底部四个入口为「书架、发现、社区、我的」。
+安装 APK 后，可直接以游客身份发现作品、阅读已有章节、导入本地文件和浏览社区。底部四个入口为「书架、发现、社区、我的」。
 
 - **书架**：本地收藏、云端收藏、EPUB/TXT/SRT 文件、收藏夹、阅读历史、置顶、批量整理和更新检查。
 - **发现**：六类书源、文库、组合筛选、高级搜索表达式、保存搜索、排行榜、书源链接识别和系统分享接收。
@@ -57,62 +26,32 @@
 
 首次登录使用原站统一认证页面，可登录、注册和找回密码。如果认证完成后未自动返回，点击右上角「完成登录」。账号角色和注册时间要求沿用原站，最终由服务器校验。
 
-长按阅读器段落可选择文字、分享或添加笔记。点击正文可收起/展开工具栏。下载完成后，可在下载管理中「导入阅读」、「打开」或「导出文件」。本地源文件会保留一份独立副本，可从书架管理菜单导出。
-
-内容区域达到 840dp 时，书架与所选书籍详情并排显示，阅读器常驻目录与正文双栏；切换宽窄布局会保留选择、筛选与阅读位置。书目行显示当前账号的待同步、同步中或失败状态，可直接重试本书；需要重新登录时显示登录入口。
-
-「我的收藏」中的文库小说支持挂载本地分卷：点击「挂载分卷」，或在管理菜单中选择「管理挂载分卷」，勾选已下载导入的文件。挂载后可在文库下方折叠／展开分卷并直接阅读，展开状态会保留；展开、收起和列表移动动画遵循「减少动态效果」设置。分卷管理菜单可更换所属文库或取消挂载，文件及阅读进度会保留；「本地文件」仍可查看所有分卷。搜索分卷名会显示所属文库和匹配分卷。新下载任务会记录来源，导入时自动挂载到已收藏的对应文库；旧任务及外部导入文件可手动挂载。
-
-展开文库后，可拖动分卷左侧的排序手柄调整顺序，拖到列表边缘会自动滚动；点击手柄也可选择上移或下移。顺序按文库保存，重启后保留，新挂载的分卷追加到手动顺序末尾。搜索和批量整理期间隐藏排序手柄，清空搜索或退出整理后即可排序。
-
-在「我的 → 阅读与外观」开启「电子纸阅读模式」后，全应用的列表、设置表单和面板改为按屏翻动：滑动过程中保持画面静止，松手后跳转一屏，也可点击底部「上一屏／下一屏」。横向筛选按屏切换，取消滚动惯性及边缘拉伸；面板直接打开，分卷排序显示上下按钮，阅读数值设置显示加减按钮，插图提供分步移动，内置原站网页也使用按屏滚动。关闭模式恢复普通交互，原有主题和手动排序保留；单书电子纸设置只影响当前阅读器。
-
-长按阅读器插图可全屏查看，支持双指缩放、拖动和双击还原。缺少封面的作品会显示贴纸默认封面；「我的」页贴纸可点击互动，下载、导入等状态也有对应的轻量反馈。详见 [贴纸与插图交互说明](docs/sticker-interactions.md)。
-
-阅读设置提供「连续滚动」与「自动分页」两种分页模式；自动分页下可分别设置上下、左右翻页手势。「显示翻页按钮」适用于两种模式，分别显示上一屏／下一屏或上一页／下一页。「电子纸阅读模式」保留主题并关闭过渡，首次开启使用自动分页，关闭恢复开启前的翻页设置，再次开启沿用上次电子纸设置；「阅读主题」包含互斥的「黑白」选项。支持音量键、方向键及 Page Up / Page Down。云端收藏新增多收藏夹下的「全部收藏」及原站完整筛选；筛选区向下浏览时平滑收起，点击摘要展开，动画受减少动态效果控制，自动收起开关位于「我的 → 阅读与外观」。详见 [电子纸与云端收藏](docs/eink-and-cloud-favorites.md)。
-
-连续滚动到本章末尾后，继续向上拉动，正文会跟随手指移动并显示进度；出现「松手加载下一章」后松手即可进入下一章。未达阈值或取消手势不会切章，也可回拉到阈值以下后松手取消。自动分页底部常显「当前页 / 本章总页数」及本章百分比，收起工具栏或关闭翻页按钮后仍可查看；百分比按当前页占总页数计算，末页为 100%。
-
-切章时先加载目标正文，加载期间可取消；失败时保留当前正文及位置，可重试或继续阅读当前章。筛选面板展开、收起时会补偿列表位置。弹层、菜单、提示及内置网页遵循减少动效、电子纸和系统关闭动画设置。
-
-网络小说辅助搜索与云端收藏共用「滚动时自动收起筛选」开关：向下浏览结果时收起，点击摘要展开，已填写的搜索条件保留。展开、收起和箭头动画均遵循「减少动态效果」及电子纸模式设置。
-
-文件工具中的「文本换行整理」支持导入或粘贴文本，合并多余的段内换行，按空行和部分句末、对话标点保留分段；可先预览再导出为 TXT。
 
 ## 构建
 
-所需环境：JDK 17、Android SDK Platform 36、Build Tools 35.0.0，首次构建需要连接 Google Maven、Maven Central 和 Gradle 分发服务。
+所需环境：JDK 17（推荐协作基线）、Android SDK Platform 36、Build Tools 35.0.0，首次构建需要连接 Google Maven、Maven Central 和 Gradle 分发服务。
 
 用 Android Studio 打开本目录，或使用 PowerShell 7：
 
 ```powershell
 ./build.ps1
-./build.ps1 -Tasks @('assembleDebug', 'testDebugUnitTest', 'lintDebug')
-./build.ps1 -Tasks @('assembleRelease', 'testReleaseUnitTest', 'lintRelease')
+./build.ps1 -Tasks @(':app:assembleDebug', ':app:testDebugUnitTest', ':app:lintDebug')
+./build.ps1 -Tasks @(':app:assembleRelease', ':app:testReleaseUnitTest', ':app:lintRelease')
 ```
 
-`build.ps1` 优先使用已配置的 JDK 或 Android Studio JBR，将 Gradle 缓存放入本项目 `.gradle-home`。在 `local.properties` 中配置 Android SDK，例如 `sdk.dir=D\:/Android/sdk`。该文件不应提交。
+`build.ps1` 优先使用 `JAVA_HOME`，未设置时依次尝试 Android Studio JBR 和 PATH；无效的 `JAVA_HOME` 会报错。Gradle 缓存放入本项目 `.gradle-home`。在 `local.properties` 中配置 Android SDK，例如 `sdk.dir=D\:/Android/sdk`。该文件不应提交。
 
 标准 Gradle Wrapper 也已提供；可在配置好 JDK/SDK 的环境中使用 `gradlew`。当前固定 AGP 8.13.2、Gradle 8.13、Kotlin 2.2.21、Compose BOM 2025.12.00。
 
-输出位置：
+Linux / macOS（`sh` 调用也适用于没有执行位的源码 ZIP）：
 
-- 当前 0.1.8 发布包：[Novelia-0.1.8-release-arm64.apk](releases/Novelia-0.1.8-release-arm64.apk)，14,806,279 字节（约 14.81 MB），版本码 11，不含 OCR；使用与原包相同的本地测试证书签名。可用 `./build.ps1 -Tasks @(':app:assembleRelease', '-PtargetAbi=arm64-v8a', '-PlocalReleaseSigning=true')` 构建。
-- 升版前交互与动效补全包：[Novelia-0.1.7-interaction-motion-arm64.apk](releases/Novelia-0.1.7-interaction-motion-arm64.apk)，14,806,283 字节（约 14.81 MB），不含 OCR，比此前精简包增加 32 KiB。
-- 上一轮精简优化包：[Novelia-0.1.7-optimized-arm64.apk](releases/Novelia-0.1.7-optimized-arm64.apk)，14,773,515 字节（约 14.77 MB），保留交互、性能与动效优化，已移除 OCR。
-- 首版交付包：`releases/Novelia-0.1.0-debug.apk`，同目录提供 SHA-256 校验文件。
-- 本地自用 Release：`releases/Novelia-0.1.7-release.apk`，启用 R8 优化与混淆，使用与 Debug 包相同的本地测试证书签名，可直接安装。
-- 未签名 Release：`releases/Novelia-0.1.7-release-unsigned.apk`；同目录保留校验文件和混淆映射。
-- 应用：`app/build/outputs/apk/debug/app-debug.apk`
-- 设备测试包：`app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk`
-- JVM 测试报告：`app/build/reports/tests/testDebugUnitTest/index.html`
-- 静态检查：`app/build/reports/lint-results-debug.html`
+```sh
+sh ./gradlew --no-daemon :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
+```
 
-`releases/`、构建输出、APK/AAB 安装包、签名旁文件及安装包校验文件仅保留在本地，由 `.gitignore` 排除，不纳入源码提交。首次克隆仓库需自行构建；分发安装包时应使用独立的发布附件。
+Debug APK 位于 `app/build/outputs/apk/debug/app-debug.apk`。默认 Release 未签名，不能直接安装；正式签名、旧版迁移和发行附件准备见 [RELEASING.md](RELEASING.md)。版本号和版本码统一在 `version.properties` 维护。
 
-Debug APK 使用**开发测试签名**。正式商店分发前需配置自己的发布签名、应用标识/品牌授权与域名 App Links 验证；本仓库没有发布私钥。
-
-Gradle 的 Release 构建默认未配置签名，原始输出 `app/build/outputs/apk/release/app-release-unsigned.apk` 不能直接安装；传入 `-PlocalReleaseSigning=true` 可使用本地测试证书生成 `app-release.apk`。本地交付目录中的 `Novelia-0.1.7-release.apk`、精简优化包、交互与动效补全包及 `Novelia-0.1.8-release-arm64.apk` 使用相同的本地测试证书，可用于本地自用并覆盖同证书的旧版本安装，保留应用数据；正式发布时应改用自己的发布证书。混淆映射为 `app/build/outputs/mapping/release/mapping.txt`。
+`releases/`、构建输出、APK/AAB 安装包、签名旁文件及安装包校验文件由 `.gitignore` 排除，不纳入源码提交。正式安装包上传为 GitHub Release 附件。
 
 ## 验证
 
@@ -141,19 +80,8 @@ adb shell am instrument -w -r -e class cc.novelia.app.AppFlowTest cc.novelia.app
 
 云端写入失败时，收藏/阅读历史等幂等操作可以进入账号隔离的待同步列表；帖子和评论不会自动重发。云端和本机章节进度不同会提供选择。退出登录不会删除本地文件。
 
-## 已知边界
+## 许可证与范围
 
-- 原站未提供稳定的第三方接口契约。接口依据公开源码核对，页面权限由服务器执行。
-- **登录后的真实账号写入尚未进行生产端到端验收**；没有在原站创建测试账号、帖子、评论或文件。登录、收藏、编辑与上传页面已接入接口，但仍需使用你自己的账号验证。
-- 原站扩展负责的书源抓取/验证码处理、日亚一键导入仍应在原站完成。App 支持已收录作品、手动文库资料维护和明确的错误反馈。
-- 本地 EPUB 使用原生流式正文与插图展示，不复现所有出版商 CSS、固定版式或脚本。EPUB 转 TXT 会有意省略插图。
-- 本地导入支持最大 64 MiB 的 EPUB/TXT/SRT；EPUB 按条目读取、插图直接落盘，解压总量最多 192 MiB，单个正文文件最多 8 MiB，整本文字最多约 1,600 万字符。超过限制会提示拆分；下载文件仍可保留、导出或交给其他阅读器打开。
-- 下载暂停后重新下载；不宣称服务器支持断点续传。大型任务可能受 Android 后台调度限制，可在下载列表重试。
-- 书架检查约每六小时执行，受网络、电量和系统调度影响；不是服务器实时推送。
-- 朗读依赖系统提供的中文/日文语音包；缺失时会提示。拒绝通知权限不影响阅读和文件保存。
-- 原站短篇/长篇榜单抓取可能返回空列表。此状态与网络失败分别展示。
-- 管理员控制台、翻译中心及相关生成流程不在此版本内。
+原创代码和文档采用 [GPL-3.0-only](LICENSE)。第三方依赖和素材保留各自权利，见 [NOTICE.md](NOTICE.md) 与 [许可证来源](licenses/README.md)。完整许可证随 APK 提供，可在「我的 → 帮助与关于 → 开源许可证」离线查看。
 
-原始规划见 [android-app-plan.md](docs/android-app-plan.md)，版本验收说明见 [v0.1-verification.md](docs/v0.1-verification.md)。
-
-本轮性能、缓存与动效改进及缓存预算见 [performance-optimization.md](docs/performance-optimization.md)。
+客户端不提供小说内容的再授权，也不是原站官方客户端。原站 API 可能变化；真实账号写入的生产端到端验收仍需在明确授权下进行。当前未配置 CI，贡献与发行检查按文档手动执行。

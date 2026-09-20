@@ -22,3 +22,14 @@ artifacts/
 *.aab.sha256
 
 resource/
+
+# Local credentials and signing configuration
+.env
+.env.*
+!.env.example
+keystore.properties
+signing.properties
+*.p12
+*.pfx
+*.key
+*.pem

@@ -1,11 +1,27 @@
-# 来源与依赖
+# 来源、版权与第三方声明
+
+Copyright (C) 2026 Novelia Android contributors.
+
+本项目原创代码及文档采用 GNU General Public License version 3 only（SPDX：GPL-3.0-only），完整条款见 [LICENSE](LICENSE)。第三方代码、构建工具和素材保留各自的许可证及版权声明。本项目不提供任何担保，具体以许可证条款为准。
+
+源码仓库：https://github.com/nobYoQ/novelia
+
+发行版与对应源码：https://github.com/nobYoQ/novelia/releases
+
+## 原站与接口
 
 本项目是面向 Novelia 的非官方 Android 客户端，与原站没有官方客户端或品牌授权关系。
 
-接口合约依据 [auto-novel/auto-novel](https://github.com/auto-novel/auto-novel) 公开源码（GNU GPL v3）和原站页面核对。实现使用 Kotlin / Android API，自行编写原生页面、存储、阅读器和文件处理代码。`.reference/` 仅供本机核对接口，不是构建输入。
+接口合约依据 [auto-novel/auto-novel](https://github.com/auto-novel/auto-novel) 公开源码（GNU GPL v3）和原站页面核对。原生页面、存储、阅读器和文件处理使用 Kotlin / Android API 实现。`.reference/` 仅供本机核对接口，不是构建输入。后续引入或改编上游实现时，必须记录来源、版本、修改内容并保留原有版权声明。
 
-使用的第三方库及其许可证包括 AndroidX / Compose、Kotlin、kotlinx.coroutines、kotlinx.serialization、OkHttp、Coil、Markwon（Apache 2.0），Jsoup（MIT）和 ICU4J（Unicode License）。正式分发时应携带对应版本的完整许可证及必要声明。
+## 第三方软件
 
-网站上的小说、封面、译文和用户内容属于相应权利人。测试夹具中的《风与书页》短文为此工程自行编写，不随正式应用作为远端内容展示。
+AndroidX / Compose、Kotlin、kotlinx.coroutines、kotlinx.serialization、OkHttp、Okio、Coil、Markwon 等依赖采用 Apache-2.0；Jsoup 采用 MIT；ICU4J 76.1 使用 Unicode-3.0 并附带其他数据许可；CommonMark 使用 BSD-2-Clause。OkHttp 所含 Public Suffix List 数据使用 MPL-2.0，来源见 [OkHttp 4.12.0](https://github.com/square/okhttp/tree/parent-4.12.0/okhttp/src/main/resources/okhttp3/internal/publicsuffix) 和 [Public Suffix List](https://publicsuffix.org/list/)。这些第三方组件的许可不因本项目选择 GPL-3.0 而改变。
 
-互动图标、默认封面与部分状态反馈使用用户提供的 `HoshikawaMidori-1789205072094` 贴纸素材，保留原始 WebP 图像。原文件与应用资源的映射见 [贴纸交互设计](docs/sticker-interactions.md)。贴纸权利归原作者或相应权利人所有；项目未为这些素材声明开源许可证。
+完整通用条款及来源记录位于 [licenses](licenses/README.md)。构建时还会从实际 Release 依赖图生成包含版本及 JAR/AAR 内原始 LICENSE/NOTICE 的报告，随 APK 打包；可在「我的 → 帮助与关于 → 开源许可证」离线查看。变更依赖后应复核报告，为依赖包未携带的许可证补入完整文本。
+
+## 内容与素材
+
+网站上的小说、封面、译文和用户内容属于相应权利人，不属于本项目开源授权范围。测试夹具中的《风与书页》短文为此工程自行编写。
+
+互动图标、默认封面与部分状态反馈使用用户提供的 `HoshikawaMidori-1789205072094` 贴纸，资源位于 `app/src/main/res/drawable-nodpi/midori_*.webp`。贴纸权利归原作者或相应权利人所有，**不适用本项目 GPL-3.0 授权；公开分发授权仍待确认**。公开包含这些素材的源码或 APK 前，维护者必须取得适当授权或完成替换。本次准备工作未修改这些素材。

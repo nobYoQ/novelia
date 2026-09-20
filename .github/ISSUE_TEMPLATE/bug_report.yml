@@ -1,0 +1,48 @@
+name: 问题反馈
+description: 报告客户端可复现的问题
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: "安全漏洞请按 SECURITY.md 私密报告。请勿上传账号令牌、Cookie、真实备份或未经授权的小说文件。"
+  - type: input
+    id: version
+    attributes:
+      label: 应用版本与来源
+      description: 填写版本名、版本码，以及 GitHub Release 或自行构建的提交号。
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: 设备和 Android 版本
+      description: 例如设备型号、Android 版本、电子纸模式或减少动效是否开启。
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 从哪个页面开始，做了哪些操作？能否稳定复现？
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期行为与实际结果
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 脱敏截图或日志（可选）
+      description: 请移除个人信息、账号凭据、阅读内容和本机隐私路径。
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前检查
+      options:
+        - label: 我已搜索已有 Issue，确认不是重复问题。
+          required: true
+        - label: 我已移除敏感信息，且未在此公开安全漏洞细节。
+          required: true

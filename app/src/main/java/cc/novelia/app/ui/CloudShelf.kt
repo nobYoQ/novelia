@@ -129,7 +129,8 @@ import cc.novelia.app.data.*
                     AsyncContent(requestKey, refreshKey = refreshKey, modifier = Modifier.weight(1f), load = {
                         c.api.cloudFavorites(kind == 1, current.id, page, sort, filter)
                     }) { result, retry ->
-                        AppLazyColumn(state = listState, modifier = Modifier.fillMaxSize().nestedScroll(collapse).preserveFilterResultPosition(listState),
+                        // Retain the scroll anchor inside the viewport; panel resizing must not scroll the books.
+                        AppLazyColumn(state = listState, modifier = Modifier.fillMaxSize().nestedScroll(collapse),
                             onPageTurn = { direction -> if(direction > 0 && local.autoCollapseCloudFilters) expanded = false }) {
                             if (result.items.isEmpty()) item {
                                 EmptyState("没有匹配的收藏", "可调整筛选、切换收藏夹，或在书籍详情中添加云端收藏。", action = "重新加载", onAction = retry)

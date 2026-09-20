@@ -125,7 +125,7 @@ import kotlinx.coroutines.delay
                             val books = remember(result.items, local.blockedBooks, local.blockedTags) { result.items.filter { visibleBook(it, local) } }
                             val resultScroll = rememberLazyListState()
                             AppLazyColumn(state = resultScroll,
-                                modifier = Modifier.nestedScroll(collapseAssistant).preserveFilterResultPosition(resultScroll),
+                                modifier = Modifier.nestedScroll(collapseAssistant),
                                 onPageTurn = { direction -> if(direction > 0 && autoCollapseAssistant) assistantExpanded = false }) {
                                 if(books.isEmpty()) item {
                                     EmptyState("没有找到匹配的作品", if(filterSummary.isNotEmpty()) "先放宽筛选条件，搜索关键词会保留。" else "试试较短的关键词，或检查屏蔽条件。", Icons.Outlined.SearchOff,

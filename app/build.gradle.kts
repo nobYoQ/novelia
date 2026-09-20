@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -6,6 +8,15 @@ plugins {
     id("androidx.baselineprofile")
 }
 
+val appVersion = Properties().apply {
+    rootProject.file("version.properties").inputStream().use { load(it) }
+}
+val releaseSigning = providers.gradleProperty("releaseSigning").orNull == "true"
+val localReleaseSigning = providers.gradleProperty("localReleaseSigning").orNull == "true"
+require(!(releaseSigning && localReleaseSigning)) { "Choose releaseSigning or localReleaseSigning, not both." }
+fun signingEnvironment(name: String): String = providers.environmentVariable(name).orNull
+    ?.takeIf { it.isNotBlank() } ?: error("Missing signing environment variable: $name")
+
 android {
     namespace = "cc.novelia.app"
     compileSdk = 36
@@ -13,8 +24,10 @@ android {
         applicationId = "cc.novelia.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 11
-        versionName = "0.1.8"
+        versionCode = appVersion.getProperty("versionCode").toInt().also { require(it > 0) }
+        versionName = appVersion.getProperty("versionName").also {
+            require(it.matches(Regex("[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?"))) { "Invalid versionName" }
+        }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
         providers.gradleProperty("targetAbi").orNull?.let { requestedAbi ->
@@ -22,11 +35,23 @@ android {
             ndk { abiFilters += requestedAbi }
         }
     }
+    if (releaseSigning) {
+        signingConfigs.create("distribution") {
+            storeFile = file(signingEnvironment("NOVELIA_KEYSTORE_PATH")).also {
+                require(it.isFile) { "Release keystore does not exist." }
+            }
+            storePassword = signingEnvironment("NOVELIA_KEYSTORE_PASSWORD")
+            keyAlias = signingEnvironment("NOVELIA_KEY_ALIAS")
+            keyPassword = signingEnvironment("NOVELIA_KEY_PASSWORD")
+        }
+    }
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            if (providers.gradleProperty("localReleaseSigning").orNull == "true") {
+            if (releaseSigning) {
+                signingConfig = signingConfigs.getByName("distribution")
+            } else if (localReleaseSigning) {
                 signingConfig = signingConfigs.getByName("debug")
             }
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
@@ -75,3 +100,7 @@ dependencies {
 }
 
 baselineProfile { automaticGenerationDuringBuild = false }
+
+apply(from = rootProject.file("gradle/open-source-notices.gradle.kts"))
+android.sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/openSourceAssets"))
+tasks.named("preBuild") { dependsOn("generateOpenSourceNotices") }
