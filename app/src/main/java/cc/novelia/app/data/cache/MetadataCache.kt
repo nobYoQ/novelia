@@ -4,7 +4,11 @@ import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 
-/** Small, account-keyed response cache. Modification time is freshness, not access time. */
+/**
+ * 有容量上限的元数据响应缓存，调用方生成包含账号身份的哈希键。
+ * 文件修改时间表示获取响应的时间，读取命中不会延长有效期；淘汰也按获取时间排序。
+ * 与正文缓存的访问时间不同，此时间参与写操作后的失效判断，不能随访问更新。
+ */
 class MetadataCache(private val directory: File, private val maxBytes: Long = 32L * 1024 * 1024) {
     init { require(maxBytes > 0) }
     private data class Entry(val file: File, val bytes: Long, val fetchedAt: Long)
@@ -13,6 +17,7 @@ class MetadataCache(private val directory: File, private val maxBytes: Long = 32
     private var total = 0L
     private var invalidatedAt = 0L
 
+    /** 仅返回未过期且晚于本地/调用方失效时间的内容；时钟回拨形成的未来缓存也视为未命中。 */
     @Synchronized fun read(key: String, now: Long = System.currentTimeMillis(), maxAgeMillis: Long = Long.MAX_VALUE, newerThan: Long = 0): String? {
         val file = file(key)
         initialize()
@@ -21,7 +26,7 @@ class MetadataCache(private val directory: File, private val maxBytes: Long = 32
         return runCatching { file.readText(Charsets.UTF_8) }.getOrNull()
     }
 
-    /** Keep mutation invalidation across process restarts without rewriting cached responses. */
+    /** 单独原子保存失效时间，使进程重启后仍不会读取写操作之前的旧响应，无需重写每份缓存。 */
     @Synchronized fun invalidate(timestamp: Long) {
         initialize()
         directory.mkdirs()

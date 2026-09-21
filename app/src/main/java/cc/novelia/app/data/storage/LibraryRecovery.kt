@@ -10,7 +10,11 @@ data class LibraryRecoveryIssue(val hasLastGood: Boolean) {
 
 internal data class LoadedLibrary(val state: LibraryState, val issue: LibraryRecoveryIssue? = null)
 
-/** A missing first-run file is different from an unreadable existing file. Never silently reset it. */
+/**
+ * 区分首次启动与已有资料损坏：只有完全没有状态文件时才正常创建空书库。
+ * 主副本解析失败后尝试最后良好副本，但无论回退是否成功，都返回恢复标记，
+ * 由 LocalStore 阻止普通写入，避免把空状态或旧状态自动覆盖到用户原始资料上。
+ */
 internal fun loadLibraryState(exists: Boolean, read: () -> String, readLastGood: () -> String,
     decode: (String) -> LibraryState = { appJson.decodeFromString<LibraryState>(it) }): LoadedLibrary {
     if (!exists) return LoadedLibrary(LibraryState())

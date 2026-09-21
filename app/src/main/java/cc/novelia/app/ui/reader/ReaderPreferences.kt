@@ -43,7 +43,9 @@ import kotlin.math.roundToInt
         if(perBook != null) TogglePreference("仅应用于这本书", "为当前小说保存独立设置", perBook, onPerBook)
         ReaderPreferenceHeading("常用设置")
         ReaderSlider("字号 ${value.fontSize.toInt()}", value.fontSize, 14f..32f) { onChange(value.copy(fontSize = it)) }
-        ReaderSlider("行距 ${"%.1f".format(value.lineHeight)}", value.lineHeight, 1.3f..2.6f) { onChange(value.copy(lineHeight = it)) }
+        ReaderSlider("行距 ${"%.1f".format(value.lineHeight)}", value.lineHeight, 1f..2.6f) { onChange(value.copy(lineHeight = it)) }
+        ReaderSlider("段距 ${value.resolvedParagraphSpacing.roundToInt()} dp", value.resolvedParagraphSpacing, 0f..32f,
+            modifier = Modifier.testTag("reader-paragraph-spacing")) { onChange(value.copy(paragraphSpacing = it)) }
         ChoiceRow("阅读主题", listOf("跟随应用", "纸张", "浅色", "深色", "黑白"), listOf("system", "paper", "light", "dark", "monochrome").indexOf(value.resolvedTheme)) { onChange(value.withTheme(listOf("system", "paper", "light", "dark", "monochrome")[it])) }
         TogglePreference("跟随系统亮度", "关闭后可单独调整", value.brightness < 0) { onChange(value.copy(brightness = if(it) -1f else .5f)) }
         AnimatedVisibility(value.brightness >= 0,

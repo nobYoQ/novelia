@@ -39,7 +39,7 @@ private val syosetuGenres = listOf("恋爱：异世界", "恋爱：现实世界"
             MotionContent(listOf(source, kind, genre, range, status), animateInitial = false) { Text("${params["type"] ?: genres[genre]} · ${ranges[range]} · ${states[status]}", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge) }
             AsyncContent(listOf(provider, params), load = { c.api.get<Page<WebOutline>>("novel/rank/$provider", params) }) { result, _ ->
                 val cards = remember(result.items) { result.items.map(WebOutline::card) }
-                AppLazyColumn { if(cards.isEmpty()) item { EmptyState("这个榜单暂时没有作品", "可以切换周期或流派；榜单数据由原站获取。") }; items(cards, key = { it.ref.key }, contentType = { "book" }) { book -> BookRow(book, { c.book(book.ref) }) }; item { PageControls(page, result.pageNumber) { page = it } } }
+                AppLazyColumn { if(cards.isEmpty()) item { EmptyState("这个榜单暂时没有作品", "可以切换周期或流派；榜单数据由原站获取。") }; items(cards, key = { it.ref.key }, contentType = { "book" }) { book -> BookRow(book, { c.book(book.ref) }, showReadingProgress = false) }; item { PageControls(page, result.pageNumber) { page = it } } }
             }
         }
     }

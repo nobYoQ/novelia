@@ -12,7 +12,12 @@ data class BookTextMatch(val chapterId: String, val chapterLabel: String, val pa
 }
 data class BookTextSearchResult(val matches: List<BookTextMatch>, val scannedChapters: Int, val availableChapters: Int, val totalChapters: Int, val truncated: Boolean)
 
-/** Searches the exact prepared reader text, so paragraph offsets also work after blank/image filtering. */
+/**
+ * 用阅读器相同的语言投影和繁体处理搜索全书，结果可直接交给阅读器做精确定位。
+ * load 返回 null 表示本章当前不可用，具体是否联网由调用方决定；章节标题分组不计为章节。
+ * availableChapters 统计已取得内容的章数，scannedChapters 只统计完整扫描的章节。
+ * 达到结果数或字符预算时设置 truncated，界面应提示范围有限，不能把结果解释为全书无遗漏。
+ */
 suspend fun searchBookText(toc: List<TocItem>, query: String, settings: ReaderSettings,
     load: suspend (String) -> Chapter?, maxResults: Int = 200, maxCharacters: Long = 20_000_000): BookTextSearchResult {
     val chapters = toc.filter { it.chapterId != null }

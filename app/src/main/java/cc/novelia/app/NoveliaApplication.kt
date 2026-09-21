@@ -25,6 +25,12 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
+/**
+ * 应用级服务的装配入口，书库、会话、API 和图片加载器在各页面之间复用。
+ * [initialization] 是进入主界面的初始化屏障：磁盘读取在 IO 作用域中执行，Activity 等待
+ * 完成后再观察书库。后台维护使用 SupervisorJob，单个维护任务失败不会取消其他任务。
+ * 此处只持有应用级对象，页面选择、弹窗及导航回调由界面自己的生命周期管理。
+ */
 class NoveliaApplication : Application(), ImageLoaderFactory {
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     val store by lazy { LocalStore(this) }
@@ -64,6 +70,8 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
         }
         applicationScope.launch {
             initialization.await()
+            // 只观察影响调度的字段，避免每次保存阅读位置都重新安排后台同步。
+            // collectLatest 会取消旧一轮等待；切换账号或队列变化后必须基于最新状态判断。
             combine(store.state.map { it.autoSync to it.pending.map { action -> action.account to action.id } }.distinctUntilChanged(),
                 session.profile.map { it?.let { user -> user.username to user.expiresAt } }.distinctUntilChanged()) { pending, login -> pending to login?.first }
                 .collectLatest { (pending, account) ->
@@ -72,6 +80,7 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
                     if(pending.first && account != null && pending.second.any { it.first == account } && store.recoveryIssue.value == null) {
                         while(true) {
                             try {
+                                // WorkManager 可能在进程重启后执行，因此先确保待同步意图已写入磁盘。
                                 store.flush()
                                 CloudSyncWorker.enqueue(this@NoveliaApplication, account)
                                 break
@@ -83,6 +92,7 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
         }
     }
 
+    /** 请求异步刷新书库和标签；生命周期回调不阻塞主线程，也不把返回视为已落盘。 */
     fun persistState() {
         applicationScope.launch {
             initialization.await()

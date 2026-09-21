@@ -7,6 +7,11 @@ sealed interface SiteLink {
     data class Book(val ref: BookRef, val chapterId: String? = null) : SiteLink
     data class Post(val id: String) : SiteLink
 }
+/**
+ * 将分享文本中的首个 HTTP(S) 链接映射为原生书籍或帖子入口。
+ * 只识别明确列出的站点主机和路径，ID 通过白名单校验；未知或不完整链接返回 null 供上层回退。
+ * 书源链接只负责定位身份，不意味着客户端会直接抓取书源正文。
+ */
 object BookLinks {
     fun parse(input: String): SiteLink? = runCatching {
         val url = Regex("https?://[^\\s<>]+").find(input.trim())?.value ?: return null

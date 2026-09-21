@@ -14,7 +14,11 @@ import kotlinx.coroutines.withContext
 
 private val syncRun = BoundCloudSync()
 
-/** Both manual and automatic retries use the application's resource ordering and session binding. */
+/**
+ * 手动重试与自动后台任务共用的同步入口，整轮操作绑定同一登录会话。
+ * bookKey 可将范围限定为某本书；手动重试允许再次尝试原先被阻塞的选中项。
+ * 结果只保留仍在队列中的失败信息，finally 中等待落盘，避免进程退出后恢复已完成的旧项。
+ */
 suspend fun synchronizePending(app: NoveliaApplication, manual: Boolean = false, bookKey: String? = null,
     binding: SessionBinding = app.session.capture()): CloudReplayResult = syncRun.run(binding, app.session::ensureCurrent) {
     app.initialization.await()
@@ -55,6 +59,10 @@ suspend fun synchronizePending(app: NoveliaApplication, manual: Boolean = false,
     }
 }
 
+/**
+ * WorkManager 适配层：执行时重新检查开关、恢复保护和账号，再交给统一同步入口。
+ * 已切换账号或需要重新登录的任务正常结束；可重试失败及未完成项通过调度器退避重试。
+ */
 open class CloudSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val app = applicationContext as NoveliaApplication

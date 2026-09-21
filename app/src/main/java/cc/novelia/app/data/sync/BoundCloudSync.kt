@@ -6,7 +6,10 @@ import cc.novelia.app.data.model.PendingAction
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/** Waiting for another sync must never rebind a user's intent to a newer login. */
+/**
+ * 串行化整轮同步，并保留进入等待前捕获的会话绑定。
+ * 加锁前后都校验身份：等待另一次同步时可能已经退出或切换账号，不能改绑后继续执行。
+ */
 internal class BoundCloudSync {
     private val mutex = Mutex()
 

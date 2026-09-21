@@ -48,6 +48,7 @@ import cc.novelia.app.ui.components.MetaParagraph
 import cc.novelia.app.ui.components.Screen
 import cc.novelia.app.ui.components.SectionTitle
 import cc.novelia.app.ui.components.TagList
+import cc.novelia.app.ui.components.displayDate
 import cc.novelia.app.ui.components.readDocument
 import cc.novelia.app.ui.components.rememberDebouncedQuery
 import cc.novelia.app.ui.downloads.DownloadSheet
@@ -55,6 +56,9 @@ import cc.novelia.app.ui.markdown.format
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.reader.ChapterCacheDialog
 import cc.novelia.app.ui.shelf.FavoriteSheet
+import cc.novelia.app.ui.shelf.BookFavoriteState
+import cc.novelia.app.ui.shelf.bookFavoriteState
+import cc.novelia.app.data.library.withCloudReadingMetadata
 import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.MotionContent
 import cc.novelia.app.ui.theme.appReducedMotion
@@ -73,7 +77,9 @@ import kotlinx.coroutines.withContext
     }
     var menu by remember { mutableStateOf(false) }; var favorite by remember { mutableStateOf<BookCard?>(null) }; var download by remember { mutableStateOf<Pair<BookCard, String?>?>(null) }; var version by remember { mutableIntStateOf(0) }
     val state by c.store.state.collectAsStateWithLifecycle(); val profile by c.session.profile.collectAsStateWithLifecycle()
-    val isSaved = remember(state.books, ref) { state.books.any { it.book.ref == ref } }
+    val localSaved = remember(state.books, ref) { state.books.any { it.book.ref == ref } }
+    val refreshKey = listOf(version, state.syncStatus[profile?.username]?.lastSuccessAt ?: 0L)
+    LaunchedEffect(ref, profile?.username) { favorite = null }
     val reducedMotion = appReducedMotion()
     var progressChoice by remember { mutableStateOf<Triple<BookCard, ReadingDestination, ReadingDestination>?>(null) }
     var uploadBusy by remember { mutableStateOf(false) }
@@ -89,18 +95,21 @@ import kotlinx.coroutines.withContext
             DropdownMenuItem({ Text("屏蔽这本书") }, { c.store.update { it.copy(blockedBooks = it.blockedBooks + ref.key) }; c.message("已从发现列表中屏蔽"); menu = false }, leadingIcon = { Icon(Icons.Outlined.Block, null) })
         } }
     }) { padding ->
-        if(ref.isWenku) AsyncContent(listOf(ref, profile?.username), refreshKey = version, load = { c.detail<WenkuDetail>("wenku/${ref.id}", forceNetwork = version > 0) }, modifier = Modifier.padding(padding)) { detail, _ ->
+        if(ref.isWenku) AsyncContent(listOf(ref, profile?.username), refreshKey = refreshKey, load = { c.detail<WenkuDetail>("wenku/${ref.id}", forceNetwork = version > 0) }, modifier = Modifier.padding(padding)) { detail, _ ->
             val book = remember(detail, ref) { detail.card(ref) }
+            val favoriteState = bookFavoriteState(ref, localSaved, detail.favored, profile?.username, state.pending)
             val refresh: () -> Unit = { version++ }
             var tab by rememberSaveable(ref.key) { mutableIntStateOf(0) }
             val tabState = rememberSaveableStateHolder()
             AdaptiveBookDetail(tab, { tab = it }, listOf("简介", "分卷", "讨论"), tabState) { panel ->
                     when(panel) {
                         0 -> AppLazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
-                            item { BookHero(book, "${detail.level} · ${detail.volumes.size} 卷", isSaved, { favorite = book }) }
+                            item { BookHero(book, "${detail.level} · ${detail.volumes.size} 卷", favoriteState, { favorite = book }) }
+                            detail.latestPublishAt?.takeIf { it > 0 }?.let { item { MetaParagraph("最近出版", displayDate(it)) } }
                             item { MetaParagraph("简介", detail.introduction) }
                             item { TagList(detail.keywords, c) }
                             item { MetaParagraph("出版信息", listOfNotNull(detail.authors.takeIf { it.isNotEmpty() }?.joinToString(prefix = "作者："), detail.artists.takeIf { it.isNotEmpty() }?.joinToString(prefix = "插画："), detail.publisher, detail.imprint).joinToString("\n")) }
+                            if(detail.volumeJp.isNotEmpty() || detail.volumeZh.isNotEmpty()) item { MetaParagraph("译文情况", "中文文件 ${detail.volumeZh.size} 卷 · 日文分卷 ${detail.volumeJp.size} 卷\nSakura ${detail.volumeJp.sumOf { it.sakura }} · GPT ${detail.volumeJp.sumOf { it.gpt }} · 有道 ${detail.volumeJp.sumOf { it.youdao }} / ${detail.volumeJp.sumOf { it.total }}") }
                             if(detail.webIds.isNotEmpty()) item { SectionTitle("关联网络版"); detail.webIds.forEach { id -> TextButton(onClick = { c.book(BookRef.fromKey(id)) }, Modifier.padding(horizontal = 12.dp)) { Text(id) } } }
                         }
                         1 -> AppLazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
@@ -113,15 +122,19 @@ import kotlinx.coroutines.withContext
                             if(detail.volumeZh.isNotEmpty()) item { SectionTitle("中文文件") }
                             if(profile?.role == "admin") items(detail.volumeZh, key = { "zh-$it" }, contentType = { "chinese-volume" }) { name -> MenuRow(name, "打开原站提供的中文资源", Icons.Outlined.Description, { c.external("https://n.novelia.cc/files-wenku/${ref.id}/${encodeSegment(name)}") }) }
                             if(detail.volumes.isNotEmpty()) item { SectionTitle("出版卷目") }
-                            items(detail.volumes, key = { "published-${it.asin}" }, contentType = { "book" }) { volume -> BookRow(BookCard(ref, volume.titleZh ?: volume.title, volume.title, volume.cover, volume.publisher.orEmpty()), { volume.coverHires?.let(c::external) }, modifier = if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(AppMotion.Release), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit))) }
+                            items(detail.volumes, key = { "published-${it.asin}" }, contentType = { "book" }) { volume -> BookRow(BookCard(ref, volume.titleZh ?: volume.title, volume.title, volume.cover, volume.publisher.orEmpty()), { volume.coverHires?.let(c::external) }, modifier = if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(AppMotion.Release), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit)), showReadingProgress = false, showBookMetadata = false) }
                             if(profile?.canEdit == true) item { OutlinedButton(onClick = { uploader.launch(arrayOf("*/*")) }, enabled = !uploadBusy, modifier = Modifier.fillMaxWidth().padding(20.dp)) { Text(if(uploadBusy) "正在上传…" else "上传日文分卷") } }
                             if(detail.volumes.isEmpty() && detail.volumeJp.isEmpty() && profile != null) item { EmptyState("暂时没有可用分卷", "可刷新资料，或在具有编辑权限时上传资源。", action = "刷新", onAction = refresh) }
                         }
                         2 -> CommentsPanel(c, "wenku-${ref.id}")
                     }
             }
-        } else AsyncContent(listOf(ref, profile?.username), refreshKey = version, load = { c.detail<WebDetail>("novel/${ref.key}", forceNetwork = version > 0) }, modifier = Modifier.padding(padding)) { detail, _ ->
-            val book = remember(detail, ref) { detail.card(ref) }
+        } else AsyncContent(listOf(ref, profile?.username), refreshKey = refreshKey, load = { c.detail<WebDetail>("novel/${ref.key}", forceNetwork = version > 0) }, modifier = Modifier.padding(padding)) { detail, _ ->
+            val book = remember(detail, ref, profile?.username) { detail.card(ref, profile?.username) }
+            LaunchedEffect(book) {
+                c.store.update { it.withCloudReadingMetadata(listOf(book), c.session.profile.value?.username) }
+            }
+            val favoriteState = bookFavoriteState(ref, localSaved, detail.favored, profile?.username, state.pending)
             val chapterCount = remember(detail.toc) { detail.toc.count { it.chapterId != null } }
             val refresh: () -> Unit = { version++ }
             var tab by rememberSaveable(ref.key) { mutableIntStateOf(0) }
@@ -134,7 +147,8 @@ import kotlinx.coroutines.withContext
             AdaptiveBookDetail(tab, { tab = it }, listOf("简介", "目录 $chapterCount", "讨论"), tabState) { panel ->
                     when(panel) {
                         0 -> AppLazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
-                            item { BookHero(book, "${detail.type} · ${providers[ref.provider]}", isSaved, { favorite = book }) }
+                            item { BookHero(book, "${detail.type} · ${providers[ref.provider]}", favoriteState, { favorite = book }) }
+                            item { BookUpdateSummary(detail) { id -> c.store.saveBook(book); c.read(ref, id) } }
                             item { Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 Button(onClick = { start?.let { if(localDestination != null && cloudDestination != null && localDestination.chapterId != cloudDestination.chapterId) progressChoice = Triple(book, localDestination, cloudDestination) else { c.store.saveBook(book); c.read(ref, it) } } }, enabled = start != null, modifier = Modifier.weight(1f)) { Icon(Icons.Outlined.MenuBook, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(if(continuing) "继续阅读 · 第 ${destination?.number} 章" else "开始阅读") }
                                 FilledTonalIconButton(onClick = { download = book to null }) { Icon(Icons.Outlined.Download, "下载小说") }
@@ -157,7 +171,7 @@ import kotlinx.coroutines.withContext
             }
         }
     }
-    favorite?.let { FavoriteSheet(c, it) { favorite = null } }
+    favorite?.let { FavoriteSheet(c, it, initialCloud = profile != null) { favorite = null } }
     download?.let { (book, volume) -> DownloadSheet(c, book, volume) { download = null } }
     progressChoice?.let { (book, localChapter, cloudChapter) -> AppAlertDialog(onDismissRequest = { progressChoice = null }, title = { Text("选择继续阅读的位置") }, text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { Text("本机与原站记录的章节不同，请选择这次从哪里继续。"); Text("本机：${localChapter.label}"); Text("原站：${cloudChapter.label}") } }, confirmButton = { TextButton(onClick = { progressChoice = null; c.store.saveBook(book); c.read(ref, cloudChapter.chapterId) }) { Text("原站进度") } }, dismissButton = { TextButton(onClick = { progressChoice = null; c.store.saveBook(book); c.read(ref, localChapter.chapterId) }) { Text("本机进度") } }) }
 }
@@ -234,10 +248,10 @@ import kotlinx.coroutines.withContext
     }
 }
 @Composable private fun Stat(label: String, value: String) { Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(value, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary); Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
-@Composable private fun BookHero(book: BookCard, subtitle: String, isSaved: Boolean, favorite: () -> Unit) {
+@Composable private fun BookHero(book: BookCard, subtitle: String, favoriteState: BookFavoriteState, favorite: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val savedColor by animateColorAsState(
-        if(isSaved) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+        if(favoriteState.isSaved) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
         animationSpec = tween(if(appReducedMotion()) 0 else AppMotion.Standard), label = "favorite-container"
     )
     Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -251,11 +265,11 @@ import kotlinx.coroutines.withContext
             interactionSource = interaction,
             colors = ButtonDefaults.outlinedButtonColors(containerColor = savedColor)
         ) {
-            MotionContent(isSaved, animateInitial = false) {
+            MotionContent(favoriteState, animateInitial = false) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(if(isSaved) Icons.Outlined.BookmarkAdded else Icons.Outlined.BookmarkAdd, null, Modifier.size(18.dp))
+                    Icon(if(favoriteState.isSaved) Icons.Outlined.BookmarkAdded else Icons.Outlined.BookmarkAdd, null, Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text(if(isSaved) "已收藏 · 管理收藏" else "收藏到书架")
+                    Text(favoriteState.label)
                 }
             }
         }

@@ -21,7 +21,11 @@ fun chapterNetworkAllowed(context: Context, wifiOnly: Boolean): Boolean {
         (!wifiOnly || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI))
 }
 
-/** Owns a session/cache generation for a bounded, cancellable sequential batch. */
+/**
+ * 手动离线缓存与自动预读共用的顺序批处理，整批捕获账号绑定和缓存代次。
+ * 每章检查取消与账号状态，新增网络读取前检查网络策略；清理缓存后不能继续用旧代次写入。
+ * 手动缓存检查实际落盘结果，自动预读则尽力改善体验，失败由阅读页面处理而不替换当前正文。
+ */
 class ChapterOffline(private val store: LocalStore, private val api: NoveliaApi, private val session: AuthenticationSession) {
     suspend fun cache(ref: BookRef, ids: List<String>, wifiOnly: Boolean, progress: suspend (Int, Int) -> Unit) = withContext(Dispatchers.IO) {
         require(!ref.isLocal && !ref.isWenku)
@@ -45,6 +49,7 @@ class ChapterOffline(private val store: LocalStore, private val api: NoveliaApi,
         }
     }
 
+    /** 沿 nextId 最多预读五章，使用 visited 防止服务端章节链接形成环；已有缓存可直接复用。 */
     suspend fun prefetch(ref: BookRef, first: String?, count: Int, wifiOnly: Boolean) = withContext(Dispatchers.IO) {
         if(first == null || count <= 0 || ref.isLocal || ref.isWenku) return@withContext
         val binding = session.capture()

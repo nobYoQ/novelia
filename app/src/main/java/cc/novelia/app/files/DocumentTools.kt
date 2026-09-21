@@ -16,7 +16,11 @@ import org.jsoup.nodes.TextNode
 import org.jsoup.parser.Parser
 import org.jsoup.select.NodeVisitor
 
-/** Imports are bounded both compressed and expanded. No archive paths are written to disk. */
+/**
+ * EPUB、TXT、SRT 的解析与转换工具，统一限制输入大小和压缩内容展开体积。
+ * 文件导入优先使用 parseFile 的流式图片出口；parse(ByteArray) 适合已在内存中的小文件。
+ * 归档内部路径只用于解析引用，落盘路径由调用方根据文档 ID 和内容哈希生成。
+ */
 object DocumentTools {
     const val MAX_INPUT = 64 * 1024 * 1024
     const val MAX_EXPANDED = 192 * 1024 * 1024
@@ -77,6 +81,7 @@ object DocumentTools {
         require(chapters.any { it.paragraphs.any(String::isNotBlank) }) { "文件没有可读取的正文" }
         return LocalDocument(UUID.randomUUID().toString(), name.substringBeforeLast('.'), extension, chapters, images = images, coverImage = cover, sourceHash = digest(bytes))
     }
+    /** 优先按 BOM 判断 UTF-16，否则严格尝试 UTF-8；解码失败再回退 GB18030，最后移除 BOM。 */
     fun decodeText(bytes: ByteArray): String {
         val charset = when {
             bytes.take(2) == listOf(0xFF.toByte(), 0xFE.toByte()) -> Charsets.UTF_16LE
@@ -86,6 +91,7 @@ object DocumentTools {
         return runCatching { charset.newDecoder().onMalformedInput(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString() }
             .getOrElse { java.nio.charset.Charset.forName("GB18030").decode(ByteBuffer.wrap(bytes)).toString() }.removePrefix("\uFEFF")
     }
+    /** TXT 按常见章节标题切分，无标题长文每 800 段分章；SRT 保留字幕块内容作为单章段落。 */
     fun parseText(text: String, format: String = "txt", checkCancelled: () -> Unit = {}): List<LocalChapter> {
         checkCancelled()
         if(format == "srt") {

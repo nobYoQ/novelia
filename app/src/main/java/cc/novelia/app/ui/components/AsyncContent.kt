@@ -17,6 +17,11 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 
+/**
+ * 页面共用的加载容器。key 表示内容身份，变化时清空结果；refreshKey 或内部重试只刷新同一内容。
+ * 已有成功内容时刷新保留原组合和列表/编辑状态，失败显示附加错误，不退回整页空白。
+ * load 必须可取消且自行切换耗时工作的调度器；取消不转换为错误页，结果发布前再次检查取消。
+ */
 @Composable fun <T> AsyncContent(key: Any?, load: suspend () -> T, modifier: Modifier = Modifier, refreshKey: Any? = Unit, content: @Composable (T, () -> Unit) -> Unit) {
     var refresh by remember(key) { mutableIntStateOf(0) }
     var result by remember(key) { mutableStateOf<Result<T>?>(null) }

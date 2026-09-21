@@ -10,7 +10,11 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
-/** Immutable payloads let progress updates persist only the small catalogue, without rewriting prose. */
+/**
+ * 将文章和草稿长文本拆成按内容哈希命名的不可变文件，主 JSON 只保存索引和轻量状态。
+ * 正文没变时复用上一份载荷，使阅读进度等小修改不会产生大规模文本编码和写盘。
+ * 该对象的缓存字段无内部锁，由 LocalStore 的磁盘写入边界串行调用。
+ */
 internal class LibraryStateCodec(
     private val directory: File,
     private val read: (File) -> String,
@@ -22,6 +26,7 @@ internal class LibraryStateCodec(
     private var fallbackHash: String? = null
     private var needsCompaction = false
 
+    /** 先写正文再返回可引用它的主 JSON；恢复时强制重写，以修复同名但已损坏的载荷。 */
     fun encode(state: LibraryState, forcePayloadWrite: Boolean = false): String {
         val payload = LongText(state.savedArticles, state.drafts)
         val hash = if (!forcePayloadWrite && payload == previous) requireNotNull(previousHash) else {
@@ -40,6 +45,7 @@ internal class LibraryStateCodec(
             (PAYLOAD to JsonPrimitive(hash))).toString()
     }
 
+    /** 兼容正文直接存于旧 JSON 的格式；存在外置索引时必须通过哈希校验才能恢复正文。 */
     fun decode(text: String): LibraryState {
         val json = appJson.parseToJsonElement(text).jsonObject
         val state = appJson.decodeFromJsonElement(LibraryState.serializer(), json)
@@ -51,7 +57,10 @@ internal class LibraryStateCodec(
         return state.copy(savedArticles = payload.articles, drafts = payload.drafts)
     }
 
-    /** Called only after both state copies are committed; keep one prior payload for recovery. */
+    /**
+     * 主状态和最后良好副本都提交后才能清理；保留当前及前一份正文以支持恢复。
+     * 过早清理会让仍有效的旧状态 JSON 指向已删除的正文文件。
+     */
     fun compact() {
         if (!needsCompaction) return
         val keep = setOfNotNull(previousHash, fallbackHash)

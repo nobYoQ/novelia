@@ -30,6 +30,11 @@ import okhttp3.Response
 
 open class ApiException(val status: Int, override val message: String) : IOException(message)
 
+/**
+ * 原站 API 的统一入口，负责 URL 构造、绑定账号的认证请求、响应解码和写操作后的缓存失效。
+ * 默认禁止自动跟随重定向，认证头只由此入口按捕获的会话重新设置。
+ * path 接收已处理好编码的路径段；查询参数通过 HttpUrl 编码，动态路径段使用 encodeSegment。
+ */
 class NoveliaApi(val session: AuthenticationSession?, val baseUrl: String = "https://n.novelia.cc/api/", val transport: OkHttpClient = OkHttpClient.Builder().connectTimeout(20, TimeUnit.SECONDS).readTimeout(60, TimeUnit.SECONDS).followRedirects(false).build(), private val onMutation: (Long) -> Unit = {}, private val onKeywords: (Collection<String>) -> Unit = {}) {
     val cloudMutations = CloudMutationQueue()
     @Volatile var lastMutationAt: Long = 0L
@@ -45,7 +50,12 @@ class NoveliaApi(val session: AuthenticationSession?, val baseUrl: String = "htt
         if (method !in listOf("GET", "HEAD")) recordMutation()
         text
     }
-    /** The response is closed after readResponse; retries retain the original account and login generation. */
+    /**
+     * 请求、读取响应及 401 续期重试始终绑定同一账号和登录代次，不能中途借用新账号令牌。
+     * 每轮发送前、收到响应后和返回前都校验绑定；401 最多触发一次刷新及重试。
+     * [readResponse] 必须在回调内消费响应体，回调结束后底层会关闭 Response，不能向外泄漏流。
+     * 网络异常直接传播；非幂等写操作是否允许重放由更上层的同步策略决定。
+     */
     suspend fun <T> withAuthenticatedResponse(request: Request, binding: SessionBinding? = session?.capture(), client: OkHttpClient = transport, readResponse: (Response) -> T): T = withContext(Dispatchers.IO) {
         val bound = binding ?: session?.capture()
         fun ensureCurrent() { if (bound != null) session?.ensureCurrent(bound) }
@@ -112,6 +122,7 @@ class NoveliaApi(val session: AuthenticationSession?, val baseUrl: String = "htt
         }
         recordMutation()
     }
+    /** 服务端写入已成功才推进失效时间；本地缓存通知失败不能把成功写操作伪装成失败。 */
     @Synchronized private fun recordMutation() {
         lastMutationAt = System.currentTimeMillis()
         // The remote write already succeeded; a local cache failure must not invite a duplicate post.

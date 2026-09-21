@@ -50,6 +50,7 @@ import cc.novelia.app.ui.components.AppLazyColumn
 import cc.novelia.app.ui.components.AppScrollColumn
 import cc.novelia.app.ui.components.AppSheet
 import cc.novelia.app.ui.components.BookRow
+import cc.novelia.app.ui.components.bookRowStatus
 import cc.novelia.app.ui.components.ChoiceRow
 import cc.novelia.app.ui.components.ConfirmDialog
 import cc.novelia.app.ui.components.EmptyState
@@ -69,6 +70,7 @@ import kotlinx.coroutines.withContext
 
 @Composable fun ShelfScreen(c: AppController, onOpenBook: (BookRef) -> Unit = c::book, selectedBookKey: String? = null) {
     val state by c.store.state.collectAsStateWithLifecycle()
+    val profile by c.session.profile.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableIntStateOf(0) }; var query by rememberSaveable { mutableStateOf("") }; var folder by rememberSaveable { mutableStateOf("全部") }; var sort by rememberSaveable { mutableIntStateOf(0) }
     var createFolder by remember { mutableStateOf(false) }; var selected by remember { mutableStateOf<SavedBook?>(null) }; var managing by remember { mutableStateOf(false) }; var selection by remember { mutableStateOf(setOf<String>()) }; var bulkMove by remember { mutableStateOf(false) }
     var renameFolder by remember { mutableStateOf(false) }; var deleteFolder by remember { mutableStateOf(false) }; var localExportId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -228,6 +230,12 @@ import kotlinx.coroutines.withContext
                             if(books.isEmpty()) item { EmptyState(if(tab == 1) "把故事装进口袋" else "书架等你来填满", if(tab == 1) "支持 EPUB、TXT 和 SRT，导入后即可离线阅读。" else "去发现喜欢的小说，或导入你已有的文件。", action = if(tab == 1) "导入文件" else "去发现", onAction = { if(tab == 1) importer.launch(arrayOf("*/*")) else c.go("discover") }, sticker = MidoriSticker.Welcome) }
                             items(reorder.rows, key = { it.saved.book.ref.key }, contentType = { if(it.parent == null) "book" else "volume" }) { row ->
                                 val saved = row.saved
+                                LaunchedEffect(saved.book.ref, profile?.username, state.syncStatus[profile?.username]?.lastSuccessAt) {
+                                    if(profile == null || saved.book.ref.isLocal || saved.book.ref.isWenku) return@LaunchedEffect
+                                    try { c.refreshCloudReading(saved.book) }
+                                    catch(e: kotlinx.coroutines.CancellationException) { throw e }
+                                    catch(_: Exception) { /* Keep the known local/cloud position when offline. */ }
+                                }
                                 val dragging = reorder.draggedKey == saved.book.ref.key
                                 val selectionColor = animateColorAsState(
                                     when {
@@ -252,7 +260,7 @@ import kotlinx.coroutines.withContext
                                     } else null)
                                 else Column(itemMotion.testTag("shelf-book-${saved.book.ref.key}").drawBehind { drawRect(selectionColor.value) }
                                     .semantics { if(!managing && saved.book.ref.key == selectedBookKey) stateDescription = "已选中" }) {
-                                    BookRow(if(saved.hasUpdates) saved.book.copy(subtitle = state.bookUpdates[saved.book.ref.key]?.summary?.ifBlank { null } ?: "有更新 · ${saved.book.subtitle}") else saved.book, onOpen, trailing = trailing)
+                                    BookRow(saved.book, onOpen, status = bookRowStatus(saved.book, saved, state.positions[saved.book.ref.key], state.bookUpdates[saved.book.ref.key], profile?.username), trailing = trailing)
                                     if(saved.book.ref.isWenku && !managing) {
                                         val rotation by animateFloatAsState(if(row.expanded) 180f else 0f, tween(if(reducedMotion) 0 else AppMotion.Standard), label = "wenku-volume-disclosure")
                                         TextButton(onClick = {

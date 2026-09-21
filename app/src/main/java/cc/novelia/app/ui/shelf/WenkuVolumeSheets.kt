@@ -20,14 +20,20 @@ import cc.novelia.app.data.model.Position
 import cc.novelia.app.data.model.SavedBook
 import cc.novelia.app.ui.components.AppLazyColumn
 import cc.novelia.app.ui.components.AppSheet
+import cc.novelia.app.ui.components.BookReadingProgressBar
+import cc.novelia.app.ui.components.bookRowStatus
 import cc.novelia.app.ui.theme.motionClickable
 
 internal data class ShelfRowItem(val saved: SavedBook, val parent: SavedBook? = null, val volumeCount: Int = 0, val expanded: Boolean = false)
 
 @Composable internal fun MountedVolumeRow(saved: SavedBook, position: Position?, modifier: Modifier, onClick: () -> Unit, trailing: @Composable () -> Unit, dragHandle: (@Composable () -> Unit)? = null) {
     val line = MaterialTheme.colorScheme.outlineVariant
+    val reading = bookRowStatus(saved.book, saved, position, null)
     ListItem(headlineContent = { Text(saved.book.title, maxLines = 3) },
-        supportingContent = { Text("${saved.status} · ${position?.title?.ifBlank { "继续阅读" } ?: "尚未开始阅读"}", maxLines = 2) },
+        supportingContent = { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("${reading.progressLabel} · ${position?.title?.ifBlank { "继续阅读" } ?: "尚未开始阅读"}", maxLines = 2)
+            BookReadingProgressBar(reading, Modifier.testTag("book-reading-progress-${saved.book.ref.key}"))
+        } },
         leadingContent = dragHandle ?: { Icon(Icons.AutoMirrored.Outlined.MenuBook, null, tint = MaterialTheme.colorScheme.primary) },
         trailingContent = trailing,
         modifier = modifier.testTag("shelf-volume-${saved.book.ref.key}").padding(start = 28.dp, end = 8.dp)

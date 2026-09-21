@@ -15,6 +15,10 @@ import kotlinx.serialization.Serializable
 
 internal enum class SyncFailure { RETRY, AUTHENTICATION, BLOCKED, ACCOUNT_CHANGED }
 
+/**
+ * 同步重试策略的统一分类：网络/临时服务错误可自动重试，401 等待重新登录，
+ * 其余业务拒绝等待手动处理。会话变化必须优先于普通 401 识别，避免修改新账号状态。
+ */
 internal fun classifySyncFailure(error: IOException): SyncFailure = when {
     error is SessionChangedException -> SyncFailure.ACCOUNT_CHANGED
     error is ApiException && error.status == 401 -> SyncFailure.AUTHENTICATION

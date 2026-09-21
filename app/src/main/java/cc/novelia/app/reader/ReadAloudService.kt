@@ -25,6 +25,11 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.serialization.encodeToString
 
+/**
+ * 系统 TTS 前台服务，持有句子队列、音频焦点、暂停状态和定时停止任务。
+ * 队列先写入缓存文件，Intent 只传 UUID，避免大章节超过 Binder 事务大小限制。
+ * TTS 回调转到主线程后校验 utterance ID，旧播放/暂停产生的迟到回调不能推进新队列。
+ */
 class ReadAloudService : Service() {
     private var engine: TextToSpeech? = null
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -120,6 +125,10 @@ class ReadAloudService : Service() {
         private val requestGeneration = AtomicLong()
         private val QUEUE_ID = Regex("[a-f0-9-]{36}")
         private fun queueFile(context: Context, id: String) = File(context.cacheDir, "tts-queue-$id.json")
+        /**
+         * 后台准备可取消的朗读队列；generation 保证较早的准备任务不会覆盖后来的开始/停止操作。
+         * 成功交给服务后由服务删除队列文件，交接前失败则由此处回收。
+         */
         suspend fun start(context: Context, title: String, settings: ReaderSettings, content: () -> List<String>) {
             val generation = requestGeneration.incrementAndGet()
             val appContext = context.applicationContext

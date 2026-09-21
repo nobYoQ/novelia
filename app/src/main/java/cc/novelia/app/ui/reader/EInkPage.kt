@@ -50,12 +50,18 @@ import cc.novelia.app.ui.theme.LocalReducedMotion
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
+/**
+ * 静态分页的位置状态，适用于普通屏幕和电子纸。页码是测量结果，持久定位使用段落及字符锚点。
+ * install 在字体/视口变化后重新找页，move 才把锚点推进到用户实际翻到的页首，
+ * 避免连续多次中间测量把位置逐步向前“吸附”。ready 为 false 时禁止按旧页表翻页。
+ */
 @Stable internal class EInkPageState(initial: Position?) {
     // The renderer binds this exact list to its measured text snapshot. Equal line
     // values from a new measurement still need to replace the previous list instance.
@@ -77,10 +83,14 @@ import kotlinx.coroutines.withContext
     val canGoForward get() = pageIndex + 1 < pages.size
 
     fun install(next: List<StaticPage>, paragraphs: List<ReadingParagraph> = content) {
+        val previousParagraph = content.getOrNull(anchorParagraph)
         sourceParagraph?.let { source ->
             anchorParagraph = paragraphs.indexOfFirst { it.index >= source }.takeIf { it >= 0 }
                 ?: paragraphs.lastIndex.coerceAtLeast(0)
         }
+        // A concatenated character offset changes meaning when the language order changes.
+        // Restore the complete source paragraph so its translation cannot become an orphan.
+        if(previousParagraph != null && previousParagraph.parts != paragraphs.getOrNull(anchorParagraph)?.parts) anchorOffset = 0
         content = paragraphs
         sourceParagraph = paragraphs.getOrNull(anchorParagraph)?.index
         pages = next
@@ -115,6 +125,12 @@ private class SecondaryOpacity(private val alpha: Float) : CharacterStyle(), Upd
     override fun updateDrawState(paint: TextPaint) { paint.alpha = (paint.alpha * alpha).toInt().coerceIn(0, 255) }
 }
 
+/**
+ * 用 Android StaticLayout 一次测量整章，再把不可分的行交给纯分页算法。
+ * width/height 为像素，字号需乘 density 与 fontScale，段距只乘 density。
+ * 拼接标签、缩进和语言分隔符的顺序必须与 paragraphPartStarts 一致，才能复用搜索字符锚点。
+ * 返回的段落、布局与页表属于同一测量快照，显示时不能与新一轮内容混用。
+ */
 internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: ReaderSettings, width: Int, height: Int, density: Float, fontScale: Float, checkCancelled: () -> Unit = {}): MeasuredEInkChapter {
     val layouts = mutableMapOf<Int, StaticLayout>()
     val lines = mutableListOf<PageLine>()
@@ -126,7 +142,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
             val text = SpannableStringBuilder()
             paragraph.parts.forEachIndexed { partIndex, part ->
                 checkCancelled()
-                if (partIndex > 0) text.append("\n\n")
+                if (partIndex > 0) text.append(READING_PART_SEPARATOR)
                 if (settings.parallel && part.source in listOf("sakura", "gpt", "youdao")) text.append(part.source.uppercase()).append("\n")
                 val start = text.length
                 if (settings.indent) text.append("　　")
@@ -153,10 +169,15 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
             }
         }
     }
-    return MeasuredEInkChapter(paragraphs, layouts, paginateLines(lines, height, (20 * density).toInt(), checkCancelled))
+    val pairedParagraphs = paragraphs.indices.filterTo(mutableSetOf()) { paragraphs[it].parts.size > 1 }
+    return MeasuredEInkChapter(paragraphs, layouts, paginateLines(lines, height, (settings.resolvedParagraphSpacing * density).roundToInt(), pairedParagraphs, checkCancelled))
 }
 
-/** Draw pre-measured full lines; swipes commit one page on release, with no scrolling frames. */
+/**
+ * 绘制预先测量的完整行，翻页复用布局，手势在释放时最多提交一次翻页。
+ * 字体、内容或视口变化才重新测量；电子纸与减少动效模式直接切页，普通模式可使用短过渡。
+ * Canvas 只裁切当前页片段，同时提供可访问性文本、搜索高亮与段落长按入口。
+ */
 @Composable internal fun EInkPage(
     paragraphs: List<ReadingParagraph>, settings: ReaderSettings, state: EInkPageState,
     modifier: Modifier = Modifier, imageModel: (ReadingParagraph) -> Any?,
@@ -191,7 +212,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
         val width = constraints.maxWidth.coerceAtLeast(1)
         val height = constraints.maxHeight.coerceAtLeast(1)
         // Reflow only for typography/content/viewport changes. Turning a page reuses all layouts.
-        val typography = listOf(settings.fontSize, settings.lineHeight, settings.weight, settings.indent, settings.parallel, settings.underline, settings.secondaryAlpha)
+        val typography = listOf(settings.fontSize, settings.lineHeight, settings.paragraphSpacing, settings.weight, settings.indent, settings.parallel, settings.underline, settings.secondaryAlpha)
         val input = EInkMeasureInput(paragraphs, typography, width, height, density.density, density.fontScale)
         val measured by produceState<EInkMeasurement?>(null, input) {
             // Coalesce viewport changes and repeated preference updates before measuring.
@@ -218,7 +239,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
                 alpha = if(animate) 1f - abs(pageShift.value) * .12f else 1f
             }.combinedClickable(onClickLabel = "显示或收起阅读工具栏", onClick = onToggleMenu)) {
                 page?.lines?.groupBy { it.paragraph }?.entries?.forEachIndexed { groupIndex, (index, lines) ->
-                    if (groupIndex > 0) Spacer(Modifier.height(20.dp))
+                    if (groupIndex > 0) Spacer(Modifier.height(settings.resolvedParagraphSpacing.dp))
                     val paragraph = chapter.paragraphs[index]
                     if (lines.first().image) {
                         val model = imageModel(paragraph)

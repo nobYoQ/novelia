@@ -1,9 +1,11 @@
 package cc.novelia.app.data.library
 
 import cc.novelia.app.data.model.BookRef
+import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.SavedBook
 import cc.novelia.app.data.model.TocItem
+import cc.novelia.app.data.model.withKnownChapter
 
 /** Directory section headings never contribute to a reader-facing chapter number. */
 data class ReadingDestination(val chapterId: String, val number: Int, val title: String) {
@@ -14,9 +16,23 @@ fun readingDestination(toc: List<TocItem>, chapterId: String?): ReadingDestinati
     .filter { it.chapterId != null }.withIndex().firstOrNull { it.value.chapterId == chapterId }
     ?.let { ReadingDestination(requireNotNull(it.value.chapterId), it.index + 1, it.value.title) }
 
+/** 依次尝试仍在目录中的本地章节、云端章节和首个可读章节；分组标题不是可阅读目的地。 */
 fun resumeDestination(toc: List<TocItem>, localId: String?, cloudId: String?): ReadingDestination? =
     readingDestination(toc, localId) ?: readingDestination(toc, cloudId)
     ?: toc.firstOrNull { it.chapterId != null }?.let { ReadingDestination(requireNotNull(it.chapterId), 1, it.title) }
+
+/** Learn only from responses already fetched for the active account, without changing local anchors. */
+fun LibraryState.withCloudReadingMetadata(cards: List<BookCard>, account: String?): LibraryState {
+    if(account == null) return this
+    val metadata = cards.filter { it.cloudReading?.account == account }.associateBy { it.ref.key }
+    if(metadata.isEmpty()) return this
+    return copy(books = books.map { saved ->
+        metadata[saved.book.ref.key]?.let { incoming -> saved.copy(book = saved.book.copy(
+            cloudReading = incoming.cloudReading?.withKnownChapter(saved.book.cloudReading),
+            updateAt = incoming.updateAt?.takeIf { it > 0 } ?: saved.book.updateAt,
+        )) } ?: saved
+    })
+}
 
 fun LibraryState.nextMountedVolume(ref: BookRef): SavedBook? {
     val parentKey = books.firstOrNull { it.book.ref == ref }?.parentWenkuKey ?: return null

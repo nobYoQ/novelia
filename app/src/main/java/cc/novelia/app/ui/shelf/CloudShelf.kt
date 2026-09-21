@@ -23,6 +23,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.catalog.providers
+import cc.novelia.app.data.library.withCloudReadingMetadata
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.CloudFolders
 import cc.novelia.app.data.model.Folder
@@ -33,6 +34,8 @@ import cc.novelia.app.data.network.cloudFolderChoices
 import cc.novelia.app.ui.components.AppLazyColumn
 import cc.novelia.app.ui.components.AsyncContent
 import cc.novelia.app.ui.components.BookRow
+import cc.novelia.app.ui.components.bookRowStatus
+import cc.novelia.app.ui.components.rememberCloudBookMetadata
 import cc.novelia.app.ui.components.ChoiceRow
 import cc.novelia.app.ui.components.CollapsibleCloudFilters
 import cc.novelia.app.ui.components.ConfirmDialog
@@ -142,6 +145,10 @@ import cc.novelia.app.ui.navigation.AppController
                     AsyncContent(requestKey, refreshKey = refreshKey, modifier = Modifier.weight(1f), load = {
                         c.api.cloudFavorites(kind == 1, current.id, page, sort, filter)
                     }) { result, retry ->
+                        LaunchedEffect(result.items, account) {
+                            if(c.session.profile.value?.username != account) return@LaunchedEffect
+                            c.store.update { it.withCloudReadingMetadata(result.items, account) }
+                        }
                         // Retain the scroll anchor inside the viewport; panel resizing must not scroll the books.
                         AppLazyColumn(state = listState, modifier = Modifier.fillMaxSize().nestedScroll(collapse),
                             onPageTurn = { direction -> if(direction > 0 && local.autoCollapseCloudFilters) expanded = false }) {
@@ -149,12 +156,14 @@ import cc.novelia.app.ui.navigation.AppController
                                 EmptyState("没有匹配的收藏", "可调整筛选、切换收藏夹，或在书籍详情中添加云端收藏。", action = "重新加载", onAction = retry)
                             }
                             items(result.items, key = { it.ref.key }, contentType = { "book" }) { book ->
+                                val displayed = rememberCloudBookMetadata(c, book, account, refreshKey)
                                 val pending = pendingFavoriteAction(local.pending, account, book.ref)
                                 val cancelling = pending?.method == "DELETE"
                                 Column {
                                 val selectedBook = book.ref.key == selectedBookKey
-                                BookRow(book, { onOpenBook(book.ref) }, Modifier.semantics { selected = selectedBook }
-                                    .then(if(selectedBook) Modifier.background(MaterialTheme.colorScheme.secondaryContainer) else Modifier), trailing = {
+                                BookRow(displayed, { onOpenBook(book.ref) }, Modifier.semantics { selected = selectedBook }
+                                    .then(if(selectedBook) Modifier.background(MaterialTheme.colorScheme.secondaryContainer) else Modifier),
+                                    status = bookRowStatus(displayed, local.books.firstOrNull { it.book.ref == book.ref }, local.positions[book.ref.key], local.bookUpdates[book.ref.key], account, preferCloud = true), trailing = {
                                     if(cancelling) TextButton(onClick = { c.action {
                                         val restoreFolder = book.favored?.takeIf { it != ALL_CLOUD_FAVORITES && it.isNotBlank() }
                                             ?: current.id.takeUnless { it == ALL_CLOUD_FAVORITES }

@@ -5,6 +5,25 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class StaticPaginationTest {
+    @Test fun shortBilingualParagraphMovesAsAUnitInsteadOfLeavingAnOrphanTranslation() {
+        val lines = listOf(PageLine(0, 0, 8, 30), PageLine(0, 8, 16, 30),
+            PageLine(1, 0, 8, 30), PageLine(1, 8, 16, 30))
+        val pages = paginateLines(lines, 110, 10, keepTogetherParagraphs = setOf(0, 1))
+        assertEquals(listOf(listOf(0, 0), listOf(1, 1)), pages.map { page -> page.lines.map { it.paragraph } })
+        assertEquals(lines, pages.flatMap { it.lines })
+    }
+
+    @Test fun oversizedBilingualParagraphStillSplitsWithoutMissingLinesOrOverfillingPages() {
+        val lines = (0..9).map { PageLine(0, it * 8, (it + 1) * 8, 30) } +
+            listOf(PageLine(1, 0, 8, 30), PageLine(1, 8, 16, 30))
+        val pages = paginateLines(lines, 100, 10, keepTogetherParagraphs = setOf(0, 1))
+        assertEquals(lines, pages.flatMap { it.lines })
+        assertTrue(pages.all { page ->
+            page.lines.sumOf(PageLine::height) + page.lines.zipWithNext().count { (a, b) -> a.paragraph != b.paragraph } * 10 <= 100
+        })
+        assertEquals(1, pages.count { page -> page.lines.any { it.paragraph == 1 } })
+    }
+
     @Test fun longParagraphSplitsWithoutMissingOrRepeatingLines() {
         val lines = (0 until 103).map { PageLine(0, it * 8, (it + 1) * 8, 32) }
         val pages = paginateLines(lines, 200, 20)

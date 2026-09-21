@@ -6,7 +6,11 @@ import java.nio.file.StandardCopyOption
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/** Active files are protected while cancelled workers wind down. */
+/**
+ * 协调下载临时文件与生命周期命令。暂停/删除的取消指令返回时，旧 Worker 可能仍在退出，
+ * 因此 active 集合保护仍在使用的 .part 文件，任务锁串行化取消、替换与成品发布。
+ * 每轮 Worker 使用独立临时文件，避免新旧下载同时写入同一路径。
+ */
 internal object DownloadFiles {
     private class TaskLock(val mutex: Mutex = Mutex(), var users: Int = 0)
     private val taskLocks = mutableMapOf<String, TaskLock>()
@@ -23,6 +27,7 @@ internal object DownloadFiles {
         finally { synchronized(taskLocks) { if (--lock.users == 0) taskLocks.remove(key) } }
     }
 
+    /** 取得任务锁后再验证所有权，通过同目录移动发布完整文件，随后才更新完成状态。 */
     suspend fun commit(directory: File, downloadId: String, partial: File, destination: File,
         isCurrent: () -> Boolean, completed: () -> Unit): Boolean = withTaskLock(directory, downloadId) {
         if (!isCurrent()) return@withTaskLock false

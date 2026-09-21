@@ -14,6 +14,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -80,16 +82,53 @@ import coil.decode.DataSource
         }
     }
 }
-@Composable fun BookRow(book: BookCard, onClick: () -> Unit, modifier: Modifier = Modifier, trailing: @Composable (() -> Unit)? = null) {
-    Row(modifier.fillMaxWidth().motionClickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+@Composable internal fun BookRow(book: BookCard, onClick: () -> Unit, modifier: Modifier = Modifier, status: BookRowStatus? = null, showReadingProgress: Boolean = true, showBookMetadata: Boolean = true, trailing: @Composable (() -> Unit)? = null) {
+    val presentation = LocalBookListPresentation.current
+    val saved = presentation.books[book.ref.key]
+    val reading = status ?: bookRowStatus(book, saved, presentation.positions[book.ref.key], presentation.updates[book.ref.key], presentation.account)
+    val showProgress = showReadingProgress && !book.ref.isWenku
+    val updated = bookUpdateDate(book.updateAt ?: saved?.book?.updateAt?.takeIf { showBookMetadata })
+    val subtitle = book.subtitle.ifBlank { providers[book.ref.provider] ?: "本地小说" }
+    val fontScale = LocalDensity.current.fontScale
+    Row(modifier.fillMaxWidth().motionClickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
         BookCover(book)
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(book.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(book.subtitle.ifBlank { providers[book.ref.provider] ?: "本地小说" }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if(book.total > 0) Text(if(book.ref.isWenku) "${book.total} 个分卷文件" else "${book.translated} / ${book.total} 章有译文", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-            else if(book.originalTitle != book.title) Text(book.originalTitle, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            BookSyncIndicator(book.ref)
+        BoxWithConstraints(Modifier.weight(1f)) {
+            val showDate = showBookMetadata && updated != null
+            // A split-screen list is much narrower than the screen. Wrap the date instead of hiding it.
+            val inlineDate = showDate && maxWidth >= (320 * fontScale).dp
+            val updateLabel = reading.updateLabel.takeIf { showBookMetadata }
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(book.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    trailing?.invoke()
+                }
+                if(showDate && !inlineDate) BookUpdateDateLabel(updated!!, book.ref.key)
+                if(showProgress || inlineDate || updateLabel != null) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if(showProgress) Text(reading.progressLabel, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    else Spacer(Modifier.weight(1f))
+                    if(inlineDate) BookUpdateDateLabel(updated!!, book.ref.key)
+                    updateLabel?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, maxLines = 1) }
+                }
+                if(showProgress) BookReadingProgressBar(reading, Modifier.testTag("book-reading-progress-${book.ref.key}"))
+                if(showBookMetadata) BookSyncIndicator(book.ref)
+            }
         }
-        trailing?.invoke()
+    }
+}
+
+@Composable private fun BookUpdateDateLabel(date: String, key: String) {
+    Text("更新于 $date", Modifier.testTag("book-update-date-$key"), style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+@Composable internal fun BookReadingProgressBar(reading: BookRowStatus, modifier: Modifier = Modifier) {
+    // A server history marker alone is not a numeric position: do not render it as 0%.
+    reading.progress?.let { progress ->
+        LinearProgressIndicator(progress = { progress }, modifier = modifier.fillMaxWidth().height(3.dp)
+            .semantics { contentDescription = reading.progressLabel }, gapSize = 0.dp, drawStopIndicator = {})
     }
 }

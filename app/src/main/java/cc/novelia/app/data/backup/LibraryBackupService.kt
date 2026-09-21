@@ -21,7 +21,11 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 
-/** All archive IO is staged on disk; UI state retains only the opaque staging ID. */
+/**
+ * 阅读资料备份的业务编排层：导出快照，或先解包到暂存目录供预览，再显式执行合并恢复。
+ * UI 只保留暂存 ID，归档字节和图片留在磁盘，避免大备份占用界面内存或依赖 Activity 存活。
+ * 格式和完整性检查交给 LibraryBackupArchive，最终状态提交通过 LocalStore 的恢复边界完成。
+ */
 class LibraryBackupService(private val store: LocalStore, private val keywords: KeywordStore) {
     private val stagingRoot = File(store.context.filesDir, "backup-staging")
 
@@ -62,6 +66,7 @@ class LibraryBackupService(private val store: LocalStore, private val keywords: 
         } finally { exportStage.deleteRecursively() }
     }
 
+    /** 准备预览只写新建暂存目录，不修改现有书库；解包或校验失败时清理这次暂存内容。 */
     suspend fun prepare(input: InputStream): BackupPreview = withContext(Dispatchers.IO) {
         val id = UUID.randomUUID().toString(); val directory = staging(id).apply { mkdirs() }
         val work = coroutineContext
@@ -76,6 +81,11 @@ class LibraryBackupService(private val store: LocalStore, private val keywords: 
 
     suspend fun discard(id: String) = withContext(Dispatchers.IO) { staging(id).deleteRecursively(); Unit }
 
+    /**
+     * 重新校验暂存归档后逐本文档安装：完整相同的文档可复用，否则分配新 ID 避免覆盖。
+     * ID 映射同时用于进度、笔记和分卷关系。书库提交前失败只回收本次安装的文件；
+     * 提交后即使标签词典保存失败也保留阅读资料，并返回提示供用户稍后重试。
+     */
     suspend fun restore(id: String) = withContext(Dispatchers.IO) {
         restoreLock.withLock {
             val work = coroutineContext
@@ -203,6 +213,7 @@ private fun matchesBackupAsset(file: File, expected: BackupAsset?, checkCancelle
     catch (_: Exception) { false }
 }
 
+/** 用恢复后的本地 ID 重写所有关联键，并重建本机封面路径，防止沿用另一设备的绝对路径。 */
 internal fun remapBackupLibrary(source: LibraryState, localIds: Map<String, String>, cover: (String) -> String?): LibraryState {
     fun key(value: String): String = if (value.startsWith("local/")) "local/${localIds[value.removePrefix("local/")] ?: value.removePrefix("local/")}" else value
     return source.forBackup().copy(

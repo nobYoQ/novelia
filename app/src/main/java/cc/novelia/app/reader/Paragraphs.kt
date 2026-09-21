@@ -4,11 +4,19 @@ import cc.novelia.app.data.model.Chapter
 import cc.novelia.app.data.model.ReaderSettings
 import com.ibm.icu.text.Transliterator
 
+/** 同一原始段落的一种显示文本；source 标明日文或翻译引擎，secondary 控制辅文本样式。 */
 data class TextPart(val text: String, val source: String, val secondary: Boolean = false)
+/** index 保留原始段落编号；过滤空段后，它不一定等于投影结果的列表下标。 */
 data class ReadingParagraph(val index: Int, val parts: List<TextPart>, val fallback: Boolean = false, val imageUrl: String? = null, val localImageId: String? = null)
 
 private val localImageMarker = Regex("novelia-image:([a-f0-9]{64})")
 
+/**
+ * 把原文和多个译文数组按原始下标对齐，生成阅读、搜索和排版共用的段落投影。
+ * 非并列模式按 engines 顺序选第一个非空译文；缺译文时回退原文，双语模式避免重复显示。
+ * 数组可能长短不一，按最长数组遍历并容忍缺项；插图在文本选择之前识别且保持段落身份。
+ * 返回值只包含可显示段落，不修改原章节；耗时调用方可通过 checkCancelled 响应取消。
+ */
 fun projectParagraphs(chapter: Chapter, settings: ReaderSettings, checkCancelled: () -> Unit = {}): List<ReadingParagraph> {
     val engines = mapOf("sakura" to chapter.sakuraParagraphs, "gpt" to chapter.gptParagraphs, "youdao" to chapter.youdaoParagraphs)
     val count = maxOf(chapter.paragraphs.size, engines.values.maxOfOrNull { it?.size ?: 0 } ?: 0)
@@ -38,7 +46,7 @@ fun projectParagraphs(chapter: Chapter, settings: ReaderSettings, checkCancelled
         val translated = translations.ifEmpty { listOf(TextPart(jp, "原文 · 暂无译文")) }
         val parts = when(settings.mode) {
             "jp" -> listOf(TextPart(jp, "日文"))
-            "jp-zh" -> listOf(TextPart(jp, "日文")) + if(missing) emptyList() else translated.map { it.copy(secondary = true) }
+            "jp-zh" -> listOf(TextPart(jp, "日文", secondary = !missing)) + if(missing) emptyList() else translated
             "zh-jp" -> translated + if(missing) emptyList() else listOf(TextPart(jp, "日文", true))
             else -> translated
         }
@@ -47,7 +55,11 @@ fun projectParagraphs(chapter: Chapter, settings: ReaderSettings, checkCancelled
     } }
 }
 
-/** Prepare display text once per chapter/language change, away from composition and scrolling. */
+/**
+ * 预处理实际显示的文本，去除首尾空白并按偏好转换中文译文为繁体；原文和插图不转换。
+ * 应在章节或语言配置变化时于后台计算，滚动、分页和搜索复用结果，保证字符偏移一致。
+ * ICU 转换器每次调用独享；长文本分块转换且不拆开 UTF-16 代理对，兼顾取消响应和字符完整性。
+ */
 fun prepareReadingParagraphs(chapter: Chapter, settings: ReaderSettings, checkCancelled: () -> Unit = {}): List<ReadingParagraph> {
     // ICU converters are mutable, so each preparation owns its converter instead of sharing one across threads.
     val converter by lazy { Transliterator.getInstance("Simplified-Traditional") }

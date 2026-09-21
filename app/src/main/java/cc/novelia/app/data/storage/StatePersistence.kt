@@ -10,7 +10,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/** A single writer coalesces bursts without holding the caller's state lock during disk IO. */
+/**
+ * 将频繁状态修改合并为串行磁盘写入。Channel 只传递唤醒信号，最新快照保存在 pending 中，
+ * 因而短时间内的连续翻页只需保存最后一个状态。调用方必须提交不会继续被修改的快照。
+ * pendingLock 只保护快照引用；writeLock 保护整个挂起写入，避免后台保存与显式 flush 并行。
+ * 写入失败保留快照并重试，同时通过 [error] 向界面暴露可恢复的保存错误。
+ */
 internal class StatePersistence<T>(
     scope: CoroutineScope,
     private val coalesceMillis: Long = 100,
@@ -48,11 +53,15 @@ internal class StatePersistence<T>(
         requests.trySend(Unit)
     }
 
-    /** Returns only after the current snapshot is durable; write failures are propagated. */
+    /**
+     * 保存取得写锁时的待写快照，失败向调用方传播。写入期间仍允许 submit 更新 pending；
+     * 因此这不是冻结所有后续修改的全局屏障，新提交的快照会留给下一轮保存。
+     */
     suspend fun flush() = writeLock.withLock {
         val snapshot = synchronized(pendingLock) { pending } ?: return@withLock
         try {
             write(snapshot.value)
+            // 比较包装对象身份，不能按值相等清空，否则可能丢掉写入期间新提交的快照。
             synchronized(pendingLock) { if (pending === snapshot) pending = null }
             mutableError.value = null
         } catch (cancelled: CancellationException) {

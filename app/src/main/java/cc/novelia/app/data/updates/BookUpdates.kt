@@ -31,7 +31,11 @@ import kotlinx.serialization.Serializable
 fun translationEngineName(engine: String) = when(engine) { "sakura" -> "Sakura"; "gpt" -> "GPT"; "youdao" -> "有道"; else -> engine }
 fun BookCard.updateSnapshot(checkedAt: Long = 0) = BookUpdateSnapshot(total, translations, volumeIds, checkedAt)
 
-/** Legacy cards lack per-engine counts: establish a baseline rather than invent historical deltas. */
+/**
+ * 计算相邻检查快照的正向增量，数量减少不当作新内容。缺少某引擎旧计数时只建立基线，
+ * 防止升级后的第一次检查把所有历史译文都报为新增；文库优先按文件 ID 集合判断新分卷。
+ * checkedAt 表示客户端发现更新的时间，用于后续判断章节缓存是否可能缺少新增译文。
+ */
 fun detectBookUpdate(previous: BookUpdateSnapshot, current: BookUpdateSnapshot, wenku: Boolean): BookUpdateInfo {
     val translations = current.translations.mapNotNull { (engine, count) ->
         previous.translations[engine]?.let { old -> (count - old).coerceAtLeast(0).takeIf { it > 0 }?.let { engine to it } }

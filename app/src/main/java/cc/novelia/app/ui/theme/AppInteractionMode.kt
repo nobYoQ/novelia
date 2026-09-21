@@ -12,6 +12,11 @@ import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.node.DrawModifierNode
 
+/**
+ * 把应用偏好与系统动画开关合并为子树的交互约束，并统一关闭波纹、指示动画和过度滚动。
+ * LocalEInkMode 还会影响翻屏方式，LocalReducedMotion 只表达静态显示需求，二者不能混为一谈。
+ * 页面可嵌套此入口，为单书电子纸偏好建立局部作用域。
+ */
 @Composable internal fun AppInteractionMode(eInk: Boolean, reducedMotion: Boolean, content: @Composable () -> Unit) {
     val durationScale = rememberCoroutineScope().coroutineContext[MotionDurationScale]
     val static = eInk || reducedMotion || !android.animation.ValueAnimator.areAnimatorsEnabled() ||

@@ -18,7 +18,11 @@ internal data class ReaderChapterTarget(
     val searchMatch: ReadingTextMatch? = null
 )
 
-/** The displayed chapter remains mounted until this request has succeeded. */
+/**
+ * 跨章加载状态机：请求期间保留当前章节，只有成功才通过 onLoaded 提交新章节。
+ * 失败保留 target 供重试，新请求先取消旧任务；generation 防止旧任务的结果或 finally
+ * 修改新请求的加载状态。默认在主线程更新 Compose 状态，load 自行安排耗时 IO。
+ */
 internal class ReaderChapterLoad<T>(
     private val scope: CoroutineScope,
     private val load: suspend (String) -> T,

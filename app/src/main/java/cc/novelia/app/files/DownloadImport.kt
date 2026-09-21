@@ -33,7 +33,11 @@ private fun copyImport(input: InputStream, target: File, checkCancelled: () -> U
     }
 }
 
-/** Stage provider streams on disk, keeping compressed books and illustrations out of heap. */
+/**
+ * 将文档提供器的 URI 流暂存到磁盘，再进入统一导入流程。
+ * 提供器声明的大小可能缺失或不可信，因此复制时仍逐块检查上限和取消状态；
+ * finally 清理本次输入暂存文件，不要求提供器返回可以直接访问的本地文件路径。
+ */
 suspend fun importDocumentUri(store: LocalStore, uri: Uri): DocumentImportResult = withContext(Dispatchers.IO) {
     val resolver = store.context.contentResolver
     val name = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use {
@@ -52,6 +56,11 @@ suspend fun importDocumentUri(store: LocalStore, uri: Uri): DocumentImportResult
     } finally { staged.delete() }
 }
 
+/**
+ * 串行完成哈希去重、解析、资源安装和加入书架，防止并发导入同一文件产生两份书籍。
+ * 命中源文件哈希时返回原引用且 imported=false，保留已有阅读位置和用户的分卷归属。
+ * 新文档使用新 ID；安装失败仅清理这个新文档，图片先流式写入暂存目录以控制内存占用。
+ */
 suspend fun importLocalDocument(store: LocalStore, file: File, name: String = file.name, title: String? = null): DocumentImportResult = withContext(Dispatchers.IO) {
     importLock.withLock {
         DocumentTools.requireImportSize(file.length())

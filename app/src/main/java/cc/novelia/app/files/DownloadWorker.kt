@@ -16,6 +16,11 @@ import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 
+/**
+ * 后台文件下载任务，业务下载 ID 与本轮 WorkManager workId 共同确定写入所有权。
+ * 重试/替换任务会产生新 workId，旧任务即使尚未完全退出，也不能覆盖新任务状态或最终文件。
+ * 响应流先写独立 .part 文件，检查大小、会话和任务状态后再发布成品；取消继续向外传播。
+ */
 class DownloadWorker(context: Context, parameters: WorkerParameters) : CoroutineWorker(context, parameters) {
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val app = applicationContext as NoveliaApplication
@@ -106,6 +111,7 @@ class DownloadWorker(context: Context, parameters: WorkerParameters) : Coroutine
                 }
             }
         }
+        /** 先把新 workId 和下载信息落盘，再交给调度器；任务启动后必须能找到自己的持久记录。 */
         suspend fun enqueue(app: NoveliaApplication, entry: DownloadEntry) {
             val request = OneTimeWorkRequestBuilder<DownloadWorker>().setInputData(workDataOf("id" to entry.id, "owner" to app.session.profile.value?.username)).setConstraints(Constraints.Builder().setRequiredNetworkType(if(app.store.state.value.wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED).build()).build()
             withContext(Dispatchers.IO) {

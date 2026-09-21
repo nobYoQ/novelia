@@ -5,13 +5,25 @@ import cc.novelia.app.data.updates.BookUpdateInfo
 import cc.novelia.app.data.updates.BookUpdateSnapshot
 import kotlinx.serialization.Serializable
 
-@Serializable data class Position(val chapterId: String, val index: Int = 0, val offset: Int = 0, val title: String = "", val updatedAt: Long = System.currentTimeMillis(), val textOffset: Int = 0)
+/**
+ * 本机精确阅读位置。index 是含章标题的阅读列表下标（正文从 1 开始），offset 为滚动像素偏移；
+ * textOffset 是整段显示文本中的 UTF-16 偏移，用于静态分页及模式切换后的定位。
+ * chapterIndex 从 0 开始，章节/段落总数可为空，不能为显示进度额外阻塞正文加载。
+ */
+@Serializable data class Position(val chapterId: String, val index: Int = 0, val offset: Int = 0, val title: String = "", val updatedAt: Long = System.currentTimeMillis(), val textOffset: Int = 0,
+    val chapterIndex: Int? = null, val chapterCount: Int? = null, val paragraphCount: Int? = null)
 
 @Serializable data class SavedBook(val book: BookCard, val folder: String = "默认收藏", val pinned: Boolean = false, val status: String = "在读", val addedAt: Long = System.currentTimeMillis(), val hasUpdates: Boolean = false,
     val parentWenkuKey: String? = null, val volumesExpanded: Boolean = false, val volumeOrder: List<String> = emptyList())
 
 @Serializable data class Note(val id: String, val key: String, val chapterId: String, val paragraph: Int, val quote: String, val text: String, val createdAt: Long = System.currentTimeMillis(), val bookTitle: String = "", val chapterTitle: String = "")
 
+/**
+ * 本机书库和偏好的不可变快照，由 LocalStore 统一发布与保存。
+ * positions/bookSettings 等书目映射使用 BookRef.key；syncStatus 以账号名隔离，
+ * pending 中的每项也保留所属账号。新增持久字段应提供兼容旧 JSON 的默认值。
+ * 会话令牌由 Session 单独管理，章节及文档正文通过专用存储读取。
+ */
 @Serializable data class LibraryState(
     val books: List<SavedBook> = emptyList(), val folders: List<String> = listOf("默认收藏"),
     val positions: Map<String, Position> = emptyMap(), val notes: List<Note> = emptyList(),

@@ -8,6 +8,11 @@ import kotlinx.serialization.Serializable
     val horizontalPageTurn: Boolean = false, val showPageButtons: Boolean = false, val volumeKeys: Boolean = false
 )
 
+/**
+ * 可序列化的阅读偏好，全局默认和单书覆盖使用同一结构；字段默认值兼容旧版本缺失字段。
+ * 字号使用 sp，宽度和段距使用 dp，lineHeight 是字号倍数，brightness 为负表示跟随系统。
+ * paged/monochrome 等旧字段保留用于迁移；渲染应使用 staticPagination 和 resolvedTheme。
+ */
 @Serializable data class ReaderSettings(
     val mode: String = "zh", val engines: List<String> = listOf("sakura", "gpt", "youdao"), val parallel: Boolean = false,
     val fontSize: Float = 19f, val lineHeight: Float = 1.8f, val weight: Boolean = false, val width: Float = 720f,
@@ -20,8 +25,10 @@ import kotlinx.serialization.Serializable
     val showPageButtons: Boolean = paged || paginationMode == "auto",
     val beforeEInk: ReaderPagingState? = null, val eInkPreferences: ReaderPagingState? = null,
     val toolbarTransparency: Float = .25f,
-    val prefetchChapters: Int = 3, val prefetchWifiOnly: Boolean = true
+    val prefetchChapters: Int = 3, val prefetchWifiOnly: Boolean = true,
+    val paragraphSpacing: Float = 8f
 ) {
+    val resolvedParagraphSpacing get() = if(paragraphSpacing.isFinite()) paragraphSpacing.coerceIn(0f, 32f) else 8f
     val resolvedToolbarTransparency get() = if(toolbarTransparency.isFinite()) toolbarTransparency.coerceIn(0f, 1f) else .25f
     // Compatibility with settings saved before black-and-white became a theme choice.
     val resolvedTheme get() = if(monochrome) "monochrome" else theme
@@ -37,6 +44,10 @@ import kotlinx.serialization.Serializable
     private fun withPagingState(state: ReaderPagingState) = copy(paginationMode = state.paginationMode,
         scrollPageTurn = state.scrollPageTurn, horizontalPageTurn = state.horizontalPageTurn,
         showPageButtons = state.showPageButtons, volumeKeys = state.volumeKeys)
+    /**
+     * 切换电子纸时分别记住普通模式和电子纸模式的翻页偏好，而不是每次套用固定预设。
+     * 首次开启才使用默认电子纸手势；主题等非翻页设置不在此处重置。
+     */
     fun withEInkMode(enabled: Boolean): ReaderSettings {
         if(enabled == eInkMode) return this
         return if(enabled) {

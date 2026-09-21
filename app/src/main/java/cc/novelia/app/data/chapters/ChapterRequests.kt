@@ -13,7 +13,11 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 
-/** Account/login and cache generations are part of the identity, including forced refreshes. */
+/**
+ * 章节网络请求的共享与落盘边界。身份包含 API 实例、账号/登录代次、缓存代次和书章标识，
+ * 防止不同账号或清理缓存前后的请求相互复用；强制刷新也可以共享同身份的在途请求。
+ * 读取磁盘缓存的优先级由调用方决定，本类负责真正发起网络读取。
+ */
 class ChapterRequests(private val store: LocalStore) {
     private data class Key(val api: NoveliaApi, val binding: SessionBinding, val generation: Long, val book: BookRef, val chapter: String)
     private val requests = SharedRequest<Key, Chapter>()
@@ -36,6 +40,7 @@ class ChapterRequests(private val store: LocalStore) {
             } ?: throw CancellationException("缓存已清理")
             fetched
         }
+        // 共享任务完成后，每个订阅者还需重新检查自己的取消状态和当前环境。
         currentCoroutineContext().ensureActive()
         session.ensureCurrent(binding)
         if (generation != store.cacheGeneration.value) throw CancellationException("缓存已清理")

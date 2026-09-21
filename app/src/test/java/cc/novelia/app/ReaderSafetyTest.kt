@@ -30,14 +30,17 @@ class ReaderSafetyTest {
     @Test fun scrollAndStaticOffsetsIncludeIdenticalParallelLabelsAndIndent() {
         val paragraph = ReadingParagraph(7, listOf(TextPart("甲乙", "gpt"), TextPart("日本語", "日文", true)))
         val starts = paragraphPartStarts(paragraph, ReaderSettings(parallel = true, indent = true))
-        assertEquals(listOf(4, 10), starts)
+        assertEquals(listOf(4, 9), starts)
         val scroll = ParagraphScrollLayout(mapOf(
-            0 to listOf(ReadingAnchorLine(4, 6, 20), ReadingAnchorLine(6, 8, 40)),
-            1 to listOf(ReadingAnchorLine(10, 12, 70), ReadingAnchorLine(12, 15, 90))))
-        val pages = listOf(StaticPage(listOf(PageLine(0, 4, 6, 20))), StaticPage(listOf(PageLine(0, 6, 8, 20))),
-            StaticPage(listOf(PageLine(0, 10, 12, 20))), StaticPage(listOf(PageLine(0, 12, 15, 20))))
+            0 to listOf(ReadingAnchorLine(starts[0], starts[0] + 2, 20), ReadingAnchorLine(starts[0] + 2, starts[0] + 4, 40)),
+            1 to listOf(ReadingAnchorLine(starts[1], starts[1] + 2, 70), ReadingAnchorLine(starts[1] + 2, starts[1] + 5, 90))))
+        val pages = listOf(
+            StaticPage(listOf(PageLine(0, starts[0], starts[0] + 2, 20))),
+            StaticPage(listOf(PageLine(0, starts[0] + 2, starts[0] + 4, 20))),
+            StaticPage(listOf(PageLine(0, starts[1], starts[1] + 2, 20))),
+            StaticPage(listOf(PageLine(0, starts[1] + 2, starts[1] + 5, 20))))
         val character = scroll.textOffsetAt(95)
-        assertEquals(12, character)
+        assertEquals(11, character)
         val page = pages[pageForAnchor(pages, 0, character)]
         assertEquals(90, scroll.scrollOffsetAt(page.lines.first().start))
     }

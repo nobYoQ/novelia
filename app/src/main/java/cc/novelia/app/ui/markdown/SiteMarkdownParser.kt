@@ -13,6 +13,11 @@ internal class DetailsNode(val title: String, val fenceLength: Int) : CustomBloc
 }
 internal class StrikeNode : CustomNode()
 
+/**
+ * 在 CommonMark 上注册站点扩展：评分块、可折叠 details 容器和双波浪线删除线。
+ * 通过解析器节点表达结构，避免用全局字符串替换破坏嵌套内容或代码块中的字面语法。
+ * details 的围栏长度随起始标记保存，闭合时由最内层尚未关闭的容器消费。
+ */
 internal fun configureSiteMarkdownParser(builder: Parser.Builder) {
     builder.customBlockParserFactory(object : AbstractBlockParserFactory() {
         override fun tryStart(state: ParserState, matchedBlockParser: MatchedBlockParser): BlockStart? {
@@ -80,7 +85,10 @@ private class DetailsParser(private val node: DetailsNode) : AbstractBlockParser
     }
 }
 
-/** AST transforms keep fenced/inline code, reference definitions and linked images intact. */
+/**
+ * 在语法树上补齐裸链接并兼容站点旧折叠包装，不改写代码、引用定义和已有链接图片。
+ * 遍历期间节点可能被移除或替换，需保存并验证 next 的父节点，避免漏处理或越过当前子树。
+ */
 internal fun prepareSiteMarkdown(root: Node) {
     fun visit(parent: Node) {
         if (parent is Link || parent is Image) return

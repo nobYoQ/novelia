@@ -18,6 +18,7 @@ import cc.novelia.app.data.model.LocalChapter
 import cc.novelia.app.data.model.LocalDocument
 import cc.novelia.app.data.model.Position
 import cc.novelia.app.data.model.SavedBook
+import cc.novelia.app.data.model.withKnownUpdateTime
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -28,7 +29,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 
-/** Small user state is atomically persisted; chapter/document payloads live in separate files. */
+/**
+ * 本地书库的状态入口：内存中发布不可变 [LibraryState]，磁盘中原子保存小型状态快照。
+ * 章节、文档及文章/草稿正文分开存储，避免每次阅读进度变化都重写整本书。
+ *
+ * 修改状态应调用 [update]，需要等待保存完成的边界调用 [flush]。同步文件方法可能执行
+ * 磁盘 IO，调用方应安排在后台线程。主状态损坏时进入保护模式，只有显式恢复可以解除。
+ */
 class LocalStore(val context: Context) {
     private val stateFile = AtomicFile(File(context.filesDir, "library.json"))
     private val lastGoodFile = File(context.filesDir, "library-last-good.json")
@@ -82,7 +89,11 @@ class LocalStore(val context: Context) {
     val cacheGeneration = mutableCacheGeneration.asStateFlow()
     val chapterRequests = ChapterRequests(this)
 
-    /** State changes are immediate; JSON encoding and atomic writes run on a single IO writer. */
+    /**
+     * 在同一把锁内读取、变换并发布状态，防止并发操作基于旧快照覆盖彼此。
+     * [transform] 应只计算新状态；编码和文件写入由单写入器异步处理。
+     * 相同状态不触发写入，恢复保护期间直接忽略修改，界面可通过 [recoveryIssue] 提示用户。
+     */
     @Synchronized fun update(transform: (LibraryState) -> LibraryState) {
         // Callers include UI callbacks and reader disposal; keep the protected state read-only
         // instead of throwing from those callbacks. A persistent recovery banner explains this.
@@ -102,7 +113,11 @@ class LocalStore(val context: Context) {
         runCatching { atomicText(lastGoodFile, text); if (!preserveTextHistory) stateCodec.compact() }
     }
 
-    /** Only this explicit recovery boundary may replace a protected, unreadable library. */
+    /**
+     * 恢复操作的提交边界：排空旧写入、保存损坏文件副本，再写盘并发布恢复后的状态。
+     * NonCancellable 使提交阶段不会因离开页面而中断；调用前应完成耗时的解析和校验。
+     * 磁盘锁先于状态锁获取，且递增 revision，使提交前排队的旧快照不能覆盖恢复结果。
+     */
     internal suspend fun commitRestore(transform: (LibraryState) -> LibraryState) = withContext(Dispatchers.IO + NonCancellable) {
         persistence.flush()
         synchronized(diskLock) {
@@ -130,12 +145,15 @@ class LocalStore(val context: Context) {
     suspend fun flush() = withContext(Dispatchers.IO) { persistence.flush() }
 
     fun saveBook(book: BookCard, folder: String = "默认收藏") = update { current ->
-        current.copy(books = current.books.filterNot { it.book.ref == book.ref } + (current.books.find { it.book.ref == book.ref }?.copy(book = book, folder = folder) ?: SavedBook(book, folder)))
+        val previous = current.books.find { it.book.ref == book.ref }
+        val merged = book.withKnownUpdateTime(previous?.book)
+        current.copy(books = current.books.filterNot { it.book.ref == book.ref } + (previous?.copy(book = merged, folder = folder) ?: SavedBook(merged, folder)))
     }
     fun removeBook(ref: BookRef) = update { it.withoutBook(ref) }
     fun rememberSearch(query: String) { if (query.isNotBlank()) update { it.copy(recentSearches = (listOf(query) + it.recentSearches.filterNot { old -> old == query }).take(20)) } }
     fun savePosition(ref: BookRef, position: Position) = update { if (it.historyPaused) it else it.copy(positions = it.positions + (ref.key to position)) }
     fun chapterFile(ref: BookRef, chapter: String) = File(cacheDir, hashName("${ref.key}/$chapter") + ".json")
+    /** 优先复用已解码章节；缺失或损坏的磁盘缓存按未命中处理，交由上层决定联网或提示。 */
     fun cachedChapter(ref: BookRef, chapter: String): Chapter? = synchronized(chapterLock) {
         val file = chapterFile(ref, chapter)
         chapterMemory[file.name]?.let { chapterIndex.accessed(file); return@synchronized it }
@@ -151,6 +169,11 @@ class LocalStore(val context: Context) {
         chapterIndex.written(file).forEach(chapterMemory::remove)
     }
 
+    /**
+     * 将导入文档拆为图片文件、章节正文和轻量目录，并更新源文件哈希索引。
+     * 保存文档本身不等于加入书架；调用方还需提交对应书目状态。
+     * [checkCancelled] 让大文档写入能在分段处理时响应取消。
+     */
     fun saveDocument(document: LocalDocument, checkCancelled: () -> Unit = {}) = synchronized(documentLock) {
         check(recoveryIssue.value == null) { "本地资料已保护，请先前往资料备份与恢复" }
         val id = safeId(document.id)
@@ -197,6 +220,7 @@ class LocalStore(val context: Context) {
         chapterIndex.size() + metadataCache.size()
     }
 
+    /** 清除可重新获取的网络缓存，并取消旧代次请求；已导入的本地文档独立保存。 */
     fun clearCache() = synchronized(chapterLock) {
         chapterMemory.clear()
         cacheDir.listFiles()?.toList().orEmpty()
@@ -208,6 +232,7 @@ class LocalStore(val context: Context) {
         chapterRequests.invalidateBefore(mutableCacheGeneration.value)
     }
 
+    /** 在清理缓存所用的同一把锁内检查代次并写入，避免清理前的慢响应重新填回缓存。 */
     fun <T> withCacheGeneration(generation: Long, block: () -> T): T? = synchronized(chapterLock) {
         if (generation == mutableCacheGeneration.value) block() else null
     }

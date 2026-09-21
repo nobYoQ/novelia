@@ -9,6 +9,18 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ReaderPreferencesTest {
+    @Test fun paragraphSpacingMigratesAndPersistsInBackupsAndPerBookPreferences() {
+        assertEquals(8f, appJson.decodeFromString<ReaderSettings>("{}").paragraphSpacing, 0f)
+        val settings = ReaderSettings(paragraphSpacing = 0f)
+        val library = LibraryState(reader = settings, bookSettings = mapOf("local/book" to settings.copy(paragraphSpacing = 16f)))
+        assertEquals(library, appJson.decodeFromString<LibraryState>(appJson.encodeToString(library)))
+        val backup = SettingsBackup(reader = settings)
+        assertEquals(backup, appJson.decodeFromString<SettingsBackup>(appJson.encodeToString(backup)))
+        assertEquals(0f, settings.withEInkMode(true).withEInkMode(false).paragraphSpacing, 0f)
+        assertEquals(0f, ReaderSettings(paragraphSpacing = -1f).resolvedParagraphSpacing, 0f)
+        assertEquals(32f, ReaderSettings(paragraphSpacing = 50f).resolvedParagraphSpacing, 0f)
+    }
+
     @Test fun toolbarTransparencyMigratesAndPersistsAcrossModesBooksAndBackups() {
         assertEquals(.25f, appJson.decodeFromString<ReaderSettings>("{}").toolbarTransparency, 0f)
         for (transparency in listOf(0f, .25f, .6f, 1f)) {

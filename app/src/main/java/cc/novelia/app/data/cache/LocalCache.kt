@@ -2,7 +2,11 @@ package cc.novelia.app.data.cache
 
 import java.io.File
 
-/** Both weight and entry count are bounded, including when a single item is unusually large. */
+/**
+ * 同时限制条目数和估算内存占用的 LRU 缓存，LinkedHashMap 的访问顺序决定淘汰顺序。
+ * weigh 由领域对象提供近似权重；单个对象超过总预算时不缓存，避免大章节挤爆内存。
+ * 替换同键对象时先扣除旧权重，即使新对象被拒绝也不会残留错误的容量统计。
+ */
 internal class WeightedMemoryCache<K, V>(
     private val maxEntries: Int,
     private val maxWeight: Long,
@@ -33,7 +37,11 @@ internal class WeightedMemoryCache<K, V>(
     @Synchronized fun clear() { entries.clear(); weight = 0 }
 }
 
-/** Builds the disk index once, then maintains size and access order incrementally. */
+/**
+ * 章节磁盘缓存的增量索引，首次使用扫描目录，之后按写入和访问维护容量及 LRU 顺序。
+ * 文件修改时间在此表示最近访问，与 MetadataCache 的响应获取时间语义不同。
+ * accessed 对磁盘时间戳更新限频，但内存访问顺序每次命中都会更新。
+ */
 internal class ChapterCacheIndex(private val directory: File, private val maxBytes: Long) {
     private data class Entry(val file: File, val bytes: Long, var touchedAt: Long)
     private val entries = LinkedHashMap<String, Entry>(16, .75f, true)

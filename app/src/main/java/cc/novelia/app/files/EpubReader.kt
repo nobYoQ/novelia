@@ -15,7 +15,12 @@ import org.jsoup.select.NodeVisitor
 
 internal data class EpubContents(val chapters: List<LocalChapter>, val cover: String?)
 
-/** Random access keeps only the current XHTML in memory. Illustration bytes go to the sink. */
+/**
+ * 按 EPUB OPF 的 spine 顺序读取正文；ZIP 随机访问使内存中只需保留当前 XHTML 的解析树。
+ * 首先校验条目路径、数量和声明总大小，再在读取时校验实际字节，限制异常压缩包的开销。
+ * 图片按哈希交给 imageSink 流式保存，正文只保留 novelia-image 标记；不会请求远程资源。
+ * DOM 以块级元素和换行切段，删除脚本、样式、导航及注音节点，保留正文中的插图顺序。
+ */
 internal fun readEpubFile(
     file: File,
     imageSink: ((String, InputStream) -> Unit)?,

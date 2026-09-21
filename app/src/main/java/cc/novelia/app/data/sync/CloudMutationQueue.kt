@@ -10,7 +10,11 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/** Shared by the application API, so activity recreation cannot introduce another writer. */
+/**
+ * 前台操作和后台重放共用的云端写入协调器，由应用级 API 持有，Activity 重建不会另开写入器。
+ * 按“账号 + 资源”加锁，同一书目的收藏、移动和取消依次执行，不同资源可以独立推进。
+ * 持久队列由调用方读写，本类只维护资源锁和运行中标记，不自行访问磁盘。
+ */
 class CloudMutationQueue {
     private val running = MutableStateFlow<Map<String, PendingAction>>(emptyMap())
     /** Runtime-only: a stopped process must never restore a stale syncing indicator. */
@@ -30,7 +34,12 @@ class CloudMutationQueue {
         finally { synchronized(resources) { if (--entry.users == 0) resources.remove(key) } }
     }
 
-    /** Returns true only for a recoverable offline failure. Older writes are superseded atomically. */
+    /**
+     * 先记录最新意图再发送；相同资源的旧意图被替换，取消或断网后仍可重放最新状态。
+     * 只有 PUT/DELETE 进入持久队列，调用方仍须确保具体接口具有可重复执行的语义。
+     * 返回 true 表示发生可重试失败且意图已保留，false 表示发送成功；权限等错误直接抛出。
+     * updatePending 只要求原子修改本地状态，此方法不等待每次修改落盘。
+     */
     suspend fun submit(action: PendingAction, updatePending: ((List<PendingAction>) -> List<PendingAction>) -> Unit,
         validate: () -> Unit = {}, onQueuedFailure: (IOException) -> Unit = {}, execute: suspend (PendingAction) -> Unit): Boolean = ordered(action) {
         validate()
@@ -62,7 +71,11 @@ class CloudMutationQueue {
         }
     }
 
-    /** A rejected resource must not prevent independent favorites/history from synchronizing. */
+    /**
+     * 每轮最多处理 100 项，跳过需要手动处理的操作。单个资源被拒绝不妨碍其他资源，
+     * 但断网、限流或认证失效会结束本轮，避免持续请求。成功项按操作 ID 删除，
+     * 取得资源锁后再次检查队列，防止重放已被前台新操作替换的旧意图。
+     */
     suspend fun replayEligible(account: String, readPending: () -> List<PendingAction>,
         updatePending: ((List<PendingAction>) -> List<PendingAction>) -> Unit,
         blockedActions: Set<String> = emptySet(), execute: suspend (PendingAction) -> Unit): CloudReplayResult {

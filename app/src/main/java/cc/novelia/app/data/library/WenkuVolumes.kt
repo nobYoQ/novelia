@@ -4,7 +4,10 @@ import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.SavedBook
 
-/** Mounts only local reading copies beneath an existing Wenku favorite. */
+/**
+ * 用给定集合替换某个文库条目的挂载分卷，只有已导入的本地书目可作为子卷。
+ * 新挂载及脱离的分卷继承父条目文件夹，随后清理失效排序键；操作只改变书架关系，不改正文文件。
+ */
 fun LibraryState.withWenkuVolumes(parentKey: String, volumeKeys: Set<String>): LibraryState {
     val parent = books.firstOrNull { it.book.ref.key == parentKey && it.book.ref.isWenku }
     require(parent != null) { "请先收藏目标文库小说" }
@@ -64,7 +67,11 @@ private fun orderedVolumes(parent: SavedBook, volumes: List<SavedBook>): List<Sa
 
 data class ShelfGroup(val saved: SavedBook, val volumes: List<SavedBook> = emptyList())
 
-/** Search retains the parent context; mounted volumes follow their parent's folder. */
+/**
+ * 构造书架显示分组：普通书架将分卷放在文库父项下，本地视图则平铺本地书。
+ * 搜索命中子卷时保留父项作为上下文，父项命中时保留全部子卷；文件夹按有效父项判断。
+ * 最近阅读排序取当前分组中父项和子卷的最新时间，置顶优先于其他排序条件。
+ */
 fun LibraryState.shelfGroups(localOnly: Boolean, folder: String, query: String, sort: Int): List<ShelfGroup> {
     val parents = books.filter { it.book.ref.isWenku }.associateBy { it.book.ref.key }
     fun parentOf(saved: SavedBook) = if(saved.book.ref.isLocal) parents[saved.parentWenkuKey] else null

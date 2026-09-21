@@ -1,6 +1,11 @@
 package cc.novelia.app.data.catalog
 
 
+/**
+ * 将辅助搜索表单转成原站查询表达式，而不是在客户端执行搜索。
+ * 普通词和短语需转义查询运算符，标签使用站点约定的尾随美元符号，数量条件使用比较前缀。
+ * 原站先按空格预处理再解析查询，因此美元符号、引号和空格的处理顺序必须保留。
+ */
 object SearchExpression {
     private fun escape(value: String) = value.replace(Regex("[+|\\-\"()*~:<>\\\\]")) { "\\${it.value}" }
     // The site's space-split preprocessing runs before the Lucene simple-query parser.
@@ -24,7 +29,7 @@ object SearchExpression {
     fun tagsIn(expression: String): List<String> = expression.split(' ').filter { it.endsWith('$') }
         .map { it.removePrefix("-").removeSuffix("$") }.filter(KeywordCatalog::canSearch).distinct()
 
-    /** Do not parse or rewrite a manually composed expression when adding assisted conditions. */
+    /** 追加辅助条件时保留手写表达式原貌，只去除已存在的同向标签；不尝试重写完整查询语法。 */
     fun append(existing: String, generated: String): String {
         val present = existing.split(' ').filter { it.endsWith('$') }.toSet()
         val additional = generated.split(' ').filterNot { it.endsWith('$') && it in present }.joinToString(" ").trim()

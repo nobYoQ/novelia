@@ -109,9 +109,9 @@ import kotlinx.coroutines.delay
                                 }
                                 if(local.savedSearches.isNotEmpty()) item(key = "saved-searches", contentType = "searches") { SectionTitle("保存的搜索"); Row(Modifier.appHorizontalScroll(rememberScrollState()).padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { local.savedSearches.forEach { value -> InputChip(true, onClick = { query = value; search() }, label = { Text(value.take(20)) }, trailingIcon = { IconButton(onClick = { c.store.update { it.copy(savedSearches = it.savedSearches - value) } }, modifier = Modifier.size(48.dp)) { Icon(Icons.Outlined.Close, "删除搜索", Modifier.size(16.dp)) } }) } } }
                                 item(key = "web-heading", contentType = "heading") { SectionTitle("热门网络小说", "更多") { category = 1; sort = 1 } }
-                                items(visibleWeb, key = { "web-${it.ref.key}" }, contentType = { "book" }) { BookRow(it, { c.book(it.ref) }, if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(AppMotion.Quick), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit))) }
+                                items(visibleWeb, key = { "web-${it.ref.key}" }, contentType = { "book" }) { BookRow(it, { c.book(it.ref) }, if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(AppMotion.Quick), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit)), showReadingProgress = false) }
                                 item(key = "wenku-heading", contentType = "heading") { SectionTitle("文库新近更新", "更多") { category = 2 } }
-                                items(visibleWenku, key = { "wenku-${it.ref.key}" }, contentType = { "book" }) { BookRow(it, { c.book(it.ref) }, if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(AppMotion.Quick), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit))) }
+                                items(visibleWenku, key = { "wenku-${it.ref.key}" }, contentType = { "book" }) { BookRow(it, { c.book(it.ref) }, if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(AppMotion.Quick), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit)), showReadingProgress = false) }
                                 item(key = "refresh", contentType = "controls") { TextButton(onClick = refresh, Modifier.fillMaxWidth()) { Text("刷新推荐") } }
                             }
                         }
@@ -155,7 +155,7 @@ import kotlinx.coroutines.delay
                                         { if(filterSummary.isNotEmpty()) resetFilters() else if(submitted.isNotBlank()) { query = ""; submitted = ""; page = 0 } else refresh() }, sticker = MidoriSticker.Curious)
                                     if(local.blockedBooks.isNotEmpty() || local.blockedTags.isNotEmpty()) TextButton(onClick = { c.go("blocked") }, Modifier.fillMaxWidth()) { Text("检查屏蔽条件") }
                                 }
-                                items(books, key = { it.ref.key }, contentType = { "book" }) { BookRow(it, { c.book(it.ref) }, if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(AppMotion.Quick), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit))) }
+                                items(books, key = { it.ref.key }, contentType = { "book" }) { BookRow(it, { c.book(it.ref) }, if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(AppMotion.Quick), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit)), showReadingProgress = false) }
                                 item { PageControls(page, result.pageNumber) { page = it } }
                             }
                         }

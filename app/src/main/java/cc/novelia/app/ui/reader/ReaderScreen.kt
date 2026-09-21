@@ -75,6 +75,9 @@ import cc.novelia.app.data.model.Chapter
 import cc.novelia.app.data.model.Note
 import cc.novelia.app.data.model.Position
 import cc.novelia.app.data.model.ReaderSettings
+import cc.novelia.app.data.model.WebDetail
+import cc.novelia.app.data.storage.appJson
+import cc.novelia.app.data.storage.hashName
 import cc.novelia.app.reader.*
 import cc.novelia.app.ui.components.AppAlertDialog
 import cc.novelia.app.ui.components.AppScrollColumn
@@ -107,6 +110,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/**
+ * 阅读器入口：单书偏好优先于全局偏好，再把电子纸/减少动效约束传递到整棵阅读界面。
+ * ReaderContent 负责加载和位置生命周期；正文投影、静态分页与搜索算法位于 reader 包。
+ */
 @Composable fun ReaderScreen(c: AppController, ref: BookRef, chapterId: String) {
     val local by c.store.state.collectAsStateWithLifecycle()
     val settings = local.bookSettings[ref.key] ?: local.reader
@@ -159,6 +166,24 @@ import kotlinx.coroutines.withContext
     }
     BackHandler(preferences || (toc && !wide) || search || bookSearch) { preferences = false; toc = false; search = false; bookSearch = false }
     AsyncContent(listOf(ref, chapterId), load = { c.chapter(ref, chapterId, version > 0) }, refreshKey = version) { (chapter, cached), _ ->
+        var chapterProgress by remember(ref, chapterId) { mutableStateOf<Pair<Int, Int>?>(null) }
+        LaunchedEffect(ref, chapterId) {
+            chapterProgress = withContext(Dispatchers.IO) {
+                try {
+                    val ids = if(ref.isLocal) c.store.documentIndex(ref.id).chapters.map { it.id }
+                    else {
+                        // Reading progress must not start an extra request or block chapter loading.
+                        val account = c.session.capture().account ?: "guest"
+                        c.metadataCache.read(hashName("$account:novel/${ref.key}"))
+                            ?.let { appJson.decodeFromString<WebDetail>(it).toc.mapNotNull { item -> item.chapterId } }
+                    }
+                    ids?.let { chapters -> chapters.indexOf(chapterId).takeIf { it >= 0 }?.let { it to chapters.size } }
+                } catch(e: CancellationException) { throw e }
+                catch(_: Exception) { null }
+            }
+        }
+        // 只有内容和语言选择会改变投影；字号、段距等变化只触发后续重新排版。
+        // 在计算线程完成繁体转换，避免滚动重组重复处理整章文本。
         var prepared by remember(ref, chapterId, chapter) { mutableStateOf<List<ReadingParagraph>?>(null) }
         LaunchedEffect(chapter, settings.mode, settings.engines, settings.parallel, settings.traditional) {
             prepared = withContext(Dispatchers.Default) {
@@ -225,7 +250,7 @@ import kotlinx.coroutines.withContext
         val chapterPullOffset = if(chapterPull.active || reducedMotion) chapterPull.offset else chapterPullReturn.value
         val eInk = remember { EInkPageState(position) }
         var readerViewportWidth by remember { mutableIntStateOf(0) }
-        val layoutGeneration = remember(paragraphs, settings.fontSize, settings.lineHeight, settings.width, settings.indent, settings.parallel, settings.weight, settings.staticPagination, readerViewportWidth) { Any() }
+        val layoutGeneration = remember(paragraphs, settings.fontSize, settings.lineHeight, settings.paragraphSpacing, settings.width, settings.indent, settings.parallel, settings.weight, settings.staticPagination, readerViewportWidth) { Any() }
         val scrollLayouts = remember(layoutGeneration) { mutableStateMapOf<Int, ParagraphScrollLayout>() }
         var previousPagination by remember { mutableStateOf(settings.staticPagination) }
         var restoringAnchor by remember { mutableStateOf(false) }
@@ -273,16 +298,23 @@ import kotlinx.coroutines.withContext
         val safeTop = readingInsets.getTop(density)
         val volumeKeysActive = !preferences && !search && (!toc || wide) && !speechSheet && !bookSearch && !nextVolumePrompt && selected == null && note == null
         LaunchedEffect(volumeKeysActive) { if(volumeKeysActive) runCatching { focus.requestFocus() } }
+        // 恢复定位或重新分页期间的中间画面不能覆盖真实进度。两种模式统一保存正文下标 + 1，
+        // 因为滚动列表的第 0 项是章标题；字符偏移支持重排，像素偏移用于恢复原滚动布局。
         fun savePosition() {
             if(leaving || restoringAnchor || previousPagination != settings.staticPagination || (if(settings.staticPagination) !eInk.ready else scroll.layoutInfo.totalItemsCount == 0) || c.store.state.value.historyPaused) return
-            val next = if(settings.staticPagination) Position(chapterId, eInk.paragraph + 1, 0, chapter.title, textOffset = eInk.textOffset)
+            val visible = if(settings.staticPagination) Position(chapterId, eInk.paragraph + 1, 0, chapter.title, textOffset = eInk.textOffset)
                 else {
                     val paragraph = paragraphs.getOrNull(scroll.firstVisibleItemIndex - 1)
                     val textOffset = scrollTextOffset(paragraph?.index)
                     Position(chapterId, scroll.firstVisibleItemIndex, scroll.firstVisibleItemScrollOffset, chapter.title, textOffset = textOffset)
                 }
+            val saved = local.positions[ref.key]?.takeIf { it.chapterId == chapterId }
+            val next = visible.copy(chapterIndex = chapterProgress?.first ?: saved?.chapterIndex,
+                chapterCount = chapterProgress?.second ?: saved?.chapterCount,
+                paragraphCount = paragraphs.size)
             val previous = lastSavedPosition
-            if(previous == null || previous.chapterId != next.chapterId || previous.index != next.index || previous.offset != next.offset || previous.textOffset != next.textOffset || previous.title != next.title) {
+            if(previous == null || previous.chapterId != next.chapterId || previous.index != next.index || previous.offset != next.offset || previous.textOffset != next.textOffset || previous.title != next.title ||
+                previous.chapterIndex != next.chapterIndex || previous.chapterCount != next.chapterCount || previous.paragraphCount != next.paragraphCount) {
                 c.store.savePosition(ref, next)
                 lastSavedPosition = next
             }
@@ -405,6 +437,7 @@ import kotlinx.coroutines.withContext
         // Local callable references compare by declaration, so rememberUpdatedState can
         // retain a reference whose captured settings belong to the previous reading mode.
         val latestSavePosition by rememberUpdatedState<() -> Unit>({ savePosition() })
+        LaunchedEffect(chapterProgress) { if(chapterProgress != null) latestSavePosition() }
         DisposableEffect(lifecycleOwner, ref, chapterId) {
             val observer = LifecycleEventObserver { _, event -> if(event == Lifecycle.Event.ON_STOP) latestSavePosition() }
             lifecycleOwner.lifecycle.addObserver(observer)
@@ -427,6 +460,8 @@ import kotlinx.coroutines.withContext
                 Triple(index, scrollTextOffset(source), source)
             }.collect { if(!restoringAnchor) scrollAnchor = it }
         }
+        // 模式切换使用字符锚点衔接，语言过滤变化时先按原始段落编号重新找投影下标。
+        // LazyColumn 需要先挂载目标项、等待文字测量，再转换字符位置为可滚动的像素位置。
         LaunchedEffect(settings.staticPagination, layoutGeneration) {
             val changed = previousPagination != settings.staticPagination
             restoringAnchor = true
@@ -469,6 +504,7 @@ import kotlinx.coroutines.withContext
                 arrivalApplied = true
             }
         }
+        // 云端历史只记录章节，精确段落/字符位置仍保存在本机；同步失败不阻断当前阅读。
         LaunchedEffect(chapterId) {
             if(c.session.profile.value != null && !ref.isLocal && !local.historyPaused) {
                 try { c.cloudMutation("PUT", "user/read-history/${ref.key}", chapterId, "text/plain") }
@@ -514,7 +550,7 @@ import kotlinx.coroutines.withContext
                     chapter.nextId?.let { openChapter(it) }
                 }
                 .graphicsLayer { translationY = -chapterPullOffset }
-                , contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                , contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(settings.resolvedParagraphSpacing.dp)) {
                 item("title", contentType = "title") {
                     Column(Modifier.fillMaxWidth().clickable(onClickLabel = "显示或收起阅读工具栏") { menu = !menu }) {
                         Text(chapter.title, Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium, color = foreground)
@@ -721,11 +757,11 @@ import kotlinx.coroutines.withContext
     content: @Composable androidx.compose.animation.AnimatedVisibilityScope.() -> Unit
 ) { AnimatedVisibility(visible, modifier, enter, exit, content = content) }
 
-@Composable private fun ReaderTextParagraph(paragraph: ReadingParagraph, settings: ReaderSettings, layoutGeneration: Any, foreground: Color, onToggleMenu: () -> Unit, onSelect: () -> Unit, activeMatch: ReadingTextMatch?,
+@Composable internal fun ReaderTextParagraph(paragraph: ReadingParagraph, settings: ReaderSettings, layoutGeneration: Any, foreground: Color, onToggleMenu: () -> Unit, onSelect: () -> Unit, activeMatch: ReadingTextMatch?,
     onLayout: (Int, List<ReadingAnchorLine>) -> Unit) {
     val starts = remember(paragraph, settings.indent, settings.parallel) { paragraphPartStarts(paragraph, settings) }
     val latestLayout by rememberUpdatedState(onLayout)
-    Column(Modifier.fillMaxWidth().heightIn(min = 48.dp).combinedClickable(
+    Column(Modifier.fillMaxWidth().combinedClickable(
         onClickLabel = "显示或收起阅读工具栏", onClick = onToggleMenu,
         onLongClickLabel = "选择段落、分享或添加笔记", onLongClick = onSelect
     ), verticalArrangement = Arrangement.spacedBy(8.dp)) {

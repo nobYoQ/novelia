@@ -34,7 +34,11 @@ data class BackupPreview(
     val bytes: Long, val originalsIncluded: Boolean
 )
 
-/** Streamed, allow-listed archive parsing. No input path is ever accepted as an arbitrary target. */
+/**
+ * 备份格式的流式读写和验证边界，只接受清单、文档和图片的白名单路径。
+ * 限制单文件、总解压字节和条目数，并校验 SHA-256、引用关系和业务字段；
+ * ZIP 元数据不能替代实际读取计数，归档路径也不能直接成为任意文件写入目标。
+ */
 internal object LibraryBackupArchive {
     const val MANIFEST = "manifest.json"
     const val MAX_ENTRY_BYTES = 128L * 1024 * 1024
@@ -94,6 +98,10 @@ internal object LibraryBackupArchive {
         return validate(staging, names - MANIFEST, checkCancelled)
     }
 
+    /**
+     * 验证“清单列出的资源”和“正文实际引用的资源”完全一致，再允许恢复层使用。
+     * extracted 在首次解包时额外比对 ZIP 条目集合；恢复前再次调用可检查暂存内容是否损坏。
+     */
     fun validate(staging: File, extracted: Set<String>? = null, checkCancelled: () -> Unit = {}): LibraryBackupManifest {
         val manifestFile = File(staging, MANIFEST)
         require(manifestFile.length() <= MAX_MANIFEST_BYTES) { "备份索引过大" }
@@ -171,7 +179,11 @@ internal fun localDocumentIds(state: LibraryState): Set<String> = (
 
 internal fun LibraryState.forBackup(): LibraryState = copy(pending = emptyList(), downloads = emptyList(), syncStatus = emptyMap())
 
-/** Existing user choices win; newer progress wins. A fresh installation also inherits global preferences. */
+/**
+ * 合并而非覆盖：已有书目、偏好和草稿优先，阅读进度按 updatedAt 取较新值，笔记按 ID 去重。
+ * 没有书目、进度和笔记的空书库还会继承备份全局偏好；运行中的下载、同步队列及状态
+ * 始终沿用当前安装的数据，备份不能重新发起另一设备的后台操作。
+ */
 internal fun mergeLibraryBackup(current: LibraryState, imported: LibraryState): LibraryState {
     val base = if (current.books.isEmpty() && current.positions.isEmpty() && current.notes.isEmpty()) imported.forBackup() else current
     val books = current.books + imported.books.filter { item -> current.books.none { it.book.ref == item.book.ref } }

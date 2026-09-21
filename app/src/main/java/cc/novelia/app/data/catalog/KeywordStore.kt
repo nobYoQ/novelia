@@ -15,7 +15,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 
-/** Browser-derived vocabulary only; it never starts a network request. */
+/**
+ * 保存用户已浏览内容中的标签及其本地翻译，不主动请求全站标签库。
+ * 内存状态即时发布，合并/排序在状态锁外完成，磁盘写入由独立写锁串行化并合并短时间更新。
+ * 原文件损坏时先使用常用标签，后续写入前保留损坏副本，避免无声覆盖用户词典。
+ */
 class KeywordStore(context: Context) {
     companion object { const val FILE_NAME = "keyword-catalog.json" }
     private val file = File(context.filesDir, FILE_NAME)
@@ -98,6 +102,8 @@ class KeywordStore(context: Context) {
         }
     }
 
+    // 乐观变换：锁外计算后比较版本，若其间有编辑则基于新快照重算，避免覆盖并发修改。
+    // transform 可能执行多次，必须保持为无外部副作用的列表变换。
     private fun change(transform: (List<KeywordEntry>) -> List<KeywordEntry>) {
         while(true) {
             val snapshot = synchronized(lock) { Snapshot(revision, mutable.value) }

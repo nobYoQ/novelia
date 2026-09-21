@@ -21,7 +21,11 @@ import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.theme.LocalEInkMode
 import cc.novelia.app.ui.theme.appReducedMotion
 
-/** Original-site pages without a native screen remain inside the app. No JavaScript bridge. */
+/**
+ * 没有原生页面的站内内容使用 WebView 展示，站外链接交给浏览器，已支持的页面转原生导航。
+ * 启用原站所需 JavaScript，但不暴露原生 JS 桥，关闭文件/内容 URI 访问和混合内容。
+ * 返回操作先消费 WebView 历史，包括 SPA 路由；组件销毁时停止加载并释放 WebView。
+ */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable internal fun SiteWebScreen(c: AppController, destination: String) {
     val context = LocalContext.current

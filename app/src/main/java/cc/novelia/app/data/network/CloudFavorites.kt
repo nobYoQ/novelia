@@ -28,6 +28,7 @@ suspend fun NoveliaApi.cloudFavorites(
     sort: String = "update",
     filter: CloudWebFilter = CloudWebFilter(),
 ): Page<BookCard> {
+    val binding = session?.capture()
     val params = buildMap {
         put("page", "$page")
         put("pageSize", "20")
@@ -43,5 +44,8 @@ suspend fun NoveliaApi.cloudFavorites(
     return if (wenku) get<Page<WenkuOutline>>("user/favored-wenku/${encodeSegment(folderId)}", params)
         .let { Page(it.pageNumber, it.items.map(WenkuOutline::card)) }
     else get<Page<WebOutline>>("user/favored-web/${encodeSegment(folderId)}", params)
-        .let { Page(it.pageNumber, it.items.map(WebOutline::card)) }
+        .let { result ->
+            binding?.let { session?.ensureCurrent(it) }
+            Page(result.pageNumber, result.items.map { it.card(binding?.account) })
+        }
 }

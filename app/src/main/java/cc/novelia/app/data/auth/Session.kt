@@ -26,6 +26,11 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
+/**
+ * 管理原站登录会话：使用认证站 Cookie 刷新访问令牌，令牌经 Android Keystore 的
+ * AES-GCM 密钥加密后保存。普通书库、设置备份不负责保存这些认证资料。
+ * 内存状态的并发规则交给 SessionState，refreshLock 合并并发的续期尝试。
+ */
 class Session(context: Context) : AuthenticationSession {
     private val preferences = context.getSharedPreferences("session", Context.MODE_PRIVATE)
     private val key: SecretKey by lazy {
@@ -43,6 +48,7 @@ class Session(context: Context) : AuthenticationSession {
     val profile = state.profile
     private val refreshLock = Mutex()
     private val client = OkHttpClient.Builder().followRedirects(false).build()
+    // JWT 载荷只提供界面所需的账号、角色和时间信息；解码本身不验证签名，权限由服务端执行。
     private fun parse(value: String): Profile {
         val payload = appJson.parseToJsonElement(Base64.decode(value.split('.')[1], Base64.URL_SAFE or Base64.NO_WRAP).toString(Charsets.UTF_8)).jsonObject
         return Profile(payload.getValue("sub").jsonPrimitive.content, payload.getValue("role").jsonPrimitive.content, payload.getValue("crat").jsonPrimitive.long, payload.getValue("exp").jsonPrimitive.long)
@@ -51,6 +57,7 @@ class Session(context: Context) : AuthenticationSession {
     override fun tokenFor(binding: SessionBinding): String? = state.tokenFor(binding)
     override suspend fun refreshIfCurrent(binding: SessionBinding, previousToken: String?): Boolean = refreshLock.withLock {
         val current = tokenFor(binding)
+        // 等锁期间另一请求可能已刷新成功；复用新令牌，避免重复刷新同一个过期会话。
         if (current != previousToken) return@withLock current != null
         refreshRequest(binding, allowAccountChange = false)
     }
@@ -78,6 +85,7 @@ class Session(context: Context) : AuthenticationSession {
             }
         }
     }
+    /** 显式登录页面完成认证后调用；与后台 401 续期不同，此入口允许接受 Cookie 对应的新账号。 */
     suspend fun refresh(): Boolean {
         val binding = capture()
         val previousToken = tokenFor(binding)

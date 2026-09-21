@@ -9,6 +9,23 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ReaderProjectionTest {
+    @Test fun bilingualOrderChangesKeepJapaneseSecondaryAndChinesePrimary() {
+        val chapter = Chapter(paragraphs = listOf("日本語", "未翻訳"), sakuraParagraphs = listOf("中文"), gptParagraphs = listOf("另一译文"))
+        for(parallel in listOf(false, true)) {
+            val chineseFirst = projectParagraphs(chapter, ReaderSettings(mode = "zh-jp", parallel = parallel))
+            val japaneseFirst = projectParagraphs(chapter, ReaderSettings(mode = "jp-zh", parallel = parallel))
+            assertEquals("日文", japaneseFirst.first().parts.first().source)
+            assertEquals("日文", chineseFirst.first().parts.last().source)
+            for(paragraphs in listOf(chineseFirst, japaneseFirst)) {
+                assertEquals(listOf(0, 1), paragraphs.map { it.index })
+                assertTrue(paragraphs.first().parts.single { it.source == "日文" }.secondary)
+                assertTrue(paragraphs.first().parts.filter { it.source != "日文" }.none { it.secondary })
+                assertFalse(paragraphs.last().parts.single().secondary)
+                assertEquals("未翻訳", paragraphs.last().parts.single().text)
+            }
+        }
+    }
+
     @Test fun searchAdvancesThroughProjectedOffsetsWhenBlankSourceParagraphsWereRemoved() {
         val paragraphs = projectParagraphs(
             Chapter(paragraphs = listOf("", "目标一", "", "目标二", "", "目标三")),

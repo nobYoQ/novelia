@@ -4,7 +4,11 @@ import java.io.File
 import java.io.OutputStream
 import java.util.UUID
 
-/** The document picker retains only an ID; its payload survives activity/process recreation on disk. */
+/**
+ * 系统文件选择器打开期间，将待导出字节保留在磁盘，界面只保存可恢复的 UUID。
+ * 这样 Activity 或进程重建后仍能完成导出，也不会把大文件塞进 Bundle。
+ * finish 无论成功、失败或用户取消都会释放该载荷，失败重试需重新生成导出结果。
+ */
 internal class PendingExportFiles(private val directory: File) {
     private fun file(id: String): File {
         require(runCatching { UUID.fromString(id).toString() == id }.getOrDefault(false)) { "待导出文件标识无效，请重新处理文件" }

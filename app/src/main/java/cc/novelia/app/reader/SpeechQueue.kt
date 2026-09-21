@@ -1,6 +1,10 @@
 package cc.novelia.app.reader
 
-/** Sentence-sized utterances let pause/resume repeat only the current sentence. */
+/**
+ * 将正文分成适合 TTS 的句子队列，暂停后恢复最多重复当前句，跳过空白与图片标记。
+ * 每段最多取 3500 个 UTF-16 单元，并避免从代理对中间切开；优先在句末及其闭引号后断开。
+ * 句号只在段尾或后接空白时视作边界，减少小数、域名等内容被错误切断的情况。
+ */
 internal fun prepareSpeechQueue(paragraphs: List<String>, checkCancelled: () -> Unit = {}): List<String> = buildList {
     for(paragraph in paragraphs) {
         checkCancelled()

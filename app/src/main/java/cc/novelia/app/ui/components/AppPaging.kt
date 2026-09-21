@@ -33,6 +33,11 @@ import kotlinx.coroutines.launch
 internal fun screenPageDistance(viewport: Int, overlap: Float): Float =
     (viewport - minOf(overlap, viewport * .2f)).coerceAtLeast(0f)
 
+/**
+ * 应用列表统一入口：普通模式使用原生滚动，电子纸模式关闭连续拖动，改为按屏跳转。
+ * 每屏保留少量重叠内容，避免边缘半行/半张卡片被跳过；正文阅读器的预先分页由 EInkPage 处理。
+ * onPageTurn 可让页面在手动翻屏时处理附加状态，例如收起筛选区。
+ */
 @Composable internal fun AppLazyColumn(
     modifier: Modifier = Modifier,
     state: LazyListState = rememberLazyListState(),
@@ -104,7 +109,11 @@ internal fun screenPageDistance(viewport: Int, overlap: Float): Float =
     }
 }
 
-/** Consume movement without changing the viewport. Commit at most one page when the finger lifts. */
+/**
+ * 电子纸输入适配：拖动期间只累计距离，松手达到阈值才翻一屏，取消手势不产生翻页。
+ * 同时适配翻页键、限频滚轮和可访问性请求；可访问性精确滚动保留原距离，避免焦点目标被跳过。
+ * rememberUpdatedState 保证持续存在的手势协程调用最新页面回调。
+ */
 @Composable private fun Modifier.screenPageInput(enabled: Boolean, horizontal: Boolean = false, page: (Int) -> Unit, scroll: (Float) -> Unit): Modifier {
     if(!enabled) return this
     val latestPage by rememberUpdatedState(page)
