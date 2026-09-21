@@ -61,5 +61,5 @@ import cc.novelia.app.ui.theme.appReducedMotion
             }
         }
     }
-    if(deletion) ConfirmDialog("删除这篇文章？", "删除后将从原站移除，请确认已保存需要的内容。", { deletion = false }) { c.action("文章已删除") { c.api.request("DELETE", "article/$id"); c.back() } }
+    if(deletion) ConfirmDialog("删除这篇文章？", "删除后将从原站移除，请确认已保存需要的内容。", { deletion = false }, confirmLabel = "删除文章") { c.action("文章已删除") { c.api.request("DELETE", "article/$id"); c.back() } }
 }

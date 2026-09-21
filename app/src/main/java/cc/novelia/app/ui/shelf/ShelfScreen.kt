@@ -13,6 +13,8 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import cc.novelia.app.ui.components.AppSelectionChip
+import cc.novelia.app.ui.components.AppActionChip
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -187,9 +189,9 @@ import kotlinx.coroutines.withContext
                                 }
                             }
                             item(key = "search", contentType = "search") { OutlinedTextField(query, { query = it }, label = { Text("搜索书架") }, leadingIcon = { Icon(Icons.Outlined.Search, null) }, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), singleLine = true, shape = MaterialTheme.shapes.extraLarge) }
-                            item(key = "folders", contentType = "folders") { Row(Modifier.appHorizontalScroll(rememberScrollState()).padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                (listOf("全部") + state.folders).forEach { value -> FilterChip(folder == value, { folder = value }, label = { Text(value) }) }
-                                AssistChip(onClick = { createFolder = true }, label = { Text("新建收藏夹") }, leadingIcon = { Icon(Icons.Outlined.Add, null, Modifier.size(18.dp)) })
+                            item(key = "folders", contentType = "folders") { Row(Modifier.appHorizontalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                (listOf("全部") + state.folders).forEach { value -> AppSelectionChip(folder == value, { folder = value }, label = { Text(value) }) }
+                                AppActionChip(onClick = { createFolder = true }, label = { Text("新建收藏夹") }, leadingIcon = { Icon(Icons.Outlined.Add, null, Modifier.size(18.dp)) })
                             } }
                             item(key = "sort", contentType = "controls") { Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Text("${groups.size} 本" + if(books.size > groups.size) " · ${books.size - groups.size} 分卷" else "", Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelLarge)
@@ -285,7 +287,7 @@ import kotlinx.coroutines.withContext
     }
     if(createFolder) TextPrompt("新建收藏夹", "名称", onDismiss = { createFolder = false }) { name -> c.store.update { it.copy(folders = (it.folders + name).distinct()) } }
     if(renameFolder) TextPrompt("重命名收藏夹", "名称", folder, { renameFolder = false }) { name -> val previous = folder; c.store.update { it.copy(folders = (it.folders.map { f -> if(f == previous) name else f }).distinct(), books = it.books.map { b -> if(b.folder == previous) b.copy(folder = name) else b }) }; folder = name }
-    if(deleteFolder) ConfirmDialog("删除收藏夹？", "其中的书籍会移入默认收藏，文件不会删除。", { deleteFolder = false }) { val previous = folder; c.store.update { it.copy(folders = it.folders - previous, books = it.books.map { b -> if(b.folder == previous) b.copy(folder = "默认收藏") else b }) }; folder = "全部" }
+    if(deleteFolder) ConfirmDialog("删除收藏夹？", "其中的书籍会移入默认收藏，文件不会删除。", { deleteFolder = false }, confirmLabel = "删除收藏夹") { val previous = folder; c.store.update { it.copy(folders = it.folders - previous, books = it.books.map { b -> if(b.folder == previous) b.copy(folder = "默认收藏") else b }) }; folder = "全部" }
     if(bulkMove) AppAlertDialog(onDismissRequest = { bulkMove = false }, title = { Text("移入收藏夹") }, text = { Column {
         if(state.books.any { it.book.ref.key in selection && it.parentWenkuKey != null && it.parentWenkuKey !in selection }) Text("单独移动分卷会取消其挂载；同时移动所属文库可保留挂载。", style = MaterialTheme.typography.bodySmall)
         state.folders.forEach { target -> TextButton(onClick = { c.store.update { it.moveShelfBooks(selection, target) }; bulkMove = false; managing = false; selection = emptySet() }) { Text(target) } }
@@ -323,7 +325,7 @@ import kotlinx.coroutines.withContext
         c.store.update { it.withVolumeParent(volume.book.ref.key, parentKey) }
         volumeParentPicker = null
     } }
-    deletingDocument?.let { saved -> ConfirmDialog("删除「${saved.book.title}」？", "将删除此设备中的导入副本，并移出书架。导入前的原文件和下载列表中的文件不受影响。此操作无法撤销。", { deletingDocument = null }) {
+    deletingDocument?.let { saved -> ConfirmDialog("删除「${saved.book.title}」？", "将删除此设备中的导入副本，并移出书架。导入前的原文件和下载列表中的文件不受影响。此操作无法撤销。", { deletingDocument = null }, confirmLabel = "删除本地小说") {
         c.action("本地小说已删除") { withContext(Dispatchers.IO) { c.store.removeDocument(saved.book.ref.id) } }
     } }
 }

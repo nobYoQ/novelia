@@ -111,5 +111,5 @@ import kotlinx.coroutines.withContext
             }
         } } }
     } }
-    remove?.let { entry -> ConfirmDialog("删除下载？", "移除该任务及其下载文件，已导入书架的副本不受影响。", { remove = null }) { c.action { DownloadWorker.remove(c.app, entry.id) } } }
+    remove?.let { entry -> ConfirmDialog("删除下载？", "移除该任务及其下载文件，已导入书架的副本不受影响。", { remove = null }, confirmLabel = "删除下载") { c.action { DownloadWorker.remove(c.app, entry.id) } } }
 }

@@ -24,6 +24,7 @@ import cc.novelia.app.ui.components.AppSheet
 import cc.novelia.app.ui.components.appHorizontalScroll
 import cc.novelia.app.ui.components.screenPageDistance
 import cc.novelia.app.ui.reader.ReaderPreferences
+import cc.novelia.app.ui.reader.rememberReaderPreferencesState
 import cc.novelia.app.ui.theme.AppInteractionMode
 import cc.novelia.app.ui.theme.NoveliaTheme
 import cc.novelia.app.ui.web.PagedSiteWebView
@@ -162,12 +163,14 @@ class AppPagingTest {
         var open by mutableStateOf(true)
         compose.setContent {
             AppInteractionMode(eInk, false) { NoveliaTheme("light") {
-                if(open) AppSheet(onDismissRequest = { open = false }) { ReaderPreferences(reader) { reader = it } }
+                val preferenceState = rememberReaderPreferencesState()
+                if(open) AppSheet(onDismissRequest = { open = false }) { ReaderPreferences(reader, state = preferenceState) { reader = it } }
             } }
         }
         compose.onNodeWithText("关闭面板").assertIsDisplayed()
         compose.onNode(hasContentDescription("增大 字号", substring = true)).performScrollTo().performClick()
         compose.runOnIdle { assertEquals(20f, reader.fontSize, .01f) }
+        compose.onNodeWithText("翻页").performClick()
         compose.onNodeWithText("工具栏透明度", substring = true).performScrollTo()
         compose.onNodeWithTag("reader-toolbar-transparency").assertExists()
         compose.runOnIdle { eInk = false }

@@ -26,7 +26,9 @@ import kotlinx.serialization.Serializable
     val beforeEInk: ReaderPagingState? = null, val eInkPreferences: ReaderPagingState? = null,
     val toolbarTransparency: Float = .25f,
     val prefetchChapters: Int = 3, val prefetchWifiOnly: Boolean = true,
-    val paragraphSpacing: Float = 8f
+    val paragraphSpacing: Float = 8f,
+    // List/form paging controls are independent of the reader's page buttons and e-ink presets.
+    val showScrollPageButtons: Boolean = true
 ) {
     val resolvedParagraphSpacing get() = if(paragraphSpacing.isFinite()) paragraphSpacing.coerceIn(0f, 32f) else 8f
     val resolvedToolbarTransparency get() = if(toolbarTransparency.isFinite()) toolbarTransparency.coerceIn(0f, 1f) else .25f

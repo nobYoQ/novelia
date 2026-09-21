@@ -96,6 +96,7 @@ import cc.novelia.app.ui.theme.ReaderPageTheme
 import cc.novelia.app.ui.theme.activityOrNull
 import cc.novelia.app.ui.theme.appReducedMotion
 import cc.novelia.app.ui.theme.readerColors
+import cc.novelia.app.ui.notes.NoteEditorDialog
 import java.util.UUID
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
@@ -119,7 +120,7 @@ import kotlinx.coroutines.withContext
     val settings = local.bookSettings[ref.key] ?: local.reader
     val eInk = settings.eInkMode
     val appEInk = LocalEInkMode.current || eInk
-    AppInteractionMode(appEInk, LocalReducedMotion.current || eInk) {
+    AppInteractionMode(appEInk, LocalReducedMotion.current || eInk, settings.showScrollPageButtons) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             ReaderContent(c, ref, chapterId, wide = maxWidth >= 840.dp)
         }
@@ -137,9 +138,11 @@ import kotlinx.coroutines.withContext
     }
     var preferences by remember { mutableStateOf(false) }; var toc by remember { mutableStateOf(false) }; var search by remember { mutableStateOf(false) }; var query by rememberSaveable { mutableStateOf("") }; var version by remember { mutableIntStateOf(0) }
     var speechSheet by remember { mutableStateOf(false) }
+    val preferenceState = rememberReaderPreferencesState()
     var tocQuery by rememberSaveable(ref.key) { mutableStateOf(readerEntry?.savedStateHandle?.remove<String>("readerTocQuery").orEmpty()) }
     var tocReversed by rememberSaveable(ref.key) { mutableStateOf(readerEntry?.savedStateHandle?.remove<Boolean>("readerTocReversed") ?: false) }
-    var tocLocateRequest by remember { mutableIntStateOf(0) }
+    var tocLocated by rememberSaveable(ref.key) { mutableStateOf(readerEntry?.savedStateHandle?.remove<Boolean>("readerTocLocated") ?: false) }
+    var tocLocateRequest by remember { mutableIntStateOf(if(tocLocated) 0 else 1) }
     val tocScroll = rememberLazyListState(
         remember(ref, chapterId) { readerEntry?.savedStateHandle?.remove<Int>("readerTocIndex") ?: 0 },
         remember(ref, chapterId) { readerEntry?.savedStateHandle?.remove<Int>("readerTocOffset") ?: 0 }
@@ -272,7 +275,27 @@ import kotlinx.coroutines.withContext
         } }
         val percent by remember(scroll, paragraphs.size) { derivedStateOf { (((scroll.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0).toFloat() / (paragraphs.size + 1).coerceAtLeast(1)) * 100).toInt().coerceIn(0, 100) } }
         val hasFallback = remember(paragraphs) { paragraphs.any { it.fallback } }
-        var selected by remember { mutableStateOf<ReadingParagraph?>(null) }; var note by remember { mutableStateOf<ReadingParagraph?>(null) }
+        var selected by remember { mutableStateOf<ReadingParagraph?>(null) }
+        var note by remember { mutableStateOf<Note?>(null) }
+        var bookmarkFeedback by remember { mutableStateOf<Job?>(null) }
+        fun saveBookmark(paragraph: ReadingParagraph, edit: Boolean = false) {
+            val candidate = Note(UUID.randomUUID().toString(), ref.key, chapterId, paragraph.index,
+                paragraph.parts.firstOrNull()?.text.orEmpty(), "",
+                bookTitle = c.store.state.value.books.firstOrNull { it.book.ref == ref }?.book?.title.orEmpty(), chapterTitle = chapter.title)
+            c.store.update { state ->
+                if(state.notes.any { it.key == ref.key && it.chapterId == chapterId && it.paragraph == paragraph.index }) state
+                else state.copy(notes = state.notes + candidate)
+            }
+            val saved = c.store.state.value.notes.firstOrNull { it.key == ref.key && it.chapterId == chapterId && it.paragraph == paragraph.index } ?: return
+            bookmarkFeedback?.cancel()
+            if(edit) note = saved
+            else bookmarkFeedback = scope.launch {
+                if(c.snackbar.showSnackbar(if(saved.id == candidate.id) "书签已保存" else "此处已保存书签", actionLabel = "编辑笔记",
+                        withDismissAction = true, duration = SnackbarDuration.Long) == SnackbarResult.ActionPerformed) {
+                    note = c.store.state.value.notes.firstOrNull { it.id == saved.id }
+                }
+            }
+        }
         var leaving by remember { mutableStateOf(false) }
         var nextVolumePrompt by remember { mutableStateOf(false) }
         var openingVolume by remember { mutableStateOf(false) }
@@ -331,6 +354,7 @@ import kotlinx.coroutines.withContext
                 set("readerTocReversed", tocReversed)
                 set("readerTocIndex", tocScroll.firstVisibleItemIndex)
                 set("readerTocOffset", tocScroll.firstVisibleItemScrollOffset)
+                set("readerTocLocated", tocLocated)
                 if(target.startAtEnd) set("readerStartAtEnd", true)
                 target.searchMatch?.let { match ->
                     set("readerSearchParagraph", match.paragraph)
@@ -517,7 +541,7 @@ import kotlinx.coroutines.withContext
         Row(Modifier.fillMaxSize().background(background).testTag(if(wide) "reader-wide-layout" else "reader-compact-layout")) {
         if(wide) {
             Surface(Modifier.width(292.dp).fillMaxHeight().windowInsetsPadding(readingInsets), color = MaterialTheme.colorScheme.surface) {
-                ReaderTocPane(c, ref, chapterId, tocScroll, tocQuery, { tocQuery = it }, tocReversed, { tocReversed = it }, tocLocateRequest, { tocLocateRequest = 0 }, { openChapter(it) })
+                ReaderTocPane(c, ref, chapterId, tocScroll, tocQuery, { tocQuery = it }, tocReversed, { tocReversed = it }, tocLocateRequest, { tocLocateRequest = 0; tocLocated = true }, { openChapter(it) })
             }
             VerticalDivider(Modifier.fillMaxHeight())
         }
@@ -645,7 +669,10 @@ import kotlinx.coroutines.withContext
                             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                 IconButton(onClick = { chapter.prevId?.let { openChapter(it) } }, enabled = chapter.prevId != null && !leaving && !chapterLoad.loading) { Icon(Icons.Outlined.SkipPrevious, "上一章") }
                                 TextButton(onClick = { if(wide) { tocQuery = ""; tocLocateRequest++ } else toc = true }, colors = ButtonDefaults.textButtonColors(contentColor = foreground)) { Icon(Icons.Outlined.FormatListBulleted, null, Modifier.size(18.dp)); Text(if(wide) " 定位目录" else " 目录") }
-                                IconButton(onClick = { note = paragraphs.getOrNull(firstParagraph) }, enabled = paragraphs.isNotEmpty()) { Icon(Icons.Outlined.BookmarkAdd, "添加书签或笔记") }
+                                val bookmarked = local.notes.any { it.key == ref.key && it.chapterId == chapterId && it.paragraph == paragraphs.getOrNull(firstParagraph)?.index }
+                                IconButton(onClick = { paragraphs.getOrNull(firstParagraph)?.let { saveBookmark(it) } }, enabled = paragraphs.isNotEmpty(), modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp)) {
+                                    Icon(if(bookmarked) Icons.Outlined.BookmarkAdded else Icons.Outlined.BookmarkAdd, if(bookmarked) "已保存书签" else "保存书签")
+                                }
                                 IconButton(onClick = { speechSheet = true }) {
                                     if(speechStatus == ReadAloudService.SLEEP_TIMER_FINISHED) StickerAccent(MidoriSticker.Sleep, speechStatus, Modifier.size(40.dp).semantics { contentDescription = "朗读定时已结束，打开朗读设置" })
                                     else Icon(Icons.Outlined.VolumeUp, "朗读本章")
@@ -703,7 +730,7 @@ import kotlinx.coroutines.withContext
             }
         }
         if(toc && !wide) ReaderSheet(onDismissRequest = { toc = false }) {
-            ReaderTocPane(c, ref, chapterId, tocScroll, tocQuery, { tocQuery = it }, tocReversed, { tocReversed = it }, tocLocateRequest, { tocLocateRequest = 0 },
+            ReaderTocPane(c, ref, chapterId, tocScroll, tocQuery, { tocQuery = it }, tocReversed, { tocReversed = it }, tocLocateRequest, { tocLocateRequest = 0; tocLocated = true },
                 { id -> toc = false; openChapter(id) }, Modifier.fillMaxHeight(.8f))
         }
         if(speechSheet) ReaderSheet(onDismissRequest = { speechSheet = false }) {
@@ -739,13 +766,21 @@ import kotlinx.coroutines.withContext
         selected?.let { paragraph -> ReaderSheet(onDismissRequest = { selected = null }) {
             Column(Modifier.padding(20.dp)) {
                 SelectionContainer { Text(paragraph.parts.joinToString("\n\n") { it.text }, Modifier.heightIn(max = 240.dp).appVerticalScroll(rememberScrollState())) }
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { TextButton(onClick = { c.share(paragraph.parts.joinToString("\n\n") { it.text }); selected = null }) { Text("分享段落") }; TextButton(onClick = { note = paragraph; selected = null }) { Text("书签 / 笔记") } }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = { c.share(paragraph.parts.joinToString("\n\n") { it.text }); selected = null }, modifier = Modifier.heightIn(min = 48.dp)) { Text("分享段落") }
+                    TextButton(onClick = { saveBookmark(paragraph); selected = null }, modifier = Modifier.heightIn(min = 48.dp)) { Text("保存书签") }
+                    TextButton(onClick = { saveBookmark(paragraph, edit = true); selected = null }, modifier = Modifier.heightIn(min = 48.dp)) { Text("编辑笔记") }
+                }
             }
         } }
-        note?.let { paragraph -> var text by remember { mutableStateOf("") }; AppAlertDialog(onDismissRequest = { note = null }, title = { Text("保存书签或笔记") }, text = { OutlinedTextField(text, { text = it }, label = { Text("笔记（可留空）") }, minLines = 3) }, confirmButton = { TextButton(onClick = { c.store.update { it.copy(notes = it.notes + Note(UUID.randomUUID().toString(), ref.key, chapterId, paragraph.index, paragraph.parts.firstOrNull()?.text.orEmpty(), text, bookTitle = it.books.firstOrNull { book -> book.book.ref == ref }?.book?.title.orEmpty(), chapterTitle = chapter.title)) }; note = null; c.message("已保存到我的笔记") }) { Text("保存") } }, dismissButton = { TextButton(onClick = { note = null }) { Text("取消") } }) }
+        note?.let { bookmark -> NoteEditorDialog(bookmark, { note = null }) { text ->
+            c.store.update { it.copy(notes = it.notes.map { existing -> if(existing.id == bookmark.id) existing.copy(text = text) else existing }) }
+            bookmarkFeedback?.cancel()
+            bookmarkFeedback = scope.launch { c.snackbar.showSnackbar("笔记已保存") }
+        } }
         }
     }
-    if(preferences) ReaderSheet(onDismissRequest = { preferences = false }) { ReaderPreferences(settings, local.bookSettings.containsKey(ref.key), { perBook -> c.store.update { it.copy(bookSettings = if(perBook) it.bookSettings + (ref.key to settings) else it.bookSettings - ref.key) } }) { value -> c.store.update { if(it.bookSettings.containsKey(ref.key)) it.copy(bookSettings = it.bookSettings + (ref.key to value)) else it.copy(reader = value) } } }
+    if(preferences) ReaderSheet(onDismissRequest = { preferences = false }) { ReaderPreferences(settings, local.bookSettings.containsKey(ref.key), { perBook -> c.store.update { it.copy(bookSettings = if(perBook) it.bookSettings + (ref.key to settings) else it.bookSettings - ref.key) } }, state = preferenceState) { value -> c.store.update { if(it.bookSettings.containsKey(ref.key)) it.copy(bookSettings = it.bookSettings + (ref.key to value)) else it.copy(reader = value) } } }
 }
 
 // Keep the overlay independent of the outer adaptive Row's size-affecting visibility extension.

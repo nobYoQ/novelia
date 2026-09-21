@@ -39,10 +39,10 @@ import coil.decode.DataSource
     val persistenceError by c.app.keywords.persistenceError.collectAsStateWithLifecycle()
     val lookup = remember(entries) { entries.associateBy { it.original } }
     var editing by remember { mutableStateOf<KeywordEntry?>(null) }
-    FlowRow(Modifier.padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    AppChipFlowRow(Modifier.padding(horizontal = 20.dp, vertical = 10.dp)) {
         tags.distinct().forEach { tag ->
             val entry = lookup[tag] ?: KeywordEntry(tag)
-            InputChip(false, onClick = {
+            AppSelectionChip(false, onClick = {
                 c.app.keywords.markUsed(listOf(tag))
                 val expression = if(KeywordCatalog.canSearch(tag)) "$tag$" else tag
                 c.go("discover?query=${android.net.Uri.encode(expression)}")

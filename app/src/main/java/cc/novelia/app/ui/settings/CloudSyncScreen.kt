@@ -75,7 +75,7 @@ import cc.novelia.app.ui.navigation.AppController
             }
         }
     }
-    removing?.let { (action, binding) -> ConfirmDialog("移除待同步操作？", "这只会移除尚未发送的记录。已经到达原站的请求无法撤回，本地阅读资料仍保留。", { removing = null }) {
+    removing?.let { (action, binding) -> ConfirmDialog("移除待同步操作？", "这只会移除尚未发送的记录。已经到达原站的请求无法撤回，本地阅读资料仍保留。", { removing = null }, confirmLabel = "移除待同步操作") {
         removing = null
         if(c.session.capture() != binding) c.message("登录账号已变化，请重新操作")
         else c.store.update { it.removePendingForSession(action, binding, c.session.capture()) }

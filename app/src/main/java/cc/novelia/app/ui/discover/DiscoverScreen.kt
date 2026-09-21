@@ -3,6 +3,9 @@ package cc.novelia.app.ui.discover
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
+import cc.novelia.app.ui.components.AppSelectionChip
+import cc.novelia.app.ui.components.AppActionChip
+import cc.novelia.app.ui.components.AppChipFlowRow
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -103,11 +106,11 @@ import kotlinx.coroutines.delay
                                     item(key = "recent-searches", contentType = "searches") {
                                         Column(if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(AppMotion.Quick), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit))) {
                                             SectionTitle("最近搜索", "清空") { c.store.update { it.copy(recentSearches = emptyList()) } }
-                                            Row(Modifier.appHorizontalScroll(rememberScrollState()).padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { local.recentSearches.take(8).forEach { value -> AssistChip(onClick = { query = value; search() }, label = { Text(value.take(20)) }) } }
+                                            Row(Modifier.appHorizontalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) { local.recentSearches.take(8).forEach { value -> AppActionChip(onClick = { query = value; search() }, label = { Text(value.take(20)) }) } }
                                         }
                                     }
                                 }
-                                if(local.savedSearches.isNotEmpty()) item(key = "saved-searches", contentType = "searches") { SectionTitle("保存的搜索"); Row(Modifier.appHorizontalScroll(rememberScrollState()).padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { local.savedSearches.forEach { value -> InputChip(true, onClick = { query = value; search() }, label = { Text(value.take(20)) }, trailingIcon = { IconButton(onClick = { c.store.update { it.copy(savedSearches = it.savedSearches - value) } }, modifier = Modifier.size(48.dp)) { Icon(Icons.Outlined.Close, "删除搜索", Modifier.size(16.dp)) } }) } } }
+                                if(local.savedSearches.isNotEmpty()) item(key = "saved-searches", contentType = "searches") { SectionTitle("保存的搜索"); Row(Modifier.appHorizontalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) { local.savedSearches.forEach { value -> AppSelectionChip(true, onClick = { query = value; search() }, label = { Text(value.take(20)) }, trailingIcon = { IconButton(onClick = { c.store.update { it.copy(savedSearches = it.savedSearches - value) } }, modifier = Modifier.size(48.dp)) { Icon(Icons.Outlined.Close, "删除搜索", Modifier.size(16.dp)) } }) } } }
                                 item(key = "web-heading", contentType = "heading") { SectionTitle("热门网络小说", "更多") { category = 1; sort = 1 } }
                                 items(visibleWeb, key = { "web-${it.ref.key}" }, contentType = { "book" }) { BookRow(it, { c.book(it.ref) }, if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(AppMotion.Quick), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit)), showReadingProgress = false) }
                                 item(key = "wenku-heading", contentType = "heading") { SectionTitle("文库新近更新", "更多") { category = 2 } }
@@ -171,7 +174,7 @@ import kotlinx.coroutines.delay
             if(category == 1) {
                 val selectedSources = remember(source) { source.split(',').filter(String::isNotEmpty).toSet() }
                 Text("书源（可多选）", Modifier.padding(start = 20.dp, top = 16.dp), style = MaterialTheme.typography.labelLarge)
-                FlowRow(Modifier.padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { providers.forEach { (id, title) -> FilterChip(id in selectedSources, onClick = { source = selectedSources.toMutableSet().apply { if(!add(id)) remove(id) }.joinToString(","); page = 0 }, label = { Text(title) }) } }
+                AppChipFlowRow(Modifier.padding(horizontal = 20.dp, vertical = 10.dp)) { providers.forEach { (id, title) -> AppSelectionChip(id in selectedSources, onClick = { source = selectedSources.toMutableSet().apply { if(!add(id)) remove(id) }.joinToString(","); page = 0 }, label = { Text(title) }) } }
                 ChoiceRow("连载状态", listOf("全部", "连载中", "已完结", "短篇"), type) { type = it; page = 0 }
                 ChoiceRow("已有译文", listOf("全部", "GPT", "Sakura"), translate) { translate = it; page = 0 }
                 ChoiceRow("排序", listOf("更新", "点击", "相关"), sort) { sort = it; page = 0 }

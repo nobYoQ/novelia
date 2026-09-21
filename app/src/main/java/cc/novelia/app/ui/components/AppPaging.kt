@@ -26,6 +26,7 @@ import androidx.compose.ui.semantics.scrollBy
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.ui.theme.LocalEInkMode
+import cc.novelia.app.ui.theme.LocalScrollPageButtons
 import kotlin.math.abs
 import kotlinx.coroutines.launch
 
@@ -61,7 +62,7 @@ internal fun screenPageDistance(viewport: Int, overlap: Float): Float =
             horizontalAlignment = horizontalAlignment, userScrollEnabled = !eInk,
             modifier = listModifier.weight(1f).screenPageInput(eInk, page = page,
                 scroll = { amount -> scope.launch { state.scrollBy(amount) }; Unit }), content = content)
-        if(eInk && (state.canScrollBackward || state.canScrollForward)) ScreenPageButtons(state.canScrollBackward, state.canScrollForward, page)
+        if(eInk && LocalScrollPageButtons.current && (state.canScrollBackward || state.canScrollForward)) ScreenPageButtons(state.canScrollBackward, state.canScrollForward, page)
     }
 }
 
@@ -80,7 +81,7 @@ internal fun screenPageDistance(viewport: Int, overlap: Float): Float =
     Column(modifier) {
         Column(Modifier.weight(1f, fill = false).appVerticalScroll(state).then(contentModifier),
             verticalArrangement = verticalArrangement, horizontalAlignment = horizontalAlignment, content = content)
-        if(eInk && (state.canScrollBackward || state.canScrollForward)) ScreenPageButtons(state.canScrollBackward, state.canScrollForward, page)
+        if(eInk && LocalScrollPageButtons.current && (state.canScrollBackward || state.canScrollForward)) ScreenPageButtons(state.canScrollBackward, state.canScrollForward, page)
     }
 }
 
@@ -102,8 +103,8 @@ internal fun screenPageDistance(viewport: Int, overlap: Float): Float =
         Column {
             HorizontalDivider()
             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { page(-1) }, enabled = back) { Text("上一屏") }
-                TextButton(onClick = { page(1) }, enabled = forward) { Text("下一屏") }
+                TextButton(onClick = { page(-1) }, enabled = back, modifier = Modifier.heightIn(min = 48.dp)) { Text("上一屏") }
+                TextButton(onClick = { page(1) }, enabled = forward, modifier = Modifier.heightIn(min = 48.dp)) { Text("下一屏") }
             }
         }
     }

@@ -9,6 +9,18 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ReaderPreferencesTest {
+    @Test fun scrollingPageButtonsSurviveModeSwitchesBackupsAndPerBookOverrides() {
+        assertTrue(appJson.decodeFromString<ReaderSettings>("{}").showScrollPageButtons)
+        val hidden = ReaderSettings(showScrollPageButtons = false, showPageButtons = true)
+        assertFalse(hidden.withEInkMode(true).withEInkMode(false).showScrollPageButtons)
+        assertFalse(hidden.withPaginationMode("auto").showScrollPageButtons)
+        assertTrue(hidden.withPaginationMode("auto").showPageButtons)
+        val library = LibraryState(reader = hidden, bookSettings = mapOf("local/book" to hidden.copy(showScrollPageButtons = true)))
+        assertEquals(library, appJson.decodeFromString<LibraryState>(appJson.encodeToString(library)))
+        val backup = SettingsBackup(reader = hidden)
+        assertEquals(backup, appJson.decodeFromString<SettingsBackup>(appJson.encodeToString(backup)))
+    }
+
     @Test fun paragraphSpacingMigratesAndPersistsInBackupsAndPerBookPreferences() {
         assertEquals(8f, appJson.decodeFromString<ReaderSettings>("{}").paragraphSpacing, 0f)
         val settings = ReaderSettings(paragraphSpacing = 0f)

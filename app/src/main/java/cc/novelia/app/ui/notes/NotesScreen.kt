@@ -2,6 +2,8 @@
 
 package cc.novelia.app.ui.notes
 
+import cc.novelia.app.ui.components.AppSelectionChip
+import cc.novelia.app.ui.components.AppChipFlowRow
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -21,7 +23,6 @@ import cc.novelia.app.ui.components.AppSheet
 import cc.novelia.app.ui.components.EmptyState
 import cc.novelia.app.ui.components.MenuRow
 import cc.novelia.app.ui.components.Screen
-import cc.novelia.app.ui.components.TextPrompt
 import cc.novelia.app.ui.components.rememberDebouncedQuery
 import cc.novelia.app.ui.navigation.AppController
 
@@ -41,8 +42,8 @@ import cc.novelia.app.ui.navigation.AppController
                 leadingIcon = { Icon(Icons.Outlined.Search, null) }, modifier = Modifier.fillMaxWidth().testTag("notes-search"))
         }
         item(key = "note-filter") {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected = bookKey != null, onClick = { choosingBook = true }, label = { Text(bookChoices.firstOrNull { it.note.key == bookKey }?.bookTitle ?: "全部书籍", maxLines = 1) }, leadingIcon = { Icon(Icons.Outlined.FilterList, null, Modifier.size(18.dp)) })
+            AppChipFlowRow() {
+                AppSelectionChip(selected = bookKey != null, onClick = { choosingBook = true }, label = { Text(bookChoices.firstOrNull { it.note.key == bookKey }?.bookTitle ?: "全部书籍", maxLines = 1) }, leadingIcon = { Icon(Icons.Outlined.FilterList, null, Modifier.size(18.dp)) })
                 if(bookKey != null || query.isNotBlank()) TextButton(onClick = { bookKey = null; query = "" }) { Text("清空筛选") }
                 Text("${notes.size} 条", Modifier.padding(vertical = 12.dp), style = MaterialTheme.typography.labelMedium)
             }
@@ -55,7 +56,7 @@ import cc.novelia.app.ui.navigation.AppController
             Text(note.quote, maxLines = 5, style = MaterialTheme.typography.bodyMedium); if(note.text.isNotBlank()) Text(note.text, color = MaterialTheme.colorScheme.primary)
             FlowRow {
                 TextButton(onClick = { val ref = BookRef.fromKey(note.key); c.store.savePosition(ref, Position(note.chapterId, note.paragraph + 1)); c.read(ref, note.chapterId) }) { Text("回到原文") }
-                TextButton(onClick = { editing = note }) { Text("编辑") }
+                TextButton(onClick = { editing = note }, modifier = Modifier.heightIn(min = 48.dp)) { Text("编辑笔记") }
                 TextButton(onClick = { c.share("${item.bookTitle} · ${item.chapterTitle}\n\n${note.quote}" + if(note.text.isNotBlank()) "\n\n${note.text}" else "") }) { Text("分享") }
                 TextButton(onClick = {
                     c.store.update { it.copy(notes = it.notes.filterNot { n -> n.id == note.id }) }
@@ -75,5 +76,5 @@ import cc.novelia.app.ui.navigation.AppController
             items(bookChoices, key = { it.note.key }) { item -> MenuRow(item.bookTitle, "${bookCounts[item.note.key] ?: 0} 条笔记", Icons.Outlined.MenuBook, { bookKey = item.note.key; choosingBook = false }) }
         }
     }
-    editing?.let { note -> TextPrompt("编辑笔记", "内容", note.text, { editing = null }) { value -> c.store.update { it.copy(notes = it.notes.map { n -> if(n.id == note.id) n.copy(text = value) else n }) } } }
+    editing?.let { note -> NoteEditorDialog(note, { editing = null }) { value -> c.store.update { it.copy(notes = it.notes.map { n -> if(n.id == note.id) n.copy(text = value) else n }) } } }
 }

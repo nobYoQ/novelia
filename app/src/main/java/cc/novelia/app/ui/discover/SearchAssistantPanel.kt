@@ -1,6 +1,9 @@
 @file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.discover
 
+import cc.novelia.app.ui.components.AppSelectionChip
+import cc.novelia.app.ui.components.AppActionChip
+import cc.novelia.app.ui.components.AppChipFlowRow
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -84,13 +87,13 @@ fun SearchAssistantPanel(
                         isError = tagQuery.trim().length > KeywordCatalog.MAX_TEXT_LENGTH,
                         supportingText = { if(tagQuery.trim().length > KeywordCatalog.MAX_TEXT_LENGTH) Text("标签最多 ${KeywordCatalog.MAX_TEXT_LENGTH} 字符，请缩短后添加。") },
                         modifier = Modifier.fillMaxWidth().testTag("assistant-tag-input"))
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        KeywordCatalog.categories.forEach { name -> FilterChip(category == name, { category = name }, label = { Text(name) }) }
+                    AppChipFlowRow() {
+                        KeywordCatalog.categories.forEach { name -> AppSelectionChip(category == name, { category = name }, label = { Text(name) }) }
                     }
                     Text("点击标签选择包含或排除，也可以编辑中文翻译。候选来自常用标签和已浏览的作品。", style = MaterialTheme.typography.bodySmall)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    AppChipFlowRow() {
                         candidates.forEach { entry ->
-                            SuggestionChip(onClick = { editing = entry }, label = { Text(entry.label) },
+                            AppActionChip(onClick = { editing = entry }, label = { Text(entry.label) },
                                 modifier = Modifier.testTag("assistant-candidate-${entry.original}"))
                         }
                     }
@@ -103,10 +106,10 @@ fun SearchAssistantPanel(
                     if(candidates.isEmpty() && manual == null) Text("这个分类暂时没有匹配标签。可以切换分类或输入标签原文。", style = MaterialTheme.typography.bodySmall)
                     if(includedTags.isNotEmpty() || excludedTags.isNotEmpty()) {
                         Text("已选条件", style = MaterialTheme.typography.titleSmall)
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        AppChipFlowRow() {
                             (includedTags.map { it to true } + excludedTags.map { it to false }).forEach { (original, include) ->
                                 val entry = lookup[original] ?: KeywordEntry(original)
-                                InputChip(true, onClick = { editing = entry }, label = { Text("${if(include) "包含" else "排除"}：${entry.label}") },
+                                AppSelectionChip(true, onClick = { editing = entry }, label = { Text("${if(include) "包含" else "排除"}：${entry.label}") },
                                     trailingIcon = { IconButton(onClick = { includedTags = includedTags - original; excludedTags = excludedTags - original }, modifier = Modifier.size(48.dp)) { Icon(Icons.Outlined.Close, "移除条件 $original", Modifier.size(16.dp)) } })
                             }
                         }

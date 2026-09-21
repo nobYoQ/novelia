@@ -385,6 +385,7 @@ class ReaderToolbarOverlayTest {
             val counter = pageCounter()
             compose.onNodeWithContentDescription("阅读设置").performClick()
             compose.onNodeWithText("仅应用于这本书").performClick()
+            compose.onNodeWithText("翻页").performClick()
             val slider = compose.onNodeWithTag("reader-toolbar-transparency")
             slider.performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) { it(.6f) }
             compose.onNodeWithText("工具栏透明度 60%").assertIsDisplayed()
@@ -405,6 +406,7 @@ class ReaderToolbarOverlayTest {
             assertEquals(before, snapshot("reader-page"))
             assertEquals(counter, pageCounter())
             compose.onNodeWithContentDescription("阅读设置").performClick()
+            compose.onNodeWithText("翻页").performClick()
             compose.onNodeWithTag("reader-toolbar-transparency").performScrollTo()
                 .assertRangeInfoEquals(androidx.compose.ui.semantics.ProgressBarRangeInfo(.6f, 0f..1f))
             compose.onNodeWithText("仅应用于这本书").performScrollTo().performClick()

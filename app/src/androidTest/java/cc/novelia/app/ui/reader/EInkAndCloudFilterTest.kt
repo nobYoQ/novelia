@@ -95,6 +95,7 @@ class EInkAndCloudFilterTest {
     @Test fun paginationModesContainGesturesAndKeepButtonPreference() {
         var settings by mutableStateOf(ReaderSettings())
         compose.setContent { MaterialTheme { ReaderPreferences(settings) { settings = it } } }
+        compose.onNodeWithText("翻页").performClick()
         compose.onNodeWithText("连续滚动").assertIsSelected()
         compose.onNodeWithText("滚动翻页").assertDoesNotExist()
         compose.onNodeWithText("左右翻页").assertDoesNotExist()
@@ -184,6 +185,7 @@ class EInkAndCloudFilterTest {
     @Test fun readerPreferencesKeepThemesMutuallyExclusive() {
         var settings by mutableStateOf(ReaderSettings(theme = "paper"))
         compose.setContent { MaterialTheme { ReaderPreferences(settings) { settings = it } } }
+        compose.onNodeWithText("翻页").performClick()
         compose.onNodeWithText("电子纸阅读模式").performScrollTo().performClick()
         compose.runOnIdle {
             assertEquals("paper", settings.theme)
@@ -193,6 +195,7 @@ class EInkAndCloudFilterTest {
         compose.onNodeWithText("滚动翻页").performScrollTo().performClick()
         compose.runOnIdle { assertFalse(settings.scrollPageTurn); assertTrue(settings.horizontalPageTurn) }
         compose.onNodeWithText("黑白色调").assertDoesNotExist()
+        compose.onNodeWithText("常用").performClick()
         val themes = linkedMapOf("黑白" to "monochrome", "深色" to "dark", "浅色" to "light", "纸张" to "paper", "跟随应用" to "system")
         themes.forEach { (label, theme) ->
             compose.onNodeWithText(label).performScrollTo().performClick().assertIsSelected()
@@ -203,6 +206,7 @@ class EInkAndCloudFilterTest {
         compose.onNodeWithText("黑白").assertIsSelected()
         compose.onNodeWithText("深色").performScrollTo().performClick().assertIsSelected()
         compose.runOnIdle { assertEquals("dark", settings.resolvedTheme); assertFalse(settings.monochrome) }
+        compose.onNodeWithText("翻页").performClick()
         compose.onNodeWithText("电子纸阅读模式").performScrollTo().performClick()
         compose.onNodeWithText("连续滚动").assertIsSelected()
         compose.onNodeWithText("滚动翻页").assertDoesNotExist()

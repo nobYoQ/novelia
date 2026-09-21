@@ -173,7 +173,7 @@ class AdaptiveLibraryTest {
             compose.waitUntil(5_000) { compose.onAllNodesWithText("目录 2").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithContentDescription("管理 双栏阅读测试").performSemanticsAction(SemanticsActions.OnClick) { it() }
             compose.onNodeWithText("删除本地小说").performScrollTo().performSemanticsAction(SemanticsActions.OnClick) { it() }
-            compose.onNodeWithText("确认").performSemanticsAction(SemanticsActions.OnClick) { it() }
+            compose.onNodeWithText("删除本地小说").performSemanticsAction(SemanticsActions.OnClick) { it() }
             compose.waitUntil(5_000) { compose.onAllNodesWithText("选择一本书").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithText("本地书籍").assertDoesNotExist()
             compose.onNodeWithTag("shelf-book-${ref.key}").assertDoesNotExist()

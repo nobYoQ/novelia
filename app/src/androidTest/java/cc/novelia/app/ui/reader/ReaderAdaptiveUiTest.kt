@@ -2,6 +2,7 @@ package cc.novelia.app.ui.reader
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,6 +35,39 @@ import org.junit.Test
 
 class ReaderAdaptiveUiTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun firstDirectoryOpeningFindsTheCurrentChapterAndReopeningKeepsBrowsePosition() =
+        withReader(390.dp, initialChapter = "extra-80") { _, _, _ ->
+            compose.onNodeWithText("目录", substring = true).performClick()
+            compose.waitUntil(10_000) { compose.onAllNodesWithTag("reader-toc-chapter-extra-80").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithTag("reader-toc-chapter-extra-80").assertIsDisplayed().assertIsSelected()
+            compose.onNode(hasScrollToIndexAction() and hasAnyAncestor(hasTestTag("reader-toc-list"))).performScrollToIndex(0)
+            compose.onNodeWithTag("reader-toc-chapter-first").assertIsDisplayed()
+            compose.onNodeWithText("关闭面板").performClick()
+            compose.onNodeWithText("目录", substring = true).performClick()
+            compose.onNodeWithTag("reader-toc-chapter-first").assertIsDisplayed()
+            compose.onNodeWithText("定位当前").performClick()
+            compose.onNodeWithTag("reader-toc-chapter-extra-80").assertIsDisplayed()
+        }
+
+    @Test fun bookmarkSavesImmediatelyAndEditingOrClearingNotesPreservesItsIdentity() = withReader(390.dp) { app, ref, _ ->
+        compose.onNodeWithContentDescription("保存书签").performClick()
+        val bookmark = app.store.state.value.notes.single { it.key == ref.key }
+        compose.onNodeWithText("编辑笔记").performClick()
+        compose.onNodeWithText("笔记内容").performTextInput("回头再读这一段")
+        compose.onNodeWithText("保存笔记").performClick()
+        compose.runOnIdle { assertEquals("回头再读这一段", app.store.state.value.notes.single { it.id == bookmark.id }.text) }
+        compose.onNodeWithContentDescription("已保存书签").performSemanticsAction(SemanticsActions.OnClick) { it() }
+        compose.onNodeWithText("编辑笔记").performClick()
+        compose.onNodeWithText("笔记内容").assertTextContains("回头再读这一段").performTextClearance()
+        compose.onNodeWithText("保存笔记").performClick()
+        compose.runOnIdle {
+            val saved = app.store.state.value.notes.single { it.key == ref.key }
+            assertEquals(bookmark.id, saved.id)
+            assertEquals("", saved.text)
+            assertEquals(bookmark.paragraph, saved.paragraph)
+        }
+    }
 
     @Test fun directoryAndTextKeepTheirStateAcrossWideAndCompactLayouts() = withReader(1024.dp) { app, ref, resize ->
         compose.onNodeWithTag("reader-wide-layout").assertExists()
@@ -102,7 +136,7 @@ class ReaderAdaptiveUiTest {
     private fun scrollPosition(): Float = compose.onNodeWithTag("reader-scroll").fetchSemanticsNode()
         .config[SemanticsProperties.VerticalScrollAxisRange].value()
 
-    private fun withReader(initialWidth: Dp, eInk: Boolean = false, block: (NoveliaApplication, BookRef, (Dp) -> Unit) -> Unit) {
+    private fun withReader(initialWidth: Dp, eInk: Boolean = false, initialChapter: String = "first", block: (NoveliaApplication, BookRef, (Dp) -> Unit) -> Unit) {
         val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
         runBlocking { app.initialization.await() }
         val previous = app.store.state.value
@@ -113,7 +147,7 @@ class ReaderAdaptiveUiTest {
             app.store.saveDocument(LocalDocument(ref.id, "阅读布局测试", "txt", listOf(
                 LocalChapter("first", "第一章 林间", List(12) { paragraph -> "第${paragraph + 1}段，沿着森林小路走向远处的小镇。".repeat(80) }),
                 LocalChapter("second", "第二章 归途", listOf("恢复后的下一章正文。"))
-            )))
+            ) + (3..100).map { LocalChapter("extra-$it", "续章 $it", listOf("续章正文 $it")) }))
             app.store.update { it.copy(reader = ReaderSettings(paginationMode = "scroll", width = 900f, eInkMode = eInk, showPageButtons = false, prefetchChapters = 0),
                 reducedMotion = true, historyPaused = false, positions = it.positions - ref.key, bookSettings = it.bookSettings - ref.key) }
             compose.setContent {
@@ -130,12 +164,13 @@ class ReaderAdaptiveUiTest {
                                     ReaderScreen(controller, BookRef(entry.arguments?.getString("provider").orEmpty(), entry.arguments?.getString("book").orEmpty()), entry.arguments?.getString("chapter").orEmpty())
                                 }
                             }
+                            SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter))
                         }
                     }
                 }
             }
-            compose.runOnIdle { controller.read(ref, "first") }
-            compose.waitUntil(10_000) { app.store.state.value.positions[ref.key]?.chapterId == "first" }
+            compose.runOnIdle { controller.read(ref, initialChapter) }
+            compose.waitUntil(10_000) { app.store.state.value.positions[ref.key]?.chapterId == initialChapter }
             compose.waitForIdle()
             block(app, ref) { width = it }
         } finally {

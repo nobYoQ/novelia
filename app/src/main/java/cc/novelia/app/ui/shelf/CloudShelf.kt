@@ -2,6 +2,9 @@
 package cc.novelia.app.ui.shelf
 
 import androidx.compose.foundation.background
+import cc.novelia.app.ui.components.AppSelectionChip
+import cc.novelia.app.ui.components.AppActionChip
+import cc.novelia.app.ui.components.AppChipFlowRow
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -103,9 +106,9 @@ import cc.novelia.app.ui.navigation.AppController
             Column(Modifier.fillMaxSize()) {
                 CollapsibleCloudFilters(expanded, { expanded = !expanded }, summary, filterHeight) {
                     ChoiceRow("收藏类型", listOf("网络小说", "文库小说"), kind) { kind = it; folderId = ""; page = 0 }
-                    Row(Modifier.appHorizontalScroll(rememberScrollState()).padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        choices.forEach { folder -> FilterChip(current?.id == folder.id, { folderId = folder.id; page = 0 }, label = { Text(folder.title) }) }
-                        AssistChip(onClick = { create = true }, label = { Text("新建") }, leadingIcon = { Icon(Icons.Outlined.Add, null) })
+                    Row(Modifier.appHorizontalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        choices.forEach { folder -> AppSelectionChip(current?.id == folder.id, { folderId = folder.id; page = 0 }, label = { Text(folder.title) }) }
+                        AppActionChip(onClick = { create = true }, label = { Text("新建") }, leadingIcon = { Icon(Icons.Outlined.Add, null) })
                     }
                     FlowRow(Modifier.padding(horizontal = 12.dp)) {
                         if (editable != null) {
@@ -123,8 +126,8 @@ import cc.novelia.app.ui.navigation.AppController
                             Text("来源（可多选）", Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
                             TextButton(onClick = { source = providers.keys.filterNot { it in selectedSources }.joinToString(","); page = 0 }) { Text("反选") }
                         }
-                        FlowRow(Modifier.padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            providers.forEach { (id, title) -> FilterChip(id in selectedSources, {
+                        AppChipFlowRow(Modifier.padding(horizontal = 20.dp, vertical = 10.dp)) {
+                            providers.forEach { (id, title) -> AppSelectionChip(id in selectedSources, {
                                 source = selectedSources.toMutableSet().apply { if (!add(id)) remove(id) }.joinToString(","); page = 0
                             }, label = { Text(title) }) }
                         }
@@ -194,7 +197,7 @@ import cc.novelia.app.ui.navigation.AppController
     }
     if (create) TextPrompt("新建云端收藏夹", "名称", onDismiss = { create = false }) { title -> c.action { c.api.post(path, mapOf("title" to title)); version++ } }
     rename?.let { folder -> TextPrompt("重命名收藏夹", "名称", folder.title, { rename = null }) { title -> c.action { c.api.put("$path/${folder.id}", mapOf("title" to title)); version++ } } }
-    deleting?.let { folder -> ConfirmDialog("删除「${folder.title}」？", "移除该云端收藏夹，小说内容不受影响。", { deleting = null }) {
+    deleting?.let { folder -> ConfirmDialog("删除「${folder.title}」？", "移除该云端收藏夹，小说内容不受影响。", { deleting = null }, confirmLabel = "删除收藏夹") {
         c.action { c.api.request("DELETE", "$path/${folder.id}"); folderId = ""; page = 0; version++ }
     } }
 }

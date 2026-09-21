@@ -109,7 +109,7 @@ import kotlinx.coroutines.withContext
             item { Text("不包含登录会话、账号凭据、待同步操作、下载任务和网络章节缓存。备份单文件上限 128 MB，总计上限 1 GB。请将备份保存到设备之外，以便换机或卸载后恢复。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
     }
-    if (confirm) ConfirmDialog("合并恢复阅读资料？", "将按上方规则合并备份。当前资料会保留；恢复完成前不要强制停止应用。", { confirm = false }) {
+    if (confirm) ConfirmDialog("合并恢复阅读资料？", "将按上方规则合并备份。当前资料会保留；恢复完成前不要强制停止应用。", { confirm = false }, confirmLabel = "合并恢复资料") {
         val id = stagingId
         if (id != null) c.action {
             busy = true; error = null
@@ -122,7 +122,7 @@ import kotlinx.coroutines.withContext
             finally { busy = false }
         }
     }
-    if (confirmLastGood) ConfirmDialog("恢复最后良好副本？", "使用当前显示的良好副本恢复读写。损坏的原文件会另存保留，以便后续排查。", { confirmLastGood = false }) {
+    if (confirmLastGood) ConfirmDialog("恢复最后良好副本？", "使用当前显示的良好副本恢复读写。损坏的原文件会另存保留，以便后续排查。", { confirmLastGood = false }, confirmLabel = "恢复良好副本") {
         c.action("已恢复最后良好副本") { busy = true; try { c.store.recoverLastGood() } finally { busy = false } }
     }
 }

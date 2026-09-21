@@ -17,12 +17,16 @@ import androidx.compose.ui.node.DrawModifierNode
  * LocalEInkMode 还会影响翻屏方式，LocalReducedMotion 只表达静态显示需求，二者不能混为一谈。
  * 页面可嵌套此入口，为单书电子纸偏好建立局部作用域。
  */
-@Composable internal fun AppInteractionMode(eInk: Boolean, reducedMotion: Boolean, content: @Composable () -> Unit) {
+internal val LocalScrollPageButtons = staticCompositionLocalOf { true }
+
+@Composable internal fun AppInteractionMode(eInk: Boolean, reducedMotion: Boolean,
+    showScrollPageButtons: Boolean = LocalScrollPageButtons.current, content: @Composable () -> Unit) {
     val durationScale = rememberCoroutineScope().coroutineContext[MotionDurationScale]
     val static = eInk || reducedMotion || !android.animation.ValueAnimator.areAnimatorsEnabled() ||
         (durationScale?.scaleFactor ?: 1f) == 0f
     CompositionLocalProvider(
         LocalEInkMode provides eInk,
+        LocalScrollPageButtons provides showScrollPageButtons,
         LocalReducedMotion provides static,
         LocalRippleConfiguration provides if(static) null else LocalRippleConfiguration.current,
         LocalIndication provides if(static) StaticIndication else LocalIndication.current,

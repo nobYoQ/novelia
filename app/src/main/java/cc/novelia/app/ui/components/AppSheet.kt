@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import cc.novelia.app.ui.theme.appReducedMotion
 
@@ -13,7 +14,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
     else AppDialog(onDismissRequest, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxWidth(.95f).fillMaxHeight(.9f), shape = MaterialTheme.shapes.large) {
             Column {
-                TextButton(onClick = onDismissRequest, modifier = Modifier.fillMaxWidth()) { Text("关闭面板") }
+                TextButton(onClick = onDismissRequest, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("关闭面板") }
                 HorizontalDivider()
                 Column(Modifier.weight(1f), content = content)
             }

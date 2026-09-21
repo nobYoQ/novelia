@@ -69,16 +69,17 @@ import kotlinx.coroutines.withContext
             }
         }
         LaunchedEffect(locateRequest, currentIndex) {
-            if(locateRequest > 0 && currentIndex >= 0) { locate(); onLocated() }
+            // Initial opening must settle at the current chapter immediately, even deep in a long book.
+            if(locateRequest > 0 && currentIndex >= 0) { scroll.scrollToItem(currentIndex); onLocated() }
         }
         Column {
             Text("目录", Modifier.padding(start = 20.dp, top = 16.dp).semantics { heading() }, style = MaterialTheme.typography.titleMedium)
             OutlinedTextField(query, onQuery, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).testTag("reader-toc-query"),
                 label = { Text("搜索章节") }, leadingIcon = { Icon(Icons.Outlined.Search, null) }, singleLine = true)
             Row(Modifier.padding(horizontal = 8.dp)) {
-                TextButton(onClick = { onReversed(!reversed) }) { Text(if(reversed) "倒序" else "正序") }
-                TextButton(onClick = { scope.launch(Dispatchers.Main.immediate) { locate() } }, enabled = currentIndex >= 0) { Text("定位当前") }
-                if(query.isNotBlank()) TextButton(onClick = { onQuery("") }) { Text("清空") }
+                TextButton(onClick = { onReversed(!reversed) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if(reversed) "倒序" else "正序") }
+                TextButton(onClick = { scope.launch(Dispatchers.Main.immediate) { locate() } }, enabled = currentIndex >= 0, modifier = Modifier.heightIn(min = 48.dp)) { Text("定位当前") }
+                if(query.isNotBlank()) TextButton(onClick = { onQuery("") }, modifier = Modifier.heightIn(min = 48.dp)) { Text("清空") }
             }
             HorizontalDivider()
             AppLazyColumn(state = scroll, modifier = Modifier.weight(1f).testTag("reader-toc-list")) {

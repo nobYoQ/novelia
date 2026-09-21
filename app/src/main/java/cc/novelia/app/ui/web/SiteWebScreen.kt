@@ -19,6 +19,7 @@ import cc.novelia.app.ui.components.Screen
 import cc.novelia.app.ui.components.ScreenPageButtons
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.theme.LocalEInkMode
+import cc.novelia.app.ui.theme.LocalScrollPageButtons
 import cc.novelia.app.ui.theme.appReducedMotion
 
 /**
@@ -85,7 +86,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
                 TextButton(onClick = { web.reload() }) { Text("重试") }
             }
             AndroidView(factory = { web }, modifier = Modifier.weight(1f).fillMaxWidth())
-            if(eInk) ScreenPageButtons(canGoBack, canGoForward, web::page)
+            if(eInk && LocalScrollPageButtons.current) ScreenPageButtons(canGoBack, canGoForward, web::page)
         }
     }
 }

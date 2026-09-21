@@ -17,4 +17,4 @@ import cc.novelia.app.ui.theme.LocalEInkMode
 @Composable fun TogglePreference(title: String, subtitle: String, value: Boolean, onChange: (Boolean) -> Unit) { ListItem(headlineContent = { Text(title) }, supportingContent = if(subtitle.isNotBlank()) ({ Text(subtitle) }) else null, trailingContent = {
     if(LocalEInkMode.current) Icon(if(value) Icons.Outlined.ToggleOn else Icons.Outlined.ToggleOff, null, Modifier.size(48.dp), tint = if(value) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
     else Switch(value, onCheckedChange = null)
-}, modifier = Modifier.toggleable(value = value, role = Role.Switch, onValueChange = onChange)) }
+}, modifier = Modifier.heightIn(min = 48.dp).toggleable(value = value, role = Role.Switch, onValueChange = onChange)) }
