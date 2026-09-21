@@ -1,0 +1,89 @@
+# 设置、笔记与个人数据
+
+[返回业务功能索引](README.md) · [文档总目录](../README.md)
+
+本页说明设置的生效范围、笔记操作和不同导出功能的用途。主要入口为 [SettingsScreen.kt](../../app/src/main/java/cc/novelia/app/ui/settings/SettingsScreen.kt)、[NotesScreen.kt](../../app/src/main/java/cc/novelia/app/ui/notes/NotesScreen.kt) 与 [ReaderPreferences.kt](../../app/src/main/java/cc/novelia/app/ui/reader/ReaderPreferences.kt)。
+
+## 1. 设置归属与生效范围
+
+| 设置 | 保存位置/作用域 | 说明 |
+| --- | --- | --- |
+| 应用主题 | `LibraryState.theme` | 系统、浅色、深色，控制应用界面 |
+| 默认阅读设置 | `LibraryState.reader` | 为未设置单书偏好的作品提供阅读默认值 |
+| 单书阅读设置 | `LibraryState.bookSettings[bookKey]` | 保存整份该书的 `ReaderSettings`，不是只保存与默认值不同的字段 |
+| 减少动效 | `LibraryState.reducedMotion` | 影响应用交互与过渡；具体组件还会结合系统和电子纸模式 |
+| 屏蔽书籍/标签/用户 | 相应 `blocked*` 集合 | 本地展示过滤，不向服务端设置账号屏蔽关系 |
+| 隐藏小说评论 | `hideNovelComments` | 面向小说评论区域，不等于隐藏整个社区 |
+| 下载网络约束 | `wifiOnly` | 创建下载任务时设置 WorkManager 网络约束 |
+| 云端筛选自动收起 | `autoCollapseCloudFilters` | 影响相关筛选界面的展开/收起行为 |
+
+修改默认阅读设置后，已经保存单书设置的作品仍使用单书快照。排查“改了设置却没生效”时，先确认是否存在覆盖值，再检查当前阅读模式。书籍键是保存偏好的关联依据，不能用可能重复或可修改的标题作键。
+
+应用主题和阅读器纸张/配色是不同设置。电子纸切换还通过 `withEInkMode` 保存和恢复普通模式、电子纸模式的翻页偏好；不要只修改 `eInk` 布尔值而绕开已有转换逻辑。具体分页、字号、行距、双语与朗读行为见[阅读器文档](reader.md)。
+
+## 2. 设置修改与持久化
+
+设置通过 `LocalStore.update` 更新内存快照，由持久化层合并写盘。普通滑块通常在拖动结束时提交，电子纸界面采用步进操作，减少连续重绘。UI 已展示新值不等于文件已经提交，导出或生命周期边界仍需等待相应 `flush()`。
+
+添加新设置时应同时检查模型默认值、UI 控件范围、单书覆盖、普通设置备份、完整资料备份及恢复校验。字段进入 `LibraryState` 并不代表自动进入 `SettingsBackup`，后者有独立白名单。
+
+## 3. 普通设置 JSON 与完整资料 ZIP
+
+| 项目 | 普通设置导出 | 阅读资料备份 |
+| --- | --- | --- |
+| 格式 | `SettingsBackup(version = 1)` JSON | `novelia-library` ZIP |
+| 用途 | 迁移部分界面、阅读与过滤偏好 | 保存书架、进度、笔记、本地文档等阅读资料 |
+| 本地小说及插图 | 不包含 | 按文档清单包含，可选带原件 |
+| 书架、进度、笔记、草稿 | 不包含 | 包含，恢复时按规则合并 |
+| 登录信息 | 不包含 | 不包含 |
+| 恢复方式 | 校验后应用设置字段 | 解包、验证、预览、合并 |
+
+[SettingsBackup.kt](../../app/src/main/java/cc/novelia/app/data/model/SettingsBackup.kt) 的字段为：`reader`、`theme`、`reducedMotion`、`blockedBooks`、`blockedTags`、`blockedUsers`、`hideNovelComments`、`wifiOnly`、`autoCollapseCloudFilters`。单书设置、自动云端同步开关、更新通知、关键词词典和待同步任务不在该普通设置格式中。
+
+普通设置导入会检查版本、主题、部分阅读数值范围和引擎优先级等条件。它与完整资料备份使用不同的校验流程，不能把一方的校验能力套用到另一方。换机操作及具体合并规则见[备份与恢复](../data/backup-and-recovery.md)。
+
+## 4. 网络、缓存与后台开关
+
+### 网络约束
+
+设置中的下载 `wifiOnly` 对应 WorkManager 的 `UNMETERED` 约束，即要求非计费网络。它不严格等价于“只能使用 Wi-Fi”，也不会自动约束应用所有 HTTP 请求。
+
+阅读器预取使用自己的 `prefetchWifiOnly`，会检查 Wi-Fi 网络传输类型。排查移动网络行为时应分别看下载、阅读预取、云端同步和更新检查的调用入口。后台任务还受系统调度影响，满足网络条件不保证立即执行。
+
+### 清缓存
+
+清缓存处理网络章节、元数据、章节新鲜度及 Coil 图片缓存。正在进行的章节请求通过缓存代次避免旧结果再次写回。它保留本地导入文档、书架资料和下载成品，因此通常不能用来释放本地小说占用的空间。
+
+删除本地文档、移出书架、移除下载记录和清缓存是不同操作，影响范围分别见[书架](library.md)、[文件与下载](files-and-downloads.md)及[数据存储](../data/data-and-storage.md)。
+
+### 通知与同步
+
+更新通知和自动云端同步是独立设置。Android 13 及以上通知还需要运行时权限；已启用更新检查不代表系统允许展示通知。周期更新检查受 WorkManager 调度，约定周期不等于准确的提醒时刻。
+
+## 5. 书签与笔记
+
+书签和笔记保存在 `LibraryState.notes`。每条记录包含书籍键、章节 ID、段落索引、摘录、用户文字、创建时间及可选标题快照。
+
+[NotePresentation.kt](../../app/src/main/java/cc/novelia/app/ui/notes/NotePresentation.kt) 在展示时补全旧记录：优先使用笔记自带标题，其次使用本地书架标题；章节标题可以从同章节的已存位置补全，最后显示章节 ID。列表按创建时间倒序，搜索覆盖书名、章节名、摘录和笔记正文，也可按书籍筛选。
+
+| 操作 | 当前行为 |
+| --- | --- |
+| 回到原文 | 根据书籍键重建 `BookRef`，保存该章节的位置后进入阅读器 |
+| 编辑 | 更新同一笔记 ID 对应的用户文字 |
+| 分享 | 通过系统分享入口发送书名、章节、摘录和笔记文本 |
+| 删除 | 移除该记录，并提供 Snackbar 撤销 |
+| 撤销删除 | 在当前状态上重新加入缺失的笔记，不覆盖其他同期操作 |
+
+笔记段落索引从 0 开始；界面显示和写回 `Position.index` 时使用相应的加一约定。维护跳转时应与阅读器的原文段落锚点一起检查，不能拿当前双语投影行号或屏幕页码代替原始位置。
+
+笔记不是云端进度同步的一部分。当前分享入口导出的是单条文本；批量保存全部笔记应使用完整阅读资料备份。作品已被移出书架后，笔记可能仍存在，但“回到原文”能否成功还取决于章节或本地文档是否可用。
+
+## 6. 回归检查
+
+- 全局设置、单书覆盖和恢复默认值分别检查，尤其是电子纸模式来回切换。
+- 导出普通设置后核对范围，不应出现书库或登录资料；导入非法版本/范围应失败。
+- 清缓存后本地小说、笔记和下载成品仍可用；旧请求不能把缓存写回来。
+- 笔记空标题、移除书籍、搜索无结果、删除撤销和原文跳转均有合理表现。
+- 通知未授权、计费 Wi-Fi、非 Wi-Fi 的非计费网络等情况按各功能的实际约束判断。
+
+相关测试入口包括 [ReaderPreferencesTest](../../app/src/test/java/cc/novelia/app/ReaderPreferencesTest.kt)、[LibraryPresentationTest](../../app/src/test/java/cc/novelia/app/LibraryPresentationTest.kt) 和 [LocalCacheTest](../../app/src/test/java/cc/novelia/app/data/cache/LocalCacheTest.kt)。真实系统分享、文件选择器和通知权限需要设备验证。

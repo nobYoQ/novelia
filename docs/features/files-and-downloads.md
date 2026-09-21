@@ -1,6 +1,6 @@
 # 文件导入、下载与工具开发
 
-[返回开发手册](README.md)
+[返回业务功能索引](README.md) · [文档总目录](../README.md)
 
 本文说明当前实现中的本地文档处理和远程文件下载。修改相关功能时，应同时考虑磁盘文件、持久化任务状态、会话切换和 Android 文档选择器的生命周期。
 
@@ -8,17 +8,17 @@
 
 | 职责 | 主要文件 |
 | --- | --- |
-| URI 暂存、来源去重、导入事务 | [DownloadImport.kt](../app/src/main/java/cc/novelia/app/files/DownloadImport.kt) |
-| 格式分派、编码、文本与内存 EPUB 工具 | [DocumentTools.kt](../app/src/main/java/cc/novelia/app/files/DocumentTools.kt) |
-| 基于磁盘文件的 EPUB 读取 | [EpubReader.kt](../app/src/main/java/cc/novelia/app/files/EpubReader.kt) |
-| EPUB 图片压缩 | [EpubCompressor.kt](../app/src/main/java/cc/novelia/app/files/EpubCompressor.kt) |
-| WorkManager 下载及任务操作 | [DownloadWorker.kt](../app/src/main/java/cc/novelia/app/files/DownloadWorker.kt) |
-| 下载锁、临时文件与完成提交 | [DownloadFiles.kt](../app/src/main/java/cc/novelia/app/files/DownloadFiles.kt) |
-| 工具结果的待导出文件 | [PendingExportFiles.kt](../app/src/main/java/cc/novelia/app/files/PendingExportFiles.kt) |
-| 书架导入及原件导出 | [ShelfScreen.kt](../app/src/main/java/cc/novelia/app/ui/shelf/ShelfScreen.kt)、[DocumentAccess.kt](../app/src/main/java/cc/novelia/app/ui/components/DocumentAccess.kt) |
-| 下载表单、下载管理 | [DownloadSheet.kt](../app/src/main/java/cc/novelia/app/ui/downloads/DownloadSheet.kt)、[DownloadsScreen.kt](../app/src/main/java/cc/novelia/app/ui/downloads/DownloadsScreen.kt) |
-| 文件工具、术语表导入导出 | [ToolsScreen.kt](../app/src/main/java/cc/novelia/app/ui/tools/ToolsScreen.kt)、[GlossaryScreen.kt](../app/src/main/java/cc/novelia/app/ui/book/GlossaryScreen.kt) |
-| 文档目录和持久化接口 | [LocalStore.kt](../app/src/main/java/cc/novelia/app/data/storage/LocalStore.kt) |
+| URI 暂存、来源去重、导入事务 | [DownloadImport.kt](../../app/src/main/java/cc/novelia/app/files/DownloadImport.kt) |
+| 格式分派、编码、文本与内存 EPUB 工具 | [DocumentTools.kt](../../app/src/main/java/cc/novelia/app/files/DocumentTools.kt) |
+| 基于磁盘文件的 EPUB 读取 | [EpubReader.kt](../../app/src/main/java/cc/novelia/app/files/EpubReader.kt) |
+| EPUB 图片压缩 | [EpubCompressor.kt](../../app/src/main/java/cc/novelia/app/files/EpubCompressor.kt) |
+| WorkManager 下载及任务操作 | [DownloadWorker.kt](../../app/src/main/java/cc/novelia/app/files/DownloadWorker.kt) |
+| 下载锁、临时文件与完成提交 | [DownloadFiles.kt](../../app/src/main/java/cc/novelia/app/files/DownloadFiles.kt) |
+| 工具结果的待导出文件 | [PendingExportFiles.kt](../../app/src/main/java/cc/novelia/app/files/PendingExportFiles.kt) |
+| 书架导入及原件导出 | [ShelfScreen.kt](../../app/src/main/java/cc/novelia/app/ui/shelf/ShelfScreen.kt)、[DocumentAccess.kt](../../app/src/main/java/cc/novelia/app/ui/components/DocumentAccess.kt) |
+| 下载表单、下载管理 | [DownloadSheet.kt](../../app/src/main/java/cc/novelia/app/ui/downloads/DownloadSheet.kt)、[DownloadsScreen.kt](../../app/src/main/java/cc/novelia/app/ui/downloads/DownloadsScreen.kt) |
+| 文件工具、术语表导入导出 | [ToolsScreen.kt](../../app/src/main/java/cc/novelia/app/ui/tools/ToolsScreen.kt)、[GlossaryScreen.kt](../../app/src/main/java/cc/novelia/app/ui/book/GlossaryScreen.kt) |
+| 文档目录和持久化接口 | [LocalStore.kt](../../app/src/main/java/cc/novelia/app/data/storage/LocalStore.kt) |
 
 ## 本地导入流程
 
@@ -80,7 +80,7 @@ SRT 按空行划分字幕块，生成一个标题为“字幕”的章节。序�
 | EPUB 单张插图 | 16 MiB | 跳过该图片 |
 | 磁盘导入 TXT/SRT 正文、EPUB 累计正文 | 16 × 1024 × 1024 个字符 | 拒绝；不是字节限制 |
 | 网络下载文件 | 512 MiB | 检查响应长度及实际累计字节，超限失败 |
-| 文库上传 | 40 MiB，仅 EPUB/TXT | [BookScreen](../app/src/main/java/cc/novelia/app/ui/book/BookScreen.kt) 在发送前拒绝 |
+| 文库上传 | 40 MiB，仅 EPUB/TXT | [BookScreen](../../app/src/main/java/cc/novelia/app/ui/book/BookScreen.kt) 在发送前拒绝 |
 
 下载允许的文件可能超过导入上限。因此，“已完成”只代表文件下载完成，不能保证应用内能够导入阅读；用户仍可导出或交给其他应用打开。
 
@@ -90,9 +90,9 @@ SRT 按空行划分字幕块，生成一个标题为“字幕”的章节。序�
 
 ### 创建任务
 
-下载表单收集内容模式、译文顺序、是否并列译文和输出格式，通过 [NoveliaApi.downloadUrl](../app/src/main/java/cc/novelia/app/data/network/NoveliaApi.kt) 请求原站生成已有内容的文件。它不创建新的翻译任务。网络小说可选 EPUB/TXT；文库分卷沿用原分卷格式。
+下载表单收集内容模式、译文顺序、是否并列译文和输出格式，通过 [NoveliaApi.downloadUrl](../../app/src/main/java/cc/novelia/app/data/network/NoveliaApi.kt) 请求原站生成已有内容的文件。它不创建新的翻译任务。网络小说可选 EPUB/TXT；文库分卷沿用原分卷格式。
 
-表单为任务创建 UUID，替换文件名中的路径及常见非法字符，并添加任务 ID 前缀。`DownloadEntry` 记录文件名、URL、展示状态、进度、错误、可选父作品及当前 `workId`，模型定义见 [DownloadEntry.kt](../app/src/main/java/cc/novelia/app/data/model/DownloadEntry.kt)。
+表单为任务创建 UUID，替换文件名中的路径及常见非法字符，并添加任务 ID 前缀。`DownloadEntry` 记录文件名、URL、展示状态、进度、错误、可选父作品及当前 `workId`，模型定义见 [DownloadEntry.kt](../../app/src/main/java/cc/novelia/app/data/model/DownloadEntry.kt)。
 
 `enqueue` 创建一次性 `DownloadWorker`，输入为任务 ID 与入队时的账号名，以 `download-<id>` 为唯一任务名，使用 `ExistingWorkPolicy.REPLACE`。它先持久化“等待下载”和新的 `workId`，再提交 WorkManager。网络约束为 `CONNECTED`，或启用“仅 Wi-Fi”时的 `UNMETERED`；后者实际表达 Android 的“非按流量计费网络”约束。
 
@@ -153,7 +153,7 @@ Worker 先获取任务锁，核对记录仍存在、未暂停、`workId` 一致�
 
 ### 外部打开和分享
 
-[AndroidManifest.xml](../app/src/main/AndroidManifest.xml) 将 FileProvider 注册为 `${applicationId}.files`，`exported=false`、`grantUriPermissions=true`。[file_paths.xml](../app/src/main/res/xml/file_paths.xml) 只开放应用私有 `filesDir` 下的 `downloads/` 和 `exports/`。
+[AndroidManifest.xml](../../app/src/main/AndroidManifest.xml) 将 FileProvider 注册为 `${applicationId}.files`，`exported=false`、`grantUriPermissions=true`。[file_paths.xml](../../app/src/main/res/xml/file_paths.xml) 只开放应用私有 `filesDir` 下的 `downloads/` 和 `exports/`。
 
 已完成下载通过 `content://` URI 交给其他应用，附加 `FLAG_GRANT_READ_URI_PERMISSION`。外部打开对 EPUB 使用 `application/epub+zip`，其他下载使用 `text/plain`；分享使用 `application/octet-stream`。不要改用 `file://`，也不要为方便分享而把整个私有文件目录加入 FileProvider。
 
@@ -163,7 +163,7 @@ Manifest 没有申请广泛的存储读写权限，也没有将应用注册成�
 
 当前没有图片 OCR 识别入口，也不再为该功能下载或运行模型。不要根据 `repairOcr` 的历史函数名推断应用仍具备图像文字识别能力。
 
-- [NoveliaApplication.kt](../app/src/main/java/cc/novelia/app/NoveliaApplication.kt) 初始化后调用 [RetiredModels.kt](../app/src/main/java/cc/novelia/app/files/RetiredModels.kt)，清理 `noBackupFilesDir/ocr-models`。
+- [NoveliaApplication.kt](../../app/src/main/java/cc/novelia/app/NoveliaApplication.kt) 初始化后调用 [RetiredModels.kt](../../app/src/main/java/cc/novelia/app/files/RetiredModels.kt)，清理 `noBackupFilesDir/ocr-models`。
 - 清理仅针对这一个旧模型目录，使用不跟随符号链接的文件树遍历，不应扩展为任意下载目录清理。
 - 用户旧的校对文本保留在 `drafts["tool:local-ocr"]`。文件工具出现“取回上次校对文本”按钮，将它载入普通文本换行整理功能。
 - 旧草稿迁移与模型清理应分别验证，不能把用户校对文本当作模型缓存删除。
@@ -189,14 +189,14 @@ Manifest 没有申请广泛的存储读写权限，也没有将应用注册成�
 
 | 测试 | 主要覆盖 |
 | --- | --- |
-| [DocumentToolsTest](../app/src/test/java/cc/novelia/app/DocumentToolsTest.kt) | EPUB spine 顺序、插图顺序、压缩包路径逃逸、SRT 时间戳、编码、文本整理、片假名计数 |
-| [FileImportRegressionTest](../app/src/test/java/cc/novelia/app/FileImportRegressionTest.kt) | 磁盘导入图片流、输入和 XHTML 上限、异常 ZIP 大小声明、文本处理取消 |
-| [DownloadFilesTest](../app/src/test/java/cc/novelia/app/DownloadFilesTest.kt) | 活跃临时文件保护、删除与完成提交竞争、旧任务提交拒绝、任务间互不阻塞 |
-| [PendingExportFilesTest](../app/src/test/java/cc/novelia/app/PendingExportFilesTest.kt) | 仅凭已保存 ID 恢复导出、取消/失败清理、缺失文件、非法 ID、准备过程取消 |
-| [RetiredModelsTest](../app/src/test/java/cc/novelia/app/files/RetiredModelsTest.kt) | 旧模型清理与其他目录保留、重复清理 |
-| [FileToolsUpgradeTest](../app/src/androidTest/java/cc/novelia/app/ui/tools/FileToolsUpgradeTest.kt) | Android 界面中恢复旧校对文本 |
-| [DownloadSheetLayoutTest](../app/src/androidTest/java/cc/novelia/app/ui/downloads/DownloadSheetLayoutTest.kt) | 下载表单布局与滚动可访问性 |
-| [DownloadLiveTest](../app/src/androidTest/java/cc/novelia/app/integration/DownloadLiveTest.kt) | 真实服务生成 EPUB、WorkManager 下载及解析；需显式 `live=true` |
+| [DocumentToolsTest](../../app/src/test/java/cc/novelia/app/DocumentToolsTest.kt) | EPUB spine 顺序、插图顺序、压缩包路径逃逸、SRT 时间戳、编码、文本整理、片假名计数 |
+| [FileImportRegressionTest](../../app/src/test/java/cc/novelia/app/FileImportRegressionTest.kt) | 磁盘导入图片流、输入和 XHTML 上限、异常 ZIP 大小声明、文本处理取消 |
+| [DownloadFilesTest](../../app/src/test/java/cc/novelia/app/DownloadFilesTest.kt) | 活跃临时文件保护、删除与完成提交竞争、旧任务提交拒绝、任务间互不阻塞 |
+| [PendingExportFilesTest](../../app/src/test/java/cc/novelia/app/PendingExportFilesTest.kt) | 仅凭已保存 ID 恢复导出、取消/失败清理、缺失文件、非法 ID、准备过程取消 |
+| [RetiredModelsTest](../../app/src/test/java/cc/novelia/app/files/RetiredModelsTest.kt) | 旧模型清理与其他目录保留、重复清理 |
+| [FileToolsUpgradeTest](../../app/src/androidTest/java/cc/novelia/app/ui/tools/FileToolsUpgradeTest.kt) | Android 界面中恢复旧校对文本 |
+| [DownloadSheetLayoutTest](../../app/src/androidTest/java/cc/novelia/app/ui/downloads/DownloadSheetLayoutTest.kt) | 下载表单布局与滚动可访问性 |
+| [DownloadLiveTest](../../app/src/androidTest/java/cc/novelia/app/integration/DownloadLiveTest.kt) | 真实服务生成 EPUB、WorkManager 下载及解析；需显式 `live=true` |
 
 可从仓库根目录选择运行纯 JVM 回归测试：
 

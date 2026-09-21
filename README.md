@@ -7,7 +7,7 @@
 - [GitHub 发行版](https://github.com/nobYoQ/novelia/releases)：下载 APK，查看版本说明和 SHA-256 校验文件。若没有已发布版本，请按下文自行构建。
 - [问题反馈与功能建议](https://github.com/nobYoQ/novelia/issues)：客户端问题请在本项目反馈；原站内容和账号问题请联系原站。
 - [更新记录](CHANGELOG.md) · [贡献指南](CONTRIBUTING.md) · [安全政策](SECURITY.md) · [手动发布指南](RELEASING.md)
-- [开发手册](docs/README.md)：环境搭建、架构、模块实现、测试、性能、发布与排障；[源码目录导航](docs/source-layout.md) 按界面、数据职责和测试类型定位代码。
+- [项目文档](docs/README.md)：按开发、架构、业务功能、数据、网络、质量和维护分类；[业务功能索引](docs/features/README.md) 按操作查流程，[源码目录导航](docs/architecture/source-layout.md) 按界面、数据职责和测试类型定位代码。
 
 当前正在准备首次 GitHub 发行，源码与文档已采用 GPL-3.0；贴纸公开分发授权仍待确认，详见 [来源与素材声明](NOTICE.md)。既有本地测试包与未来正式发布证书可能不同，升级前请先备份阅读资料并阅读发行说明。
 
@@ -44,7 +44,7 @@
 ./build-release.ps1 -Abi arm64-v8a -Verify -Offline
 ```
 
-APK 与 SHA-256 校验文件输出到 `artifacts/packages/debug/` 或 `artifacts/packages/release-local/`，Release 同时保留 R8 映射；日志在 `artifacts/logs/`。这些入口允许未提交的本地改动，重复构建会覆盖同版本、模式和 ABI 的产物，不会自动安装或上传。完整参数与未签名构建见 [环境搭建与构建](docs/getting-started.md)。
+APK 与 SHA-256 校验文件输出到 `artifacts/packages/debug/` 或 `artifacts/packages/release-local/`，Release 同时保留 R8 映射；日志在 `artifacts/logs/`。这些入口允许未提交的本地改动，重复构建会覆盖同版本、模式和 ABI 的产物，不会自动安装或上传。完整参数与未签名构建见 [环境搭建与构建](docs/development/getting-started.md)。
 
 构建入口复用 `build.ps1`：优先使用 `JAVA_HOME`，未设置时依次尝试 Android Studio JBR 和 PATH；无效的 `JAVA_HOME` 会报错。Gradle 缓存放入本项目 `.gradle-home`。在 `local.properties` 中配置 Android SDK，例如 `sdk.dir=D\:/Android/sdk`。该文件不应提交。
 
@@ -77,7 +77,7 @@ adb shell am instrument -w -r -e class cc.novelia.app.ui.reader.AppFlowTest cc.n
 | 目录 | 内容 |
 | --- | --- |
 | `data` | 模型、网络、会话、存储、同步等 13 个职责包，根目录保留旧后台任务兼容入口 |
-| `ui` | 按界面及共享职责划分的 17 个子包，详见 [源码目录导航](docs/source-layout.md) |
+| `ui` | 按界面及共享职责划分的 17 个子包，详见 [源码目录导航](docs/architecture/source-layout.md) |
 | `reader` | 段落投影、译文回退、前台 TTS 服务 |
 | `files` | EPUB/TXT/SRT、图片压缩、后台下载 |
 | `src/test` | 无账号的 JVM 测试；数据层测试按对应职责分包 |
@@ -85,7 +85,7 @@ adb shell am instrument -w -r -e class cc.novelia.app.ui.reader.AppFlowTest cc.n
 
 界面代码位于 `app/src/main/java/cc/novelia/app/ui/`：书架在 `shelf/`，发现在 `discover/`，书籍详情在 `book/`，阅读器在 `reader/`，社区在 `community/`，账号与设置分别在 `account/`、`settings/`。页面专用组件和展示逻辑与所属界面放在一起，跨界面组件、导航、主题、Markdown 与反馈各有独立目录。
 
-数据层位于同级 `data/`：领域模型在 `model/`，API 在 `network/`，本地持久化在 `storage/`，云端写入在 `sync/`，更新检查在 `updates/`。设备测试的 package 与所属目录一致，例如阅读流程测试为 `cc.novelia.app.ui.reader.AppFlowTest`；详见 [测试指南](docs/testing.md)。
+数据层位于同级 `data/`：领域模型在 `model/`，API 在 `network/`，本地持久化在 `storage/`，云端写入在 `sync/`，更新检查在 `updates/`。设备测试的 package 与所属目录一致，例如阅读流程测试为 `cc.novelia.app.ui.reader.AppFlowTest`；详见 [测试指南](docs/quality/testing.md)。
 
 轻量状态使用原子 JSON 文件持久化；章节、书籍元数据、原始文件、插图、下载分别存放。账号访问令牌使用 Android Keystore 加密；密码在原站认证页中处理。普通设置导出不包含访问令牌、认证 Cookie 或待同步操作。
 

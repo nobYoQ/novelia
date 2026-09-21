@@ -1,12 +1,12 @@
 # 性能测量
 
-[返回开发手册](README.md)
+[返回质量验证索引](README.md) · [文档总目录](../README.md)
 
-性能修改要有可复现的前后数据，并注明测量边界。工程提供三种互补工具：离线数据/排版场景、Macrobenchmark、Baseline Profile 采集。实现和现有测量定义见 [benchmark/README.md](../benchmark/README.md)。
+性能修改要有可复现的前后数据，并注明测量边界。工程提供三种互补工具：离线数据/排版场景、Macrobenchmark、Baseline Profile 采集。实现和现有测量定义见 [benchmark/README.md](../../benchmark/README.md)。
 
 ## 离线数据与排版场景
 
-[PerformanceScenarioTest.kt](../app/src/androidTest/java/cc/novelia/app/performance/PerformanceScenarioTest.kt) 在独立临时目录中生成数据，使用 ContextWrapper 隔离数据路径，测量后刷新并清理本次夹具。它没有使用真实书库作为性能数据源。
+[PerformanceScenarioTest.kt](../../app/src/androidTest/java/cc/novelia/app/performance/PerformanceScenarioTest.kt) 在独立临时目录中生成数据，使用 ContextWrapper 隔离数据路径，测量后刷新并清理本次夹具。它没有使用真实书库作为性能数据源。
 
 | 场景 | 分别测量 |
 | --- | --- |
@@ -27,7 +27,7 @@
 
 ## 启动与帧测量
 
-[ReadingBenchmark.kt](../benchmark/src/main/java/cc/novelia/benchmark/ReadingBenchmark.kt) 中：
+[ReadingBenchmark.kt](../../benchmark/src/main/java/cc/novelia/benchmark/ReadingBenchmark.kt) 中：
 
 - `ReadingBenchmark.coldStart`：冷启动，等待书架入口，收集启动和帧时间，重复 5 次。
 - `ReadingBenchmark.shelfAndSettings`：书架滚动、进入阅读与外观设置、返回，收集帧时间，重复 5 次。
@@ -55,7 +55,7 @@ benchmark 模块要求 API 28 及以上。采集使用专用设备与可安装�
 
 `ReadingBaselineProfile.startup` 只收集启动路径，并设置 `includeInStartupProfile=true`；`localNavigation` 收集本地导航和设置，明确不纳入 startup profile。这样启动 DEX 布局与非启动路径的 profile 责任保持清楚。
 
-当前 [app 配置](../app/build.gradle.kts) 设置 `automaticGenerationDuringBuild=false`；[benchmark 配置](../benchmark/build.gradle.kts) 设置 `useConnectedDevices=true`。普通构建不会自动启动设备生成 profile。
+当前 [app 配置](../../app/build.gradle.kts) 设置 `automaticGenerationDuringBuild=false`；[benchmark 配置](../../benchmark/build.gradle.kts) 设置 `useConnectedDevices=true`。普通构建不会自动启动设备生成 profile。
 
 查看可用生成任务：
 

@@ -1,24 +1,24 @@
 # 测试与验收
 
-[返回开发手册](README.md)
+[返回质量验证索引](README.md) · [文档总目录](../README.md)
 
 ## 测试层次
 
 | 层次 | 位置 | 适合验证 | 限制 |
 | --- | --- | --- | --- |
-| JVM | [app/src/test](../app/src/test/java/cc/novelia/app) | 纯逻辑、JSON、查询参数、MockWebServer、文件及同步边界 | 不能证明真实 Android UI、WebView、Keystore 和字体排版正确 |
-| 设备 instrumentation | [app/src/androidTest](../app/src/androidTest/java/cc/novelia/app) | Compose 导航、手势、布局、Android 文件和排版行为 | 需要专用设备/模拟器；部分测试修改应用内数据 |
+| JVM | [app/src/test](../../app/src/test/java/cc/novelia/app) | 纯逻辑、JSON、查询参数、MockWebServer、文件及同步边界 | 不能证明真实 Android UI、WebView、Keystore 和字体排版正确 |
+| 设备 instrumentation | [app/src/androidTest](../../app/src/androidTest/java/cc/novelia/app) | Compose 导航、手势、布局、Android 文件和排版行为 | 需要专用设备/模拟器；部分测试修改应用内数据 |
 | 显式启用的站点联调 | 同上，`live` / `liveSite` 参数 | 公开接口、已有内容下载、认证表单和站内页面 | 依赖外部网络、站点与内容；默认跳过 |
-| 性能 | [benchmark](../benchmark)、`PerformanceScenarioTest` | 启动、帧时间、数据处理和排版 | 结果需附设备与构建条件，见 [性能指南](performance.md) |
+| 性能 | [benchmark](../../benchmark)、`PerformanceScenarioTest` | 启动、帧时间、数据处理和排版 | 结果需附设备与构建条件，见 [性能指南](performance.md) |
 | 手工验收 | 专用真机/模拟器 | 文件选择器、真实 TTS 引擎、后台行为、升级迁移 | 明确记录测试设备与未验证范围 |
 
 当前没有 CI，提交者和维护者需手动执行检查。测试数量会随代码变化，不把固定数字当作门禁；报告中的成功、失败、跳过应分别记录。历史通过记录不能代表当前提交通过。
 
-测试目录与 package 保持一致，分类地图见 [源码目录导航](source-layout.md)。JVM 的 `data/` 测试按生产职责分包；设备测试按 `ui/` 界面与组件、`data/backup/`、`integration/`、`performance/` 分类。`--tests`、instrumentation 的 `class` 参数和 IDE 运行配置应使用当前位置对应的全名，应用 ID 与 runner 无需随目录整理修改。
+测试目录与 package 保持一致，分类地图见 [源码目录导航](../architecture/source-layout.md)。JVM 的 `data/` 测试按生产职责分包；设备测试按 `ui/` 界面与组件、`data/backup/`、`integration/`、`performance/` 分类。`--tests`、instrumentation 的 `class` 参数和 IDE 运行配置应使用当前位置对应的全名，应用 ID 与 runner 无需随目录整理修改。
 
 ## 常规检查
 
-以下 PowerShell 7 命令在仓库根执行，环境配置见 [构建指南](getting-started.md)。
+以下 PowerShell 7 命令在仓库根执行，环境配置见 [构建指南](../development/getting-started.md)。
 
 ```powershell
 ./build-debug.ps1 -Verify
@@ -30,7 +30,7 @@
 ./build-release.ps1 -Verify
 ```
 
-这个入口生成使用 Debug 测试证书签名的本地 Release 包，不需要发布私钥。若只需未签名产物可加 `-Unsigned`。参数与归档位置见 [构建指南](getting-started.md)。
+这个入口生成使用 Debug 测试证书签名的本地 Release 包，不需要发布私钥。若只需未签名产物可加 `-Unsigned`。参数与归档位置见 [构建指南](../development/getting-started.md)。
 
 `build.ps1 -Tasks` 仍可直接组合 Gradle 任务，例如 `@(':app:assembleRelease', ':app:testReleaseUnitTest', ':app:lintRelease')` 默认生成未签名 Release。聚焦某一逻辑测试可以减少反馈时间：
 
@@ -53,6 +53,7 @@ JVM 报告在 `app/build/reports/tests/testDebugUnitTest/`，XML 结果在 `app/
 | 文档存储与导入 | `data.documents.DocumentStorageTest`、`data.documents.DocumentHashIndexTest`、`FileImportRegressionTest`、`DocumentToolsTest` |
 | 下载/导出生命周期 | `DownloadFilesTest`、`PendingExportFilesTest`、`DownloadCelebrationTest` |
 | 阅读投影/进度 | `ReaderProjectionTest`、`ReaderPreferencesTest`、`ReadingContinuityTest`、`ReaderChapterLoadTest`、`ReaderSafetyTest` |
+| 书籍摘要、云端元数据和进度展示 | `BookMetadataTest`、`CloudBookMetadataTest`、`BookListPresentationTest`、`FavoritePresentationTest` |
 | 分页/搜索/插图 | `StaticPaginationTest`、`ReaderExactSearchTest`、`ReaderChapterOverscrollTest`、`IllustrationTransformTest` |
 | 搜索、关键词、书源 | `ReaderAndLinksTest`、`SearchExpressionBoundaryTest`、`KeywordCatalogTest`、`KeywordObservationTest` |
 | 分卷与更新检查 | `WenkuVolumesTest`、`BookUpdatesTest`、`TranslationFreshnessTest`、`data.updates.UpdateCheckOrderTest` |
@@ -60,6 +61,8 @@ JVM 报告在 `app/build/reports/tests/testDebugUnitTest/`，XML 结果在 `app/
 | Markdown 与编辑器 | `MarkdownTest`、`SiteMarkdownTest`、`MarkdownAnchorsTest`、`MarkdownTemplatesTest`、`EditorStateRegressionTest` |
 
 新测试应表达用户能遇到的错误或关键不变量。例如账号切换时旧响应不得写入当前界面、损坏 ZIP 不得覆盖可用书库、双语投影改变后仍定位同一原文段落。不要只断言实现刚赋给自身的值。
+
+各功能的人工核对场景见[业务功能索引](../features/README.md)中的专题末尾；登录与备份分别见[会话验证](../network/authentication.md)和[恢复验证](../data/backup-and-recovery.md)。功能文档中的场景是选择测试范围的依据，不是已执行结果。纯文档迁移的链接、编码和内容保留检查见[文档维护规则](../maintenance/documentation.md)。
 
 ## 设备测试
 
@@ -102,10 +105,10 @@ Gradle 设备 HTML 报告位于 `app/build/reports/androidTests/connected/` 下�
 
 | 测试类 | 开关 | 内容 |
 | --- | --- | --- |
-| [LiveReadOnlyTest](../app/src/androidTest/java/cc/novelia/app/integration/LiveReadOnlyTest.kt) | `live=true` | 公开目录、详情与已有章节 |
-| [DownloadLiveTest](../app/src/androidTest/java/cc/novelia/app/integration/DownloadLiveTest.kt) | `live=true` | 请求并解析已有译文的 EPUB 下载 |
-| [AuthPageTest](../app/src/androidTest/java/cc/novelia/app/integration/AuthPageTest.kt) | `live=true` | 认证页面表单可见性，不填写凭据 |
-| [SiteWebNavigationTest](../app/src/androidTest/java/cc/novelia/app/ui/web/SiteWebNavigationTest.kt) | `liveSite=true` | 部分用例访问原站教程、链接、锚点和图片，其余用例不受此开关控制 |
+| [LiveReadOnlyTest](../../app/src/androidTest/java/cc/novelia/app/integration/LiveReadOnlyTest.kt) | `live=true` | 公开目录、详情与已有章节 |
+| [DownloadLiveTest](../../app/src/androidTest/java/cc/novelia/app/integration/DownloadLiveTest.kt) | `live=true` | 请求并解析已有译文的 EPUB 下载 |
+| [AuthPageTest](../../app/src/androidTest/java/cc/novelia/app/integration/AuthPageTest.kt) | `live=true` | 认证页面表单可见性，不填写凭据 |
+| [SiteWebNavigationTest](../../app/src/androidTest/java/cc/novelia/app/ui/web/SiteWebNavigationTest.kt) | `liveSite=true` | 部分用例访问原站教程、链接、锚点和图片，其余用例不受此开关控制 |
 
 例如只选公开阅读测试：
 

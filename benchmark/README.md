@@ -25,4 +25,4 @@ JSON 与文本报告写入应用外部文件目录 `performance/scenarios-<运�
 
 用模拟器验证测试是否完整执行即可。发布性能结论应在同一台低端真机上，保持 release 构建、供电、温度、系统字体、屏幕和编译状态一致，保留完整报告并比较多次分布。生成 Baseline Profile 也不等于已经获得性能提升，必须保留前后实测数据。
 
-UI 和 data 拆包后，已清理旧包描述符及相关不稳定的编译器/R8 合成名称。迁移后的覆盖尚待专用设备重新采集，具体状态和命令见 [性能 Profile 维护](../docs/baseline-profiles.md)；现有 Profile 的手工清理不能当作重新测量结果。
+UI 和 data 拆包后，已清理旧包描述符及相关不稳定的编译器/R8 合成名称。迁移后的覆盖尚待专用设备重新采集，具体状态和命令见 [性能 Profile 维护](../docs/quality/baseline-profiles.md)；现有 Profile 的手工清理不能当作重新测量结果。

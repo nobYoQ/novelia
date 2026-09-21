@@ -1,6 +1,6 @@
 # 性能 Profile 的维护
 
-[返回开发手册](README.md) · [性能测量](performance.md)
+[返回质量验证索引](README.md) · [文档总目录](../README.md) · [性能测量](performance.md)
 
 `app/src/release/generated/baselineProfiles/` 中的 `baseline-prof.txt` 和 `startup-prof.txt` 是已提交的采集产物，普通 Release 构建会使用它们；自动重新采集处于关闭状态。该目录仅放 Profile 数据，构建工具会读取其中的文件，不能把 README 等普通说明放进去。
 

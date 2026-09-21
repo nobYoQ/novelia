@@ -1,6 +1,6 @@
 # 排障指南
 
-[返回开发手册](README.md)
+[返回发布与维护索引](README.md) · [文档总目录](../README.md)
 
 先记录提交/版本、构建类型、设备 API/ABI、入口和具体错误，再定位最小失败步骤。以下操作优先保留用户资料；不要把卸载、清数据或删除全部缓存作为第一步。
 
@@ -9,13 +9,13 @@
 | 现象 | 先核对 | 处理 |
 | --- | --- | --- |
 | `JAVA_HOME 无效` / 找不到 Java | `JAVA_HOME` 是否为 JDK 根目录，目录下是否有 `bin/java.exe` | 修正当前环境或 Android Studio 的 Gradle JDK；不要指向 `bin` 或 `java.exe` 本身 |
-| Kotlin/Java 目标版本错误 | 工程目标为 17；IDE 和命令行是否采用不同 JDK | 使用 [环境基线](getting-started.md)，不要通过改低源代码目标掩盖环境差异 |
+| Kotlin/Java 目标版本错误 | 工程目标为 17；IDE 和命令行是否采用不同 JDK | 使用 [环境基线](../development/getting-started.md)，不要通过改低源代码目标掩盖环境差异 |
 | `SDK location not found` | `local.properties` 的路径和转义；Android Studio SDK 设置 | 配置本机 SDK，不提交机器路径 |
 | 找不到 Platform 36/构建工具 | SDK Manager 已安装组件 | 安装缺失组件，按发布示例准备签名工具；不要随意修改 compileSdk |
 | 下载 Gradle/依赖失败 | 失败主机、代理、网络权限、缓存是否完整 | 检查访问条件；首次构建不使用 `-Offline`，已有完整缓存才使用离线模式 |
 | IDE 可构建但脚本离线失败 | IDE 与 `build.ps1` 缓存目录可能不同 | 脚本使用项目 `.gradle-home/`；先完成该环境的正常依赖解析 |
-| `Unsupported targetAbi` | 是否把 `universal` 传给了 Gradle | 通用构建省略 `targetAbi`；`universal` 只用于附件脚本的 `-Abi` |
-| 缺少签名变量 | 是否意外传了 `-PreleaseSigning=true` | 普通贡献构建无需此参数；正式发布按 [RELEASING.md](../RELEASING.md) 注入环境 |
+| `Unsupported targetAbi` | `targetAbi` 是否为当前支持值 | 支持 `universal`、`arm64-v8a`、`armeabi-v7a`、`x86_64`、`x86`；省略或使用 `universal` 均不增加单 ABI 过滤，详见 [Gradle 配置](../../app/build.gradle.kts) |
+| 缺少签名变量 | 是否意外传了 `-PreleaseSigning=true` | 普通贡献构建无需此参数；正式发布按 [RELEASING.md](../../RELEASING.md) 注入环境 |
 
 环境确认后，聚焦失败任务运行。需要堆栈可追加 `--stacktrace`，公开前检查日志；签名任务不要启用 build scan 或包含敏感信息的调试日志。不要以清空整个用户 Gradle 缓存或禁用证书校验作为常规修复。
 
@@ -30,7 +30,7 @@
 | 站点测试显示跳过 | 是否显式选择对应类并传入 `live=true` 或 `liveSite=true`；跳过不等于已联调通过 |
 | UI 测试找不到文本 | 当前模式、字体、屏幕尺寸、滚动位置与是否仍处加载态；先看截图和层级，不直接增大全局等待时间 |
 
-部分测试会修改应用资料，相关前提和命令见 [测试指南](testing.md)。
+部分测试会修改应用资料，相关前提和命令见 [测试指南](../quality/testing.md)。
 
 ## 登录、网络与同步
 
@@ -47,11 +47,11 @@
 | 已联网但后台未立刻执行 | WorkManager 受约束及系统调度影响；手动同步与后台任务不是相同触发方式 |
 | 页面仍显示旧数据 | 检查详情缓存的账号键、变更时间、缓存代次与 forceNetwork 行为 |
 
-本地书架、笔记和文件会在退出登录后保留，不是“账号没有退出”的证据。章节缓存也不是按账号分库，详见 [数据边界](data-and-storage.md)。帖子/评论提交失败时不能默认自动重发，先确认服务端是否已接收。
+本地书架、笔记和文件会在退出登录后保留，不是“账号没有退出”的证据。章节缓存也不是按账号分库，详见 [数据边界](../data/data-and-storage.md)。帖子/评论提交失败时不能默认自动重发，先确认服务端是否已接收。
 
 ## 文件、备份与下载
 
-导入失败先核对格式和实际大小。下载上限与本地文件导入上限不同，完成下载不保证一定能在应用内导入；当前限制和各工具处理路径见 [文件文档](files-and-downloads.md)。
+导入失败先核对格式和实际大小。下载上限与本地文件导入上限不同，完成下载不保证一定能在应用内导入；当前限制和各工具处理路径见 [文件文档](../features/files-and-downloads.md)。
 
 - EPUB 缺章或顺序错误：检查 OPF/spine、目录与正文引用，不只看 ZIP 中的文件名排序。用最小合法或畸形夹具复现。
 - TXT 乱码：核对原文件编码和识别回退路径，不把源文件中文直接改成拼音或问号。
@@ -73,14 +73,14 @@
 | 电子纸下没有惯性或动画 | 静态交互模式的预期行为；区分全局和单书设置及预设恢复 |
 | 浮层/筛选位置变化 | 大屏/窄屏、键盘、列表滚动状态、自动收起设置和减少动效模式 |
 | 朗读无声音或语言不匹配 | 系统 TTS 引擎和语音包、语言选择、媒体音量、朗读服务状态 |
-| 大目录或长章节变慢 | 按 [性能指南](performance.md) 区分 I/O、投影、排版和渲染，不仅依靠主观滑动感受 |
+| 大目录或长章节变慢 | 按 [性能指南](../quality/performance.md) 区分 I/O、投影、排版和渲染，不仅依靠主观滑动感受 |
 
-阅读器实现和测试定位见 [reader.md](reader.md)，页面路由/主题/Markdown 见 [ui-and-navigation.md](ui-and-navigation.md)。
+阅读器实现和测试定位见 [reader.md](../features/reader.md)，页面路由/主题/Markdown 见 [ui-and-navigation.md](../architecture/ui-and-navigation.md)。
 
 ## 发行脚本
 
 准备附件时若工作区不干净或标签不匹配，应先审查并完成正常提交/标签流程，不绕过检查。目录已存在则保留原产物，确认是否需要新版本或在安全位置归档后重新准备，不能静默覆盖公开版本。
 
-证书不匹配或检测到 Debug 证书时停止分发，核对长期发布证书及公开指纹。源码 ZIP、APK 和元数据必须对应同一提交。具体输出、参数和验收见 [发布指南](../RELEASING.md)。
+证书不匹配或检测到 Debug 证书时停止分发，核对长期发布证书及公开指纹。源码 ZIP、APK 和元数据必须对应同一提交。具体输出、参数和验收见 [发布指南](../../RELEASING.md)。
 
-提交问题时使用 [Issue 表单](../.github/ISSUE_TEMPLATE/bug_report.yml)，给出最小复现与脱敏错误。可能涉及漏洞或私密数据时按 [SECURITY.md](../SECURITY.md) 报告。
+提交问题时使用 [Issue 表单](../../.github/ISSUE_TEMPLATE/bug_report.yml)，给出最小复现与脱敏错误。可能涉及漏洞或私密数据时按 [SECURITY.md](../../SECURITY.md) 报告。

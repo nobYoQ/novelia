@@ -2,7 +2,7 @@
 
 本项目通过 [GitHub Releases](https://github.com/nobYoQ/novelia/releases) 分发 APK，安装包不提交到 Git。当前不配置 CI 或自动发布工作流；以下操作由维护者在可信设备执行。
 
-日常本地打包使用 `./build-debug.ps1` 或 `./build-release.ps1`，详见 [本地构建指南](docs/getting-started.md)。本地 Release 默认使用 Debug 测试证书，输出到 `artifacts/packages/`，允许未提交改动且无需标签；它不等于本页的正式发行流程。正式附件仍由 `scripts/prepare-release.ps1` 准备。
+日常本地打包使用 `./build-debug.ps1` 或 `./build-release.ps1`，详见 [本地构建指南](docs/development/getting-started.md)。本地 Release 默认使用 Debug 测试证书，输出到 `artifacts/packages/`，允许未提交改动且无需标签；它不等于本页的正式发行流程。正式附件仍由 `scripts/prepare-release.ps1` 准备。
 
 ## 首次发布前
 

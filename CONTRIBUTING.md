@@ -2,7 +2,7 @@
 
 客户端问题请提交到 [Issues](https://github.com/nobYoQ/novelia/issues)；原站内容、账号与服务端权限问题应联系原站。较大的功能或架构调整请先开 Issue 讨论范围。
 
-首次参与请从 [开发手册](docs/README.md) 开始；架构、模块实现、扩展步骤和测试选择均在 `docs/` 维护。
+首次参与请从 [项目文档](docs/README.md) 开始；架构、业务功能、扩展步骤和测试选择均在 `docs/` 按职责分类维护。新增或移动说明时遵循 [文档分类与维护规则](docs/maintenance/documentation.md)，同步更新分类索引和相对链接。
 
 ## 开发环境
 
@@ -29,7 +29,7 @@ sh ./gradlew --no-daemon :app:assembleDebug :app:testDebugUnitTest :app:lintDebu
 
 - 外部贡献者从 Fork 创建功能分支，通过 PR 合入 `main`；一个 PR 聚焦一个问题。
 - Kotlin 遵循现有风格与 `.editorconfig`，UTF-8 无 BOM；避免无关的全文件重排。
-- 源码按 [目录导航与归档规则](docs/source-layout.md) 放入所属功能包；独立页面使用独立文件，通用组件进入 `ui/components/`，数据层按职责归档，测试与对应包保持一致。同步维护 package、引用、测试类名筛选和文档链接。
+- 源码按 [目录导航与归档规则](docs/architecture/source-layout.md) 放入所属功能包；独立页面使用独立文件，通用组件进入 `ui/components/`，数据层按职责归档，测试与对应包保持一致。同步维护 package、引用、测试类名筛选和文档链接。
 - 移动 Worker 时保留已排队任务的旧类名兼容，移动或拆分源码时检查性能 Profile 中的描述符；不能只修改 imports 就认为升级与性能采集产物也已同步。
 - 数据存储、备份、账号隔离、文件解析和阅读进度变更应补充有意义的回归测试。
 - UI 变更提供复现步骤和截图，说明普通模式、电子纸、减少动效及大屏布局的检查情况。
