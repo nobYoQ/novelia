@@ -10,6 +10,10 @@ local.properties
 *.jks
 *.keystore
 captures/
+
+# Build packages, logs and release bundles
+/outputs/
+# Legacy local output directories
 artifacts/
 
 # Local release bundles and generated Android packages

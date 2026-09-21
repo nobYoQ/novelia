@@ -87,13 +87,15 @@ sh ./gradlew --no-daemon :app:assembleDebug :app:testDebugUnitTest :app:lintDebu
 
 | 模式 | 入口 | 归档目录 |
 | --- | --- | --- |
-| `debug` | `build-debug.ps1` | `artifacts/packages/debug/` |
-| `release-local` | `build-release.ps1` | `artifacts/packages/release-local/` |
-| `release-unsigned` | `build-release.ps1 -Unsigned` | `artifacts/packages/release-unsigned/` |
+| `debug` | `build-debug.ps1` | `outputs/packages/debug/` |
+| `release-local` | `build-release.ps1` | `outputs/packages/release-local/` |
+| `release-unsigned` | `build-release.ps1 -Unsigned` | `outputs/packages/release-unsigned/` |
 
-构建日志写入 `artifacts/logs/build-<模式>-<ABI>-<时间戳>.log`。本地脚本允许工作区有未提交修改，无需版本标签；重复构建会覆盖同版本、模式和 ABI 的归档文件，日志另存。它们不安装应用、不生成正式发行附件，也不上传文件。需要保留某次本地安装包时应另行归档。
+构建日志写入 `outputs/logs/build-<模式>-<ABI>-<时间戳>.log`。直接调用 `build.ps1` 时，默认日志为 `outputs/logs/build-gradle-<时间戳>.log`，仍可通过 `-LogPath` 指定其他位置。本地脚本允许工作区有未提交修改，无需版本标签；重复构建会覆盖同版本、模式和 ABI 的归档文件，日志另存。它们不安装应用、不生成正式发行附件，也不上传文件。需要保留某次本地安装包时应另行归档。
 
-正式分发使用 [prepare-release.ps1](../../scripts/prepare-release.ps1)：要求干净工作区、匹配版本的标签和正式证书，输出到 `releases/`，详见 [发布指南](../../RELEASING.md)。本地 Release 的测试证书不适合公开发行。
+正式分发使用 [prepare-release.ps1](../../scripts/prepare-release.ps1)：要求干净工作区、匹配版本的标签和正式证书，输出到 `outputs/releases/`，详见 [发布指南](../../RELEASING.md)。本地 Release 的测试证书不适合公开发行。
+
+`outputs/` 由脚本自动创建并整体忽略，是收集安装包、日志和正式附件的统一目录。Gradle 中间文件与原始测试报告仍位于各模块的 `build/`，具体路径见下表。清理旧日志、测试截图或临时夹具前，应确认没有需要保留的发行映射和验证记录；不要将依赖缓存、`local.properties`、签名材料或尚未提交的源码当作临时产物删除。
 
 ## 运行与 Gradle 构建产物
 

@@ -39,7 +39,7 @@ try {
     foreach ($name in @('NOVELIA_KEYSTORE_PATH', 'NOVELIA_KEYSTORE_PASSWORD', 'NOVELIA_KEY_ALIAS', 'NOVELIA_KEY_PASSWORD')) {
         if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) { throw "缺少签名环境变量：$name。请在本机安全配置，不要粘贴到 Issue 或聊天中。" }
     }
-    $outputPath = Join-Path $rootPath "releases/$tag-$Abi"
+    $outputPath = Join-Path $rootPath "outputs/releases/$tag-$Abi"
     if (Test-Path -LiteralPath $outputPath) { throw '发行目录已存在；为避免覆盖，先自行核对并归档旧目录。' }
 
     $tasks = @(':app:testReleaseUnitTest', ':app:lintRelease', ':app:assembleRelease', '-PreleaseSigning=true')

@@ -25,10 +25,12 @@ if (-not $javaExecutable) {
     if ($javaCommand) { $javaExecutable = $javaCommand.Source }
 }
 if (-not $javaExecutable) { throw '需要 JDK 17 或更新版本，请设置 JAVA_HOME。' }
-if ($LogPath) {
-    $LogPath = [IO.Path]::GetFullPath($LogPath)
-    [IO.Directory]::CreateDirectory((Split-Path -Parent $LogPath)) | Out-Null
+if (-not $LogPath) {
+    $LogPath = Join-Path $rootPath ('outputs/logs/build-gradle-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff') + '.log')
 }
+$LogPath = [IO.Path]::GetFullPath($LogPath)
+[IO.Directory]::CreateDirectory((Split-Path -Parent $LogPath)) | Out-Null
+Write-Host "Gradle 日志：$LogPath"
 $arguments = @('-classpath', (Join-Path $rootPath 'gradle/wrapper/gradle-wrapper.jar'), 'org.gradle.wrapper.GradleWrapperMain', '--no-daemon', '--console=plain') + $Tasks
 if ($Offline) { $arguments += '--offline' }
 $previousGradleHome = $env:GRADLE_USER_HOME
@@ -37,11 +39,7 @@ Push-Location -LiteralPath $rootPath
 try {
     $env:GRADLE_USER_HOME = Join-Path $rootPath '.gradle-home'
     $env:ANDROID_USER_HOME = Join-Path $rootPath '.android'
-    if ($LogPath) {
-        & $javaExecutable @arguments 2>&1 | Tee-Object -FilePath $LogPath
-    } else {
-        & $javaExecutable @arguments
-    }
+    & $javaExecutable @arguments 2>&1 | Tee-Object -FilePath $LogPath
     if ($LASTEXITCODE -ne 0) { throw "Gradle 构建失败，退出码 $LASTEXITCODE" }
 } finally {
     $env:GRADLE_USER_HOME = $previousGradleHome

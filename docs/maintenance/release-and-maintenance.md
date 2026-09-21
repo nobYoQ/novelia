@@ -24,7 +24,7 @@
 
 ## 构建到附件的流程
 
-日常安装测试使用根目录的 [build-debug.ps1](../../build-debug.ps1) 或 [build-release.ps1](../../build-release.ps1)，参数见 [本地构建指南](../development/getting-started.md)。本地脚本允许未提交改动和无标签构建，将 APK、校验文件及 Release 映射归档到 `artifacts/packages/`；默认本地 Release 使用 Debug 测试证书，不能作为正式发行附件。
+日常安装测试使用根目录的 [build-debug.ps1](../../build-debug.ps1) 或 [build-release.ps1](../../build-release.ps1)，参数见 [本地构建指南](../development/getting-started.md)。本地脚本允许未提交改动和无标签构建，将 APK、校验文件及 Release 映射归档到 `outputs/packages/`；默认本地 Release 使用 Debug 测试证书，不能作为正式发行附件。
 
 正式发行则采用以下流程：
 
@@ -56,7 +56,7 @@ flowchart LR
 | `CHANGELOG.md` | 说明变化、迁移与限制 |
 | R8 mapping ZIP | 维护者长期归档，用于解释对应版本的混淆堆栈，可选择公开 |
 
-产物在忽略目录 `releases/` 生成，上传为 GitHub Release 附件，不提交到源码树。多 ABI 共享的源码、声明和更新记录上传一份即可；校验文件引用的名称应保持不变。
+产物在忽略目录 `outputs/releases/` 生成，上传为 GitHub Release 附件，不提交到源码树。多 ABI 共享的源码、声明和更新记录上传一份即可；校验文件引用的名称应保持不变。
 
 正式签名材料是长期维护资产，不是发行附件。直接调用 Gradle 或通过 `build.ps1` 执行 Release 任务时默认未签名；本地 `build-release.ps1` 默认采用测试签名。只有维护者通过正式发行流程显式开启正式签名。旧本地测试包可能与新正式包证书不同，需要先导出并验证阅读资料，再按发行说明迁移，不能假定直接覆盖安装。
 

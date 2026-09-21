@@ -2,7 +2,7 @@
 
 本项目通过 [GitHub Releases](https://github.com/nobYoQ/novelia/releases) 分发 APK，安装包不提交到 Git。当前不配置 CI 或自动发布工作流；以下操作由维护者在可信设备执行。
 
-日常本地打包使用 `./build-debug.ps1` 或 `./build-release.ps1`，详见 [本地构建指南](docs/development/getting-started.md)。本地 Release 默认使用 Debug 测试证书，输出到 `artifacts/packages/`，允许未提交改动且无需标签；它不等于本页的正式发行流程。正式附件仍由 `scripts/prepare-release.ps1` 准备。
+日常本地打包使用 `./build-debug.ps1` 或 `./build-release.ps1`，详见 [本地构建指南](docs/development/getting-started.md)。本地 Release 默认使用 Debug 测试证书，输出到 `outputs/packages/`，允许未提交改动且无需标签；它不等于本页的正式发行流程。正式附件仍由 `scripts/prepare-release.ps1` 准备。
 
 ## 首次发布前
 
@@ -50,7 +50,7 @@ $certificateFingerprint = '<发布证书的 SHA-256 指纹>'
 
 脚本要求版本对应标签已存在且指向 HEAD、工作区干净，运行 Release 单元测试、Lint 和构建，再验证 APK 签名、版本及证书。已缓存依赖时可加 `-Offline`。支持 `arm64-v8a`、`armeabi-v7a`、`x86_64`、`x86` 和 `universal`；较老设备是否支持某个 ABI，应以实际安装验证为准。
 
-输出目录为 `releases/vX.Y.Z-ABI/`。脚本拒绝覆盖已存在的输出目录，不会创建提交、标签、推送或上传。
+输出目录为 `outputs/releases/vX.Y.Z-ABI/`，构建日志默认写入 `outputs/logs/`。脚本拒绝覆盖已存在的输出目录，不会创建提交、标签、推送或上传。
 
 | 附件 | 用途 |
 | --- | --- |
@@ -68,7 +68,7 @@ Linux / macOS 可使用 `sh ./gradlew :app:testReleaseUnitTest :app:lintRelease 
 
 ## 上传与验收
 
-1. 推送已审查的提交和对应版本标签到 GitHub；不要推送密钥或本地 `releases/`。
+1. 推送已审查的提交和对应版本标签到 GitHub；不要推送密钥或本地 `outputs/`。
 2. 在 Releases 选择 **Draft a new release**，选中已经推送的准确标签。
 3. 填写版本变化、最低 Android 版本（API 26 / Android 8.0）、ABI、签名迁移说明、已验证及未验证范围。测试版本勾选 Pre-release。
 4. 上传 APK、对应源码、许可证、校验文件和版本元数据；归档混淆映射。

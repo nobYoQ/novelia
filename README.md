@@ -44,7 +44,7 @@
 ./build-release.ps1 -Abi arm64-v8a -Verify -Offline
 ```
 
-APK 与 SHA-256 校验文件输出到 `artifacts/packages/debug/` 或 `artifacts/packages/release-local/`，Release 同时保留 R8 映射；日志在 `artifacts/logs/`。这些入口允许未提交的本地改动，重复构建会覆盖同版本、模式和 ABI 的产物，不会自动安装或上传。完整参数与未签名构建见 [环境搭建与构建](docs/development/getting-started.md)。
+APK 与 SHA-256 校验文件输出到 `outputs/packages/debug/` 或 `outputs/packages/release-local/`，Release 同时保留 R8 映射；日志在 `outputs/logs/`。这些入口允许未提交的本地改动，重复构建会覆盖同版本、模式和 ABI 的产物，不会自动安装或上传。完整参数与未签名构建见 [环境搭建与构建](docs/development/getting-started.md)。
 
 构建入口复用 `build.ps1`：优先使用 `JAVA_HOME`，未设置时依次尝试 Android Studio JBR 和 PATH；无效的 `JAVA_HOME` 会报错。Gradle 缓存放入本项目 `.gradle-home`。在 `local.properties` 中配置 Android SDK，例如 `sdk.dir=D\:/Android/sdk`。该文件不应提交。
 
@@ -58,7 +58,7 @@ sh ./gradlew --no-daemon :app:assembleDebug :app:testDebugUnitTest :app:lintDebu
 
 仍可用 `./build.ps1 -Tasks @(':app:assembleDebug', ':app:testDebugUnitTest', ':app:lintDebug')` 自选 Gradle 任务；不带参数的 `build.ps1` 保持执行 Debug 构建和单元测试。直接调用 Gradle 或通过 `build.ps1` 执行 `assembleRelease` 时默认未签名。正式 GitHub 发行使用独立的 [发布流程](RELEASING.md)，不要上传本地测试签名包。版本号和版本码统一在 `version.properties` 维护。
 
-`releases/`、构建输出、APK/AAB 安装包、签名旁文件及安装包校验文件由 `.gitignore` 排除，不纳入源码提交。正式安装包上传为 GitHub Release 附件。
+`outputs/`、Gradle 构建目录、APK/AAB 安装包、签名旁文件及安装包校验文件由 `.gitignore` 排除，不纳入源码提交。正式附件准备脚本写入 `outputs/releases/`，正式安装包上传为 GitHub Release 附件；旧 `artifacts/`、`releases/` 仍在忽略规则内。
 
 ## 验证
 

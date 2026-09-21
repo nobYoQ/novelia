@@ -26,7 +26,7 @@ if ($versionName -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$' -or $v
     throw 'version.properties 中的版本配置无效。'
 }
 
-$logDirectory = Join-Path $rootPath 'artifacts/logs'
+$logDirectory = Join-Path $rootPath 'outputs/logs'
 [IO.Directory]::CreateDirectory($logDirectory) | Out-Null
 $logPath = Join-Path $logDirectory ("build-$mode-$Abi-" + (Get-Date -Format 'yyyyMMdd-HHmmss-fff') + '.log')
 $tasks = @()
@@ -64,7 +64,7 @@ try {
         throw 'Release 构建缺少 mapping.txt；没有整理安装包。'
     }
 
-    $outputDirectory = Join-Path $rootPath "artifacts/packages/$mode"
+    $outputDirectory = Join-Path $rootPath "outputs/packages/$mode"
     [IO.Directory]::CreateDirectory($outputDirectory) | Out-Null
     $stem = "Novelia-$versionName-$mode-$Abi"
     $outputApk = Join-Path $outputDirectory "$stem.apk"
