@@ -175,7 +175,7 @@ class LibraryBackupFlowTest {
             assertArrayEquals(byteArrayOf(10, 20, 30), persisted.documentSource(restoredFirst.id, "epub").readBytes())
             assertFalse(persisted.documentSource(restoredSecond.id, "txt").exists())
             assertTrue(restored.pending.isEmpty()); assertTrue(restored.downloads.isEmpty())
-            assertEquals("用户译名", KeywordStore(targetContext).state.value.single { it.original == "ヤンデレ" }.translation)
+            assertEquals("用户译名", KeywordStore(targetContext).state.value.entries.single { it.original == "ヤンデレ" }.translation)
 
             targetTags.setTranslation("ヤンデレ", "本机后续译名")
             target.savePosition(restoredFirst, Position("c1", index = 1, textOffset = 8, updatedAt = 999))
@@ -183,7 +183,7 @@ class LibraryBackupFlowTest {
             assertNull(service.restore(repeated.stagingId))
             assertEquals("重复恢复不得复制相同本地正文", 3, target.state.value.books.size)
             assertEquals(8, target.state.value.positions.getValue(restoredFirst.key).textOffset)
-            assertEquals("本机后续译名", targetTags.state.value.single { it.original == "ヤンデレ" }.translation)
+            assertEquals("本机后续译名", targetTags.state.value.entries.single { it.original == "ヤンデレ" }.translation)
         } }
     }
 

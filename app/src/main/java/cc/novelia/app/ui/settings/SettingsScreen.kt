@@ -37,6 +37,7 @@ import kotlinx.serialization.encodeToString
     val state by c.store.state.collectAsStateWithLifecycle(); var reader by remember { mutableStateOf(false) }; var clear by remember { mutableStateOf(false) }; var size by remember { mutableStateOf<Long?>(null) }
     var clearing by remember { mutableStateOf(false) }
     val preferenceState = rememberReaderPreferencesState()
+    val keywordTransfer = rememberKeywordTransfer(c)
     LaunchedEffect(c) { size = withContext(Dispatchers.IO) { c.store.cacheSize() + (c.app.imageLoader.diskCache?.size ?: 0L) } }
     val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> c.message(if(granted) "已允许通知" else "可在系统设置中开启通知") }
     val exportSettings = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri -> uri?.let { c.action("设置已导出") { val s = c.store.state.value; val backup = SettingsBackup(reader = s.reader, theme = s.theme, reducedMotion = s.reducedMotion, blockedBooks = s.blockedBooks, blockedTags = s.blockedTags, blockedUsers = s.blockedUsers, hideNovelComments = s.hideNovelComments, wifiOnly = s.wifiOnly, autoCollapseCloudFilters = s.autoCollapseCloudFilters); withContext(Dispatchers.IO) { c.app.contentResolver.openOutputStream(it)?.use { output -> output.write(appJson.encodeToString(backup).toByteArray()) } ?: error("无法写入文件") } } } }
@@ -55,6 +56,8 @@ import kotlinx.serialization.encodeToString
         item { MenuRow("导出普通设置", "阅读偏好、外观与屏蔽名单，不含账号会话", Icons.Outlined.IosShare, { exportSettings.launch("novelia-settings.json") }) }
         item { MenuRow("备份与恢复阅读资料", "迁移书架、阅读进度、笔记和本地小说", Icons.Outlined.Backup, { c.go("backup") }) }
         item { MenuRow("导入普通设置", "从 Novelia 设置文件恢复偏好", Icons.Outlined.FileOpen, { importSettings.launch(arrayOf("application/json", "*/*")) }) }
+        item { MenuRow("标签库与分类", "搜索全部本地标签，管理译名与分类", Icons.Outlined.Label, { c.go("keywords") }) }
+        item { KeywordTransferControls(keywordTransfer) }
         item { MetaParagraph("本地数据", "小说文件、书签和偏好保存在此设备。系统文件选择器负责导入和导出，无需申请全部存储空间权限。卸载应用会删除这些数据，请先导出需要保留的文件。") }
     } }
     if(reader) AppSheet(onDismissRequest = { reader = false }) { ReaderPreferences(state.reader, state = preferenceState) { value -> c.store.update { it.copy(reader = value) } } }

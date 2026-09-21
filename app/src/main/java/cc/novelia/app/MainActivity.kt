@@ -52,6 +52,7 @@ import cc.novelia.app.ui.settings.BlockedScreen
 import cc.novelia.app.ui.settings.CloudSyncScreen
 import cc.novelia.app.ui.settings.LibraryBackupScreen
 import cc.novelia.app.ui.settings.SettingsScreen
+import cc.novelia.app.ui.discover.KeywordLibraryScreen
 import cc.novelia.app.ui.shelf.AdaptiveLibraryScreen
 import cc.novelia.app.ui.shelf.BookUpdatesScreen
 import cc.novelia.app.ui.shelf.FavoriteSheet
@@ -172,6 +173,7 @@ class MainActivity : ComponentActivity() {
                                 composable("login") { LoginScreen(controller) }
                                 composable("settings") { SettingsScreen(controller) }
                                 composable("backup") { LibraryBackupScreen(controller) }
+                                composable("keywords") { KeywordLibraryScreen(controller) }
                                 composable("sync") { CloudSyncScreen(controller) }
                                 composable("updates") { BookUpdatesScreen(controller) }
                                 composable("downloads") { DownloadsScreen(controller) }

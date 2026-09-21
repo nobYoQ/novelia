@@ -77,7 +77,7 @@ import kotlinx.coroutines.withContext
                 }
             } }
             item {
-                Text("保存书架、收藏夹、进度、笔记、阅读偏好、分卷挂载与排序、个人术语和标签翻译。备份始终包含可阅读的本地正文与插图；没有原始文件也能恢复阅读。", style = MaterialTheme.typography.bodyMedium)
+                Text("保存书架、收藏夹、进度、笔记、阅读偏好、分卷挂载与排序、个人术语、标签翻译和自定义分类。备份始终包含可阅读的本地正文与插图；没有原始文件也能恢复阅读。", style = MaterialTheme.typography.bodyMedium)
             }
             item {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {

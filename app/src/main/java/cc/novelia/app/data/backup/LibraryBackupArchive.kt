@@ -1,7 +1,8 @@
 package cc.novelia.app.data.backup
 
-import cc.novelia.app.data.catalog.KeywordCatalog
 import cc.novelia.app.data.catalog.KeywordEntry
+import cc.novelia.app.data.catalog.KeywordLibrary
+import cc.novelia.app.data.catalog.KeywordLibraryFormat
 import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.LocalDocument
 import cc.novelia.app.data.storage.appJson
@@ -25,7 +26,8 @@ import kotlinx.serialization.encodeToString
     val missingDocuments: List<String> = emptyList(),
     val originalsIncluded: Boolean = false,
     val keywords: List<KeywordEntry> = emptyList(),
-    val assets: Map<String, BackupAsset>
+    val assets: Map<String, BackupAsset>,
+    val keywordCategories: List<String>? = null,
 )
 
 data class BackupPreview(
@@ -155,8 +157,7 @@ internal object LibraryBackupArchive {
             }
         }
         require(expected == manifest.assets.keys) { "备份包含未引用的文档或图片" }
-        require(manifest.keywords.size <= KeywordCatalog.MAX_ENTRIES && manifest.keywords.map { it.original }.distinct().size == manifest.keywords.size &&
-            manifest.keywords.all { it.original.isNotBlank() && it.original.length <= KeywordCatalog.MAX_TEXT_LENGTH && it.translation.length <= KeywordCatalog.MAX_TEXT_LENGTH }) { "备份标签索引无效" }
+        KeywordLibraryFormat.validate(manifest.keywordLibrary())
         return manifest
     }
 
@@ -172,6 +173,9 @@ internal object LibraryBackupArchive {
         return total
     }
 }
+
+internal fun LibraryBackupManifest.keywordLibrary(): KeywordLibrary = keywordCategories?.let { KeywordLibrary(keywords, it) }
+    ?: KeywordLibrary.fromLegacy(keywords, addDefaults = false)
 
 internal fun localDocumentIds(state: LibraryState): Set<String> = (
     state.books.map { it.book.ref.key } + state.positions.keys + state.notes.map { it.key } + state.bookSettings.keys + state.personalGlossaries.keys

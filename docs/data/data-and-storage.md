@@ -50,7 +50,7 @@
 | `downloads/` | 下载成品和任务暂存文件 | 由下载任务管理，与章节缓存不同 |
 | `exports/` | 导出时使用的临时文件 | 不等于用户在系统选择器中选定的最终文件 |
 | `backup-staging/<UUID>/` | 待确认恢复的解包目录 | 先验证、预览，再显式合并 |
-| `keyword-catalog.json` | 已观察的标签及用户翻译 | 独立 `KeywordStore` 管理 |
+| `keyword-catalog.json` | 已观察的标签、用户翻译及分类（含空分类） | 独立 `KeywordStore` 原子保存版本化 `KeywordLibrary`，兼容旧标签数组 |
 
 `AtomicFile` 还可能产生 `.bak`、`.new` 等伴随文件，不应绕过该 API 随意处理它们。网络图片由 Coil 保存在 `Context.cacheDir/images`，磁盘预算 128 MiB；这与用户本地文档中的图片不是一类数据。
 

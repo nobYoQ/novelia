@@ -60,8 +60,9 @@ class LibraryBackupService(private val store: LocalStore, private val keywords: 
         val portable = snapshot.copy(books = snapshot.books.map { saved ->
             if (saved.book.ref.isLocal) saved.copy(book = saved.book.copy(cover = null)) else saved
         })
+        val vocabulary = keywords.exportLibrary()
         val manifest = LibraryBackupManifest("novelia-library", 1, System.currentTimeMillis(), portable, documents,
-            missing, includeOriginals, keywords.exportSnapshot(), files.mapValues { LibraryBackupArchive.digest(it.value) { work.ensureActive() } })
+            missing, includeOriginals, vocabulary.entries, files.mapValues { LibraryBackupArchive.digest(it.value) { work.ensureActive() } }, vocabulary.categories)
         LibraryBackupArchive.write(output, manifest, files) { work.ensureActive() }
         } finally { exportStage.deleteRecursively() }
     }
@@ -164,7 +165,7 @@ class LibraryBackupService(private val store: LocalStore, private val keywords: 
                     committed = true
                     // A catalogue failure does not invalidate the successfully committed library.
                     // Keep the stage for a retry; merge is idempotent and existing translations win.
-                    val catalogueError = runCatching { keywords.mergeSnapshot(manifest.keywords); keywords.flush() }.exceptionOrNull()
+                    val catalogueError = runCatching { keywords.mergeLibrary(manifest.keywordLibrary()); keywords.flush() }.exceptionOrNull()
                     if (catalogueError == null) directory.deleteRecursively()
                     if (catalogueError == null) null else "阅读资料已恢复，但标签词典暂未保存；请保留备份并稍后重试。"
                 }

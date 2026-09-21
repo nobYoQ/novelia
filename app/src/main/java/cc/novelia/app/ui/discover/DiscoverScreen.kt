@@ -122,10 +122,11 @@ import kotlinx.coroutines.delay
                         val autoCollapseAssistant = category == 1 && local.autoCollapseCloudFilters
                         val collapseAssistant = rememberCloudFilterCollapse(autoCollapseAssistant, assistantExpanded) { assistantExpanded = false }
                         if(category == 1) {
-                            SearchAssistantPanel(query, keywords, assistantExpanded, { assistantExpanded = it },
+                            SearchAssistantPanel(query, keywords.entries, assistantExpanded, { assistantExpanded = it },
                                 onApply = { expression -> query = expression; search() },
                                 onSaveTranslation = c.app.keywords::setTranslation,
-                                onHelp = { c.go("article/64f3d63f794cbb1321145c07") }, persistenceError = keywordPersistenceError)
+                                onHelp = { c.go("article/64f3d63f794cbb1321145c07") }, persistenceError = keywordPersistenceError,
+                                categoryNames = keywords.categories, libraryActions = rememberKeywordLibraryActions(c.app.keywords))
                         }
                         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(if(submitted.isBlank()) "浏览全部" else "搜索：$submitted", Modifier.weight(1f), maxLines = 1, style = MaterialTheme.typography.labelLarge)

@@ -10,6 +10,7 @@ data class KeywordEntry(
     val common: Boolean = false,
     val lastUsedAt: Long = 0,
     val translationEdited: Boolean = false,
+    val categoryEdited: Boolean = false,
 ) {
     val label: String get() = if(translation.isBlank()) original else "$original ($translation)"
 }
@@ -18,7 +19,7 @@ data class KeywordEntry(
 object KeywordCatalog {
     const val MAX_TEXT_LENGTH = 256
     const val MAX_ENTRIES = 20_000
-    val categories = listOf("全部", "题材", "人物", "情节", "其他")
+    val defaultCategories = listOf("题材", "人物", "情节", "其他")
     val common = listOf(
         KeywordEntry("ファンタジー", "奇幻", "题材", true),
         KeywordEntry("ラブコメ", "爱情喜剧", "题材", true),
@@ -59,7 +60,7 @@ object KeywordCatalog {
         val valid = entries.filter { it.original.isNotBlank() && it.original.length <= MAX_TEXT_LENGTH && it.translation.length <= MAX_TEXT_LENGTH }
             .distinctBy { it.original }
         if(valid.size <= limit) return valid
-        return valid.withIndex().sortedWith(compareByDescending<IndexedValue<KeywordEntry>> { it.value.translationEdited }
+        return valid.withIndex().sortedWith(compareByDescending<IndexedValue<KeywordEntry>> { it.value.translationEdited || it.value.categoryEdited }
             .thenByDescending { it.value.lastUsedAt }.thenByDescending { it.value.common }.thenByDescending { it.index })
             .take(limit).sortedBy { it.index }.map { it.value }
     }
@@ -86,16 +87,18 @@ object KeywordCatalog {
         return bounded(entries.filterNot { it.original == original } + existing.copy(translation = translation, translationEdited = true))
     }
 
-    fun merge(current: List<KeywordEntry>, incoming: Collection<KeywordEntry>): List<KeywordEntry> {
+    fun merge(current: List<KeywordEntry>, incoming: Collection<KeywordEntry>, addDefaults: Boolean = true): List<KeywordEntry> {
         val imported = incoming.filter { it.original.isNotBlank() }.associateBy { it.original }
         val merged = current.map { entry ->
             val restored = imported[entry.original]
             val translated = if(restored != null && !entry.translationEdited) entry.copy(
                 translation = restored.translation, translationEdited = restored.translationEdited,
             ) else entry
-            translated.copy(lastUsedAt = maxOf(entry.lastUsedAt, restored?.lastUsedAt ?: 0))
+            translated.copy(lastUsedAt = maxOf(entry.lastUsedAt, restored?.lastUsedAt ?: 0),
+                category = if(restored != null && !entry.categoryEdited) restored.category else entry.category,
+                categoryEdited = entry.categoryEdited || restored?.categoryEdited == true)
         }
-        return withDefaults(merged + incoming)
+        return if(addDefaults) withDefaults(merged + incoming) else bounded(merged + incoming)
     }
 
     fun suggestions(entries: List<KeywordEntry>, query: String, category: String = "全部", limit: Int = 20): List<KeywordEntry> {

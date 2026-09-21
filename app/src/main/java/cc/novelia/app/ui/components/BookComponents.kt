@@ -37,7 +37,7 @@ import coil.decode.DataSource
 @Composable fun TagList(tags: List<String>, c: AppController) {
     val entries by c.app.keywords.state.collectAsStateWithLifecycle()
     val persistenceError by c.app.keywords.persistenceError.collectAsStateWithLifecycle()
-    val lookup = remember(entries) { entries.associateBy { it.original } }
+    val lookup = remember(entries) { entries.entries.associateBy { it.original } }
     var editing by remember { mutableStateOf<KeywordEntry?>(null) }
     AppChipFlowRow(Modifier.padding(horizontal = 20.dp, vertical = 10.dp)) {
         tags.distinct().forEach { tag ->
@@ -52,7 +52,8 @@ import coil.decode.DataSource
         }
     }
     persistenceError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 20.dp)) }
-    editing?.let { KeywordEditorDialog(it, { editing = null }, c.app.keywords::setTranslation) }
+    editing?.let { KeywordEditorDialog(it, { editing = null }, c.app.keywords::setTranslation,
+        categories = entries.categories, onSaveDetails = c.app.keywords::editEntry) }
 }
 
 @Composable fun BookCover(book: BookCard, modifier: Modifier = Modifier) {

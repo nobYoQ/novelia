@@ -26,11 +26,11 @@ class KeywordStore(context: Context) {
     private val atomic = AtomicFile(file)
     private val lock = Any()
     private val writeLock = Any()
-    private data class Snapshot(val revision: Long, val entries: List<KeywordEntry>)
+    private data class Snapshot(val revision: Long, val library: KeywordLibrary)
     private var revision = 0L
     private var failedRead = false
     private val mutable = MutableStateFlow(read())
-    val state: StateFlow<List<KeywordEntry>> = mutable.asStateFlow()
+    val state: StateFlow<KeywordLibrary> = mutable.asStateFlow()
     private val mutableError = MutableStateFlow<String?>(null)
     val persistenceError: StateFlow<String?> = mutableError.asStateFlow()
     private val writes = Channel<Unit>(Channel.CONFLATED)
@@ -50,18 +50,24 @@ class KeywordStore(context: Context) {
         }
     }
 
-    fun observe(originals: Collection<String>) = change { KeywordCatalog.observe(it, originals) }
+    fun observe(originals: Collection<String>) = change { it.withEntries(KeywordCatalog.observe(it.entries, originals)) }
     fun markUsed(originals: Collection<String>) {
         val now = System.currentTimeMillis()
-        change { entries -> KeywordCatalog.markUsed(entries, originals, now) }
+        change { it.withEntries(KeywordCatalog.markUsed(it.entries, originals, now)) }
     }
     fun setTranslation(original: String, translation: String) {
         val normalized = original.trim()
         if(normalized.isBlank()) return
-        change { entries -> KeywordCatalog.translate(entries, normalized, translation.trim()) }
+        change { it.withEntries(KeywordCatalog.translate(it.entries, normalized, translation.trim())) }
     }
-    fun exportSnapshot(): List<KeywordEntry> = state.value.toList()
-    fun mergeSnapshot(entries: List<KeywordEntry>) = change { KeywordCatalog.merge(it, entries) }
+    fun createCategory(name: String) = change { it.createCategory(name.trim()) }
+    fun renameCategory(old: String, name: String) = change { it.renameCategory(old, name.trim()) }
+    fun deleteCategory(name: String) = change { it.deleteCategory(name) }
+    fun editEntry(original: String, translation: String, category: String) = change { it.editEntry(original.trim(), translation.trim(), category) }
+    fun exportLibrary(): KeywordLibrary = state.value
+    fun exportSnapshot(): List<KeywordEntry> = state.value.entries
+    fun mergeLibrary(library: KeywordLibrary) = change { it.merge(library) }
+    fun mergeSnapshot(entries: List<KeywordEntry>) = mergeLibrary(KeywordLibrary.fromLegacy(entries, addDefaults = false))
     fun reload() = synchronized(writeLock) {
         val before = synchronized(lock) { mutable.value }
         val loaded = read()
@@ -69,11 +75,15 @@ class KeywordStore(context: Context) {
             mutableError.value = "标签词库读取失败，已保留当前标签；再次保存时会保留损坏原文件。"
             return@synchronized
         }
-        val prior = before.associateBy { it.original }
+        val prior = before.entries.associateBy { it.original }
         // Disk IO can overlap reader edits. Only those concurrent changes override the reload.
         change { current ->
             if(current === before) loaded
-            else KeywordCatalog.withDefaults(current.filter { prior[it.original] != it } + loaded)
+            else {
+                val edited = current.entries.filter { prior[it.original] != it }
+                val base = if(current.categories != before.categories) current else loaded
+                base.withEntries((edited + loaded.entries).distinctBy { it.original })
+            }
         }
         mutableError.value = null
     }
@@ -104,12 +114,12 @@ class KeywordStore(context: Context) {
 
     // 乐观变换：锁外计算后比较版本，若其间有编辑则基于新快照重算，避免覆盖并发修改。
     // transform 可能执行多次，必须保持为无外部副作用的列表变换。
-    private fun change(transform: (List<KeywordEntry>) -> List<KeywordEntry>) {
+    private fun change(transform: (KeywordLibrary) -> KeywordLibrary) {
         while(true) {
             val snapshot = synchronized(lock) { Snapshot(revision, mutable.value) }
             // Catalog ranking/merging also stays outside the state lock used by the UI and flush.
-            val next = transform(snapshot.entries)
-            val changed = next != snapshot.entries
+            val next = transform(snapshot.library)
+            val changed = next != snapshot.library
             val committed = synchronized(lock) {
                 if(revision != snapshot.revision) false
                 else {
@@ -123,11 +133,13 @@ class KeywordStore(context: Context) {
             }
         }
     }
-    private fun read(): List<KeywordEntry> {
+    private fun read(): KeywordLibrary {
         failedRead = false
-        if(!file.exists() && !File(file.path + ".bak").exists()) return KeywordCatalog.common
+        if(!file.exists() && !File(file.path + ".bak").exists()) return KeywordLibrary.defaults()
         return try {
-            KeywordCatalog.withDefaults(appJson.decodeFromString<List<KeywordEntry>>(atomic.openRead().bufferedReader(Charsets.UTF_8).use { it.readText() }))
-        } catch(_: Exception) { failedRead = true; KeywordCatalog.common }
+            val text = atomic.openRead().bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val loaded = KeywordLibraryFormat.decode(text)
+            if(text.trimStart().startsWith("[")) KeywordLibrary.fromLegacy(loaded.entries) else loaded
+        } catch(_: Exception) { failedRead = true; KeywordLibrary.defaults() }
     }
 }

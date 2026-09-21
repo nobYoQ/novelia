@@ -26,6 +26,7 @@ import cc.novelia.app.ui.components.AppScrollColumn
 import cc.novelia.app.ui.components.FilterPanelExpandIcon
 import cc.novelia.app.ui.components.FilterPanelVisibility
 import cc.novelia.app.ui.components.KeywordEditorDialog
+import cc.novelia.app.ui.components.KeywordCategoryPicker
 
 @Composable
 fun SearchAssistantPanel(
@@ -38,6 +39,8 @@ fun SearchAssistantPanel(
     onHelp: () -> Unit,
     modifier: Modifier = Modifier,
     persistenceError: String? = null,
+    categoryNames: List<String> = KeywordCatalog.defaultCategories,
+    libraryActions: KeywordLibraryActions? = null,
 ) {
     var all by rememberSaveable { mutableStateOf("") }
     var any by rememberSaveable { mutableStateOf("") }
@@ -51,6 +54,8 @@ fun SearchAssistantPanel(
     var category by rememberSaveable { mutableStateOf("全部") }
     var editing by remember { mutableStateOf<KeywordEntry?>(null) }
     var replacing by remember { mutableStateOf(false) }
+    var browsingLibrary by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(categoryNames) { if(category != "全部" && category !in categoryNames) category = "全部" }
     // Keep the editing position when the panel leaves composition after a collapse.
     val panelScroll = rememberScrollState()
     val generated = SearchExpression.build(all, any, exact, excluded, includedTags.joinToString(" "), excludedTags.joinToString(" "), minimum, maximum)
@@ -83,14 +88,15 @@ fun SearchAssistantPanel(
                 ) {
                     Text("选好条件后再应用，搜索框中的手工表达式会保留。", style = MaterialTheme.typography.bodySmall)
                     Text("标签检索", style = MaterialTheme.typography.titleSmall)
+                    OutlinedButton(onClick = { browsingLibrary = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("assistant-open-library")) {
+                        Text("浏览全部标签（${entries.size}）")
+                    }
                     OutlinedTextField(tagQuery, { tagQuery = it }, label = { Text("输入原文或中文标签") }, singleLine = true,
                         isError = tagQuery.trim().length > KeywordCatalog.MAX_TEXT_LENGTH,
                         supportingText = { if(tagQuery.trim().length > KeywordCatalog.MAX_TEXT_LENGTH) Text("标签最多 ${KeywordCatalog.MAX_TEXT_LENGTH} 字符，请缩短后添加。") },
                         modifier = Modifier.fillMaxWidth().testTag("assistant-tag-input"))
-                    AppChipFlowRow() {
-                        KeywordCatalog.categories.forEach { name -> AppSelectionChip(category == name, { category = name }, label = { Text(name) }) }
-                    }
-                    Text("点击标签选择包含或排除，也可以编辑中文翻译。候选来自常用标签和已浏览的作品。", style = MaterialTheme.typography.bodySmall)
+                    KeywordCategoryPicker(listOf("全部") + categoryNames, category, { category = it })
+                    Text("这里显示最多 12 个候选。可在标签库搜索、浏览全部标签，点击选择包含或排除。", style = MaterialTheme.typography.bodySmall)
                     AppChipFlowRow() {
                         candidates.forEach { entry ->
                             AppActionChip(onClick = { editing = entry }, label = { Text(entry.label) },
@@ -144,8 +150,13 @@ fun SearchAssistantPanel(
     editing?.let { entry ->
         KeywordEditorDialog(entry, onDismiss = { editing = null }, onSave = onSaveTranslation,
             onInclude = { includedTags = (includedTags + entry.original).distinct(); excludedTags = excludedTags - entry.original; editing = null },
-            onExclude = { excludedTags = (excludedTags + entry.original).distinct(); includedTags = includedTags - entry.original; editing = null })
+            onExclude = { excludedTags = (excludedTags + entry.original).distinct(); includedTags = includedTags - entry.original; editing = null },
+            categories = categoryNames, onSaveDetails = libraryActions?.editEntry)
     }
+    if(browsingLibrary) KeywordLibraryDialog(entries, categoryNames, { browsingLibrary = false }, onSaveTranslation, libraryActions,
+        onInclude = { entry -> includedTags = (includedTags + entry.original).distinct(); excludedTags = excludedTags - entry.original },
+        onExclude = { entry -> excludedTags = (excludedTags + entry.original).distinct(); includedTags = includedTags - entry.original },
+        included = includedTags, excluded = excludedTags, persistenceError = persistenceError)
     if(replacing) AppAlertDialog(onDismissRequest = { replacing = false }, title = { Text("替换手工搜索条件？") },
         text = { Text("当前搜索框：\n$query\n\n替换为：\n$generated") },
         confirmButton = { TextButton(onClick = { replacing = false; apply(generated) }) { Text("替换并搜索") } },
