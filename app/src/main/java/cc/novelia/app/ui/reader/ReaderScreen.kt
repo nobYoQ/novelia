@@ -120,7 +120,7 @@ import kotlinx.coroutines.withContext
     val settings = local.bookSettings[ref.key] ?: local.reader
     val eInk = settings.eInkMode
     val appEInk = LocalEInkMode.current || eInk
-    AppInteractionMode(appEInk, LocalReducedMotion.current || eInk, settings.showScrollPageButtons) {
+    AppInteractionMode(appEInk, LocalReducedMotion.current || eInk) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             ReaderContent(c, ref, chapterId, wide = maxWidth >= 840.dp)
         }
@@ -600,9 +600,11 @@ import kotlinx.coroutines.withContext
                     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                         HorizontalDivider(Modifier.padding(vertical = 24.dp)); Text("本章完", color = foreground.copy(alpha = .65f)); Spacer(Modifier.height(20.dp))
                         if(chapter.nextId != null) Text("上拉加载下一章", Modifier.padding(bottom = 8.dp), style = MaterialTheme.typography.labelMedium, color = foreground.copy(alpha = .65f))
-                        if(chapter.nextId != null) Button(onClick = { openChapter(chapter.nextId) }, enabled = !leaving && !chapterLoad.loading) { Text("阅读下一章") }
-                        else if(nextVolume != null) { Text("下一分卷：${nextVolume.book.title}", color = foreground, modifier = Modifier.padding(bottom = 12.dp)); Button(onClick = { nextVolumePrompt = true }, enabled = !leaving) { Text("阅读下一分卷") } }
-                        else OutlinedButton(onClick = { if(wide) { tocQuery = ""; tocLocateRequest++ } else toc = true }) { Text("返回目录") }
+                        if(settings.showScrollPageButtons) {
+                            if(chapter.nextId != null) Button(onClick = { openChapter(chapter.nextId) }, modifier = Modifier.heightIn(min = 48.dp), enabled = !leaving && !chapterLoad.loading) { Text("阅读下一章") }
+                            else if(nextVolume != null) { Text("下一分卷：${nextVolume.book.title}", color = foreground, modifier = Modifier.padding(bottom = 12.dp)); Button(onClick = { nextVolumePrompt = true }, modifier = Modifier.heightIn(min = 48.dp), enabled = !leaving) { Text("阅读下一分卷") } }
+                            else OutlinedButton(onClick = { if(wide) { tocQuery = ""; tocLocateRequest++ } else toc = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text("返回目录") }
+                        }
                     }
                 }
             }

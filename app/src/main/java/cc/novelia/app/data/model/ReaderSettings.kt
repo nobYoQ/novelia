@@ -27,7 +27,7 @@ import kotlinx.serialization.Serializable
     val toolbarTransparency: Float = .25f,
     val prefetchChapters: Int = 3, val prefetchWifiOnly: Boolean = true,
     val paragraphSpacing: Float = 8f,
-    // List/form paging controls are independent of the reader's page buttons and e-ink presets.
+    // Chapter-end navigation in continuous reading; independent of toolbar buttons and e-ink presets.
     val showScrollPageButtons: Boolean = true
 ) {
     companion object {

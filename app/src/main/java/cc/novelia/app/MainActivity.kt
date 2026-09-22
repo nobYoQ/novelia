@@ -68,8 +68,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 
-private data class AppAppearance(val theme: String, val reducedMotion: Boolean, val eInk: Boolean, val eInkBooks: Set<String>, val showScrollPageButtons: Boolean)
-private fun LibraryState.appearance() = AppAppearance(theme, reducedMotion || reader.eInkMode, reader.eInkMode, bookSettings.filterValues { it.eInkMode }.keys, reader.showScrollPageButtons)
+private data class AppAppearance(val theme: String, val reducedMotion: Boolean, val eInk: Boolean, val eInkBooks: Set<String>)
+private fun LibraryState.appearance() = AppAppearance(theme, reducedMotion || reader.eInkMode, reader.eInkMode, bookSettings.filterValues { it.eInkMode }.keys)
 
 /**
  * Android 生命周期与 Compose 界面的连接点：等待应用初始化，装配主题、控制器和导航图。
@@ -95,7 +95,7 @@ class MainActivity : ComponentActivity() {
             val appearance by remember(app) { app.store.state.map { it.appearance() }.distinctUntilChanged() }
                 .collectAsStateWithLifecycle(initialValue = remember(app) { app.store.state.value.appearance() })
             val link by incoming.collectAsStateWithLifecycle()
-            AppInteractionMode(appearance.eInk, appearance.reducedMotion, appearance.showScrollPageButtons) {
+            AppInteractionMode(appearance.eInk, appearance.reducedMotion) {
             NoveliaTheme(appearance.theme) {
                 val nav = rememberNavController(); val scope = rememberCoroutineScope(); val snackbar = remember { SnackbarHostState() }
                 val controller = remember { AppController(app, nav, scope, snackbar) }

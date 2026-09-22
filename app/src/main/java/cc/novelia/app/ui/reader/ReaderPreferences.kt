@@ -107,7 +107,7 @@ import kotlin.math.roundToInt
                         TogglePreference("显示翻页按钮", if(value.staticPagination) "显示上一页、下一页按钮" else "显示上一屏、下一屏，每次移动约一屏正文", value.showPageButtons) { onChange(value.copy(showPageButtons = it)) }
                         TogglePreference("音量键翻页", "音量键控制阅读位置", value.volumeKeys) { onChange(value.copy(volumeKeys = it)) }
                         ReaderPreferenceHeading("滚动分页")
-                        TogglePreference("滚动分页底部按钮", "电子纸模式下，显示列表与设置页的上一屏、下一屏；关闭后仍可滑动翻屏", value.showScrollPageButtons) { onChange(value.copy(showScrollPageButtons = it)) }
+                        TogglePreference("章节末尾按钮", "连续滚动时显示章末的下一章、下一分卷或返回目录按钮；关闭后仍可上拉进入下一章", value.showScrollPageButtons) { onChange(value.copy(showScrollPageButtons = it)) }
                         ReaderPreferenceHeading("工具栏")
                         ReaderSlider("工具栏透明度 ${(value.resolvedToolbarTransparency * 100).roundToInt()}%", value.resolvedToolbarTransparency, 0f..1f,
                             modifier = Modifier.testTag("reader-toolbar-transparency")) { onChange(value.copy(toolbarTransparency = it)) }

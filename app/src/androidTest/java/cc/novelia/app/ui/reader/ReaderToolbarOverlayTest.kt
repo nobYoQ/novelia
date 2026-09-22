@@ -6,6 +6,7 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.MainActivity
@@ -39,6 +40,61 @@ class ReaderToolbarOverlayTest {
     @Test fun eInkPagesKeepToolbarHiddenAcrossChapters() = verifyChapterNavigation(ReaderSettings().withEInkMode(true))
 
     @Test fun eInkScrollingKeepsToolbarHiddenAcrossChapters() = verifyChapterNavigation(ReaderSettings().withEInkMode(true).withPaginationMode("scroll"))
+
+    @Test fun chapterEndButtonsFollowTheGlobalPreference() = verifyChapterEndButtons(eInk = false, perBook = false)
+
+    @Test fun chapterEndButtonsFollowThePerBookPreferenceInEInkMode() = verifyChapterEndButtons(eInk = true, perBook = true)
+
+    private fun verifyChapterEndButtons(eInk: Boolean, perBook: Boolean) = withReader(
+        ReaderSettings(eInkMode = eInk, paginationMode = "scroll", showPageButtons = true),
+        listOf(
+            LocalChapter("first", "第一章 林间旅途", listOf("旅人沿着森林小路前行。")),
+            LocalChapter("second", "第二章 归来", listOf("星光照亮归途。")),
+            LocalChapter("third", "第三章 新的旅程", listOf("新的故事开始了。"))
+        )
+    ) { app, ref ->
+        fun toggleChapterEndButtons() {
+            compose.onNodeWithContentDescription("阅读设置").performClick()
+            compose.onNodeWithText("翻页").performClick()
+            compose.onNodeWithText("章节末尾按钮").performScrollTo().performClick()
+            if(eInk) compose.onNodeWithText("关闭面板").performClick()
+            else InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+            scrollToChapterEnd()
+        }
+        scrollToChapterEnd()
+        compose.onNodeWithText("阅读下一章").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+        if(perBook) {
+            compose.onNodeWithContentDescription("阅读设置").performClick()
+            compose.onNodeWithText("仅应用于这本书").performScrollTo().performClick()
+            compose.onNodeWithText("关闭面板").performClick()
+        }
+        toggleChapterEndButtons()
+        compose.onNodeWithText("阅读下一章").assertDoesNotExist()
+        compose.onNodeWithText("上拉加载下一章").assertExists()
+        compose.onNodeWithText("下一屏").assertIsDisplayed()
+        runBlocking { app.store.flush() }
+        val saved = LocalStore(compose.activity).state.value
+        assertFalse((if(perBook) saved.bookSettings.getValue(ref.key) else saved.reader).showScrollPageButtons)
+        assertTrue(saved.reader.showPageButtons)
+        if(perBook) assertTrue(saved.reader.showScrollPageButtons)
+
+        toggleChapterEndButtons()
+        compose.onNodeWithText("阅读下一章").assertIsDisplayed().performClick()
+        waitForChapter(app, ref, "second")
+        toggleChapterEndButtons()
+        compose.onNodeWithText("阅读下一章").assertDoesNotExist()
+        val density = compose.activity.resources.displayMetrics.density
+        compose.onNodeWithTag("reader-scroll").performTouchInput {
+            down(center)
+            moveBy(Offset(0f, -100f * density), delayMillis = 200)
+            up()
+        }
+        waitForChapter(app, ref, "third")
+        scrollToChapterEnd()
+        compose.onNodeWithText("返回目录").assertDoesNotExist()
+        toggleChapterEndButtons()
+        compose.onNodeWithText("返回目录").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+    }
 
     @Test fun automaticPageProgressStaysVisibleWithoutButtonsAndResetsAcrossChapters() = withReader(
         ReaderSettings(paginationMode = "auto", showPageButtons = false, scrollPageTurn = true),

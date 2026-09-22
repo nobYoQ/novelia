@@ -1,12 +1,10 @@
 package cc.novelia.app.ui.reader
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
@@ -21,10 +19,8 @@ import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.ui.account.AccountPermissionsCard
 import cc.novelia.app.ui.community.CommentMoreMenu
 import cc.novelia.app.ui.community.blockCommentUser
-import cc.novelia.app.ui.components.AppLazyColumn
 import cc.novelia.app.ui.components.ChoiceRow
 import cc.novelia.app.ui.navigation.AppController
-import cc.novelia.app.ui.theme.AppInteractionMode
 import cc.novelia.app.ui.theme.NoveliaTheme
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -63,7 +59,7 @@ class ReadingUsabilityTest {
             compose.onNodeWithText("正文翻页").getUnclippedBoundsInRoot().top)
         capture("reader-preferences-paging")
         compose.onNodeWithText("显示翻页按钮").performScrollTo().performClick()
-        compose.onNodeWithText("滚动分页底部按钮").performScrollTo().performClick()
+        compose.onNodeWithText("章节末尾按钮").performScrollTo().performClick()
         compose.runOnIdle { assertTrue(settings.showPageButtons); assertFalse(settings.showScrollPageButtons) }
         compose.onNodeWithText("更多").performClick()
         capture("reader-preferences-more")
@@ -124,23 +120,6 @@ class ReadingUsabilityTest {
         capture("choice-groups-large-font")
         compose.onNodeWithText("纸张").performClick().assertIsSelected()
         compose.runOnIdle { assertEquals(1, selected) }
-    }
-
-    @Test fun hidingListButtonsKeepsPagingAccessibleAndRestoresButtonsOnDemand() {
-        var buttons by mutableStateOf(true)
-        val scroll = LazyListState()
-        compose.setContent { NoveliaTheme("light") { AppInteractionMode(true, true, buttons) {
-            AppLazyColumn(Modifier.width(360.dp).height(400.dp), state = scroll, listModifier = Modifier.testTag("paging-list")) {
-                items(30) { Text("条目 $it", Modifier.fillMaxWidth().height(72.dp)) }
-            }
-        } } }
-        compose.onNodeWithText("下一屏").assertHeightIsAtLeast(48.dp)
-        compose.runOnIdle { buttons = false }
-        compose.onNodeWithText("下一屏").assertDoesNotExist()
-        compose.onNodeWithTag("paging-list").performSemanticsAction(SemanticsActions.PageDown) { it() }
-        compose.runOnIdle { assertTrue(scroll.firstVisibleItemIndex > 0); buttons = true }
-        compose.onNodeWithText("上一屏").assertIsEnabled().performClick()
-        compose.runOnIdle { assertEquals(0, scroll.firstVisibleItemIndex) }
     }
 
     @Test fun commentBlockLivesInMoreMenuAndUndoRestoresTheUser() {
