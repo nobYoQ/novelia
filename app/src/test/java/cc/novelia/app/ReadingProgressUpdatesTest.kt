@@ -1,6 +1,7 @@
 package cc.novelia.app
 
 import cc.novelia.app.data.library.acknowledgeReadChapterUpdates
+import cc.novelia.app.data.library.acknowledgeCompletedBookUpdates
 import cc.novelia.app.data.library.withReadingPosition
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
@@ -11,6 +12,8 @@ import cc.novelia.app.data.storage.appJson
 import cc.novelia.app.data.updates.BookUpdateInfo
 import cc.novelia.app.data.updates.BookUpdateSnapshot
 import cc.novelia.app.data.updates.detectBookUpdate
+import cc.novelia.app.data.updates.accumulate
+import cc.novelia.app.ui.components.bookRowStatus
 import kotlinx.serialization.encodeToString
 import org.junit.Assert.*
 import org.junit.Test
@@ -52,13 +55,68 @@ class ReadingProgressUpdatesTest {
         }
     }
 
-    @Test fun finishingChaptersPreservesIndependentTranslationAndVolumeChanges() {
+    @Test fun finishingChaptersPreservesTranslationFreshnessAndIndependentVolumeChanges() {
         val update = BookUpdateInfo(checkedAt = 10, newChapters = 1, translations = mapOf("gpt" to 3),
             translationUpdatedAt = mapOf("gpt" to 9), newVolumes = 2)
         val result = library.copy(bookUpdates = mapOf(ref.key to update)).withReadingPosition(ref, lastPage)
         assertTrue(result.books.single().hasUpdates)
-        assertEquals(update.copy(newChapters = 0), result.bookUpdates[ref.key])
+        assertEquals(update.copy(newChapters = 0, translations = emptyMap()), result.bookUpdates[ref.key])
         assertEquals(9L, result.bookUpdates.getValue(ref.key).latestTranslationAt(listOf("gpt")))
+    }
+
+    @Test fun finishingClearsTheFallbackBadgeForAllExistingTranslationsButKeepsCacheFreshness() {
+        val engines = listOf("sakura", "gpt", "youdao")
+        val update = BookUpdateInfo(checkedAt = 10, newChapters = 1, translations = engines.associateWith { 1 })
+        val result = library.copy(bookUpdates = mapOf(ref.key to update)).withReadingPosition(ref, lastPage)
+        assertFalse(result.books.single().hasUpdates)
+        val remaining = result.bookUpdates.getValue(ref.key)
+        assertFalse(remaining.hasChanges)
+        assertTrue(remaining.translations.isEmpty())
+        assertNull(bookRowStatus(book.book, result.books.single(), lastPage, remaining).updateLabel)
+        assertEquals(engines.associateWith { 10L }, remaining.translationUpdatedAt)
+        assertEquals(10L, remaining.latestTranslationAt(engines))
+        val checkedAgain = remaining.accumulate(BookUpdateInfo(checkedAt = 30))
+        assertFalse(checkedAgain.hasChanges)
+        assertEquals(10L, checkedAgain.latestTranslationAt(engines))
+        val decoded = appJson.decodeFromString<LibraryState>(appJson.encodeToString(result))
+        assertEquals(result, decoded)
+    }
+
+    @Test fun completedRecordsFromThePreviousVersionAreReconciledWithoutChangingTheirAnchors() {
+        val old = library.copy(positions = mapOf(ref.key to lastPage),
+            bookUpdates = mapOf(ref.key to BookUpdateInfo(checkedAt = 10, translations = mapOf("gpt" to 1))))
+        val repaired = old.acknowledgeCompletedBookUpdates()
+        assertFalse(repaired.books.single().hasUpdates)
+        assertEquals(old.positions, repaired.positions)
+        assertEquals(old.updateSnapshots, repaired.updateSnapshots)
+        assertNull(bookRowStatus(book.book, repaired.books.single(), lastPage, repaired.bookUpdates[ref.key]).updateLabel)
+        assertEquals(repaired, repaired.acknowledgeCompletedBookUpdates())
+    }
+
+    @Test fun translationsDiscoveredAfterReadingStillNotifyUntilReadAgain() {
+        val update = BookUpdateInfo(checkedAt = 30, translations = mapOf("gpt" to 1))
+        val current = library.copy(positions = mapOf(ref.key to lastPage), bookUpdates = mapOf(ref.key to update))
+            .acknowledgeCompletedBookUpdates()
+        assertTrue(current.books.single().hasUpdates)
+        assertEquals("有更新", bookRowStatus(book.book, current.books.single(), lastPage, current.bookUpdates[ref.key]).updateLabel)
+        val reread = current.withReadingPosition(ref, lastPage.copy(updatedAt = 40))
+        assertFalse(reread.books.single().hasUpdates)
+        assertNull(bookRowStatus(book.book, reread.books.single(), lastPage, reread.bookUpdates[ref.key]).updateLabel)
+        assertEquals(30L, reread.bookUpdates.getValue(ref.key).latestTranslationAt(listOf("gpt")))
+    }
+
+    @Test fun eachEngineUsesItsOwnUpdateTimeWhenAcknowledgingTranslations() {
+        val mixed = BookUpdateInfo(checkedAt = 30, translations = mapOf("gpt" to 2, "sakura" to 1),
+            translationUpdatedAt = mapOf("gpt" to 10, "sakura" to 30))
+        val result = library.copy(bookUpdates = mapOf(ref.key to mixed)).withReadingPosition(ref, lastPage)
+        val remaining = result.bookUpdates.getValue(ref.key)
+        assertEquals(mapOf("sakura" to 1), remaining.translations)
+        assertTrue(result.books.single().hasUpdates)
+        assertEquals(10L, remaining.latestTranslationAt(listOf("gpt")))
+        assertEquals(30L, remaining.latestTranslationAt(listOf("sakura")))
+        val newUpdate = remaining.accumulate(BookUpdateInfo(checkedAt = 50, translations = mapOf("gpt" to 1)))
+        assertEquals(mapOf("gpt" to 1, "sakura" to 1), newUpdate.translations)
+        assertEquals(50L, newUpdate.latestTranslationAt(listOf("gpt")))
     }
 
     @Test fun pausedHistoryDoesNotWriteOrAcknowledgeReading() {

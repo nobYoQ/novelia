@@ -14,6 +14,8 @@ import cc.novelia.app.data.model.LocalDocument
 import cc.novelia.app.data.model.Position
 import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.data.updates.BookUpdateInfo
+import cc.novelia.app.data.storage.LocalStore
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -26,6 +28,52 @@ class ReaderCompletionFlowTest {
     @Test fun finalScrollScreenCompletesTheBookWithChapterEndButtonsHidden() = verifyCompletion("scroll")
 
     @Test fun finalAutomaticPageCompletesTheBookWithoutChangingItsRestoreAnchor() = verifyCompletion("auto")
+
+    @Test fun alreadyCompletedBooksLoseOldBadgesWithoutReopeningButKeepFutureUpdates() {
+        compose.waitUntil(15_000) { compose.onAllNodesWithText("本地文件").fetchSemanticsNodes().isNotEmpty() }
+        val app = compose.activity.application as NoveliaApplication
+        val previous = app.store.state.value
+        val ref = BookRef("local", "completed-badge-upgrade")
+        val title = "已读更新提示修复"
+        val readAt = System.currentTimeMillis()
+        val position = Position("last", index = 1, updatedAt = readAt, chapterIndex = 0,
+            chapterCount = 1, paragraphCount = 1, chapterCompleted = true)
+        try {
+            compose.runOnIdle {
+                app.store.saveBook(BookCard(ref, title, total = 1))
+                app.store.update { state -> state.copy(reducedMotion = true,
+                    books = state.books.map { if(it.book.ref == ref) it.copy(hasUpdates = true) else it },
+                    positions = state.positions + (ref.key to position),
+                    bookUpdates = state.bookUpdates + (ref.key to BookUpdateInfo(checkedAt = readAt - 1_000,
+                        translations = mapOf("gpt" to 1)))) }
+            }
+            compose.onNodeWithText("本地文件").performClick()
+            compose.waitUntil(10_000) { app.store.state.value.books.any { it.book.ref == ref && !it.hasUpdates } }
+            compose.onNodeWithTag("book-reading-progress-${ref.key}", useUnmergedTree = true)
+                .assertContentDescriptionEquals("已读 100%")
+            compose.onNode(hasText(title) and hasText("有更新")).assertDoesNotExist()
+            assertEquals(position, app.store.state.value.positions[ref.key])
+            runBlocking { app.store.flush() }
+            val persisted = LocalStore(compose.activity).state.value
+            assertFalse(persisted.books.single { it.book.ref == ref }.hasUpdates)
+            assertFalse(persisted.bookUpdates.getValue(ref.key).hasChanges)
+            assertEquals(readAt - 1_000, persisted.bookUpdates.getValue(ref.key).latestTranslationAt(listOf("gpt")))
+            compose.activityRule.scenario.recreate()
+            compose.waitUntil(15_000) { compose.onAllNodesWithText(title).fetchSemanticsNodes().isNotEmpty() }
+            compose.onNode(hasText(title) and hasText("有更新")).assertDoesNotExist()
+
+            compose.runOnIdle {
+                app.store.update { state -> state.copy(
+                    books = state.books.map { if(it.book.ref == ref) it.copy(hasUpdates = true) else it },
+                    bookUpdates = state.bookUpdates + (ref.key to BookUpdateInfo(checkedAt = readAt + 1_000,
+                        translations = mapOf("gpt" to 1)))) }
+            }
+            compose.onNode(hasText(title) and hasText("有更新")).assertIsDisplayed()
+            assertEquals(position, app.store.state.value.positions[ref.key])
+        } finally {
+            compose.runOnIdle { app.store.update { previous } }
+        }
+    }
 
     private fun verifyCompletion(mode: String) {
         compose.waitUntil(15_000) { compose.onAllNodesWithText("本地文件").fetchSemanticsNodes().isNotEmpty() }
@@ -43,7 +91,8 @@ class ReaderCompletionFlowTest {
                 app.store.saveBook(BookCard(ref, title, total = 1))
                 app.store.update { state -> state.copy(
                     books = state.books.map { if(it.book.ref == ref) it.copy(hasUpdates = true) else it },
-                    bookUpdates = state.bookUpdates + (ref.key to BookUpdateInfo(newChapters = 1))) }
+                    bookUpdates = state.bookUpdates + (ref.key to BookUpdateInfo(checkedAt = System.currentTimeMillis(),
+                        newChapters = 1, translations = mapOf("sakura" to 1, "gpt" to 1, "youdao" to 1)))) }
             }
             compose.onNodeWithText("本地文件").performClick()
             compose.onNode(hasText(title) and hasText("更新 1 章")).assertExists()
@@ -71,11 +120,13 @@ class ReaderCompletionFlowTest {
             compose.onNodeWithTag("book-reading-progress-${ref.key}", useUnmergedTree = true)
                 .assertContentDescriptionEquals("已读 100%")
             compose.onNode(hasText(title) and hasText("更新 1 章")).assertDoesNotExist()
+            compose.onNode(hasText(title) and hasText("有更新")).assertDoesNotExist()
             compose.runOnIdle {
                 val saved = app.store.state.value.books.single { it.book.ref == ref }
                 assertEquals("在读", saved.status)
                 assertFalse(saved.hasUpdates)
                 assertEquals(0, app.store.state.value.bookUpdates[ref.key]?.newChapters ?: 0)
+                assertFalse(app.store.state.value.bookUpdates[ref.key]?.hasChanges == true)
             }
             compose.onNodeWithText(title).performClick()
             compose.waitUntil(15_000) { compose.onAllNodesWithContentDescription("阅读设置").fetchSemanticsNodes().isNotEmpty() }

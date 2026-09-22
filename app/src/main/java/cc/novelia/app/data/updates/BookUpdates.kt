@@ -24,8 +24,18 @@ import kotlinx.serialization.Serializable
     }.joinToString(" · ")
     fun relevantTo(settings: ReaderSettings) = newChapters > 0 || newVolumes > 0 ||
         (settings.mode != "jp" && (translations[settings.engines.firstOrNull()] ?: 0) > 0)
-    fun latestTranslationAt(engines: List<String>): Long = translations.filter { it.key in engines && it.value > 0 }
-        .keys.maxOfOrNull { translationUpdatedAt[it] ?: checkedAt } ?: 0L
+    // Cache freshness survives acknowledging the unread badge.
+    fun latestTranslationAt(engines: List<String>): Long = engines.maxOfOrNull {
+        translationUpdatedAt[it] ?: if((translations[it] ?: 0) > 0) checkedAt else 0L
+    } ?: 0L
+
+    fun acknowledgeThrough(readAt: Long): BookUpdateInfo {
+        val freshness = (translationUpdatedAt.keys + translations.filterValues { it > 0 }.keys)
+            .associateWith { translationUpdatedAt[it] ?: checkedAt }.filterValues { it > 0 }
+        return copy(newChapters = 0,
+            translations = translations.filter { (engine, count) -> count > 0 && (freshness[engine] ?: 0L) > readAt },
+            translationUpdatedAt = freshness)
+    }
 }
 
 fun translationEngineName(engine: String) = when(engine) { "sakura" -> "Sakura"; "gpt" -> "GPT"; "youdao" -> "有道"; else -> engine }
@@ -51,8 +61,8 @@ fun BookUpdateInfo.accumulate(newer: BookUpdateInfo) = BookUpdateInfo(
     maxOf(checkedAt, newer.checkedAt), newChapters + newer.newChapters,
     (translations.keys + newer.translations.keys).associateWith { translations.getOrDefault(it, 0) + newer.translations.getOrDefault(it, 0) },
     newVolumes + newer.newVolumes,
-    (translations.keys + newer.translations.keys).associateWith { engine ->
-        maxOf(if((translations[engine] ?: 0) > 0) translationUpdatedAt[engine] ?: checkedAt else 0L,
-            if((newer.translations[engine] ?: 0) > 0) newer.translationUpdatedAt[engine] ?: newer.checkedAt else 0L)
+    (translationUpdatedAt.keys + newer.translationUpdatedAt.keys + translations.keys + newer.translations.keys).associateWith { engine ->
+        maxOf(translationUpdatedAt[engine] ?: if((translations[engine] ?: 0) > 0) checkedAt else 0L,
+            newer.translationUpdatedAt[engine] ?: if((newer.translations[engine] ?: 0) > 0) newer.checkedAt else 0L)
     }
 )

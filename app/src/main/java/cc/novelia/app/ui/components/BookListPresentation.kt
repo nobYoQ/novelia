@@ -5,6 +5,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.Position
 import cc.novelia.app.data.model.SavedBook
+import cc.novelia.app.data.library.acknowledgeCompletedBookUpdates
 import cc.novelia.app.data.storage.localReadingProgressCandidates
 import cc.novelia.app.data.storage.restoreLocalReadingProgress
 import cc.novelia.app.data.updates.BookUpdateInfo
@@ -98,6 +99,9 @@ internal val LocalBookListPresentation = compositionLocalOf { BookListPresentati
     }
     LaunchedEffect(c.store, legacyLocalPositions) {
         c.store.restoreLocalReadingProgress(legacyLocalPositions)
+    }
+    LaunchedEffect(c.store, presentation.books, presentation.positions, presentation.updates) {
+        c.store.update { it.acknowledgeCompletedBookUpdates() }
     }
     return remember(presentation, profile?.username) { presentation.copy(account = profile?.username) }
 }
