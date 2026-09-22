@@ -5,6 +5,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.Position
 import cc.novelia.app.data.model.SavedBook
+import cc.novelia.app.data.storage.localReadingProgressCandidates
+import cc.novelia.app.data.storage.restoreLocalReadingProgress
 import cc.novelia.app.data.updates.BookUpdateInfo
 import cc.novelia.app.ui.navigation.AppController
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -40,7 +42,7 @@ internal fun bookRowStatus(book: BookCard, saved: SavedBook?, position: Position
         position == null -> 0f
         chapter == null || chapter < 0 || count <= 0 || chapter >= count -> null
         else -> {
-            val within = position.paragraphCount?.takeIf { it > 0 }
+            val within = if(position.chapterCompleted) 1f else position.paragraphCount?.takeIf { it > 0 }
                 ?.let { (position.index - 1).coerceIn(0, it).toFloat() / it } ?: 0f
             ((chapter + within) / count).coerceIn(0f, 1f)
         }
@@ -91,5 +93,11 @@ internal val LocalBookListPresentation = compositionLocalOf { BookListPresentati
     val presentation by source.collectAsStateWithLifecycle(initialValue = remember(c.store) {
         c.store.state.value.let { BookListPresentation(it.books.associateBy { saved -> saved.book.ref.key }, it.positions, it.bookUpdates) }
     })
+    val legacyLocalPositions = remember(c.store, presentation.books, presentation.positions) {
+        c.store.state.value.localReadingProgressCandidates()
+    }
+    LaunchedEffect(c.store, legacyLocalPositions) {
+        c.store.restoreLocalReadingProgress(legacyLocalPositions)
+    }
     return remember(presentation, profile?.username) { presentation.copy(account = profile?.username) }
 }

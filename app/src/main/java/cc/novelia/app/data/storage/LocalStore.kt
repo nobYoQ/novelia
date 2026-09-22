@@ -10,6 +10,7 @@ import cc.novelia.app.data.chapters.clearChapterFreshness
 import cc.novelia.app.data.documents.DocumentHashIndex
 import cc.novelia.app.data.documents.DocumentStorage
 import cc.novelia.app.data.library.withoutBook
+import cc.novelia.app.data.library.withReadingPosition
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.Chapter
@@ -151,7 +152,7 @@ class LocalStore(val context: Context) {
     }
     fun removeBook(ref: BookRef) = update { it.withoutBook(ref) }
     fun rememberSearch(query: String) { if (query.isNotBlank()) update { it.copy(recentSearches = (listOf(query) + it.recentSearches.filterNot { old -> old == query }).take(20)) } }
-    fun savePosition(ref: BookRef, position: Position) = update { if (it.historyPaused) it else it.copy(positions = it.positions + (ref.key to position)) }
+    fun savePosition(ref: BookRef, position: Position) = update { it.withReadingPosition(ref, position) }
     fun chapterFile(ref: BookRef, chapter: String) = File(cacheDir, hashName("${ref.key}/$chapter") + ".json")
     /** 优先复用已解码章节；缺失或损坏的磁盘缓存按未命中处理，交由上层决定联网或提示。 */
     fun cachedChapter(ref: BookRef, chapter: String): Chapter? = synchronized(chapterLock) {

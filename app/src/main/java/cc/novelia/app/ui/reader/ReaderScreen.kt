@@ -324,20 +324,26 @@ import kotlinx.coroutines.withContext
         // 恢复定位或重新分页期间的中间画面不能覆盖真实进度。两种模式统一保存正文下标 + 1，
         // 因为滚动列表的第 0 项是章标题；字符偏移支持重排，像素偏移用于恢复原滚动布局。
         fun savePosition() {
-            if(leaving || restoringAnchor || previousPagination != settings.staticPagination || (if(settings.staticPagination) !eInk.ready else scroll.layoutInfo.totalItemsCount == 0) || c.store.state.value.historyPaused) return
+            if(leaving || !initialAnchorRestored || restoringAnchor || previousPagination != settings.staticPagination ||
+                (if(settings.staticPagination) !eInk.ready || eInk.pages.isEmpty() else scroll.layoutInfo.totalItemsCount == 0 || scroll.layoutInfo.visibleItemsInfo.isEmpty()) ||
+                c.store.state.value.historyPaused) return
             val visible = if(settings.staticPagination) Position(chapterId, eInk.paragraph + 1, 0, chapter.title, textOffset = eInk.textOffset)
                 else {
                     val paragraph = paragraphs.getOrNull(scroll.firstVisibleItemIndex - 1)
                     val textOffset = scrollTextOffset(paragraph?.index)
                     Position(chapterId, scroll.firstVisibleItemIndex, scroll.firstVisibleItemScrollOffset, chapter.title, textOffset = textOffset)
                 }
-            val saved = local.positions[ref.key]?.takeIf { it.chapterId == chapterId }
+            val saved = c.store.state.value.positions[ref.key]?.takeIf { it.chapterId == chapterId }
+            // A final page can begin halfway through the last paragraph. Keep that exact
+            // restore anchor while recording completion separately, including after rereading.
+            val chapterCompleted = saved?.chapterCompleted == true ||
+                if(settings.staticPagination) !eInk.canGoForward else !scroll.canScrollForward
             val next = visible.copy(chapterIndex = chapterProgress?.first ?: saved?.chapterIndex,
                 chapterCount = chapterProgress?.second ?: saved?.chapterCount,
-                paragraphCount = paragraphs.size)
+                paragraphCount = paragraphs.size, chapterCompleted = chapterCompleted)
             val previous = lastSavedPosition
             if(previous == null || previous.chapterId != next.chapterId || previous.index != next.index || previous.offset != next.offset || previous.textOffset != next.textOffset || previous.title != next.title ||
-                previous.chapterIndex != next.chapterIndex || previous.chapterCount != next.chapterCount || previous.paragraphCount != next.paragraphCount) {
+                previous.chapterIndex != next.chapterIndex || previous.chapterCount != next.chapterCount || previous.paragraphCount != next.paragraphCount || previous.chapterCompleted != next.chapterCompleted) {
                 c.store.savePosition(ref, next)
                 lastSavedPosition = next
             }
@@ -467,9 +473,11 @@ import kotlinx.coroutines.withContext
             lifecycleOwner.lifecycle.addObserver(observer)
             onDispose { lifecycleOwner.lifecycle.removeObserver(observer); latestSavePosition() }
         }
-        LaunchedEffect(scroll, chapterId, local.historyPaused) {
-            if(!local.historyPaused) snapshotFlow {
-                if(scroll.isScrollInProgress) null else scroll.firstVisibleItemIndex to scroll.firstVisibleItemScrollOffset
+        LaunchedEffect(scroll, chapterId, local.historyPaused, settings.staticPagination) {
+            if(!local.historyPaused && !settings.staticPagination) snapshotFlow {
+                if(scroll.isScrollInProgress || !initialAnchorRestored || restoringAnchor) null else SettledReadingScroll(
+                    scroll.firstVisibleItemIndex, scroll.firstVisibleItemScrollOffset, scroll.canScrollForward,
+                    scroll.layoutInfo.totalItemsCount, scroll.layoutInfo.visibleItemsInfo.lastOrNull()?.index)
             }.distinctUntilChanged().collectLatest { settled ->
                 if(settled != null) { delay(500); latestSavePosition() }
             }
@@ -845,3 +853,4 @@ private class ScrollPartMeasurement {
 
 private data class RestoredScrollAnchor(val layoutGeneration: Any, val itemIndex: Int, val pixelOffset: Int, val textOffset: Int)
 private data class ReadingRestoreAnchor(val paragraph: Int, val sourceIndex: Int?, val textOffset: Int)
+private data class SettledReadingScroll(val index: Int, val offset: Int, val canScrollForward: Boolean, val itemCount: Int, val lastVisibleIndex: Int?)

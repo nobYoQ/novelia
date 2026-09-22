@@ -9,9 +9,11 @@ import kotlinx.serialization.Serializable
  * 本机精确阅读位置。index 是含章标题的阅读列表下标（正文从 1 开始），offset 为滚动像素偏移；
  * textOffset 是整段显示文本中的 UTF-16 偏移，用于静态分页及模式切换后的定位。
  * chapterIndex 从 0 开始，章节/段落总数可为空，不能为显示进度额外阻塞正文加载。
+ * chapterCompleted 独立记录本章已到末屏，不能用修改屏顶锚点的方式表示读完。
  */
 @Serializable data class Position(val chapterId: String, val index: Int = 0, val offset: Int = 0, val title: String = "", val updatedAt: Long = System.currentTimeMillis(), val textOffset: Int = 0,
-    val chapterIndex: Int? = null, val chapterCount: Int? = null, val paragraphCount: Int? = null)
+    val chapterIndex: Int? = null, val chapterCount: Int? = null, val paragraphCount: Int? = null,
+    val chapterCompleted: Boolean = false)
 
 @Serializable data class SavedBook(val book: BookCard, val folder: String = "默认收藏", val pinned: Boolean = false, val status: String = "在读", val addedAt: Long = System.currentTimeMillis(), val hasUpdates: Boolean = false,
     val parentWenkuKey: String? = null, val volumesExpanded: Boolean = false, val volumeOrder: List<String> = emptyList())

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.work.*
 import cc.novelia.app.NoveliaApplication
 import cc.novelia.app.data.auth.SessionChangedException
+import cc.novelia.app.data.library.acknowledgeReadChapterUpdates
 import cc.novelia.app.data.model.WebDetail
 import cc.novelia.app.data.model.WenkuDetail
 import cc.novelia.app.data.model.withKnownUpdateTime
@@ -43,12 +44,14 @@ open class UpdateWorker(context: Context, params: WorkerParameters) : CoroutineW
                     val delta = detectBookUpdate(previous, current, ref.isWenku)
                     val prior = state.bookUpdates[ref.key].takeIf { existing.hasUpdates }
                     val changes = if(delta.hasChanges) prior?.accumulate(delta) ?: delta else prior
-                    if(delta.relevantTo(state.bookSettings[ref.key] ?: state.reader)) count++
-                    state.copy(
+                    val next = state.copy(
                         books = state.books.map { b -> if(b.book.ref == ref) b.copy(book = updated.withKnownUpdateTime(b.book), hasUpdates = b.hasUpdates || delta.hasChanges) else b },
                         updateSnapshots = state.updateSnapshots + (ref.key to current),
                         bookUpdates = if(changes != null) state.bookUpdates + (ref.key to changes) else state.bookUpdates - ref.key
-                    )
+                    ).acknowledgeReadChapterUpdates(ref)
+                    val unreadDelta = if((next.bookUpdates[ref.key]?.newChapters ?: 0) > 0) delta else delta.copy(newChapters = 0)
+                    if(unreadDelta.relevantTo(state.bookSettings[ref.key] ?: state.reader)) count++
+                    next
                 }
             } catch(e: kotlinx.coroutines.CancellationException) { throw e }
             catch(_: SessionChangedException) { return Result.success() }

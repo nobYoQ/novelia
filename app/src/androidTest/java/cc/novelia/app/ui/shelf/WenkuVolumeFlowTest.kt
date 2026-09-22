@@ -37,6 +37,41 @@ class WenkuVolumeFlowTest {
     private val secondRef = BookRef("local", "mount-volume-2")
     private val disclosure = "wenku-volumes-${parentRef.key}"
 
+    @Test fun legacyMountedVolumeProgressReturnsWithoutOpeningTheReaderAndSurvivesReload() = withShelf { app ->
+        val document = LocalDocument(volumeRef.id, "第1卷 春日启程", "txt", listOf(
+            LocalChapter("first", "第一章 启程", listOf("春日的旅途从这里开始。")),
+            LocalChapter("second", "第二章 重逢", listOf("", "街角传来熟悉的声音。", " ", "旅人停下脚步。", "故人正在等候。", "故事仍在继续。"))
+        ))
+        val legacy = Position("second", index = 3, offset = 24, title = "第二章 重逢", updatedAt = 123456789L, textOffset = 8)
+        val expected = legacy.copy(chapterIndex = 1, chapterCount = 2, paragraphCount = 4)
+        compose.runOnIdle {
+            app.store.saveDocument(document)
+            app.store.update { it.withWenkuVolumes(parentRef.key, setOf(volumeRef.key))
+                .copy(positions = mapOf(volumeRef.key to legacy)) }
+        }
+        compose.waitUntil(10_000) { app.store.state.value.positions[volumeRef.key] == expected }
+        scrollTo(hasTestTag("shelf-volume-${volumeRef.key}"))
+        compose.onNodeWithTag("book-reading-progress-${volumeRef.key}", useUnmergedTree = true)
+            .assertExists().assertContentDescriptionEquals("已读 75%")
+        compose.onNodeWithText("已读 75% · 第二章 重逢").assertIsDisplayed()
+        assertEquals(document, app.store.document(volumeRef.id))
+
+        compose.onNodeWithText("本地文件").performClick()
+        compose.onNodeWithText("我的收藏").performClick()
+        scrollTo(hasTestTag("shelf-volume-${volumeRef.key}"))
+        compose.onNodeWithText("已读 75% · 第二章 重逢").assertIsDisplayed()
+        runBlocking { app.store.flush() }
+        val reloaded = LocalStore(compose.activity)
+        assertEquals(expected, reloaded.state.value.positions[volumeRef.key])
+        assertEquals(document, reloaded.document(volumeRef.id))
+        compose.activityRule.scenario.recreate()
+        compose.waitForIdle()
+        scrollTo(hasTestTag("shelf-volume-${volumeRef.key}"))
+        compose.onNodeWithTag("book-reading-progress-${volumeRef.key}", useUnmergedTree = true)
+            .assertExists().assertContentDescriptionEquals("已读 75%")
+        assertEquals(expected, app.store.state.value.positions[volumeRef.key])
+    }
+
     @Test fun mountReadCollapseReloadAndReassignExistingVolumes() = withShelf { app ->
         openManager()
         compose.onNodeWithTag("wenku-volume-picker").performScrollToNode(hasTestTag("mount-volume-${volumeRef.key}"))

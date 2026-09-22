@@ -136,6 +136,32 @@ class BookListPresentationTest {
         assertEquals("已读 100%", bookRowStatus(single, null, first.copy(index = 2), null).progressLabel)
     }
 
+    @Test fun finishingTheLastScreenReachesOneHundredWithoutMovingTheRestoreAnchor() {
+        val lastScreen = Position("last", index = 100, offset = 260, textOffset = 720,
+            chapterIndex = 9, chapterCount = 10, paragraphCount = 100)
+        assertEquals("已读 99%", bookRowStatus(book, null, lastScreen, null).progressLabel)
+        val completed = lastScreen.copy(chapterCompleted = true)
+        val restored = appJson.decodeFromString<Position>(appJson.encodeToString(completed))
+        assertEquals(lastScreen, restored.copy(chapterCompleted = false))
+        assertEquals("已读 100%", bookRowStatus(book, null, restored, null).progressLabel)
+        assertEquals(1f, bookRowStatus(book, null, restored, null).progress!!, 0f)
+        assertEquals("已读 90%", bookRowStatus(book.copy(total = 11), null, restored, null).progressLabel)
+        assertEquals(10f / 11, bookRowStatus(book.copy(total = 11), null, restored, null).progress!!, .0001f)
+    }
+
+    @Test fun singleLongParagraphOnlyFinishesWhenItsFinalScreenHasBeenReached() {
+        val single = book.copy(total = 1)
+        val middle = Position("one", index = 1, offset = 900, textOffset = 700,
+            chapterIndex = 0, chapterCount = 1, paragraphCount = 1)
+        assertEquals("已读 0%", bookRowStatus(single, null, middle, null).progressLabel)
+        val finished = middle.copy(chapterCompleted = true)
+        assertEquals("已读 100%", bookRowStatus(single, null, finished, null).progressLabel)
+        assertEquals("已读 100%", bookRowStatus(single, null, finished.copy(offset = 0, textOffset = 0), null).progressLabel)
+        val legacy = appJson.decodeFromString<Position>("""{"chapterId":"one","index":1,"chapterIndex":0,"chapterCount":1,"paragraphCount":1}""")
+        assertFalse(legacy.chapterCompleted)
+        assertEquals("已读 0%", bookRowStatus(single, null, legacy, null).progressLabel)
+    }
+
     @Test fun legacyOrInvalidPositionsNeverInventAPercentage() {
         assertEquals("未读", bookRowStatus(book, null, null, null).progressLabel)
         listOf(Position("four"), Position("four", chapterIndex = -1), Position("four", chapterIndex = 10, chapterCount = 10))
