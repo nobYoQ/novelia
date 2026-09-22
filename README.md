@@ -1,6 +1,6 @@
 # Novelia Android
 
-面向 [轻小说机翻机器人](https://n.novelia.cc/) 的非官方原生安卓客户端，当前版本 `0.1.8`。使用 Kotlin、Jetpack Compose 与 Material 3，支持 Android 8.0（API 26）及以上。
+面向 [轻小说机翻机器人](https://n.novelia.cc/) 的非官方原生安卓客户端，当前版本 `0.1.9`。使用 Kotlin、Jetpack Compose 与 Material 3，支持 Android 8.0（API 26）及以上。
 
 ## 下载与反馈
 

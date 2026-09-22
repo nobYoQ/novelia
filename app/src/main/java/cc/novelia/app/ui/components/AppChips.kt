@@ -8,6 +8,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.ui.theme.pressFeedback
 
@@ -28,17 +29,20 @@ internal val ChipSpacing = 12.dp
     modifier: Modifier = Modifier,
     leadingIcon: (@Composable () -> Unit)? = null,
     trailingIcon: (@Composable () -> Unit)? = null,
+    shape: Shape = ChipShape,
+    colors: SelectableChipColors? = null,
+    border: BorderStroke? = null,
 ) {
     val interaction = remember { MutableInteractionSource() }
-    val colors = MaterialTheme.colorScheme
+    val scheme = MaterialTheme.colorScheme
     FilterChip(selected = selected, onClick = onClick,
         label = { Box(Modifier.padding(vertical = 6.dp)) { label() } },
         modifier = modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp).pressFeedback(interaction),
-        leadingIcon = leadingIcon, trailingIcon = trailingIcon, shape = ChipShape,
-        colors = FilterChipDefaults.filterChipColors(containerColor = colors.surfaceContainerLow,
-            labelColor = colors.onSurfaceVariant, selectedContainerColor = colors.secondaryContainer,
-            selectedLabelColor = colors.onSecondaryContainer),
-        border = BorderStroke(if(selected) 1.5.dp else 1.dp, if(selected) colors.primary else colors.outlineVariant),
+        leadingIcon = leadingIcon, trailingIcon = trailingIcon, shape = shape,
+        colors = colors ?: FilterChipDefaults.filterChipColors(containerColor = scheme.surfaceContainerLow,
+            labelColor = scheme.onSurfaceVariant, selectedContainerColor = scheme.secondaryContainer,
+            selectedLabelColor = scheme.onSecondaryContainer),
+        border = border ?: BorderStroke(if(selected) 1.5.dp else 1.dp, if(selected) scheme.primary else scheme.outlineVariant),
         interactionSource = interaction)
 }
 

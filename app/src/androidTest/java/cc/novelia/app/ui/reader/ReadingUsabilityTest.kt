@@ -51,8 +51,12 @@ class ReadingUsabilityTest {
         var settings by mutableStateOf(ReaderSettings())
         compose.setContent { NoveliaTheme("light") { ReaderPreferences(settings) { settings = it } } }
         compose.onNodeWithText("常用").assertIsSelected().assertHeightIsAtLeast(48.dp)
-        compose.onNodeWithText("显示语言").assertDoesNotExist()
+        compose.onNodeWithText("显示语言").assertExists()
         capture("reader-preferences-common")
+        compose.onNodeWithText("语言与译文").performScrollTo().assertHasNoClickAction()
+        compose.onNodeWithText("中日").performScrollTo().performClick()
+        compose.onNodeWithText("繁体显示").performScrollTo().assertIsDisplayed()
+        capture("reader-preferences-language")
         compose.onNodeWithText("翻页").performClick()
         compose.onNodeWithText("电子纸阅读模式").assertIsDisplayed()
         assertTrue(compose.onNodeWithText("电子纸阅读模式").getUnclippedBoundsInRoot().top <
@@ -63,13 +67,13 @@ class ReadingUsabilityTest {
         compose.runOnIdle { assertTrue(settings.showPageButtons); assertFalse(settings.showScrollPageButtons) }
         compose.onNodeWithText("更多").performClick()
         capture("reader-preferences-more")
-        compose.onNodeWithText("语言与译文").performClick()
-        compose.onNodeWithText("中日").performScrollTo().performClick()
+        compose.onNodeWithText("语言与译文").assertDoesNotExist()
         compose.onNodeWithText("离线预读").performScrollTo().performClick()
         compose.onNodeWithText("显示语言").assertDoesNotExist()
         compose.onNodeWithText("关闭").performScrollTo().performClick()
         compose.onNodeWithText("仅 Wi-Fi 自动预读").assertDoesNotExist()
         compose.onNodeWithText("常用").performClick()
+        compose.onNodeWithText("中日").performScrollTo().assertIsSelected()
         compose.runOnIdle { assertEquals("zh-jp", settings.mode); assertEquals(0, settings.prefetchChapters) }
     }
 

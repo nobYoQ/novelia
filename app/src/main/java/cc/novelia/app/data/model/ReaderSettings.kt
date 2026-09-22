@@ -30,6 +30,11 @@ import kotlinx.serialization.Serializable
     // List/form paging controls are independent of the reader's page buttons and e-ink presets.
     val showScrollPageButtons: Boolean = true
 ) {
+    companion object {
+        const val MIN_LINE_HEIGHT = .5f
+        val LINE_HEIGHT_RANGE = MIN_LINE_HEIGHT..2.6f
+    }
+
     val resolvedParagraphSpacing get() = if(paragraphSpacing.isFinite()) paragraphSpacing.coerceIn(0f, 32f) else 8f
     val resolvedToolbarTransparency get() = if(toolbarTransparency.isFinite()) toolbarTransparency.coerceIn(0f, 1f) else .25f
     // Compatibility with settings saved before black-and-white became a theme choice.

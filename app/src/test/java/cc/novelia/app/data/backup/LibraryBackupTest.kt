@@ -37,6 +37,23 @@ class LibraryBackupTest {
         catch (expected: IllegalArgumentException) { /* rejection leaves the live library untouched */ }
     }
 
+    @Test fun lineHeightBelowOneRestoresForGlobalAndPerBookSettingsButInvalidValuesAreRejected() {
+        val root = temp()
+        try {
+            for(multiplier in listOf(.5f, .8f, 4f, .49f, 4.1f)) {
+                for(perBook in listOf(false, true)) {
+                    val settings = ReaderSettings(lineHeight = multiplier)
+                    val state = if(perBook) LibraryState(bookSettings = mapOf("syosetu/n1" to settings)) else LibraryState(reader = settings)
+                    val bytes = archive(mapOf("manifest.json" to appJson.encodeToString(manifest(state)).toByteArray()))
+                    val stage = File(root, "$multiplier-$perBook").apply { mkdirs() }
+                    if(multiplier in .5f..4f) {
+                        assertEquals(state, LibraryBackupArchive.extract(ByteArrayInputStream(bytes), stage).library)
+                    } else fails { LibraryBackupArchive.extract(ByteArrayInputStream(bytes), stage) }
+                }
+            }
+        } finally { root.deleteRecursively() }
+    }
+
     @Test fun unsafeZipPathsAreRejectedBeforeWritingOutsideStage() {
         val root = temp()
         try {

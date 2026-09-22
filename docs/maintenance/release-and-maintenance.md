@@ -18,7 +18,7 @@
 
 ## 版本与变更记录
 
-[version.properties](../../version.properties) 是版本名称和 Android 版本码的单一配置来源。当前基线为 `0.1.8 / 11`。发行时维护者统一选择版本、递增 `versionCode`、整理 [CHANGELOG.md](../../CHANGELOG.md) 并更新项目首页展示版本。各 ABI 使用同一版本码。
+[version.properties](../../version.properties) 是版本名称和 Android 版本码的单一配置来源。当前版本为 `0.1.9 / 12`。发行时维护者统一选择版本、递增 `versionCode`、整理 [CHANGELOG.md](../../CHANGELOG.md) 并更新项目首页展示版本。各 ABI 使用同一版本码。
 
 标签格式为 `v<versionName>`，预发布后缀也须匹配。已经公开的版本标签和附件不静默替换；修复后发布新版本，让用户能区分产物。发行二进制、对应源码、版本元数据和标签应关联同一个提交。
 

@@ -57,7 +57,7 @@ flowchart LR
 
 [KeywordStore](../../app/src/main/java/cc/novelia/app/data/catalog/KeywordStore.kt)从用户已经访问的内容观察标签，并保存本地译名和使用记录，不会另行下载全站标签库。目录合并、可搜索性和排序规则在 [KeywordCatalog](../../app/src/main/java/cc/novelia/app/data/catalog/KeywordCatalog.kt)。
 
-辅助搜索保留最多 12 个快捷候选，通过“浏览全部标签”进入 [KeywordLibraryScreen](../../app/src/main/java/cc/novelia/app/ui/discover/KeywordLibraryScreen.kt) 的完整标签库。完整列表使用惰性布局，不截断为候选数量，可按原文、中文译名、别名搜索并筛选分类；选择包含/排除后返回辅助搜索，仍由读者统一应用条件。设置页也提供不携带搜索条件的管理入口。
+辅助搜索保留最多 12 个快捷候选，通过“浏览全部标签”进入 [KeywordLibraryScreen](../../app/src/main/java/cc/novelia/app/ui/discover/KeywordLibraryScreen.kt) 的完整标签库。标签按实际文字宽度自动换行，后台计算行布局并只组合可见行，不截断为候选数量；分类使用可左右滑动的胶囊选项。支持原文、中文译名、别名搜索，选择包含/排除后返回辅助搜索，仍由读者统一应用条件。包含使用选中色，排除使用红色与删除线，两者都保留无障碍状态描述和至少 48dp 触控区域。设置页也提供不携带搜索条件的管理入口。
 
 分类最初在本地内置为题材、人物、情节、其他。读者可以新建、重命名、删除分类和调整标签归属；“全部”是虚拟筛选项，“其他”是保留的默认分类。删除分类会将其标签移到“其他”，不会删除标签。分类最多 100 个，名称最多 40 字符。`KeywordLibrary` 将分类（含空分类）与标签存入同一个原子快照，避免重启时丢失空分类或复活已删除分类。
 

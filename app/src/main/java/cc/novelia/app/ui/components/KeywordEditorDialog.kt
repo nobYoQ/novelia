@@ -24,9 +24,10 @@ fun KeywordEditorDialog(
     var category by rememberSaveable(entry.original) { mutableStateOf(entry.category) }
     var error by remember { mutableStateOf<String?>(null) }
     val tooLong = translation.length > KeywordCatalog.MAX_TEXT_LENGTH || entry.original.length > KeywordCatalog.MAX_TEXT_LENGTH
-    fun saveChanges(): Boolean = try {
-        if(onSaveDetails != null) onSaveDetails(entry.original, translation, category)
-        else onSave(entry.original, translation)
+    fun saveChanges(force: Boolean = false): Boolean = try {
+        if(onSaveDetails != null) {
+            if(force || translation != entry.translation || category != entry.category) onSaveDetails(entry.original, translation, category)
+        } else if(force || translation != entry.translation) onSave(entry.original, translation)
         true
     } catch(failure: IllegalArgumentException) { error = failure.message; false }
     AppAlertDialog(onDismissRequest = onDismiss, title = { Text(entry.original) },
@@ -47,6 +48,6 @@ fun KeywordEditorDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { if(saveChanges()) onDismiss() }, enabled = !tooLong) { Text(if(onSaveDetails != null) "保存标签" else "保存翻译") } },
+        confirmButton = { TextButton(onClick = { if(saveChanges(force = true)) onDismiss() }, enabled = !tooLong) { Text(if(onSaveDetails != null) "保存标签" else "保存翻译") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("关闭") } })
 }

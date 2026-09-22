@@ -17,7 +17,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.catalog.*
 import cc.novelia.app.ui.components.*
 import cc.novelia.app.ui.navigation.AppController
-import cc.novelia.app.ui.theme.motionClickable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -65,43 +64,36 @@ class KeywordLibraryActions(
     var managing by rememberSaveable { mutableStateOf(false) }
     var editing by remember { mutableStateOf<KeywordEntry?>(null) }
     val activeCategory = category.takeIf { it == "全部" || it in categories } ?: "全部"
+    LaunchedEffect(categories) { if(category != "全部" && category !in categories) category = "全部" }
     val settledQuery = rememberDebouncedQuery(query)
-    val results by produceState<List<KeywordEntry>?>(null, entries, settledQuery, activeCategory) {
+    // Observe here before Scaffold subcomposes its content, including results that finish before layout.
+    val results = produceState<List<KeywordEntry>?>(null, entries, settledQuery, activeCategory) {
         value = null
         value = withContext(Dispatchers.Default) { KeywordCatalog.suggestions(entries, settledQuery, activeCategory, KeywordCatalog.MAX_ENTRIES) }
-    }
+    }.value
     Screen("标签库", onBack, actions = {
         if(actions != null) TextButton(onClick = { managing = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text("管理分类") }
     }) { padding ->
         Column(Modifier.padding(padding)) {
-            Column(Modifier.padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(query, { query = it }, label = { Text("搜索原文、中文译名或别名") }, singleLine = true,
-                    leadingIcon = { Icon(Icons.Outlined.Search, null) }, modifier = Modifier.fillMaxWidth().testTag("keyword-library-search"))
-                KeywordCategoryPicker(listOf("全部") + categories, activeCategory, { category = it })
-                Text(if(results == null) "正在检索…" else "${results!!.size} 个标签 · 标签库共 ${entries.size} 个", style = MaterialTheme.typography.labelLarge)
-                if(onInclude != null) Text("点击标签选择包含或排除，返回后统一应用搜索。已选包含 ${included.size} 个、排除 ${excluded.size} 个。", style = MaterialTheme.typography.bodySmall)
-                else Text("收录常用标签和浏览作品时遇到的标签，分类和译名保存在本机。", style = MaterialTheme.typography.bodySmall)
+            OutlinedTextField(query, { query = it }, placeholder = { Text("搜索原文、译名或别名") }, singleLine = true,
+                leadingIcon = { Icon(Icons.Outlined.Search, null) }, shape = MaterialTheme.shapes.large,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 12.dp, bottom = 8.dp).testTag("keyword-library-search"))
+            KeywordCategoryChips(listOf("全部") + categories, activeCategory, { category = it }, Modifier.fillMaxWidth().testTag("keyword-library-categories"))
+            Column(Modifier.padding(horizontal = 20.dp).padding(top = 8.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(when { results == null -> "正在检索…"; results!!.size == entries.size -> "${entries.size} 个标签";
+                        else -> "${results!!.size} / ${entries.size} 个标签" }, Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
+                    if(included.isNotEmpty() || excluded.isNotEmpty()) Text("包含 ${included.size} · 排除 ${excluded.size}",
+                        style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                }
+                Text(if(onInclude != null) "点按标签选择包含或排除，返回后应用" else "点按标签编辑译名与分类",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 persistenceError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             }
             HorizontalDivider()
-            AppLazyColumn(Modifier.weight(1f).testTag("keyword-library-list"), contentPadding = PaddingValues(bottom = 20.dp)) {
-                if(results?.isEmpty() == true) item { EmptyState("没有匹配的标签", "换个关键词或分类试试。", Icons.Outlined.SearchOff) }
-                items(results.orEmpty(), key = { it.original }) { entry ->
-                    ListItem(
-                        headlineContent = { Text(entry.original) },
-                        supportingContent = { Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            if(entry.translation.isNotBlank()) Text(entry.translation)
-                            Text(entry.category, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                        } },
-                        trailingContent = {
-                            when(entry.original) {
-                                in included -> Text("已包含", color = MaterialTheme.colorScheme.primary)
-                                in excluded -> Text("已排除", color = MaterialTheme.colorScheme.error)
-                                else -> Icon(Icons.Outlined.Edit, "编辑标签")
-                            }
-                        }, modifier = Modifier.fillMaxWidth().heightIn(min = 72.dp).testTag("library-tag-${entry.original}").motionClickable { editing = entry })
-                    HorizontalDivider(Modifier.padding(horizontal = 20.dp), color = MaterialTheme.colorScheme.outlineVariant)
-                }
+            if(results?.isEmpty() == true) EmptyState("没有匹配的标签", "换个关键词或分类试试。", Icons.Outlined.SearchOff)
+            else key(settledQuery, activeCategory) {
+                KeywordTagCloud(results.orEmpty(), included, excluded, { editing = it }, Modifier.weight(1f).fillMaxWidth())
             }
         }
     }

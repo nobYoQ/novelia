@@ -75,7 +75,8 @@ import kotlin.math.roundToInt
                     0 -> {
                         ReaderPreferenceHeading("文字与主题")
                         ReaderSlider("字号 ${value.fontSize.toInt()}", value.fontSize, 14f..32f) { onChange(value.copy(fontSize = it)) }
-                        ReaderSlider("行距 ${"%.1f".format(value.lineHeight)}", value.lineHeight, 1f..2.6f) { onChange(value.copy(lineHeight = it)) }
+                        ReaderSlider("行距 ${"%.1f".format(value.lineHeight)}", value.lineHeight, ReaderSettings.LINE_HEIGHT_RANGE,
+                            modifier = Modifier.testTag("reader-line-height")) { onChange(value.copy(lineHeight = it)) }
                         ReaderSlider("段距 ${value.resolvedParagraphSpacing.roundToInt()} dp", value.resolvedParagraphSpacing, 0f..32f,
                             modifier = Modifier.testTag("reader-paragraph-spacing")) { onChange(value.copy(paragraphSpacing = it)) }
                         ChoiceRow("阅读主题", listOf("跟随应用", "纸张", "浅色", "深色", "黑白"), listOf("system", "paper", "light", "dark", "monochrome").indexOf(value.resolvedTheme)) { onChange(value.withTheme(listOf("system", "paper", "light", "dark", "monochrome")[it])) }
@@ -86,6 +87,11 @@ import kotlin.math.roundToInt
                         ) {
                             ReaderSlider("屏幕亮度", value.brightness.coerceIn(.05f, 1f), .05f..1f, enabled = value.brightness >= 0) { onChange(value.copy(brightness = it)) }
                         }
+                        ReaderPreferenceHeading("语言与译文")
+                        ChoiceRow("显示语言", listOf("中文", "日文", "中日", "日中"), listOf("zh", "jp", "zh-jp", "jp-zh").indexOf(value.mode)) { onChange(value.copy(mode = listOf("zh", "jp", "zh-jp", "jp-zh")[it])) }
+                        ChoiceRow("优先译文", listOf("Sakura", "GPT", "有道"), listOf("sakura", "gpt", "youdao").indexOf(value.engines.firstOrNull())) { val engine = listOf("sakura", "gpt", "youdao")[it]; onChange(value.copy(engines = listOf(engine) + value.engines.filterNot { e -> e == engine })) }
+                        TogglePreference("并列展示译文", "关闭时按优先顺序回退", value.parallel) { onChange(value.copy(parallel = it)) }
+                        TogglePreference("繁体显示", "将简体译文转换为繁体", value.traditional) { onChange(value.copy(traditional = it)) }
                     }
                     1 -> {
                         ReaderPreferenceHeading("阅读模式")
@@ -110,12 +116,6 @@ import kotlin.math.roundToInt
                     }
                     else -> {
                         var expanded by state.expandedGroup
-                        ReaderPreferenceGroup("语言与译文", "显示语言、优先译文与简繁转换", expanded == "language", { expanded = if(expanded == "language") "" else "language" }) {
-                            ChoiceRow("显示语言", listOf("中文", "日文", "中日", "日中"), listOf("zh", "jp", "zh-jp", "jp-zh").indexOf(value.mode)) { onChange(value.copy(mode = listOf("zh", "jp", "zh-jp", "jp-zh")[it])) }
-                            ChoiceRow("优先译文", listOf("Sakura", "GPT", "有道"), listOf("sakura", "gpt", "youdao").indexOf(value.engines.firstOrNull())) { val engine = listOf("sakura", "gpt", "youdao")[it]; onChange(value.copy(engines = listOf(engine) + value.engines.filterNot { e -> e == engine })) }
-                            TogglePreference("并列展示译文", "关闭时按优先顺序回退", value.parallel) { onChange(value.copy(parallel = it)) }
-                            TogglePreference("繁体显示", "将简体译文转换为繁体", value.traditional) { onChange(value.copy(traditional = it)) }
-                        }
                         ReaderPreferenceGroup("离线预读", "提前缓存后续章节与网络限制", expanded == "offline", { expanded = if(expanded == "offline") "" else "offline" }) {
                             ChoiceRow("自动预读后续章节", listOf("关闭", "1 章", "3 章", "5 章"), listOf(0, 1, 3, 5).indexOf(value.prefetchChapters).coerceAtLeast(0)) { onChange(value.copy(prefetchChapters = listOf(0, 1, 3, 5)[it])) }
                             if(value.prefetchChapters > 0) TogglePreference("仅 Wi-Fi 自动预读", "退出阅读或清理缓存时停止预读", value.prefetchWifiOnly) { onChange(value.copy(prefetchWifiOnly = it)) }

@@ -9,6 +9,15 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ReaderPreferencesTest {
+    @Test fun halfLineHeightSurvivesSettingsBackupsAndPerBookOverrides() {
+        val settings = ReaderSettings(lineHeight = .5f)
+        val library = LibraryState(reader = settings, bookSettings = mapOf("local/book" to settings))
+        assertEquals(library, appJson.decodeFromString<LibraryState>(appJson.encodeToString(library)))
+        val backup = SettingsBackup(reader = settings)
+        assertEquals(backup, appJson.decodeFromString<SettingsBackup>(appJson.encodeToString(backup)))
+        assertEquals(.5f, settings.withEInkMode(true).withEInkMode(false).lineHeight, 0f)
+    }
+
     @Test fun scrollingPageButtonsSurviveModeSwitchesBackupsAndPerBookOverrides() {
         assertTrue(appJson.decodeFromString<ReaderSettings>("{}").showScrollPageButtons)
         val hidden = ReaderSettings(showScrollPageButtons = false, showPageButtons = true)

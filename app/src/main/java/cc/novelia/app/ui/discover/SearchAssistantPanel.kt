@@ -26,7 +26,7 @@ import cc.novelia.app.ui.components.AppScrollColumn
 import cc.novelia.app.ui.components.FilterPanelExpandIcon
 import cc.novelia.app.ui.components.FilterPanelVisibility
 import cc.novelia.app.ui.components.KeywordEditorDialog
-import cc.novelia.app.ui.components.KeywordCategoryPicker
+import cc.novelia.app.ui.components.KeywordCategoryChips
 
 @Composable
 fun SearchAssistantPanel(
@@ -95,7 +95,7 @@ fun SearchAssistantPanel(
                         isError = tagQuery.trim().length > KeywordCatalog.MAX_TEXT_LENGTH,
                         supportingText = { if(tagQuery.trim().length > KeywordCatalog.MAX_TEXT_LENGTH) Text("标签最多 ${KeywordCatalog.MAX_TEXT_LENGTH} 字符，请缩短后添加。") },
                         modifier = Modifier.fillMaxWidth().testTag("assistant-tag-input"))
-                    KeywordCategoryPicker(listOf("全部") + categoryNames, category, { category = it })
+                    KeywordCategoryChips(listOf("全部") + categoryNames, category, { category = it }, Modifier.fillMaxWidth(), PaddingValues(vertical = 4.dp))
                     Text("这里显示最多 12 个候选。可在标签库搜索、浏览全部标签，点击选择包含或排除。", style = MaterialTheme.typography.bodySmall)
                     AppChipFlowRow() {
                         candidates.forEach { entry ->

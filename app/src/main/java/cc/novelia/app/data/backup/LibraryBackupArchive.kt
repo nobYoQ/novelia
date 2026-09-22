@@ -5,6 +5,7 @@ import cc.novelia.app.data.catalog.KeywordLibrary
 import cc.novelia.app.data.catalog.KeywordLibraryFormat
 import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.LocalDocument
+import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.data.storage.appJson
 import java.io.File
 import java.io.InputStream
@@ -126,7 +127,7 @@ internal object LibraryBackupArchive {
         require(state.books.map { it.book.ref.key }.distinct().size == state.books.size && state.notes.map { it.id }.distinct().size == state.notes.size) { "备份含重复的书籍或笔记标识" }
         require(state.theme in setOf("system", "light", "dark")) { "备份主题设置无效" }
         (listOf(state.reader) + state.bookSettings.values).forEach { settings ->
-            require(settings.fontSize in 10f..60f && settings.lineHeight in 1f..4f && settings.width in 200f..2000f &&
+            require(settings.fontSize in 10f..60f && settings.lineHeight in ReaderSettings.MIN_LINE_HEIGHT..4f && settings.width in 200f..2000f &&
                 settings.engines.size == 3 && settings.engines.toSet() == setOf("sakura", "gpt", "youdao") && settings.speechRate in .1f..5f &&
                 settings.secondaryAlpha in 0f..1f && (settings.brightness == -1f || settings.brightness in 0f..1f)) { "备份阅读设置无效" }
         }

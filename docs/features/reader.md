@@ -60,7 +60,7 @@ flowchart TD
 
 `staticPagination` 仅判断 `paginationMode == "auto"`，不要把它等同于 `eInkMode`。电子纸首次开启使用自动分页和可用的翻页控制，关闭时恢复 `beforeEInk`，并保存电子纸内的选择供下次使用。旧字段 `paged`、`monochrome` 仍参与历史配置兼容；新增偏好应有默认值，调整这些字段前先读 [ReaderPreferencesTest](../../app/src/test/java/cc/novelia/app/ReaderPreferencesTest.kt)。
 
-设置 UI 位于 [ReaderPreferences.kt](../../app/src/main/java/cc/novelia/app/ui/reader/ReaderPreferences.kt) 的 `ReaderPreferences`，由阅读器和 [SettingsScreen.kt](../../app/src/main/java/cc/novelia/app/ui/settings/SettingsScreen.kt) 复用。行距范围为 1.0–2.6，设置导入使用相同范围。段距单独设置为 0–32dp，默认 8dp；滚动正文按实际文字高度布局，不再强制保留 48dp 段落高度。滚动与分页模式共用段距，分页测量和绘制使用同一数值。中文模式只布局中文，不为隐藏的日文预留空间。普通滑杆先维护临时值，松手时再提交昂贵的排版变化；电子纸改用步进按钮。亮度和常亮标志只在阅读器中生效，并在 `DisposableEffect` 清理时恢复。
+设置 UI 位于 [ReaderPreferences.kt](../../app/src/main/java/cc/novelia/app/ui/reader/ReaderPreferences.kt) 的 `ReaderPreferences`，由阅读器和 [SettingsScreen.kt](../../app/src/main/java/cc/novelia/app/ui/settings/SettingsScreen.kt) 复用。行距范围为 0.5–2.6，设置导入使用相同范围。段距单独设置为 0–32dp，默认 8dp；滚动正文按实际文字高度布局，不再强制保留 48dp 段落高度。滚动与分页模式共用段距，分页测量和绘制使用同一数值。中文模式只布局中文，不为隐藏的日文预留空间。普通滑杆先维护临时值，松手时再提交昂贵的排版变化；电子纸改用步进按钮。亮度和常亮标志只在阅读器中生效，并在 `DisposableEffect` 清理时恢复。
 
 ## 3. 章节加载、缓存与切换
 

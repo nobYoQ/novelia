@@ -29,6 +29,25 @@ import java.io.File
 class ReaderSpacingTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun lineHeightCanReachHalfInBothModesAndSurvivesReopeningPreferences() {
+        var settings by mutableStateOf(ReaderSettings())
+        var showing by mutableStateOf(true)
+        compose.setContent { AppInteractionMode(eInk = settings.eInkMode, reducedMotion = true) { NoveliaTheme("light") {
+            if(showing) ReaderPreferences(settings) { settings = it }
+        } } }
+        compose.onNodeWithTag("reader-line-height").performScrollTo()
+            .performSemanticsAction(SemanticsActions.SetProgress) { it(.5f) }
+        compose.runOnIdle { assertEquals(.5f, settings.lineHeight, 0f) }
+        compose.onNodeWithText("行距 0.5").assertIsDisplayed()
+        compose.runOnIdle { settings = settings.withEInkMode(true).copy(lineHeight = .55f) }
+        compose.onNodeWithContentDescription("减小 行距", substring = true).performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(.5f, settings.lineHeight, .0001f) }
+        compose.onNodeWithContentDescription("减小 行距", substring = true).assertIsNotEnabled()
+        compose.runOnIdle { showing = false }
+        compose.runOnIdle { showing = true }
+        compose.onNodeWithText("行距 0.5").assertIsDisplayed()
+    }
+
     @Test fun chineseScrollParagraphsUseContentHeightAndTheSelectedGapWithoutJapaneseSlots() {
         var settings by mutableStateOf(ReaderSettings(mode = "zh", fontSize = 14f, lineHeight = 1f, paragraphSpacing = 0f, indent = false))
         val chapter = Chapter(paragraphs = listOf("隠された日本語一", "隠された日本語二", "隠された日本語三"),

@@ -1,13 +1,31 @@
 package cc.novelia.app.ui.components
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+
+@Composable fun KeywordCategoryChips(categories: List<String>, selected: String, onSelect: (String) -> Unit, modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 20.dp, vertical = 4.dp)) {
+    Row(modifier.appHorizontalScroll(rememberScrollState()).padding(contentPadding),
+        horizontalArrangement = Arrangement.spacedBy(ChipSpacing)) {
+        categories.forEach { name ->
+            key(name) {
+                AppSelectionChip(name == selected, { onSelect(name) },
+                    label = { Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis) }, shape = CircleShape,
+                    modifier = Modifier.widthIn(max = 240.dp).testTag("keyword-category-$name"))
+            }
+        }
+    }
+}
 
 @Composable fun KeywordCategoryPicker(categories: List<String>, selected: String, onSelect: (String) -> Unit, modifier: Modifier = Modifier) {
     var expanded by remember { mutableStateOf(false) }
