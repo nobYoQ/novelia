@@ -10,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.model.Page
 import cc.novelia.app.data.model.WebOutline
 import cc.novelia.app.ui.components.AppLazyColumn
@@ -27,6 +28,7 @@ import cc.novelia.app.ui.theme.MotionContent
 private val kakuyomuGenres = listOf("综合", "异世界幻想", "现代幻想", "科幻", "恋爱", "浪漫喜剧", "现代戏剧", "恐怖", "推理", "散文·纪实", "历史·时代·传奇", "创作论·评论", "诗·童话·其他")
 private val syosetuGenres = listOf("恋爱：异世界", "恋爱：现实世界", "幻想：高幻想", "幻想：低幻想", "文学：纯文学", "文学：人性剧", "文学：历史", "文学：推理", "文学：恐怖", "文学：动作", "文学：喜剧", "科幻：VR游戏", "科幻：宇宙", "科幻：空想科学", "科幻：惊悚", "其他：童话", "其他：诗", "其他：散文", "其他：其他")
 @Composable fun RankScreen(c: AppController) {
+    val local by c.store.state.collectAsStateWithLifecycle()
     var source by rememberSaveable { mutableIntStateOf(0) }; var kind by rememberSaveable { mutableIntStateOf(1) }; var genre by rememberSaveable { mutableIntStateOf(0) }; var range by rememberSaveable { mutableIntStateOf(0) }; var status by rememberSaveable { mutableIntStateOf(0) }; var page by rememberSaveable { mutableIntStateOf(0) }; var filters by remember { mutableStateOf(false) }
     val provider = if(source == 0) "syosetu" else "kakuyomu"
     val ranges = if(source == 0) listOf("总计", "每年", "季度", "每月", "每周", "每日") else listOf("总计", "每年", "每月", "每周", "每日")
@@ -37,8 +39,14 @@ private val syosetuGenres = listOf("恋爱：异世界", "恋爱：现实世界"
         Column(Modifier.padding(padding)) {
             ChoiceRow("平台", listOf("成为小说家吧", "Kakuyomu"), source) { source = it; range = 0; genre = 0; status = 0; page = 0 }
             MotionContent(listOf(source, kind, genre, range, status), animateInitial = false) { Text("${params["type"] ?: genres[genre]} · ${ranges[range]} · ${states[status]}", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge) }
-            AsyncContent(listOf(provider, params), load = { c.api.get<Page<WebOutline>>("novel/rank/$provider", params) }) { result, _ ->
-                val cards = remember(result.items) { result.items.map(WebOutline::card) }
+            AsyncContent(listOf(provider, params, local.blockedAuthors), load = {
+                c.api.get<Page<WebOutline>>("novel/rank/$provider", params).let {
+                    Page(it.pageNumber, enrichAuthors(it.items.map(WebOutline::card), c, local.blockedAuthors))
+                }
+            }) { result, _ ->
+                val cards = remember(result.items, local.blockedBooks, local.blockedTags, local.blockedAuthors) {
+                    result.items.filter { visibleBook(it, local) }
+                }
                 AppLazyColumn { if(cards.isEmpty()) item { EmptyState("这个榜单暂时没有作品", "可以切换周期或流派；榜单数据由原站获取。") }; items(cards, key = { it.ref.key }, contentType = { "book" }) { book -> BookRow(book, { c.book(book.ref) }, showReadingProgress = false) }; item { PageControls(page, result.pageNumber) { page = it } } }
             }
         }

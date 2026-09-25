@@ -40,6 +40,8 @@ import cc.novelia.app.ui.components.BookRow
 import cc.novelia.app.ui.components.bookRowStatus
 import cc.novelia.app.ui.components.rememberCloudBookMetadata
 import cc.novelia.app.ui.components.ChoiceRow
+import cc.novelia.app.ui.components.QuickFilter
+import cc.novelia.app.ui.components.QuickFilterBar
 import cc.novelia.app.ui.components.CollapsibleCloudFilters
 import cc.novelia.app.ui.components.ConfirmDialog
 import cc.novelia.app.ui.components.EmptyState
@@ -104,6 +106,15 @@ import cc.novelia.app.ui.navigation.AppController
                 add(if (sort == "update") "更新时间" else "收藏时间")
             }.joinToString(" · ")
             Column(Modifier.fillMaxSize()) {
+                QuickFilterBar(buildList {
+                    add(QuickFilter("排序", listOf("更新时间", "收藏时间"), if(sort == "update") 0 else 1) {
+                        sort = if(it == 0) "update" else "create"; page = 0
+                    })
+                    if(kind == 0) {
+                        add(QuickFilter("状态", listOf("全部", "连载中", "已完结", "短篇"), type) { type = it; page = 0 })
+                        add(QuickFilter("分级", listOf("全部", "一般向", "R18"), level) { level = it; page = 0 })
+                    }
+                })
                 CollapsibleCloudFilters(expanded, { expanded = !expanded }, summary, filterHeight) {
                     ChoiceRow("收藏类型", listOf("网络小说", "文库小说"), kind) { kind = it; folderId = ""; page = 0 }
                     Row(Modifier.appHorizontalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -171,7 +182,7 @@ import cc.novelia.app.ui.navigation.AppController
                                         val restoreFolder = book.favored?.takeIf { it != ALL_CLOUD_FAVORITES && it.isNotBlank() }
                                             ?: current.id.takeUnless { it == ALL_CLOUD_FAVORITES }
                                         if(restoreFolder != null) {
-                                            c.cloudMutation("PUT", "$path/$restoreFolder/${if(kind == 0) book.ref.key else book.ref.id}")
+                                            c.addCloudFavorite(displayed, restoreFolder)
                                             version++
                                         } else { c.pendingFavoriteCloud = true; c.pendingFavorite = book }
                                     } }) { Text("撤销") }

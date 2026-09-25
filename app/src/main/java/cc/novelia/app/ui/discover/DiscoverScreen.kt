@@ -28,14 +28,19 @@ import cc.novelia.app.data.catalog.BookLinks
 import cc.novelia.app.data.catalog.SearchExpression
 import cc.novelia.app.data.catalog.providers
 import cc.novelia.app.data.model.Page
+import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.WebOutline
+import cc.novelia.app.data.model.WebDetail
 import cc.novelia.app.data.model.WenkuOutline
+import cc.novelia.app.data.model.WenkuDetail
 import cc.novelia.app.ui.components.AppLazyColumn
 import cc.novelia.app.ui.components.AppScrollColumn
 import cc.novelia.app.ui.components.AppSheet
 import cc.novelia.app.ui.components.AsyncContent
 import cc.novelia.app.ui.components.BookRow
 import cc.novelia.app.ui.components.ChoiceRow
+import cc.novelia.app.ui.components.QuickFilter
+import cc.novelia.app.ui.components.QuickFilterBar
 import cc.novelia.app.ui.components.EmptyState
 import cc.novelia.app.ui.components.PageControls
 import cc.novelia.app.ui.components.Screen
@@ -49,13 +54,16 @@ import cc.novelia.app.ui.theme.MotionContent
 import cc.novelia.app.ui.theme.appReducedMotion
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 
 @Composable fun DiscoverScreen(c: AppController, initialQuery: String) {
     var query by rememberSaveable(initialQuery) { mutableStateOf(initialQuery) }
     var submitted by rememberSaveable(initialQuery) { mutableStateOf(initialQuery) }
     var category by rememberSaveable { mutableIntStateOf(if(initialQuery.isNotBlank()) 1 else 0) }
     var page by rememberSaveable { mutableIntStateOf(0) }
+    var searchRevision by rememberSaveable { mutableIntStateOf(0) }
     var filterOpen by remember { mutableStateOf(false) }
     var assistantExpanded by rememberSaveable { mutableStateOf(false) }
     var source by rememberSaveable { mutableStateOf("") }; var type by rememberSaveable { mutableIntStateOf(0) }; var translate by rememberSaveable { mutableIntStateOf(0) }; var sort by rememberSaveable { mutableIntStateOf(0) }
@@ -66,9 +74,11 @@ import kotlinx.coroutines.delay
     val keywordPersistenceError by c.app.keywords.persistenceError.collectAsStateWithLifecycle()
     LaunchedEffect(local.autoCollapseCloudFilters) { if(!local.autoCollapseCloudFilters) assistantExpanded = true }
     fun search() {
-        c.store.rememberSearch(query); page = 0
+        c.store.rememberSearch(query)
         if(category != 2) c.app.keywords.markUsed(SearchExpression.tagsIn(query))
-        if(BookLinks.parse(query) != null) c.openLink(query) else { submitted = query.trim(); if(category == 0) category = 1 }
+        if(BookLinks.parse(query) != null) c.openLink(query) else {
+            page = 0; searchRevision++; submitted = query.trim(); if(category == 0) category = 1
+        }
     }
     fun resetFilters() { source = ""; type = 0; translate = 0; sort = 0; webLevel = 0; wenkuLevel = 0; page = 0 }
     val filterSummary = remember(category, source, type, translate, sort, webLevel, wenkuLevel, profile?.canEdit) {
@@ -89,9 +99,9 @@ import kotlinx.coroutines.delay
             MotionContent(category, Modifier.weight(1f), animateInitial = false) {
                 Column(Modifier.fillMaxSize()) {
                     if(category == 0) {
-                        AsyncContent(listOf("recommend", profile?.username), load = { coroutineScope { val web = async { c.api.webList(0, sort = 1) }; val wenku = async { c.api.wenkuList(0) }; web.await().items.map { it.card() } to wenku.await().items.map { it.card() } } }) { (web, wenku), refresh ->
-                            val visibleWeb = remember(web, local.blockedBooks, local.blockedTags) { web.asSequence().filter { visibleBook(it, local) }.take(8).toList() }
-                            val visibleWenku = remember(wenku, local.blockedBooks, local.blockedTags) { wenku.asSequence().filter { visibleBook(it, local) }.take(6).toList() }
+                        AsyncContent(listOf("recommend", profile?.username, local.blockedAuthors), load = { coroutineScope { val web = async { c.api.webList(0, sort = 1) }; val wenku = async { c.api.wenkuList(0) }; enrichAuthors(web.await().items.map { it.card() }, c, local.blockedAuthors) to enrichAuthors(wenku.await().items.map { it.card() }, c, local.blockedAuthors) } }) { (web, wenku), refresh ->
+                            val visibleWeb = remember(web, local.blockedBooks, local.blockedTags, local.blockedAuthors) { web.asSequence().filter { visibleBook(it, local) }.take(8).toList() }
+                            val visibleWenku = remember(wenku, local.blockedBooks, local.blockedTags, local.blockedAuthors) { wenku.asSequence().filter { visibleBook(it, local) }.take(6).toList() }
                             AppLazyColumn(contentPadding = PaddingValues(bottom = 20.dp)) {
                                 item(key = "rank-hero", contentType = "hero") {
                                     Card(Modifier.fillMaxWidth().padding(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
@@ -137,18 +147,28 @@ import kotlinx.coroutines.delay
                             }
                             TextButton(onClick = { filterOpen = true }) { Icon(Icons.Outlined.Tune, null, Modifier.size(18.dp)); Text(if(filterSummary.isEmpty()) " 筛选" else " 筛选 ${filterSummary.size}") }
                         }
+                        if(category == 1) QuickFilterBar(buildList {
+                            add(QuickFilter("排序", listOf("更新", "点击", "相关"), sort) { sort = it; page = 0 })
+                            add(QuickFilter("状态", listOf("全部", "连载中", "已完结", "短篇"), type) { type = it; page = 0 })
+                            if(profile?.canEdit == true) add(QuickFilter("分级", listOf("全部", "一般向", "R18"), webLevel.coerceIn(0, 2)) { webLevel = it; page = 0 })
+                        })
                         if(filterSummary.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(filterSummary.joinToString(" · "), Modifier.weight(1f).testTag("discover-filter-summary"), maxLines = 2, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                             TextButton(onClick = ::resetFilters) { Text("清空筛选") }
                         }
                         val effectiveWebLevel = if(profile?.canEdit == true) webLevel.coerceIn(0, 2) else 1
                         val effectiveWenkuLevel = wenkuLevel.coerceIn(0, if(profile?.canEdit == true) 6 else 4)
-                        AsyncContent(listOf(category, page, submitted, source, type, translate, sort, effectiveWebLevel, effectiveWenkuLevel, profile?.username, profile?.canEdit), load = {
-                            if(filterOpen) delay(180)
-                            if(category == 1) c.api.webList(page, submitted, source, type, effectiveWebLevel, translate, sort).let { Page(it.pageNumber, it.items.map(WebOutline::card)) }
-                            else c.api.wenkuList(page, submitted, effectiveWenkuLevel).let { Page(it.pageNumber, it.items.map(WenkuOutline::card)) }
-                        }) { result, refresh ->
-                            val books = remember(result.items, local.blockedBooks, local.blockedTags) { result.items.filter { visibleBook(it, local) } }
+                        val requestKey = listOf(category, page, submitted, source, type, translate, sort, effectiveWebLevel,
+                            effectiveWenkuLevel, profile?.username, profile?.canEdit, local.blockedAuthors, searchRevision)
+                        AsyncContent(requestKey, load = {
+                            if(category == 1) c.api.webList(page, submitted, source, type, effectiveWebLevel, translate, sort).let {
+                                Page(it.pageNumber, enrichAuthors(it.items.map(WebOutline::card), c, local.blockedAuthors))
+                            } else c.api.wenkuList(page, submitted, effectiveWenkuLevel).let {
+                                Page(it.pageNumber, enrichAuthors(it.items.map(WenkuOutline::card), c, local.blockedAuthors))
+                            }
+                        }, initialResult = c.discoverPage?.takeIf { it.first == requestKey }?.second,
+                            onLoaded = { c.discoverPage = requestKey to it }) { result, refresh ->
+                            val books = remember(result.items, local.blockedBooks, local.blockedTags, local.blockedAuthors) { result.items.filter { visibleBook(it, local) } }
                             val resultScroll = rememberLazyListState()
                             AppLazyColumn(state = resultScroll,
                                 modifier = Modifier.nestedScroll(collapseAssistant),
@@ -157,7 +177,7 @@ import kotlinx.coroutines.delay
                                     EmptyState("没有找到匹配的作品", if(filterSummary.isNotEmpty()) "先放宽筛选条件，搜索关键词会保留。" else "试试较短的关键词，或检查屏蔽条件。", Icons.Outlined.SearchOff,
                                         if(filterSummary.isNotEmpty()) "放宽筛选" else if(submitted.isNotBlank()) "浏览全部作品" else "重新加载",
                                         { if(filterSummary.isNotEmpty()) resetFilters() else if(submitted.isNotBlank()) { query = ""; submitted = ""; page = 0 } else refresh() }, sticker = MidoriSticker.Curious)
-                                    if(local.blockedBooks.isNotEmpty() || local.blockedTags.isNotEmpty()) TextButton(onClick = { c.go("blocked") }, Modifier.fillMaxWidth()) { Text("检查屏蔽条件") }
+                                    if(local.blockedBooks.isNotEmpty() || local.blockedTags.isNotEmpty() || local.blockedAuthors.isNotEmpty()) TextButton(onClick = { c.go("blocked") }, Modifier.fillMaxWidth()) { Text("检查屏蔽条件") }
                                 }
                                 items(books, key = { it.ref.key }, contentType = { "book" }) { BookRow(it, { c.book(it.ref) }, if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(AppMotion.Quick), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit)), showReadingProgress = false) }
                                 item { PageControls(page, result.pageNumber) { page = it } }
@@ -186,5 +206,23 @@ import kotlinx.coroutines.delay
             TextButton(onClick = { c.go("article/64f3d63f794cbb1321145c07"); filterOpen = false }, Modifier.padding(horizontal = 12.dp)) { Text("查看搜索语法") }
             Button(onClick = { filterOpen = false }, Modifier.fillMaxWidth().padding(horizontal = 20.dp)) { Text("查看结果") }
         }
+    }
+}
+
+/** Outline responses can omit authors. Resolve them only while an author block is active. */
+internal suspend fun enrichAuthors(books: List<BookCard>, c: AppController, blockedAuthors: Set<String>): List<BookCard> {
+    if(blockedAuthors.isEmpty()) return books
+    val limit = Semaphore(4)
+    return coroutineScope {
+        books.map { book -> async {
+            if(book.authors.isNotEmpty()) book else limit.withPermit {
+                try {
+                    val authors = if(book.ref.isWenku) c.detail<WenkuDetail>("wenku/${book.ref.id}").authors
+                        else c.detail<WebDetail>("novel/${book.ref.key}").authors.map { it.name }
+                    book.copy(authors = authors)
+                } catch(e: CancellationException) { throw e }
+                  catch(_: Exception) { book }
+            }
+        } }.map { it.await() }
     }
 }

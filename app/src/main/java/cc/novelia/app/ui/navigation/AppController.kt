@@ -14,10 +14,12 @@ import cc.novelia.app.data.catalog.SiteLink
 import cc.novelia.app.data.markdown.MarkdownLinks
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
+import cc.novelia.app.data.model.Page
 import cc.novelia.app.data.model.Chapter
 import cc.novelia.app.data.model.PendingAction
 import cc.novelia.app.data.model.WebDetail
 import cc.novelia.app.data.library.withCloudReadingMetadata
+import cc.novelia.app.data.library.withCloudFavoriteLocalCopy
 import cc.novelia.app.data.library.CloudBookMetadataLoader
 import cc.novelia.app.data.network.ApiException
 import cc.novelia.app.data.storage.appJson
@@ -53,6 +55,8 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
     var pendingFavorite by mutableStateOf<BookCard?>(null)
     var pendingFavoriteCloud by mutableStateOf(false)
     private var celebration: Job? = null
+    /** Keep the latest discovery page while a book detail covers its navigation entry. */
+    internal var discoverPage: Pair<Any, Page<BookCard>>? = null
     internal data class ReaderHandoff(val ref: BookRef, val id: String, val value: Pair<Chapter, Boolean>, val binding: SessionBinding, val generation: Long)
     private var readerHandoff: ReaderHandoff? = null
     private val cloudBookMetadata = CloudBookMetadataLoader(session) { ref -> detail<WebDetail>("novel/${ref.key}") }
@@ -209,6 +213,16 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
             state.copy(syncStatus = state.syncStatus + (account to status.copy(lastSuccessAt = System.currentTimeMillis(), requiresLogin = false)))
         }
         if (queued) message("操作已保存，等待同步")
+        return queued
+    }
+    /** Pair an explicit cloud favorite with an optional local copy of the same book. */
+    suspend fun addCloudFavorite(book: BookCard, folderId: String): Boolean {
+        val binding = session.capture()
+        val path = if(book.ref.isWenku) "user/favored-wenku/$folderId/${book.ref.id}"
+            else "user/favored-web/$folderId/${book.ref.key}"
+        val queued = cloudMutation("PUT", path)
+        session.ensureCurrent(binding)
+        store.update { it.withCloudFavoriteLocalCopy(book) }
         return queued
     }
     fun syncBook(ref: BookRef) {

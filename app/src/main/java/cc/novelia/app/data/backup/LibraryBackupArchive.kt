@@ -201,6 +201,7 @@ internal fun mergeLibraryBackup(current: LibraryState, imported: LibraryState): 
         bookSettings = imported.bookSettings + current.bookSettings,
         personalGlossaries = (current.personalGlossaries.keys + imported.personalGlossaries.keys).associateWith { key -> imported.personalGlossaries[key].orEmpty() + current.personalGlossaries[key].orEmpty() },
         blockedBooks = current.blockedBooks + imported.blockedBooks, blockedTags = current.blockedTags + imported.blockedTags,
+        blockedAuthors = current.blockedAuthors + imported.blockedAuthors,
         blockedUsers = current.blockedUsers + imported.blockedUsers,
         recentSearches = (current.recentSearches + imported.recentSearches).distinct().take(20),
         savedSearches = (current.savedSearches + imported.savedSearches).distinct(),

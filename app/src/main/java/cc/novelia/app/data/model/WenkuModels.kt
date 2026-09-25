@@ -17,6 +17,6 @@ import kotlinx.serialization.Serializable
     val level: String = "一般向", val introduction: String = "", val webIds: List<String> = emptyList(),
     val volumes: List<WenkuVolume> = emptyList(), val glossary: Map<String, String> = emptyMap(), val visited: Long = 0,
     val favored: String? = null, val volumeZh: List<String> = emptyList(), val volumeJp: List<JapaneseVolume> = emptyList()
-) { fun card(ref: BookRef) = BookCard(ref, titleZh.ifBlank { title }, title, cover, authors.joinToString(), keywords, total = volumeJp.size + volumeZh.size, favored = favored,
+) { fun card(ref: BookRef) = BookCard(ref, titleZh.ifBlank { title }, title, cover, authors.joinToString(), keywords, total = volumeJp.size + volumeZh.size, favored = favored, authors = authors,
     translations = mapOf("gpt" to volumeJp.sumOf { it.gpt }, "sakura" to volumeJp.sumOf { it.sakura }, "youdao" to volumeJp.sumOf { it.youdao }),
     volumeIds = volumeJp.map { "jp:${it.volumeId}" } + volumeZh.map { "zh:$it" }) }

@@ -64,7 +64,7 @@ import cc.novelia.app.ui.navigation.loginForFavorite
                         val selected = folder.id == favoriteState.cloudFolder
                         MenuRow(folder.title, if(selected) "当前云端收藏夹" else "与原站同步", if(selected) Icons.Outlined.BookmarkAdded else Icons.Outlined.CloudQueue, {
                             c.action {
-                                val queued = c.cloudMutation("PUT", "$path/${folder.id}/$bookId")
+                                val queued = c.addCloudFavorite(book, folder.id)
                                 dismiss()
                                 if(!queued) c.message("已加入云端收藏")
                             }

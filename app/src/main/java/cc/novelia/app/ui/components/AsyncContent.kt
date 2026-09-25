@@ -22,19 +22,23 @@ import kotlinx.coroutines.ensureActive
  * 已有成功内容时刷新保留原组合和列表/编辑状态，失败显示附加错误，不退回整页空白。
  * load 必须可取消且自行切换耗时工作的调度器；取消不转换为错误页，结果发布前再次检查取消。
  */
-@Composable fun <T> AsyncContent(key: Any?, load: suspend () -> T, modifier: Modifier = Modifier, refreshKey: Any? = Unit, content: @Composable (T, () -> Unit) -> Unit) {
+@Composable fun <T> AsyncContent(key: Any?, load: suspend () -> T, modifier: Modifier = Modifier, refreshKey: Any? = Unit,
+    initialResult: T? = null, onLoaded: (T) -> Unit = {}, content: @Composable (T, () -> Unit) -> Unit) {
     var refresh by remember(key) { mutableIntStateOf(0) }
-    var result by remember(key) { mutableStateOf<Result<T>?>(null) }
-    var loading by remember(key) { mutableStateOf(true) }
+    var result by remember(key) { mutableStateOf<Result<T>?>(initialResult?.let { Result.success(it) }) }
+    var loading by remember(key) { mutableStateOf(initialResult == null) }
     var refreshError by remember(key) { mutableStateOf<Exception?>(null) }
+    var skipInitialLoad by remember(key) { mutableStateOf(initialResult != null) }
     val currentLoad by rememberUpdatedState(load)
     LaunchedEffect(key, refreshKey, refresh) {
+        if (skipInitialLoad) { skipInitialLoad = false; return@LaunchedEffect }
         loading = true
         refreshError = null
         try {
             val loaded = currentLoad()
             currentCoroutineContext().ensureActive()
             result = Result.success(loaded)
+            onLoaded(loaded)
         } catch(e: CancellationException) {
             throw e
         } catch(e: Exception) {

@@ -81,7 +81,7 @@ import kotlinx.coroutines.withContext
     val refreshKey = listOf(version, state.syncStatus[profile?.username]?.lastSuccessAt ?: 0L)
     LaunchedEffect(ref, profile?.username) { favorite = null }
     val reducedMotion = appReducedMotion()
-    var progressChoice by remember { mutableStateOf<Triple<BookCard, ReadingDestination, ReadingDestination>?>(null) }
+    var progressChoice by remember { mutableStateOf<Pair<ReadingDestination, ReadingDestination>?>(null) }
     var uploadBusy by remember { mutableStateOf(false) }
     val uploader = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let { c.action("分卷上传完成") { uploadBusy = true; try { withContext(Dispatchers.IO) { val (name, bytes) = readDocument(c, it); require(name.substringAfterLast('.').lowercase() in listOf("epub", "txt") && bytes.size <= 40 * 1024 * 1024) { "文库上传支持不超过 40 MB 的 EPUB / TXT" }; val file = File(c.app.cacheDir, "upload-${System.nanoTime()}"); try { file.writeBytes(bytes); c.api.uploadVolume(ref, name, file) } finally { file.delete() } }; version++ } finally { uploadBusy = false } } } }
     Screen(if(ref.isWenku) "文库详情" else "作品详情", onBack, actions = {
@@ -109,6 +109,11 @@ import kotlinx.coroutines.withContext
                             item { MetaParagraph("简介", detail.introduction) }
                             item { TagList(detail.keywords, c) }
                             item { MetaParagraph("出版信息", listOfNotNull(detail.authors.takeIf { it.isNotEmpty() }?.joinToString(prefix = "作者："), detail.artists.takeIf { it.isNotEmpty() }?.joinToString(prefix = "插画："), detail.publisher, detail.imprint).joinToString("\n")) }
+                            detail.authors.filter(String::isNotBlank).forEach { author -> item {
+                                MenuRow("屏蔽作者：$author", "在发现列表中隐藏这位作者的作品", Icons.Outlined.PersonOff, {
+                                    c.store.update { it.copy(blockedAuthors = it.blockedAuthors + author.trim()) }; c.message("已屏蔽作者 $author")
+                                })
+                            } }
                             if(detail.volumeJp.isNotEmpty() || detail.volumeZh.isNotEmpty()) item { MetaParagraph("译文情况", "中文文件 ${detail.volumeZh.size} 卷 · 日文分卷 ${detail.volumeJp.size} 卷\nSakura ${detail.volumeJp.sumOf { it.sakura }} · GPT ${detail.volumeJp.sumOf { it.gpt }} · 有道 ${detail.volumeJp.sumOf { it.youdao }} / ${detail.volumeJp.sumOf { it.total }}") }
                             if(detail.webIds.isNotEmpty()) item { SectionTitle("关联网络版"); detail.webIds.forEach { id -> TextButton(onClick = { c.book(BookRef.fromKey(id)) }, Modifier.padding(horizontal = 12.dp)) { Text(id) } } }
                         }
@@ -148,9 +153,9 @@ import kotlinx.coroutines.withContext
                     when(panel) {
                         0 -> AppLazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
                             item { BookHero(book, "${detail.type} · ${providers[ref.provider]}", favoriteState, { favorite = book }) }
-                            item { BookUpdateSummary(detail) { id -> c.store.saveBook(book); c.read(ref, id) } }
+                            item { BookUpdateSummary(detail) { id -> c.read(ref, id) } }
                             item { Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Button(onClick = { start?.let { if(localDestination != null && cloudDestination != null && localDestination.chapterId != cloudDestination.chapterId) progressChoice = Triple(book, localDestination, cloudDestination) else { c.store.saveBook(book); c.read(ref, it) } } }, enabled = start != null, modifier = Modifier.weight(1f)) { Icon(Icons.Outlined.MenuBook, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(if(continuing) "继续阅读 · 第 ${destination?.number} 章" else "开始阅读") }
+                                Button(onClick = { start?.let { if(localDestination != null && cloudDestination != null && localDestination.chapterId != cloudDestination.chapterId) progressChoice = localDestination to cloudDestination else c.read(ref, it) } }, enabled = start != null, modifier = Modifier.weight(1f)) { Icon(Icons.Outlined.MenuBook, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(if(continuing) "继续阅读 · 第 ${destination?.number} 章" else "开始阅读") }
                                 FilledTonalIconButton(onClick = { download = book to null }) { Icon(Icons.Outlined.Download, "下载小说") }
                             } }
                             destination?.let { target -> item { Text(target.title, Modifier.padding(horizontal = 24.dp, vertical = 8.dp), style = MaterialTheme.typography.bodyMedium) } }
@@ -160,12 +165,19 @@ import kotlinx.coroutines.withContext
                             } }
                             item { MetaParagraph("简介", detail.introductionZh?.takeIf(String::isNotBlank) ?: detail.introductionJp) }
                             item { TagList(detail.keywords + detail.attentions, c) }
-                            item { SectionTitle("作者"); detail.authors.forEach { author -> TextButton(onClick = { c.go("discover?query=${android.net.Uri.encode(author.name)}") }, Modifier.padding(horizontal = 12.dp)) { Text(author.name) } } }
+                            item { SectionTitle("作者"); detail.authors.filter { it.name.isNotBlank() }.forEach { author ->
+                                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    TextButton(onClick = { c.go("discover?query=${android.net.Uri.encode(author.name)}") }, Modifier.weight(1f)) { Text(author.name) }
+                                    IconButton(onClick = { c.store.update { it.copy(blockedAuthors = it.blockedAuthors + author.name.trim()) }; c.message("已屏蔽作者 ${author.name}") }) {
+                                        Icon(Icons.Outlined.PersonOff, "屏蔽作者 ${author.name}")
+                                    }
+                                }
+                            } }
                             item { MetaParagraph("译文进度", "原文 ${detail.jp} · Sakura ${detail.sakura} · GPT ${detail.gpt} · 有道 ${detail.youdao}") }
                             detail.wenkuId?.let { id -> item { MenuRow("关联文库版", "查看分卷与出版信息", Icons.Outlined.LibraryBooks, { c.book(BookRef("wenku", id)) }) } }
                             item { TextButton(onClick = refresh, Modifier.fillMaxWidth()) { Text("刷新书籍资料") } }
                         }
-                        1 -> TocPanel(c, ref, detail.toc, start) { id -> c.store.saveBook(book); c.read(ref, id) }
+                        1 -> TocPanel(c, ref, detail.toc, start) { id -> c.read(ref, id) }
                         2 -> CommentsPanel(c, "web-${ref.provider}-${ref.id}")
                     }
             }
@@ -173,7 +185,7 @@ import kotlinx.coroutines.withContext
     }
     favorite?.let { FavoriteSheet(c, it, initialCloud = profile != null) { favorite = null } }
     download?.let { (book, volume) -> DownloadSheet(c, book, volume) { download = null } }
-    progressChoice?.let { (book, localChapter, cloudChapter) -> AppAlertDialog(onDismissRequest = { progressChoice = null }, title = { Text("选择继续阅读的位置") }, text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { Text("本机与原站记录的章节不同，请选择这次从哪里继续。"); Text("本机：${localChapter.label}"); Text("原站：${cloudChapter.label}") } }, confirmButton = { TextButton(onClick = { progressChoice = null; c.store.saveBook(book); c.read(ref, cloudChapter.chapterId) }) { Text("原站进度") } }, dismissButton = { TextButton(onClick = { progressChoice = null; c.store.saveBook(book); c.read(ref, localChapter.chapterId) }) { Text("本机进度") } }) }
+    progressChoice?.let { (localChapter, cloudChapter) -> AppAlertDialog(onDismissRequest = { progressChoice = null }, title = { Text("选择继续阅读的位置") }, text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { Text("本机与原站记录的章节不同，请选择这次从哪里继续。"); Text("本机：${localChapter.label}"); Text("原站：${cloudChapter.label}") } }, confirmButton = { TextButton(onClick = { progressChoice = null; c.read(ref, cloudChapter.chapterId) }) { Text("原站进度") } }, dismissButton = { TextButton(onClick = { progressChoice = null; c.read(ref, localChapter.chapterId) }) { Text("本机进度") } }) }
 }
 @Composable private fun LocalBookDetailScreen(c: AppController, ref: BookRef, onBack: () -> Unit) {
     val state by c.store.state.collectAsStateWithLifecycle()

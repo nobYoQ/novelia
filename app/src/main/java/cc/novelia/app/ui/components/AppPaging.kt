@@ -19,6 +19,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.*
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.pageDown
 import androidx.compose.ui.semantics.pageUp
@@ -49,6 +54,8 @@ internal fun screenPageDistance(viewport: Int, overlap: Float): Float =
     content: LazyListScope.() -> Unit
 ) {
     val eInk = LocalEInkMode.current
+    val inSheet = LocalInAppSheet.current
+    val sheetEnd = remember(inSheet, state) { if (inSheet) SheetEndOverscrollConnection { state.canScrollForward } else null }
     val scope = rememberCoroutineScope()
     val overlap = with(LocalDensity.current) { 48.dp.toPx() }
     val page: (Int) -> Unit = { direction -> onPageTurn(direction); scope.launch {
@@ -59,7 +66,7 @@ internal fun screenPageDistance(viewport: Int, overlap: Float): Float =
     Column(modifier) {
         LazyColumn(state = state, contentPadding = contentPadding, verticalArrangement = verticalArrangement,
             horizontalAlignment = horizontalAlignment, userScrollEnabled = !eInk,
-            modifier = listModifier.weight(1f).screenPageInput(eInk, page = page,
+            modifier = listModifier.weight(1f).then(if (sheetEnd != null) Modifier.nestedScroll(sheetEnd) else Modifier).screenPageInput(eInk, page = page,
                 scroll = { amount -> scope.launch { state.scrollBy(amount) }; Unit }), content = content)
         if(eInk && (state.canScrollBackward || state.canScrollForward)) ScreenPageButtons(state.canScrollBackward, state.canScrollForward, page)
     }
@@ -74,14 +81,27 @@ internal fun screenPageDistance(viewport: Int, overlap: Float): Float =
     content: @Composable ColumnScope.() -> Unit
 ) {
     val eInk = LocalEInkMode.current
+    val inSheet = LocalInAppSheet.current
+    val sheetEnd = remember(inSheet, state) { if (inSheet) SheetEndOverscrollConnection { state.canScrollForward } else null }
     val scope = rememberCoroutineScope()
     val overlap = with(LocalDensity.current) { 48.dp.toPx() }
     val page: (Int) -> Unit = { direction -> scope.launch { state.scrollBy(direction * screenPageDistance(state.viewportSize, overlap)) }; Unit }
     Column(modifier) {
-        Column(Modifier.weight(1f, fill = false).appVerticalScroll(state).then(contentModifier),
+        Column(Modifier.weight(1f, fill = false).then(if (sheetEnd != null) Modifier.nestedScroll(sheetEnd) else Modifier)
+            .appVerticalScroll(state).then(contentModifier),
             verticalArrangement = verticalArrangement, horizontalAlignment = horizontalAlignment, content = content)
         if(eInk && (state.canScrollBackward || state.canScrollForward)) ScreenPageButtons(state.canScrollBackward, state.canScrollForward, page)
     }
+}
+
+/** Keep an exhausted upward fling in the list; downward motion may still dismiss the sheet. */
+internal class SheetEndOverscrollConnection(private val canScrollForward: () -> Boolean) : NestedScrollConnection {
+    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset =
+        if (source == NestedScrollSource.UserInput && available.y < 0f && !canScrollForward()) Offset(0f, available.y)
+        else Offset.Zero
+
+    override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity =
+        if (available.y < 0f && !canScrollForward()) Velocity(0f, available.y) else Velocity.Zero
 }
 
 @Composable internal fun Modifier.appVerticalScroll(state: ScrollState): Modifier = appScroll(state, false)
