@@ -21,13 +21,7 @@
 
 ## 从源码启动
 
-Fork 本仓库后克隆自己的 Fork，或克隆项目仓库。在 Android Studio 中打开仓库根目录，安装所需 SDK，选择 Gradle JDK，然后等待同步。命令行开发需要让 `local.properties` 中的 `sdk.dir` 指向本机 SDK；Android Studio 可生成该文件。
-
-示例 `local.properties`（路径必须按本机修改，文件已被忽略）：
-
-```properties
-sdk.dir=D\:/Android/sdk
-```
+Fork 本仓库后克隆自己的 Fork，或克隆项目仓库。在 Android Studio 中打开仓库根目录，安装所需 SDK，选择 Gradle JDK，然后等待同步。Windows 脚本会自动查找已安装的 JDK 和 Android SDK；没有安装环境时，先通过 Android Studio / SDK Manager 或 JDK 安装程序准备环境。检测逻辑不会自动安装 JDK 或 SDK，也不扫描整个磁盘。
 
 Windows 推荐在仓库根目录执行：
 
@@ -43,14 +37,46 @@ Windows 推荐在仓库根目录执行：
 ./build-release.ps1 -Verify
 ```
 
-两个根目录入口通过 [build-package.ps1](../../scripts/build-package.ps1) 复用 [build.ps1](../../build.ps1)。后者优先采用 `JAVA_HOME/bin/java.exe`，如果变量已设置但无效会立即报错。未设置时依次查找脚本中列出的 Android Studio JBR 路径，再查找 PATH。它将 `GRADLE_USER_HOME` 和 `ANDROID_USER_HOME` 指向当前仓库的 `.gradle-home/`、`.android/`，工作目录切换到仓库根并在结束时还原。该缓存与直接调用 Wrapper 的默认用户缓存可能不同。
+## 自动检测与手动配置
 
-`JAVA_HOME` 必须指向 JDK 根目录。需要临时指定 JDK 时，在当前 PowerShell 会话中按本机路径配置；不必改构建脚本：
+两个根目录入口通过 [build-package.ps1](../../scripts/build-package.ps1) 复用 [build.ps1](../../build.ps1)，正式附件脚本也使用同一个构建入口。检测逻辑位于 [build-environment.ps1](../../scripts/build-environment.ps1)，手动配置集中在 **根目录 `build.ps1` 顶部的“手动环境配置区”**，无需分别修改 Debug / Release 脚本。
+
+| 配置 | 从高到低的选择顺序 |
+| --- | --- |
+| JDK | 手动配置 → `JAVA_HOME` → `JDK_HOME` → `STUDIO_JDK` → PATH 的 `java.exe` → 注册表和默认位置的 Android Studio JBR/JRE → 用户 `.jdks` 与 Program Files 下常见 JDK 厂商目录 |
+| Android SDK | 手动配置 → `local.properties` 的 `sdk.dir` → `ANDROID_HOME` → `ANDROID_SDK_ROOT` → `%LOCALAPPDATA%/Android/Sdk` → PATH 的 `adb.exe` 所属 SDK |
+| Gradle 缓存 | 手动配置 → `GRADLE_USER_HOME` → 当前项目 `.gradle-home/` |
+| Android 用户目录 | 手动配置 → `ANDROID_USER_HOME` → 当前项目 `.android/` |
+
+自动候选无效时跳过并继续查找；手动填写的 JDK/SDK 无效时直接报错，避免悄悄使用其他安装。JDK 检查实际版本、运行能力和 `javac.exe`：当前组合支持 JDK 17–23，推荐 17 或 21，范围依据 [Gradle Java 兼容表](https://docs.gradle.org/current/userguide/compatibility.html)。SDK 检测确认安装根目录，Platform 36 和 Build Tools 等组件是否齐全由实际 Gradle 构建检查。
+
+可先执行只读检查，不启动 Gradle、不下载依赖，也不修改 `local.properties`：
+
+```powershell
+./build.ps1 -CheckEnvironment
+```
+
+自动检测失败或希望固定环境时，修改 `build.ps1` 中以下变量。下面只是填写示例，请换成自己的目录；留空 `''` 表示自动选择：
+
+```powershell
+# JDK 根目录，不要写到 bin 或 java.exe
+$ManualJavaHome = 'C:/Tools/jdk-21'
+# SDK 根目录，不要写到 platform-tools 或 build-tools
+$ManualAndroidSdk = 'C:/Tools/Android/Sdk'
+# 可选：缓存目录；通常不需要改
+$ManualGradleUserHome = ''
+$ManualAndroidUserHome = ''
+```
+
+路径可以包含空格和中文，也可使用相对于 `build.ps1` 所在目录的路径。不要把个人目录修改提交到仓库；需要保持工作区干净时，可改用环境变量：
 
 ```powershell
 $env:JAVA_HOME = 'C:/Program Files/Java/jdk-17'
+$env:ANDROID_HOME = 'C:/Tools/Android/Sdk'
 ./build-debug.ps1
 ```
+
+已有有效 `local.properties` 的 SDK 路径优先于环境变量；需要换 SDK 时修改该文件，或填写 `$ManualAndroidSdk`。构建前脚本只同步 `sdk.dir`，保留其他属性和注释；文件已被 Git 忽略。构建过程中统一设置 JDK/SDK 环境和 Gradle daemon JDK，并在成功或失败后还原进程环境变量及工作目录。默认缓存与直接调用 Wrapper 的用户缓存可能不同；更换 `ANDROID_USER_HOME` 还会改变默认 Debug 测试证书的位置，原有测试包可能因签名不同无法覆盖安装。
 
 已有完整依赖缓存时可用离线模式；首次构建不能依靠离线模式下载缺失依赖：
 
@@ -64,7 +90,7 @@ Linux / macOS 直接使用仓库 Wrapper。`sh` 调用也适用于未保留执�
 sh ./gradlew --no-daemon :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
 ```
 
-标准 Windows Wrapper 入口为 `./gradlew.bat`；它要求调用环境已配置 JDK/SDK，不执行 `build.ps1` 的 JBR 查找和缓存目录设置。仓库不需要 `.reference/`、`resource/`、`artifacts/` 等本地忽略目录才能构建。
+标准 Windows Wrapper 入口为 `./gradlew.bat`；它要求调用环境已配置 JDK/SDK，不执行 `build.ps1` 的自动检测和缓存目录设置。PowerShell 入口面向 Windows，也可在已配置环境的 Windows 构建机上使用；Linux / macOS 使用上述 Wrapper 命令。仓库不需要 `.reference/`、`resource/`、`artifacts/` 等本地忽略目录才能构建。
 
 ## 本地打包参数与产物
 
@@ -94,6 +120,29 @@ sh ./gradlew --no-daemon :app:assembleDebug :app:testDebugUnitTest :app:lintDebu
 构建日志写入 `outputs/logs/build-<模式>-<ABI>-<时间戳>.log`。直接调用 `build.ps1` 时，默认日志为 `outputs/logs/build-gradle-<时间戳>.log`，仍可通过 `-LogPath` 指定其他位置。本地脚本允许工作区有未提交修改，无需版本标签；重复构建会覆盖同版本、模式和 ABI 的归档文件，日志另存。它们不安装应用、不生成正式发行附件，也不上传文件。需要保留某次本地安装包时应另行归档。
 
 正式分发使用 [prepare-release.ps1](../../scripts/prepare-release.ps1)：要求干净工作区、匹配版本的标签和正式证书，输出到 `outputs/releases/`，详见 [发布指南](../../RELEASING.md)。本地 Release 的测试证书不适合公开发行。
+
+## 修改版本号并重新编译
+
+只需修改根目录 [version.properties](../../version.properties) 的两项，不必修改 Gradle 文件或打包脚本。例如从 `0.1.9 / 12` 升为：
+
+```properties
+versionName=0.1.10
+versionCode=13
+```
+
+- `versionName` 是展示版本，使用 `X.Y.Z`，也支持 `0.2.0-beta.1` 这样的预发布名称。
+- `versionCode` 是 Android 判断更新先后的正整数，每次对外发包递增，所有 ABI 使用相同值；不要重复使用旧版本码。
+
+保存后在 PowerShell 7 执行：
+
+```powershell
+# 通用 Debug 包
+./build-debug.ps1
+# 或：ARM64 本地 Release 包，同时跑单元测试与 Lint
+./build-release.ps1 -Abi arm64-v8a -Verify
+```
+
+通常不需要先 `clean`，无需提交或打标签即可本地编译。APK 内版本、APK 文件名和校验文件自动采用新值，例如 `outputs/packages/release-local/Novelia-0.1.10-release-local-arm64-v8a.apk`。脚本会核对 APK 元数据，发现版本不一致时不会整理产物。这里的数值只是示例，不会自动修改仓库版本；正式发布还需同步更新日志、版本展示、标签并使用长期发布证书，按 [发布流程](../../RELEASING.md) 执行。
 
 `outputs/` 由脚本自动创建并整体忽略，是收集安装包、日志和正式附件的统一目录。Gradle 中间文件与原始测试报告仍位于各模块的 `build/`，具体路径见下表。清理旧日志、测试截图或临时夹具前，应确认没有需要保留的发行映射和验证记录；不要将依赖缓存、`local.properties`、签名材料或尚未提交的源码当作临时产物删除。
 

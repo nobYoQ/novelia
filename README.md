@@ -46,7 +46,7 @@
 
 APK 与 SHA-256 校验文件输出到 `outputs/packages/debug/` 或 `outputs/packages/release-local/`，Release 同时保留 R8 映射；日志在 `outputs/logs/`。这些入口允许未提交的本地改动，重复构建会覆盖同版本、模式和 ABI 的产物，不会自动安装或上传。完整参数与未签名构建见 [环境搭建与构建](docs/development/getting-started.md)。
 
-构建入口复用 `build.ps1`：优先使用 `JAVA_HOME`，未设置时依次尝试 Android Studio JBR 和 PATH；无效的 `JAVA_HOME` 会报错。Gradle 缓存放入本项目 `.gradle-home`。在 `local.properties` 中配置 Android SDK，例如 `sdk.dir=D\:/Android/sdk`。该文件不应提交。
+构建入口复用 `build.ps1`，自动从环境变量、PATH、Android Studio 和常见安装目录查找 JDK，从 `local.properties`、环境变量及默认目录查找 Android SDK。换电脑后无须沿用原机器盘符；自动检测失败时，填写 `build.ps1` 顶部带中文注释的“手动环境配置区”。运行 `./build.ps1 -CheckEnvironment` 可只检查路径。构建时自动同步被 Git 忽略的 `local.properties`，保留其中其他配置；缓存默认使用项目 `.gradle-home/`、`.android/`，也可沿用对应环境变量或手动指定。完整优先级见 [环境配置说明](docs/development/getting-started.md#自动检测与手动配置)。
 
 标准 Gradle Wrapper 也已提供；可在配置好 JDK/SDK 的环境中使用 `gradlew`。当前固定 AGP 8.13.2、Gradle 8.13、Kotlin 2.2.21、Compose BOM 2025.12.00。
 
@@ -57,6 +57,8 @@ sh ./gradlew --no-daemon :app:assembleDebug :app:testDebugUnitTest :app:lintDebu
 ```
 
 仍可用 `./build.ps1 -Tasks @(':app:assembleDebug', ':app:testDebugUnitTest', ':app:lintDebug')` 自选 Gradle 任务；不带参数的 `build.ps1` 保持执行 Debug 构建和单元测试。直接调用 Gradle 或通过 `build.ps1` 执行 `assembleRelease` 时默认未签名。正式 GitHub 发行使用独立的 [发布流程](RELEASING.md)，不要上传本地测试签名包。版本号和版本码统一在 `version.properties` 维护。
+
+修改版本后打包：编辑根目录 `version.properties` 的 `versionName`（例如 `0.1.10`）和递增的 `versionCode`（例如由 `12` 改为 `13`），保存后运行 `./build-release.ps1` 或 `./build-debug.ps1`，APK 内版本和归档文件名会自动更新。具体示例见 [修改版本号并重新编译](docs/development/getting-started.md#修改版本号并重新编译)。
 
 `outputs/`、Gradle 构建目录、APK/AAB 安装包、签名旁文件及安装包校验文件由 `.gitignore` 排除，不纳入源码提交。正式附件准备脚本写入 `outputs/releases/`，正式安装包上传为 GitHub Release 附件；旧 `artifacts/`、`releases/` 仍在忽略规则内。
 

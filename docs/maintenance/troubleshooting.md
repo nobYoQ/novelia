@@ -8,12 +8,12 @@
 
 | 现象 | 先核对 | 处理 |
 | --- | --- | --- |
-| `JAVA_HOME 无效` / 找不到 Java | `JAVA_HOME` 是否为 JDK 根目录，目录下是否有 `bin/java.exe` | 修正当前环境或 Android Studio 的 Gradle JDK；不要指向 `bin` 或 `java.exe` 本身 |
+| 找不到可用 JDK / 手动 JDK 配置无效 | `./build.ps1 -CheckEnvironment`；JDK 根目录是否有 `bin/java.exe`、`bin/javac.exe`，版本是否为 17–23 | 修正环境变量，或填写 `build.ps1` 顶部 `$ManualJavaHome`；不要指向 `bin` 或 `java.exe` 本身 |
 | Kotlin/Java 目标版本错误 | 工程目标为 17；IDE 和命令行是否采用不同 JDK | 使用 [环境基线](../development/getting-started.md)，不要通过改低源代码目标掩盖环境差异 |
-| `SDK location not found` | `local.properties` 的路径和转义；Android Studio SDK 设置 | 配置本机 SDK，不提交机器路径 |
+| 找不到 Android SDK / `SDK location not found` | `./build.ps1 -CheckEnvironment`；`local.properties`、`ANDROID_HOME` 和 SDK 安装目录 | 填写 `build.ps1` 顶部 `$ManualAndroidSdk`，或修正现有 `sdk.dir`；脚本会同步本机配置，不提交机器路径 |
 | 找不到 Platform 36/构建工具 | SDK Manager 已安装组件 | 安装缺失组件，按发布示例准备签名工具；不要随意修改 compileSdk |
 | 下载 Gradle/依赖失败 | 失败主机、代理、网络权限、缓存是否完整 | 检查访问条件；首次构建不使用 `-Offline`，已有完整缓存才使用离线模式 |
-| IDE 可构建但脚本离线失败 | IDE 与 `build.ps1` 缓存目录可能不同 | 脚本使用项目 `.gradle-home/`；先完成该环境的正常依赖解析 |
+| IDE 可构建但脚本离线失败 | `-CheckEnvironment` 输出的缓存目录是否与 IDE 一致 | 脚本优先沿用 `GRADLE_USER_HOME`，未配置时使用项目 `.gradle-home/`；先完成该缓存的正常依赖解析 |
 | `Unsupported targetAbi` | `targetAbi` 是否为当前支持值 | 支持 `universal`、`arm64-v8a`、`armeabi-v7a`、`x86_64`、`x86`；省略或使用 `universal` 均不增加单 ABI 过滤，详见 [Gradle 配置](../../app/build.gradle.kts) |
 | 缺少签名变量 | 是否意外传了 `-PreleaseSigning=true` | 普通贡献构建无需此参数；正式发布按 [RELEASING.md](../../RELEASING.md) 注入环境 |
 

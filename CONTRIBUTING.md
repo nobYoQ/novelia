@@ -8,8 +8,8 @@
 
 - JDK 17（推荐的协作基线）、Android SDK Platform 36、Build Tools 35.0.0。
 - 使用仓库的 Gradle Wrapper；不要升级本地全局 Gradle 来解决项目问题。
-- 在 Android Studio 配置 SDK，或在本机 `local.properties` 设置 `sdk.dir`。不要提交该文件。
-- Windows 使用 PowerShell 7；`build.ps1` 优先采用有效的 `JAVA_HOME`，未设置时尝试 Android Studio JBR 和 PATH。
+- 在 Android Studio 安装 SDK；脚本可自动查找并同步本机 `local.properties` 的 `sdk.dir`。不要提交该文件。
+- Windows 使用 PowerShell 7；`build.ps1` 自动查找 JDK/SDK，检测失败时填写其顶部“手动环境配置区”，或设置环境变量。优先级与检查命令见 [环境搭建](docs/development/getting-started.md#自动检测与手动配置)。
 
 Windows 检查命令：
 
