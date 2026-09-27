@@ -667,15 +667,15 @@ import kotlinx.coroutines.withContext
                 }
                 }
             }
-            Surface(Modifier.align(Alignment.BottomCenter).testTag("reader-bottom-toolbar").onSizeChanged { bottomOverlayHeight = it.height }, color = toolbarBackground, contentColor = foreground) {
-            Column(Modifier.navigationBarsPadding()) {
-                if(settings.showPageButtons) Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.align(Alignment.BottomCenter).testTag("reader-bottom-toolbar").onSizeChanged { bottomOverlayHeight = it.height }) {
+                val persistentControls = settings.showPageButtons || settings.staticPagination
+                if(settings.showPageButtons) Row(Modifier.fillMaxWidth().background(toolbarBackground).padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
                     OutlinedButton(onClick = { page(-1) }, colors = ButtonDefaults.outlinedButtonColors(contentColor = foreground, disabledContentColor = foreground.copy(alpha = .38f)), enabled = if(settings.staticPagination) eInk.ready && (eInk.canGoBack || (eInk.pages.isNotEmpty() && chapter.prevId != null)) else scroll.canScrollBackward) { Text(if(settings.staticPagination) "上一页" else "上一屏") }
                     OutlinedButton(onClick = { page(1) }, colors = ButtonDefaults.outlinedButtonColors(contentColor = foreground, disabledContentColor = foreground.copy(alpha = .38f)), enabled = if(settings.staticPagination) eInk.ready && (eInk.canGoForward || (eInk.pages.isNotEmpty() && (chapter.nextId != null || nextVolume != null))) else scroll.canScrollForward) { Text(if(settings.staticPagination) "下一页" else "下一屏") }
                 }
-                AnimatedVisibility(menu, enter = if(reducedMotion) EnterTransition.None else fadeIn(tween(AppMotion.Quick)) + slideInVertically(tween(AppMotion.Standard)) { it }, exit = if(reducedMotion) ExitTransition.None else fadeOut(tween(AppMotion.Exit)) + slideOutVertically(tween(AppMotion.Release)) { it }) {
-                    Surface(color = Color.Transparent, contentColor = foreground) {
-                        Column {
+                ReaderOverlayVisibility(menu, Modifier, enter = if(reducedMotion) EnterTransition.None else fadeIn(tween(AppMotion.Quick)) + slideInVertically(tween(AppMotion.Standard)) { it }, exit = if(reducedMotion) ExitTransition.None else fadeOut(tween(AppMotion.Exit)) + slideOutVertically(tween(AppMotion.Release)) { it }) {
+                    Surface(color = toolbarBackground, contentColor = foreground) {
+                        Column(if(persistentControls) Modifier else Modifier.navigationBarsPadding()) {
                             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                 IconButton(onClick = { chapter.prevId?.let { openChapter(it) } }, enabled = chapter.prevId != null && !leaving && !chapterLoad.loading) { Icon(Icons.Outlined.SkipPrevious, "上一章") }
                                 TextButton(onClick = { if(wide) { tocQuery = ""; tocLocateRequest++ } else toc = true }, colors = ButtonDefaults.textButtonColors(contentColor = foreground)) { Icon(Icons.Outlined.FormatListBulleted, null, Modifier.size(18.dp)); Text(if(wide) " 定位目录" else " 目录") }
@@ -693,7 +693,7 @@ import kotlinx.coroutines.withContext
                         }
                     }
                 }
-                if(settings.staticPagination) Row(Modifier.fillMaxWidth().height(pageProgressHeight).padding(horizontal = 24.dp),
+                if(settings.staticPagination) Row(Modifier.fillMaxWidth().background(toolbarBackground).height(pageProgressHeight).padding(horizontal = 24.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
                     if(eInk.ready) {
                         val total = eInk.pages.size.coerceAtLeast(1)
@@ -704,7 +704,7 @@ import kotlinx.coroutines.withContext
                         Text("本章 $chapterPercent%", Modifier.testTag("reader-chapter-progress"), color = foreground, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 1)
                     } else Text("正在分页…", color = foreground, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 1)
                 }
-            }
+                if(persistentControls) Spacer(Modifier.fillMaxWidth().background(toolbarBackground).navigationBarsPadding())
             }
             if(chapterLoad.loading || chapterLoad.error != null) Surface(
                 Modifier.align(Alignment.BottomCenter).windowInsetsPadding(readingInsets)

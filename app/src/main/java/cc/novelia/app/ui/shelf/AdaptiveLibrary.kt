@@ -15,12 +15,21 @@ import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.ui.book.BookScreen
 import cc.novelia.app.ui.components.EmptyState
 import cc.novelia.app.ui.navigation.AppController
+import cc.novelia.app.ui.navigation.SHOW_SHELF_LIST
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
 /** One shelf destination owns the selection, so reading and tab navigation can restore it. */
 @Composable fun AdaptiveLibraryScreen(c: AppController, onCompactDetailChanged: (Boolean) -> Unit = {}) {
     var selectedKey by rememberSaveable { mutableStateOf<String?>(null) }
+    val navigationState = remember(c.nav) { c.nav.getBackStackEntry("shelf").savedStateHandle }
+    val showShelfList by navigationState.getStateFlow(SHOW_SHELF_LIST, false).collectAsStateWithLifecycle()
+    LaunchedEffect(showShelfList) {
+        if (showShelfList) {
+            selectedKey = null
+            navigationState[SHOW_SHELF_LIST] = false
+        }
+    }
     val books by remember(c.store) { c.store.state.map { it.books }.distinctUntilChanged() }
         .collectAsStateWithLifecycle(initialValue = remember(c.store) { c.store.state.value.books })
     LaunchedEffect(selectedKey, books) {

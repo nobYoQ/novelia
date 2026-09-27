@@ -21,7 +21,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.*
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.LibraryState
@@ -46,6 +45,7 @@ import cc.novelia.app.ui.downloads.DownloadsScreen
 import cc.novelia.app.ui.feedback.ObserveDownloadCelebrations
 import cc.novelia.app.ui.feedback.StickerSnackbarHost
 import cc.novelia.app.ui.navigation.AppController
+import cc.novelia.app.ui.navigation.switchRootTab
 import cc.novelia.app.ui.notes.NotesScreen
 import cc.novelia.app.ui.reader.ReaderScreen
 import cc.novelia.app.ui.settings.BlockedScreen
@@ -120,7 +120,7 @@ class MainActivity : ComponentActivity() {
                 ObserveDownloadCelebrations(controller, route)
                 val roots = listOf("shelf", "discover?query={query}", "community", "profile")
                 val tabs = listOf(Triple("shelf", "书架", Icons.Outlined.CollectionsBookmark), Triple("discover", "发现", Icons.Outlined.Explore), Triple("community", "社区", Icons.Outlined.Forum), Triple("profile", "我的", Icons.Outlined.PersonOutline))
-                fun switchTab(target: String) { nav.navigate(target) { popUpTo(nav.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } }
+                fun switchTab(target: String) { nav.switchRootTab(target) }
                 val showNavigation = route in roots
                 var compactShelfDetail by remember { mutableStateOf(false) }
                 BoxWithConstraints(Modifier.fillMaxSize()) {

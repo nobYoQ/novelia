@@ -23,5 +23,3 @@ AndroidX / Compose、Kotlin、kotlinx.coroutines、kotlinx.serialization、OkHtt
 ## 内容与素材
 
 网站上的小说、封面、译文和用户内容属于相应权利人，不属于本项目开源授权范围。测试夹具中的《风与书页》短文为此工程自行编写。
-
-互动图标、默认封面与部分状态反馈使用用户提供的 `HoshikawaMidori-1789205072094` 贴纸，资源位于 `app/src/main/res/drawable-nodpi/midori_*.webp`。贴纸权利归原作者或相应权利人所有，**不适用本项目 GPL-3.0 授权；公开分发授权仍待确认**。公开包含这些素材的源码或 APK 前，维护者必须取得适当授权或完成替换。本次准备工作未修改这些素材。
