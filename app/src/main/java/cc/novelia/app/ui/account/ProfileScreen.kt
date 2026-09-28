@@ -20,6 +20,7 @@ import cc.novelia.app.ui.components.AppLazyColumn
 import cc.novelia.app.ui.components.ConfirmDialog
 import cc.novelia.app.ui.components.MenuRow
 import cc.novelia.app.ui.components.Screen
+import cc.novelia.app.ui.components.SectionTitle
 import cc.novelia.app.ui.components.displayDate
 import cc.novelia.app.ui.feedback.MidoriCompanion
 import cc.novelia.app.ui.navigation.AppController
@@ -43,15 +44,19 @@ import cc.novelia.app.ui.theme.motionClickable
                 }
             }
         } }
+        item { SectionTitle("阅读资料") }
+        item { MenuRow("书架更新", "新增章节、译文与分卷", Icons.Outlined.NewReleases, { c.go("updates") }) }
         item { MenuRow("下载管理", "查看进度、导出与离线阅读", Icons.Outlined.Download, { c.go("downloads") }) }
         item { MenuRow("书签与笔记", "${state.notes.size} 条阅读记录", Icons.Outlined.EditNote, { c.go("notes") }) }
+        item { MenuRow("阅读历史", "接着上次的位置阅读", Icons.Outlined.History, { c.go("history") }) }
         item { MenuRow("文件工具", "EPUB 转 TXT、图片压缩、文本换行整理与片假名统计", Icons.Outlined.Handyman, { c.go("tools") }) }
-        item { MenuRow("阅读与外观", "字号、主题、动效与朗读", Icons.Outlined.Tune, { c.go("settings") }) }
+        item { SectionTitle("偏好与数据") }
+        item { MenuRow("设置", "阅读、外观、下载与数据管理", Icons.Outlined.Tune, { c.go("settings") }) }
         item { MenuRow("屏蔽管理", "管理作品和标签屏蔽", Icons.Outlined.Block, { c.go("blocked") }) }
         val pending = state.pending.count { it.account == profile?.username }
         item { MenuRow("同步状态", if(pending > 0) "$pending 项待处理 · 查看原因与重试" else "自动同步、状态与重试", Icons.Outlined.Sync, { c.go("sync") }) }
         item { MenuRow("阅读资料备份", "书架、进度、笔记、本地小说与标签词典", Icons.Outlined.Backup, { c.go("backup") }) }
-        item { MenuRow("书架更新", "新增章节、译文与分卷", Icons.Outlined.NewReleases, { c.go("updates") }) }
+        item { SectionTitle("帮助") }
         item { MenuRow("帮助与关于", "使用说明、版本与反馈", Icons.Outlined.Info, { c.go("about") }) }
     } }
     if(logout) ConfirmDialog("退出当前账号？", "本地小说、下载和笔记仍保留在此设备。云端操作需要重新登录。", { logout = false }, confirmLabel = "退出登录") { c.action("已退出登录") { c.session.logout() } }

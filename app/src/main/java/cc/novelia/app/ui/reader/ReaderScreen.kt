@@ -790,7 +790,16 @@ import kotlinx.coroutines.withContext
         } }
         }
     }
-    if(preferences) ReaderSheet(onDismissRequest = { preferences = false }) { ReaderPreferences(settings, local.bookSettings.containsKey(ref.key), { perBook -> c.store.update { it.copy(bookSettings = if(perBook) it.bookSettings + (ref.key to settings) else it.bookSettings - ref.key) } }, state = preferenceState) { value -> c.store.update { if(it.bookSettings.containsKey(ref.key)) it.copy(bookSettings = it.bookSettings + (ref.key to value)) else it.copy(reader = value) } } }
+    if(preferences) ReaderPreferencesSheet(onDismissRequest = { preferences = false }) { expanded, onExpandedChange ->
+        ReaderPreferences(settings, local.bookSettings.containsKey(ref.key), { perBook -> c.store.update { it.copy(bookSettings = if(perBook) it.bookSettings + (ref.key to settings) else it.bookSettings - ref.key) } },
+            state = preferenceState, modifier = Modifier.fillMaxSize(), livePreview = true, headerActions = {
+                IconButton(onClick = { onExpandedChange(!expanded) }) {
+                    Icon(if(expanded) Icons.Outlined.ExpandMore else Icons.Outlined.ExpandLess,
+                        if(expanded) "收起面板" else "展开面板")
+                }
+                TextButton(onClick = { preferences = false }) { Text("关闭面板") }
+            }) { value -> c.store.update { if(it.bookSettings.containsKey(ref.key)) it.copy(bookSettings = it.bookSettings + (ref.key to value)) else it.copy(reader = value) } }
+    }
 }
 
 // Keep the overlay independent of the outer adaptive Row's size-affecting visibility extension.

@@ -144,12 +144,12 @@ class EInkReaderFlowTest {
             compose.onNodeWithContentDescription("返回").performClick()
             compose.onNodeWithText("我的").performClick()
             repeat(5) {
-                if(compose.onAllNodesWithText("阅读与外观").fetchSemanticsNodes().isEmpty()) compose.onNodeWithText("下一屏").performClick()
+                if(compose.onAllNodesWithText("设置").fetchSemanticsNodes().isEmpty()) compose.onNodeWithText("下一屏").performClick()
             }
-            compose.onNodeWithText("阅读与外观").performScrollTo().performClick()
-            compose.onNodeWithText("滚动时自动收起筛选").performScrollTo().assertIsDisplayed()
+            compose.onNodeWithText("设置").performScrollTo().performClick()
+            compose.onNodeWithText("滚动时自动收起云端收藏筛选").performScrollTo().assertIsDisplayed()
             val oldCollapse = app.store.state.value.autoCollapseCloudFilters
-            compose.onNodeWithText("滚动时自动收起筛选").performClick()
+            compose.onNodeWithText("滚动时自动收起云端收藏筛选").performClick()
             compose.runOnIdle { assertEquals(!oldCollapse, app.store.state.value.autoCollapseCloudFilters) }
         } finally {
             compose.runOnIdle { app.store.update { previous } }

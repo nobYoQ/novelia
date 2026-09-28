@@ -98,7 +98,7 @@ class StickerFeaturesTest {
             screenshot("v2-import-complete")
             compose.onNodeWithContentDescription("返回").performClick()
             compose.onNodeWithContentDescription("返回").performClick()
-            openMenu("阅读与外观")
+            openMenu("设置")
             compose.onNodeWithText("减少动态效果").assertIsDisplayed()
             compose.onNodeWithText("减少页面切换、列表变化与按压动效").assertDoesNotExist()
             screenshot("v2-settings")

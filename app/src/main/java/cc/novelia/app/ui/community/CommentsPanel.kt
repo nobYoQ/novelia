@@ -39,7 +39,7 @@ import kotlinx.coroutines.launch
     val reducedMotion = appReducedMotion()
     val feedback = remember(site, parent) { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    if(!site.startsWith("article-") && preferences.hideNovelComments) { EmptyState("小说评论已隐藏", "可以在阅读与外观设置中重新开启。", Icons.Outlined.CommentsDisabled); return }
+    if(!site.startsWith("article-") && preferences.hideNovelComments) { EmptyState("小说评论已隐藏", "可以在设置的阅读体验中重新开启。", Icons.Outlined.CommentsDisabled); return }
     val markdownRenderer = rememberMarkdownRenderer(c)
     val documentUrl = remember(site) { MarkdownLinks.commentDocumentUrl(site) }
     Column(Modifier.fillMaxSize()) {

@@ -40,6 +40,7 @@ import cc.novelia.app.ui.theme.LocalEInkMode
 import cc.novelia.app.ui.theme.appReducedMotion
 import cc.novelia.app.ui.theme.motionClickable
 import kotlin.math.roundToInt
+import kotlin.math.abs
 
 /** Owned outside the sheet: switching between dialog and bottom sheet recreates their composition. */
 @Stable class ReaderPreferencesState internal constructor(
@@ -58,11 +59,16 @@ import kotlin.math.roundToInt
 }
 
 @Composable fun ReaderPreferences(value: ReaderSettings, perBook: Boolean? = null, onPerBook: (Boolean) -> Unit = {},
-    state: ReaderPreferencesState = rememberReaderPreferencesState(), onChange: (ReaderSettings) -> Unit) {
+    state: ReaderPreferencesState = rememberReaderPreferencesState(), modifier: Modifier = Modifier,
+    headerActions: @Composable RowScope.() -> Unit = {}, livePreview: Boolean = false,
+    onChange: (ReaderSettings) -> Unit) {
     val reducedMotion = appReducedMotion()
     var tab by state.tab
-    Column {
-        Text("阅读偏好", Modifier.padding(horizontal = 20.dp, vertical = 12.dp), style = MaterialTheme.typography.titleLarge)
+    Column(modifier) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("阅读偏好", Modifier.weight(1f).padding(start = 20.dp, end = 8.dp, top = 12.dp, bottom = 12.dp), style = MaterialTheme.typography.titleLarge)
+            headerActions()
+        }
         PrimaryTabRow(tab) {
             listOf("常用", "翻页", "更多").forEachIndexed { index, title ->
                 Tab(tab == index, { tab = index }, modifier = Modifier.heightIn(min = 48.dp), text = { Text(title) })
@@ -74,11 +80,12 @@ import kotlin.math.roundToInt
                 when(tab) {
                     0 -> {
                         ReaderPreferenceHeading("文字与主题")
-                        ReaderSlider("字号 ${value.fontSize.toInt()}", value.fontSize, 14f..32f) { onChange(value.copy(fontSize = it)) }
+                        ReaderSlider("字号 ${value.fontSize.toInt()}", value.fontSize, 14f..32f,
+                            livePreviewStep = if(livePreview) .5f else null) { onChange(value.copy(fontSize = it)) }
                         ReaderSlider("行距 ${"%.1f".format(value.lineHeight)}", value.lineHeight, ReaderSettings.LINE_HEIGHT_RANGE,
-                            modifier = Modifier.testTag("reader-line-height")) { onChange(value.copy(lineHeight = it)) }
+                            modifier = Modifier.testTag("reader-line-height"), livePreviewStep = if(livePreview) .05f else null) { onChange(value.copy(lineHeight = it)) }
                         ReaderSlider("段距 ${value.resolvedParagraphSpacing.roundToInt()} dp", value.resolvedParagraphSpacing, 0f..32f,
-                            modifier = Modifier.testTag("reader-paragraph-spacing")) { onChange(value.copy(paragraphSpacing = it)) }
+                            modifier = Modifier.testTag("reader-paragraph-spacing"), livePreviewStep = if(livePreview) 1f else null) { onChange(value.copy(paragraphSpacing = it)) }
                         ChoiceRow("阅读主题", listOf("跟随应用", "纸张", "浅色", "深色", "黑白"), listOf("system", "paper", "light", "dark", "monochrome").indexOf(value.resolvedTheme)) { onChange(value.withTheme(listOf("system", "paper", "light", "dark", "monochrome")[it])) }
                         TogglePreference("跟随系统亮度", "关闭后可单独调整", value.brightness < 0) { onChange(value.copy(brightness = if(it) -1f else .5f)) }
                         AnimatedVisibility(value.brightness >= 0,
@@ -159,7 +166,8 @@ import kotlin.math.roundToInt
     HorizontalDivider(Modifier.padding(top = 12.dp))
     Text(title, Modifier.padding(horizontal = 20.dp, vertical = 12.dp).semantics { heading() }, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
 }
-@Composable private fun ReaderSlider(label: String, value: Float, range: ClosedFloatingPointRange<Float>, modifier: Modifier = Modifier, enabled: Boolean = true, onChange: (Float) -> Unit) {
+@Composable private fun ReaderSlider(label: String, value: Float, range: ClosedFloatingPointRange<Float>, modifier: Modifier = Modifier,
+    enabled: Boolean = true, livePreviewStep: Float? = null, onChange: (Float) -> Unit) {
     Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
         Text(label, style = MaterialTheme.typography.labelLarge)
         if(LocalEInkMode.current) {
@@ -174,10 +182,19 @@ import kotlin.math.roundToInt
                 OutlinedButton(onClick = { onChange((value + step).coerceIn(range)) }, enabled = enabled && value < range.endInclusive, modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp)) { Icon(Icons.Outlined.Add, "增大 $label") }
             }
         } else {
-            // Keep thumb feedback immediate while committing expensive typography changes once.
-            var draft by remember(value) { mutableFloatStateOf(value) }
-            Slider(draft, { draft = it }, modifier = modifier.heightIn(min = 48.dp), valueRange = range, enabled = enabled,
-                onValueChangeFinished = { onChange(draft) })
+            var draft by remember { mutableFloatStateOf(value) }
+            var dragging by remember { mutableStateOf(false) }
+            var lastPreviewed by remember { mutableFloatStateOf(value) }
+            LaunchedEffect(value, dragging) { if(!dragging) { draft = value; lastPreviewed = value } }
+            Slider(draft, { next ->
+                draft = next
+                dragging = true
+                if(livePreviewStep != null && abs(next - lastPreviewed) >= livePreviewStep) {
+                    lastPreviewed = next
+                    onChange(next)
+                }
+            }, modifier = modifier.heightIn(min = 48.dp), valueRange = range, enabled = enabled,
+                onValueChangeFinished = { dragging = false; onChange(draft) })
         }
     }
 }

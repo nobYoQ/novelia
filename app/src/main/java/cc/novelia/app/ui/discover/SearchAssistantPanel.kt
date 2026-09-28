@@ -41,6 +41,7 @@ fun SearchAssistantPanel(
     persistenceError: String? = null,
     categoryNames: List<String> = KeywordCatalog.defaultCategories,
     libraryActions: KeywordLibraryActions? = null,
+    sheetMode: Boolean = false,
 ) {
     var all by rememberSaveable { mutableStateOf("") }
     var any by rememberSaveable { mutableStateOf("") }
@@ -72,14 +73,18 @@ fun SearchAssistantPanel(
     }
     Surface(modifier.fillMaxWidth(), tonalElevation = 1.dp) {
         Column {
-            TextButton(onClick = { onExpandedChange(!expanded) }, modifier = Modifier.fillMaxWidth().testTag("search-assistant-toggle")) {
+            if(sheetMode) Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Text("辅助搜索", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+                TextButton(onClick = { onExpandedChange(false) }) { Text("关闭") }
+            } else TextButton(onClick = { onExpandedChange(!expanded) }, modifier = Modifier.fillMaxWidth().testTag("search-assistant-toggle")) {
                 Text("辅助搜索", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
                 if(generated.isNotBlank() && !expanded) Text("有待应用条件", style = MaterialTheme.typography.labelSmall)
                 FilterPanelExpandIcon(expanded, if(expanded) "收起辅助搜索" else "展开辅助搜索")
             }
             persistenceError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 16.dp)) }
             FilterPanelVisibility(expanded) {
-                val panelHeight = (LocalConfiguration.current.screenHeightDp * .43f).coerceIn(140f, 400f).dp
+                val panelHeight = (LocalConfiguration.current.screenHeightDp * (if(sheetMode) .72f else .43f))
+                    .coerceIn(140f, if(sheetMode) 720f else 400f).dp
                 AppScrollColumn(
                     modifier = Modifier.fillMaxWidth().heightIn(max = panelHeight).testTag("search-assistant-content"),
                     state = panelScroll,

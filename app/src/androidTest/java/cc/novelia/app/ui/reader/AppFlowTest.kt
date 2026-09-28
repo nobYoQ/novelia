@@ -86,7 +86,7 @@ class AppFlowTest {
         } finally {
             compose.runOnIdle { app.store.update { it.copy(downloads = originalDownloads) } }
         }
-        compose.onNodeWithText("阅读与外观").performScrollTo().performClick()
+        compose.onNodeWithText("设置").performScrollTo().performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithText("应用主题").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("深色", useUnmergedTree = true).performClick()
         compose.onNodeWithText("减少动态效果").performClick()
