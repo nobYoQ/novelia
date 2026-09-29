@@ -126,6 +126,16 @@ private fun linkify(text: Text) {
     for (match in bareUrl.findAll(text.literal)) {
         var url = match.value.trimEnd('.', ',', ':', ';', '!', '?', '\'', '"')
         while (url.endsWith(')') && url.count { it == ')' } > url.count { it == '(' }) url = url.dropLast(1)
+        // 旧书单常见 URL(中文说明）：全角右括号已作为分隔符，未闭合的左括号也不属于 URL。
+        // 保留 URL 内合法的成对括号，例如维基路径和查询参数。
+        val parentheses = ArrayDeque<Int>()
+        url.forEachIndexed { index, char ->
+            when (char) {
+                '(' -> parentheses.addLast(index)
+                ')' -> if (parentheses.isNotEmpty()) parentheses.removeLast()
+            }
+        }
+        if (parentheses.isNotEmpty()) url = url.take(parentheses.first())
         if (url.isEmpty()) continue
         if (match.range.first > end) text.insertBefore(Text(text.literal.substring(end, match.range.first)))
         val destination = if (url.startsWith("www.", true)) "https://$url" else url

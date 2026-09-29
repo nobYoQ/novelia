@@ -15,7 +15,8 @@
 | 屏蔽书籍/标签/用户 | 相应 `blocked*` 集合 | 本地展示过滤，不向服务端设置账号屏蔽关系 |
 | 隐藏小说评论 | `hideNovelComments` | 面向小说评论区域，不等于隐藏整个社区 |
 | 下载网络约束 | `wifiOnly` | 创建下载任务时设置 WorkManager 网络约束 |
-| 云端筛选自动收起 | `autoCollapseCloudFilters` | 影响相关筛选界面的展开/收起行为 |
+| 云端筛选自动收起 | `autoCollapseCloudFilters` | 控制滚动云端列表时是否收起筛选；离开页面总会收起 |
+| 剪贴板链接提示 | `clipboardLinkHints` | 返回前台时识别受支持的原站链接，点击提示后打开；默认开启 |
 
 修改默认阅读设置后，已经保存单书设置的作品仍使用单书快照。排查“改了设置却没生效”时，先确认是否存在覆盖值，再检查当前阅读模式。书籍键是保存偏好的关联依据，不能用可能重复或可修改的标题作键。
 
@@ -27,7 +28,9 @@
 
 主题等单选组共用 `ChoiceRow`，按实际文字宽度和字体缩放自适应为最多三列的等宽选项；选中状态使用底色和描边，不预留隐藏勾号。选项、书源筛选、收藏夹与标签共用 `AppChips` 样式，行列间距为 12dp，触控区域至少 48dp。
 
-“我的”顶部个人卡片内显示默认收起的账号权限小卡片，展开后查看社区发布和书籍编辑权限，不再占用下方菜单列表的独立条目。
+阅读偏好在一次打开期间保留各页签的位置；关闭再打开后回到“常用”页顶部，更多页的分组恢复收起，已保存设置不变。阅读器中的面板高度可在半屏和大半屏之间切换，采用弹簧动画；减少动效、电子纸和系统关闭动画时直接切换。
+
+“我的”顶部个人卡片使用低强调的主题表面色，将 76dp 的小绿与账号类型、昵称、成员身份和注册时间集中排列，昵称作为视觉中心。退出登录放在右上角“账号操作”菜单，仍需确认；账号权限使用卡片底部的通栏入口，展开后才显示社区发布和书籍编辑权限。游客直接显示“登录 / 注册”入口。贴纸点击采用压缩、弹跳、轻摇和表情淡入淡出，连续点击从当前姿态衔接，最多保留两组飘动爱心；减少动效时只切换静态表情。
 
 设置通过 `LocalStore.update` 更新内存快照，由持久化层合并写盘。普通滑块通常在拖动结束时提交，电子纸界面采用步进操作，减少连续重绘。UI 已展示新值不等于文件已经提交，导出或生命周期边界仍需等待相应 `flush()`。
 
@@ -44,7 +47,7 @@
 | 登录信息 | 不包含 | 不包含 |
 | 恢复方式 | 校验后应用设置字段 | 解包、验证、预览、合并 |
 
-[SettingsBackup.kt](../../app/src/main/java/cc/novelia/app/data/model/SettingsBackup.kt) 的字段为：`reader`、`theme`、`reducedMotion`、`blockedBooks`、`blockedTags`、`blockedUsers`、`hideNovelComments`、`wifiOnly`、`autoCollapseCloudFilters`。单书设置、自动云端同步开关、更新通知、关键词词典和待同步任务不在该普通设置格式中。
+[SettingsBackup.kt](../../app/src/main/java/cc/novelia/app/data/model/SettingsBackup.kt) 的字段为：`reader`、`theme`、`reducedMotion`、`blockedBooks`、`blockedTags`、`blockedAuthors`、`blockedUsers`、`hideNovelComments`、`wifiOnly`、`autoCollapseCloudFilters`、`autoSaveCloudFavoritesLocally`、`clipboardLinkHints`。单书设置、自动云端同步开关、更新通知、关键词词典和待同步任务不在该普通设置格式中。
 
 普通设置导入会检查版本、主题、部分阅读数值范围和引擎优先级等条件。它与完整资料备份使用不同的校验流程，不能把一方的校验能力套用到另一方。换机操作及具体合并规则见[备份与恢复](../data/backup-and-recovery.md)。
 

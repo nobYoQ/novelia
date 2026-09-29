@@ -37,6 +37,7 @@ open class ApiException(val status: Int, override val message: String) : IOExcep
  */
 class NoveliaApi(val session: AuthenticationSession?, val baseUrl: String = "https://n.novelia.cc/api/", val transport: OkHttpClient = OkHttpClient.Builder().connectTimeout(20, TimeUnit.SECONDS).readTimeout(60, TimeUnit.SECONDS).followRedirects(false).build(), private val onMutation: (Long) -> Unit = {}, private val onKeywords: (Collection<String>) -> Unit = {}) {
     val cloudMutations = CloudMutationQueue()
+    internal val downloadTransport by lazy { transport.forDownloads() }
     @Volatile var lastMutationAt: Long = 0L
         private set
     fun url(path: String, params: List<Pair<String, String>> = emptyList()): String = baseUrl.toHttpUrl().newBuilder().addEncodedPathSegments(path.trimStart('/')).apply { params.forEach { (k, v) -> addQueryParameter(k, v) } }.build().toString()

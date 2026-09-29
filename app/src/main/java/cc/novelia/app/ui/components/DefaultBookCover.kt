@@ -28,12 +28,16 @@ private val CoverAccents = listOf(Color(0xFF537B57), Color(0xFF566EA0), Color(0x
 
 @Composable
 internal fun DefaultBookCover(book: BookCard, modifier: Modifier = Modifier) {
-    // Stable per book, including negative hash codes; filtering and refresh never shuffle covers.
+    // 贴纸沿用稳定变体；网络小说的颜色只由分级和连载状态决定。
     val variant = remember(book.ref.key) { stableCoverVariant(book.ref.key, CoverAccents.size) }
     val colors = MaterialTheme.colorScheme
     val eInk = LocalEInkMode.current
     val dark = colors.surface.luminance() < .5f
-    val accent = if(eInk) colors.onSurface else CoverAccents[variant]
+    val accent = when {
+        eInk -> colors.onSurface
+        book.ref.isLocal || book.ref.isWenku -> CoverAccents[variant]
+        else -> webCoverPalette(book).accent
+    }
     val tint = if(eInk) colors.surface else lerp(colors.surface, accent, if(dark) .38f else .18f)
     Box(modifier.background(Brush.verticalGradient(listOf(tint, if(eInk) tint else lerp(colors.surface, accent, .08f))))) {
         Box(Modifier.fillMaxHeight().width(3.dp).background(accent.copy(alpha = .65f)))

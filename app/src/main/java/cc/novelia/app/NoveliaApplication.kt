@@ -3,6 +3,7 @@ package cc.novelia.app
 import android.app.Application
 import cc.novelia.app.data.auth.Session
 import cc.novelia.app.data.catalog.KeywordStore
+import cc.novelia.app.data.catalog.ClipboardLinkHistory
 import cc.novelia.app.data.model.User
 import cc.novelia.app.data.network.NoveliaApi
 import cc.novelia.app.data.storage.LocalStore
@@ -36,6 +37,7 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
     val store by lazy { LocalStore(this) }
     val session by lazy { Session(this) }
     val keywords by lazy { KeywordStore(this) }
+    internal val clipboardLinkHistory = ClipboardLinkHistory()
     val metadataCache get() = store.metadataCache
     val api by lazy { NoveliaApi(session, onMutation = { metadataCache.invalidate(it) }, onKeywords = { tags -> applicationScope.launch { keywords.observe(tags) } }) }
     val initialization by lazy { applicationScope.async { store; session; Unit } }

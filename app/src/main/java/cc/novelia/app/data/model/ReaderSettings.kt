@@ -28,7 +28,9 @@ import kotlinx.serialization.Serializable
     val prefetchChapters: Int = 3, val prefetchWifiOnly: Boolean = true,
     val paragraphSpacing: Float = 8f,
     // Chapter-end navigation in continuous reading; independent of toolbar buttons and e-ink presets.
-    val showScrollPageButtons: Boolean = true
+    val showScrollPageButtons: Boolean = true,
+    // The chapter scrubber is independent of page buttons and survives e-ink preset changes.
+    val showProgressBar: Boolean = true
 ) {
     companion object {
         const val MIN_LINE_HEIGHT = .5f

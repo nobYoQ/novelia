@@ -51,9 +51,10 @@ JVM 报告在 `app/build/reports/tests/testDebugUnitTest/`，XML 结果在 `app/
 | 云端收藏和待同步 | `CloudFavoritesTest`、`data.sync.CloudMutationQueueTest`、`data.sync.CloudSyncPolicyTest`、`data.sync.CloudSyncRuntimeTest`、`data.sync.BoundCloudSyncTest` |
 | 书库状态与恢复 | `data.storage.StatePersistenceTest`、`data.storage.LibraryStateCodecTest`、`data.backup.LibraryBackupTest`、`data.cache.LocalCacheTest`、`MetadataCacheTest` |
 | 文档存储与导入 | `data.documents.DocumentStorageTest`、`data.documents.DocumentHashIndexTest`、`FileImportRegressionTest`、`DocumentToolsTest` |
+| 手动离线缓存并发 | `data.chapters.ChapterBatchTest`：去重、并发上限、失败/取消、单调进度；设备另查网络策略和缓存代次 |
 | 下载/导出生命周期 | `DownloadFilesTest`、`PendingExportFilesTest`、`DownloadCelebrationTest` |
 | 阅读投影/进度 | `ReaderProjectionTest`、`ReaderPreferencesTest`、`ReadingContinuityTest`、`ReaderChapterLoadTest`、`ReaderSafetyTest` |
-| 书籍摘要、云端元数据和进度展示 | `BookMetadataTest`、`CloudBookMetadataTest`、`BookListPresentationTest`、`FavoritePresentationTest` |
+| 书籍摘要、云端元数据和进度展示 | `BookMetadataTest`、`CloudBookMetadataTest`、`BookListPresentationTest`、`FavoritePresentationTest`、`WebCoverTest` |
 | 分页/搜索/插图 | `StaticPaginationTest`、`ReaderExactSearchTest`、`ReaderChapterOverscrollTest`、`IllustrationTransformTest` |
 | 搜索、关键词、书源 | `ReaderAndLinksTest`、`SearchExpressionBoundaryTest`、`KeywordCatalogTest`、`KeywordObservationTest` |
 | 分卷与更新检查 | `WenkuVolumesTest`、`BookUpdatesTest`、`TranslationFreshnessTest`、`data.updates.UpdateCheckOrderTest` |
@@ -123,5 +124,7 @@ Gradle 设备 HTML 报告位于 `app/build/reports/androidTests/connected/` 下�
 关键路径包括首次安装、本地文件导入、网络章节与离线缓存、切换译文、搜索、书签/笔记、跨章、普通设置与阅读资料备份/恢复、后台下载及 TTS。按改动增加登录续期、账号切换、同步冲突或文库编辑。
 
 UI 至少检查普通模式、减少动效、电子纸、浅深主题、大字体、窄屏与宽屏/横屏。迁移测试分别记录旧版签名是否相同、覆盖安装或备份后重装，勿用一次新装结果代表升级可用。
+
+面板会话回归见 `PanelSessionTest`、`ReaderPanelSessionTest` 和 `FilterPositionTest`：验证关闭再打开回到顶部、阅读偏好重置页签但保留设置、半屏切换动效及减少动效立即生效。剪贴板纯逻辑由 `ClipboardLinksTest` 验证网址识别、查询与锚点保留、去重和设置兼容；前台焦点、系统剪贴板提示及点击跳转仍需设备验证。
 
 PR 中列出执行命令、构建变体、设备/API、成功/失败/跳过数量和报告位置；失败记录应脱敏。文档修改通常只需核对链接、路径、代码和命令，不必为排版变动重跑完整应用测试。

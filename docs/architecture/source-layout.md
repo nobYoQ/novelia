@@ -64,6 +64,8 @@ app/src/main/java/cc/novelia/app/
 
 原来汇集不同模型的 `Models.kt` 已按领域拆入 `model/`，书源列表独立到 `catalog/Providers.kt`。`storage/StorageFormat.kt` 集中提供 `appJson` 与 `hashName`；新的模型或存储代码应引用同一序列化配置，避免另起一套格式。系统通知入口 `updates/AppNotifications.kt` 与更新任务实现分别存放。
 
+文件下载的独立网络调度配置位于 `network/DownloadTransport.kt`，由应用级 `NoveliaApi` 复用，任务与文件生命周期仍由 `files/DownloadWorker.kt` 管理。手动缓存章节的有界并行逻辑位于 `chapters/ChapterBatch.kt`，账号、网络策略与落盘检查由 `ChapterOffline.kt` 负责。
+
 `data/` 根目录保留 [CloudSyncWorker.kt](../../app/src/main/java/cc/novelia/app/data/CloudSyncWorker.kt) 和 [UpdateWorker.kt](../../app/src/main/java/cc/novelia/app/data/UpdateWorker.kt) 两个带 `@Keep` 的兼容入口，仅用于升级后继续构造旧版已排队的任务。WorkManager 会把 Worker 类全名保存到内部数据库，旧任务仍可能使用旧名字；因此不能像普通 helper 一样直接删除或改名。实际逻辑位于 `sync/` 与 `updates/`，新开发应从职责包中的实现入手。此次源码分包没有改变原有持久化数据格式或字段。
 
 ## 测试目录地图

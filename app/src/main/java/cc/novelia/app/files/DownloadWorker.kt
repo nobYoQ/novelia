@@ -7,7 +7,6 @@ import cc.novelia.app.data.model.DownloadEntry
 import cc.novelia.app.data.network.ApiException
 import cc.novelia.app.data.updates.AppNotifications
 import java.io.File
-import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -41,7 +40,7 @@ class DownloadWorker(context: Context, parameters: WorkerParameters) : Coroutine
         val partial = DownloadFiles.acquire(app.store.downloadsDir, id, this@DownloadWorker.id.toString()); val destination = File(app.store.downloadsDir, entry.fileName)
         try {
             update(app, id, "下载中", 0)
-            val client = app.api.transport.newBuilder().followRedirects(true).readTimeout(120, TimeUnit.SECONDS).build()
+            val client = app.api.downloadTransport
             val parsed = entry.url.toHttpUrl(); require(parsed.scheme == "https" && parsed.host == "n.novelia.cc")
             val request = Request.Builder().url(parsed).build()
             val workContext = coroutineContext
@@ -61,7 +60,8 @@ class DownloadWorker(context: Context, parameters: WorkerParameters) : Coroutine
                         total += count; require(total <= 512L * 1024 * 1024) { "文件超过 512 MB" }; output.write(buffer, 0, count)
                         val progress = if(expected > 0) (total * 100 / expected).toInt() else 0
                         val now = android.os.SystemClock.elapsedRealtime()
-                        if(progress != previousProgress && now - lastProgressAt >= 250) { previousProgress = progress; lastProgressAt = now; update(app, id, "下载中", progress, active = { workContext[kotlinx.coroutines.Job]?.isActive == true }) }
+                        // 每次进度变化会触发书库快照持久化；每秒最多发布一次，完成状态另行立即提交。
+                        if(progress != previousProgress && now - lastProgressAt >= 1_000) { previousProgress = progress; lastProgressAt = now; update(app, id, "下载中", progress, active = { workContext[kotlinx.coroutines.Job]?.isActive == true }) }
                     }
                 } }
                 if(expected >= 0 && total != expected) error("下载不完整，请重试")

@@ -5,7 +5,6 @@ import cc.novelia.app.ui.components.AppSelectionChip
 import cc.novelia.app.ui.components.AppActionChip
 import cc.novelia.app.ui.components.AppChipFlowRow
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
@@ -27,6 +26,7 @@ import cc.novelia.app.ui.components.FilterPanelExpandIcon
 import cc.novelia.app.ui.components.FilterPanelVisibility
 import cc.novelia.app.ui.components.KeywordEditorDialog
 import cc.novelia.app.ui.components.KeywordCategoryChips
+import cc.novelia.app.ui.components.rememberPanelScrollState
 
 @Composable
 fun SearchAssistantPanel(
@@ -57,8 +57,8 @@ fun SearchAssistantPanel(
     var replacing by remember { mutableStateOf(false) }
     var browsingLibrary by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(categoryNames) { if(category != "全部" && category !in categoryNames) category = "全部" }
-    // Keep the editing position when the panel leaves composition after a collapse.
-    val panelScroll = rememberScrollState()
+    // 保留尚未应用的搜索条件，每次展开则从面板顶部开始。
+    val panelScroll = rememberPanelScrollState(expanded)
     val generated = SearchExpression.build(all, any, exact, excluded, includedTags.joinToString(" "), excludedTags.joinToString(" "), minimum, maximum)
     val invalidBounds = minimum.toIntOrNull()?.let { min -> maximum.toIntOrNull()?.let { max -> min >= max } } == true
     val conflicts = SearchExpression.conflictingTags(query, generated)

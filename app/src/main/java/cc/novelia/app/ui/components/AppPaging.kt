@@ -10,8 +10,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -45,7 +43,7 @@ internal fun screenPageDistance(viewport: Int, overlap: Float): Float =
  */
 @Composable internal fun AppLazyColumn(
     modifier: Modifier = Modifier,
-    state: LazyListState = rememberLazyListState(),
+    state: LazyListState = rememberContentLazyListState(),
     contentPadding: PaddingValues = PaddingValues(0.dp),
     verticalArrangement: Arrangement.Vertical = Arrangement.Top,
     horizontalAlignment: Alignment.Horizontal = Alignment.Start,
@@ -74,7 +72,7 @@ internal fun screenPageDistance(viewport: Int, overlap: Float): Float =
 
 @Composable internal fun AppScrollColumn(
     modifier: Modifier = Modifier,
-    state: ScrollState = rememberScrollState(),
+    state: ScrollState = rememberContentScrollState(),
     verticalArrangement: Arrangement.Vertical = Arrangement.Top,
     horizontalAlignment: Alignment.Horizontal = Alignment.Start,
     contentModifier: Modifier = Modifier,

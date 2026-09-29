@@ -70,7 +70,7 @@ import kotlinx.coroutines.withContext
         }
         LaunchedEffect(locateRequest, currentIndex) {
             // Initial opening must settle at the current chapter immediately, even deep in a long book.
-            if(locateRequest > 0 && currentIndex >= 0) { scroll.scrollToItem(currentIndex); onLocated() }
+            if(locateRequest > 0) { scroll.scrollToItem(currentIndex.coerceAtLeast(0)); onLocated() }
         }
         Column {
             Text("目录", Modifier.padding(start = 20.dp, top = 16.dp).semantics { heading() }, style = MaterialTheme.typography.titleMedium)

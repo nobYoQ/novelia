@@ -59,4 +59,47 @@ class MetadataCacheTest {
         assertEquals("new", cache.read(firstKey, now = 4_001))
         assertEquals(3L, cache.size())
     }
+
+    @Test fun hotReadsReuseTextWithoutExtendingFreshnessAndHonorInvalidation() {
+        val cache = MetadataCache(temporary.root)
+        cache.write(firstKey, "重复打开的详情", fetchedAt = 1_000)
+        val first = cache.read(firstKey, now = 1_010, maxAgeMillis = 20)
+        assertSame(first, cache.read(firstKey, now = 1_020, maxAgeMillis = 20))
+        assertNull(cache.read(firstKey, now = 1_021, maxAgeMillis = 20))
+        cache.invalidate(1_000)
+        assertNull(cache.read(firstKey, now = 1_030))
+        cache.write(firstKey, "编辑后的详情", fetchedAt = 2_000)
+        assertEquals("编辑后的详情", cache.read(firstKey, now = 2_001))
+        cache.clear()
+        assertNull(cache.read(firstKey, now = 2_002))
+    }
+
+    @Test fun delayedResponsesAndEqualTimestampsDoNotCorruptEvictionOrder() {
+        val cache = MetadataCache(temporary.root, maxBytes = 12)
+        val thirdKey = "c".repeat(64)
+        cache.write(firstKey, "aaaaaa", fetchedAt = 3_000)
+        cache.write(secondKey, "bbbbbb", fetchedAt = 3_000)
+        cache.write(thirdKey, "cccccc", fetchedAt = 1_000)
+        assertNull(cache.read(thirdKey, now = 4_000))
+        assertEquals("aaaaaa", cache.read(firstKey, now = 4_000))
+        cache.write(firstKey, "newaaa", fetchedAt = 5_000)
+        cache.write(thirdKey, "newccc", fetchedAt = 6_000)
+        assertNull(cache.read(secondKey, now = 7_000))
+        assertEquals("newaaa", cache.read(firstKey, now = 7_000))
+        assertEquals(12L, cache.size())
+        assertEquals(12L, MetadataCache(temporary.root, 12).size())
+    }
+
+    @Test fun evictingHotTextFromMemoryKeepsTheDiskCopyAvailable() {
+        val cache = MetadataCache(temporary.root)
+        cache.write(firstKey, "磁盘副本", fetchedAt = 1_000)
+        val original = cache.read(firstKey, now = 2_000)
+        repeat(16) { index -> cache.write(index.toString(16).padStart(64, '0'), "other-$index", fetchedAt = 1_000) }
+        val reloaded = cache.read(firstKey, now = 2_000)
+        assertEquals(original, reloaded)
+        assertNotSame(original, reloaded)
+        assertSame(reloaded, cache.read(firstKey, now = 2_000))
+        File(temporary.root, "$firstKey.json").delete()
+        assertNull(cache.read(firstKey, now = 2_000))
+    }
 }

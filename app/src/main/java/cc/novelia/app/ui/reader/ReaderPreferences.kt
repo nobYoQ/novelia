@@ -11,12 +11,10 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.ScrollState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.*
@@ -49,13 +47,8 @@ import kotlin.math.abs
     internal val scrollStates: List<ScrollState>
 )
 
-@Composable fun rememberReaderPreferencesState(): ReaderPreferencesState {
-    val tab = rememberSaveable { mutableIntStateOf(0) }
-    val expanded = rememberSaveable { mutableStateOf("") }
-    val commonScroll = rememberScrollState()
-    val pagingScroll = rememberScrollState()
-    val moreScroll = rememberScrollState()
-    return remember { ReaderPreferencesState(tab, expanded, listOf(commonScroll, pagingScroll, moreScroll)) }
+@Composable fun rememberReaderPreferencesState(open: Boolean = true): ReaderPreferencesState = remember(open) {
+    ReaderPreferencesState(mutableIntStateOf(0), mutableStateOf(""), List(3) { ScrollState(0) })
 }
 
 @Composable fun ReaderPreferences(value: ReaderSettings, perBook: Boolean? = null, onPerBook: (Boolean) -> Unit = {},
@@ -116,6 +109,7 @@ import kotlin.math.abs
                         ReaderPreferenceHeading("滚动分页")
                         TogglePreference("章节末尾按钮", "连续滚动时显示章末的下一章、下一分卷或返回目录按钮；关闭后仍可上拉进入下一章", value.showScrollPageButtons) { onChange(value.copy(showScrollPageButtons = it)) }
                         ReaderPreferenceHeading("工具栏")
+                        TogglePreference("阅读进度条", "展开工具栏时显示，可快速跳转本章位置", value.showProgressBar) { onChange(value.copy(showProgressBar = it)) }
                         ReaderSlider("工具栏透明度 ${(value.resolvedToolbarTransparency * 100).roundToInt()}%", value.resolvedToolbarTransparency, 0f..1f,
                             modifier = Modifier.testTag("reader-toolbar-transparency")) { onChange(value.copy(toolbarTransparency = it)) }
                         Text("0% 为不透明，100% 为背景完全透明；文字和图标保持清晰。工具栏覆盖正文，显示或收起不会改变排版。",

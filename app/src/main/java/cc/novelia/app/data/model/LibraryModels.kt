@@ -40,5 +40,6 @@ import kotlinx.serialization.Serializable
     val personalGlossaries: Map<String, Map<String, String>> = emptyMap(),
     val autoSync: Boolean = true, val syncStatus: Map<String, CloudSyncStatus> = emptyMap(),
     val updateSnapshots: Map<String, BookUpdateSnapshot> = emptyMap(),
-    val bookUpdates: Map<String, BookUpdateInfo> = emptyMap()
+    val bookUpdates: Map<String, BookUpdateInfo> = emptyMap(),
+    val clipboardLinkHints: Boolean = true
 )

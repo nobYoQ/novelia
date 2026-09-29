@@ -1,14 +1,12 @@
-@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.shelf
 
 import androidx.compose.foundation.background
 import cc.novelia.app.ui.components.AppSelectionChip
-import cc.novelia.app.ui.components.AppActionChip
 import cc.novelia.app.ui.components.AppChipFlowRow
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -18,13 +16,18 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import cc.novelia.app.data.catalog.providers
 import cc.novelia.app.data.library.withCloudReadingMetadata
 import cc.novelia.app.data.model.BookRef
@@ -40,14 +43,11 @@ import cc.novelia.app.ui.components.BookRow
 import cc.novelia.app.ui.components.bookRowStatus
 import cc.novelia.app.ui.components.rememberCloudBookMetadata
 import cc.novelia.app.ui.components.ChoiceRow
-import cc.novelia.app.ui.components.QuickFilter
-import cc.novelia.app.ui.components.QuickFilterBar
 import cc.novelia.app.ui.components.CollapsibleCloudFilters
 import cc.novelia.app.ui.components.ConfirmDialog
 import cc.novelia.app.ui.components.EmptyState
 import cc.novelia.app.ui.components.PageControls
 import cc.novelia.app.ui.components.TextPrompt
-import cc.novelia.app.ui.components.appHorizontalScroll
 import cc.novelia.app.ui.components.rememberCloudFilterCollapse
 import cc.novelia.app.ui.navigation.AppController
 
@@ -76,11 +76,11 @@ import cc.novelia.app.ui.navigation.AppController
     var type by rememberSaveable { mutableIntStateOf(0) }
     var level by rememberSaveable { mutableIntStateOf(0) }
     var translate by rememberSaveable { mutableIntStateOf(0) }
-    var expanded by rememberSaveable { mutableStateOf(true) }
+    var expanded by remember { mutableStateOf(false) }
     // A row-level or background retry can finish without this screen's own menu callback.
     // Refresh remote results after success while AsyncContent keeps the current viewport.
     val refreshKey = listOf(version, local.syncStatus[account]?.lastSuccessAt ?: 0L)
-    LaunchedEffect(local.autoCollapseCloudFilters) { if(!local.autoCollapseCloudFilters) expanded = true }
+    LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { expanded = false }
     val focus = LocalFocusManager.current
     val path = if (kind == 0) "user/favored-web" else "user/favored-wenku"
     val filter = CloudWebFilter(submitted, source, type, level, translate)
@@ -94,8 +94,7 @@ import cc.novelia.app.ui.navigation.AppController
             val current = choices.find { it.id == folderId } ?: choices.firstOrNull()
             val editable = current?.takeUnless { it.id == ALL_CLOUD_FAVORITES }
             val selectedSources = source.split(',').filter(String::isNotBlank).toSet()
-            val summary = buildList {
-                add(current?.title ?: "未创建收藏夹")
+            val activeFilters = buildList {
                 if (kind == 0) {
                     if (submitted.isNotBlank()) add("搜索：$submitted")
                     if (selectedSources.size != providers.size) add("${selectedSources.size} 个书源")
@@ -103,36 +102,30 @@ import cc.novelia.app.ui.navigation.AppController
                     if (level != 0) add(listOf("全部", "一般向", "R18")[level])
                     if (translate != 0) add(listOf("全部", "GPT", "Sakura")[translate])
                 }
-                add(if (sort == "update") "更新时间" else "收藏时间")
-            }.joinToString(" · ")
+            }
+            val summary = activeFilters.joinToString(" · ")
             Column(Modifier.fillMaxSize()) {
-                QuickFilterBar(buildList {
-                    add(QuickFilter("排序", listOf("更新时间", "收藏时间"), if(sort == "update") 0 else 1) {
-                        sort = if(it == 0) "update" else "create"; page = 0
-                    })
-                    if(kind == 0) {
-                        add(QuickFilter("状态", listOf("全部", "连载中", "已完结", "短篇"), type) { type = it; page = 0 })
-                        add(QuickFilter("分级", listOf("全部", "一般向", "R18"), level) { level = it; page = 0 })
+                CloudNovelKindSwitch(kind) { kind = it; folderId = ""; page = 0; expanded = false }
+                key(kind) { CloudShelfToolbar(choices, current, { folderId = it; page = 0 },
+                    sort, { sort = it; page = 0 }, activeFilters.size, expanded,
+                    if(kind == 0) ({ expanded = !expanded; focus.clearFocus() }) else null) { close ->
+                    DropdownMenuItem({ Text("新建收藏夹") }, { close(); create = true }, leadingIcon = { Icon(Icons.Outlined.Add, null) })
+                    if(editable != null) {
+                        DropdownMenuItem({ Text("重命名收藏夹") }, { close(); rename = editable })
+                        if(editable.id != "default") DropdownMenuItem({ Text("删除收藏夹") }, { close(); deleting = editable })
                     }
-                })
-                CollapsibleCloudFilters(expanded, { expanded = !expanded }, summary, filterHeight) {
-                    ChoiceRow("收藏类型", listOf("网络小说", "文库小说"), kind) { kind = it; folderId = ""; page = 0 }
-                    Row(Modifier.appHorizontalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        choices.forEach { folder -> AppSelectionChip(current?.id == folder.id, { folderId = folder.id; page = 0 }, label = { Text(folder.title) }) }
-                        AppActionChip(onClick = { create = true }, label = { Text("新建") }, leadingIcon = { Icon(Icons.Outlined.Add, null) })
-                    }
-                    FlowRow(Modifier.padding(horizontal = 12.dp)) {
-                        if (editable != null) {
-                            TextButton(onClick = { rename = editable }) { Text("重命名") }
-                            if (editable.id != "default") TextButton(onClick = { deleting = editable }) { Text("删除收藏夹") }
-                        }
-                        TextButton(onClick = refresh) { Text("刷新收藏夹") }
-                    }
+                    DropdownMenuItem({ Text("刷新收藏夹") }, { close(); refresh() }, leadingIcon = { Icon(Icons.Outlined.Refresh, null) })
+                } }
+                if(activeFilters.isNotEmpty()) Text(summary,
+                    Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 8.dp).testTag("cloud-filter-summary"),
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+                CollapsibleCloudFilters(expanded, { expanded = !expanded }, summary, filterHeight, showHeader = false) {
                     if (kind == 0) {
                         OutlinedTextField(query, { query = it }, label = { Text("搜索中 / 日标题或作者") }, singleLine = true,
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { submit() }),
                             trailingIcon = { IconButton(onClick = ::submit) { Icon(Icons.Outlined.Search, "搜索云端收藏") } },
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp))
+                            modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 12.dp))
                         Row(Modifier.padding(start = 20.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text("来源（可多选）", Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
                             TextButton(onClick = { source = providers.keys.filterNot { it in selectedSources }.joinToString(","); page = 0 }) { Text("反选") }
@@ -146,10 +139,12 @@ import cc.novelia.app.ui.navigation.AppController
                         ChoiceRow("分级", listOf("全部", "一般向", "R18"), level) { level = it; page = 0 }
                         ChoiceRow("翻译", listOf("全部", "GPT", "Sakura"), translate) { translate = it; page = 0 }
                     }
-                    ChoiceRow("排序", listOf("更新时间", "收藏时间"), if (sort == "update") 0 else 1) { sort = if (it == 0) "update" else "create"; page = 0 }
-                    TextButton(onClick = {
-                        query = ""; submitted = ""; source = providers.keys.joinToString(","); type = 0; level = 0; translate = 0; sort = "update"; page = 0
-                    }, Modifier.padding(horizontal = 12.dp)) { Text("重置筛选") }
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                        TextButton(onClick = {
+                            query = ""; submitted = ""; source = providers.keys.joinToString(","); type = 0; level = 0; translate = 0; page = 0
+                        }, Modifier.heightIn(min = 48.dp)) { Text("重置筛选") }
+                        TextButton(onClick = { submit(); expanded = false }, Modifier.heightIn(min = 48.dp)) { Text("完成") }
+                    }
                 }
                 if (current == null) EmptyState("创建第一个云端收藏夹", "收藏夹与原站同步。", action = "新建收藏夹", onAction = { create = true })
                 else {
@@ -175,7 +170,7 @@ import cc.novelia.app.ui.navigation.AppController
                                 val cancelling = pending?.method == "DELETE"
                                 Column {
                                 val selectedBook = book.ref.key == selectedBookKey
-                                BookRow(displayed, { onOpenBook(book.ref) }, Modifier.semantics { selected = selectedBook }
+                                BookRow(displayed, { expanded = false; onOpenBook(book.ref) }, Modifier.semantics { selected = selectedBook }
                                     .then(if(selectedBook) Modifier.background(MaterialTheme.colorScheme.secondaryContainer) else Modifier),
                                     status = bookRowStatus(displayed, local.books.firstOrNull { it.book.ref == book.ref }, local.positions[book.ref.key], local.bookUpdates[book.ref.key], account, preferCloud = true), trailing = {
                                     if(cancelling) TextButton(onClick = { c.action {
@@ -211,4 +206,22 @@ import cc.novelia.app.ui.navigation.AppController
     deleting?.let { folder -> ConfirmDialog("删除「${folder.title}」？", "移除该云端收藏夹，小说内容不受影响。", { deleting = null }, confirmLabel = "删除收藏夹") {
         c.action { c.api.request("DELETE", "$path/${folder.id}"); folderId = ""; page = 0; version++ }
     } }
+}
+
+@Composable internal fun CloudNovelKindSwitch(kind: Int, onChange: (Int) -> Unit) {
+    Surface(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp).testTag("cloud-novel-kind"),
+        shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+        Row(Modifier.padding(4.dp)) {
+            listOf("网络小说", "文库小说").forEachIndexed { index, label ->
+                TextButton(onClick = { if(kind != index) onChange(index) },
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp).semantics { selected = kind == index },
+                    shape = MaterialTheme.shapes.small,
+                    colors = ButtonDefaults.textButtonColors(
+                        containerColor = if(kind == index) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
+                        contentColor = if(kind == index) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)) {
+                    Text(label, style = MaterialTheme.typography.labelLarge)
+                }
+            }
+        }
+    }
 }

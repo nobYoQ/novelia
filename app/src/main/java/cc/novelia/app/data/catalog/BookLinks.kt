@@ -14,13 +14,14 @@ sealed interface SiteLink {
  */
 object BookLinks {
     fun parse(input: String): SiteLink? = runCatching {
-        val url = Regex("https?://[^\\s<>]+").find(input.trim())?.value ?: return null
-        val uri = URI(url); if (uri.scheme !in listOf("http", "https")) return null
+        val url = Regex("https?://[^\\s<>]+", RegexOption.IGNORE_CASE).find(input.trim())?.value ?: return null
+        val uri = SiteUrls.normalize(URI(url))
+        if (uri.scheme?.lowercase() !in listOf("http", "https") || uri.userInfo != null) return null
         val host = uri.host?.lowercase() ?: return null
         val path = uri.path.trim('/').split('/').filter { it.isNotEmpty() }
         fun book(provider: String, id: String?, chapter: String? = null): SiteLink? = id?.takeIf { it.matches(Regex("[a-zA-Z0-9_-]+")) }?.let { SiteLink.Book(BookRef(provider, it), chapter?.takeIf { c -> c.matches(Regex("[a-zA-Z0-9_-]+")) }) }
         when (host) {
-            "n.novelia.cc" -> when(path.firstOrNull()) {
+            "n.novelia.cc" -> if (!SiteUrls.isInternal(uri)) null else when(path.firstOrNull()) {
                 "novel" -> if(path.getOrNull(1) in providers) book(path[1], path.getOrNull(2), path.getOrNull(3)) else null
                 "wenku" -> book("wenku", path.getOrNull(1))
                 "forum" -> path.getOrNull(1)?.takeIf { it.matches(Regex("[a-zA-Z0-9]+")) }?.let { SiteLink.Post(it) }

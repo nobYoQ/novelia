@@ -5,26 +5,30 @@ package cc.novelia.app.ui.account
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import cc.novelia.app.data.model.Profile
+import cc.novelia.app.ui.components.AppDropdownMenu
 import cc.novelia.app.ui.components.AppLazyColumn
 import cc.novelia.app.ui.components.ConfirmDialog
 import cc.novelia.app.ui.components.MenuRow
 import cc.novelia.app.ui.components.Screen
 import cc.novelia.app.ui.components.SectionTitle
 import cc.novelia.app.ui.components.displayDate
+import cc.novelia.app.ui.components.FilterPanelExpandIcon
+import cc.novelia.app.ui.components.FilterPanelVisibility
 import cc.novelia.app.ui.feedback.MidoriCompanion
 import cc.novelia.app.ui.navigation.AppController
-import cc.novelia.app.ui.theme.motionClickable
 
 @Composable fun ProfileScreen(c: AppController) {
     val profile by c.session.profile.collectAsStateWithLifecycle(); val state by c.store.state.collectAsStateWithLifecycle(); var logout by remember { mutableStateOf(false) }
@@ -33,17 +37,8 @@ import cc.novelia.app.ui.theme.motionClickable
         listState.layoutInfo.visibleItemsInfo.any { it.key == "profile-card" }
     } }
     Screen("我的") { padding -> AppLazyColumn(Modifier.padding(padding), state = listState, contentPadding = PaddingValues(bottom = 24.dp)) {
-        item(key = "profile-card") { Card(Modifier.fillMaxWidth().padding(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
-            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                MidoriCompanion(visible = companionVisible)
-                Text(profile?.username ?: "你好，阅读者", style = MaterialTheme.typography.headlineMedium)
-                Text(if(profile == null) "在此设备阅读，也可以连接原站账号。" else "${mapOf("admin" to "管理员", "member" to "普通成员", "trusted" to "可信成员", "restricted" to "受限账号", "banned" to "被封禁账号")[profile?.role] ?: profile?.role} · 注册于 ${displayDate(profile!!.createdAt)}", style = MaterialTheme.typography.bodyMedium)
-                if(profile == null) Button(onClick = { c.go("login") }, modifier = Modifier.heightIn(min = 48.dp)) { Text("登录 / 注册") } else {
-                    AccountPermissionsCard(profile!!.username, profile!!.canPost, profile!!.canEdit)
-                    TextButton(onClick = { logout = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text("退出登录") }
-                }
-            }
-        } }
+        item(key = "profile-card") { ProfileAccountCard(profile, companionVisible,
+            onLogin = { c.go("login") }, onLogout = { logout = true }, modifier = Modifier.padding(20.dp)) }
         item { SectionTitle("阅读资料") }
         item { MenuRow("书架更新", "新增章节、译文与分卷", Icons.Outlined.NewReleases, { c.go("updates") }) }
         item { MenuRow("下载管理", "查看进度、导出与离线阅读", Icons.Outlined.Download, { c.go("downloads") }) }
@@ -62,29 +57,65 @@ import cc.novelia.app.ui.theme.motionClickable
     if(logout) ConfirmDialog("退出当前账号？", "本地小说、下载和笔记仍保留在此设备。云端操作需要重新登录。", { logout = false }, confirmLabel = "退出登录") { c.action("已退出登录") { c.session.logout() } }
 }
 
-@Composable internal fun AccountPermissionsCard(username: String, canPost: Boolean, canEdit: Boolean) {
-    var expanded by rememberSaveable(username) { mutableStateOf(false) }
-    Surface(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surface.copy(alpha = .8f)) {
-        Column {
-            Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("account-permissions-toggle")
-                .semantics { stateDescription = if(expanded) "已展开" else "已收起" }
-                .motionClickable { expanded = !expanded }.padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Icon(Icons.Outlined.VerifiedUser, null, tint = MaterialTheme.colorScheme.primary)
-                Column(Modifier.weight(1f)) {
-                    Text("账号权限", style = MaterialTheme.typography.titleSmall)
-                    Text(if(expanded) "点击收起详情" else "发布${if(canPost) "可用" else "受限"} · 编辑${if(canEdit) "可用" else "受限"}",
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+@Composable internal fun ProfileAccountCard(profile: Profile?, companionVisible: Boolean,
+    onLogin: () -> Unit, onLogout: () -> Unit, modifier: Modifier = Modifier) {
+    var accountMenu by remember(profile?.username) { mutableStateOf(false) }
+    Card(modifier.fillMaxWidth().testTag("profile-account-card"),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(Modifier.fillMaxWidth()) {
+                Row(Modifier.fillMaxWidth().padding(end = if(profile != null) 40.dp else 0.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    MidoriCompanion(Modifier.size(76.dp), visible = companionVisible)
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        val role = profile?.let { mapOf("admin" to "管理员", "member" to "普通成员", "trusted" to "可信成员",
+                            "restricted" to "受限账号", "banned" to "被封禁账号")[it.role] ?: it.role }
+                        Text(if(profile == null) "阅读账户" else "$role",
+                            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                        Text(profile?.username ?: "你好!", style = MaterialTheme.typography.headlineSmall,
+                            maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(profile?.let { "注册于 ${displayDate(it.createdAt)}" } ?: "在此设备阅读，也可以连接Novelia账号。",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
-                Icon(if(expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, null)
+                if(profile != null) Box(Modifier.align(Alignment.TopEnd)) {
+                    IconButton(onClick = { accountMenu = true }, modifier = Modifier.size(48.dp).testTag("profile-account-menu")) {
+                        Icon(Icons.Outlined.MoreHoriz, "账号操作")
+                    }
+                    AppDropdownMenu(accountMenu, { accountMenu = false }) {
+                        DropdownMenuItem(text = { Text("退出登录") }, onClick = { accountMenu = false; onLogout() },
+                            leadingIcon = { Icon(Icons.AutoMirrored.Outlined.Logout, null) },
+                            modifier = Modifier.heightIn(min = 48.dp).testTag("profile-logout"))
+                    }
+                }
             }
-            if(expanded) Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                HorizontalDivider()
-                PermissionStatus("社区发布", canPost)
-                PermissionStatus("书籍编辑", canEdit)
-                Text("权限遵循原站角色与注册时间要求，操作最终由原站服务器校验。",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if(profile == null) Button(onClick = onLogin, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("登录 / 注册") }
+            else AccountPermissionsCard(profile.username, profile.canPost, profile.canEdit)
+        }
+    }
+}
+
+@Composable internal fun AccountPermissionsCard(username: String, canPost: Boolean, canEdit: Boolean) {
+    var expanded by remember(username) { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth()) {
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        TextButton(onClick = { expanded = !expanded }, modifier = Modifier.fillMaxWidth()
+            .heightIn(min = 48.dp).testTag("account-permissions-toggle")
+            .semantics { stateDescription = if(expanded) "已展开" else "已收起" },
+            contentPadding = PaddingValues(vertical = 12.dp)) {
+            Icon(Icons.Outlined.VerifiedUser, null, Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("账号权限", Modifier.weight(1f))
+            Spacer(Modifier.width(4.dp))
+            FilterPanelExpandIcon(expanded)
+        }
+        FilterPanelVisibility(expanded) {
+            Surface(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium,
+                color = MaterialTheme.colorScheme.surface.copy(alpha = .8f)) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    PermissionStatus("社区发布", canPost)
+                    PermissionStatus("书籍编辑", canEdit)
+                }
             }
         }
     }

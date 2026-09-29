@@ -38,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
@@ -138,7 +139,7 @@ import kotlinx.coroutines.withContext
     }
     var preferences by remember { mutableStateOf(false) }; var toc by remember { mutableStateOf(false) }; var search by remember { mutableStateOf(false) }; var query by rememberSaveable { mutableStateOf("") }; var version by remember { mutableIntStateOf(0) }
     var speechSheet by remember { mutableStateOf(false) }
-    val preferenceState = rememberReaderPreferencesState()
+    val preferenceState = rememberReaderPreferencesState(preferences)
     var tocQuery by rememberSaveable(ref.key) { mutableStateOf(readerEntry?.savedStateHandle?.remove<String>("readerTocQuery").orEmpty()) }
     var tocReversed by rememberSaveable(ref.key) { mutableStateOf(readerEntry?.savedStateHandle?.remove<Boolean>("readerTocReversed") ?: false) }
     var tocLocated by rememberSaveable(ref.key) { mutableStateOf(readerEntry?.savedStateHandle?.remove<Boolean>("readerTocLocated") ?: false) }
@@ -147,6 +148,12 @@ import kotlinx.coroutines.withContext
         remember(ref, chapterId) { readerEntry?.savedStateHandle?.remove<Int>("readerTocIndex") ?: 0 },
         remember(ref, chapterId) { readerEntry?.savedStateHandle?.remove<Int>("readerTocOffset") ?: 0 }
     )
+    LaunchedEffect(toc, wide) {
+        if(toc && !wide) {
+            // 由目录在数据就绪后统一定位，避免这里的顶部重置覆盖当前章定位。
+            tocLocateRequest++
+        }
+    }
     var bookSearch by remember { mutableStateOf(false) }
     var refreshAnchor by remember(ref, chapterId) { mutableStateOf<ReadingRestoreAnchor?>(null) }
     val cacheGeneration by c.store.cacheGeneration.collectAsStateWithLifecycle()
@@ -243,6 +250,7 @@ import kotlinx.coroutines.withContext
             else local.positions[ref.key]?.takeIf { it.chapterId == chapterId }
         }
         val scroll = rememberLazyListState(position?.index ?: 0, position?.offset ?: 0); val scope = rememberCoroutineScope(); val focus = remember { FocusRequester() }
+        val eInkInteraction = LocalEInkMode.current
         val chapterPull = rememberReaderChapterOverscrollGesture()
         val chapterPullReturn = remember { Animatable(0f) }
         LaunchedEffect(chapterPull.offset, chapterPull.active, reducedMotion) {
@@ -250,7 +258,7 @@ import kotlinx.coroutines.withContext
             else chapterPullReturn.animateTo(chapterPull.offset, tween(AppMotion.Release))
         }
         // Touch and the motion preference take effect in this frame, even during an old return.
-        val chapterPullOffset = if(chapterPull.active || reducedMotion) chapterPull.offset else chapterPullReturn.value
+        val chapterPullOffset = if(eInkInteraction) 0f else if(chapterPull.active || reducedMotion) chapterPull.offset else chapterPullReturn.value
         val eInk = remember { EInkPageState(position) }
         var readerViewportWidth by remember { mutableIntStateOf(0) }
         val layoutGeneration = remember(paragraphs, settings.fontSize, settings.lineHeight, settings.paragraphSpacing, settings.width, settings.indent, settings.parallel, settings.weight, settings.staticPagination, readerViewportWidth) { Any() }
@@ -273,7 +281,24 @@ import kotlinx.coroutines.withContext
         val firstParagraph by remember(settings.staticPagination, eInk, scroll) { derivedStateOf {
             if(settings.staticPagination) eInk.paragraph else (scroll.firstVisibleItemIndex - 1).coerceAtLeast(0)
         } }
-        val percent by remember(scroll, paragraphs.size) { derivedStateOf { (((scroll.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0).toFloat() / (paragraphs.size + 1).coerceAtLeast(1)) * 100).toInt().coerceIn(0, 100) } }
+        val seekIndex = remember(paragraphs, settings.indent, settings.parallel) { ChapterSeekIndex(paragraphs, settings) }
+        var seekJob by remember { mutableStateOf<Job?>(null) }
+        var seekGeneration by remember { mutableIntStateOf(0) }
+        var seekTarget by remember { mutableStateOf<Float?>(null) }
+        var seekFocused by remember { mutableStateOf(false) }
+        val readingProgress by remember(scroll, eInk, settings.staticPagination, seekIndex, scrollLayouts) { derivedStateOf {
+            if(settings.staticPagination) eInk.pageIndex.toFloat() / (eInk.pages.size - 1).coerceAtLeast(1)
+            else if(!scroll.canScrollForward && scroll.canScrollBackward) 1f
+            else if(scroll.firstVisibleItemIndex == 0) 0f
+            else {
+                val index = (scroll.firstVisibleItemIndex - 1).coerceIn(0, paragraphs.lastIndex.coerceAtLeast(0))
+                val offset = paragraphs.getOrNull(index)?.let { scrollLayouts[it.index]?.textOffsetAt(scroll.firstVisibleItemScrollOffset) } ?: 0
+                seekIndex.fractionAt(index, offset)
+            }
+        } }
+        DisposableEffect(layoutGeneration) {
+            onDispose { seekGeneration++; seekJob?.cancel(); seekJob = null; seekTarget = null }
+        }
         val hasFallback = remember(paragraphs) { paragraphs.any { it.fallback } }
         var selected by remember { mutableStateOf<ReadingParagraph?>(null) }
         var note by remember { mutableStateOf<Note?>(null) }
@@ -324,7 +349,7 @@ import kotlinx.coroutines.withContext
         // 恢复定位或重新分页期间的中间画面不能覆盖真实进度。两种模式统一保存正文下标 + 1，
         // 因为滚动列表的第 0 项是章标题；字符偏移支持重排，像素偏移用于恢复原滚动布局。
         fun savePosition() {
-            if(leaving || !initialAnchorRestored || restoringAnchor || previousPagination != settings.staticPagination ||
+            if(leaving || seekTarget != null || !initialAnchorRestored || restoringAnchor || previousPagination != settings.staticPagination ||
                 (if(settings.staticPagination) !eInk.ready || eInk.pages.isEmpty() else scroll.layoutInfo.totalItemsCount == 0 || scroll.layoutInfo.visibleItemsInfo.isEmpty()) ||
                 c.store.state.value.historyPaused) return
             val visible = if(settings.staticPagination) Position(chapterId, eInk.paragraph + 1, 0, chapter.title, textOffset = eInk.textOffset)
@@ -374,12 +399,16 @@ import kotlinx.coroutines.withContext
         val chapterLoad = remember(ref, chapterId, scope) {
             ReaderChapterLoad(scope, { id -> c.prepareReaderChapter(ref, id) }, { target, loaded -> onChapterLoaded(target, loaded) }, { it.friendlyMessage() })
         }
+        var inlineChapterLoad by remember { mutableStateOf(false) }
         DisposableEffect(chapterLoad) { onDispose { chapterLoad.cancel() } }
-        fun openChapter(id: String, startAtEnd: Boolean = false, match: ReadingTextMatch? = null) {
+        fun openChapter(id: String, startAtEnd: Boolean = false, match: ReadingTextMatch? = null, inline: Boolean = false) {
             if(leaving || id == chapterId) return
+            seekGeneration++; seekJob?.cancel(); seekTarget = null
+            inlineChapterLoad = inline
             chapterLoad.request(ReaderChapterTarget(id, startAtEnd, match))
         }
         fun refreshChapter() {
+            seekGeneration++; seekJob?.cancel(); seekTarget = null
             chapterLoad.cancel()
             refreshAnchor = if(settings.staticPagination) ReadingRestoreAnchor(eInk.paragraph, eInk.sourceIndex, eInk.textOffset)
                 else ReadingRestoreAnchor(firstParagraph, paragraphs.getOrNull(firstParagraph)?.index, scrollTextOffset(paragraphs.getOrNull(firstParagraph)?.index))
@@ -408,6 +437,7 @@ import kotlinx.coroutines.withContext
         }
         fun page(direction: Int) {
             if(chapterLoad.loading || leaving) return
+            seekGeneration++; seekJob?.cancel(); seekTarget = null
             if(settings.staticPagination) {
                 if(!eInk.ready) return
                 if(direction > 0 && !eInk.canGoForward && eInk.pages.isNotEmpty()) { if(chapter.nextId != null) openChapter(chapter.nextId) else if(nextVolume != null) nextVolumePrompt = true }
@@ -420,6 +450,26 @@ import kotlinx.coroutines.withContext
             }
             val distance = scroll.layoutInfo.viewportSize.height.coerceAtLeast(1) * .85f
             scope.launch(Dispatchers.Main.immediate) { if(reducedMotion) scroll.scrollBy(distance * direction) else scroll.animateScrollBy(distance * direction, tween(AppMotion.Standard)) }
+        }
+        fun seekChapter(progress: Float) {
+            if(leaving || chapterLoad.loading || restoringAnchor || !initialAnchorRestored ||
+                (settings.staticPagination && !eInk.ready)) return
+            val generation = ++seekGeneration
+            seekJob?.cancel()
+            chapterPull.cancel()
+            searchGeneration++; searchJob?.cancel(); finding = false; activeMatch = null
+            restoredScrollAnchor = null
+            val target = progress.safeFraction()
+            seekTarget = target
+            seekJob = scope.launch {
+                try {
+                    if(settings.staticPagination) eInk.move(chapterSeekPage(target, eInk.pages.size) - eInk.pageIndex)
+                    else scroll.seekChapter(target, seekIndex, paragraphs, scrollLayouts, animate = !reducedMotion)
+                } finally {
+                    // A cancelled preview cannot overwrite a newer drag's pending target.
+                    if(seekGeneration == generation) { seekTarget = null; savePosition() }
+                }
+            }
         }
         suspend fun revealMatch(match: ReadingTextMatch) = withContext(Dispatchers.Main.immediate) {
             val paragraph = paragraphs.getOrNull(match.paragraph) ?: return@withContext
@@ -461,7 +511,7 @@ import kotlinx.coroutines.withContext
         }
         BackHandler(!preferences && (!toc || wide) && !search && !speechSheet && !bookSearch && !nextVolumePrompt && selected == null && note == null) {
             if(chapterLoad.loading || chapterLoad.error != null) chapterLoad.cancel()
-            else if(!leaving) { savePosition(); leaving = true; c.back() }
+            else if(!leaving) { seekGeneration++; seekJob?.cancel(); seekTarget = null; savePosition(); leaving = true; c.back() }
         }
         val lifecycleOwner = LocalLifecycleOwner.current
         // Local callable references compare by declaration, so rememberUpdatedState can
@@ -555,7 +605,7 @@ import kotlinx.coroutines.withContext
         }
         Box(Modifier.weight(1f).fillMaxHeight().background(background).focusRequester(focus).onPreviewKeyEvent { event ->
             val direction = readerKeyDirection(event.nativeKeyEvent.keyCode, settings.volumeKeys)
-            if(volumeKeysActive && direction != 0) {
+            if(volumeKeysActive && !seekFocused && direction != 0) {
                 if(event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) page(direction)
                 true
             } else false
@@ -578,8 +628,8 @@ import kotlinx.coroutines.withContext
                     readerViewportWidth = size.width
                 }
                 .clipToBounds()
-                .readerChapterOverscroll(scroll, chapterPull, chapter.nextId != null && !leaving && !chapterLoad.loading && !restoringAnchor && volumeKeysActive) {
-                    chapter.nextId?.let { openChapter(it) }
+                .readerChapterOverscroll(scroll, chapterPull, chapter.nextId != null && !leaving && !chapterLoad.loading && seekTarget == null && !restoringAnchor && volumeKeysActive) {
+                    chapter.nextId?.let { openChapter(it, inline = true) }
                 }
                 .graphicsLayer { translationY = -chapterPullOffset }
                 , contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(settings.resolvedParagraphSpacing.dp)) {
@@ -607,28 +657,17 @@ import kotlinx.coroutines.withContext
                 item("end", contentType = "footer") {
                     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                         HorizontalDivider(Modifier.padding(vertical = 24.dp)); Text("本章完", color = foreground.copy(alpha = .65f)); Spacer(Modifier.height(20.dp))
-                        if(chapter.nextId != null) Text("上拉加载下一章", Modifier.padding(bottom = 8.dp), style = MaterialTheme.typography.labelMedium, color = foreground.copy(alpha = .65f))
+                        if(chapter.nextId != null) ReaderChapterPullHint(chapterPull.progress, chapterPull.active, chapterPull.ready,
+                            inlineChapterLoad && chapterLoad.loading, foreground, Modifier.padding(bottom = 8.dp))
                         if(settings.showScrollPageButtons) {
-                            if(chapter.nextId != null) Button(onClick = { openChapter(chapter.nextId) }, modifier = Modifier.heightIn(min = 48.dp), enabled = !leaving && !chapterLoad.loading) { Text("阅读下一章") }
+                            if(chapter.nextId != null) Button(onClick = { openChapter(chapter.nextId, inline = true) }, modifier = Modifier.heightIn(min = 48.dp), enabled = !leaving && !chapterLoad.loading) { Text("阅读下一章") }
                             else if(nextVolume != null) { Text("下一分卷：${nextVolume.book.title}", color = foreground, modifier = Modifier.padding(bottom = 12.dp)); Button(onClick = { nextVolumePrompt = true }, modifier = Modifier.heightIn(min = 48.dp), enabled = !leaving) { Text("阅读下一分卷") } }
                             else OutlinedButton(onClick = { if(wide) { tocQuery = ""; tocLocateRequest++ } else toc = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text("返回目录") }
                         }
+                        // Footer clearance keeps this same sentence above the controls at the end.
+                        // It does not resize the reading viewport or repaginate the chapter.
+                        Spacer(Modifier.height(with(density) { (bottomOverlayHeight - readingInsets.getBottom(density)).coerceAtLeast(0).toDp() }))
                     }
-                }
-            }
-            if(!settings.staticPagination && chapter.nextId != null && chapterPullOffset > 0f) {
-                // Keep the feedback visible above the toolbar, without changing the reading viewport.
-                Column(Modifier.align(Alignment.BottomCenter).windowInsetsPadding(readingInsets)
-                    .padding(bottom = with(density) { (bottomOverlayHeight - readingInsets.getBottom(density)).coerceAtLeast(0).toDp() })
-                    .widthIn(max = settings.width.dp).fillMaxWidth()
-                    .height(with(density) { chapterPullOffset.toDp() }).clipToBounds().background(background)
-                    .testTag("reader-next-chapter-pull"), horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center) {
-                    Text(if(chapterPull.ready) "松手加载下一章" else "继续上拉加载下一章", color = foreground,
-                        style = MaterialTheme.typography.labelMedium)
-                    Spacer(Modifier.height(4.dp))
-                    LinearProgressIndicator(progress = { chapterPull.progress }, modifier = Modifier.width(160.dp).height(3.dp),
-                        color = foreground, trackColor = foreground.copy(alpha = .15f))
                 }
             }
             ReaderOverlayVisibility(menu, Modifier.align(Alignment.TopCenter), enter = if(reducedMotion) EnterTransition.None else fadeIn(tween(AppMotion.Quick)) + slideInVertically(tween(AppMotion.Standard)) { -it }, exit = if(reducedMotion) ExitTransition.None else fadeOut(tween(AppMotion.Exit)) + slideOutVertically(tween(AppMotion.Release)) { -it }) {
@@ -636,7 +675,7 @@ import kotlinx.coroutines.withContext
                 // This height is used only to place search results below the overlay.
                 Column(Modifier.onSizeChanged { topOverlayHeight = it.height }) {
                     TopAppBar(title = { Text(chapter.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium) }, navigationIcon = {
-                        IconButton(onClick = { if(!leaving) { chapterLoad.cancel(); savePosition(); leaving = true; c.back() } }) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "返回") }
+                        IconButton(onClick = { if(!leaving) { seekGeneration++; seekJob?.cancel(); seekTarget = null; chapterLoad.cancel(); savePosition(); leaving = true; c.back() } }) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "返回") }
                     }, actions = {
                         if(!ref.isLocal) IconButton(onClick = { refreshChapter() }, enabled = !leaving) { Icon(Icons.Outlined.Refresh, "刷新本章译文") }
                         IconButton(onClick = { if(search) focusManager.clearFocus(); search = !search }) { Icon(Icons.Outlined.Search, "搜索本章") }
@@ -676,6 +715,11 @@ import kotlinx.coroutines.withContext
                 ReaderOverlayVisibility(menu, Modifier, enter = if(reducedMotion) EnterTransition.None else fadeIn(tween(AppMotion.Quick)) + slideInVertically(tween(AppMotion.Standard)) { it }, exit = if(reducedMotion) ExitTransition.None else fadeOut(tween(AppMotion.Exit)) + slideOutVertically(tween(AppMotion.Release)) { it }) {
                     Surface(color = toolbarBackground, contentColor = foreground) {
                         Column(if(persistentControls) Modifier else Modifier.navigationBarsPadding()) {
+                            if(settings.showProgressBar) ReaderSeekBar(seekTarget ?: readingProgress,
+                                pageCount = if(settings.staticPagination && eInk.ready) eInk.pages.size else null,
+                                enabled = !leaving && !chapterLoad.loading && !restoringAnchor && initialAnchorRestored &&
+                                    (if(settings.staticPagination) eInk.ready && eInk.pages.size > 1 else paragraphs.isNotEmpty() && (scroll.canScrollForward || scroll.canScrollBackward)),
+                                foreground = foreground, onSeek = { seekChapter(it) }, modifier = Modifier.padding(top = 8.dp).onFocusChanged { seekFocused = it.hasFocus })
                             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                 IconButton(onClick = { chapter.prevId?.let { openChapter(it) } }, enabled = chapter.prevId != null && !leaving && !chapterLoad.loading) { Icon(Icons.Outlined.SkipPrevious, "上一章") }
                                 TextButton(onClick = { if(wide) { tocQuery = ""; tocLocateRequest++ } else toc = true }, colors = ButtonDefaults.textButtonColors(contentColor = foreground)) { Icon(Icons.Outlined.FormatListBulleted, null, Modifier.size(18.dp)); Text(if(wide) " 定位目录" else " 目录") }
@@ -689,7 +733,7 @@ import kotlinx.coroutines.withContext
                                 }
                                 IconButton(onClick = { if(chapter.nextId != null) openChapter(chapter.nextId) else nextVolumePrompt = true }, enabled = (chapter.nextId != null || nextVolume != null) && !leaving && !chapterLoad.loading) { Icon(Icons.Outlined.SkipNext, if(chapter.nextId == null && nextVolume != null) "下一分卷" else "下一章") }
                             }
-                            Text(if(settings.staticPagination) "${if(settings.eInkMode) "电子纸" else "分页阅读"} · 点击正文收起工具栏" else "${if(cached) "本地内容 · " else ""}$percent% · 点击正文收起工具栏", Modifier.align(Alignment.CenterHorizontally).padding(bottom = 8.dp), style = MaterialTheme.typography.labelSmall, color = foreground)
+                            Text(if(settings.staticPagination) "${if(settings.eInkMode) "电子纸" else "分页阅读"} · 点击正文收起工具栏" else "${if(cached) "本地内容 · " else ""}点击正文收起工具栏", Modifier.align(Alignment.CenterHorizontally).padding(bottom = 8.dp), style = MaterialTheme.typography.labelSmall, color = foreground)
                         }
                     }
                 }
@@ -706,7 +750,7 @@ import kotlinx.coroutines.withContext
                 }
                 if(persistentControls) Spacer(Modifier.fillMaxWidth().background(toolbarBackground).navigationBarsPadding())
             }
-            if(chapterLoad.loading || chapterLoad.error != null) Surface(
+            if((chapterLoad.loading && (!inlineChapterLoad || settings.staticPagination)) || chapterLoad.error != null) Surface(
                 Modifier.align(Alignment.BottomCenter).windowInsetsPadding(readingInsets)
                     .padding(bottom = with(density) { (bottomOverlayHeight - readingInsets.getBottom(density)).coerceAtLeast(0).toDp() })
                     .padding(12.dp).widthIn(max = 560.dp).fillMaxWidth().testTag("reader-chapter-load-status"),
@@ -794,8 +838,7 @@ import kotlinx.coroutines.withContext
         ReaderPreferences(settings, local.bookSettings.containsKey(ref.key), { perBook -> c.store.update { it.copy(bookSettings = if(perBook) it.bookSettings + (ref.key to settings) else it.bookSettings - ref.key) } },
             state = preferenceState, modifier = Modifier.fillMaxSize(), livePreview = true, headerActions = {
                 IconButton(onClick = { onExpandedChange(!expanded) }) {
-                    Icon(if(expanded) Icons.Outlined.ExpandMore else Icons.Outlined.ExpandLess,
-                        if(expanded) "收起面板" else "展开面板")
+                    ReaderSheetExpandIcon(expanded)
                 }
                 TextButton(onClick = { preferences = false }) { Text("关闭面板") }
             }) { value -> c.store.update { if(it.bookSettings.containsKey(ref.key)) it.copy(bookSettings = it.bookSettings + (ref.key to value)) else it.copy(reader = value) } }

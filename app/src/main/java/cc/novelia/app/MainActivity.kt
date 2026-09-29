@@ -46,6 +46,7 @@ import cc.novelia.app.ui.feedback.ObserveDownloadCelebrations
 import cc.novelia.app.ui.feedback.StickerSnackbarHost
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.navigation.switchRootTab
+import cc.novelia.app.ui.navigation.ObserveClipboardLinks
 import cc.novelia.app.ui.notes.NotesScreen
 import cc.novelia.app.ui.reader.ReaderScreen
 import cc.novelia.app.ui.settings.BlockedScreen
@@ -118,6 +119,7 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(Unit) { runCatching { app.session.refresh() } }
                 val entry by nav.currentBackStackEntryAsState(); val route = entry?.destination?.route
                 ObserveDownloadCelebrations(controller, route)
+                ObserveClipboardLinks(controller, externalLinkPending = link != null)
                 val roots = listOf("shelf", "discover?query={query}", "community", "profile")
                 val tabs = listOf(Triple("shelf", "书架", Icons.Outlined.CollectionsBookmark), Triple("discover", "发现", Icons.Outlined.Explore), Triple("community", "社区", Icons.Outlined.Forum), Triple("profile", "我的", Icons.Outlined.PersonOutline))
                 fun switchTab(target: String) { nav.switchRootTab(target) }
@@ -160,7 +162,7 @@ class MainActivity : ComponentActivity() {
                                 if(duration == 0 || staticReader(initialState) || staticReader(targetState)) return@NavHost ExitTransition.None
                                 fadeOut(tween(AppMotion.Exit)) + slideOutHorizontally(tween(duration, easing = FastOutSlowInEasing)) { travel }
                             }) {
-                                composable("shelf") { AdaptiveLibraryScreen(controller) { compactShelfDetail = it } }
+                                composable("shelf") { entry -> AdaptiveLibraryScreen(controller, entry.savedStateHandle) { compactShelfDetail = it } }
                                 composable("discover?query={query}") { DiscoverScreen(controller, it.arguments?.getString("query").orEmpty()) }
                                 composable("rank") { RankScreen(controller) }
                                 composable("wenku-new") { WenkuEditorScreen(controller) }

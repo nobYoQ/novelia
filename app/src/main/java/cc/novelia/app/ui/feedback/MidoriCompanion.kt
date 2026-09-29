@@ -1,16 +1,15 @@
 package cc.novelia.app.ui.feedback
 
 import androidx.annotation.DrawableRes
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.keyframes
-import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
@@ -25,6 +24,7 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -86,9 +86,12 @@ fun MidoriCompanion(modifier: Modifier = Modifier, visible: Boolean = true) {
     var taps by remember { mutableIntStateOf(0) }
     var reactionIndex by remember { mutableIntStateOf(-1) }
     var reacting by remember { mutableStateOf(false) }
-    val pop = remember { Animatable(1f) }
-    val hearts = remember { Animatable(1f) }
+    val squash = remember { Animatable(0f) }
+    val lift = remember { Animatable(0f) }
+    val tilt = remember { Animatable(0f) }
+    var bursts by remember { mutableStateOf(emptyList<Int>()) }
     val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
     val sticker = if(reacting && active) HappyReactions[reactionIndex] else MidoriSticker.Neutral
 
     // One replaceable reaction: rapid taps restart it without accumulating particles or jobs.
@@ -100,38 +103,44 @@ fun MidoriCompanion(modifier: Modifier = Modifier, visible: Boolean = true) {
         delay(1800)
         reacting = false
     }
-    LaunchedEffect(taps, active, reducedMotion, reacting) {
-        pop.snapTo(1f)
-        hearts.snapTo(1f)
-        if(!animate || !reacting) return@LaunchedEffect
-        launch {
-            pop.animateTo(.88f, tween(AppMotion.StickerPress))
-            pop.animateTo(1f, keyframes {
-                durationMillis = AppMotion.StickerReaction
-                .88f at 0 using FastOutSlowInEasing
-                1.12f at 140 using FastOutSlowInEasing
-                .97f at 260 using FastOutSlowInEasing
-                1f at AppMotion.StickerReaction
-            })
+    // 中断时从当前形变继续，连点不会先跳回单位缩放或突然归零摇摆。
+    LaunchedEffect(taps, animate, reacting, pressed) {
+        if(!animate) {
+            squash.snapTo(0f); lift.snapTo(0f); tilt.snapTo(0f)
+            bursts = emptyList()
+            return@LaunchedEffect
         }
-        hearts.snapTo(0f)
-        hearts.animateTo(1f, tween(AppMotion.StickerHearts))
+        when {
+            pressed -> {
+                launch { squash.animateTo(1f, spring(dampingRatio = .8f, stiffness = 650f)) }
+                launch { lift.animateTo(0f, spring(stiffness = 650f)) }
+                tilt.animateTo(-3f, spring(dampingRatio = .8f, stiffness = 500f))
+            }
+            reacting -> {
+                launch {
+                    squash.animateTo(.9f, tween(65))
+                    squash.animateTo(0f, spring(dampingRatio = .36f, stiffness = 450f))
+                }
+                launch {
+                    lift.animateTo(-10f, tween(130, easing = FastOutSlowInEasing))
+                    lift.animateTo(0f, spring(dampingRatio = .42f, stiffness = 360f))
+                }
+                tilt.animateTo(if(taps % 2 == 0) -7f else 7f, tween(130))
+                tilt.animateTo(0f, spring(dampingRatio = .4f, stiffness = 300f))
+            }
+            else -> {
+                launch { squash.animateTo(0f, spring(dampingRatio = .7f)) }
+                launch { lift.animateTo(0f, spring(dampingRatio = .7f)) }
+                tilt.animateTo(0f, spring(dampingRatio = .8f))
+                while(true) {
+                    tilt.animateTo(-3f, tween(800, easing = FastOutSlowInEasing))
+                    tilt.animateTo(3f, tween(1200, easing = FastOutSlowInEasing))
+                    tilt.animateTo(0f, tween(800, easing = FastOutSlowInEasing))
+                    delay(1600)
+                }
+            }
+        }
     }
-
-    // A gentle sway followed by a rest, only while the card is visible and the app is resumed.
-    val sway = if(animate && !reacting) {
-        rememberInfiniteTransition(label = "midori idle").animateFloat(
-            initialValue = 0f, targetValue = 0f,
-            animationSpec = infiniteRepeatable(keyframes {
-                durationMillis = AppMotion.StickerIdle
-                0f at 0 using FastOutSlowInEasing
-                -4f at 800 using FastOutSlowInEasing
-                4f at 2000 using FastOutSlowInEasing
-                0f at 2800
-                0f at AppMotion.StickerIdle
-            }), label = "midori sway",
-        )
-    } else null
 
     Box(
         modifier.size(128.dp)
@@ -147,32 +156,49 @@ fun MidoriCompanion(modifier: Modifier = Modifier, visible: Boolean = true) {
                 reactionIndex = (reactionIndex + 1) % HappyReactions.size
                 reacting = true
                 taps++
+                if(animate) bursts = (bursts + taps).takeLast(2)
             },
         contentAlignment = Alignment.Center,
     ) {
-        MidoriIllustration(sticker, Modifier.size(112.dp).graphicsLayer {
+        Crossfade(sticker, modifier = Modifier.size(112.dp).testTag("midori-artwork").graphicsLayer {
             // Read frames in the draw phase; the card and account data do not recompose.
             transformOrigin = TransformOrigin(.5f, .85f)
-            rotationZ = sway?.value ?: 0f
-            scaleX = if(animate) pop.value else 1f
-            scaleY = scaleX
-        })
-        if(reacting && active) {
-            repeat(3) { index ->
-                Icon(Icons.Filled.Favorite, null, tint = StickerHeartPink,
-                    modifier = Modifier.size(if(index == 1) 16.dp else 12.dp).graphicsLayer {
-                        val progress = if(reducedMotion) .65f else hearts.value
-                        val fraction = ((progress - index * .09f) / .82f).coerceIn(0f, 1f)
-                        val direction = index - 1f
-                        translationX = direction * (18f + fraction * 20f).dp.toPx()
-                        translationY = (-4f - fraction * (if(index == 1) 44f else 32f)).dp.toPx()
-                        rotationZ = direction * 14f
-                        alpha = if(reducedMotion) 1f else ((1f - fraction) * 3f).coerceIn(0f, 1f) * (fraction * 8f).coerceIn(0f, 1f)
-                        scaleX = if(reducedMotion) 1f else .6f + fraction * .5f
-                        scaleY = scaleX
-                    },
-                )
-            }
+            rotationZ = if(animate) tilt.value else 0f
+            translationY = if(animate) lift.value.dp.toPx() else 0f
+            scaleX = if(animate) 1f + squash.value * .09f else 1f
+            scaleY = if(animate) 1f - squash.value * .1f else 1f
+        }, animationSpec = tween(if(reducedMotion || !active) 0 else 120), label = "midori expression") {
+            MidoriIllustration(it, Modifier.fillMaxSize())
         }
+        if(active && reacting) {
+            if(reducedMotion) ReactionHearts(animated = false)
+            else bursts.forEach { burst -> key(burst) {
+                ReactionHearts(animated = true) { bursts = bursts - burst }
+            } }
+        }
+    }
+}
+
+/** 最多保留两组独立爱心，下一次点击不会把正在飘走的爱心拉回原位。 */
+@Composable private fun BoxScope.ReactionHearts(animated: Boolean, onFinished: () -> Unit = {}) {
+    val hearts = remember { Animatable(0f) }
+    val finished by rememberUpdatedState(onFinished)
+    LaunchedEffect(animated) {
+        if(animated) { hearts.animateTo(1f, tween(AppMotion.StickerHearts)); finished() }
+    }
+    repeat(3) { index ->
+        Icon(Icons.Filled.Favorite, null, tint = StickerHeartPink,
+            modifier = Modifier.size(if(index == 1) 16.dp else 12.dp).graphicsLayer {
+                val progress = if(!animated) .65f else hearts.value
+                val fraction = ((progress - index * .09f) / .82f).coerceIn(0f, 1f)
+                val direction = index - 1f
+                translationX = direction * (18f + fraction * 20f).dp.toPx()
+                translationY = (-4f - fraction * (if(index == 1) 44f else 32f)).dp.toPx()
+                rotationZ = direction * 14f
+                alpha = if(!animated) 1f else ((1f - fraction) * 3f).coerceIn(0f, 1f) * (fraction * 8f).coerceIn(0f, 1f)
+                scaleX = if(!animated) 1f else .6f + fraction * .5f
+                scaleY = scaleX
+            },
+        )
     }
 }

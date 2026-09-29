@@ -22,7 +22,7 @@ fun chapterNetworkAllowed(context: Context, wifiOnly: Boolean): Boolean {
 }
 
 /**
- * 手动离线缓存与自动预读共用的顺序批处理，整批捕获账号绑定和缓存代次。
+ * 手动离线缓存最多三章并行，自动预读沿 nextId 顺序执行；整批捕获账号绑定和缓存代次。
  * 每章检查取消与账号状态，新增网络读取前检查网络策略；清理缓存后不能继续用旧代次写入。
  * 手动缓存检查实际落盘结果，自动预读则尽力改善体验，失败由阅读页面处理而不替换当前正文。
  */
@@ -32,8 +32,7 @@ class ChapterOffline(private val store: LocalStore, private val api: NoveliaApi,
         require(ids.size <= 200)
         val binding = session.capture()
         val generation = store.cacheGeneration.value
-        val distinctIds = ids.distinct()
-        for((index, id) in distinctIds.withIndex()) {
+        cacheChapterBatch(ids, load = { id ->
             currentCoroutineContext().ensureActive()
             session.ensureCurrent(binding)
             if(store.cacheGeneration.value != generation) throw CancellationException("缓存已清理")
@@ -45,8 +44,7 @@ class ChapterOffline(private val store: LocalStore, private val api: NoveliaApi,
                 // A network policy change must not allow the next request in this batch.
                 check(store.cachedChapter(ref, id) != null) { "章节缓存未保存，请检查可用存储空间" }
             }
-            progress(index + 1, distinctIds.size)
-        }
+        }, progress = progress)
     }
 
     /** 沿 nextId 最多预读五章，使用 visited 防止服务端章节链接形成环；已有缓存可直接复用。 */

@@ -1,3 +1,4 @@
+@file:OptIn(androidx.compose.ui.test.ExperimentalTestApi::class)
 package cc.novelia.app.ui.reader
 
 import androidx.compose.ui.geometry.Offset
@@ -40,6 +41,117 @@ class ReaderToolbarOverlayTest {
     @Test fun eInkPagesKeepToolbarHiddenAcrossChapters() = verifyChapterNavigation(ReaderSettings().withEInkMode(true))
 
     @Test fun eInkScrollingKeepsToolbarHiddenAcrossChapters() = verifyChapterNavigation(ReaderSettings().withEInkMode(true).withPaginationMode("scroll"))
+
+    @Test fun scrollingSeekReachesLongParagraphsAndChapterBoundariesWithoutTurningChapters() = withReader(
+        ReaderSettings(paginationMode = "scroll", showPageButtons = false),
+        listOf(LocalChapter("first", "第一章 长段落", listOf("旅人沿着森林小路前行，寻找远处的小镇。".repeat(600))),
+            LocalChapter("second", "第二章", listOf("下一章正文。")))
+    ) { app, ref ->
+        val slider = compose.onNodeWithTag("reader-seek-bar").assertHeightIsAtLeast(48.dp)
+        slider.performSemanticsAction(SemanticsActions.SetProgress) { it(.63f) }
+        compose.waitUntil(10_000) { (app.store.state.value.positions[ref.key]?.textOffset ?: 0) > 6000 }
+        screenshot("reader-seek-scroll")
+        slider.performSemanticsAction(SemanticsActions.SetProgress) { it(.2f) }
+        compose.waitUntil(10_000) { app.store.state.value.positions[ref.key]?.textOffset?.let { it in 1000..4000 } == true }
+        val anchor = app.store.state.value.positions.getValue(ref.key)
+        compose.onNodeWithContentDescription("返回").performClick()
+        compose.onNodeWithText("工具栏覆盖测试").performClick()
+        compose.waitUntil(15_000) { compose.onAllNodesWithTag("reader-seek-bar").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitForIdle()
+        assertAnchorEquals(anchor, app.store.state.value.positions.getValue(ref.key))
+        compose.onNodeWithTag("reader-seek-bar").performSemanticsAction(SemanticsActions.SetProgress) { it(1f) }
+        compose.onNodeWithText("上拉加载下一章").assertIsDisplayed()
+        assertChapterUnchanged(app, ref, "first")
+        compose.onNodeWithTag("reader-seek-preview").assertTextEquals("100%")
+        compose.onNodeWithTag("reader-seek-bar").performSemanticsAction(SemanticsActions.SetProgress) { it(0f) }
+        compose.waitUntil(10_000) { app.store.state.value.positions[ref.key]?.let { it.index == 0 && it.offset == 0 } == true }
+    }
+
+    @Test fun pagedSeekPreviewsWhileDraggingAndReducedMotionKeepsTheSelectedPage() = withReader(
+        ReaderSettings(paginationMode = "auto", showPageButtons = false)
+    ) { app, ref ->
+        val total = pageNumbers().second
+        val slider = compose.onNodeWithTag("reader-seek-bar")
+        slider.performTouchInput { down(Offset(width * .2f, centerY)); moveTo(Offset(width * .75f, centerY), delayMillis = 300) }
+        compose.waitUntil(10_000) { pageNumbers().first > total / 2 }
+        slider.performTouchInput { up() }
+        screenshot("reader-seek-paged")
+        compose.runOnIdle { app.store.update { it.copy(reducedMotion = true) } }
+        val targetIndex = total / 3
+        slider.performSemanticsAction(SemanticsActions.SetProgress) { it(targetIndex.toFloat() / (total - 1)) }
+        val expected = targetIndex + 1
+        compose.waitUntil(10_000) { pageNumbers().first == expected }
+        assertChapterProgress(expected, total)
+        assertTrue(app.store.state.value.positions.getValue(ref.key).textOffset > 0 || app.store.state.value.positions.getValue(ref.key).index > 1)
+        slider.performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+            .performKeyInput { pressKey(androidx.compose.ui.input.key.Key.DirectionRight) }
+        assertEquals(expected + 1, pageNumbers().first)
+        slider.performSemanticsAction(SemanticsActions.SetProgress) { it(1f) }
+        assertChapterProgress(total, total)
+        assertChapterUnchanged(app, ref, "first")
+    }
+
+    @Test fun eInkSeekDefersPageRefreshUntilReleaseAndCancelledPreviewDoesNotNavigate() = withReader(
+        ReaderSettings().withEInkMode(true).copy(showPageButtons = false)
+    ) { _, _ ->
+        val slider = compose.onNodeWithTag("reader-seek-bar").assertHeightIsAtLeast(48.dp)
+        val total = pageNumbers().second
+        slider.performTouchInput { down(Offset(width * .2f, centerY)); moveTo(Offset(width * .8f, centerY), delayMillis = 300) }
+        compose.onNodeWithText("松手跳转").assertIsDisplayed()
+        assertEquals(1, pageNumbers().first)
+        screenshot("reader-seek-eink-preview")
+        slider.performTouchInput { cancel() }
+        assertEquals(1, pageNumbers().first)
+        compose.onNodeWithText("松手跳转").assertDoesNotExist()
+        slider.performTouchInput { down(Offset(width * .2f, centerY)); moveTo(Offset(width * .8f, centerY), delayMillis = 300); up() }
+        compose.waitUntil(10_000) { pageNumbers().first > total / 2 }
+        slider.performSemanticsAction(SemanticsActions.SetProgress) { it(0f) }
+        assertEquals(1, pageNumbers().first)
+    }
+
+    @Test fun eInkScrollingSeekCommitsOnReleaseAndRetainsAnExactLongParagraphAnchor() = withReader(
+        ReaderSettings().withEInkMode(true).withPaginationMode("scroll").copy(showPageButtons = false)
+    ) { app, ref ->
+        val before = app.store.state.value.positions.getValue(ref.key)
+        val slider = compose.onNodeWithTag("reader-seek-bar")
+        slider.performTouchInput { down(Offset(width * .1f, centerY)); moveTo(Offset(width * .65f, centerY), delayMillis = 300) }
+        assertAnchorEquals(before, app.store.state.value.positions.getValue(ref.key))
+        slider.performTouchInput { up() }
+        compose.waitUntil(10_000) { (app.store.state.value.positions[ref.key]?.index ?: 0) >= 3 }
+        assertTrue((app.store.state.value.positions[ref.key]?.textOffset ?: 0) > 0)
+        slider.performSemanticsAction(SemanticsActions.SetProgress) { it(0f) }
+        compose.waitUntil(10_000) { app.store.state.value.positions[ref.key]?.let { it.index == 0 && it.offset == 0 } == true }
+    }
+
+    @Test fun progressBarPreferencePersistsPerBookWithoutChangingThePageOrOtherControls() = withReader(
+        ReaderSettings().withEInkMode(true)
+    ) { app, ref ->
+        compose.onNodeWithText("下一页").performClick()
+        val before = snapshot("reader-page")
+        val counter = pageCounter()
+        compose.onNodeWithContentDescription("阅读设置").performClick()
+        compose.onNodeWithText("仅应用于这本书").performClick()
+        compose.onNodeWithText("翻页").performClick()
+        compose.onNodeWithText("阅读进度条").performScrollTo().performClick()
+        screenshot("reader-progress-preference")
+        compose.onNodeWithText("关闭面板").performClick()
+        compose.onNodeWithTag("reader-seek-bar").assertDoesNotExist()
+        compose.onNodeWithText("下一页").assertIsDisplayed()
+        assertEquals(counter, pageCounter())
+        assertEquals(before, snapshot("reader-page"))
+        runBlocking { app.store.flush() }
+        val saved = LocalStore(compose.activity).state.value
+        assertTrue(saved.reader.showProgressBar)
+        assertFalse(saved.bookSettings.getValue(ref.key).showProgressBar)
+        compose.onNodeWithContentDescription("阅读设置").performClick()
+        compose.onNodeWithText("仅应用于这本书").performScrollTo().performClick()
+        compose.onNodeWithText("关闭面板").performClick()
+        compose.onNodeWithTag("reader-seek-bar").assertIsDisplayed()
+        compose.runOnIdle { app.store.update { it.copy(reader = it.reader.copy(showProgressBar = false)) } }
+        compose.onNodeWithTag("reader-seek-bar").assertDoesNotExist()
+        assertEquals(counter, pageCounter())
+        assertEquals(before, snapshot("reader-page"))
+    }
 
     @Test fun chapterEndButtonsFollowTheGlobalPreference() = verifyChapterEndButtons(eInk = false, perBook = false)
 
@@ -163,6 +275,9 @@ class ReaderToolbarOverlayTest {
             moveBy(Offset(0f, -32f * density), delayMillis = 100)
         }
         compose.onNodeWithText("继续上拉加载下一章").assertExists()
+        compose.onAllNodesWithTag("reader-chapter-pull-hint").assertCountEquals(1)
+        compose.onNodeWithText("上拉加载下一章").assertDoesNotExist()
+        compose.onNodeWithTag("reader-next-chapter-pull").assertDoesNotExist()
         compose.runOnIdle { assertEquals("first", app.store.state.value.positions[ref.key]?.chapterId) }
         compose.onNodeWithTag("reader-scroll").performTouchInput { moveBy(Offset(0f, -48f * density), delayMillis = 150) }
         compose.onNodeWithText("松手加载下一章").assertIsDisplayed()
@@ -258,8 +373,10 @@ class ReaderToolbarOverlayTest {
         scrollToChapterEnd()
         val density = compose.activity.resources.displayMetrics.density
         val body = compose.onNodeWithTag("reader-scroll")
+        val restingTop = compose.onNodeWithText("本章完").fetchSemanticsNode().boundsInRoot.top
         body.performTouchInput { down(center); moveBy(Offset(0f, -80f * density), delayMillis = 200) }
         compose.onNodeWithText("松手加载下一章").assertIsDisplayed()
+        assertEquals("电子纸上拉反馈不连续移动正文", restingTop, compose.onNodeWithText("本章完").fetchSemanticsNode().boundsInRoot.top, .5f)
         compose.runOnIdle { assertEquals("first", app.store.state.value.positions[ref.key]?.chapterId) }
         body.performTouchInput { cancel() }
         compose.onNodeWithTag("reader-next-chapter-pull").assertDoesNotExist()

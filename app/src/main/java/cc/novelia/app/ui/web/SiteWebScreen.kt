@@ -61,8 +61,13 @@ import cc.novelia.app.ui.theme.appReducedMotion
             }
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 if (!request.isForMainFrame) return false
-                val url = MarkdownLinks.resolve(request.url.toString()) ?: return true
-                if (MarkdownLinks.isInternal(url) && MarkdownLinks.nativeRoute(url) == null) return false
+                val requested = request.url.toString()
+                val url = MarkdownLinks.resolve(requested) ?: return true
+                if (MarkdownLinks.isInternal(url) && MarkdownLinks.nativeRoute(url) == null) {
+                    if (url == requested) return false
+                    view.loadUrl(url)
+                    return true
+                }
                 c.openMarkdownLink(url)
                 return true
             }

@@ -2,24 +2,33 @@
 package cc.novelia.app.ui.reader
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material3.Icon
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import cc.novelia.app.ui.components.AppDialog
 import cc.novelia.app.ui.components.AppSheet
 import cc.novelia.app.ui.components.LocalInAppSheet
+import cc.novelia.app.ui.components.LocalPanelSession
 import cc.novelia.app.ui.theme.appReducedMotion
 
 @Composable internal fun ReaderSheet(onDismissRequest: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
@@ -29,24 +38,37 @@ import cc.novelia.app.ui.theme.appReducedMotion
 /** Keep most of the page visible while adjusting its appearance. Other reader sheets remain full size. */
 @Composable internal fun ReaderPreferencesSheet(onDismissRequest: () -> Unit,
     content: @Composable ColumnScope.(expanded: Boolean, onExpandedChange: (Boolean) -> Unit) -> Unit) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(false) }
+    val session = remember { Any() }
+    val reducedMotion = appReducedMotion()
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
-    val sheetHeight = if(expanded) screenHeight * .85f else screenHeight * .48f
-    if(!appReducedMotion()) ModalBottomSheet(onDismissRequest = onDismissRequest,
+    val targetHeight = if(expanded) screenHeight * .85f else screenHeight * .48f
+    val animatedHeight by animateDpAsState(targetHeight,
+        if(reducedMotion) snap() else spring(dampingRatio = .72f, stiffness = 280f), label = "reader panel height")
+    val sheetHeight = if(reducedMotion) targetHeight else animatedHeight
+    if(!reducedMotion) ModalBottomSheet(onDismissRequest = onDismissRequest,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         scrimColor = Color.Transparent, dragHandle = { BottomSheetDefaults.DragHandle() }) {
-        CompositionLocalProvider(LocalInAppSheet provides true) {
-            Column(Modifier.fillMaxWidth().height(sheetHeight)) { content(expanded) { expanded = it } }
+        CompositionLocalProvider(LocalInAppSheet provides true, LocalPanelSession provides session) {
+            Column(Modifier.fillMaxWidth().height(sheetHeight).testTag("reader-preferences-panel")) { content(expanded) { expanded = it } }
         }
     } else AppDialog(onDismissRequest, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         val window = (LocalView.current.parent as? DialogWindowProvider)?.window
         SideEffect { window?.setDimAmount(0f) }
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
-            Surface(Modifier.fillMaxWidth().height(sheetHeight), shape = MaterialTheme.shapes.extraLarge) {
-                CompositionLocalProvider(LocalInAppSheet provides true) {
+            Surface(Modifier.fillMaxWidth().height(sheetHeight).testTag("reader-preferences-panel"), shape = MaterialTheme.shapes.extraLarge) {
+                CompositionLocalProvider(LocalInAppSheet provides true, LocalPanelSession provides session) {
                     Column { content(expanded) { expanded = it } }
                 }
             }
         }
     }
+}
+
+@Composable internal fun ReaderSheetExpandIcon(expanded: Boolean) {
+    val reduced = appReducedMotion()
+    val rotation by animateFloatAsState(if(expanded) 180f else 0f,
+        if(reduced) snap() else spring(dampingRatio = .72f, stiffness = 280f), label = "reader panel arrow")
+    Icon(Icons.Outlined.ExpandLess, if(expanded) "收起面板" else "展开面板",
+        Modifier.graphicsLayer { rotationZ = if(reduced) if(expanded) 180f else 0f else rotation })
 }

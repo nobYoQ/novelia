@@ -128,7 +128,7 @@ class AdaptiveLibraryTest {
                         val c = remember(app, nav, scope) { AppController(app, nav, scope, SnackbarHostState()) }
                         Box(Modifier.requiredWidth(1000.dp).height(620.dp)) {
                             NavHost(nav, "shelf") {
-                                composable("shelf") { AdaptiveLibraryScreen(c) }
+                                composable("shelf") { entry -> AdaptiveLibraryScreen(c, entry.savedStateHandle) }
                                 composable("reader/{provider}/{id}/{chapter}") { entry ->
                                     Column {
                                         Text("阅读章节：${entry.arguments?.getString("chapter")}")

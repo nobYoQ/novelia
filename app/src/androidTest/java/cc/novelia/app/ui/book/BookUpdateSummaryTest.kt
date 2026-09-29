@@ -62,7 +62,7 @@ class BookUpdateSummaryTest {
             TocItem(chapterId = "a", titleJp = "风の中", titleZh = "风中的约定", createAt = 1704067200),
             TocItem(chapterId = "b", titleZh = "春日的来信", createAt = 1704153600)))
         compose.setContent { NoveliaTheme("light") { Surface(Modifier.requiredWidth(360.dp)) { BookUpdateSummary(detail) { opened = it } } } }
-        compose.onNodeWithText("最后更新时间").assertIsDisplayed()
+        compose.onNodeWithText("最近更新").assertIsDisplayed()
         compose.onNodeWithText(bookUpdateDateTime(1704153600)!!).assertIsDisplayed()
         compose.onNodeWithText("第 2 章 · 春日的来信").assertIsDisplayed().performClick()
         compose.runOnIdle { assertEquals("b", opened) }

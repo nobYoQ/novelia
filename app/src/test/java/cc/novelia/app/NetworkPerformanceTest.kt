@@ -5,11 +5,15 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import okhttp3.Call
 import okhttp3.EventListener
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.SocketPolicy
@@ -60,6 +64,43 @@ class NetworkPerformanceTest {
             server.enqueue(MockResponse().setBody("{}"))
             api.request("PUT", "novel", "{}")
             assertTrue(api.lastMutationAt > 0L)
+        }
+    }
+
+    @Test fun saturatedDownloadsDoNotBlockReadingAndQueuedDownloadsCanBeCancelled() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
+            server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
+            server.enqueue(MockResponse().setBody("正文"))
+            val client = OkHttpClient.Builder().build()
+            val api = NoveliaApi(null, server.url("/api/").toString(), client)
+            val downloads = api.downloadTransport
+            assertSame(downloads, api.downloadTransport)
+            assertSame(client.connectionPool, downloads.connectionPool)
+            val jobs = (1..2).map { index -> launch(Dispatchers.IO) {
+                api.withAuthenticatedResponse(Request.Builder().url(server.url("/file/$index")).build(), client = downloads) {
+                    it.body?.string()
+                }
+            } }
+            var queued: kotlinx.coroutines.Job? = null
+            try {
+                repeat(2) { assertNotNull(server.takeRequest(5, TimeUnit.SECONDS)) }
+                queued = launch(Dispatchers.IO) {
+                    api.withAuthenticatedResponse(Request.Builder().url(server.url("/file/queued")).build(), client = downloads) {
+                        it.body?.string()
+                    }
+                }
+                withTimeout(5_000) { while(downloads.dispatcher.queuedCallsCount() != 1) delay(10) }
+                queued.cancelAndJoin()
+                assertEquals("正文", withTimeout(5_000) { api.request("GET", "chapter") })
+                assertEquals("/api/chapter", server.takeRequest(5, TimeUnit.SECONDS)?.path)
+            } finally {
+                queued?.cancelAndJoin()
+                jobs.forEach { it.cancel() }
+                jobs.joinAll()
+            }
+            withTimeout(5_000) { while(downloads.dispatcher.runningCallsCount() != 0) delay(10) }
+            assertEquals(3, server.requestCount)
         }
     }
 }

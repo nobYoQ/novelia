@@ -36,7 +36,7 @@ import org.junit.Test
 class ReaderAdaptiveUiTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun firstDirectoryOpeningFindsTheCurrentChapterAndReopeningKeepsBrowsePosition() =
+    @Test fun directoryOpeningAndReopeningBothFindTheCurrentChapter() =
         withReader(390.dp, initialChapter = "extra-80") { _, _, _ ->
             compose.onNodeWithText("目录", substring = true).performClick()
             compose.waitUntil(10_000) { compose.onAllNodesWithTag("reader-toc-chapter-extra-80").fetchSemanticsNodes().isNotEmpty() }
@@ -45,8 +45,7 @@ class ReaderAdaptiveUiTest {
             compose.onNodeWithTag("reader-toc-chapter-first").assertIsDisplayed()
             compose.onNodeWithText("关闭面板").performClick()
             compose.onNodeWithText("目录", substring = true).performClick()
-            compose.onNodeWithTag("reader-toc-chapter-first").assertIsDisplayed()
-            compose.onNodeWithText("定位当前").performClick()
+            compose.waitUntil(10_000) { compose.onAllNodesWithTag("reader-toc-chapter-extra-80").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithTag("reader-toc-chapter-extra-80").assertIsDisplayed()
         }
 

@@ -87,7 +87,6 @@ internal fun AboutIdentity() {
             else Icon(Icons.Outlined.AutoStories, null, Modifier.fillMaxSize(), tint = MaterialTheme.colorScheme.primary)
         }
         Text("Novelia", style = MaterialTheme.typography.headlineLarge)
-        Text("让每个故事，随身同行。", color = MaterialTheme.colorScheme.onSurfaceVariant)
         Box(Modifier.heightIn(min = 48.dp).clickable(onClickLabel = "版本信息") {
             val now = SystemClock.uptimeMillis()
             taps = if(now - lastTap < 800) taps + 1 else 1

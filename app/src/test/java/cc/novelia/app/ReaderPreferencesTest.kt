@@ -9,6 +9,19 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ReaderPreferencesTest {
+    @Test fun progressBarDefaultsRemainCompatibleAndItsSwitchSurvivesBackupAndEInkChanges() {
+        assertTrue(appJson.decodeFromString<ReaderSettings>("{}").showProgressBar)
+        val hidden = ReaderSettings(showProgressBar = false)
+        assertFalse(hidden.withPaginationMode("auto").showProgressBar)
+        assertFalse(hidden.withEInkMode(true).withEInkMode(false).showProgressBar)
+        val backup = SettingsBackup(reader = hidden)
+        assertEquals(backup, appJson.decodeFromString<SettingsBackup>(appJson.encodeToString(backup)))
+        val library = LibraryState(reader = ReaderSettings(), bookSettings = mapOf("local/book" to hidden))
+        val restored = appJson.decodeFromString<LibraryState>(appJson.encodeToString(library))
+        assertTrue(restored.reader.showProgressBar)
+        assertFalse(restored.bookSettings.getValue("local/book").showProgressBar)
+    }
+
     @Test fun halfLineHeightSurvivesSettingsBackupsAndPerBookOverrides() {
         val settings = ReaderSettings(lineHeight = .5f)
         val library = LibraryState(reader = settings, bookSettings = mapOf("local/book" to settings))

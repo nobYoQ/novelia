@@ -20,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.catalog.BookLinks
@@ -151,17 +152,20 @@ import kotlinx.coroutines.withContext
             val continuing = localDestination != null || cloudDestination != null
             AdaptiveBookDetail(tab, { tab = it }, listOf("简介", "目录 $chapterCount", "讨论"), tabState) { panel ->
                     when(panel) {
-                        0 -> AppLazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
-                            item { BookHero(book, "${detail.type} · ${providers[ref.provider]}", favoriteState, { favorite = book }) }
+                        0 -> AppLazyColumn(contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            item { BookHero(book, "${detail.type} · ${providers[ref.provider]}", favoriteState, { favorite = book }, bottomPadding = 0.dp, showFavorite = false) }
+                            item { BookReadingActions(destination, continuing,
+                                favoriteState = favoriteState, onFavorite = { favorite = book },
+                                onRead = { start?.let { if(localDestination != null && cloudDestination != null && localDestination.chapterId != cloudDestination.chapterId) progressChoice = localDestination to cloudDestination else c.read(ref, it) } },
+                                onDownload = { download = book to null }) }
                             item { BookUpdateSummary(detail) { id -> c.read(ref, id) } }
-                            item { Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Button(onClick = { start?.let { if(localDestination != null && cloudDestination != null && localDestination.chapterId != cloudDestination.chapterId) progressChoice = localDestination to cloudDestination else c.read(ref, it) } }, enabled = start != null, modifier = Modifier.weight(1f)) { Icon(Icons.Outlined.MenuBook, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(if(continuing) "继续阅读 · 第 ${destination?.number} 章" else "开始阅读") }
-                                FilledTonalIconButton(onClick = { download = book to null }) { Icon(Icons.Outlined.Download, "下载小说") }
-                            } }
-                            destination?.let { target -> item { Text(target.title, Modifier.padding(horizontal = 24.dp, vertical = 8.dp), style = MaterialTheme.typography.bodyMedium) } }
                             if(!continuing && (state.positions.containsKey(ref.key) || detail.lastReadChapterId != null)) item { Text("原进度章节已不在目录中，将从第一章开始。", Modifier.padding(horizontal = 24.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                            item { Row(Modifier.fillMaxWidth().padding(20.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-                                Stat("章节", "${book.total}"); Stat("字数", detail.totalCharacters?.let { if(it > 10000) "${it / 10000}万" else "$it" } ?: "—"); Stat("浏览", "${detail.visited}")
+                            item { FlowRow(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("${book.total} 章", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                val characters = detail.totalCharacters?.let { if(it > 10000) "${it / 10000}万" else "$it" } ?: "—"
+                                Text("$characters 字", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("${detail.visited} 浏览", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             } }
                             item { MetaParagraph("简介", detail.introductionZh?.takeIf(String::isNotBlank) ?: detail.introductionJp) }
                             item { TagList(detail.keywords + detail.attentions, c) }
@@ -260,18 +264,18 @@ import kotlinx.coroutines.withContext
     }
 }
 @Composable private fun Stat(label: String, value: String) { Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(value, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary); Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
-@Composable private fun BookHero(book: BookCard, subtitle: String, favoriteState: BookFavoriteState, favorite: () -> Unit) {
+@Composable private fun BookHero(book: BookCard, subtitle: String, favoriteState: BookFavoriteState, favorite: () -> Unit, bottomPadding: Dp = 20.dp, showFavorite: Boolean = true) {
     val interaction = remember { MutableInteractionSource() }
     val savedColor by animateColorAsState(
         if(favoriteState.isSaved) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
         animationSpec = tween(if(appReducedMotion()) 0 else AppMotion.Standard), label = "favorite-container"
     )
-    Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = bottomPadding), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             BookCover(book, Modifier.width(94.dp).height(134.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) { Text(book.title, style = MaterialTheme.typography.titleLarge); Text(subtitle, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary); Text(book.originalTitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
-        OutlinedButton(
+        if(showFavorite) OutlinedButton(
             onClick = favorite,
             modifier = Modifier.fillMaxWidth().pressFeedback(interaction),
             interactionSource = interaction,

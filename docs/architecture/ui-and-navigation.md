@@ -135,6 +135,8 @@ Activity 接受 `intent.dataString`，没有时再取 `Intent.EXTRA_TEXT`。待�
 
 ## 5. 主题、电子纸与减少动效
 
+通用 `AppSheet` 为每次打开提供独立的 `LocalPanelSession`。默认 `AppScrollColumn` / `AppLazyColumn` 在面板内使用临时滚动状态，关闭后不跨会话恢复；页面列表仍保留原有状态恢复行为。需要在普通与静态面板之间切换时保留状态的表单（如阅读偏好），由外部显式持有状态，并以实际打开/关闭状态重置。
+
 [Theme.kt](../../app/src/main/java/cc/novelia/app/ui/theme/Theme.kt) 定义普通界面的浅色/深色配色和文字层级。阅读页的 `readerColors()` 单独支持跟随应用、纸张、浅色、深色和黑白主题，设置面板保持应用主题。不要以切换全局 `MaterialTheme` 的方式实现一页正文背景。
 
 [AppInteractionMode.kt](../../app/src/main/java/cc/novelia/app/ui/theme/AppInteractionMode.kt) 将下列条件合并为静态交互：电子纸、用户减少动效、系统动画关闭、Compose 动画缩放为零。通过 `LocalEInkMode`、`LocalReducedMotion`、ripple、indication 和 overscroll 的 CompositionLocal 传播。

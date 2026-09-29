@@ -21,15 +21,18 @@ fun resumeDestination(toc: List<TocItem>, localId: String?, cloudId: String?): R
     readingDestination(toc, localId) ?: readingDestination(toc, cloudId)
     ?: toc.firstOrNull { it.chapterId != null }?.let { ReadingDestination(requireNotNull(it.chapterId), 1, it.title) }
 
-/** Learn only from responses already fetched for the active account, without changing local anchors. */
+/** Public cover metadata also applies to guests; cloud reading remains bound to the active account. */
 fun LibraryState.withCloudReadingMetadata(cards: List<BookCard>, account: String?): LibraryState {
-    if(account == null) return this
-    val metadata = cards.filter { it.cloudReading?.account == account }.associateBy { it.ref.key }
+    val metadata = cards.associateBy { it.ref.key }
     if(metadata.isEmpty()) return this
     return copy(books = books.map { saved ->
         metadata[saved.book.ref.key]?.let { incoming -> saved.copy(book = saved.book.copy(
-            cloudReading = incoming.cloudReading?.withKnownChapter(saved.book.cloudReading),
-            updateAt = incoming.updateAt?.takeIf { it > 0 } ?: saved.book.updateAt,
+            cloudReading = incoming.cloudReading?.takeIf { account != null && it.account == account }
+                ?.withKnownChapter(saved.book.cloudReading) ?: saved.book.cloudReading,
+            updateAt = if(account != null && incoming.cloudReading?.account == account)
+                incoming.updateAt?.takeIf { it > 0 } ?: saved.book.updateAt else saved.book.updateAt,
+            novelType = incoming.novelType?.takeIf { it.isNotBlank() } ?: saved.book.novelType,
+            attentions = incoming.attentions ?: saved.book.attentions,
         )) } ?: saved
     })
 }

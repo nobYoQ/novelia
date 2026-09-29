@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -134,7 +135,7 @@ class FilterPositionTest {
         compose.runOnIdle { assertEquals(1, collapses) }
     }
 
-    @Test fun auxiliarySearchRestoresItsEditingPositionAfterStaticCollapse() {
+    @Test fun auxiliarySearchReturnsToTheTopAfterStaticCollapse() {
         var expanded by mutableStateOf(true)
         compose.setContent {
             MaterialTheme {
@@ -144,11 +145,33 @@ class FilterPositionTest {
             }
         }
         compose.onNodeWithTag("assistant-all").performScrollTo().assertIsDisplayed()
-        val before = compose.onNodeWithTag("assistant-all").getUnclippedBoundsInRoot().top
+        compose.onNodeWithTag("assistant-open-library").assertIsNotDisplayed()
         compose.onNodeWithTag("search-assistant-toggle").performClick()
         compose.onNodeWithTag("assistant-all").assertDoesNotExist()
         compose.onNodeWithTag("search-assistant-toggle").performClick()
-        compose.onNodeWithTag("assistant-all").assertIsDisplayed()
-        assertEquals(before, compose.onNodeWithTag("assistant-all").getUnclippedBoundsInRoot().top)
+        compose.onNodeWithTag("assistant-open-library").assertIsDisplayed()
+        compose.onNodeWithTag("assistant-all").assertIsNotDisplayed()
+    }
+
+    @Test fun cloudFilterReturnsToTheTopAfterAnimatedCollapse() = checkFilterReopen(false)
+    @Test fun cloudFilterReturnsToTheTopWithReducedMotion() = checkFilterReopen(true)
+
+    private fun checkFilterReopen(reduced: Boolean) {
+        var expanded by mutableStateOf(true)
+        compose.setContent {
+            MaterialTheme {
+                CompositionLocalProvider(LocalReducedMotion provides reduced) {
+                    CollapsibleCloudFilters(expanded, { expanded = !expanded }, "全部收藏", 180.dp) {
+                        repeat(20) { Text("条件 $it", Modifier.height(60.dp).testTag("condition-$it")) }
+                    }
+                }
+            }
+        }
+        compose.onNodeWithTag("condition-19").performScrollTo().assertIsDisplayed()
+        compose.runOnIdle { expanded = false }
+        compose.waitForIdle()
+        compose.runOnIdle { expanded = true }
+        compose.onNodeWithTag("condition-0").assertIsDisplayed()
+        compose.onNodeWithTag("condition-19").assertIsNotDisplayed()
     }
 }

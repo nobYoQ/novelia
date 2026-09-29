@@ -29,6 +29,8 @@ class CloudBookMetadataLoader(
                 cloudReading = reading,
                 updateAt = book.updateAt?.takeIf { it > 0 } ?: resolved.updateAt,
                 total = maxOf(book.total, resolved.total),
+                novelType = resolved.novelType,
+                attentions = resolved.attentions,
             )
         }
     }

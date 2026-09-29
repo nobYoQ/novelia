@@ -10,6 +10,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.ui.book.BookScreen
@@ -20,9 +21,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
 /** One shelf destination owns the selection, so reading and tab navigation can restore it. */
-@Composable fun AdaptiveLibraryScreen(c: AppController, onCompactDetailChanged: (Boolean) -> Unit = {}) {
+@Composable fun AdaptiveLibraryScreen(c: AppController, navigationState: SavedStateHandle, onCompactDetailChanged: (Boolean) -> Unit = {}) {
     var selectedKey by rememberSaveable { mutableStateOf<String?>(null) }
-    val navigationState = remember(c.nav) { c.nav.getBackStackEntry("shelf").savedStateHandle }
     val showShelfList by navigationState.getStateFlow(SHOW_SHELF_LIST, false).collectAsStateWithLifecycle()
     LaunchedEffect(showShelfList) {
         if (showShelfList) {

@@ -31,5 +31,7 @@ import kotlinx.serialization.Serializable
     val subtitle: String = "", val tags: List<String> = emptyList(), val translated: Int = 0, val total: Int = 0,
     val favored: String? = null, val updateAt: Long? = null,
     val translations: Map<String, Int> = emptyMap(), val volumeIds: List<String> = emptyList(),
-    val cloudReading: CloudReadingProgress? = null, val authors: List<String> = emptyList()
+    val cloudReading: CloudReadingProgress? = null, val authors: List<String> = emptyList(),
+    // null 表示旧书目尚未获取分类；空 attentions 则明确表示没有内容警告。
+    val novelType: String? = null, val attentions: List<String>? = null
 )

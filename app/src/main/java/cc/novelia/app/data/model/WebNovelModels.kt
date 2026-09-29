@@ -8,7 +8,7 @@ import kotlinx.serialization.Serializable
     val extra: String? = null, val favored: String? = null, val lastReadAt: Long? = null,
     val total: Int = 0, val jp: Int = 0, val youdao: Int = 0, val gpt: Int = 0, val sakura: Int = 0, val updateAt: Long? = null
 ) {
-    fun card() = BookCard(BookRef(providerId, novelId), titleZh?.takeIf { it.isNotBlank() } ?: titleJp, titleJp, subtitle = "$type · $total 章", tags = keywords, translated = maxOf(gpt, sakura, youdao), total = total, favored = favored, updateAt = updateAt, translations = mapOf("gpt" to gpt, "sakura" to sakura, "youdao" to youdao))
+    fun card() = BookCard(BookRef(providerId, novelId), titleZh?.takeIf { it.isNotBlank() } ?: titleJp, titleJp, subtitle = "$type · $total 章", tags = keywords, translated = maxOf(gpt, sakura, youdao), total = total, favored = favored, updateAt = updateAt, translations = mapOf("gpt" to gpt, "sakura" to sakura, "youdao" to youdao), novelType = type, attentions = attentions)
     // Favorites omit history, even for books the account has read. Absence is unknown, not unread.
     fun card(account: String?) = card().copy(cloudReading = account?.takeIf { (lastReadAt ?: 0) > 0 }
         ?.let { CloudReadingProgress(it, lastReadAt = lastReadAt) })
@@ -33,7 +33,7 @@ import kotlinx.serialization.Serializable
     val lastUpdatedChapter get() = toc.withIndex().filter { it.value.chapterId != null }
         .maxWithOrNull(compareBy<IndexedValue<TocItem>> { it.value.createAt?.takeIf { time -> time > 0 } ?: 0L }
             .thenBy { it.index })?.value
-    fun card(ref: BookRef) = BookCard(ref, title, titleJp, subtitle = authors.joinToString { it.name }, tags = keywords, total = toc.count { it.chapterId != null }, translated = maxOf(gpt, sakura, youdao), favored = favored, updateAt = lastUpdatedAt, translations = mapOf("gpt" to gpt, "sakura" to sakura, "youdao" to youdao), authors = authors.map { it.name })
+    fun card(ref: BookRef) = BookCard(ref, title, titleJp, subtitle = authors.joinToString { it.name }, tags = keywords, total = toc.count { it.chapterId != null }, translated = maxOf(gpt, sakura, youdao), favored = favored, updateAt = lastUpdatedAt, translations = mapOf("gpt" to gpt, "sakura" to sakura, "youdao" to youdao), authors = authors.map { it.name }, novelType = type, attentions = attentions)
     fun card(ref: BookRef, account: String?): BookCard {
         val chapters = toc.mapNotNull { it.chapterId }
         return card(ref).copy(cloudReading = account?.let {

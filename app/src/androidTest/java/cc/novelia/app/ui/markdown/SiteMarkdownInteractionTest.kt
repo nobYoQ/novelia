@@ -299,6 +299,48 @@ class SiteMarkdownInteractionTest {
         } finally { instrumentation.removeMonitor(monitor) }
     }
 
+    @Test fun legacyBareLinkWithMixedParenthesesOpensTheNativeBook() {
+        show("https://books.fishhawk.top/novel/hameln/270019(大受好评）",
+            documentUrl = "https://n.novelia.cc/forum/675590fcca0084226562ac36")
+        tap("https://books.fishhawk.top")
+        compose.onNodeWithText("站内书籍").assertIsDisplayed()
+        compose.runOnIdle {
+            assertEquals("hameln", nav.currentBackStackEntry?.arguments?.getString("provider"))
+            assertEquals("270019", nav.currentBackStackEntry?.arguments?.getString("id"))
+        }
+    }
+
+    @Test fun mixedHostTableLinksRespondToRealTaps() {
+        show("""
+            | 书名 | 推荐指数 | 书评 |
+            | :- | :- | :- |
+            | [旧小说](https://books.fishhawk.top/novel/syosetu/n2544jm) | 5 | 说明 |
+            | [旧短篇](https://books.fishhawk.top/novel/pixiv/s20401120) | 4 | 说明 |
+            | [新小说](https://n.novelia.cc/novel/kakuyomu/16818792440198448037) | 3 | 说明 |
+        """.trimIndent(), documentUrl = "https://n.novelia.cc/forum/67eead898f8151329eaeebf9")
+        listOf(Triple("旧小说", "syosetu", "n2544jm"), Triple("旧短篇", "pixiv", "s20401120"),
+            Triple("新小说", "kakuyomu", "16818792440198448037")).forEach { (label, provider, id) ->
+            var offset = Offset.Zero
+            compose.runOnIdle {
+                val view = textView()
+                val text = view.text as Spanned
+                val row = text.getSpans(0, text.length, io.noties.markwon.ext.tables.TableRowSpan::class.java)
+                    .single { it.findLayoutForHorizontalOffset(0)?.text?.toString() == label }
+                val line = view.layout.getLineForOffset(text.getSpanStart(row))
+                offset = Offset(view.totalPaddingLeft + 16 * view.resources.displayMetrics.density,
+                    view.totalPaddingTop + (view.layout.getLineTop(line) + view.layout.getLineBottom(line)) / 2f)
+            }
+            compose.onNodeWithTag("site-markdown").performTouchInput { click(offset) }
+            compose.onNodeWithText("站内书籍").assertIsDisplayed()
+            compose.runOnIdle {
+                assertEquals(provider, nav.currentBackStackEntry?.arguments?.getString("provider"))
+                assertEquals(id, nav.currentBackStackEntry?.arguments?.getString("id"))
+                nav.popBackStack()
+            }
+            compose.waitForIdle()
+        }
+    }
+
     @Test fun markdownImageLongPressOpensTheIllustrationViewerAndCanZoom() {
         val context = instrumentation.targetContext
         val file = File.createTempFile("markdown-image-", ".png", context.cacheDir)

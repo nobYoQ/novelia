@@ -2,6 +2,7 @@ package cc.novelia.app.data.markdown
 
 import cc.novelia.app.data.catalog.BookLinks
 import cc.novelia.app.data.catalog.SiteLink
+import cc.novelia.app.data.catalog.SiteUrls
 import java.net.URI
 
 /** Markdown destinations may be root-relative or protocol-relative on the original site. */
@@ -10,13 +11,14 @@ object MarkdownLinks {
     fun resolve(destination: String, documentUrl: String? = null): String? = runCatching {
         val input = destination.trim()
         if (input.isEmpty()) return null
-        val origin = documentUrl?.let { URI(it) } ?: base
+        val origin = documentUrl?.let { SiteUrls.normalize(URI(it)) } ?: base
         val uri = origin.resolve(if (input.startsWith("www.", true)) "https://$input" else input).normalize()
         if (uri.scheme?.lowercase() !in setOf("http", "https") || uri.host.isNullOrBlank() || uri.userInfo != null) return null
-        uri.toASCIIString().replaceBefore(':', uri.scheme.lowercase())
+        val normalized = SiteUrls.normalize(uri)
+        normalized.toASCIIString().replaceBefore(':', normalized.scheme.lowercase())
     }.getOrNull()
 
-    fun isInternal(url: String): Boolean = runCatching { URI(url).host.equals(base.host, true) }.getOrDefault(false)
+    fun isInternal(url: String): Boolean = runCatching { SiteUrls.isInternal(URI(url)) }.getOrDefault(false)
 
     /** null means another document; an empty fragment denotes the top of this document. */
     fun localFragment(destination: String, documentUrl: String?): String? = runCatching {
@@ -40,17 +42,18 @@ object MarkdownLinks {
 
     /** Screens with a native equivalent. Other site pages stay in an in-app WebView. */
     fun nativeRoute(url: String): String? {
+        val resolved = resolve(url) ?: return null
         // MarkdownText handles headings within its current document before routing here.
         // Other documents' heading/comment anchors keep their full URL in WebView.
-        if (isInternal(url) && !URI(url).rawFragment.isNullOrEmpty()) return null
-        when (val link = BookLinks.parse(url)) {
+        if (isInternal(resolved) && !URI(resolved).rawFragment.isNullOrEmpty()) return null
+        when (val link = BookLinks.parse(resolved)) {
             is SiteLink.Book -> return if (link.chapterId == null) "book/${link.ref.provider}/${link.ref.id}"
                 else "reader/${link.ref.provider}/${link.ref.id}/${link.chapterId}"
             is SiteLink.Post -> return "article/${link.id}"
             null -> Unit
         }
-        if (!isInternal(url)) return null
-        val uri = URI(url)
+        if (!isInternal(resolved)) return null
+        val uri = URI(resolved)
         // Preserve filters and pagination on site list pages through the WebView.
         if (uri.rawQuery != null) return null
         return when (uri.path.trimEnd('/')) {
