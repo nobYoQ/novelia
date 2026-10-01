@@ -13,6 +13,6 @@
 - [ ] 开启 Release immutability（如可用），以后先准备完整草稿再发布。
 - [ ] 公开前核对素材授权、源码和历史内容；公开仓库可能被永久复制或 Fork。
 
-贴纸授权及 CI 是明确保留的待办。发布证书由维护者在本机安全创建、保管和备份；不在仓库中生成或存储。
+素材授权依据应记录在 NOTICE.md 及对应许可文件中，逐项核对实际状态。当前未配置 CI，检查仍需人工执行和记录。发布证书由维护者在本机安全创建、保管和备份；不在仓库中生成或存储。
 
 参考：[GitHub 仓库最佳实践](https://docs.github.com/en/repositories/creating-and-managing-repositories/best-practices-for-repositories)。

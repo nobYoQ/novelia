@@ -6,7 +6,7 @@
 
 ## 首次发布前
 
-- [ ] 确认贴纸的公开分发授权或完成替换。它们不适用本项目 GPL-3.0；此事项仍待处理。
+- [ ] 核对贴纸及相关形象的来源和公开分发授权，将适用的授权依据记录到 [NOTICE.md](NOTICE.md)；第三方素材许可不由项目代码的 GPL 授权替代。
 - [ ] 核对准备公开的源码和 Git 历史；旧历史中存在 `releases/Novelia-0.1.0-debug.apk`。忽略规则不会清除历史。普通旧安装包可保留历史；若因凭据或素材授权必须清理，应先备份并另行制定历史重写方案，不能直接强推。
 - [ ] 按 [仓库设置清单](.github/REPOSITORY_SETUP.md) 核对 GitHub 权限与安全设置。
 - [ ] 使用 Android Studio 的 Generate Signed App Bundle or APK 创建或选定长期发布证书。密钥库放在仓库外，并做好独立加密备份。
@@ -18,8 +18,8 @@
 ## 版本与源码
 
 1. 修改根目录 `version.properties`：`versionName` 使用 `X.Y.Z` 或 `X.Y.Z-beta.1`；`versionCode` 每次公开发包都递增，所有 ABI 使用同一版本码。
-2. 当前版本是 `0.1.9 / 12`，上一版本为 `0.1.8 / 11`。后续发行继续递增版本码，不要静默替换已分发的旧版本附件；本地完成打包不代表已在 GitHub 发布。
-3. 把 `CHANGELOG.md` 中待发布内容归入新版本并填写真实发布日期，更新 README 展示版本。
+2. 当前源码配置为 `0.2.2 / 14`，实际值以 `version.properties` 为准。后续发行继续递增版本码，不要静默替换已分发的旧版本附件；本地完成打包不代表已在 GitHub 发布。
+3. 汇总 PR 与功能文档中的变化、迁移影响和验证范围，准备 GitHub Release 正文并更新 README 展示版本。仓库当前不维护独立的 `CHANGELOG.md`。
 4. 运行检查、审查改动并提交，确认工作区干净。为该提交创建 `vX.Y.Z` 标签（含预发布后缀时必须一致），再切换到该提交构建。
 5. 发行附件、标签和公开源码必须对应同一个提交。发布后不移动标签，不覆盖已分发的同名包。
 
@@ -40,6 +40,8 @@
 
 ## 准备附件
 
+当前 `scripts/prepare-release.ps1` 仍要求复制根目录 `CHANGELOG.md`，而仓库已经删除该文件，会在附件收集时失败。正式使用下列命令前，需先同步脚本的附件清单与当前发行说明方式；本页记录的是这一现存限制，不代表正式附件流程已验证可用。日常本地打包入口不依赖该文件。
+
 Windows PowerShell 7 示例；把工具路径和公开证书指纹换成你的实际值，先按上文配置签名环境：
 
 ```powershell
@@ -59,10 +61,10 @@ $certificateFingerprint = '<发布证书的 SHA-256 指纹>'
 | `OPEN_SOURCE_NOTICES.txt` | 与 APK 内相同的完整许可和依赖声明 |
 | `SHA256SUMS-ABI.txt` | 附件的 SHA-256 校验值 |
 | `Novelia-X.Y.Z-ABI-metadata.json` | 提交、版本、ABI 与证书公开指纹 |
-| `CHANGELOG.md` | 更新记录 |
+| GitHub Release 正文 | 版本变化、迁移说明和验证范围，填写在发布页面中 |
 | `Novelia-X.Y.Z-ABI-mapping.zip` | R8 混淆映射；维护者长期归档，可选择公开 |
 
-同时发布多个 ABI 时，分别生成附件；脚本为 APK、校验文件、元数据和映射添加 ABI 名称以避免覆盖。相同源码 ZIP、更新记录和许可证只需上传一份；保留文件原名以便校验。GitHub 自动生成的 Source code 档案也应保留。
+同时发布多个 ABI 时，分别生成附件；脚本为 APK、校验文件、元数据和映射添加 ABI 名称以避免覆盖。相同源码 ZIP 和许可证只需上传一份，发行说明在 Release 正文中统一填写；保留文件原名以便校验。GitHub 自动生成的 Source code 档案也应保留。
 
 Linux / macOS 可使用 `sh ./gradlew :app:testReleaseUnitTest :app:lintRelease :app:assembleRelease -PreleaseSigning=true -PtargetAbi=arm64-v8a` 构建，然后按相同要求验证签名、对应源码和附件校验值。上面的 PowerShell 附件工具以 Windows 为验证环境。
 

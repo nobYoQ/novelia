@@ -40,10 +40,10 @@ sh ./gradlew --no-daemon :app:assembleDebug :app:testDebugUnitTest :app:lintDebu
 
 ## 提交 PR
 
-说明问题、最终行为、验证结果以及未验证的范围，关联 Issue。用户可见变更写入 [CHANGELOG.md](CHANGELOG.md) 的“未发布”部分；普通贡献不自行升版，由维护者发布时统一修改 `version.properties`。
+说明问题、最终行为、验证结果以及未验证的范围，关联 Issue。用户可见变更写入 PR 描述并同步相关功能文档，由维护者发行时汇总到 GitHub Release 说明；仓库当前不维护独立的 `CHANGELOG.md`。普通贡献不自行升版，由维护者发布时统一修改 `version.properties`。
 
 依赖更新应说明用途、版本与许可，复核生成的开源声明。不要提交 APK、构建缓存、密钥、账号会话、真实用户备份或未经授权的小说/图片。
 
-贡献的原创代码和文档按本项目 GPL-3.0-only 许可提供；只提交你有权提供的内容。外部代码注明来源和许可证，保留版权声明。贴纸不在项目 GPL 授权范围内，见 [NOTICE.md](NOTICE.md)。无需转让版权。
+贡献的原创代码和文档按本项目 GPL-3.0-only 许可提供；只提交你有权提供的内容。外部代码和素材注明来源、适用许可证或授权依据，保留版权声明，记录在 [NOTICE.md](NOTICE.md) 与对应许可文件中；第三方素材许可不能由项目代码的 GPL 授权替代。无需转让版权。
 
 交流遵循 [行为准则](CODE_OF_CONDUCT.md)，安全漏洞按 [安全政策](SECURITY.md) 私密报告。

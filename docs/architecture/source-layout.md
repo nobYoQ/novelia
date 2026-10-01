@@ -36,7 +36,7 @@ app/src/main/java/cc/novelia/app/
 | `tools/` | EPUB 转换与压缩、文本换行整理、片假名统计的界面 | [ToolsScreen.kt](../../app/src/main/java/cc/novelia/app/ui/tools/ToolsScreen.kt) |
 | `about/` | 帮助、版本、项目链接和离线许可证 | [AboutScreen.kt](../../app/src/main/java/cc/novelia/app/ui/about/AboutScreen.kt)、[OpenSourceLicensesScreen.kt](../../app/src/main/java/cc/novelia/app/ui/about/OpenSourceLicensesScreen.kt) |
 | `web/` | 原站网页兜底和 WebView 分页交互 | [SiteWebScreen.kt](../../app/src/main/java/cc/novelia/app/ui/web/SiteWebScreen.kt)、[PagedSiteWebView.kt](../../app/src/main/java/cc/novelia/app/ui/web/PagedSiteWebView.kt) |
-| `navigation/` | 共享控制器、导航动作与登录后继续 | [AppController.kt](../../app/src/main/java/cc/novelia/app/ui/navigation/AppController.kt)、[LoginContinuation.kt](../../app/src/main/java/cc/novelia/app/ui/navigation/LoginContinuation.kt) |
+| `navigation/` | 共享控制器、根标签切换、导航动作与登录后继续 | [AppController.kt](../../app/src/main/java/cc/novelia/app/ui/navigation/AppController.kt)、[RootNavigation.kt](../../app/src/main/java/cc/novelia/app/ui/navigation/RootNavigation.kt)、[LoginContinuation.kt](../../app/src/main/java/cc/novelia/app/ui/navigation/LoginContinuation.kt) |
 | `components/` | 多个功能复用的页面容器、加载态、书籍行、弹窗、分页与文档访问桥接 | [Screen.kt](../../app/src/main/java/cc/novelia/app/ui/components/Screen.kt)、[AsyncContent.kt](../../app/src/main/java/cc/novelia/app/ui/components/AsyncContent.kt)、[BookComponents.kt](../../app/src/main/java/cc/novelia/app/ui/components/BookComponents.kt)、[DocumentAccess.kt](../../app/src/main/java/cc/novelia/app/ui/components/DocumentAccess.kt) |
 | `theme/` | 应用与阅读配色、动效、电子纸及减少动效的交互环境 | [Theme.kt](../../app/src/main/java/cc/novelia/app/ui/theme/Theme.kt)、[Motion.kt](../../app/src/main/java/cc/novelia/app/ui/theme/Motion.kt)、[AppInteractionMode.kt](../../app/src/main/java/cc/novelia/app/ui/theme/AppInteractionMode.kt)、[InteractionLocals.kt](../../app/src/main/java/cc/novelia/app/ui/theme/InteractionLocals.kt) |
 | `markdown/` | Markdown 编辑、渲染、解析扩展、锚点与草稿生命周期 | [MarkdownText.kt](../../app/src/main/java/cc/novelia/app/ui/markdown/MarkdownText.kt)、[MarkdownEditor.kt](../../app/src/main/java/cc/novelia/app/ui/markdown/MarkdownEditor.kt)、[EditorDraft.kt](../../app/src/main/java/cc/novelia/app/ui/markdown/EditorDraft.kt) |
@@ -66,30 +66,33 @@ app/src/main/java/cc/novelia/app/
 
 文件下载的独立网络调度配置位于 `network/DownloadTransport.kt`，由应用级 `NoveliaApi` 复用，任务与文件生命周期仍由 `files/DownloadWorker.kt` 管理。手动缓存章节的有界并行逻辑位于 `chapters/ChapterBatch.kt`，账号、网络策略与落盘检查由 `ChapterOffline.kt` 负责。
 
+书架更新状态变换集中在 [BookUpdateState.kt](../../app/src/main/java/cc/novelia/app/data/updates/BookUpdateState.kt)，详情刷新、后台检查与收藏移动共用基线；已到达章节的更新确认在 [ReadingProgress.kt](../../app/src/main/java/cc/novelia/app/data/library/ReadingProgress.kt)。显式云端收藏创建本地副本的规则在 [CloudFavoriteLocalCopy.kt](../../app/src/main/java/cc/novelia/app/data/library/CloudFavoriteLocalCopy.kt)，与补齐阅读元数据分开。站内新旧域名及端口规则由 [SiteUrls.kt](../../app/src/main/java/cc/novelia/app/data/catalog/SiteUrls.kt) 共用。
+
 `data/` 根目录保留 [CloudSyncWorker.kt](../../app/src/main/java/cc/novelia/app/data/CloudSyncWorker.kt) 和 [UpdateWorker.kt](../../app/src/main/java/cc/novelia/app/data/UpdateWorker.kt) 两个带 `@Keep` 的兼容入口，仅用于升级后继续构造旧版已排队的任务。WorkManager 会把 Worker 类全名保存到内部数据库，旧任务仍可能使用旧名字；因此不能像普通 helper 一样直接删除或改名。实际逻辑位于 `sync/` 与 `updates/`，新开发应从职责包中的实现入手。此次源码分包没有改变原有持久化数据格式或字段。
 
 ## 测试目录地图
 
 JVM 测试位于 `app/src/test/java/cc/novelia/app/`，其中原 `data/` 测试按生产职责分别放入 `auth/`、`backup/`、`cache/`、`documents/`、`network/`、`storage/`、`sync/`、`updates/`。`data/compat/` 下的 [LegacyWorkerCompatibilityTest.kt](../../app/src/test/java/cc/novelia/app/data/compat/LegacyWorkerCompatibilityTest.kt) 验证两个旧 Worker 的反射类名与构造签名，防止破坏升级任务恢复。其余既有 JVM 测试沿用原位置。
 
-设备测试位于 `app/src/androidTest/java/cc/novelia/app/`，按以下 15 类存放。表中的类名均为示例；运行命令使用完整包名，见 [测试指南](../quality/testing.md)。
+设备测试位于 `app/src/androidTest/java/cc/novelia/app/`，按下表中的界面、数据与验证职责存放。表中的类名均为示例；运行命令使用完整包名，见 [测试指南](../quality/testing.md)。
 
 | 目录 | 测试内容与示例 |
 | --- | --- |
 | `ui/account/` | 个人页与账号入口：`ProfileStickerTest` |
 | `ui/community/` | 文章编辑页面：`ArticleEditorLayoutTest` |
-| `ui/components/` | 共享加载态、分页与静态弹层：`AsyncContentTest`、`AppPagingTest`、`StaticOverlayTest` |
+| `ui/components/` | 共享加载态、页码跳转、分页与静态弹层：`AsyncContentTest`、`PageControlsTest`、`AppPagingTest`、`StaticOverlayTest` |
 | `ui/discover/` | 筛选与辅助搜索：`FilterPositionTest`、`SearchAssistantTest` |
 | `ui/downloads/` | 下载表单布局：`DownloadSheetLayoutTest` |
 | `ui/feedback/` | 贴纸与反馈：`MidoriCompanionTest`、`StickerFallbackTest`、`StickerFeaturesTest` |
 | `ui/markdown/` | Markdown 编辑、渲染与草稿生命周期：`EditorDraftLifecycleTest`、`SiteMarkdownInteractionTest` |
-| `ui/reader/` | 阅读流程、排版、电子纸与插图：`AppFlowTest`、`ReaderAdaptiveUiTest`、`EInkReaderFlowTest` |
+| `ui/navigation/` | 根标签切换与返回书架：`RootNavigationTest` |
+| `ui/reader/` | 阅读流程、完成与更新确认、排版、电子纸与插图：`AppFlowTest`、`ReaderCompletionFlowTest`、`ReaderAdaptiveUiTest`、`EInkReaderFlowTest` |
 | `ui/shelf/` | 书架适配、同步提示与分卷交互：`AdaptiveLibraryTest`、`BookSyncUiTest`、`WenkuVolumeFlowTest` |
 | `ui/theme/` | 主题动效：`MotionTest` |
 | `ui/tools/` | 文件工具升级行为：`FileToolsUpgradeTest` |
 | `ui/web/` | 网页导航与原站链接：`SiteWebNavigationTest`，部分用例需 `liveSite=true` |
 | `data/backup/` | Android 文件环境下的备份恢复：`LibraryBackupFlowTest` |
-| `integration/` | 需 `live=true` 的公开站点联调：`AuthPageTest`、`DownloadLiveTest`、`LiveReadOnlyTest` |
+| `integration/` | 需 `live=true` 的公开站点联调：`AuthPageTest`、`DownloadLiveTest`、`LiveReadOnlyTest`、`ForumLinksLiveTest` |
 | `performance/` | 离线数据与排版测量：`PerformanceScenarioTest` |
 
 测试 package 与目录对应，例如 `cc.novelia.app.ui.reader.AppFlowTest`；它与生产页面同包但处于不同 source set。目录分类不改变测试开关、数据隔离要求或执行副作用，不能仅凭目录名判断测试是否会访问网络。

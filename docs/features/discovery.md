@@ -80,7 +80,9 @@ flowchart LR
 
 ## 过滤、空结果和界面适配
 
-[BookVisibility](../../app/src/main/java/cc/novelia/app/ui/discover/BookVisibility.kt)按书籍键和标签集合隐藏作品。当前页远端有结果、但全部被本地屏蔽后，仍可能出现空列表；不要把它误报为原站无内容。页面应保留放宽筛选、清空查询、重试或检查屏蔽条件的可达入口。
+[BookVisibility](../../app/src/main/java/cc/novelia/app/ui/discover/BookVisibility.kt)按书籍键、标签和作者集合隐藏作品，应用于发现与排行榜。作者名按去掉作品作者名首尾空白后的完整名称匹配，忽略大小写；多作者作品任意一位命中即隐藏，不做子串匹配。屏蔽管理页可手动添加/取消，网络小说与文库详情也提供作者屏蔽入口；它不会修改远端作品、删除本地书目或建立服务端屏蔽关系。
+
+仅在作者屏蔽集合非空且列表摘要缺少作者时，`enrichAuthors` 才通过详情接口补齐作者，最多四个请求并发，复用现有详情缓存。补查失败保留原条目，协程取消继续传播；因此离线且缺少作者资料时，不能保证该条目已按作者过滤。当前页远端有结果、但全部被本地屏蔽后，仍可能出现空列表；不要把它误报为原站无内容。页面应保留放宽筛选、清空查询、重试或检查屏蔽条件的可达入口。
 
 网络小说辅助面板与云端收藏使用共同的自动收起偏好。收起只是显示状态，不能清除已提交条件；关闭自动收起后面板应可保持展开。电子纸的按屏翻动和普通拖动均需检查摘要、展开按钮及列表位置。
 
@@ -93,4 +95,5 @@ flowchart LR
 | 表达式及链接边界 | [SearchExpressionBoundaryTest](../../app/src/test/java/cc/novelia/app/SearchExpressionBoundaryTest.kt)、[ReaderAndLinksTest](../../app/src/test/java/cc/novelia/app/ReaderAndLinksTest.kt) |
 | 标签观察与词典持久化 | [KeywordCatalogTest](../../app/src/test/java/cc/novelia/app/KeywordCatalogTest.kt)、[KeywordObservationTest](../../app/src/test/java/cc/novelia/app/KeywordObservationTest.kt) |
 | 请求契约 | [ApiContractTest](../../app/src/test/java/cc/novelia/app/ApiContractTest.kt) |
+| 作者屏蔽及设置兼容 | [BookVisibilityTest](../../app/src/test/java/cc/novelia/app/BookVisibilityTest.kt) |
 | 辅助面板及筛选位置 | [发现设备测试目录](../../app/src/androidTest/java/cc/novelia/app/ui/discover) |

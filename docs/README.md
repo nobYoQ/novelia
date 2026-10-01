@@ -1,8 +1,8 @@
 # Novelia 项目文档
 
-本目录按功能和维护职责组织 Android 客户端的使用边界、实现流程与开发说明。内容以当前工作树为准，不代表某次发行已经通过测试。版本、依赖和用户可见变化分别以 [version.properties](../version.properties)、[Gradle 配置](../app/build.gradle.kts) 和 [CHANGELOG.md](../CHANGELOG.md) 为准。
+本目录按功能和维护职责组织 Android 客户端的使用边界、实现流程与开发说明。内容以当前工作树为准，不代表某次发行已经通过测试。版本和依赖以 [version.properties](../version.properties) 与 [Gradle 配置](../app/build.gradle.kts) 为准；当前功能见[业务功能索引](features/README.md)，已发布版本的变化与迁移说明见 [GitHub 发行说明](https://github.com/nobYoQ/novelia/releases)。
 
-Novelia 是原站的非官方 Android 客户端，提供阅读、收藏、社区和文件工具，不包含翻译中心、译文生成或翻译服务密钥配置。原站 API、内容和服务端权限不由本仓库控制。产品介绍与下载入口见 [项目首页](../README.md)。
+Novelia 是 [轻小说机翻机器人](https://n.novelia.cc/) 的非官方 Android 客户端，提供阅读、收藏、社区和文件工具，不包含翻译中心、译文生成或翻译服务密钥配置。原站 API、内容和服务端权限不由本仓库控制。产品介绍与下载入口见 [项目首页](../README.md)。
 
 ## 文档分类
 
@@ -54,5 +54,3 @@ Novelia 是原站的非官方 Android 客户端，提供阅读、收藏、社区
 ## 协作与维护入口
 
 [贡献指南](../CONTRIBUTING.md)规定代码协作；[安全政策](../SECURITY.md)规定漏洞报告；[手动发布指南](../RELEASING.md)规定正式签名和附件流程；[来源与素材声明](../NOTICE.md)及[许可证目录](../licenses/README.md)记录授权边界。
-
-当前没有 CI，检查需手动执行并记录。贴纸公开分发授权仍待确认，具体发行前待办见 [发布与维护](maintenance/release-and-maintenance.md)。新增或迁移文档时遵循 [文档维护规则](maintenance/documentation.md)，同步维护目录索引、引用和行为说明。

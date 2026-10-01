@@ -16,7 +16,7 @@
 | `BookCard` / `SavedBook` | 列表摘要与本地收藏。`SavedBook` 额外保存分组、置顶、阅读状态、更新标记和文库分卷挂载关系。 |
 | `WebDetail` / `WenkuDetail` | 原站详情响应，通过 `card()` 转为摘要。详情中的云端收藏信息不等于本地收藏状态。 |
 | `Chapter` | 网络章节，包含原文及有道、GPT、Sakura 译文列表。缺失译文使用 `null`，不要自行补成“翻译已完成”。 |
-| `Position` | 保存 `chapterId`、段落 `index`、像素 `offset`、段内 `textOffset` 和更新时间，并可带章节序号/总数、段落总数供列表估算进度。恢复阅读仍依赖精确锚点，不能仅保存百分比或屏幕页码。 |
+| `Position` | 保存 `chapterId`、段落 `index`、像素 `offset`、段内 `textOffset` 和更新时间，并可带章节序号/总数、段落总数及 `chapterCompleted`。列表全书进度按已到达章节计算；段落与字符坐标用于章内定位，完成标记不等于手工标记整书读完。恢复阅读仍依赖精确锚点，不能仅保存百分比或屏幕页码。 |
 | `CloudReadingProgress` | 带账号归属的云端章节摘要，记录最后阅读时间、章节 ID 及目录解析状态；不会覆盖本机精确段落位置。 |
 | `Note` | 通过书籍键、章节和段落关联书签/笔记，另存摘录和标题，便于脱离当前阅读页展示。 |
 | `LocalDocument` / `LocalChapter` | 本地文档目录、章节正文与图片引用。运行时分块格式和备份中的便携格式不同。 |

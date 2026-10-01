@@ -123,11 +123,11 @@ sh ./gradlew --no-daemon :app:assembleDebug :app:testDebugUnitTest :app:lintDebu
 
 ## 修改版本号并重新编译
 
-只需修改根目录 [version.properties](../../version.properties) 的两项，不必修改 Gradle 文件或打包脚本。例如从 `0.1.9 / 12` 升为：
+只需修改根目录 [version.properties](../../version.properties) 的两项，不必修改 Gradle 文件或打包脚本。例如从 `0.2.2 / 14` 升为：
 
 ```properties
-versionName=0.1.10
-versionCode=13
+versionName=0.2.3
+versionCode=15
 ```
 
 - `versionName` 是展示版本，使用 `X.Y.Z`，也支持 `0.2.0-beta.1` 这样的预发布名称。
@@ -142,7 +142,7 @@ versionCode=13
 ./build-release.ps1 -Abi arm64-v8a -Verify
 ```
 
-通常不需要先 `clean`，无需提交或打标签即可本地编译。APK 内版本、APK 文件名和校验文件自动采用新值，例如 `outputs/packages/release-local/Novelia-0.1.10-release-local-arm64-v8a.apk`。脚本会核对 APK 元数据，发现版本不一致时不会整理产物。这里的数值只是示例，不会自动修改仓库版本；正式发布还需同步更新日志、版本展示、标签并使用长期发布证书，按 [发布流程](../../RELEASING.md) 执行。
+通常不需要先 `clean`，无需提交或打标签即可本地编译。APK 内版本、APK 文件名和校验文件自动采用新值，例如 `outputs/packages/release-local/Novelia-0.2.3-release-local-arm64-v8a.apk`。脚本会核对 APK 元数据，发现版本不一致时不会整理产物。这里的数值只是示例，不会自动修改仓库版本；正式发布还需同步发行说明、版本展示、标签并使用长期发布证书，按 [发布流程](../../RELEASING.md) 执行。
 
 `outputs/` 由脚本自动创建并整体忽略，是收集安装包、日志和正式附件的统一目录。Gradle 中间文件与原始测试报告仍位于各模块的 `build/`，具体路径见下表。清理旧日志、测试截图或临时夹具前，应确认没有需要保留的发行映射和验证记录；不要将依赖缓存、`local.properties`、签名材料或尚未提交的源码当作临时产物删除。
 

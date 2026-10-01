@@ -48,18 +48,19 @@ JVM 报告在 `app/build/reports/tests/testDebugUnitTest/`，XML 结果在 `app/
 | 改动 | 优先测试 |
 | --- | --- |
 | 请求与会话 | `ApiContractTest`、`NetworkPerformanceTest`、`data.auth.SessionIsolationTest`、`data.network.SharedRequestTest` |
-| 云端收藏和待同步 | `CloudFavoritesTest`、`data.sync.CloudMutationQueueTest`、`data.sync.CloudSyncPolicyTest`、`data.sync.CloudSyncRuntimeTest`、`data.sync.BoundCloudSyncTest` |
+| 云端收藏和待同步 | `CloudFavoritesTest`、`CloudFavoriteLocalCopyTest`、`data.sync.CloudMutationQueueTest`、`data.sync.CloudSyncPolicyTest`、`data.sync.CloudSyncRuntimeTest`、`data.sync.BoundCloudSyncTest` |
 | 书库状态与恢复 | `data.storage.StatePersistenceTest`、`data.storage.LibraryStateCodecTest`、`data.backup.LibraryBackupTest`、`data.cache.LocalCacheTest`、`MetadataCacheTest` |
 | 文档存储与导入 | `data.documents.DocumentStorageTest`、`data.documents.DocumentHashIndexTest`、`FileImportRegressionTest`、`DocumentToolsTest` |
 | 手动离线缓存并发 | `data.chapters.ChapterBatchTest`：去重、并发上限、失败/取消、单调进度；设备另查网络策略和缓存代次 |
 | 下载/导出生命周期 | `DownloadFilesTest`、`PendingExportFilesTest`、`DownloadCelebrationTest` |
-| 阅读投影/进度 | `ReaderProjectionTest`、`ReaderPreferencesTest`、`ReadingContinuityTest`、`ReaderChapterLoadTest`、`ReaderSafetyTest` |
+| 阅读投影/进度 | `ReaderProjectionTest`、`ReaderPreferencesTest`、`ReadingContinuityTest`、`ReadingProgressUpdatesTest`、`ReaderChapterLoadTest`、`ReaderSafetyTest` |
 | 书籍摘要、云端元数据和进度展示 | `BookMetadataTest`、`CloudBookMetadataTest`、`BookListPresentationTest`、`FavoritePresentationTest`、`WebCoverTest` |
 | 分页/搜索/插图 | `StaticPaginationTest`、`ReaderExactSearchTest`、`ReaderChapterOverscrollTest`、`IllustrationTransformTest` |
-| 搜索、关键词、书源 | `ReaderAndLinksTest`、`SearchExpressionBoundaryTest`、`KeywordCatalogTest`、`KeywordObservationTest` |
-| 分卷与更新检查 | `WenkuVolumesTest`、`BookUpdatesTest`、`TranslationFreshnessTest`、`data.updates.UpdateCheckOrderTest` |
+| 搜索、关键词、书源与屏蔽 | `ReaderAndLinksTest`、`SearchExpressionBoundaryTest`、`KeywordCatalogTest`、`KeywordObservationTest`、`BookVisibilityTest` |
+| 分卷与更新检查 | `WenkuVolumesTest`、`BookUpdatesTest`、`TranslationFreshnessTest`、`data.updates.BookUpdateStateTest`、`data.updates.UpdateCheckOrderTest` |
+| 列表页码窗口与跳转 | `PageControlsTest` |
 | 旧后台任务升级兼容 | `data.compat.LegacyWorkerCompatibilityTest`：检查两个旧 Worker 类名可反射加载且保留 WorkManager 构造签名 |
-| Markdown 与编辑器 | `MarkdownTest`、`SiteMarkdownTest`、`MarkdownAnchorsTest`、`MarkdownTemplatesTest`、`EditorStateRegressionTest` |
+| Markdown 与编辑器 | `MarkdownTest`、`SiteMarkdownTest`、`MarkdownAnchorsTest`、`MarkdownTemplatesTest`、`ForumLinksRegressionTest`、`EditorStateRegressionTest` |
 
 新测试应表达用户能遇到的错误或关键不变量。例如账号切换时旧响应不得写入当前界面、损坏 ZIP 不得覆盖可用书库、双语投影改变后仍定位同一原文段落。不要只断言实现刚赋给自身的值。
 
@@ -90,13 +91,13 @@ Gradle 设备 HTML 报告位于 `app/build/reports/androidTests/connected/` 下�
 
 | 场景 | 代表性设备测试 |
 | --- | --- |
-| 基本导航与阅读 | `ui.reader.AppFlowTest`、`ui.reader.ReadingContinuityUiTest`、`ui.shelf.BookSyncUiTest` |
+| 基本导航与阅读 | `ui.navigation.RootNavigationTest`、`ui.reader.AppFlowTest`、`ui.reader.ReadingContinuityUiTest`、`ui.reader.ReaderCompletionFlowTest`、`ui.shelf.BookSyncUiTest` |
 | 书架与分卷 | `ui.shelf.AdaptiveLibraryTest`、`ui.shelf.LibraryInteractionTest`、`ui.shelf.WenkuVolumeFlowTest` |
 | 电子纸/静态弹层 | `ui.reader.EInkReaderFlowTest`、`ui.reader.EInkAndCloudFilterTest`、`ui.components.StaticOverlayTest`、`ui.components.ReducedMotionSheetTest` |
 | 阅读器布局和插图 | `ui.reader.ReaderAdaptiveUiTest`、`ui.reader.ReaderToolbarOverlayTest`、`ui.reader.IllustrationViewerTest` |
 | 编辑与 Markdown | `ui.community.ArticleEditorLayoutTest`、`ui.markdown.EditorDraftLifecycleTest`、`ui.markdown.MarkdownToolbarInteractionTest`、`ui.markdown.SiteMarkdownInteractionTest` |
 | 备份与文件工具 | `data.backup.LibraryBackupFlowTest`、`ui.tools.FileToolsUpgradeTest`、`ui.downloads.DownloadSheetLayoutTest` |
-| 列表与筛选 | `ui.components.AppPagingTest`、`ui.components.AsyncContentTest`、`ui.discover.FilterPositionTest`、`ui.discover.SearchAssistantTest` |
+| 列表与筛选 | `ui.components.PageControlsTest`、`ui.components.AppPagingTest`、`ui.components.AsyncContentTest`、`ui.discover.FilterPositionTest`、`ui.discover.SearchAssistantTest` |
 
 上表同样省略 `cc.novelia.app.` 前缀。全量任务可能包含被默认跳过的联调用例；`SiteWebNavigationTest` 的联调用例仍通过 `liveSite` 单独控制，不因放入 `ui/web/` 而自动启用。
 
@@ -109,6 +110,7 @@ Gradle 设备 HTML 报告位于 `app/build/reports/androidTests/connected/` 下�
 | [LiveReadOnlyTest](../../app/src/androidTest/java/cc/novelia/app/integration/LiveReadOnlyTest.kt) | `live=true` | 公开目录、详情与已有章节 |
 | [DownloadLiveTest](../../app/src/androidTest/java/cc/novelia/app/integration/DownloadLiveTest.kt) | `live=true` | 请求并解析已有译文的 EPUB 下载 |
 | [AuthPageTest](../../app/src/androidTest/java/cc/novelia/app/integration/AuthPageTest.kt) | `live=true` | 认证页面表单可见性，不填写凭据 |
+| [ForumLinksLiveTest](../../app/src/androidTest/java/cc/novelia/app/integration/ForumLinksLiveTest.kt) | `live=true` | 匿名读取两篇公开帖子，核对表格/裸链接中的新旧域名解析及原生路由，不执行云端写入 |
 | [SiteWebNavigationTest](../../app/src/androidTest/java/cc/novelia/app/ui/web/SiteWebNavigationTest.kt) | `liveSite=true` | 部分用例访问原站教程、链接、锚点和图片，其余用例不受此开关控制 |
 
 例如只选公开阅读测试：

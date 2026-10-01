@@ -62,7 +62,7 @@
 
 消息只触发刷新，不携带令牌给原生层。不要用不限定来源的 JavaScript bridge 替换它，也不要直接把网页消息当成已登录证明。
 
-普通原站浏览由 [SiteWebScreen.kt](../../app/src/main/java/cc/novelia/app/ui/web/SiteWebScreen.kt) 承担，它没有原生 JavaScript bridge。链接经 [MarkdownLinks.kt](../../app/src/main/java/cc/novelia/app/data/markdown/MarkdownLinks.kt) 解析：拒绝非 HTTP(S)、无 host 和带用户信息的 URL；有原生页面的链接进入原生路由，其他同站页面留在 WebView，外站链接走外部浏览器。`isInternal` 当前比较 host，不是完整的 HTTPS origin 校验；应用清单另行禁用明文网络流量。修改这套代码时，应分别测试 URL 解析、主框架导航和登录消息来源，不能用一个 host 判断替代所有边界。
+普通原站浏览由 [SiteWebScreen.kt](../../app/src/main/java/cc/novelia/app/ui/web/SiteWebScreen.kt) 承担，它没有原生 JavaScript bridge。链接经 [MarkdownLinks.kt](../../app/src/main/java/cc/novelia/app/data/markdown/MarkdownLinks.kt) 解析：拒绝非 HTTP(S)、无 host 和带用户信息的 URL；有原生页面的链接进入原生路由，其他同站页面留在 WebView，外站链接走外部浏览器。站内判断委托 [SiteUrls.kt](../../app/src/main/java/cc/novelia/app/data/catalog/SiteUrls.kt)，接受 `n.novelia.cc` 与旧域名 `books.fishhawk.top`，同时检查 HTTP(S)、无用户信息，以及未显式指定端口或使用对应默认端口（HTTP 80 / HTTPS 443）。旧域名转换为当前 HTTPS 地址，保留原始编码、查询和锚点；当前域名的 HTTP 地址不会在这里统一升级，应用清单另行禁用明文网络流量。此规则与登录消息的 HTTPS origin 校验不同，修改时应分别测试 URL 解析、主框架导航和消息来源。
 
 ## 4. 令牌持久化与账号代次
 
@@ -97,7 +97,7 @@
 
 `c.chapter` 默认先用缓存；`forceNetwork = true` 时必须从网络刷新，失败不会伪装成刷新成功。成功响应即使缓存写盘失败也可以供前台阅读，因此前台读到正文不等于已经具备离线副本。
 
-[ChapterOffline.kt](../../app/src/main/java/cc/novelia/app/data/chapters/ChapterOffline.kt) 的显式缓存批次最多 200 章，顺序请求并跳过已缓存项；预取沿 `nextId` 最多取 5 章并防止循环。它们绑定会话与缓存代次，按批次持续检查网络策略，并沿用共享章节请求。批量缓存会额外检查章节已写入磁盘。
+[ChapterOffline.kt](../../app/src/main/java/cc/novelia/app/data/chapters/ChapterOffline.kt) 的显式缓存批次最多 200 章，去重后通过 [ChapterBatch.kt](../../app/src/main/java/cc/novelia/app/data/chapters/ChapterBatch.kt) 的最多三个 worker 并行处理，已有缓存直接复用。每章检查会话与缓存代次，新增网络请求前检查网络策略，确认章节已写入磁盘后才计入完成数；进度回调串行递增。失败或取消停止整批，成功缓存的章节保留，重试会跳过它们。自动预取仍沿 `nextId` 顺序读取最多 5 章，并防止循环；两种入口都沿用共享章节请求。
 
 注意“仅 Wi-Fi”存在两种当前语义：章节预取检查 Wi-Fi transport；文件下载的 WorkManager 约束使用 `UNMETERED`（非计费网络）。不要将它们在文档或界面实现中视为完全相同的条件。
 
@@ -172,7 +172,8 @@
 | 同步分类、手动与自动模式 | [CloudSyncPolicyTest](../../app/src/test/java/cc/novelia/app/data/sync/CloudSyncPolicyTest.kt)、[CloudSyncRuntimeTest](../../app/src/test/java/cc/novelia/app/data/sync/CloudSyncRuntimeTest.kt)、[BoundCloudSyncTest](../../app/src/test/java/cc/novelia/app/data/sync/BoundCloudSyncTest.kt) |
 | 共享请求与取消 | [SharedRequestTest](../../app/src/test/java/cc/novelia/app/data/network/SharedRequestTest.kt)、[NetworkPerformanceTest](../../app/src/test/java/cc/novelia/app/NetworkPerformanceTest.kt) |
 | 缓存和阅读边界 | [MetadataCacheTest](../../app/src/test/java/cc/novelia/app/MetadataCacheTest.kt)、[ReaderChapterLoadTest](../../app/src/test/java/cc/novelia/app/ReaderChapterLoadTest.kt) |
+| 手动缓存并发、取消和进度 | [ChapterBatchTest](../../app/src/test/java/cc/novelia/app/data/chapters/ChapterBatchTest.kt) |
 | 下载提交竞态、删除/重试 | [DownloadFilesTest](../../app/src/test/java/cc/novelia/app/DownloadFilesTest.kt) |
-| URL 和 Markdown 路由 | [ReaderAndLinksTest](../../app/src/test/java/cc/novelia/app/ReaderAndLinksTest.kt)、[MarkdownAnchorsTest](../../app/src/test/java/cc/novelia/app/MarkdownAnchorsTest.kt) |
+| URL 和 Markdown 路由 | [ReaderAndLinksTest](../../app/src/test/java/cc/novelia/app/ReaderAndLinksTest.kt)、[MarkdownAnchorsTest](../../app/src/test/java/cc/novelia/app/MarkdownAnchorsTest.kt)、[ForumLinksRegressionTest](../../app/src/test/java/cc/novelia/app/ForumLinksRegressionTest.kt) |
 
 真实 WebView Cookie、Android Keystore、不同系统 WebView 版本、后台限制与账号切换还需设备验证。MockWebServer 和纯单元测试验证客户端契约，不能证明生产服务端或认证网页始终维持相同协议。

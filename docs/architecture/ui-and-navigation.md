@@ -25,13 +25,13 @@
 
 书籍简略行左侧保留封面，右侧显示书名、副标题（作者等）和更新提示，译文统计保留在详情页。发现、搜索结果和排行榜不显示阅读进度；本地和云端文库主书目也不显示，挂载到本地文库的每个分卷按自己的阅读记录显示进度。网络书架和阅读历史显示可用的本机或当前账号云端进度。
 
-书籍有有效日期时，列表始终用小字显示 `更新于 yyyy-MM-dd`。右侧文字区达到 `320 dp × fontScale` 时放在进度行，窄列表与大字号下单独换行，不因分栏或隐藏进度而丢失日期。网络列表优先采用接口的 `updateAt`（本站发现目录变化的时间），缺失时从详情目录的最新有效章节 `createAt` 补全。详情以信息卡显示“最后更新时间”、`yyyy-MM-dd HH:mm` 及对应章节序号和标题，点击章节可阅读；缺少全部章节时间时仍显示最后一章，但不捏造日期。保存详情卡片时缺失的时间不会覆盖已有日期；不把同步检查时间当作内容更新。文库仅有出版日期时，详情标为“最近出版”。
+书籍有有效日期时，列表始终用小字显示 `更新于 yyyy-MM-dd`。右侧文字区达到 `320 dp × fontScale` 时放在进度行，窄列表与大字号下单独换行，不因分栏或隐藏进度而丢失日期。网络列表优先采用接口的 `updateAt`（本站发现目录变化的时间），缺失时从详情目录的最新有效章节 `createAt` 补全。网络小说详情在阅读按钮下方以轻量信息行显示最近更新时间、`yyyy-MM-dd HH:mm` 及最新章节序号和标题，点击章节可阅读；缺少全部章节时间时仍显示最后一章，但不捏造日期。保存详情卡片时缺失的时间不会覆盖已有日期；不把同步检查时间当作内容更新。文库仅有出版日期时，详情标为“最近出版”。
 
 云端收藏接口没有填充阅读历史，`lastReadAt` 为空表示未知，不能直接当成未读。云端收藏和历史列表中可见的网络小说会补查账号隔离的详情缓存（最多同时两本），用 `lastReadChapterId` 在有效章节目录中的位置显示“读到第 X 章”，并按同一章节号 `X / 总章节数` 填充进度条；加载失败保留已知数据或显示“云端进度待同步”。只有详情明确没有阅读章节时才显示未读，纯云端收藏不会因此加入本地书架。旧版本保存的空历史记录同样按未知处理。
 
-“更新 X 章”是本机更新检查比较两次章节总数的正差，并累计到尚未清除的更新记录；不是未读章节数。手动“标记更新已读”后清除，打开或阅读本书不会自动扣减。只增加译文时显示“有更新”，分卷文件增加则显示“更新 X 卷”。检查对象为本地书架中的在线书籍；纯云端收藏不单独参加检查。手动检查可随时触发，开启自动提醒后约每六小时检查一次。
+“更新 X 章”来自后台检查或完整详情刷新比较两次章节总数的正差，按同一基线累计；阅读时逐章确认，数量不超过最新已知目录中尚未到达的章节数。到达末章可清除本轮章节提示，当前账号已解析的云端章节也可参与确认。只增加译文时显示“译文更新”，分卷文件增加则显示“更新 X 卷”；阅读之后才发现的译文变化和文库父项的独立分卷变化仍保留。手动“标记更新已读”清除提示，但保留译文缓存刷新时间和检查基线。具体状态规则见[书架专题](../features/library.md)。检查对象为本地书架中的在线书籍；纯云端收藏不单独参加检查。手动检查可随时触发，开启自动提醒后约每六小时检查一次。
 
-详情收藏状态分别采用当前账号的云端收藏和本地书架，并叠加当前账号待同步的收藏操作。云端已收藏优先显示“已云端收藏”，登录后收藏管理默认打开云端；云端收藏操作不会隐式创建本地收藏。
+详情收藏状态分别采用当前账号的云端收藏和本地书架，并叠加当前账号待同步的收藏操作。云端已收藏优先显示“已云端收藏”，登录后收藏管理默认打开云端。“云端收藏同时保存到本地”默认开启，显式加入或移动云端收藏可为缺失书目创建本地条目，已有本地收藏保持不变；加载列表和阅读元数据不会触发这一行为，见[书架专题](../features/library.md)。
 
 ## 2. 路由清单与返回栈
 
@@ -69,7 +69,7 @@ c.back()                         // 返回上一层
 c.openMarkdownLink(url, baseUrl)  // Markdown 链接的统一解析与分派
 ```
 
-`AppController.go()` 默认不启用 `launchSingleTop`，同一目的地的不同参数可以拥有独立历史项。`replaceTop = true` 实际只启用 `launchSingleTop`，用于避免同一目的地在栈顶重复入栈，并不执行任意栈顶替换。四个根标签由 Activity 单独执行 `popUpTo(startDestination)`、`saveState`、`restoreState` 和 `launchSingleTop`，不能把这套根标签行为套到普通书籍/帖子跳转上。
+`AppController.go()` 默认不启用 `launchSingleTop`，同一目的地的不同参数可以拥有独立历史项。`replaceTop = true` 实际只启用 `launchSingleTop`，用于避免同一目的地在栈顶重复入栈，并不执行任意栈顶替换。四个根标签由 Activity 调用 [RootNavigation.kt](../../app/src/main/java/cc/novelia/app/ui/navigation/RootNavigation.kt) 的 `switchRootTab`，使用 `popUpTo(startDestination)`、`saveState` 和 `launchSingleTop`；除书架外的标签启用 `restoreState`。回到书架时不恢复旧子栈，并设置 `SHOW_SHELF_LIST` 清除选中的详情，避免再次落入详情或其搜索页。不能把这套根标签行为套到普通书籍/帖子跳转上。
 
 移除功能时应考虑已有安装保存的返回栈。`ocr` 的兼容跳转就是现成例子：删掉页面实现后保留旧路由的重定向，避免升级恢复时找不到目的地。
 
@@ -114,6 +114,8 @@ Activity 接受 `intent.dataString`，没有时再取 `Intent.EXTRA_TEXT`。待�
 - 结果提交前调用 `ensureActive()`，取消的旧请求不能覆盖新界面。
 
 新增页面优先复用这套逻辑。列表要提供稳定 `key` 和适当 `contentType`；同一个书籍或评论的身份不应取决于当前排序下标。搜索输入可以复用 `rememberDebouncedQuery`，当前非空查询的等待时间为 180 ms。
+
+分页列表共用 [PageControls.kt](../../app/src/main/java/cc/novelia/app/ui/components/PageControls.kt)：内部页码从 0 开始，界面显示从 1 开始。提供首末页、当前页附近的页码、上一页/下一页和数字跳转；总页数较小时显示全部页码。输入必须在 `1..总页数` 内，非法值显示错误且不跳转。页码选项允许换行，保留选中语义和至少 48dp 的点击区域；页码跳转与电子纸的列表翻屏是不同操作。
 
 ## 4. 自适应布局
 
@@ -209,6 +211,8 @@ Activity 接受 `intent.dataString`，没有时再取 `Intent.EXTRA_TEXT`。待�
 | 修改范围 | 优先检查的现有测试 |
 | --- | --- |
 | 通用加载和刷新 | [AsyncContentTest](../../app/src/androidTest/java/cc/novelia/app/ui/components/AsyncContentTest.kt) |
+| 根标签与书架返回 | [RootNavigationTest](../../app/src/androidTest/java/cc/novelia/app/ui/navigation/RootNavigationTest.kt)、[AdaptiveLibraryTest](../../app/src/androidTest/java/cc/novelia/app/ui/shelf/AdaptiveLibraryTest.kt) |
+| 页码窗口、数字跳转和边界 | [PageControlsTest](../../app/src/test/java/cc/novelia/app/PageControlsTest.kt)、[PageControlsTest（设备）](../../app/src/androidTest/java/cc/novelia/app/ui/components/PageControlsTest.kt) |
 | 链接解析 | [ReaderAndLinksTest](../../app/src/test/java/cc/novelia/app/ReaderAndLinksTest.kt)、[MarkdownTest](../../app/src/test/java/cc/novelia/app/MarkdownTest.kt) |
 | 主题、动画、弹窗 | [MotionTest](../../app/src/androidTest/java/cc/novelia/app/ui/theme/MotionTest.kt)、[ReducedMotionSheetTest](../../app/src/androidTest/java/cc/novelia/app/ui/components/ReducedMotionSheetTest.kt)、[StaticOverlayTest](../../app/src/androidTest/java/cc/novelia/app/ui/components/StaticOverlayTest.kt) |
 | 全局电子纸分页 | [AppPagingTest](../../app/src/androidTest/java/cc/novelia/app/ui/components/AppPagingTest.kt)、[EInkAndCloudFilterTest](../../app/src/androidTest/java/cc/novelia/app/ui/reader/EInkAndCloudFilterTest.kt) |

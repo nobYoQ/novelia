@@ -42,6 +42,8 @@
 
 管理收藏时，界面结合服务端已知关系与本账号最新待同步意图生成状态。`PUT` 表示目标收藏夹，`DELETE` 表示用户已经请求取消；“待同步”不能展示为远端已经确认。实现见 [FavoritePresentation](../../app/src/main/java/cc/novelia/app/ui/shelf/FavoritePresentation.kt)。
 
+“云端收藏同时保存到本地”默认开启。通过收藏面板显式加入或移动云端收藏后，无论请求已发送成功还是已保存为待同步意图，都会为尚未在本地书架中的作品添加默认收藏条目；已有本地条目的文件夹、置顶和阅读状态保持不变。关闭开关只影响之后的操作，不移除已有条目；取消云端收藏也保留本地资料。这只保存书目摘要，不下载正文；加载云端列表、补齐阅读元数据和提交阅读历史不会触发它。实现见 [CloudFavoriteLocalCopy.kt](../../app/src/main/java/cc/novelia/app/data/library/CloudFavoriteLocalCopy.kt)，设置入口见[设置专题](settings-and-notes.md)。
+
 同一书目的收藏、移动和删除共用资源顺序。前台操作覆盖较早的同资源待办，后台重放也必须遵守这一顺序。云端文件夹新建等接口不能仅凭“属于收藏功能”就推断支持离线排队，具体调用和失败策略见网络专题。
 
 ## 文库分卷
@@ -60,7 +62,7 @@
 
 ## 阅读进度和更新时间
 
-[BookListPresentation](../../app/src/main/java/cc/novelia/app/ui/components/BookListPresentation.kt)集中计算列表状态。本机百分比按章节等权，再用当前章段落位置估计章内进度；这不是按全书字数计算的精确完成率。旧位置缺少章节序号时显示“继续阅读”，不编造百分比。
+[BookListPresentation](../../app/src/main/java/cc/novelia/app/ui/components/BookListPresentation.kt)集中计算列表状态。本机百分比按已到达章节计算，即 `(chapterIndex + 1) / 当前已知总章节数`；分母取书目摘要、已有收藏与保存位置中的最大总数，不再把章内段落位置计入全书百分比。进入最新已知章节即可显示 100%，不等于手工标记“读完”；章内滚动和分页仍保存独立的精确恢复锚点。已知书目总数增加时采用更大的总数，剩余进度随之变化。旧位置缺少章节序号时显示“继续阅读”，本地文档可在后台补齐目录元数据，文件不可用时不猜百分比。
 
 云端记录通常只知道读到的章节。列表显示“读到第 N 章”或“有阅读记录”，解析尚未完成时可以显示“云端进度待同步”。书目被标记“读完”以及云端优先显示场景有专门规则；展示结果不能回写成阅读器的精确锚点。
 
@@ -70,7 +72,7 @@
 
 历史页面分本机与云端。本机历史使用精确位置，云端历史读取账号列表。暂停历史会影响后续位置记录；清空某一侧历史不代表另一侧也已清空。详情页发现本机和云端章节不同，会让用户选择这次从哪里继续，见[书籍详情](book-details.md)。
 
-后台检查和完整详情刷新共用同一更新基线，比较章节数、各引擎译文计数与文库分卷 ID。收藏或移动收藏夹时保留旧基线；缺少旧计数时先建立基线，数量下降不视为新增，相同内容重复获取不重复计数，迟到的旧响应不能回退基线。尚未到达的新增章节会累计，随阅读逐章确认；最新章已打开时书架进度为 100% 并消除本轮章节提示。译文变化单独显示“译文更新”；手动标记更新已读仍保留译文缓存刷新时间。通知是否相关还会考虑阅读模式及优先引擎。
+后台检查和完整详情刷新共用同一更新基线，比较章节数、各引擎译文计数与文库分卷 ID。收藏或移动收藏夹时保留旧基线；缺少旧计数时先建立基线，数量下降不视为新增，相同内容重复获取不重复计数，迟到的旧响应不能回退基线。尚未到达的新增章节会累计，随阅读逐章确认；最新章已打开时书架进度为 100% 并消除本轮章节提示。当前账号已解析的云端章节也可用于确认已到达的更新，其他账号的摘要不能参与。译文变化单独显示“译文更新”；到达末章只确认阅读时间之前发现的译文变化，后发现的变化继续提示。手动标记更新已读仍保留译文缓存刷新时间。文库父作品的分卷更新不因读完某个本地子卷而清除。通知是否相关还会考虑阅读模式及优先引擎。状态变换见 [BookUpdateState.kt](../../app/src/main/java/cc/novelia/app/data/updates/BookUpdateState.kt) 和 [ReadingProgress.kt](../../app/src/main/java/cc/novelia/app/data/library/ReadingProgress.kt)。
 
 定时任务受系统调度约束，手动与定时检查共用锁。每本书处理后保存游标，避免长书架任务被中断时总是只检查前部；实现与增量规则见 [BookUpdates](../../app/src/main/java/cc/novelia/app/data/updates/BookUpdates.kt)。
 
@@ -80,7 +82,7 @@
 
 | 验证范围 | 测试入口 |
 | --- | --- |
-| 收藏展示与账号待办 | [FavoritePresentationTest](../../app/src/test/java/cc/novelia/app/FavoritePresentationTest.kt)、[CloudFavoritesTest](../../app/src/test/java/cc/novelia/app/CloudFavoritesTest.kt) |
+| 收藏展示与账号待办 | [FavoritePresentationTest](../../app/src/test/java/cc/novelia/app/FavoritePresentationTest.kt)、[CloudFavoritesTest](../../app/src/test/java/cc/novelia/app/CloudFavoritesTest.kt)、[CloudFavoriteLocalCopyTest](../../app/src/test/java/cc/novelia/app/CloudFavoriteLocalCopyTest.kt) |
 | 进度与元数据兼容 | [BookListPresentationTest](../../app/src/test/java/cc/novelia/app/BookListPresentationTest.kt)、[BookMetadataTest](../../app/src/test/java/cc/novelia/app/BookMetadataTest.kt)、[CloudBookMetadataTest](../../app/src/test/java/cc/novelia/app/CloudBookMetadataTest.kt) |
-| 分卷、继续阅读与更新 | [WenkuVolumesTest](../../app/src/test/java/cc/novelia/app/WenkuVolumesTest.kt)、[ReadingContinuityTest](../../app/src/test/java/cc/novelia/app/ReadingContinuityTest.kt)、[BookUpdatesTest](../../app/src/test/java/cc/novelia/app/BookUpdatesTest.kt) |
+| 分卷、继续阅读与更新 | [WenkuVolumesTest](../../app/src/test/java/cc/novelia/app/WenkuVolumesTest.kt)、[ReadingContinuityTest](../../app/src/test/java/cc/novelia/app/ReadingContinuityTest.kt)、[BookUpdatesTest](../../app/src/test/java/cc/novelia/app/BookUpdatesTest.kt)、[ReadingProgressUpdatesTest](../../app/src/test/java/cc/novelia/app/ReadingProgressUpdatesTest.kt)、[BookUpdateStateTest](../../app/src/test/java/cc/novelia/app/data/updates/BookUpdateStateTest.kt) |
 | 界面布局和操作 | [书架设备测试目录](../../app/src/androidTest/java/cc/novelia/app/ui/shelf) |

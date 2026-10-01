@@ -10,7 +10,7 @@
 
 开发时在专用模拟器或测试设备使用虚构书籍与测试账号。复现记录应包含构建版本、系统 API、入口、预期、实际结果和是否开启电子纸/减少动效。可用合成的小说短文与 MockWebServer 响应复现的问题，不需要请求生产站点。
 
-提交前检查差异，按 [测试指南](../quality/testing.md) 执行相关检查，在 PR 中写明结果、未运行范围和原因。用户可见变化写入 [CHANGELOG.md](../../CHANGELOG.md) 的“未发布”；普通贡献不自行升版。模板见 [.github/pull_request_template.md](../../.github/pull_request_template.md)，协作规则见 [CONTRIBUTING.md](../../CONTRIBUTING.md)。
+提交前检查差异，按 [测试指南](../quality/testing.md) 执行相关检查，在 PR 中写明结果、未运行范围和原因。用户可见变化写入 PR 描述并同步相关功能文档，发行时由维护者汇总到 GitHub Release 说明；仓库当前不维护独立的 `CHANGELOG.md`。普通贡献不自行升版。模板见 [.github/pull_request_template.md](../../.github/pull_request_template.md)，协作规则见 [CONTRIBUTING.md](../../CONTRIBUTING.md)。
 
 ## 代码与资源约定
 

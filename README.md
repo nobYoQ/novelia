@@ -1,15 +1,15 @@
 # Novelia Android
 
-面向 [轻小说机翻机器人](https://n.novelia.cc/) 的非官方原生安卓客户端，当前版本 `0.1.9`。使用 Kotlin、Jetpack Compose 与 Material 3，支持 Android 8.0（API 26）及以上。
+面向 [轻小说机翻机器人](https://n.novelia.cc/) 的非官方原生安卓客户端，当前源码配置版本为 [0.2.2](version.properties)。使用 Kotlin、Jetpack Compose 与 Material 3，支持 Android 8.0（API 26）及以上。
 
 ## 下载与反馈
 
 - [GitHub 发行版](https://github.com/nobYoQ/novelia/releases)：下载 APK，查看版本说明和 SHA-256 校验文件。若没有已发布版本，请按下文自行构建。
 - [问题反馈与功能建议](https://github.com/nobYoQ/novelia/issues)：客户端问题请在本项目反馈；原站内容和账号问题请联系原站。
-- [更新记录](CHANGELOG.md) · [贡献指南](CONTRIBUTING.md) · [安全政策](SECURITY.md) · [手动发布指南](RELEASING.md)
+- [发行说明](https://github.com/nobYoQ/novelia/releases) · [贡献指南](CONTRIBUTING.md) · [安全政策](SECURITY.md) · [手动发布指南](RELEASING.md)
 - [项目文档](docs/README.md)：按开发、架构、业务功能、数据、网络、质量和维护分类；[业务功能索引](docs/features/README.md) 按操作查流程，[源码目录导航](docs/architecture/source-layout.md) 按界面、数据职责和测试类型定位代码。
 
-当前正在准备首次 GitHub 发行，源码与文档已采用 GPL-3.0；贴纸公开分发授权仍待确认，详见 [来源与素材声明](NOTICE.md)。既有本地测试包与未来正式发布证书可能不同，升级前请先备份阅读资料并阅读发行说明。
+源码与文档采用 GPL-3.0-only，第三方依赖和素材保留各自的许可与权利，详见 [来源与素材声明](NOTICE.md)。公开版本以 GitHub Releases 为准；本地测试包与正式发行包的证书可能不同，升级前请先备份阅读资料并阅读发行说明。
 
 ## 使用
 
@@ -58,7 +58,7 @@ sh ./gradlew --no-daemon :app:assembleDebug :app:testDebugUnitTest :app:lintDebu
 
 仍可用 `./build.ps1 -Tasks @(':app:assembleDebug', ':app:testDebugUnitTest', ':app:lintDebug')` 自选 Gradle 任务；不带参数的 `build.ps1` 保持执行 Debug 构建和单元测试。直接调用 Gradle 或通过 `build.ps1` 执行 `assembleRelease` 时默认未签名。正式 GitHub 发行使用独立的 [发布流程](RELEASING.md)，不要上传本地测试签名包。版本号和版本码统一在 `version.properties` 维护。
 
-修改版本后打包：编辑根目录 `version.properties` 的 `versionName`（例如 `0.1.10`）和递增的 `versionCode`（例如由 `12` 改为 `13`），保存后运行 `./build-release.ps1` 或 `./build-debug.ps1`，APK 内版本和归档文件名会自动更新。具体示例见 [修改版本号并重新编译](docs/development/getting-started.md#修改版本号并重新编译)。
+修改版本后打包：编辑根目录 `version.properties` 的 `versionName`（例如 `0.2.3`）和递增的 `versionCode`（例如由 `14` 改为 `15`），保存后运行 `./build-release.ps1` 或 `./build-debug.ps1`，APK 内版本和归档文件名会自动更新。具体示例见 [修改版本号并重新编译](docs/development/getting-started.md#修改版本号并重新编译)。
 
 `outputs/`、Gradle 构建目录、APK/AAB 安装包、签名旁文件及安装包校验文件由 `.gitignore` 排除，不纳入源码提交。正式附件准备脚本写入 `outputs/releases/`，正式安装包上传为 GitHub Release 附件；旧 `artifacts/`、`releases/` 仍在忽略规则内。
 
@@ -72,7 +72,7 @@ JVM 测试覆盖书源链接、查询参数、序列化、译文对齐与回退�
 adb shell am instrument -w -r -e class cc.novelia.app.ui.reader.AppFlowTest cc.novelia.app.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
-外部站点测试默认跳过。明确需要只读联调时添加 `-e live true`，选择 `cc.novelia.app.integration.LiveReadOnlyTest`、`cc.novelia.app.integration.DownloadLiveTest` 或 `cc.novelia.app.integration.AuthPageTest`。它们读取公开接口、已有内容文件与认证表单，不填写凭据、发布帖子、评论或修改云端收藏。
+外部站点测试默认跳过。明确需要只读联调时添加 `-e live true`，选择 `cc.novelia.app.integration.LiveReadOnlyTest`、`cc.novelia.app.integration.DownloadLiveTest`、`cc.novelia.app.integration.AuthPageTest` 或 `cc.novelia.app.integration.ForumLinksLiveTest`。它们读取公开接口、已有内容文件、认证表单或帖子链接，不填写凭据、发布帖子、评论或修改云端收藏。
 
 ## 工程结构
 
@@ -83,7 +83,7 @@ adb shell am instrument -w -r -e class cc.novelia.app.ui.reader.AppFlowTest cc.n
 | `reader` | 段落投影、译文回退、前台 TTS 服务 |
 | `files` | EPUB/TXT/SRT、图片压缩、后台下载 |
 | `src/test` | 无账号的 JVM 测试；数据层测试按对应职责分包 |
-| `src/androidTest` | 按界面、备份、站点联调和性能划分的 15 个测试目录 |
+| `src/androidTest` | 按界面、导航、备份、站点联调和性能分类的设备测试 |
 
 界面代码位于 `app/src/main/java/cc/novelia/app/ui/`：书架在 `shelf/`，发现在 `discover/`，书籍详情在 `book/`，阅读器在 `reader/`，社区在 `community/`，账号与设置分别在 `account/`、`settings/`。页面专用组件和展示逻辑与所属界面放在一起，跨界面组件、导航、主题、Markdown 与反馈各有独立目录。
 

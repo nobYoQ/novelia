@@ -12,10 +12,11 @@
 | 默认阅读设置 | `LibraryState.reader` | 为未设置单书偏好的作品提供阅读默认值 |
 | 单书阅读设置 | `LibraryState.bookSettings[bookKey]` | 保存整份该书的 `ReaderSettings`，不是只保存与默认值不同的字段 |
 | 减少动效 | `LibraryState.reducedMotion` | 影响应用交互与过渡；具体组件还会结合系统和电子纸模式 |
-| 屏蔽书籍/标签/用户 | 相应 `blocked*` 集合 | 本地展示过滤，不向服务端设置账号屏蔽关系 |
+| 屏蔽书籍/标签/作者/用户 | 相应 `blocked*` 集合 | 本地展示过滤，不向服务端设置账号屏蔽关系；作者屏蔽面向发现和排行榜 |
 | 隐藏小说评论 | `hideNovelComments` | 面向小说评论区域，不等于隐藏整个社区 |
 | 下载网络约束 | `wifiOnly` | 创建下载任务时设置 WorkManager 网络约束 |
 | 云端筛选自动收起 | `autoCollapseCloudFilters` | 控制滚动云端列表时是否收起筛选；离开页面总会收起 |
+| 云端收藏同时保存到本地 | `autoSaveCloudFavoritesLocally` | 默认开启，仅影响之后的显式云端收藏操作，不移除已有本地条目 |
 | 剪贴板链接提示 | `clipboardLinkHints` | 返回前台时识别受支持的原站链接，点击提示后打开；默认开启 |
 
 修改默认阅读设置后，已经保存单书设置的作品仍使用单书快照。排查“改了设置却没生效”时，先确认是否存在覆盖值，再检查当前阅读模式。书籍键是保存偏好的关联依据，不能用可能重复或可修改的标题作键。
@@ -35,6 +36,8 @@
 设置通过 `LocalStore.update` 更新内存快照，由持久化层合并写盘。普通滑块通常在拖动结束时提交，电子纸界面采用步进操作，减少连续重绘。UI 已展示新值不等于文件已经提交，导出或生命周期边界仍需等待相应 `flush()`。
 
 添加新设置时应同时检查模型默认值、UI 控件范围、单书覆盖、普通设置备份、完整资料备份及恢复校验。字段进入 `LibraryState` 并不代表自动进入 `SettingsBackup`，后者有独立白名单。
+
+屏蔽管理页可取消书籍、标签、作者和用户屏蔽，并提供手动添加标签、作者和用户的入口；书籍屏蔽从作品详情添加。作品详情也可直接屏蔽作者，作者名采用忽略大小写的完整名称匹配；同一作品的任意作者命中即隐藏。作者信息缺失时的补查范围与失败处理见[发现专题](discovery.md)。云端收藏副本只添加缺失书目，不覆盖已有本地收藏夹或下载正文，取消云端收藏后本地资料仍保留，见[书架专题](library.md)。
 
 ## 3. 普通设置 JSON 与完整资料 ZIP
 
@@ -94,8 +97,9 @@
 
 - 全局设置、单书覆盖和恢复默认值分别检查，尤其是电子纸模式来回切换。
 - 导出普通设置后核对范围，不应出现书库或登录资料；导入非法版本/范围应失败。
+- 作者屏蔽在发现和排行榜生效，取消后恢复展示；云端收藏副本开关、旧设置默认值与普通设置备份保持一致，已有本地收藏夹不被云端操作移动。
 - 清缓存后本地小说、笔记和下载成品仍可用；旧请求不能把缓存写回来。
 - 笔记空标题、移除书籍、搜索无结果、删除撤销和原文跳转均有合理表现。
 - 通知未授权、计费 Wi-Fi、非 Wi-Fi 的非计费网络等情况按各功能的实际约束判断。
 
-相关测试入口包括 [ReaderPreferencesTest](../../app/src/test/java/cc/novelia/app/ReaderPreferencesTest.kt)、[LibraryPresentationTest](../../app/src/test/java/cc/novelia/app/LibraryPresentationTest.kt) 和 [LocalCacheTest](../../app/src/test/java/cc/novelia/app/data/cache/LocalCacheTest.kt)。真实系统分享、文件选择器和通知权限需要设备验证。
+相关测试入口包括 [ReaderPreferencesTest](../../app/src/test/java/cc/novelia/app/ReaderPreferencesTest.kt)、[LibraryPresentationTest](../../app/src/test/java/cc/novelia/app/LibraryPresentationTest.kt)、[BookVisibilityTest](../../app/src/test/java/cc/novelia/app/BookVisibilityTest.kt)、[CloudFavoriteLocalCopyTest](../../app/src/test/java/cc/novelia/app/CloudFavoriteLocalCopyTest.kt) 和 [LocalCacheTest](../../app/src/test/java/cc/novelia/app/data/cache/LocalCacheTest.kt)。真实系统分享、文件选择器和通知权限需要设备验证。

@@ -16,6 +16,8 @@
 
 详情转为 `BookCard` 后可以保存到本地书架。保存或更新摘要时应保留已有用户分组、置顶等选择；部分接口缺少更新时间时，不能用空值抹掉已知时间。相关逻辑见 [BookMetadata.kt](../../app/src/main/java/cc/novelia/app/data/model/BookMetadata.kt) 和 [LocalStore.kt](../../app/src/main/java/cc/novelia/app/data/storage/LocalStore.kt)。
 
+网络小说和文库详情可按作者添加本地屏蔽，影响发现与排行榜的展示；不删除书籍或向服务端提交屏蔽关系。匹配和作者补查规则见[发现专题](discovery.md)。收藏面板的显式云端操作还可按默认开启的设置创建本地书目副本，具体边界见[书架专题](library.md)。
+
 ## 2. 继续阅读如何选章节
 
 阅读入口首先需要确认章节仍在当前目录中。目录中的分组标题没有 `chapterId`，不能作为章节打开，也不能参与“第几章”的计算。

@@ -232,6 +232,7 @@ UI 在 `Dispatchers.Default` 执行正文准备，依赖章节和语言/引擎/�
 | 分页、锚点、翻页键 | [StaticPaginationTest](../../app/src/test/java/cc/novelia/app/StaticPaginationTest.kt)、[ReaderExactSearchTest](../../app/src/test/java/cc/novelia/app/ReaderExactSearchTest.kt) |
 | 精确搜索、边界/取消、朗读队列 | [ReaderExactSearchTest](../../app/src/test/java/cc/novelia/app/ReaderExactSearchTest.kt)、[ReaderSafetyTest](../../app/src/test/java/cc/novelia/app/ReaderSafetyTest.kt) |
 | 阅读连续性和分卷 | [ReadingContinuityTest](../../app/src/test/java/cc/novelia/app/ReadingContinuityTest.kt)、[ReadingContinuityUiTest](../../app/src/androidTest/java/cc/novelia/app/ui/reader/ReadingContinuityUiTest.kt) |
+| 章节进度、更新确认与旧记录兼容 | [ReadingProgressUpdatesTest](../../app/src/test/java/cc/novelia/app/ReadingProgressUpdatesTest.kt)、[BookUpdateStateTest](../../app/src/test/java/cc/novelia/app/data/updates/BookUpdateStateTest.kt)、[ReaderCompletionFlowTest](../../app/src/androidTest/java/cc/novelia/app/ui/reader/ReaderCompletionFlowTest.kt) |
 | 工具栏不改变排版 | [ReaderToolbarOverlayTest](../../app/src/androidTest/java/cc/novelia/app/ui/reader/ReaderToolbarOverlayTest.kt) |
 | 宽屏目录、窗口调整 | [ReaderAdaptiveUiTest](../../app/src/androidTest/java/cc/novelia/app/ui/reader/ReaderAdaptiveUiTest.kt) |
 | 图片缩放和平移 | [IllustrationTransformTest](../../app/src/test/java/cc/novelia/app/IllustrationTransformTest.kt)、[IllustrationViewerTest](../../app/src/androidTest/java/cc/novelia/app/ui/reader/IllustrationViewerTest.kt) |
