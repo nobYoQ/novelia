@@ -37,14 +37,8 @@ internal class EchNativeEngine(context: Context) : EchEngine {
                 upload?.start()
                 val reply = try { call.execute() }
                 catch (_: Exception) { throw connectionFailure(call.failureReason()) }
-                val responseHeaders = Headers.Builder()
-                appJson.decodeFromString<Map<String, List<String>>>(reply.headersJSON()).forEach { (name, values) ->
-                    if (name.lowercase() !in setOf("connection", "transfer-encoding")) {
-                        values.forEach { responseHeaders.add(name, it) }
-                    }
-                }
                 val protocol = if (reply.protocol() == "HTTP/2.0") Protocol.HTTP_2 else Protocol.HTTP_1_1
-                return EchReply(reply.statusCode().toInt(), protocol, responseHeaders.build(), reply.contentLength())
+                return EchReply(reply.statusCode().toInt(), protocol, decodeEchResponseHeaders(reply.headersJSON()), reply.contentLength())
             }
 
             override fun read(maxBytes: Long): ByteArray = try {
@@ -59,6 +53,21 @@ internal class EchNativeEngine(context: Context) : EchEngine {
     fun probe(host: String): String = native.probe(host)
     fun resetNetworkState() { if (nativeDelegate.isInitialized()) native.resetNetworkState() }
 }
+
+/** 原站下载响应含 UTF-8 文件名；接收时保留非 ASCII 值，不套用发送请求头的 ASCII 限制。 */
+internal fun decodeEchResponseHeaders(json: String): Headers = Headers.Builder().apply {
+    appJson.decodeFromString<Map<String, List<String>>>(json).forEach { (name, values) ->
+        if (name.lowercase() !in setOf("connection", "transfer-encoding")) {
+            values.forEach { value ->
+                // Go 已完成 HTTP 解析；桥接边界仍拒绝控制字符，异常不包含响应头内容。
+                require(value.all { it == '\t' || (it.code >= 0x20 && it.code != 0x7f) }) {
+                    "Invalid ECH response header value"
+                }
+                addUnsafeNonAscii(name, value)
+            }
+        }
+    }
+}.build()
 
 private fun connectionFailure(reason: String?, fallback: String = "连接失败"): EchIOException {
     val safeReason = reason?.takeIf { it in setOf("连接超时", "请求发送超时", "响应读取超时", "连接被中断",

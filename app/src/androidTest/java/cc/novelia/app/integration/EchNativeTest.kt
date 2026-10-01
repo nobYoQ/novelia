@@ -5,16 +5,57 @@ import cc.novelia.app.NoveliaApplication
 import cc.novelia.app.data.network.EchForumProbe
 import cc.novelia.app.data.network.NoveliaApi
 import cc.novelia.app.data.model.WebDetail
+import cc.novelia.app.data.model.DownloadEntry
+import cc.novelia.app.files.DownloadWorker
 import cc.novelia.nativeech.ech.Ech
 import cc.novelia.nativeech.ech.Upload
+import java.io.File
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import okhttp3.Request
 import org.junit.Assert.*
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 
 class EchNativeTest {
+    @Test fun downloadWorkerSavesPublicTxtAndEpubWithUnicodeResponseFilenames() = runBlocking {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("echLive") == "true")
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
+        assertNull("Live downloads require a dedicated anonymous test device", app.session.profile.value)
+        val wasEnabled = app.ech.enabled.value
+        app.ech.setEnabled(true)
+        try {
+            val api = NoveliaApi(null, transport = app.api.transport)
+            val ref = api.webList(0).items.filter { it.total > 0 }.minBy { it.total }.card().ref
+            for (format in listOf("txt", "epub")) {
+                val id = UUID.randomUUID().toString()
+                val entry = DownloadEntry(id, "ECH 下载回归", "ech-test-$id.$format",
+                    api.downloadUrl(ref, null, "jp", listOf("sakura", "gpt", "youdao"), false, format, "ECH下载测试.$format"))
+                try {
+                    DownloadWorker.enqueue(app, entry)
+                    val state = withTimeout(90_000) {
+                        app.store.state.first { state -> state.downloads.any {
+                            it.id == id && it.status in setOf("已完成", "失败", "需要登录")
+                        } }
+                    }
+                    val downloaded = state.downloads.single { it.id == id }
+                    assertEquals(downloaded.error ?: "Download did not complete", "已完成", downloaded.status)
+                    assertEquals(100, downloaded.progress)
+                    val file = File(app.store.downloadsDir, downloaded.fileName)
+                    assertTrue(file.length() in 1..(8L * 1024 * 1024))
+                    if (format == "epub") file.inputStream().use { input ->
+                        assertEquals('P'.code, input.read())
+                        assertEquals('K'.code, input.read())
+                    }
+                    else assertTrue(file.readText().isNotBlank())
+                } finally { DownloadWorker.remove(app, id) }
+            }
+        } finally { app.ech.setEnabled(wasEnabled) }
+    }
+
     @Test fun applicationTransportReadsCompleteResponsesAndParsesDiscovery() = runBlocking {
         assumeTrue(InstrumentationRegistry.getArguments().getString("echLive") == "true")
         val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication

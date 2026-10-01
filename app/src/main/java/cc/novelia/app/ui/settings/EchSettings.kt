@@ -27,10 +27,7 @@ import kotlinx.coroutines.launch
     AppSheet(onDismissRequest = onDismiss) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("ECH 连接测试", style = MaterialTheme.typography.titleLarge)
-            TogglePreference("启用 ECH", "对小说、论坛和认证接口使用加密握手；影响新请求。", enabled, transport::setEnabled)
-            Text("保持开启后测试发现、章节、社区、下载和登录续期。连接失败时可关闭开关，对比普通连接。", style = MaterialTheme.typography.bodyMedium)
-            Text("网页登录仍使用系统 WebView，本开关不改变登录页网络；已登录账号的续期请求已接入 ECH。", style = MaterialTheme.typography.bodySmall)
-            Text("诊断测试三个原站域名的全新 ECH 握手、公开检测页，以及论坛分类和帖子 API 的完整读取与解析；不发送账号、Cookie 或令牌。DNS 查询通过阿里、Cloudflare 或 Google 的加密 DNS 完成。", style = MaterialTheme.typography.bodySmall)
+            TogglePreference("启用 ECH", "对小说、论坛和认证接口使用加密握手", enabled, transport::setEnabled)
             Button(enabled = !busy, onClick = {
                 busy = true
                 scope.launch {
