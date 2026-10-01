@@ -12,13 +12,35 @@ import (
 	core "github.com/inqadh/jissr-bypass"
 )
 
+type dialPolicyKey struct{}
+type dialPolicy struct {
+	parent  context.Context
+	timeout time.Duration
+}
+
+func connectionContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	policy, ok := ctx.Value(dialPolicyKey{}).(dialPolicy)
+	if !ok {
+		return context.WithCancel(ctx)
+	}
+	var dialCtx context.Context
+	var cancel context.CancelFunc
+	if policy.timeout > 0 {
+		dialCtx, cancel = context.WithTimeout(ctx, policy.timeout)
+	} else {
+		dialCtx, cancel = context.WithCancel(ctx)
+	}
+	stop := context.AfterFunc(policy.parent, cancel)
+	return dialCtx, func() { stop(); cancel() }
+}
+
 // Keep the upstream encrypted resolver, but own the custom TLS dial so its
 // deadline actually applies. net/http detaches in-flight dials from request
 // cancellation; a request timer alone would leave stalled TLS dials running.
 func newHTTPTransport(resolver *core.Client) *http.Transport {
 	return &http.Transport{
 		DialTLSContext: func(ctx context.Context, network, address string) (net.Conn, error) {
-			ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
+			ctx, cancel := connectionContext(ctx)
 			defer cancel()
 			host, port, err := net.SplitHostPort(address)
 			if err != nil || port != "443" || !protectedURL("https://"+host+"/") {
@@ -30,7 +52,7 @@ func newHTTPTransport(resolver *core.Client) *http.Transport {
 			}
 			config := resolution.ECH
 			for attempt := 0; attempt < 2; attempt++ {
-				raw, err := (&net.Dialer{Timeout: 8 * time.Second, KeepAlive: 30 * time.Second}).DialContext(ctx, network, net.JoinHostPort(resolution.IP, "443"))
+				raw, err := (&net.Dialer{KeepAlive: 30 * time.Second}).DialContext(ctx, network, net.JoinHostPort(resolution.IP, "443"))
 				if err != nil {
 					resolver.ResetNetworkState()
 					return nil, fmt.Errorf("tcp: %w", err)

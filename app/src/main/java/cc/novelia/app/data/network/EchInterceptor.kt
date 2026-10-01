@@ -1,9 +1,12 @@
 package cc.novelia.app.data.network
 
 import java.io.IOException
-import java.util.concurrent.Executors
+import java.io.InterruptedIOException
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import okhttp3.Headers
 import okhttp3.HttpUrl
 import okhttp3.Interceptor
@@ -24,7 +27,7 @@ internal val echHosts = setOf("n.novelia.cc", "auth.novelia.cc", "forum.novelia.
 internal class EchIOException(message: String) : IOException(message)
 
 internal interface EchEngine {
-    fun open(request: Request, timeoutMillis: Long): EchExchange
+    fun open(request: Request, timeouts: EchTimeouts): EchExchange
 }
 
 internal interface EchExchange {
@@ -46,41 +49,56 @@ internal class EchInterceptor(
     override fun intercept(chain: Interceptor.Chain): Response {
         var request = chain.request()
         if (!enabled() || request.url.host !in echHosts) return chain.proceed(request)
-        repeat(11) { redirectCount ->
-            if (!request.url.isHttps || request.url.port != 443) throw IOException("ECH 仅支持 HTTPS 443")
-            if (chain.call().isCanceled()) throw IOException("Canceled")
-            if (request.body?.isDuplex() == true) throw IOException("ECH 暂不支持双工请求")
-            val response = execute(chain, request)
-            val next = if (redirects) redirectRequest(response) else null
-            if (next == null) return response
-            response.close()
-            if (redirectCount == 10) throw IOException("重定向次数过多")
-            request = next
-            // 外部图片/下载站仍交给原客户端；跨来源凭据已移除。
-            if (request.url.host !in echHosts) return chain.proceed(request)
-        }
-        throw IOException("重定向次数过多")
+        val lifetime = CallLifetime(chain)
+        try {
+            repeat(11) { redirectCount ->
+                if (!request.url.isHttps || request.url.port != 443) throw IOException("ECH 仅支持 HTTPS 443")
+                lifetime.checkActive()
+                if (request.body?.isDuplex() == true) throw IOException("ECH 暂不支持双工请求")
+                val response = execute(chain, request, lifetime)
+                val next = if (redirects) redirectRequest(response) else null
+                if (next == null) {
+                    lifetime.finalBody.set(true)
+                    lifetime.checkActive()
+                    return response
+                }
+                response.close()
+                if (redirectCount == 10) throw IOException("重定向次数过多")
+                request = next
+                // 外部图片/下载站仍交给原客户端；跨来源凭据已移除。
+                if (request.url.host !in echHosts) {
+                    lifetime.close()
+                    return chain.proceed(request)
+                }
+            }
+            throw IOException("重定向次数过多")
+        } catch (error: Exception) { lifetime.close(); throw error }
     }
 
-    private fun execute(chain: Interceptor.Chain, request: Request): Response {
+    private fun execute(chain: Interceptor.Chain, request: Request, lifetime: CallLifetime): Response {
         val started = System.currentTimeMillis()
-        val timeout = chain.readTimeoutMillis().toLong().takeIf { it > 0 } ?: TimeUnit.HOURS.toMillis(24)
-        val exchange = try { engine.open(request, timeout) }
+        val timeouts = EchTimeouts(
+            chain.connectTimeoutMillis().toLong(), chain.readTimeoutMillis().toLong(), chain.writeTimeoutMillis().toLong()
+        )
+        val exchange = try { engine.open(request, timeouts) }
         catch (_: LinkageError) { throw EchIOException("当前设备无法加载 ECH 本地库，可在设置中关闭 ECH") }
         catch (_: Exception) { throw EchIOException("ECH 初始化失败，请运行连接诊断") }
         val closed = AtomicBoolean(false)
-        val monitor = cancellationMonitor.scheduleWithFixedDelay({
-            if (chain.call().isCanceled()) exchange.cancel()
-        }, 0, 100, TimeUnit.MILLISECONDS)
+        val monitor = AtomicReference<ScheduledFuture<*>?>()
         fun finishExchange() {
             if (closed.compareAndSet(false, true)) {
-                monitor.cancel(false)
+                monitor.get()?.cancel(false)
                 exchange.cancel()
+                if (lifetime.finalBody.get()) lifetime.close()
             }
         }
+        monitor.set(cancellationMonitor.scheduleWithFixedDelay({
+            if (chain.call().isCanceled()) finishExchange()
+        }, 0, 50, TimeUnit.MILLISECONDS))
+        if (closed.get()) monitor.get()?.cancel(false)
         try {
             val reply = exchange.execute()
-            if (chain.call().isCanceled()) throw IOException("Canceled")
+            lifetime.checkActive()
             val source = object : Source {
                 private var eof = false
                 override fun timeout() = Timeout.NONE
@@ -89,9 +107,15 @@ internal class EchInterceptor(
                     require(byteCount >= 0)
                     if (byteCount == 0L) return 0
                     if (eof) return -1
-                    if (closed.get() || chain.call().isCanceled()) throw IOException("Canceled")
+                    lifetime.checkActive()
+                    if (closed.get()) throw IOException("Canceled")
                     val bytes = try { exchange.read(minOf(byteCount, 65536)) }
-                    catch (_: Exception) { finishExchange(); throw EchIOException("ECH 响应读取失败，请运行连接诊断") }
+                    catch (error: Exception) {
+                        finishExchange()
+                        lifetime.checkActive()
+                        throw error as? EchIOException ?: EchIOException("ECH 响应读取失败，请运行连接诊断")
+                    }
+                    lifetime.checkActive()
                     if (bytes.isEmpty()) { eof = true; finishExchange(); return -1 }
                     sink.write(bytes)
                     return bytes.size.toLong()
@@ -107,15 +131,39 @@ internal class EchInterceptor(
                 .sentRequestAtMillis(started).receivedResponseAtMillis(System.currentTimeMillis()).build()
         } catch (error: Exception) {
             finishExchange()
-            if (chain.call().isCanceled()) throw IOException("Canceled")
+            lifetime.checkActive()
             throw error as? EchIOException ?: EchIOException("ECH 连接失败，请在设置中运行连接诊断")
         }
     }
 
-    companion object {
-        private val cancellationMonitor = Executors.newSingleThreadScheduledExecutor { runnable ->
-            Thread(runnable, "novelia-ech-cancel").apply { isDaemon = true }
+    /** Application-interceptor responses bypass OkHttp's exchange/body lifecycle. */
+    private class CallLifetime(private val chain: Interceptor.Chain) {
+        val finalBody = AtomicBoolean(false)
+        private val timedOut = AtomicBoolean(false)
+        private val finished = AtomicBoolean(false)
+        private val timeoutTask: ScheduledFuture<*>?
+        init {
+            val timeout = chain.call().timeout()
+            val remaining = if (timeout.hasDeadline()) (timeout.deadlineNanoTime() - System.nanoTime()).coerceAtLeast(1) else 0L
+            val budget = listOf(timeout.timeoutNanos(), remaining).filter { it > 0 }.minOrNull()
+            timeoutTask = budget?.let { cancellationMonitor.schedule({
+                if (finished.compareAndSet(false, true)) {
+                    timedOut.set(true)
+                    chain.call().cancel()
+                }
+            }, it, TimeUnit.NANOSECONDS) }
         }
+        fun checkActive() {
+            if (timedOut.get()) throw InterruptedIOException("timeout")
+            if (chain.call().isCanceled()) throw IOException("Canceled")
+        }
+        fun close() { finished.set(true); timeoutTask?.cancel(false) }
+    }
+
+    companion object {
+        private val cancellationMonitor = ScheduledThreadPoolExecutor(1) { runnable ->
+            Thread(runnable, "novelia-ech-cancel").apply { isDaemon = true }
+        }.apply { removeOnCancelPolicy = true }
     }
 }
 
@@ -146,7 +194,8 @@ internal fun OkHttpClient.Builder.echRedirects(enabled: Boolean): OkHttpClient.B
     followRedirects(enabled)
     val existing = interceptors().filterIsInstance<EchInterceptor>().singleOrNull()
     if (existing != null) {
-        interceptors().remove(existing)
-        addInterceptor(existing.withRedirects(enabled))
+        // Preserve ordering: later interceptors must not move ahead of the ECH route.
+        val index = interceptors().indexOf(existing)
+        interceptors()[index] = existing.withRedirects(enabled)
     }
 }

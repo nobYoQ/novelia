@@ -16,7 +16,7 @@ class EchInterceptorTest {
     @Test fun fixedEchFailureMessageSurvivesTheAdapter() {
         val failure = EchIOException("ECH 连接超时，请在设置中运行连接诊断")
         val engine = object : EchEngine {
-            override fun open(request: Request, timeoutMillis: Long) = object : EchExchange {
+            override fun open(request: Request, timeouts: EchTimeouts) = object : EchExchange {
                 override fun execute(): EchReply = throw failure
                 override fun read(maxBytes: Long) = ByteArray(0)
                 override fun cancel() {}
@@ -56,7 +56,7 @@ class EchInterceptorTest {
     @Test fun failureDoesNotFallBackOrReplayPost() {
         var attempts = 0
         val engine = object : EchEngine {
-            override fun open(request: Request, timeoutMillis: Long): EchExchange {
+            override fun open(request: Request, timeouts: EchTimeouts): EchExchange {
                 attempts++
                 return object : EchExchange {
                     override fun execute(): EchReply = throw IOException("failed")
@@ -75,7 +75,7 @@ class EchInterceptorTest {
         val cancelled = AtomicBoolean(false)
         val data = Buffer().write(ByteArray(5 * 1024 * 1024) { 42 })
         val engine = object : EchEngine {
-            override fun open(request: Request, timeoutMillis: Long) = object : EchExchange {
+            override fun open(request: Request, timeouts: EchTimeouts) = object : EchExchange {
                 override fun execute() = reply(401, Headers.Builder().add("Set-Cookie", "first=1").add("Set-Cookie", "second=2").build())
                 override fun read(maxBytes: Long) = data.readByteArray(minOf(maxBytes, data.size))
                 override fun cancel() { cancelled.set(true) }
@@ -93,7 +93,7 @@ class EchInterceptorTest {
     @Test fun cancellationInterruptsNativeHeaders() {
         val started = CountDownLatch(1); val cancelled = CountDownLatch(1); val completed = CountDownLatch(1)
         val engine = object : EchEngine {
-            override fun open(request: Request, timeoutMillis: Long) = object : EchExchange {
+            override fun open(request: Request, timeouts: EchTimeouts) = object : EchExchange {
                 override fun execute(): EchReply { started.countDown(); assertTrue(cancelled.await(2, TimeUnit.SECONDS)); throw IOException("cancelled") }
                 override fun read(maxBytes: Long) = ByteArray(0)
                 override fun cancel() { cancelled.countDown() }
@@ -110,12 +110,106 @@ class EchInterceptorTest {
     }
 
     @Test fun unprotectedHostAndDisabledModeUseOriginalClient() {
-        val engine = object : EchEngine { override fun open(request: Request, timeoutMillis: Long): EchExchange = error("must not route") }
+        val engine = object : EchEngine { override fun open(request: Request, timeouts: EchTimeouts): EchExchange = error("must not route") }
         for ((url, enabled) in listOf("https://example.com/" to true, "https://n.novelia.cc/" to false, "https://n.novelia.cc.example.com/" to true)) {
             val client = OkHttpClient.Builder().addInterceptor(EchInterceptor(engine, { enabled })).addInterceptor {
                 Response.Builder().request(it.request()).protocol(Protocol.HTTP_1_1).code(200).message("").body("ordinary".toResponseBody()).build()
             }.build()
             client.newCall(Request.Builder().url(url).build()).execute().use { assertEquals("ordinary", it.body!!.string()) }
         }
+    }
+
+    @Test fun derivedClientTimeoutsReachNativeIncludingUnlimitedZero() {
+        val received = mutableListOf<EchTimeouts>()
+        val engine = object : EchEngine {
+            override fun open(request: Request, timeouts: EchTimeouts): EchExchange {
+                received += timeouts
+                return object : EchExchange {
+                    override fun execute() = reply()
+                    override fun read(maxBytes: Long) = ByteArray(0)
+                    override fun cancel() {}
+                }
+            }
+        }
+        val original = OkHttpClient.Builder().connectTimeout(150, TimeUnit.MILLISECONDS)
+            .readTimeout(250, TimeUnit.MILLISECONDS).writeTimeout(350, TimeUnit.MILLISECONDS)
+            .addInterceptor(EchInterceptor(engine, { true })).build()
+        val derived = original.newBuilder().connectTimeout(0, TimeUnit.MILLISECONDS)
+            .readTimeout(0, TimeUnit.MILLISECONDS).writeTimeout(0, TimeUnit.MILLISECONDS).build()
+        for (client in listOf(original, derived)) {
+            client.newCall(Request.Builder().url("https://n.novelia.cc/").build()).execute().close()
+        }
+        assertEquals(listOf(EchTimeouts(150, 250, 350), EchTimeouts(0, 0, 0)), received)
+    }
+
+    @Test fun callTimeoutRemainsActiveDuringResponseBodyRead() {
+        val cancelled = CountDownLatch(1)
+        val engine = object : EchEngine {
+            override fun open(request: Request, timeouts: EchTimeouts) = object : EchExchange {
+                override fun execute() = reply()
+                override fun read(maxBytes: Long): ByteArray {
+                    assertTrue("native body did not receive cancellation", cancelled.await(2, TimeUnit.SECONDS))
+                    throw IOException("closed")
+                }
+                override fun cancel() { cancelled.countDown() }
+            }
+        }
+        val client = OkHttpClient.Builder().callTimeout(150, TimeUnit.MILLISECONDS)
+            .readTimeout(0, TimeUnit.MILLISECONDS).addInterceptor(EchInterceptor(engine, { true })).build()
+        val call = client.newCall(Request.Builder().url("https://n.novelia.cc/").build())
+        call.execute().use { response ->
+            try { response.body!!.string(); fail("unlimited read ignored total call budget") }
+            catch (error: IOException) { assertTrue(call.isCanceled()); assertTrue(error.message in setOf("timeout", "Canceled")) }
+        }
+        assertEquals(0, cancelled.count)
+    }
+
+    @Test fun responseCloseReleasesCallDeadlineAndCancelsNativeOnce() {
+        val cancellations = java.util.concurrent.atomic.AtomicInteger()
+        val engine = object : EchEngine {
+            override fun open(request: Request, timeouts: EchTimeouts) = object : EchExchange {
+                override fun execute() = reply()
+                override fun read(maxBytes: Long) = ByteArray(0)
+                override fun cancel() { cancellations.incrementAndGet() }
+            }
+        }
+        val client = OkHttpClient.Builder().callTimeout(100, TimeUnit.MILLISECONDS)
+            .addInterceptor(EchInterceptor(engine, { true })).build()
+        val call = client.newCall(Request.Builder().url("https://n.novelia.cc/").build())
+        call.execute().close()
+        Thread.sleep(180)
+        assertFalse("closed call was cancelled by a leaked deadline", call.isCanceled())
+        assertEquals(1, cancellations.get())
+    }
+
+    @Test fun cancellationAlsoInterruptsBlockedResponseBody() {
+        val started = CountDownLatch(1)
+        val cancelled = CountDownLatch(1)
+        val finished = CountDownLatch(1)
+        val engine = object : EchEngine {
+            override fun open(request: Request, timeouts: EchTimeouts) = object : EchExchange {
+                override fun execute() = reply()
+                override fun read(maxBytes: Long): ByteArray {
+                    started.countDown()
+                    assertTrue(cancelled.await(2, TimeUnit.SECONDS))
+                    throw IOException("closed")
+                }
+                override fun cancel() { cancelled.countDown() }
+            }
+        }
+        val client = OkHttpClient.Builder().addInterceptor(EchInterceptor(engine, { true })).build()
+        val call = client.newCall(Request.Builder().url("https://n.novelia.cc/").build())
+        val response = call.execute()
+        val failure = java.util.concurrent.atomic.AtomicReference<Throwable?>()
+        val reader = Thread {
+            try { response.use { it.body!!.string() }; failure.set(AssertionError("read unexpectedly succeeded")) }
+            catch (_: IOException) { }
+            catch (error: Throwable) { failure.set(error) }
+            finally { finished.countDown() }
+        }
+        reader.start()
+        assertTrue(started.await(2, TimeUnit.SECONDS)); call.cancel()
+        assertTrue(finished.await(2, TimeUnit.SECONDS))
+        failure.get()?.let { throw AssertionError(it) }
     }
 }

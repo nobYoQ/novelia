@@ -1,8 +1,8 @@
 # Novelia Android
 
-面向 [轻小说机翻机器人](https://n.novelia.cc/) 的非官方原生安卓客户端，当前源码配置版本为 [0.2.3-ech.4](version.properties)。使用 Kotlin、Jetpack Compose 与 Material 3，支持 Android 8.0（API 26）及以上。
+面向 [轻小说机翻机器人](https://n.novelia.cc/) 的非官方原生安卓客户端，当前源码配置版本为 [0.2.3-ech.5](version.properties)。使用 Kotlin、Jetpack Compose 与 Material 3，支持 Android 8.0（API 26）及以上。
 
-当前 `codex/ech-adaptation` 分支基于 `main` 增加实验性 ECH 网络传输，并保留后续独立论坛接入所需的域名支持与匿名 API 诊断。开关位于「我的 → 设置 → ECH 连接测试」；适配范围、构建要求与后续接入说明见 [ECH 连接测试版](docs/network/ech-test.md)。
+当前版本包含实验性 ECH 网络传输，并保留后续独立论坛接入所需的域名支持与匿名 API 诊断。开关位于「我的 → 设置 → ECH 连接测试」；适配范围、构建要求与后续接入说明见 [ECH 连接测试版](docs/network/ech-test.md)。
 
 ## 下载与反馈
 
@@ -50,7 +50,7 @@ APK 与 SHA-256 校验文件输出到 `outputs/packages/debug/` 或 `outputs/pac
 
 构建入口复用 `build.ps1`，自动从环境变量、PATH、Android Studio 和常见安装目录查找 JDK，从 `local.properties`、环境变量及默认目录查找 Android SDK。换电脑后无须沿用原机器盘符；自动检测失败时，填写 `build.ps1` 顶部带中文注释的“手动环境配置区”。运行 `./build.ps1 -CheckEnvironment` 可只检查路径。构建时自动同步被 Git 忽略的 `local.properties`，保留其中其他配置；缓存默认使用项目 `.gradle-home/`、`.android/`，也可沿用对应环境变量或手动指定。完整优先级见 [环境配置说明](docs/development/getting-started.md#自动检测与手动配置)。
 
-标准 Gradle Wrapper 也已提供；可在配置好 JDK/SDK 的环境中使用 `gradlew`。当前固定 AGP 8.13.2、Gradle 8.13、Kotlin 2.2.21、Compose BOM 2025.12.00。
+标准 Gradle Wrapper 也已提供；可在配置好 JDK/SDK 的环境中使用 `gradlew`。当前固定 AGP 8.13.2、Gradle 8.13、Kotlin 2.2.21、Compose BOM 2025.12.00。ECH 本地库已接入 Gradle 依赖图，需要 SDK 内的 NDK `28.2.13676358`；Windows x64 可自动引导校验过的 Go `1.27.1`，Linux/macOS 需预装该版本 Go（或设置 `NOVELIA_GO_HOME`）。详见 [ECH 构建说明](docs/network/ech-test.md#构建与测试)。
 
 Linux / macOS（`sh` 调用也适用于没有执行位的源码 ZIP）：
 

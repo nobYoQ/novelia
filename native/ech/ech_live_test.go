@@ -18,7 +18,7 @@ func TestLiveECHReadOnly(t *testing.T) {
 		t.Run(host, func(t *testing.T) {
 			t.Parallel()
 			client := NewClient()
-			call, err := client.NewCall("GET", "https://"+host+"/cdn-cgi/trace", "{}", nil, 0, 20000)
+			call, err := client.NewCall("GET", "https://"+host+"/cdn-cgi/trace", "{}", nil, 0, 8000, 20000, 20000)
 			if err != nil {
 				t.Fatal("cannot construct call")
 			}
@@ -60,7 +60,7 @@ func TestLiveForumAPI(t *testing.T) {
 	}
 	for _, path := range []string{"category/", "post/?page=1&page_size=20&category=announcements&q=&sort=active"} {
 		client := NewClient()
-		call, err := client.NewCall("GET", "https://forum.novelia.cc/api/v1/"+path, `{"Accept":["application/json"]}`, nil, 0, 20000)
+		call, err := client.NewCall("GET", "https://forum.novelia.cc/api/v1/"+path, `{"Accept":["application/json"]}`, nil, 0, 8000, 20000, 20000)
 		if err != nil {
 			t.Fatal("cannot construct public API request")
 		}

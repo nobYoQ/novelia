@@ -35,7 +35,6 @@ import kotlinx.coroutines.launch
                 busy = true
                 scope.launch {
                     try {
-                        transport.resetConnections()
                         result = transport.diagnose()
                     } finally { busy = false }
                 }

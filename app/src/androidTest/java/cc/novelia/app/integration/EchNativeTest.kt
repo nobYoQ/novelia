@@ -59,6 +59,31 @@ class EchNativeTest {
         assertTrue(report, report.contains("论坛帖子 API\nHTTP 200，读取和解析成功"))
     }
 
+    @Test fun resettingNetworkStatePreservesActiveBodyAndAllowsFreshConnections() {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("echLive") == "true")
+        go.Seq.setContext(InstrumentationRegistry.getInstrumentation().targetContext)
+        val client = Ech.newClient()
+        val first = client.newCall("GET", "https://forum.novelia.cc/cdn-cgi/trace", "{}", null, 0, 8000, 20000, 20000)
+        try {
+            assertEquals(200L, first.execute().statusCode())
+            assertEquals(1, first.read(1)!!.size)
+            client.resetNetworkState() // Same native operation invoked by the Android network callback.
+            var length = 1
+            while (true) {
+                val bytes = first.read(4096) ?: ByteArray(0)
+                if (bytes.isEmpty()) break
+                length += bytes.size
+                assertTrue(length < 65536)
+            }
+            assertTrue(length > 1)
+        } finally { first.cancel() }
+        val next = client.newCall("GET", "https://forum.novelia.cc/cdn-cgi/trace", "{}", null, 0, 8000, 20000, 20000)
+        try {
+            assertEquals(200L, next.execute().statusCode())
+            assertTrue(next.read(4096)!!.isNotEmpty())
+        } finally { next.cancel() }
+    }
+
     @Test fun nativeLibraryLoadsAndCancellationClosesUploadWithoutNetwork() {
         go.Seq.setContext(InstrumentationRegistry.getInstrumentation().targetContext)
         val client = Ech.newClient()
@@ -67,7 +92,7 @@ class EchNativeTest {
             override fun readChunk(maxBytes: Long): ByteArray = error("cancelled call must not read upload")
             override fun close() { closed.set(true) }
         }
-        val call = client.newCall("POST", "https://auth.novelia.cc/", "{}", upload, 0, 1000)
+        val call = client.newCall("POST", "https://auth.novelia.cc/", "{}", upload, 0, 1000, 1000, 1000)
         call.cancel()
         assertTrue(closed.get())
         try { call.execute(); fail("cancelled call executed") } catch (_: Exception) { /* expected */ }
@@ -78,7 +103,7 @@ class EchNativeTest {
         go.Seq.setContext(InstrumentationRegistry.getInstrumentation().targetContext)
         val client = Ech.newClient()
         for (host in listOf("n.novelia.cc", "auth.novelia.cc", "forum.novelia.cc")) {
-            val call = client.newCall("GET", "https://$host/cdn-cgi/trace", "{}", null, 0, 20000)
+            val call = client.newCall("GET", "https://$host/cdn-cgi/trace", "{}", null, 0, 8000, 20000, 20000)
             try {
                 val response = call.execute() // Native bridge rejects a connection without accepted ECH.
                 assertEquals(200L, response.statusCode())

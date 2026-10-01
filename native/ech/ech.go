@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/http/httptrace"
 	"net/url"
 	"strings"
 	"sync"
@@ -35,8 +36,8 @@ func NewClient() *Client {
 		"https://8.8.8.8/dns-query",
 	}
 	config.JSONResolvers = []string{"https://cloudflare-dns.com/dns-query", "https://dns.google/resolve"}
-	// Calls impose a header deadline and a fresh idle deadline for every read.
-	// This upper bound is deliberately larger than a normal file download.
+	// This upstream client only supplies encrypted resolution. Actual HTTP calls
+	// use the local transport below and the per-call phase deadlines.
 	config.RequestTimeout = 24 * time.Hour
 	config.UserAgent = "Novelia-ECH/1"
 	c, err := core.NewClient(config)
@@ -49,7 +50,7 @@ func NewClient() *Client {
 		panic("invalid built-in ECH probe configuration")
 	}
 	transport := newHTTPTransport(c)
-	httpClient := &http.Client{Transport: transport, Timeout: 24 * time.Hour,
+	httpClient := &http.Client{Transport: transport,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	return &Client{core: c, probe: p, transport: transport, do: httpClient.Do}
 }
@@ -68,16 +69,18 @@ func protectedURL(raw string) bool {
 
 // Call can be cancelled while connecting, uploading, awaiting headers or reading.
 type Call struct {
-	client   *Client
-	request  *http.Request
-	timeout  time.Duration
-	ctx      context.Context
-	cancel   context.CancelFunc
-	mu       sync.Mutex
-	readMu   sync.Mutex
-	executed bool
-	body     io.ReadCloser
-	failure  string
+	client         *Client
+	request        *http.Request
+	connectTimeout time.Duration
+	readTimeout    time.Duration
+	writeTimeout   time.Duration
+	ctx            context.Context
+	cancel         context.CancelFunc
+	mu             sync.Mutex
+	readMu         sync.Mutex
+	executed       bool
+	body           io.ReadCloser
+	failure        string
 }
 
 // Upload is fed by a bounded Android pipe; no request body is saved to disk.
@@ -103,12 +106,14 @@ func (r *uploadReader) Read(p []byte) (int, error) {
 }
 func (r *uploadReader) Close() error { r.source.Close(); return nil }
 
-func (c *Client) NewCall(method, rawURL, headersJSON string, upload Upload, contentLength, timeoutMillis int64) (*Call, error) {
+func (c *Client) NewCall(method, rawURL, headersJSON string, upload Upload, contentLength, connectTimeoutMillis, readTimeoutMillis, writeTimeoutMillis int64) (*Call, error) {
 	if !protectedURL(rawURL) {
 		return nil, errors.New("ECH destination is outside the configured HTTPS hosts")
 	}
-	if timeoutMillis <= 0 || timeoutMillis > 24*60*60*1000 {
-		return nil, errors.New("invalid idle timeout")
+	for _, value := range []int64{connectTimeoutMillis, readTimeoutMillis, writeTimeoutMillis} {
+		if value < 0 || value > 2147483647 {
+			return nil, errors.New("invalid phase timeout")
+		}
 	}
 	var headers map[string][]string
 	if err := json.Unmarshal([]byte(headersJSON), &headers); err != nil {
@@ -137,7 +142,11 @@ func (c *Client) NewCall(method, rawURL, headersJSON string, upload Upload, cont
 		request.ContentLength = contentLength
 		// GetBody stays nil: a non-idempotent upload is never automatically replayed.
 	}
-	return &Call{client: c, request: request, timeout: time.Duration(timeoutMillis) * time.Millisecond, ctx: ctx, cancel: cancel}, nil
+	return &Call{client: c, request: request,
+		connectTimeout: time.Duration(connectTimeoutMillis) * time.Millisecond,
+		readTimeout:    time.Duration(readTimeoutMillis) * time.Millisecond,
+		writeTimeout:   time.Duration(writeTimeoutMillis) * time.Millisecond,
+		ctx:            ctx, cancel: cancel}, nil
 }
 
 // Reply contains headers only. The body remains streamed through Call.Read.
@@ -164,13 +173,17 @@ func (c *Call) Execute() (*Reply, error) {
 	if err := c.ctx.Err(); err != nil {
 		return nil, err
 	}
-	deadline := time.AfterFunc(c.timeout, c.Cancel)
-	response, err := doWithConnectRetry(c.client.do, c.request, 9*time.Second)
-	deadline.Stop()
+	phase := newPhaseDeadline(func(reason string) { c.fail(reason); c.Cancel() })
+	defer phase.stop()
+	trace := &httptrace.ClientTrace{
+		GotConn:      func(httptrace.GotConnInfo) { phase.start(c.writeTimeout, "请求发送超时") },
+		WroteRequest: func(httptrace.WroteRequestInfo) { phase.start(c.readTimeout, "响应读取超时") },
+	}
+	request := c.request.Clone(httptrace.WithClientTrace(c.request.Context(), trace))
+	response, err := doWithConnectRetry(c.client.do, request, c.connectTimeout)
+	phase.stop()
 	if err != nil {
-		c.mu.Lock()
-		c.failure = failureReason(err.Error())
-		c.mu.Unlock()
+		c.fail(failureReason(err.Error()))
 		if c.request.Body != nil {
 			c.request.Body.Close()
 		}
@@ -196,6 +209,14 @@ func (c *Call) Execute() (*Reply, error) {
 		return nil, errors.New("invalid response headers")
 	}
 	return &Reply{code: response.StatusCode, protocol: response.Proto, headers: string(headers), length: response.ContentLength}, nil
+}
+
+func (c *Call) fail(reason string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.failure == "" {
+		c.failure = reason
+	}
 }
 
 // FailureReason contains a fixed diagnostic label, never raw errors or URLs.
@@ -224,10 +245,11 @@ func (c *Call) Read(maxBytes int) ([]byte, error) {
 	if err := c.ctx.Err(); err != nil {
 		return nil, err
 	}
-	deadline := time.AfterFunc(c.timeout, c.Cancel)
+	deadline := newPhaseDeadline(func(reason string) { c.fail(reason); c.Cancel() })
+	deadline.start(c.readTimeout, "响应读取超时")
 	buffer := make([]byte, maxBytes)
 	n, err := body.Read(buffer)
-	deadline.Stop()
+	deadline.stop()
 	if n > 0 {
 		return buffer[:n], nil
 	}

@@ -14,23 +14,34 @@ import (
 // request bytes have been sent. Never replay uploads, HTTP errors or body reads.
 // The core uses DialTLSContext, so Transport.TLSHandshakeTimeout is ignored.
 func doWithConnectRetry(do func(*http.Request) (*http.Response, error), request *http.Request, budget time.Duration) (*http.Response, error) {
-	if request.Body != nil || (request.Method != http.MethodGet && request.Method != http.MethodHead) {
-		return do(request)
+	attempts := 1
+	if request.Body == nil && (request.Method == http.MethodGet || request.Method == http.MethodHead) {
+		attempts = 3
 	}
 	var last error
-	for attempt := 0; attempt < 3; attempt++ {
+	for attempt := 0; attempt < attempts; attempt++ {
 		if err := request.Context().Err(); err != nil {
 			return nil, err
 		}
 		ctx, cancel := context.WithCancel(request.Context())
 		var connected atomic.Bool
-		timer := time.AfterFunc(budget, cancel)
+		var timer *time.Timer
+		if budget > 0 {
+			timer = time.AfterFunc(budget, cancel)
+		}
 		trace := &httptrace.ClientTrace{GotConn: func(httptrace.GotConnInfo) {
 			connected.Store(true)
-			timer.Stop()
+			if timer != nil {
+				timer.Stop()
+			}
 		}}
+		// net/http detaches dial cancellation, but preserves context values.
+		// Let our TLS dial observe this attempt's cancellation and budget too.
+		ctx = context.WithValue(ctx, dialPolicyKey{}, dialPolicy{parent: ctx, timeout: budget})
 		response, err := do(request.Clone(httptrace.WithClientTrace(ctx, trace)))
-		timer.Stop()
+		if timer != nil {
+			timer.Stop()
+		}
 		if err == nil {
 			// Parent Call.Cancel closes this context at EOF/close, so a successful
 			// response remains readable after the connect budget has elapsed.

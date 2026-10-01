@@ -3,6 +3,7 @@ package ech
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"errors"
 	"io"
 	"net/http"
@@ -92,5 +93,48 @@ func TestConnectCancellationStopsRetries(t *testing.T) {
 	_, _ = doWithConnectRetry(func(*http.Request) (*http.Response, error) { attempts++; cancel(); return nil, io.EOF }, r, time.Second)
 	if attempts != 1 {
 		t.Fatal("retried cancelled call")
+	}
+}
+
+func TestConnectTimeoutAlsoBoundsWriteMethodsBeforeConnection(t *testing.T) {
+	r, _ := http.NewRequest("POST", "https://forum.novelia.cc/", bytes.NewBufferString("example"))
+	attempts := 0
+	_, err := doWithConnectRetry(func(r *http.Request) (*http.Response, error) {
+		attempts++
+		<-r.Context().Done()
+		return nil, r.Context().Err()
+	}, r, 20*time.Millisecond)
+	if err == nil || attempts != 1 {
+		t.Fatal("write method connection was not bounded once")
+	}
+}
+
+func TestCertificateFailuresAreNeverRetried(t *testing.T) {
+	r, _ := http.NewRequest("GET", "https://forum.novelia.cc/", nil)
+	attempts := 0
+	_, _ = doWithConnectRetry(func(*http.Request) (*http.Response, error) {
+		attempts++
+		return nil, &tls.CertificateVerificationError{Err: errors.New("untrusted certificate")}
+	}, r, time.Second)
+	if attempts != 1 {
+		t.Fatal("retried certificate failure")
+	}
+}
+
+func TestDetachedTLSDialStillHonorsCancellationAndConfiguredBudget(t *testing.T) {
+	for _, timeout := range []time.Duration{0, 20 * time.Millisecond} {
+		parent, cancel := context.WithCancel(context.Background())
+		ctx := context.WithValue(parent, dialPolicyKey{}, dialPolicy{parent: parent, timeout: timeout})
+		dial, stop := connectionContext(context.WithoutCancel(ctx))
+		if timeout == 0 {
+			cancel()
+		}
+		select {
+		case <-dial.Done():
+		case <-time.After(time.Second):
+			t.Fatal("detached TLS dial ignored cancellation/deadline")
+		}
+		stop()
+		cancel()
 	}
 }
