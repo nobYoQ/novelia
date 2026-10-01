@@ -37,7 +37,7 @@ import java.util.UUID
                 val filename = "$mode.$name"
                 val engines = listOf(engine) + listOf("sakura", "gpt", "youdao").filterNot { it == engine }
                 val url = c.api.downloadUrl(book.ref, volume, mode, engines, parallel, type, filename)
-                c.action { DownloadWorker.enqueue(c.app, DownloadEntry(id, volume ?: book.title, "$id-$filename", url, sourceBook = book.ref)); dismiss(); c.message("已加入下载列表"); c.go("downloads") }
+                c.action { DownloadWorker.enqueue(c.app, DownloadEntry(id, volume ?: book.title, "$id-$filename", url, sourceBook = book.ref, sourceCard = book)); dismiss(); c.message("已加入下载列表"); c.go("downloads") }
             }, Modifier.fillMaxWidth().padding(horizontal = 20.dp)) { Icon(Icons.Outlined.Download, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("开始下载") }
         }
     }

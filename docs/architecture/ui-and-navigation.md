@@ -48,7 +48,7 @@
 | `book/{provider}/{id}` | 书籍详情 |
 | `reader/{provider}/{id}/{chapter}` | 阅读器 |
 | `article/{id}` | 帖子详情 |
-| `compose?article={article}` | 新建或编辑帖子 |
+| `compose?article={article}&draft={draft}` | 新建、续写本地新帖草稿或编辑已有帖子 |
 | `login` | 登录与账号入口 |
 | `settings`、`backup`、`sync` | 偏好、书库备份、云同步状态 |
 | `updates`、`downloads`、`tools` | 更新中心、下载管理、文件工具 |
@@ -189,7 +189,7 @@ Activity 接受 `intent.dataString`，没有时再取 `Intent.EXTRA_TEXT`。待�
 
 ### 编辑与草稿
 
-社区列表和文章详情分别位于 [CommunityScreen.kt](../../app/src/main/java/cc/novelia/app/ui/community/CommunityScreen.kt) 与 [ArticleScreen.kt](../../app/src/main/java/cc/novelia/app/ui/community/ArticleScreen.kt)；文章编辑器位于 [ComposeArticleScreen.kt](../../app/src/main/java/cc/novelia/app/ui/community/ComposeArticleScreen.kt)，评论位于 [CommentsPanel.kt](../../app/src/main/java/cc/novelia/app/ui/community/CommentsPanel.kt)。文章草稿键为 `article:<id>` 或 `article:new`，评论为 `comment:<site>:<parent>`。文章编辑和预览通过 `SaveableStateHolder` 保存各自状态，输入区根据键盘和剩余高度设定边界。
+社区列表和文章详情分别位于 [CommunityScreen.kt](../../app/src/main/java/cc/novelia/app/ui/community/CommunityScreen.kt) 与 [ArticleScreen.kt](../../app/src/main/java/cc/novelia/app/ui/community/ArticleScreen.kt)；文章编辑器位于 [ComposeArticleScreen.kt](../../app/src/main/java/cc/novelia/app/ui/community/ComposeArticleScreen.kt)，评论位于 [CommentsPanel.kt](../../app/src/main/java/cc/novelia/app/ui/community/CommentsPanel.kt)。已有文章草稿键为 `article:<id>`，新帖为独立的 `article:new:<UUID>`（兼容旧 `article:new`），评论为 `comment:<site>:<parent>`。新帖从草稿箱传入已编码的 `draft` 参数直接离线恢复，打开新帖不需要登录。文章编辑和预览通过 `SaveableStateHolder` 保存各自状态，输入区根据键盘和剩余高度设定边界。
 
 [EditorDraft.kt](../../app/src/main/java/cc/novelia/app/ui/markdown/EditorDraft.kt) 的 `DraftPersistence` 是编辑器必须保留的约束：离开时读取实时输入；提交成功后仅当当前文本仍等于提交快照时清理草稿。请求期间新增的文字不得被成功回调清掉。文章另有 700 ms 防抖保存，评论在修改时更新草稿。
 

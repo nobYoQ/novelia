@@ -2,7 +2,7 @@ package cc.novelia.app.files
 
 import android.net.Uri
 import android.provider.OpenableColumns
-import cc.novelia.app.data.library.withVolumeParent
+import cc.novelia.app.data.library.withDownloadedVolume
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.DownloadEntry
@@ -39,7 +39,8 @@ private fun copyImport(input: InputStream, target: File, checkCancelled: () -> U
  * 提供器声明的大小可能缺失或不可信，因此复制时仍逐块检查上限和取消状态；
  * finally 清理本次输入暂存文件，不要求提供器返回可以直接访问的本地文件路径。
  */
-suspend fun importDocumentUri(store: LocalStore, uri: Uri): DocumentImportResult = withContext(Dispatchers.IO) {
+suspend fun importDocumentUri(store: LocalStore, uri: Uri, onProgress: (String) -> Unit = {}): DocumentImportResult = withContext(Dispatchers.IO) {
+    onProgress("正在读取文件")
     val resolver = store.context.contentResolver
     val name = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use {
         if (it.moveToFirst()) {
@@ -53,7 +54,7 @@ suspend fun importDocumentUri(store: LocalStore, uri: Uri): DocumentImportResult
     try {
         val workContext = coroutineContext
         resolver.openInputStream(uri)?.use { copyImport(it, staged) { workContext.ensureActive() } } ?: error("无法读取文件")
-        importLocalDocument(store, staged, name)
+        importLocalDocument(store, staged, name, onProgress = onProgress)
     } finally { staged.delete() }
 }
 
@@ -62,20 +63,24 @@ suspend fun importDocumentUri(store: LocalStore, uri: Uri): DocumentImportResult
  * 命中源文件哈希时返回原引用且 imported=false，保留已有阅读位置和用户的分卷归属。
  * 新文档使用新 ID；安装失败仅清理这个新文档，图片先流式写入暂存目录以控制内存占用。
  */
-suspend fun importLocalDocument(store: LocalStore, file: File, name: String = file.name, title: String? = null): DocumentImportResult = withContext(Dispatchers.IO) {
+suspend fun importLocalDocument(store: LocalStore, file: File, name: String = file.name, title: String? = null,
+    onProgress: (String) -> Unit = {}): DocumentImportResult = withContext(Dispatchers.IO) {
     importLock.withLock {
+        onProgress("正在检查重复文件")
         DocumentTools.requireImportSize(file.length())
         val workContext = coroutineContext
         val hash = file.inputStream().use { DocumentTools.digest(it) { workContext.ensureActive() } }
         store.findDocumentByHash(hash) { workContext.ensureActive() }?.let { return@withLock DocumentImportResult(it, false) }
         val images = java.nio.file.Files.createTempDirectory(store.context.cacheDir.toPath(), "document-images-").toFile()
         try {
+            onProgress("正在解析章节")
             val parsed = DocumentTools.parseFile(name, file, { imageHash, input ->
                 copyImport(input, File(images, imageHash)) { workContext.ensureActive() }
             }, hash) { workContext.ensureActive() }
             val document = if (title == null) parsed else parsed.copy(name = title)
             val ref = BookRef("local", document.id)
             try {
+                onProgress("正在保存小说")
                 file.inputStream().use { copyImport(it, store.documentSource(document.id, document.format)) { workContext.ensureActive() } }
                 images.listFiles().orEmpty().forEach { image ->
                     workContext.ensureActive()
@@ -96,12 +101,15 @@ suspend fun importLocalDocument(store: LocalStore, file: File, name: String = fi
     }
 }
 
-/** 重新导入时，保留用户已明确选择的分卷解绑或移动结果。 */
-suspend fun importDownloadedDocument(store: LocalStore, entry: DownloadEntry): BookRef {
+/** 每次开始阅读均补齐父文库并挂载，重复文件复用已有副本和阅读位置。 */
+suspend fun importDownloadedDocument(store: LocalStore, entry: DownloadEntry, sourceCard: BookCard? = entry.sourceCard): BookRef {
     val result = importLocalDocument(store, File(store.downloadsDir, entry.fileName), entry.fileName, entry.title)
-    if (result.imported) store.update { state ->
-        val parent = entry.sourceBook?.takeIf { it.isWenku && state.books.any { saved -> saved.book.ref == it } }
-        if (parent == null) state else state.withVolumeParent(result.ref.key, parent.key)
+    entry.sourceBook?.takeIf { it.isWenku }?.let { source -> store.update { state ->
+        val parent = state.books.firstOrNull { it.book.ref == source }?.book
+            ?: sourceCard?.takeIf { it.ref == source }
+            ?: BookCard(source, "文库小说 ${source.id}", subtitle = "文库小说")
+        state.withDownloadedVolume(result.ref, parent)
+    }
     }
     return result.ref
 }

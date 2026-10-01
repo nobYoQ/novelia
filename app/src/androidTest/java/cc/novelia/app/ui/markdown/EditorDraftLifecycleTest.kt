@@ -5,6 +5,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.data.storage.LocalStore
+import cc.novelia.app.ui.community.ArticleDrafts
 import cc.novelia.app.ui.markdown.DraftPersistence
 import cc.novelia.app.ui.markdown.rememberDraftPersistence
 import java.io.File
@@ -87,6 +88,36 @@ class EditorDraftLifecycleTest {
             compose.runOnIdle { visible = false }
             compose.waitForIdle()
             assertEquals("正文：second", store.state.value.drafts["second"])
+        } finally {
+            compose.runOnIdle { visible = false }
+            compose.waitForIdle()
+            runBlocking { store.flush() }
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test fun twoOfflineNewPostDraftsRetainLastInputAcrossEditorDisposalAndStoreReload() {
+        val (directory, store) = isolatedStore()
+        val first = ArticleDrafts.newKey()
+        val second = ArticleDrafts.newKey()
+        var selected by mutableStateOf(first)
+        var visible by mutableStateOf(true)
+        val texts = mutableStateMapOf(first to "第一篇草稿", second to "第二篇草稿")
+        try {
+            compose.setContent {
+                if(visible) {
+                    val key = selected
+                    rememberDraftPersistence(store, key) { texts.getValue(key) }
+                }
+            }
+            compose.runOnIdle { texts[first] = "第一篇的最后输入"; selected = second }
+            compose.waitForIdle()
+            compose.runOnIdle { texts[second] = "第二篇的最后输入"; visible = false }
+            compose.waitForIdle()
+            runBlocking { store.flush() }
+            val reloaded = LocalStore(store.context).state.value.drafts
+            assertEquals("第一篇的最后输入", reloaded[first])
+            assertEquals("第二篇的最后输入", reloaded[second])
         } finally {
             compose.runOnIdle { visible = false }
             compose.waitForIdle()

@@ -17,6 +17,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.model.Article
 import cc.novelia.app.data.model.Page
 import cc.novelia.app.ui.components.AppLazyColumn
+import cc.novelia.app.ui.components.AppSheet
 import cc.novelia.app.ui.components.AsyncContent
 import cc.novelia.app.ui.components.EmptyState
 import cc.novelia.app.ui.components.PageControls
@@ -33,13 +34,15 @@ import cc.novelia.app.ui.theme.motionClickable
     var category by rememberSaveable { mutableStateOf("General") }; var page by rememberSaveable { mutableIntStateOf(0) }; var search by rememberSaveable { mutableStateOf("") }; var saved by rememberSaveable { mutableStateOf(false) }
     val reducedMotion = appReducedMotion()
     val state by c.store.state.collectAsStateWithLifecycle()
+    var draftBoxOpen by rememberSaveable { mutableStateOf(false) }
     Screen("社区", actions = {
+        IconButton(onClick = { draftBoxOpen = true }) { Icon(Icons.Outlined.Drafts, "新帖草稿箱") }
         IconToggleButton(checked = saved, onCheckedChange = { saved = it }) {
             Crossfade(saved, animationSpec = tween(if(reducedMotion) 0 else AppMotion.Quick), label = "savedArticles") { showingSaved ->
                 Icon(if(showingSaved) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder, "已收藏的文章")
             }
         }
-        IconButton(onClick = { c.requireLogin { c.go("compose") } }) { Icon(Icons.Outlined.Edit, "发布帖子") }
+        IconButton(onClick = { c.go("compose") }) { Icon(Icons.Outlined.Edit, "新建帖子草稿") }
     }) { padding ->
         Column(Modifier.padding(padding)) {
             PrimaryTabRow(categories.keys.indexOf(category)) { categories.forEach { (key, label) -> Tab(category == key, { category = key; page = 0; saved = false }, text = { Text(label) }) } }
@@ -56,6 +59,7 @@ import cc.novelia.app.ui.theme.motionClickable
             }
         }
     }
+    if(draftBoxOpen) AppSheet(onDismissRequest = { draftBoxOpen = false }) { ArticleDraftBox(c) { draftBoxOpen = false } }
 }
 @Composable private fun ArticleList(c: AppController, result: Page<Article>, page: Int, changePage: (Int) -> Unit) {
     val reducedMotion = appReducedMotion()

@@ -30,7 +30,10 @@ import kotlinx.serialization.Serializable
     // 连续阅读的章末导航独立于工具栏按钮和墨水屏预设。
     val showScrollPageButtons: Boolean = true,
     // 章节进度条独立于翻页按钮，切换墨水屏预设时保留其设置。
-    val showProgressBar: Boolean = true
+    val showProgressBar: Boolean = true,
+    // 默认连读本地/缓存及联网章节，整个播放会话共用一次定时停止。
+    val speechContinueChapters: Boolean = true,
+    val speechNetworkContinuation: Boolean = true
 ) {
     companion object {
         const val MIN_LINE_HEIGHT = .5f

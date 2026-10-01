@@ -22,6 +22,9 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.model.DownloadEntry
+import cc.novelia.app.data.model.WenkuDetail
+import cc.novelia.app.data.storage.appJson
+import cc.novelia.app.data.storage.hashName
 import cc.novelia.app.files.*
 import cc.novelia.app.ui.components.AppDropdownMenu
 import cc.novelia.app.ui.components.AppLazyColumn
@@ -34,7 +37,9 @@ import cc.novelia.app.ui.theme.MotionContent
 import cc.novelia.app.ui.theme.appReducedMotion
 import java.io.File
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 @Composable fun DownloadsScreen(c: AppController) {
     val state by c.store.state.collectAsStateWithLifecycle(); var exportId by rememberSaveable { mutableStateOf<String?>(null) }; var remove by remember { mutableStateOf<DownloadEntry?>(null) }
@@ -77,7 +82,20 @@ import kotlinx.coroutines.withContext
                             importing = importing + entry.id
                             c.action {
                                 try {
-                                    val ref = importDownloadedDocument(c.store, entry)
+                                    val parent = entry.sourceBook?.takeIf { it.isWenku }
+                                    val sourceCard = entry.sourceCard ?: parent?.let { source ->
+                                        c.store.state.value.books.firstOrNull { it.book.ref == source }?.book ?: try {
+                                            val binding = c.session.capture()
+                                            val cached = withContext(Dispatchers.IO) {
+                                                val key = hashName("${binding.account ?: "guest"}:wenku/${source.id}")
+                                                c.metadataCache.read(key)?.let { runCatching { appJson.decodeFromString<WenkuDetail>(it).card(source) }.getOrNull() }
+                                            }
+                                            c.session.ensureCurrent(binding)
+                                            cached ?: withTimeoutOrNull(1_500) { c.detail<WenkuDetail>("wenku/${source.id}").card(source) }
+                                        } catch(e: CancellationException) { throw e }
+                                        catch(_: Exception) { null }
+                                    }
+                                    val ref = importDownloadedDocument(c.store, entry, sourceCard)
                                     c.book(ref)
                                 } finally { importing = importing - entry.id }
                             }

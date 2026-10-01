@@ -125,13 +125,16 @@ class WenkuVolumeFlowTest {
         compose.runOnIdle { app.store.update { state -> state.withWenkuVolumes(parentRef.key, setOf(volumeRef.key, secondRef.key)).let { mounted ->
             mounted.copy(books = mounted.books.map { if(it.book.ref == parentRef) it.copy(volumesExpanded = false) else it }, theme = "dark")
         } } }
-        scrollTo(hasText("搜索书架"))
-        compose.onNodeWithText("搜索书架").performTextInput("春日")
+        compose.onNodeWithTag("local-filter-toggle").performClick()
+        compose.onNodeWithText("搜索书名或作者").performTextInput("春日")
+        compose.onNodeWithText("搜索书名或作者").performImeAction()
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("shelf-volume-${volumeRef.key}").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("青空物语").assertExists()
         compose.onNodeWithTag("volume-drag-${volumeRef.key}").assertDoesNotExist()
         screenshot("wenku-volumes-search-dark")
-        compose.onNodeWithText("搜索书架").performTextClearance()
+        compose.onNodeWithTag("local-filter-toggle").performClick()
+        compose.onNodeWithText("搜索书名或作者").performTextClearance()
+        compose.onNodeWithText("完成").performClick()
         compose.waitForIdle()
         openManager()
         compose.onNodeWithTag("wenku-volume-picker").performScrollToNode(hasTestTag("mount-volume-${secondRef.key}"))
@@ -183,7 +186,7 @@ class WenkuVolumeFlowTest {
             assertEquals(1, app.store.state.value.books.count { it.book.ref == ref })
             app.store.update { it.withVolumeParent(ref.key, null) }
             assertEquals(ref, runBlocking { importDownloadedDocument(app.store, entry) })
-            assertNull(app.store.state.value.books.first { it.book.ref == ref }.parentWenkuKey)
+            assertEquals(parentRef.key, app.store.state.value.books.first { it.book.ref == ref }.parentWenkuKey)
             assertEquals(1, app.store.state.value.positions.getValue(ref.key).index)
             assertTrue(app.store.documentSource(ref.id, "txt").exists())
         } finally { file.delete() }

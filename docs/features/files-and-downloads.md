@@ -24,6 +24,10 @@
 
 书架通过 `OpenMultipleDocuments` 获取用户选择的 URI，逐个调用 `importDocumentUri`。导入不依赖 URI 对应真实文件路径，也不长期保存外部文档 URI。
 
+批次由页面的 `DocumentImportViewModel` 持有，旋转屏幕不会重新导入。列表逐文件显示读取、去重、解析、保存阶段，并区分成功、重复、失败、尚未处理；一个文件失败后继续处理后续文件。“仅重试失败项”只处理失败项，保留已成功和重复项；“暂停导入”保留尚未完成的项，可使用“继续尚未处理项”恢复。结果清单支持直接开始阅读成功或重复项。批次清单不跨进程重启保存，已导入书籍照常持久化到书架。
+
+批次状态和取消行为见 [DocumentImportBatch.kt](../../app/src/main/java/cc/novelia/app/files/DocumentImportBatch.kt)、[DocumentImportBatchTest.kt](../../app/src/test/java/cc/novelia/app/DocumentImportBatchTest.kt)。
+
 1. 在 `Dispatchers.IO` 查询 `OpenableColumns.DISPLAY_NAME` 和可用的文件大小。提供方未返回名称时使用 `导入文档.txt`；已知大小先接受上限检查。
 2. 使用 `ContentResolver.openInputStream`，按 64 KiB 缓冲流式复制到 `cacheDir/document-input-*.tmp`。读取过程中再次累计大小并检查协程取消，不能仅信任提供方声明的大小。
 3. `importLocalDocument` 在进程内全局 `Mutex` 下计算源文件 SHA-256，并通过 `findDocumentByHash` 查找书架中已有本地副本。完全相同的原始字节直接返回已有 `BookRef`，`imported` 为 `false`。
@@ -33,7 +37,9 @@
 
 来源去重依据原始文件内容，而不是书名、扩展名或解析后的正文。仅改动 EPUB 元数据也会改变来源哈希。`saveDocument` 将正文交给文档存储层，并更新来源索引；阅读时通过目录和单章接口取数据，不应为常规阅读调用完整文档导出接口。
 
-`importDownloadedDocument` 复用相同流程。首次导入文库分卷时，仅当对应父作品已经在书架中，才建立本地分卷与父作品的关系；再次导入不会覆盖用户主动解除或更改的归属关系。删除下载任务只删除下载副本，已导入书架的文档保留。
+`importDownloadedDocument` 复用相同流程。每次在下载列表点击“开始阅读”时，文库分卷都会挂载到来源父作品；父作品尚未本地收藏时自动创建本地收藏，已收藏时保留其文件夹、状态和元数据。重复文件复用已有文档与阅读位置并重新挂载，不新增副本。新下载任务保存 `sourceCard` 以支持离线创建父作品；旧任务优先读取本地书目及详情缓存，网络补齐最多等待 1.5 秒，缺失时以文库 ID 创建可用占位书目。删除下载任务只删除下载副本，已导入书架的文档保留。
+
+本地小说和分卷可以从书架管理菜单重命名。`LocalStore.renameDocument` 只写轻量文档目录并更新书架及笔记书名，不重新解析或重写正文；文件 ID、来源哈希、原始字节和挂载关系不变。导出时默认文件名使用新名称，EPUB 内部原始元数据仍沿用导入原件。
 
 ## 格式支持与解析规则
 
@@ -92,7 +98,7 @@ SRT 按空行划分字幕块，生成一个标题为“字幕”的章节。序�
 
 下载表单收集内容模式、译文顺序、是否并列译文和输出格式，通过 [NoveliaApi.downloadUrl](../../app/src/main/java/cc/novelia/app/data/network/NoveliaApi.kt) 请求原站生成已有内容的文件。它不创建新的翻译任务。网络小说可选 EPUB/TXT；文库分卷沿用原分卷格式。
 
-表单为任务创建 UUID，替换文件名中的路径及常见非法字符，并添加任务 ID 前缀。`DownloadEntry` 记录文件名、URL、展示状态、进度、错误、可选父作品及当前 `workId`，模型定义见 [DownloadEntry.kt](../../app/src/main/java/cc/novelia/app/data/model/DownloadEntry.kt)。
+表单为任务创建 UUID，替换文件名中的路径及常见非法字符，并添加任务 ID 前缀。`DownloadEntry` 记录文件名、URL、展示状态、进度、错误、可选父作品引用与书目摘要及当前 `workId`，模型定义见 [DownloadEntry.kt](../../app/src/main/java/cc/novelia/app/data/model/DownloadEntry.kt)。
 
 `enqueue` 创建一次性 `DownloadWorker`，输入为任务 ID 与入队时的账号名，以 `download-<id>` 为唯一任务名，使用 `ExistingWorkPolicy.REPLACE`。它先持久化“等待下载”和新的 `workId`，再提交 WorkManager。网络约束为 `CONNECTED`，或启用“仅 Wi-Fi”时的 `UNMETERED`；后者实际表达 Android 的“非按流量计费网络”约束。
 

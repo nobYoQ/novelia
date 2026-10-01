@@ -65,25 +65,49 @@ private fun orderedVolumes(parent: SavedBook, volumes: List<SavedBook>): List<Sa
     }
 }
 
-data class ShelfGroup(val saved: SavedBook, val volumes: List<SavedBook> = emptyList())
+enum class ShelfBookType(val label: String) { All("全部类型"), Wenku("文库小说"), Web("网络小说"), Local("本地小说") }
+
+val readingStatuses = listOf("想读", "在读", "读完")
+
+fun LibraryState.withReadingStatus(keys: Set<String>, status: String): LibraryState {
+    require(status in readingStatuses) { "不支持的阅读状态" }
+    return copy(books = books.map { if(it.book.ref.key in keys) it.copy(status = status) else it })
+}
+
+/** 不匹配筛选条件的父项仅作分卷上下文显示，不应被批量全选。 */
+data class ShelfGroup(val saved: SavedBook, val volumes: List<SavedBook> = emptyList(), val matchesFilters: Boolean = true)
 
 /**
  * 构造书架显示分组：普通书架将分卷放在文库父项下，本地视图则平铺本地书。
  * 搜索命中子卷时保留父项作为上下文，父项命中时保留全部子卷；文件夹按有效父项判断。
  * 最近阅读排序取当前分组中父项和子卷的最新时间，置顶优先于其他排序条件。
  */
-fun LibraryState.shelfGroups(localOnly: Boolean, folder: String, query: String, sort: Int): List<ShelfGroup> {
+fun LibraryState.shelfGroups(localOnly: Boolean, folder: String, query: String, sort: Int,
+    type: ShelfBookType = ShelfBookType.All, status: String = "全部"): List<ShelfGroup> {
     val parents = books.filter { it.book.ref.isWenku }.associateBy { it.book.ref.key }
     fun parentOf(saved: SavedBook) = if(saved.book.ref.isLocal) parents[saved.parentWenkuKey] else null
+    val keyword = query.trim()
+    fun matchesQuery(saved: SavedBook): Boolean = saved.book.let { book ->
+        book.title.contains(keyword, true) || book.originalTitle.contains(keyword, true) || book.authors.any { it.contains(keyword, true) }
+    }
+    fun matchesStatus(saved: SavedBook) = status == "全部" || saved.status == status
+    fun matchesType(saved: SavedBook) = when(type) {
+        ShelfBookType.All -> true
+        ShelfBookType.Wenku -> saved.book.ref.isWenku || parentOf(saved) != null
+        ShelfBookType.Web -> !saved.book.ref.isWenku && !saved.book.ref.isLocal
+        ShelfBookType.Local -> saved.book.ref.isLocal && parentOf(saved) == null
+    }
     val mounted = books.filter { parentOf(it) != null }.groupBy { it.parentWenkuKey }
     val groups = books.asSequence().filter { if(localOnly) it.book.ref.isLocal else parentOf(it) == null }
+        .filter(::matchesType)
         .filter { folder == "全部" || (parentOf(it)?.folder ?: it.folder) == folder }
         .map { saved ->
             val volumes = if(localOnly) emptyList() else orderedVolumes(saved, mounted[saved.book.ref.key].orEmpty())
-            if(saved.book.title.contains(query, true)) ShelfGroup(saved, volumes)
-            else ShelfGroup(saved, volumes.filter { it.book.title.contains(query, true) })
+            val parentMatchesQuery = matchesQuery(saved) || (parentOf(saved)?.let(::matchesQuery) == true)
+            ShelfGroup(saved, volumes.filter { matchesStatus(it) && (parentMatchesQuery || matchesQuery(it)) },
+                matchesFilters = parentMatchesQuery && matchesStatus(saved))
         }
-        .filter { it.saved.book.title.contains(query, true) || it.volumes.isNotEmpty() }
+        .filter { it.matchesFilters || it.volumes.isNotEmpty() }
     fun recent(group: ShelfGroup): Long = (listOf(group.saved) + group.volumes).maxOf { positions[it.book.ref.key]?.updatedAt ?: it.addedAt }
     return groups.sortedWith(compareByDescending<ShelfGroup> { it.saved.pinned }
         .thenByDescending { if(sort == 0) recent(it) else if(sort == 1) it.saved.addedAt else 0 }

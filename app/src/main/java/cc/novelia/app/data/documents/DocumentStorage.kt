@@ -63,6 +63,15 @@ internal class DocumentStorage(
     fun full(index: LocalDocument, checkCancelled: () -> Unit = {}): LocalDocument = index.copy(
         chapters = index.chapters.map { checkCancelled(); chapter(index, it.id) }, chapterFiles = emptyMap())
 
+    /** 只更新目录名称；分卷 ID、源文件哈希和外置章节文件均保持稳定。 */
+    fun rename(index: LocalDocument, name: String): LocalDocument {
+        val title = name.trim()
+        require(title.isNotEmpty()) { "小说名称不能为空" }
+        val renamed = index.copy(name = title)
+        write(manifest(index.id), appJson.encodeToString(renamed))
+        return renamed
+    }
+
     fun remove(id: String) {
         val file = manifest(id)
         listOf(file, File(file.path + ".bak"), File(file.path + ".new")).forEach { it.delete() }

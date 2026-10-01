@@ -26,6 +26,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.catalog.BookLinks
 import cc.novelia.app.data.catalog.SearchExpression
+import cc.novelia.app.data.catalog.SavedSearchPreset
+import cc.novelia.app.data.catalog.withMigratedSearchPresets
 import cc.novelia.app.data.catalog.providers
 import cc.novelia.app.data.model.Page
 import cc.novelia.app.data.model.BookCard
@@ -67,6 +69,7 @@ import kotlinx.coroutines.sync.withPermit
     var filterOpen by remember { mutableStateOf(false) }
     var assistantOpen by rememberSaveable { mutableStateOf(false) }
     var searchListOpen by rememberSaveable { mutableStateOf("") }
+    var presetToSave by remember { mutableStateOf<SavedSearchPreset?>(null) }
     val assistantState = rememberSaveableStateHolder()
     var source by rememberSaveable { mutableStateOf("") }; var type by rememberSaveable { mutableIntStateOf(0) }; var translate by rememberSaveable { mutableIntStateOf(0) }; var sort by rememberSaveable { mutableIntStateOf(0) }
     var webLevel by rememberSaveable { mutableIntStateOf(0) }; var wenkuLevel by rememberSaveable { mutableIntStateOf(0) }
@@ -74,6 +77,18 @@ import kotlinx.coroutines.sync.withPermit
     val local by c.store.state.collectAsStateWithLifecycle(); val profile by c.session.profile.collectAsStateWithLifecycle()
     val keywords by c.app.keywords.state.collectAsStateWithLifecycle()
     val keywordPersistenceError by c.app.keywords.persistenceError.collectAsStateWithLifecycle()
+    LaunchedEffect(local.savedSearches) { c.store.update { it.withMigratedSearchPresets() } }
+    fun currentPreset() = SavedSearchPreset(name = submitted.ifBlank { if(category == 2) "文库小说筛选" else "网络小说筛选" }.take(80),
+        query = submitted, category = category, source = source, type = type, translate = translate, sort = sort,
+        webLevel = webLevel, wenkuLevel = wenkuLevel).normalized()
+    fun applyPreset(preset: SavedSearchPreset) {
+        val value = preset.normalized()
+        query = value.query; submitted = value.query; category = value.category
+        source = value.source; type = value.type; translate = value.translate; sort = value.sort
+        webLevel = value.webLevel; wenkuLevel = value.wenkuLevel; page = 0; searchRevision++
+        c.store.rememberSearch(value.query)
+        if(value.category == 1) c.app.keywords.markUsed(SearchExpression.tagsIn(value.query))
+    }
     fun search() {
         c.store.rememberSearch(query)
         if(category != 2) c.app.keywords.markUsed(SearchExpression.tagsIn(query))
@@ -121,7 +136,7 @@ import kotlinx.coroutines.sync.withPermit
                                         }
                                     }
                                 }
-                                if(local.savedSearches.isNotEmpty()) item(key = "saved-searches", contentType = "searches") { SectionTitle("保存的搜索"); Row(Modifier.appHorizontalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) { local.savedSearches.forEach { value -> AppSelectionChip(true, onClick = { query = value; search() }, label = { Text(value.take(20)) }, trailingIcon = { IconButton(onClick = { c.store.update { it.copy(savedSearches = it.savedSearches - value) } }, modifier = Modifier.size(48.dp)) { Icon(Icons.Outlined.Close, "删除搜索", Modifier.size(16.dp)) } }) } } }
+                                if(local.savedSearchPresets.isNotEmpty()) item(key = "saved-searches", contentType = "searches") { SectionTitle("保存的搜索", "管理") { searchListOpen = "saved" }; Row(Modifier.appHorizontalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) { local.savedSearchPresets.forEach { value -> AppActionChip(onClick = { applyPreset(value) }, label = { Text(value.name.take(20)) }) } } }
                                 item(key = "web-heading", contentType = "heading") { SectionTitle("热门网络小说", "更多") { category = 1; sort = 1 } }
                                 items(visibleWeb, key = { "web-${it.ref.key}" }, contentType = { "book" }) { BookRow(it, { c.book(it.ref) }, if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(AppMotion.Quick), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit)), showReadingProgress = false) }
                                 item(key = "wenku-heading", contentType = "heading") { SectionTitle("文库新近更新", "更多") { category = 2 } }
@@ -143,8 +158,8 @@ import kotlinx.coroutines.sync.withPermit
                                 } else Text(if(submitted.isBlank()) "浏览全部" else "搜索结果", Modifier.weight(1f), maxLines = 1, style = MaterialTheme.typography.labelLarge)
                                 IconButton(onClick = { searchListOpen = "recent" }) { Icon(Icons.Outlined.History, "查看最近搜索") }
                                 IconButton(onClick = { searchListOpen = "saved" }) { Icon(Icons.Outlined.Bookmarks, "查看保存的搜索") }
-                                IconButton(onClick = { if(submitted.isNotBlank()) { c.store.update { it.copy(savedSearches = (it.savedSearches + submitted).distinct()) }; c.message("已保存搜索条件") } }, enabled = submitted.isNotBlank()) {
-                                    Crossfade(submitted.isNotBlank() && submitted in local.savedSearches, animationSpec = tween(if(reducedMotion) 0 else AppMotion.Quick), label = "savedSearch") { isSaved ->
+                                IconButton(onClick = { presetToSave = currentPreset() }) {
+                                    Crossfade(local.savedSearchPresets.any { it.hasSameConditions(currentPreset()) }, animationSpec = tween(if(reducedMotion) 0 else AppMotion.Quick), label = "savedSearch") { isSaved ->
                                         Icon(if(isSaved) Icons.Outlined.BookmarkAdded else Icons.Outlined.BookmarkAdd, if(isSaved) "搜索已保存" else "保存搜索")
                                     }
                                 }
@@ -226,24 +241,36 @@ import kotlinx.coroutines.sync.withPermit
     }
     if(searchListOpen.isNotEmpty()) AppSheet(onDismissRequest = { searchListOpen = "" }) {
         val recent = searchListOpen == "recent"
-        val searches = if(recent) local.recentSearches else local.savedSearches
+        val searches = local.recentSearches
         Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(if(recent) "最近搜索" else "保存的搜索", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
             if(recent && searches.isNotEmpty()) TextButton(onClick = { c.store.update { it.copy(recentSearches = emptyList()) } }) { Text("清空") }
             TextButton(onClick = { searchListOpen = "" }) { Text("关闭") }
         }
         AppScrollColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp), contentModifier = Modifier.padding(bottom = 24.dp)) {
-            if(searches.isEmpty()) Text(if(recent) "还没有搜索记录" else "还没有保存的搜索", Modifier.padding(20.dp),
+            if(if(recent) searches.isEmpty() else local.savedSearchPresets.isEmpty()) Text(if(recent) "还没有搜索记录" else "还没有保存的搜索", Modifier.padding(20.dp),
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            searches.forEach { value ->
-                MenuRow(value, "点击搜索", if(recent) Icons.Outlined.History else Icons.Outlined.Bookmark,
-                    { query = value; searchListOpen = ""; search() },
-                    trailing = if(recent) null else {{ IconButton(onClick = { c.store.update { it.copy(savedSearches = it.savedSearches - value) } }) {
-                        Icon(Icons.Outlined.Close, "删除保存的搜索")
-                    } }})
+            if(recent) searches.forEach { value ->
+                MenuRow(value, "点击搜索", Icons.Outlined.History, { query = value; searchListOpen = ""; search() })
+            } else local.savedSearchPresets.forEach { value ->
+                MenuRow(value.name, value.summary(), Icons.Outlined.Bookmark,
+                    { searchListOpen = ""; applyPreset(value) },
+                    trailing = { Row {
+                        IconButton(onClick = { presetToSave = value; searchListOpen = "" }) { Icon(Icons.Outlined.Edit, "重命名搜索 ${value.name}") }
+                        IconButton(onClick = { c.store.update { state -> state.copy(savedSearchPresets = state.savedSearchPresets.filterNot { it.id == value.id }) } }) { Icon(Icons.Outlined.Close, "删除保存的搜索 ${value.name}") }
+                    } })
             }
         }
     }
+    presetToSave?.let { preset -> SaveSearchPresetDialog(preset, onDismiss = { presetToSave = null }) { value ->
+        c.action {
+            check(c.store.recoveryIssue.value == null) { "本地资料处于恢复保护状态，暂时无法保存搜索" }
+            c.store.update { state -> state.copy(savedSearchPresets = state.savedSearchPresets.filterNot { it.id == value.id } + value) }
+            c.store.flush()
+            presetToSave = null
+            c.message("已保存搜索组合：${value.name}")
+        }
+    } }
 }
 
 /** 列表摘要可能没有作者，仅在启用作者屏蔽时补取作者信息。 */

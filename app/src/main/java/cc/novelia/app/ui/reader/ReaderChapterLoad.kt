@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import cc.novelia.app.reader.ReadingTextMatch
+import cc.novelia.app.reader.ReadingReturnPoint
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -19,7 +20,8 @@ import kotlinx.coroutines.launch
 internal data class ReaderChapterTarget(
     val id: String,
     val startAtEnd: Boolean = false,
-    val searchMatch: ReadingTextMatch? = null
+    val searchMatch: ReadingTextMatch? = null,
+    val returnPoint: ReadingReturnPoint? = null
 )
 
 /**

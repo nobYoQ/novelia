@@ -111,6 +111,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.encodeToString
 
 /**
  * 阅读器入口：单书偏好优先于全局偏好，再把电子纸/减少动效约束传递到整棵阅读界面。
@@ -160,6 +161,10 @@ import kotlinx.coroutines.withContext
         }
     }
     var bookSearch by remember { mutableStateOf(false) }
+    var returnPointJson by rememberSaveable(ref.key, chapterId) {
+        mutableStateOf(readerEntry?.savedStateHandle?.remove<String>("readerReturnPoint"))
+    }
+    val returnPoint = remember(returnPointJson) { returnPointJson?.let { runCatching { appJson.decodeFromString<ReadingReturnPoint>(it) }.getOrNull() } }
     var refreshAnchor by remember(ref, chapterId) { mutableStateOf<ReadingRestoreAnchor?>(null) }
     val cacheGeneration by c.store.cacheGeneration.collectAsStateWithLifecycle()
     val enteredCacheGeneration = remember(ref, chapterId) { c.store.cacheGeneration.value }
@@ -252,7 +257,10 @@ import kotlinx.coroutines.withContext
         }
         val position = remember(ref, chapterId) {
             val anchor = refreshAnchor
-            if(searchArrival != null) Position(chapterId, searchArrival.coerceIn(0, paragraphs.lastIndex.coerceAtLeast(0)) + 1,
+            val returned = readerEntry?.savedStateHandle?.remove<String>("readerRestorePosition")
+                ?.let { runCatching { appJson.decodeFromString<ReadingReturnPoint>(it).resolvedPosition(paragraphs) }.getOrNull() }
+            if(returned != null) returned
+            else if(searchArrival != null) Position(chapterId, searchArrival.coerceIn(0, paragraphs.lastIndex.coerceAtLeast(0)) + 1,
                 textOffset = paragraphs.getOrNull(searchArrival)?.let { arrivalMatch?.textOffset(it, settings) } ?: 0)
             else if(anchor != null) Position(chapterId, (anchor.sourceIndex?.let { source -> paragraphs.indexOfFirst { it.index >= source }.takeIf { it >= 0 } } ?: anchor.paragraph).coerceIn(0, paragraphs.lastIndex.coerceAtLeast(0)) + 1, textOffset = anchor.textOffset)
             else if(readerEntry?.savedStateHandle?.remove<Boolean>("readerStartAtEnd") == true) Position(chapterId, Int.MAX_VALUE)
@@ -382,6 +390,16 @@ import kotlinx.coroutines.withContext
                 lastSavedPosition = next
             }
         }
+        fun rememberReadingPlace() {
+            if(leaving || restoringAnchor || !initialAnchorRestored || (settings.staticPagination && !eInk.ready)) return
+            val paragraph = if(settings.staticPagination) eInk.paragraph else (scroll.firstVisibleItemIndex - 1).coerceAtLeast(0)
+            val source = if(!settings.staticPagination && scroll.firstVisibleItemIndex == 0) null else paragraphs.getOrNull(paragraph)?.index
+            val current = ReadingReturnPoint(Position(chapterId,
+                index = if(settings.staticPagination) paragraph + 1 else scroll.firstVisibleItemIndex,
+                offset = if(settings.staticPagination) 0 else scroll.firstVisibleItemScrollOffset,
+                title = chapter.title, textOffset = if(settings.staticPagination) eInk.textOffset else scrollTextOffset(source)), source)
+            returnPointJson = appJson.encodeToString(retainReadingReturnPoint(returnPoint, current))
+        }
         val onChapterLoaded by rememberUpdatedState<(ReaderChapterTarget, AppController.ReaderHandoff) -> Unit>({ target, loaded ->
             if(!leaving && c.nav.currentBackStackEntry == readerEntry) {
             savePosition()
@@ -395,6 +413,8 @@ import kotlinx.coroutines.withContext
                 set("readerTocIndex", tocScroll.firstVisibleItemIndex)
                 set("readerTocOffset", tocScroll.firstVisibleItemScrollOffset)
                 set("readerTocLocated", tocLocated)
+                if(target.returnPoint != null) set("readerRestorePosition", appJson.encodeToString(target.returnPoint))
+                else returnPointJson?.let { set("readerReturnPoint", it) }
                 if(target.startAtEnd) set("readerStartAtEnd", true)
                 target.searchMatch?.let { match ->
                     set("readerSearchParagraph", match.paragraph)
@@ -410,11 +430,42 @@ import kotlinx.coroutines.withContext
         }
         var inlineChapterLoad by remember { mutableStateOf(false) }
         DisposableEffect(chapterLoad) { onDispose { chapterLoad.cancel() } }
-        fun openChapter(id: String, startAtEnd: Boolean = false, match: ReadingTextMatch? = null, inline: Boolean = false) {
+        fun openChapter(id: String, startAtEnd: Boolean = false, match: ReadingTextMatch? = null, inline: Boolean = false,
+            restore: ReadingReturnPoint? = null) {
             if(leaving || id == chapterId) return
             seekGeneration++; seekJob?.cancel(); seekTarget = null
             inlineChapterLoad = inline
-            chapterLoad.request(ReaderChapterTarget(id, startAtEnd, match))
+            chapterLoad.request(ReaderChapterTarget(id, startAtEnd, match, restore))
+        }
+        fun returnToReadingPlace() {
+            val target = returnPoint ?: return
+            searchGeneration++; searchJob?.cancel(); finding = false; activeMatch = null
+            search = false; bookSearch = false; toc = false; focusManager.clearFocus()
+            if(target.position.chapterId != chapterId) {
+                openChapter(target.position.chapterId, restore = target)
+                return
+            }
+            chapterLoad.cancel()
+            seekGeneration++; seekJob?.cancel(); seekTarget = null
+            searchJob = scope.launch {
+                restoringAnchor = true
+                try {
+                    val resolved = target.resolvedPosition(paragraphs)
+                    val paragraphIndex = (resolved.index - 1).coerceAtLeast(0)
+                    if(settings.staticPagination) eInk.find(paragraphIndex, resolved.textOffset, target.sourceIndex)
+                    else {
+                        scroll.scrollToItem(resolved.index, resolved.offset)
+                        val paragraph = paragraphs.getOrNull(paragraphIndex)
+                        if(resolved.index > 0 && resolved.textOffset > 0 && paragraph != null && paragraph.imageUrl == null && paragraph.localImageId == null) {
+                            val layout = snapshotFlow { scrollLayouts[paragraph.index] }.first { it != null && it.parts.size == paragraph.parts.size }!!
+                            scroll.scrollToItem(resolved.index, layout.scrollOffsetAt(resolved.textOffset))
+                        }
+                        restoredScrollAnchor = RestoredScrollAnchor(layoutGeneration, resolved.index, scroll.firstVisibleItemScrollOffset, resolved.textOffset)
+                    }
+                    returnPointJson = null
+                } finally { restoringAnchor = false }
+                savePosition()
+            }
         }
         fun refreshChapter() {
             seekGeneration++; seekJob?.cancel(); seekTarget = null
@@ -513,6 +564,7 @@ import kotlinx.coroutines.withContext
                     else {
                         val offset = if(settings.staticPagination) eInk.textOffset else scrollTextOffset(paragraphs.getOrNull(firstParagraph)?.index)
                         val next = nextReadingMatchIndex(matches, activeMatch, direction, firstParagraph, offset) { match -> match.textOffset(paragraphs[match.paragraph], settings) }
+                        rememberReadingPlace()
                         revealMatch(matches[next])
                     }
                 } finally { if(generation == searchGeneration) finding = false }
@@ -608,7 +660,7 @@ import kotlinx.coroutines.withContext
         Row(Modifier.fillMaxSize().background(background).testTag(if(wide) "reader-wide-layout" else "reader-compact-layout")) {
         if(wide) {
             Surface(Modifier.width(292.dp).fillMaxHeight().windowInsetsPadding(readingInsets), color = MaterialTheme.colorScheme.surface) {
-                ReaderTocPane(c, ref, chapterId, tocScroll, tocQuery, { tocQuery = it }, tocReversed, { tocReversed = it }, tocLocateRequest, { tocLocateRequest = 0; tocLocated = true }, { openChapter(it) })
+                ReaderTocPane(c, ref, chapterId, tocScroll, tocQuery, { tocQuery = it }, tocReversed, { tocReversed = it }, tocLocateRequest, { tocLocateRequest = 0; tocLocated = true }, { if(it != chapterId) rememberReadingPlace(); openChapter(it) })
             }
             VerticalDivider(Modifier.fillMaxHeight())
         }
@@ -691,6 +743,10 @@ import kotlinx.coroutines.withContext
                         IconButton(onClick = { preferences = true }) { Icon(Icons.Outlined.TextFields, "阅读设置") }
                     }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent, scrolledContainerColor = Color.Transparent, titleContentColor = foreground, actionIconContentColor = foreground, navigationIconContentColor = foreground))
                     if(translationUpdate != null) TextButton(onClick = { refreshChapter() }, enabled = !leaving, colors = ButtonDefaults.textButtonColors(contentColor = foreground)) { Text("本书有新的译文，可刷新本章") }
+                    if(returnPoint != null) TextButton(onClick = { returnToReadingPlace() }, enabled = !leaving && !chapterLoad.loading && !restoringAnchor && initialAnchorRestored,
+                        colors = ButtonDefaults.textButtonColors(contentColor = foreground), modifier = Modifier.testTag("reader-return-to-reading")) {
+                        Icon(Icons.Outlined.Undo, null, Modifier.size(18.dp)); Text("回到刚才阅读处", Modifier.padding(start = 6.dp))
+                    }
                     AnimatedVisibility(search,
                         enter = if(reducedMotion) EnterTransition.None else fadeIn(tween(AppMotion.Quick)) + expandVertically(tween(AppMotion.Standard), expandFrom = Alignment.Top),
                         exit = if(reducedMotion) ExitTransition.None else fadeOut(tween(AppMotion.Exit)) + shrinkVertically(tween(AppMotion.Release), shrinkTowards = Alignment.Top)
@@ -781,6 +837,7 @@ import kotlinx.coroutines.withContext
         if(nextVolumePrompt && nextVolume != null) AppAlertDialog(onDismissRequest = { nextVolumePrompt = false }, title = { Text("本卷已读完") }, text = { Column { Text("按书架中的分卷顺序接续：${nextVolume.book.title}"); volumeError?.let { Text(it, color = MaterialTheme.colorScheme.error) } } }, confirmButton = { TextButton(onClick = { openNextVolume() }, enabled = !openingVolume) { Text(if(openingVolume) "正在打开…" else "阅读下一分卷") } }, dismissButton = { TextButton(onClick = { nextVolumePrompt = false }) { Text("稍后") } })
         if(bookSearch) ReaderSheet(onDismissRequest = { bookSearch = false }) {
             BookSearchPanel(c, ref, chapterId, chapter, settings) { match ->
+                rememberReadingPlace()
                 bookSearch = false; search = false; focusManager.clearFocus()
                 if(match.chapterId == chapterId) {
                     searchGeneration++; searchJob?.cancel(); finding = false
@@ -794,33 +851,33 @@ import kotlinx.coroutines.withContext
         }
         if(toc && !wide) ReaderSheet(onDismissRequest = { toc = false }) {
             ReaderTocPane(c, ref, chapterId, tocScroll, tocQuery, { tocQuery = it }, tocReversed, { tocReversed = it }, tocLocateRequest, { tocLocateRequest = 0; tocLocated = true },
-                { id -> toc = false; openChapter(id) }, Modifier.fillMaxHeight(.8f))
+                { id -> if(id != chapterId) rememberReadingPlace(); toc = false; openChapter(id) }, Modifier.fillMaxHeight(.8f))
         }
         if(speechSheet) ReaderSheet(onDismissRequest = { speechSheet = false }) {
             AppScrollColumn(contentModifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text("系统朗读", style = MaterialTheme.typography.titleLarge)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     if(speechStatus == ReadAloudService.SLEEP_TIMER_FINISHED) StickerAccent(MidoriSticker.Sleep, speechStatus, Modifier.size(64.dp))
-                    Text(speechStatus.ifBlank { "从当前段落朗读至本章结束。语音由系统提供。" }, style = MaterialTheme.typography.bodyMedium)
+                    Text(speechStatus.ifBlank { if(settings.speechContinueChapters) "从当前段落开始，自动连续朗读后续章节。语音由系统提供。" else "从当前段落朗读至本章结束。语音由系统提供。" }, style = MaterialTheme.typography.bodyMedium)
                 }
                 Text("${settings.speechRate}× · ${settings.speechMinutes} 分钟后停止", style = MaterialTheme.typography.labelLarge)
+                if(settings.speechContinueChapters) Text(if(settings.speechNetworkContinuation) "连续听书 · 优先本地与缓存，未缓存章节自动联网加载" else "连续听书 · 仅本地与缓存章节", style = MaterialTheme.typography.bodySmall)
                 Button(onClick = {
                     val first = firstParagraph
                     val originalIndex = paragraphs.getOrNull(first)?.index ?: 0
-                    val japanese = settings.speechLanguage == "jp" || (settings.speechLanguage == "auto" && settings.mode.startsWith("jp"))
                     scope.launch {
                         try {
-                            ReadAloudService.start(context, chapter.title, settings) {
-                                if(japanese) chapter.paragraphs.drop(originalIndex)
-                                else paragraphs.drop(first).mapNotNull { it.parts.firstOrNull { p -> !p.secondary }?.text }
+                            val jobContext = currentCoroutineContext()
+                            ReadAloudService.start(context, chapter.title, settings, ref, chapterId, chapter.nextId) {
+                                speechParagraphs(chapter, settings, originalIndex) { jobContext.ensureActive() }
                             }
                         } catch(e: CancellationException) { throw e }
                         catch(e: Exception) { c.message(e.friendlyMessage()) }
                     }
                 }, Modifier.fillMaxWidth(), enabled = speechStatus != "正在准备朗读…") { Text(if(speechStatus == "正在准备朗读…") "正在准备朗读…" else "从这里开始朗读") }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    TextButton(onClick = { context.startService(Intent(context, ReadAloudService::class.java).setAction("pause")) }, enabled = speechStatus.startsWith("正在朗读")) { Text("暂停") }
-                    TextButton(onClick = { context.startService(Intent(context, ReadAloudService::class.java).setAction("resume")) }, enabled = speechStatus == "朗读已暂停") { Text("继续") }
+                    TextButton(onClick = { context.startService(Intent(context, ReadAloudService::class.java).setAction("pause")) }, enabled = speechStatus.startsWith("正在朗读") || speechStatus == "正在准备下一章…") { Text("暂停") }
+                    TextButton(onClick = { context.startService(Intent(context, ReadAloudService::class.java).setAction("resume")) }, enabled = speechStatus == "朗读已暂停" || speechStatus.startsWith("续章已暂停")) { Text("继续") }
                     TextButton(onClick = { context.startService(Intent(context, ReadAloudService::class.java).setAction("stop")) }) { Text("停止") }
                     TextButton(onClick = { speechSheet = false; preferences = true }) { Text("设置") }
                 }
@@ -845,7 +902,7 @@ import kotlinx.coroutines.withContext
     }
     if(preferences) ReaderPreferencesSheet(onDismissRequest = { preferences = false }) { expanded, onExpandedChange ->
         ReaderPreferences(settings, local.bookSettings.containsKey(ref.key), { perBook -> c.store.update { it.copy(bookSettings = if(perBook) it.bookSettings + (ref.key to settings) else it.bookSettings - ref.key) } },
-            state = preferenceState, modifier = Modifier.fillMaxSize(), livePreview = true, headerActions = {
+            state = preferenceState, modifier = Modifier.fillMaxSize(), livePreview = true, defaultSettings = local.reader, headerActions = {
                 IconButton(onClick = { onExpandedChange(!expanded) }) {
                     ReaderSheetExpandIcon(expanded)
                 }

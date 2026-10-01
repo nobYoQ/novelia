@@ -205,6 +205,7 @@ internal fun mergeLibraryBackup(current: LibraryState, imported: LibraryState): 
         blockedUsers = current.blockedUsers + imported.blockedUsers,
         recentSearches = (current.recentSearches + imported.recentSearches).distinct().take(20),
         savedSearches = (current.savedSearches + imported.savedSearches).distinct(),
+        savedSearchPresets = (current.savedSearchPresets + imported.savedSearchPresets).distinctBy { it.id },
         savedArticles = current.savedArticles + imported.savedArticles.filter { post -> current.savedArticles.none { it.id == post.id } },
         drafts = imported.drafts + current.drafts,
         updateSnapshots = (imported.updateSnapshots + current.updateSnapshots).filterKeys { it in booksByKey },

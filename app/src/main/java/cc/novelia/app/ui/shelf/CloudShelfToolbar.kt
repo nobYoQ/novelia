@@ -25,12 +25,23 @@ import cc.novelia.app.ui.components.AppDropdownMenu
     filterCount: Int, expanded: Boolean, onToggleFilters: (() -> Unit)?,
     folderActions: @Composable ColumnScope.(close: () -> Unit) -> Unit,
 ) {
+    ShelfToolbar(folders, current, onFolder, sort, onSort, listOf("update" to "更新时间", "create" to "收藏时间"),
+        filterCount, expanded, onToggleFilters, "cloud", folderActions)
+}
+
+/** 本机与云端共用同一套收藏夹、排序和筛选入口。 */
+@Composable internal fun ShelfToolbar(
+    folders: List<Folder>, current: Folder?, onFolder: (String) -> Unit,
+    sort: String, onSort: (String) -> Unit, sortOptions: List<Pair<String, String>>,
+    filterCount: Int, expanded: Boolean, onToggleFilters: (() -> Unit)?, tagPrefix: String,
+    folderActions: @Composable ColumnScope.(close: () -> Unit) -> Unit,
+) {
     var folderMenu by remember { mutableStateOf(false) }
     var sortMenu by remember { mutableStateOf(false) }
     val folderButton: @Composable (Modifier) -> Unit = { modifier ->
         Box(modifier) {
             TextButton(onClick = { folderMenu = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                .testTag("cloud-folder-picker"), contentPadding = PaddingValues(horizontal = 4.dp)) {
+                .testTag("$tagPrefix-folder-picker"), contentPadding = PaddingValues(horizontal = 4.dp)) {
                 Text(current?.title ?: "收藏夹", Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
                 Icon(Icons.Outlined.ExpandMore, null, Modifier.size(18.dp))
@@ -48,20 +59,20 @@ import cc.novelia.app.ui.components.AppDropdownMenu
     val sortingAndFilters: @Composable RowScope.(Boolean) -> Unit = { fill ->
         Box(if(fill) Modifier.weight(1f) else Modifier) {
             TextButton(onClick = { sortMenu = true }, modifier = (if(fill) Modifier.fillMaxWidth() else Modifier).heightIn(min = 48.dp)
-                .testTag("cloud-sort-picker"), contentPadding = PaddingValues(horizontal = 8.dp)) {
-                Text(if(sort == "update") "更新时间" else "收藏时间", Modifier.weight(1f, fill = false), style = MaterialTheme.typography.labelMedium)
+                .testTag("$tagPrefix-sort-picker"), contentPadding = PaddingValues(horizontal = 8.dp)) {
+                Text(sortOptions.firstOrNull { it.first == sort }?.second.orEmpty(), Modifier.weight(1f, fill = false), style = MaterialTheme.typography.labelMedium)
                 Spacer(Modifier.width(4.dp))
                 Icon(Icons.AutoMirrored.Outlined.Sort, null, Modifier.size(18.dp))
             }
             AppDropdownMenu(sortMenu, { sortMenu = false }) {
-                listOf("update" to "更新时间", "create" to "收藏时间").forEach { (value, label) ->
+                sortOptions.forEach { (value, label) ->
                     DropdownMenuItem(text = { Text(label) }, onClick = { sortMenu = false; onSort(value) },
                         trailingIcon = if(sort == value) ({ Icon(Icons.Outlined.Check, null) }) else null)
                 }
             }
         }
         onToggleFilters?.let { toggle ->
-            TextButton(onClick = toggle, modifier = (if(fill) Modifier.weight(1f) else Modifier).heightIn(min = 48.dp).testTag("cloud-filter-toggle")
+            TextButton(onClick = toggle, modifier = (if(fill) Modifier.weight(1f) else Modifier).heightIn(min = 48.dp).testTag("$tagPrefix-filter-toggle")
                 .semantics {
                     contentDescription = if(expanded) "收起筛选" else "展开筛选"
                     stateDescription = if(filterCount == 0) "未设置筛选条件" else "$filterCount 项筛选条件"
@@ -72,7 +83,7 @@ import cc.novelia.app.ui.components.AppDropdownMenu
             }
         }
     }
-    BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 20.dp).testTag("cloud-toolbar")) {
+    BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 20.dp).testTag("$tagPrefix-toolbar")) {
         // 系统字号需要换行时，仍保留完整标签和触摸区域。
         if(maxWidth < (260 * LocalDensity.current.fontScale).dp) {
             Column {

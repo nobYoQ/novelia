@@ -25,6 +25,25 @@ import org.junit.runner.RunWith
 class ReaderPanelSessionTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun independentBookSettingsExposeScopeDifferencesAndRestoreDefaultFollowing() {
+        var independent by mutableStateOf(true)
+        val defaults = ReaderSettings(fontSize = 16.629105f)
+        var book by mutableStateOf(defaults.copy(fontSize = 24f, lineHeight = 2.1f, theme = "dark"))
+        compose.setContent {
+            MaterialTheme {
+                ReaderPreferences(if(independent) book else defaults, independent, { independent = it }, defaultSettings = defaults) { book = it }
+            }
+        }
+        compose.onNodeWithText("仅修改本书").assertIsDisplayed()
+        compose.onNodeWithTag("reader-default-字号").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(defaults.fontSize, book.fontSize, 0f); assertEquals(2.1f, book.lineHeight, 0f); assertTrue(independent) }
+        compose.onNodeWithText("跟随应用").performScrollTo().performClick().assertIsSelected()
+        compose.runOnIdle { assertEquals(defaults.resolvedTheme, book.resolvedTheme); assertEquals(2.1f, book.lineHeight, 0f) }
+        compose.onNodeWithText("仅应用于这本书").performScrollTo().performClick()
+        compose.onNodeWithText("正在修改默认设置").assertIsDisplayed()
+        compose.runOnIdle { assertFalse(independent) }
+    }
+
     @Test fun reopeningPreferencesResetsNavigationButKeepsSavedSettings() {
         var open by mutableStateOf(true)
         var settings by mutableStateOf(ReaderSettings(fontSize = 24f))

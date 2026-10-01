@@ -24,15 +24,18 @@ import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.theme.MotionContent
 import kotlinx.serialization.encodeToString
 
-@Composable fun ComposeArticleScreen(c: AppController, articleId: String?) {
-    if(articleId.isNullOrBlank()) ArticleEditor(c, null) else AsyncContent(articleId, { c.api.get<Article>("article/$articleId") }) { article, _ -> ArticleEditor(c, article.copy(id = articleId)) }
+@Composable fun ComposeArticleScreen(c: AppController, articleId: String?, draftKey: String? = null) {
+    val newPostKey = rememberSaveable(articleId, draftKey) { draftKey?.takeIf(ArticleDrafts::isNewPostKey) ?: ArticleDrafts.newKey() }
+    if(articleId.isNullOrBlank()) ArticleEditor(c, null, newPostKey) else AsyncContent(articleId, { c.api.get<Article>("article/$articleId") }) { article, _ -> ArticleEditor(c, article.copy(id = articleId)) }
 }
-@Composable internal fun ArticleEditor(c: AppController, article: Article?) {
+@Composable internal fun ArticleEditor(c: AppController, article: Article?, newPostKey: String? = null) {
     val profile by c.session.profile.collectAsStateWithLifecycle()
-    val key = "article:${article?.id ?: "new"}"
+    val generatedKey = rememberSaveable { ArticleDrafts.newKey() }
+    val key = article?.id?.let { "article:$it" } ?: newPostKey ?: generatedKey
     val draft = remember(key) { c.store.state.value.drafts[key] }
-    val saved = remember(key) { draft?.let { runCatching { appJson.decodeFromString<Map<String, String>>(it) }.getOrNull() } }
-    var title by rememberSaveable(key) { mutableStateOf(saved?.get("title") ?: article?.title.orEmpty()) }; var content by rememberSaveable(key) { mutableStateOf(saved?.get("content") ?: article?.content.orEmpty()) }; var category by rememberSaveable(key) { mutableStateOf(saved?.get("category") ?: article?.category ?: "General") }; var preview by rememberSaveable(key) { mutableStateOf(false) }; var sending by remember { mutableStateOf(false) }
+    val saved = remember(key) { draft?.let { ArticleDrafts.read(key, it) } }
+    var title by rememberSaveable(key) { mutableStateOf(saved?.title ?: article?.title.orEmpty()) }; var content by rememberSaveable(key) { mutableStateOf(saved?.content ?: article?.content.orEmpty()) }; var category by rememberSaveable(key) { mutableStateOf(saved?.category ?: article?.category ?: "General") }; var preview by rememberSaveable(key) { mutableStateOf(false) }; var sending by remember { mutableStateOf(false) }
+    val persistenceError by c.store.persistenceError.collectAsStateWithLifecycle()
     val editorState = rememberSaveableStateHolder()
 
     val renderer = rememberMarkdownRenderer(c)
@@ -56,7 +59,11 @@ import kotlinx.serialization.encodeToString
                         ChoiceRow("分类", categories.values.toList(), categories.keys.indexOf(category)) { category = categories.keys.elementAt(it) }
                         MarkdownEditor(content, { content = it }, editorHeight)
                     }
-                    Text("草稿自动保存在此设备。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(persistenceError ?: if(article == null) "草稿自动保存在此设备，可从社区草稿箱继续写作。" else "草稿自动保存在此设备，重新编辑此帖时恢复。", style = MaterialTheme.typography.bodySmall, color = if(persistenceError == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error)
+                    OutlinedButton(onClick = { c.action {
+                        check(c.store.recoveryIssue.value == null) { "本地资料处于恢复保护状态，暂时无法保存草稿" }
+                        draftPersistence.save(); c.store.flush(); c.back()
+                    } }, modifier = Modifier.fillMaxWidth(), enabled = !sending) { Text("保存草稿并退出") }
                     Button(onClick = { draftPersistence.save(); c.requireLogin { c.action {
                         check(c.session.profile.value?.canPost == true) { "当前账号暂不具备社区发布权限，草稿已保留" }
                         sending = true

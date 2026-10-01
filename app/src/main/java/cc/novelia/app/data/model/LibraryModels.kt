@@ -1,6 +1,7 @@
 package cc.novelia.app.data.model
 
 import cc.novelia.app.data.sync.CloudSyncStatus
+import cc.novelia.app.data.catalog.SavedSearchPreset
 import cc.novelia.app.data.updates.BookUpdateInfo
 import cc.novelia.app.data.updates.BookUpdateSnapshot
 import kotlinx.serialization.Serializable
@@ -37,6 +38,7 @@ import kotlinx.serialization.Serializable
     val downloads: List<DownloadEntry> = emptyList(), val blockedBooks: Set<String> = emptySet(), val blockedTags: Set<String> = emptySet(),
     val blockedAuthors: Set<String> = emptySet(),
     val recentSearches: List<String> = emptyList(), val savedSearches: List<String> = emptyList(), val savedArticles: List<Article> = emptyList(),
+    val savedSearchPresets: List<SavedSearchPreset> = emptyList(),
     val drafts: Map<String, String> = emptyMap(), val reader: ReaderSettings = ReaderSettings(), val bookSettings: Map<String, ReaderSettings> = emptyMap(),
     val theme: String = "system", val reducedMotion: Boolean = false, val historyPaused: Boolean = false, val autoCollapseCloudFilters: Boolean = true,
     val autoSaveCloudFavoritesLocally: Boolean = true,

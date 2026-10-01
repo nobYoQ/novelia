@@ -93,7 +93,8 @@ class WenkuVolumesTest {
         assertTrue(old.volumeOrder.isEmpty())
         val oldDownload = appJson.decodeFromString<DownloadEntry>("""{"id":"d","title":"卷","fileName":"a.epub","url":"https://example.com/a.epub"}""")
         assertNull(oldDownload.sourceBook)
-        val state = library().withVolumeParent("local/1", parent.book.ref.key).copy(downloads = listOf(oldDownload.copy(sourceBook = parent.book.ref)))
+        assertNull(oldDownload.sourceCard)
+        val state = library().withVolumeParent("local/1", parent.book.ref.key).copy(downloads = listOf(oldDownload.copy(sourceBook = parent.book.ref, sourceCard = parent.book)))
         assertEquals(state, appJson.decodeFromString<LibraryState>(appJson.encodeToString(state)))
     }
 

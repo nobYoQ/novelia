@@ -199,6 +199,19 @@ class LocalStore(val context: Context) {
     fun document(id: String, checkCancelled: () -> Unit = {}): LocalDocument =
         documentStorage.full(documentIndex(id), checkCancelled)
 
+    /** 名称写入轻量目录并同步书架；不重建正文，也不改变分卷关系和阅读记录。 */
+    fun renameDocument(id: String, name: String) = synchronized(documentLock) {
+        check(recoveryIssue.value == null) { "本地资料已保护，请先前往资料备份与恢复" }
+        val key = safeId(id)
+        val renamed = documentStorage.rename(documentIndex(key), name)
+        documentMemory.put(key, renamed)
+        val ref = BookRef("local", key)
+        update { state -> state.copy(
+            books = state.books.map { if(it.book.ref == ref) it.copy(book = it.book.copy(title = renamed.name)) else it },
+            notes = state.notes.map { if(it.key == ref.key) it.copy(bookTitle = renamed.name) else it }
+        ) }
+    }
+
     fun removeDocument(id: String) = synchronized(documentLock) {
         check(recoveryIssue.value == null) { "本地资料已保护，请先前往资料备份与恢复" }
         val key = safeId(id)

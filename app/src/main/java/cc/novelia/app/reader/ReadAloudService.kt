@@ -9,12 +9,17 @@ import android.media.AudioManager
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import cc.novelia.app.MainActivity
+import cc.novelia.app.NoveliaApplication
 import cc.novelia.app.R
+import cc.novelia.app.data.auth.SessionBinding
+import cc.novelia.app.data.model.BookRef
+import cc.novelia.app.data.model.Chapter
 import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.data.storage.appJson
 import java.io.File
@@ -34,6 +39,9 @@ class ReadAloudService : Service() {
     private var engine: TextToSpeech? = null
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var loadJob: Job? = null
+    private var continuation: SpeechChapterSequence? = null
+    private var binding: SessionBinding? = null
+    private var stopAt = Long.MAX_VALUE
     private var loading = false
     private var activeRequest = ""
     private var currentUtterance: String? = null
@@ -60,24 +68,36 @@ class ReadAloudService : Service() {
         when(intent?.action) {
             "stop" -> { requestGeneration.incrementAndGet(); stopPlayback("朗读已停止") }
             "pause" -> pause()
-            "resume" -> { paused = false; configureAndSpeak() }
+            "resume" -> {
+                paused = false
+                if(loading) {
+                    status.value = if(continuation != null) "正在准备下一章…" else "正在准备朗读…"
+                    getSystemService(NotificationManager::class.java).notify(100, notification())
+                } else configureAndSpeak()
+            }
             "start" -> {
-                loadJob?.cancel(); currentUtterance = null; engine?.stop(); paragraphs = emptyList(); loading = true
+                loadJob?.cancel(); continuation = null; binding = null; currentUtterance = null; engine?.stop(); paragraphs = emptyList(); loading = true
                 index = 0; title = intent.getStringExtra("title") ?: "小说朗读"; rate = intent.getFloatExtra("rate", 1f); language = if(intent.getBooleanExtra("japanese", false)) Locale.JAPAN else Locale.SIMPLIFIED_CHINESE; paused = false
                 // 按 Android 要求立即进入前台服务，再把全部 IO 放到主线程之外。
-                startForeground(100, notification()); handler.removeCallbacks(stopTimer); handler.postDelayed(stopTimer, intent.getIntExtra("minutes", 30) * 60000L)
+                startForeground(100, notification()); handler.removeCallbacks(stopTimer)
+                val duration = intent.getIntExtra("minutes", 30).coerceIn(1, 180) * 60000L
+                stopAt = SystemClock.elapsedRealtime() + duration
+                handler.postDelayed(stopTimer, duration)
                 val requestId = intent.getStringExtra("queue")
                 if(requestId == null || !QUEUE_ID.matches(requestId)) { status.value = "朗读内容不可用，请重新开始"; stopSelf(); return START_NOT_STICKY }
                 activeRequest = requestId
                 loadJob = serviceScope.launch {
                     try {
-                        val queue = withContext(Dispatchers.IO) {
+                        val request = withContext(Dispatchers.IO) {
                             val file = queueFile(applicationContext, requestId)
-                            try { appJson.decodeFromString<List<String>>(file.readText(Charsets.UTF_8)) }
+                            try { appJson.decodeFromString<SpeechRequest>(file.readText(Charsets.UTF_8)) }
                             finally { file.delete() }
                         }
-                        if(queue.isEmpty()) { status.value = EMPTY_QUEUE; stopSelf(); return@launch }
-                        paragraphs = queue; loading = false
+                        binding = request.ref?.takeUnless { it.isLocal }?.let { SessionBinding(request.account, request.sessionGeneration) }
+                        continuation = request.ref?.takeIf { request.settings.speechContinueChapters }?.let { ref ->
+                            SpeechChapterSequence(request.chapterId, request.nextId, request.settings) { id -> loadChapter(ref, id, request) }
+                        }
+                        paragraphs = request.paragraphs; loading = false
                         configureAndSpeak()
                     } catch(e: CancellationException) { throw e }
                     catch(_: Exception) { status.value = "朗读内容不可用，请重新开始"; stopSelf() }
@@ -89,7 +109,8 @@ class ReadAloudService : Service() {
         return START_NOT_STICKY
     }
     private fun configureAndSpeak() {
-        if(!ready || loading || paused || paragraphs.isEmpty()) return
+        if(!ready || loading || paused || activeRequest.isEmpty()) return
+        if(SystemClock.elapsedRealtime() >= stopAt) { stopPlayback(SLEEP_TIMER_FINISHED); return }
         val result = engine?.setLanguage(language)
         if(result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) { status.value = "缺少${if(language == Locale.JAPAN) "日文" else "中文"}语音包，请在系统文字转语音设置中安装"; stopSelf(); return }
         if(getSystemService(AudioManager::class.java).requestAudioFocus(focus) != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) { pause(); return }
@@ -97,14 +118,66 @@ class ReadAloudService : Service() {
     }
     private fun isCurrentUtterance(id: String?) = id != null && id == currentUtterance && !loading && !paused
     private fun speak() {
-        if(index >= paragraphs.size) stopPlayback("本章朗读完成")
+        if(SystemClock.elapsedRealtime() >= stopAt) { stopPlayback(SLEEP_TIMER_FINISHED); return }
+        if(binding?.let { it != (application as NoveliaApplication).session.capture() } == true) {
+            stopPlayback("登录账号已变化，请重新开始朗读"); return
+        }
+        if(index >= paragraphs.size) continueChapter()
         else if(!paused) {
             val id = "$activeRequest:$index:${++utteranceSequence}"
             currentUtterance = id
             engine?.speak(paragraphs[index], TextToSpeech.QUEUE_FLUSH, null, id)
         }
     }
+    private suspend fun loadChapter(ref: BookRef, id: String, request: SpeechRequest): Chapter {
+        val app = application as NoveliaApplication
+        app.initialization.await()
+        val binding = SessionBinding(request.account, request.sessionGeneration)
+        if(!ref.isLocal) app.session.ensureCurrent(binding)
+        val loaded = resolveSpeechChapter(ref, id, request.settings.speechNetworkContinuation, local = { chapterId ->
+            val document = app.store.documentIndex(ref.id)
+            val chapterIndex = document.chapters.indexOfFirst { it.id == chapterId }
+            check(chapterIndex >= 0) { "下一章已不存在，请从目录重新开始朗读" }
+            val chapter = app.store.documentChapter(ref.id, chapterId)
+            Chapter(chapter.title, chapter.title, document.name, document.name,
+                document.chapters.getOrNull(chapterIndex - 1)?.id, document.chapters.getOrNull(chapterIndex + 1)?.id,
+                chapter.paragraphs, chapter.paragraphs)
+        }, cached = { app.store.cachedChapter(ref, it) }, network = {
+            app.store.chapterRequests.load(app.api, app.session, binding, app.store.cacheGeneration.value, ref, it)
+        })
+        if(!ref.isLocal) app.session.ensureCurrent(binding)
+        return loaded
+    }
+    private fun continueChapter() {
+        if(loading || paused) return
+        val sequence = continuation ?: run { stopPlayback("本章朗读完成"); return }
+        currentUtterance = null; loading = true
+        status.value = "正在准备下一章…"
+        getSystemService(NotificationManager::class.java).notify(100, notification())
+        val requestId = activeRequest
+        loadJob = serviceScope.launch {
+            try {
+                val chapter = withContext(Dispatchers.IO) { sequence.next() }
+                ensureActive()
+                if(activeRequest != requestId) return@launch
+                if(SystemClock.elapsedRealtime() >= stopAt) { stopPlayback(SLEEP_TIMER_FINISHED); return@launch }
+                if(chapter == null) { stopPlayback("朗读完成，已到末章"); return@launch }
+                paragraphs = chapter.paragraphs; index = 0; title = chapter.title; loading = false
+                getSystemService(NotificationManager::class.java).notify(100, notification())
+                configureAndSpeak()
+            } catch(e: CancellationException) { throw e }
+            catch(e: Exception) {
+                if(activeRequest == requestId) {
+                    loading = false; paused = true
+                    val message = if(e is IllegalStateException) e.message.orEmpty() else "章节加载失败，请检查网络或登录状态"
+                    status.value = "续章已暂停：$message。点击继续可重试"
+                    getSystemService(NotificationManager::class.java).notify(100, notification())
+                }
+            }
+        }
+    }
     private fun stopPlayback(message: String) {
+        handler.removeCallbacks(stopTimer)
         paused = true; activeRequest = ""; currentUtterance = null; loadJob?.cancel(); engine?.stop()
         status.value = message
         stopSelf()
@@ -129,18 +202,24 @@ class ReadAloudService : Service() {
          * 后台准备可取消的朗读队列；generation 保证较早的准备任务不会覆盖后来的开始/停止操作。
          * 成功交给服务后由服务删除队列文件，交接前失败则由此处回收。
          */
-        suspend fun start(context: Context, title: String, settings: ReaderSettings, content: () -> List<String>) {
+        suspend fun start(context: Context, title: String, settings: ReaderSettings,
+            ref: BookRef? = null, chapterId: String? = null, nextId: String? = null, content: () -> List<String>) {
             val generation = requestGeneration.incrementAndGet()
             val appContext = context.applicationContext
             val id = UUID.randomUUID().toString()
             val file = queueFile(appContext, id)
+            val binding = (appContext as? NoveliaApplication)?.session?.capture()
             var submitted = false
             status.value = "正在准备朗读…"
             try {
                 val hasText = withContext(Dispatchers.IO) {
                     val jobContext = currentCoroutineContext()
                     val queue = prepareSpeechQueue(content()) { jobContext.ensureActive() }
-                    if(queue.isEmpty()) false else { file.writeText(appJson.encodeToString(queue), Charsets.UTF_8); true }
+                    if(queue.isEmpty() && !(settings.speechContinueChapters && ref != null && nextId != null)) false
+                    else {
+                        file.writeText(appJson.encodeToString(SpeechRequest(queue, settings, ref, chapterId, nextId, binding?.account, binding?.generation ?: 0)), Charsets.UTF_8)
+                        true
+                    }
                 }
                 if(requestGeneration.get() != generation) return
                 if(!hasText) {

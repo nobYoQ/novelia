@@ -76,4 +76,20 @@ class DocumentStorageTest {
             assertEquals(original, storage.full(index))
         } finally { directory.deleteRecursively() }
     }
+
+    @Test fun renamingOnlyWritesTheIndexAndPreservesChaptersAndDeduplicationHash() {
+        val directory = Files.createTempDirectory("rename-document").toFile()
+        try {
+            val writes = mutableListOf<String>()
+            val storage = DocumentStorage(directory, { it.readText() }, { file, text -> writes += file.name; file.writeText(text) })
+            val index = storage.save(original)
+            writes.clear()
+            val renamed = storage.rename(index, "  新卷名  ")
+            assertEquals(listOf("book.json"), writes)
+            assertEquals(index.copy(name = "新卷名"), renamed)
+            assertEquals(original.copy(name = "新卷名"), storage.full(storage.index("book")))
+            assertThrows(IllegalArgumentException::class.java) { storage.rename(renamed, "  ") }
+            assertEquals(renamed, storage.index("book"))
+        } finally { directory.deleteRecursively() }
+    }
 }

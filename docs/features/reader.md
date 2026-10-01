@@ -46,6 +46,8 @@ flowchart TD
 
 实际配置为 `local.bookSettings[ref.key] ?: local.reader`。开启“仅应用于这本书”会为当前书保存完整设置副本，关闭则删除副本、重新继承默认值。它不是逐字段继承模型；修改全局偏好不会自动更新已有单书副本。
 
+面板顶部显示“正在修改默认设置”或“仅修改本书”。单书模式在原滑条轨道内标示默认进度，不增加滑条高度：当前值较小时以浅色余量延伸到默认位置，当前值较大时将默认范围显示为稍深的颜色。点击默认进度只复位该项，色阶切换和复位位置均有平滑过渡；拖动保持跟手，不因默认进度的点击区域受到阻挡。“减少动效”、系统关闭动画或电子纸模式会立即完成过渡，途中开启减少动效也会立即到达目标。单选按钮用浅色标记默认选项、实色标记当前选项；开关使用深浅色区分修改状态。电子纸模式提供同一精确默认值的复位按钮。关闭“仅应用于这本书”会删除整个单书副本并恢复跟随默认设置。
+
 [ReaderSettings](../../app/src/main/java/cc/novelia/app/data/model/ReaderSettings.kt) 包含以下相关配置：
 
 | 类别 | 主要字段与含义 |
@@ -56,7 +58,7 @@ flowchart TD
 | 分页/输入 | `paginationMode`、`showPageButtons`、`scrollPageTurn`、`horizontalPageTurn`、`volumeKeys` |
 | 电子纸 | `eInkMode`、`beforeEInk`、`eInkPreferences` |
 | 预读 | `prefetchChapters`、`prefetchWifiOnly` |
-| 朗读 | `speechLanguage`、`speechRate`、`speechMinutes` |
+| 朗读 | `speechLanguage`、`speechRate`、`speechMinutes`、`speechContinueChapters`、`speechNetworkContinuation` |
 
 `staticPagination` 仅判断 `paginationMode == "auto"`，不要把它等同于 `eInkMode`。电子纸首次开启使用自动分页和可用的翻页控制，关闭时恢复 `beforeEInk`，并保存电子纸内的选择供下次使用。旧字段 `paged`、`monochrome` 仍参与历史配置兼容；新增偏好应有默认值，调整这些字段前先读 [ReaderPreferencesTest](../../app/src/test/java/cc/novelia/app/ReaderPreferencesTest.kt)。
 
@@ -199,6 +201,10 @@ UI 在 `Dispatchers.Default` 执行正文准备，依赖章节和语言/引擎/�
 
 `searchBookText` 同样调用 `prepareReadingParagraphs`，默认上限为 200 个结果、20,000,000 个已扫描文本字符。它返回扫描章数、可用章数、目录总章数和 `truncated`，结果为空不能被解释成全网小说没有命中。跳转结果携带 `paragraph/part/start/end`，到目标章后按真实布局定位并高亮。
 
+### 查阅后返回
+
+第一次实际跳转章内搜索命中、整本搜索结果或目录章节之前，保存 `ReadingReturnPoint`（章节、原始段落索引、字符锚点、像素回退）。后续查阅继续保留同一个起点，工具栏显示“回到刚才阅读处”。同章直接定位；跨章沿用可取消、可重试的章节加载流程，成功后才消费返回位置。字符锚点可在重新排版后恢复正文位置，插图和标题保留像素偏移。此临时查阅位置通过导航项和 `rememberSaveable` 保留，不受暂停阅读历史影响，也不替代普通阅读进度。
+
 ## 8. 插图与笔记
 
 滚动插图先预留宽度 1.35 倍、限制在 180–900 dp 的显示框，下载解码完成后不会推动后续段落。静态分页中插图独占一页。两种模式都有失败重试和长按放大入口。
@@ -209,15 +215,19 @@ UI 在 `Dispatchers.Default` 执行正文准备，依赖章节和语言/引擎/�
 
 ## 9. 系统朗读
 
-朗读采用 Android `TextToSpeech`，由 [AndroidManifest.xml](../../app/src/main/AndroidManifest.xml) 中的 `ReadAloudService` 前台服务提供后台播放。当前功能朗读本章，不会自动网络抓取并连续朗读下一章。
+朗读采用 Android `TextToSpeech`，由 [AndroidManifest.xml](../../app/src/main/AndroidManifest.xml) 中的 `ReadAloudService` 前台服务提供后台播放。默认开启连续听书，当前章结束后由服务自动加载下一章，直到末章、停止或定时到期；关闭 `speechContinueChapters` 可只读本章。
 
-开始时按当前显示段落选取起点。日文模式使用原始段落索引从原文截取；中文或译文朗读从投影列表截取每段的第一段主文本。设置的 `speechLanguage` 为 `auto` 时依据显示模式是否以 `jp` 开头选择日文。
+开始时按当前显示段落的原始索引选取起点。日文使用原文；中文使用中文投影的首个主文本，保留译文优先序和繁体设置，显式选择中文时不受屏幕日文模式影响。首章和续章使用同一选择逻辑。设置的 `speechLanguage` 为 `auto` 时依据显示模式是否以 `jp` 开头选择日文。
+
+[SpeechContinuation.kt](../../app/src/main/java/cc/novelia/app/reader/SpeechContinuation.kt) 管理续章顺序、文本选择和加载策略：本地书读取索引和文件，网络书优先使用缓存，仅在未缓存且 `speechNetworkContinuation` 开启时联网。纯插图/空章自动跳过，循环章节 ID 停止并报错。网络请求与播放绑定启动时账号会话，切换账号后旧播放不能推进；失败暂停并保留同一章，通知或面板的“继续”可重试。关闭联网续章后遇到未缓存章节会暂停并解释原因。
 
 `prepareSpeechQueue` 忽略空白和图片标记，按句号、问号、感叹号、换行等切分句子，每个 utterance 最多约 3500 个字符，并避免切断 UTF-16 代理对。暂停/恢复重读当前句子，不承诺从句中某个字精确恢复。
 
-长正文不放进 Intent extras：后台先写私有缓存目录的 `tts-queue-<UUID>.json`，服务只接收队列 ID。服务立即升为前台，再在 IO 线程读取并删除文件；准备取消和异常也负责清理文件。更改这部分不能把整章通过 Binder 传递。
+长正文不放进 Intent extras：后台先把首章队列、书籍与下一章身份、阅读设置及无令牌会话绑定写入私有缓存目录的 `tts-queue-<UUID>.json`，服务只接收队列 ID。服务立即升为前台，再在 IO 线程读取并删除文件；准备取消和异常也负责清理文件。续章也在 IO 协程加载；停止、重新开始或服务销毁会取消待加载任务。更改这部分不能把整章通过 Binder 传递。
 
 服务用全局请求代次和唯一 utterance ID 隔离旧回调；新的开始/停止后，旧 `onDone` 不能推进新队列。它管理音频焦点、通知暂停/继续/停止按钮、定时停止、TTS 语言包检查和销毁清理。`status` 是供 UI 观察的 `StateFlow`。系统引擎或语音包缺失应显示失败原因，不应误报“本章朗读完成”。
+
+定时器只在新播放会话开始时设置一次，并使用单调时钟复核到期时间；跨章、暂停/恢复和失败重试都不会重置期限，到期会取消续章加载。`SpeechContinuationTest` 覆盖本地/缓存/联网策略、禁用联网、失败重试、取消、空章跳过、环路和语言一致性；真实 TTS 后台与通知行为仍需设备验证。
 
 ## 10. 修改步骤与测试矩阵
 

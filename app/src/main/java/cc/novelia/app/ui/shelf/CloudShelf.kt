@@ -209,19 +209,5 @@ import cc.novelia.app.ui.navigation.AppController
 }
 
 @Composable internal fun CloudNovelKindSwitch(kind: Int, onChange: (Int) -> Unit) {
-    Surface(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp).testTag("cloud-novel-kind"),
-        shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainerLow) {
-        Row(Modifier.padding(4.dp)) {
-            listOf("网络小说", "文库小说").forEachIndexed { index, label ->
-                TextButton(onClick = { if(kind != index) onChange(index) },
-                    modifier = Modifier.weight(1f).heightIn(min = 48.dp).semantics { selected = kind == index },
-                    shape = MaterialTheme.shapes.small,
-                    colors = ButtonDefaults.textButtonColors(
-                        containerColor = if(kind == index) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
-                        contentColor = if(kind == index) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)) {
-                    Text(label, style = MaterialTheme.typography.labelLarge)
-                }
-            }
-        }
-    }
+    ShelfKindSwitch(listOf("网络小说", "文库小说"), kind, "cloud-novel-kind", onChange)
 }
