@@ -5,7 +5,7 @@ import cc.novelia.app.data.catalog.SiteLink
 import cc.novelia.app.data.catalog.SiteUrls
 import java.net.URI
 
-/** Markdown destinations may be root-relative or protocol-relative on the original site. */
+/** 原站 Markdown 链接可能使用根相对路径或省略协议的地址。 */
 object MarkdownLinks {
     private val base = URI("https://n.novelia.cc/")
     fun resolve(destination: String, documentUrl: String? = null): String? = runCatching {
@@ -20,7 +20,7 @@ object MarkdownLinks {
 
     fun isInternal(url: String): Boolean = runCatching { SiteUrls.isInternal(URI(url)) }.getOrDefault(false)
 
-    /** null means another document; an empty fragment denotes the top of this document. */
+    /** 返回 null 表示其他文档，空片段表示当前文档顶部。 */
     fun localFragment(destination: String, documentUrl: String?): String? = runCatching {
         val input = destination.trim()
         if (input.startsWith('#')) return URI(input).fragment
@@ -40,11 +40,11 @@ object MarkdownLinks {
         else -> null
     }
 
-    /** Screens with a native equivalent. Other site pages stay in an in-app WebView. */
+    /** 存在原生页面时优先进入原生界面，其余站点页面使用应用内 WebView。 */
     fun nativeRoute(url: String): String? {
         val resolved = resolve(url) ?: return null
-        // MarkdownText handles headings within its current document before routing here.
-        // Other documents' heading/comment anchors keep their full URL in WebView.
+        // MarkdownText 会先处理当前文档内的标题跳转，再进入此路由；
+        // 其他文档的标题和评论锚点保留完整 URL，交给 WebView。
         if (isInternal(resolved) && !URI(resolved).rawFragment.isNullOrEmpty()) return null
         when (val link = BookLinks.parse(resolved)) {
             is SiteLink.Book -> return if (link.chapterId == null) "book/${link.ref.provider}/${link.ref.id}"
@@ -54,7 +54,7 @@ object MarkdownLinks {
         }
         if (!isInternal(resolved)) return null
         val uri = URI(resolved)
-        // Preserve filters and pagination on site list pages through the WebView.
+        // 站点列表页使用 WebView，保留 URL 中的筛选和分页参数。
         if (uri.rawQuery != null) return null
         return when (uri.path.trimEnd('/')) {
             "/forum" -> "community"

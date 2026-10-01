@@ -18,7 +18,7 @@ internal object DownloadFiles {
     private val safeId = Regex("[a-zA-Z0-9-]+")
     private val partialName = Regex("[a-zA-Z0-9-]+\\.part")
 
-    /** Serialize lifecycle commands and file promotion, without waiting for a worker to terminate. */
+    /** 串行处理生命周期命令和成品文件发布，无需等待旧 Worker 完全退出。 */
     suspend fun <T> withTaskLock(directory: File, downloadId: String, block: suspend () -> T): T {
         require(safeId.matches(downloadId))
         val key = File(directory, downloadId).absolutePath
@@ -31,7 +31,7 @@ internal object DownloadFiles {
     suspend fun commit(directory: File, downloadId: String, partial: File, destination: File,
         isCurrent: () -> Boolean, completed: () -> Unit): Boolean = withTaskLock(directory, downloadId) {
         if (!isCurrent()) return@withTaskLock false
-        // Both paths are in the same private directory; move instead of publishing a partial copy.
+        // 两个路径位于同一私有目录，通过移动发布完整文件，避免出现部分拷贝。
         Files.move(partial.toPath(), destination.toPath(), StandardCopyOption.REPLACE_EXISTING)
         completed()
         true
@@ -47,6 +47,7 @@ internal object DownloadFiles {
         active -= file.absolutePath
     }
 
+    /** 只清理符合临时文件命名规则且未被运行任务占用的文件；不触碰下载成品。 */
     @Synchronized fun cleanup(directory: File, downloadId: String? = null) {
         if (downloadId != null) require(safeId.matches(downloadId))
         directory.listFiles().orEmpty().filter { file ->

@@ -246,7 +246,7 @@ import kotlinx.coroutines.sync.withPermit
     }
 }
 
-/** Outline responses can omit authors. Resolve them only while an author block is active. */
+/** 列表摘要可能没有作者，仅在启用作者屏蔽时补取作者信息。 */
 internal suspend fun enrichAuthors(books: List<BookCard>, c: AppController, blockedAuthors: Set<String>): List<BookCard> {
     if(blockedAuthors.isEmpty()) return books
     val limit = Semaphore(4)

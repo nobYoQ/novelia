@@ -28,7 +28,7 @@ import cc.novelia.app.ui.shelf.BookFavoriteState
                 Icon(if(favoriteState.isSaved) Icons.Outlined.BookmarkAdded else Icons.Outlined.BookmarkAdd,
                     null, Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
-                // Keep pending operations explicit; only the repeated action hint is omitted visually.
+                // 待处理操作仍明确显示，只在视觉上省略重复的操作提示。
                 Text(favoriteState.label.substringBefore(" · "), Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
                 Icon(Icons.Outlined.ChevronRight, null, Modifier.size(18.dp))
             }

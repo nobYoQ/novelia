@@ -47,7 +47,7 @@ class DownloadFilesTest {
                 DownloadFiles.withTaskLock(root, "task") {
                     exists = false
                     deleting.complete(Unit)
-                    finishDelete.await() // The library flush can suspend here.
+                    finishDelete.await() // 书库 flush 可以在这里挂起。
                     destination.delete()
                     DownloadFiles.cleanup(root, "task")
                 }

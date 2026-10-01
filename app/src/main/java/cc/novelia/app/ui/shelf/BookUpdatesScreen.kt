@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.updates.UpdateWorker
+import cc.novelia.app.data.updates.withAcknowledgedBookUpdates
 import cc.novelia.app.ui.components.AppLazyColumn
 import cc.novelia.app.ui.components.BookRow
 import cc.novelia.app.ui.components.EmptyState
@@ -35,7 +36,7 @@ import cc.novelia.app.ui.navigation.AppController
                 Column(Modifier.padding(vertical = 8.dp)) {
                     BookRow(saved.book.copy(subtitle = update?.summary?.ifBlank { null } ?: "有更新"), { c.book(saved.book.ref) })
                     TextButton(onClick = {
-                        c.store.update { current -> current.copy(books = current.books.map { if(it.book.ref == saved.book.ref) it.copy(hasUpdates = false) else it }, bookUpdates = current.bookUpdates - saved.book.ref.key) }
+                        c.store.update { it.withAcknowledgedBookUpdates(saved.book.ref) }
                     }, modifier = Modifier.padding(horizontal = 12.dp)) { Text("标记更新已读") }
                 }
             }

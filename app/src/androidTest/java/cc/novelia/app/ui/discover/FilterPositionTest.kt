@@ -67,7 +67,7 @@ class FilterPositionTest {
                     }
                     AppLazyColumn(Modifier.weight(1f), state = list, listModifier = Modifier.testTag("result-viewport")) {
                         items(100, key = { it }) { index ->
-                            // Discovery rows also animate placement; exercise this alongside viewport resizing.
+                            // 发现列表行也带有位置动画，同时验证它与视口大小变化的交互。
                             val motion = if(assistant && !reduced && !eInk) Modifier.animateItem(
                                 fadeInSpec = tween(AppMotion.Quick), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit)) else Modifier
                             Text("书目 $index", motion.fillMaxWidth().height((96 + index % 3 * 16).dp).testTag("result-$index"))
@@ -78,8 +78,8 @@ class FilterPositionTest {
             }
         }
         compose.waitForIdle()
-        // Initial scroll-to-end is clamped to fill the viewport. Keep that first visible book;
-        // shrinking the viewport is allowed to move the last book below its lower edge.
+        // 初次滚到末尾时会受填满视口的限制，应保留当时首个可见书目；
+        // 视口缩小时，允许最后一本书移到下边界之外。
         val anchorIndex = list.firstVisibleItemIndex
         val anchorOffset = list.firstVisibleItemScrollOffset
         fun relativePosition(): Float {
@@ -89,7 +89,7 @@ class FilterPositionTest {
         }
         val before = relativePosition()
         compose.mainClock.autoAdvance = false
-        // Include reversing a transition before it finishes, not just its settled endpoints.
+        // 也验证过渡尚未结束时反向切换的情况，而非只检查两个稳定端点。
         for((target, frames) in listOf(true to 24, false to 24, true to 5, false to 4, true to 24, false to 24)) {
             compose.runOnIdle { expanded = target }
             repeat(frames) { frame ->

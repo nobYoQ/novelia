@@ -71,7 +71,7 @@ internal object LibraryBackupArchive {
             zip.putNextEntry(ZipEntry(MANIFEST)); zip.write(metadata); zip.closeEntry()
             files.forEach { (name, file) ->
                 checkCancelled(); requireSafePath(name)
-                // Detect a document edited while its export snapshot was being assembled.
+                // 检测导出快照组装期间文档是否被修改。
                 require(digest(file, checkCancelled) == manifest.assets[name]) { "备份期间文件发生变化，请重试" }
                 zip.putNextEntry(ZipEntry(name))
                 file.inputStream().use { transfer(it, zip, MAX_ENTRY_BYTES, checkCancelled) }
@@ -209,7 +209,7 @@ internal fun mergeLibraryBackup(current: LibraryState, imported: LibraryState): 
         drafts = imported.drafts + current.drafts,
         updateSnapshots = (imported.updateSnapshots + current.updateSnapshots).filterKeys { it in booksByKey },
         bookUpdates = (imported.bookUpdates + current.bookUpdates).filterKeys { it in booksByKey },
-        // Live work belongs to this installation and is never supplied by the archive.
+        // 运行中的任务属于当前安装实例，不从备份归档恢复。
         pending = current.pending, downloads = current.downloads, syncStatus = current.syncStatus
     )
     return merged

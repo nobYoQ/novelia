@@ -13,7 +13,7 @@ class EditorStateRegressionTest {
         var stored: String? = input
         val drafts = DraftPersistence({ input }, { stored = it })
         input = "已保存及最后一次输入"
-        drafts.save() // The same synchronous callback used by onDispose.
+        drafts.save() // 使用与 onDispose 相同的同步回调。
         assertEquals(input, stored)
     }
 

@@ -10,7 +10,7 @@ import okhttp3.Response
 
 internal data class HttpTextResponse(val code: Int, val text: String)
 
-/** Reads and closes the body on OkHttp's dispatcher; cancellation also stops an in-flight body. */
+/** 在 OkHttp 调度线程中读取并关闭响应体，取消请求也会中止正在读取的响应体。 */
 internal suspend fun Call.awaitText(): HttpTextResponse = awaitBody {
     HttpTextResponse(it.code, if (it.isSuccessful) it.body?.string().orEmpty() else "")
 }

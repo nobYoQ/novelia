@@ -45,7 +45,7 @@ class BookListPresentationTest {
         val remote = book.copy(cloudReading = CloudReadingProgress("alice", lastReadAt = 20))
         val local = Position("four", index = 9, updatedAt = 10_000, chapterIndex = 3, chapterCount = 10, paragraphCount = 10)
         assertEquals("有阅读记录", bookRowStatus(remote, null, local, null, "alice").progressLabel)
-        assertEquals("已读 38%", bookRowStatus(remote, null, local.copy(updatedAt = 21_000), null, "alice").progressLabel)
+        assertEquals("已读 40%", bookRowStatus(remote, null, local.copy(updatedAt = 21_000), null, "alice").progressLabel)
     }
 
     @Test fun refreshedHistoryUpdatesOnlyMatchingSavedBooksAndNeverReplacesLocalAnchors() {
@@ -79,7 +79,7 @@ class BookListPresentationTest {
         val cloud = book.copy(cloudReading = CloudReadingProgress("alice", chapterId = "c", chapterIndex = 5, chapterCount = 10, chapterResolved = true))
         val beginning = Position("first", index = 1, chapterIndex = 0, chapterCount = 10, paragraphCount = 10)
         assertEquals(.6f, bookRowStatus(cloud, null, beginning, null, "alice").progress!!, .0001f)
-        assertEquals(.78f, bookRowStatus(cloud, null, beginning.copy(chapterIndex = 7, index = 9), null, "alice").progress!!, .0001f)
+        assertEquals(.8f, bookRowStatus(cloud, null, beginning.copy(chapterIndex = 7, index = 9), null, "alice").progress!!, .0001f)
     }
 
     @Test fun cloudChapterLabelAndFillUseTheSameReachedChapterIncludingFirstAndLast() {
@@ -103,7 +103,7 @@ class BookListPresentationTest {
             assertEquals("读到第 3 章", row.progressLabel)
             assertEquals(.3f, row.progress!!, .0001f)
         }
-        assertEquals(0f, bookRowStatus(remote, null, local, null, "alice").progress!!, .0001f)
+        assertEquals(.1f, bookRowStatus(remote, null, local, null, "alice").progress!!, .0001f)
         assertEquals("已读 100%", bookRowStatus(remote, SavedBook(book, status = "读完"), local, null, "alice").progressLabel)
     }
 
@@ -119,27 +119,28 @@ class BookListPresentationTest {
             .books.single().book.cloudReading?.chapterIndex)
     }
 
-    @Test fun readingProgressIncludesTheCurrentChapterAndNewChapters() {
+    @Test fun readingProgressUsesTheReachedChapterAndLatestKnownTotal() {
         val position = Position("four", index = 9, chapterIndex = 3, chapterCount = 10, paragraphCount = 10)
         val row = bookRowStatus(book, null, position, BookUpdateInfo(newChapters = 3))
-        assertEquals(.38f, row.progress!!, .0001f)
-        assertEquals("已读 38%", row.progressLabel)
+        assertEquals(.4f, row.progress!!, .0001f)
+        assertEquals("已读 40%", row.progressLabel)
         assertEquals("更新 3 章", row.updateLabel)
-        assertEquals(.19f, bookRowStatus(book.copy(total = 20), null, position, null).progress!!, .0001f)
+        assertEquals(.2f, bookRowStatus(book.copy(total = 20), null, position, null).progress!!, .0001f)
     }
 
-    @Test fun openingTheFirstParagraphDoesNotFinishASingleParagraphBook() {
+    @Test fun openingASingleChapterReachesTheLatestChapterWithoutMarkingItsContentCompleted() {
         val single = book.copy(total = 1)
         val first = Position("one", index = 1, chapterIndex = 0, chapterCount = 1, paragraphCount = 1)
-        assertEquals(0f, bookRowStatus(single, null, first, null).progress!!, .0001f)
-        assertEquals("已读 0%", bookRowStatus(single, null, first, null).progressLabel)
+        assertFalse(first.chapterCompleted)
+        assertEquals(1f, bookRowStatus(single, null, first, null).progress!!, .0001f)
+        assertEquals("已读 100%", bookRowStatus(single, null, first, null).progressLabel)
         assertEquals("已读 100%", bookRowStatus(single, null, first.copy(index = 2), null).progressLabel)
     }
 
     @Test fun finishingTheLastScreenReachesOneHundredWithoutMovingTheRestoreAnchor() {
         val lastScreen = Position("last", index = 100, offset = 260, textOffset = 720,
             chapterIndex = 9, chapterCount = 10, paragraphCount = 100)
-        assertEquals("已读 99%", bookRowStatus(book, null, lastScreen, null).progressLabel)
+        assertEquals("已读 100%", bookRowStatus(book, null, lastScreen, null).progressLabel)
         val completed = lastScreen.copy(chapterCompleted = true)
         val restored = appJson.decodeFromString<Position>(appJson.encodeToString(completed))
         assertEquals(lastScreen, restored.copy(chapterCompleted = false))
@@ -149,17 +150,17 @@ class BookListPresentationTest {
         assertEquals(10f / 11, bookRowStatus(book.copy(total = 11), null, restored, null).progress!!, .0001f)
     }
 
-    @Test fun singleLongParagraphOnlyFinishesWhenItsFinalScreenHasBeenReached() {
+    @Test fun chapterReadingProgressIsIndependentOfParagraphAndCompletionAnchors() {
         val single = book.copy(total = 1)
         val middle = Position("one", index = 1, offset = 900, textOffset = 700,
             chapterIndex = 0, chapterCount = 1, paragraphCount = 1)
-        assertEquals("已读 0%", bookRowStatus(single, null, middle, null).progressLabel)
+        assertEquals("已读 100%", bookRowStatus(single, null, middle, null).progressLabel)
         val finished = middle.copy(chapterCompleted = true)
         assertEquals("已读 100%", bookRowStatus(single, null, finished, null).progressLabel)
         assertEquals("已读 100%", bookRowStatus(single, null, finished.copy(offset = 0, textOffset = 0), null).progressLabel)
         val legacy = appJson.decodeFromString<Position>("""{"chapterId":"one","index":1,"chapterIndex":0,"chapterCount":1,"paragraphCount":1}""")
         assertFalse(legacy.chapterCompleted)
-        assertEquals("已读 0%", bookRowStatus(single, null, legacy, null).progressLabel)
+        assertEquals("已读 100%", bookRowStatus(single, null, legacy, null).progressLabel)
     }
 
     @Test fun legacyOrInvalidPositionsNeverInventAPercentage() {
@@ -175,7 +176,7 @@ class BookListPresentationTest {
 
     @Test fun translatedChaptersAreNotCountedAsNewStoryChapters() {
         val row = bookRowStatus(book, null, null, BookUpdateInfo(translations = mapOf("sakura" to 3)))
-        assertEquals("有更新", row.updateLabel)
+        assertEquals("译文更新", row.updateLabel)
         assertEquals("更新 2 卷", bookRowStatus(book, null, null, BookUpdateInfo(newVolumes = 2)).updateLabel)
     }
 
@@ -184,5 +185,28 @@ class BookListPresentationTest {
         assertNull(bookUpdateDate(null))
         assertNull(bookUpdateDate(0))
         assertNull(bookUpdateDate(-1))
+    }
+
+    @Test fun finishedStatusCannotHideNewChaptersOrUseAnOlderListTotal() {
+        val old = Position("last", chapterIndex = 9, chapterCount = 10, chapterCompleted = true)
+        val latest = book.copy(total = 11)
+        val saved = SavedBook(latest, status = "读完", hasUpdates = true)
+        val row = bookRowStatus(book, saved, old, BookUpdateInfo(newChapters = 1))
+        assertEquals(10f / 11, row.progress!!, .0001f)
+        assertEquals("已读 90%", row.progressLabel)
+        assertEquals("更新 1 章", row.updateLabel)
+        val noAnchor = bookRowStatus(latest, saved, null, BookUpdateInfo(newChapters = 1))
+        assertEquals(10f / 11, noAnchor.progress!!, .0001f)
+        assertEquals("已读 90%", noAnchor.progressLabel)
+    }
+
+    @Test fun localAndCloudProgressAgreeAtEveryReachedChapter() {
+        for(index in 0 until book.total) {
+            val local = Position("$index", chapterIndex = index, chapterCount = book.total)
+            val remote = book.copy(cloudReading = CloudReadingProgress("alice", chapterId = "$index",
+                chapterIndex = index, chapterCount = book.total, chapterResolved = true))
+            assertEquals(bookRowStatus(remote, null, null, null, "alice").progress,
+                bookRowStatus(book, null, local, null).progress)
+        }
     }
 }

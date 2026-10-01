@@ -21,7 +21,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-/** Keep one source buffer, including the IME composition and selection, while resizing. */
+/** 尺寸变化时保留同一输入缓冲区，包括输入法组合文本和选区。 */
 @Composable internal fun MarkdownEditor(text: String, onTextChange: (String) -> Unit, maxEditorHeight: Dp) {
     var source by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue(text)) }
     var toolbarSelection by remember(text) { mutableStateOf<TextFieldValue?>(null) }
@@ -36,7 +36,7 @@ import androidx.compose.ui.unit.dp
     val lineHeight = with(density) { MaterialTheme.typography.bodyLarge.lineHeight.toDp() }
     val inputHeight = (maxEditorHeight - 56.dp).coerceAtLeast(56.dp)
     val visibleLines = ((inputHeight - 32.dp) / lineHeight).toInt().coerceAtLeast(1)
-    // Respond to keyboard resizing, without fighting manual scrolling on each keystroke.
+    // 响应键盘引起的尺寸变化，但不在每次按键后干扰用户手动滚动。
     LaunchedEffect(focused, imeBottom, maxEditorHeight) {
         if (focused) { withFrameNanos { }; bringIntoView.bringIntoView() }
     }
@@ -58,7 +58,7 @@ import androidx.compose.ui.unit.dp
             .focusRequester(focus)
             .onFocusChanged { focused = it.isFocused; if(it.isFocused) toolbarSelection = null }
             .onPreviewKeyEvent {
-                // Preserve the selected range before TextField clears it during keyboard focus exit.
+                // 键盘焦点移出时，先保存选区，再允许 TextField 清除选择。
                 if(it.type == KeyEventType.KeyDown && it.key == Key.Tab && !it.isCtrlPressed && !it.isAltPressed && !it.isMetaPressed) toolbarSelection = current
                 false
             },

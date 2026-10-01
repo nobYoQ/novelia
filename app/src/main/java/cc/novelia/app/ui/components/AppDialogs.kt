@@ -31,7 +31,7 @@ import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import cc.novelia.app.ui.theme.appReducedMotion
 
-/** Window animations are outside Compose's animation scale and must be disabled separately. */
+/** 窗口动画不受 Compose 动画缩放控制，需要单独关闭。 */
 @Composable private fun ApplyDialogMotion() {
     val reduced = appReducedMotion()
     val window = (LocalView.current.parent as? DialogWindowProvider)?.window
@@ -67,7 +67,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
         properties = properties)
 }
 
-/** A static anchored popup avoids Material's hard-coded menu fade/scale in reduced motion. */
+/** 减少动画模式使用静态锚定弹窗，避开 Material 菜单固定的淡入和缩放动画。 */
 @Composable internal fun AppDropdownMenu(
     expanded: Boolean,
     onDismissRequest: () -> Unit,

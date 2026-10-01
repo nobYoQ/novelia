@@ -6,7 +6,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/** 固定数量 worker，不为每个章节创建协程；失败/取消停止整批，进度回调串行递增。 */
+/** 使用固定数量的工作协程，不为每章单独创建；失败或取消停止整批，进度回调串行递增。 */
 internal suspend fun cacheChapterBatch(
     ids: List<String>,
     load: suspend (String) -> Unit,

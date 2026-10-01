@@ -121,8 +121,8 @@ class MarkdownFeaturesTest {
             val top = view.layout.getLineTop(line) + view.totalPaddingTop
             val bottom = view.layout.getLineBottom(line) + view.totalPaddingTop
             tap = Offset((left + right) / 2, (top + bottom) / 2f)
-            // Keep glyph bounds relative to the tested AndroidView. A platform Activity
-            // transition can move its screen coordinates after this layout snapshot.
+            // 字形边界以被测 AndroidView 为参照；平台 Activity 的过渡动画
+            // 可能在此布局快照之后改变控件的屏幕坐标。
             region = android.graphics.Rect(left.toInt() + 2, top + 2, right.toInt() - 2, bottom - 2)
         }
         compose.onNodeWithTag("spoiler-touch-test").performTouchInput { click(tap) }
@@ -132,9 +132,9 @@ class MarkdownFeaturesTest {
             assertFalse(other.revealed)
         }
         compose.waitForIdle()
-        // captureToImage uses PixelCopy from the real window, cropped to this node. Check
-        // both colors in the same rendered frame instead of accepting frame A then
-        // asserting unrelated frames B/C from uiAutomation's full-screen compositor.
+        // captureToImage 通过 PixelCopy 获取真实窗口并裁切到此节点；应在
+        // 同一渲染帧中检查两种颜色，避免先接受帧 A，再拿
+        // uiAutomation 全屏合成器中无关的帧 B/C 进行断言。
         var white = 0
         var black = 0
         var lastFrame: Bitmap? = null
@@ -169,7 +169,7 @@ class MarkdownFeaturesTest {
         assertTrue("展开后应显示白色背景，实际白色像素数 $white", white > region.width() * region.height() / 3)
         assertTrue("展开后应显示黑色文字，实际黑色像素数 $black", black > 20)
         compose.onNodeWithTag("spoiler-touch-test").performTouchInput {
-            // Two separate taps: a native double-tap selects text instead.
+            // 分两次单击；原生双击会触发文字选择。
             advanceEventTime(android.view.ViewConfiguration.getDoubleTapTimeout().toLong() + 50)
             click(tap)
         }

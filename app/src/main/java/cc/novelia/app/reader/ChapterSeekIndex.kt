@@ -4,9 +4,14 @@ import cc.novelia.app.data.model.ReaderSettings
 import kotlin.math.roundToLong
 import kotlin.math.roundToInt
 
+/** paragraph 为投影列表下标；文字段落的 textOffset 为包含标签、分隔符和缩进的 UTF-16 偏移。 */
 internal data class ChapterSeekAnchor(val paragraph: Int, val textOffset: Int)
 
-/** A character-weighted chapter index, so one long paragraph can still be scrubbed precisely. */
+/**
+ * 按显示字符数加权的章节索引，利用前缀和与二分查找定位到长段落内部。
+ * 插图使用固定权重，使其可被进度条选中；这不是实际页码或像素滚动距离。
+ * 长度计算须与 paragraphPartStarts 的文本拼接约定一致，才能与两种渲染器共享锚点。
+ */
 internal class ChapterSeekIndex(paragraphs: List<ReadingParagraph>, settings: ReaderSettings) {
     private val lengths = paragraphs.map { paragraph ->
         if(paragraph.imageUrl != null || paragraph.localImageId != null) 400
@@ -20,6 +25,7 @@ internal class ChapterSeekIndex(paragraphs: List<ReadingParagraph>, settings: Re
         lengths.forEachIndexed { index, length -> sums[index + 1] = sums[index] + length }
     }
 
+    /** 100% 定位到最后一个有效权重位置；滚动模式的精确末尾由界面额外处理。 */
     fun anchorAt(progress: Float): ChapterSeekAnchor {
         if(lengths.isEmpty()) return ChapterSeekAnchor(0, 0)
         val target = (progress.safeFraction().toDouble() * starts.last()).roundToLong().coerceAtMost(starts.last() - 1)

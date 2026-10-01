@@ -11,6 +11,7 @@ import cc.novelia.app.data.documents.DocumentHashIndex
 import cc.novelia.app.data.documents.DocumentStorage
 import cc.novelia.app.data.library.withoutBook
 import cc.novelia.app.data.library.withReadingPosition
+import cc.novelia.app.data.updates.withSavedBook
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.Chapter
@@ -18,8 +19,6 @@ import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.LocalChapter
 import cc.novelia.app.data.model.LocalDocument
 import cc.novelia.app.data.model.Position
-import cc.novelia.app.data.model.SavedBook
-import cc.novelia.app.data.model.withKnownUpdateTime
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -51,7 +50,7 @@ class LocalStore(val context: Context) {
     )
     private val mutable = MutableStateFlow(initial.state)
     private val mutableRecoveryIssue = MutableStateFlow(initial.issue)
-    // Damaged snapshots may still contain recoverable pointers; keep their payload history intact.
+    // 损坏快照仍可能包含可恢复的引用，应保留其历史正文载荷。
     private val preserveTextHistory = initial.issue != null || context.filesDir.listFiles().orEmpty().any { it.name.startsWith("library-damaged-") }
     val recoveryIssue = mutableRecoveryIssue.asStateFlow()
     private data class Revision(val number: Long, val state: LibraryState)
@@ -59,9 +58,9 @@ class LocalStore(val context: Context) {
     private val diskLock = Any()
     private val persistence = StatePersistence<Revision>(CoroutineScope(SupervisorJob() + Dispatchers.IO)) { next ->
         synchronized(diskLock) {
-            // A restore invalidates every queued snapshot created before its atomic commit.
+            // 恢复提交后，原子提交之前排队的全部旧快照失效。
             val eligible = synchronized(this) { next.number == revision && mutableRecoveryIssue.value == null }
-            // UI updates never wait for normal JSON encoding or filesystem writes.
+            // 普通界面状态更新无需等待 JSON 编码或文件系统写入。
             if (eligible) writeState(next.state)
         }
     }
@@ -96,8 +95,8 @@ class LocalStore(val context: Context) {
      * 相同状态不触发写入，恢复保护期间直接忽略修改，界面可通过 [recoveryIssue] 提示用户。
      */
     @Synchronized fun update(transform: (LibraryState) -> LibraryState) {
-        // Callers include UI callbacks and reader disposal; keep the protected state read-only
-        // instead of throwing from those callbacks. A persistent recovery banner explains this.
+        // 调用方包括界面回调和阅读器销毁流程；恢复保护期间保持状态只读，
+        // 避免在这些回调中抛异常，由持续显示的恢复提示说明原因。
         if (mutableRecoveryIssue.value != null) return
         val next = transform(mutable.value)
         if (next == mutable.value) return
@@ -110,7 +109,7 @@ class LocalStore(val context: Context) {
         val output = stateFile.startWrite()
         try { output.write(text.toByteArray(Charsets.UTF_8)); stateFile.finishWrite(output) }
         catch (error: Exception) { stateFile.failWrite(output); throw error }
-        // A second copy is best effort: a failure must not misreport an already committed library.
+        // 备用副本尽力写入，其失败不能把已成功提交的书库误报为失败。
         runCatching { atomicText(lastGoodFile, text); if (!preserveTextHistory) stateCodec.compact() }
     }
 
@@ -128,7 +127,7 @@ class LocalStore(val context: Context) {
                     val damaged = File(context.filesDir, "library.json")
                     if (damaged.exists()) damaged.copyTo(File(context.filesDir, "library-damaged-${java.util.UUID.randomUUID()}.json"))
                 }
-                // Explicit recovery repairs payloads even when the decoded values equal this process's cache.
+                // 显式恢复会修复正文载荷，即使解码结果与进程内缓存相同。
                 writeState(next, forcePayloadWrite = true)
                 revision += 1
                 mutable.value = next
@@ -142,14 +141,10 @@ class LocalStore(val context: Context) {
         commitRestore { it }
     }
 
-    /** Await this at lifecycle and background-work boundaries that require durable state. */
+    /** 需要可靠落盘的生命周期和后台任务边界应等待此方法完成。 */
     suspend fun flush() = withContext(Dispatchers.IO) { persistence.flush() }
 
-    fun saveBook(book: BookCard, folder: String = "默认收藏") = update { current ->
-        val previous = current.books.find { it.book.ref == book.ref }
-        val merged = book.withKnownUpdateTime(previous?.book)
-        current.copy(books = current.books.filterNot { it.book.ref == book.ref } + (previous?.copy(book = merged, folder = folder) ?: SavedBook(merged, folder)))
-    }
+    fun saveBook(book: BookCard, folder: String = "默认收藏") = update { it.withSavedBook(book, folder) }
     fun removeBook(ref: BookRef) = update { it.withoutBook(ref) }
     fun rememberSearch(query: String) { if (query.isNotBlank()) update { it.copy(recentSearches = (listOf(query) + it.recentSearches.filterNot { old -> old == query }).take(20)) } }
     fun savePosition(ref: BookRef, position: Position) = update { it.withReadingPosition(ref, position) }
@@ -190,7 +185,7 @@ class LocalStore(val context: Context) {
     }
     fun documentImage(id: String, hash: String): File { require(hash.matches(Regex("[a-f0-9]{64}"))); return File(documentsDir, "${safeId(id)}-images/$hash") }
     fun documentSource(id: String, format: String): File { require(format in listOf("epub", "txt", "srt")); return File(documentsDir, "${safeId(id)}.$format") }
-    /** Small chapter catalogue for reader navigation, search planning, and export metadata. */
+    /** 轻量章节目录，用于阅读导航、搜索规划和导出元数据。 */
     fun documentIndex(id: String): LocalDocument = synchronized(documentLock) {
         val key = safeId(id)
         documentMemory[key] ?: documentStorage.index(key).also { documentMemory.put(key, it) }
@@ -200,7 +195,7 @@ class LocalStore(val context: Context) {
         val key = "${index.id}/${index.chapterFiles[chapterId] ?: chapterId}"
         localChapterMemory[key] ?: documentStorage.chapter(index, chapterId).also { localChapterMemory.put(key, it) }
     }
-    /** Portable full document; only explicit backup/export work should need this allocation. */
+    /** 可移植的完整文档；仅显式备份或导出时才应分配整本文档内存。 */
     fun document(id: String, checkCancelled: () -> Unit = {}): LocalDocument =
         documentStorage.full(documentIndex(id), checkCancelled)
 

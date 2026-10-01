@@ -32,7 +32,7 @@ import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
 
-/** Real Android AtomicFile coverage, isolated from the application's user library. */
+/** 使用真实 Android AtomicFile 验证，测试书库与应用的用户书库隔离。 */
 @RunWith(AndroidJUnit4::class)
 class LibraryBackupFlowTest {
     private class IsolatedContext(base: Context, private val directory: File) : ContextWrapper(base) {
@@ -45,7 +45,7 @@ class LibraryBackupFlowTest {
         val root = File(base.cacheDir, "library-backup-test-${UUID.randomUUID()}").apply { mkdirs() }
         try { block(IsolatedContext(base, File(root, "source")), IsolatedContext(base, File(root, "target"))) }
         finally {
-            // Catalogue coalescers may still hold an already-flushed request; let them drain.
+            // 目录写入合并器可能仍持有已刷盘的请求，等待其处理完毕。
             delay(350)
             root.deleteRecursively()
         }
@@ -136,7 +136,7 @@ class LibraryBackupFlowTest {
                 images = mapOf(imageHash to java.util.Base64.getEncoder().encodeToString(image)), coverImage = imageHash, sourceHash = "source-one"))
             source.saveDocument(LocalDocument(second.id, "第二卷", "txt", listOf(LocalChapter("c2", "第二章", listOf("续篇正文"))), sourceHash = "source-two"))
             source.documentSource(first.id, "epub").writeBytes(byteArrayOf(10, 20, 30))
-            // The second book deliberately has no original file; its parsed body must still restore.
+            // 第二本书刻意不提供原始文件，恢复仍须保留已解析的正文。
             source.update { it.copy(books = listOf(
                 SavedBook(BookCard(parent, "系列"), folder = "收藏夹", volumeOrder = listOf(second.key, first.key)),
                 SavedBook(BookCard(first, "第一卷"), folder = "收藏夹", parentWenkuKey = parent.key),
@@ -154,7 +154,7 @@ class LibraryBackupFlowTest {
             val service = LibraryBackupService(target, targetTags)
             val preview = service.prepare(ByteArrayInputStream(bytes))
             assertEquals(3, preview.books); assertEquals(2, preview.documents); assertEquals(1, preview.notes)
-            // Reconstructing the service simulates recreating the screen with only its staging ID.
+            // 重新创建服务，模拟界面重建后仅凭暂存 ID 继续恢复。
             assertEquals(preview, LibraryBackupService(target, targetTags).preview(preview.stagingId))
             assertNull(service.restore(preview.stagingId))
             target.flush()
@@ -220,8 +220,8 @@ class LibraryBackupFlowTest {
                 zip.putNextEntry(ZipEntry("../library.json")); zip.write("overwrite".toByteArray()); zip.closeEntry()
             } }.toByteArray()
             try { LibraryBackupService(store, tags).prepare(ByteArrayInputStream(malicious)); fail("must reject traversal") }
-            catch (_: IllegalArgumentException) { /* App-level archive path validation. */ }
-            catch (_: java.util.zip.ZipException) { /* Newer Android rejects traversal in nextEntry first. */ }
+            catch (_: IllegalArgumentException) { /* 验证应用层的归档路径检查。 */ }
+            catch (_: java.util.zip.ZipException) { /* 较新 Android 会先在 nextEntry 中拒绝路径穿越。 */ }
             assertArrayEquals(before, File(context.filesDir, "library.json").readBytes())
             assertEquals(listOf("keep me"), LocalStore(context).state.value.savedSearches)
             assertEquals("已有书籍", store.state.value.books.single().book.title)
@@ -241,7 +241,7 @@ class LibraryBackupFlowTest {
             val beforeBytes = File(targetContext.filesDir, "library.json").readBytes()
             val service = LibraryBackupService(target, targetTags)
             val preview = service.prepare(ByteArrayInputStream(bytes))
-            // Android AtomicFile writes to .new. A non-empty directory forces an actual IO failure.
+            // Android AtomicFile 写入 .new 文件；用非空目录制造真实的 IO 失败。
             val obstruction = File(targetContext.filesDir, "library.json.new").apply { mkdirs() }
             File(obstruction, "blocked").writeText("force write failure")
             try { service.restore(preview.stagingId); fail("atomic commit must fail") }

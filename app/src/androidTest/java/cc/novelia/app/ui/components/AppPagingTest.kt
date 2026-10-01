@@ -51,8 +51,8 @@ class AppPagingTest {
                         applyMotionPreference(); ready = true
                     }
                 }
-                // loadData builds a data URL: an unescaped CSS '#' would truncate that URL.
-                // This API accepts the original HTML, so the ID selector and fixture remain intact.
+                // loadData 会构造 data URL，未转义的 CSS '#' 会截断该 URL。
+                // 此 API 接收原始 HTML，能保留 ID 选择器和测试内容。
                 loadDataWithBaseURL(null, "<html><style>#sample{animation:pulse 2s infinite;transition:opacity 1s}@keyframes pulse{to{opacity:.5}}</style><body><p id='sample'>Motion sample</p></body></html>", "text/html", "UTF-8", null)
             } }
             DisposableEffect(view) { onDispose { view.destroy() } }

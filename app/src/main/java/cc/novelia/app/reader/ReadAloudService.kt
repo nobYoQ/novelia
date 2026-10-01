@@ -64,7 +64,7 @@ class ReadAloudService : Service() {
             "start" -> {
                 loadJob?.cancel(); currentUtterance = null; engine?.stop(); paragraphs = emptyList(); loading = true
                 index = 0; title = intent.getStringExtra("title") ?: "小说朗读"; rate = intent.getFloatExtra("rate", 1f); language = if(intent.getBooleanExtra("japanese", false)) Locale.JAPAN else Locale.SIMPLIFIED_CHINESE; paused = false
-                // Promote immediately as Android requires, then perform all IO off the main thread.
+                // 按 Android 要求立即进入前台服务，再把全部 IO 放到主线程之外。
                 startForeground(100, notification()); handler.removeCallbacks(stopTimer); handler.postDelayed(stopTimer, intent.getIntExtra("minutes", 30) * 60000L)
                 val requestId = intent.getStringExtra("queue")
                 if(requestId == null || !QUEUE_ID.matches(requestId)) { status.value = "朗读内容不可用，请重新开始"; stopSelf(); return START_NOT_STICKY }

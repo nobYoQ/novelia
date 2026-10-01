@@ -4,11 +4,16 @@ import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.ReaderSettings
 import kotlinx.serialization.Serializable
 
+/** 最近一轮检查的完整数量基线；checkedAt 为客户端检查时间，文库以文件 ID 列表识别增量。 */
 @Serializable data class BookUpdateSnapshot(
     val total: Int = 0, val translations: Map<String, Int> = emptyMap(),
     val volumeIds: List<String> = emptyList(), val checkedAt: Long = 0
 )
 
+/**
+ * 尚未确认的更新数量与译文刷新时间；数量用于提示，时间用于判断已有章节缓存是否过旧。
+ * 两者生命周期不同，清除已读提示后仍可保留 translationUpdatedAt。
+ */
 @Serializable data class BookUpdateInfo(
     val checkedAt: Long = 0, val newChapters: Int = 0,
     val translations: Map<String, Int> = emptyMap(), val newVolumes: Int = 0,
@@ -24,11 +29,12 @@ import kotlinx.serialization.Serializable
     }.joinToString(" · ")
     fun relevantTo(settings: ReaderSettings) = newChapters > 0 || newVolumes > 0 ||
         (settings.mode != "jp" && (translations[settings.engines.firstOrNull()] ?: 0) > 0)
-    // Cache freshness survives acknowledging the unread badge.
+    // 确认未读提示后，仍保留用于缓存刷新的译文更新时间。
     fun latestTranslationAt(engines: List<String>): Long = engines.maxOfOrNull {
         translationUpdatedAt[it] ?: if((translations[it] ?: 0) > 0) checkedAt else 0L
     } ?: 0L
 
+    /** 清除已读章节增量，只确认不晚于阅读时间的译文更新，保留之后发现的译文变化。 */
     fun acknowledgeThrough(readAt: Long): BookUpdateInfo {
         val freshness = (translationUpdatedAt.keys + translations.filterValues { it > 0 }.keys)
             .associateWith { translationUpdatedAt[it] ?: checkedAt }.filterValues { it > 0 }
@@ -53,7 +59,9 @@ fun detectBookUpdate(previous: BookUpdateSnapshot, current: BookUpdateSnapshot, 
     val newVolumes = if(!wenku || (previous.checkedAt == 0L && previous.volumeIds.isEmpty())) 0 else if(previous.volumeIds.isNotEmpty())
         (current.volumeIds.toSet() - previous.volumeIds.toSet()).size
     else (current.total - previous.total).coerceAtLeast(0)
-    return BookUpdateInfo(current.checkedAt, if(wenku) 0 else (current.total - previous.total).coerceAtLeast(0), translations, newVolumes,
+    val newChapters = if(wenku || (previous.total == 0 && previous.checkedAt == 0L)) 0
+        else (current.total - previous.total).coerceAtLeast(0)
+    return BookUpdateInfo(current.checkedAt, newChapters, translations, newVolumes,
         translations.keys.associateWith { current.checkedAt })
 }
 

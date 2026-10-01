@@ -128,11 +128,16 @@ import kotlinx.coroutines.withContext
     }
 }
 
+/**
+ * 当前导航项拥有正文、目录与弹层会话；跨章先准备正文，再保存位置并交接导航状态。
+ * 滚动和静态分页共享段落/字符锚点，恢复、拖动预览或重新测量期间不提交中间位置。
+ * 已读状态独立于屏顶位置保存，工具栏、搜索框和键盘以浮层叠加，不参与正文分页。
+ */
 @Composable private fun ReaderContent(c: AppController, ref: BookRef, chapterId: String, wide: Boolean) {
     val local by c.store.state.collectAsStateWithLifecycle()
     val settings = local.bookSettings[ref.key] ?: local.reader
-    // Outgoing readers can remain composed during a navigation transition. A refresh
-    // completing then must not consume the incoming reader's search/end-of-chapter flags.
+    // 导航过渡期间，离开的阅读器仍可能处于组合中；此时完成的刷新
+    // 不得消费新阅读器的搜索定位或章末跳转标记。
     val readerEntry = remember(ref, chapterId) { c.nav.currentBackStackEntry }
     var menu by rememberSaveable(ref.key) {
         mutableStateOf(readerEntry?.savedStateHandle?.remove<Boolean>("readerMenuVisible") ?: true)
@@ -177,15 +182,19 @@ import kotlinx.coroutines.withContext
     BackHandler(preferences || (toc && !wide) || search || bookSearch) { preferences = false; toc = false; search = false; bookSearch = false }
     AsyncContent(listOf(ref, chapterId), load = { c.chapter(ref, chapterId, version > 0) }, refreshKey = version) { (chapter, cached), _ ->
         var chapterProgress by remember(ref, chapterId) { mutableStateOf<Pair<Int, Int>?>(null) }
-        LaunchedEffect(ref, chapterId) {
+        val knownChapterCount = maxOf(local.books.firstOrNull { it.book.ref == ref }?.book?.total ?: 0,
+            local.updateSnapshots[ref.key]?.total ?: 0)
+        LaunchedEffect(ref, chapterId, knownChapterCount, cacheGeneration, version) {
             chapterProgress = withContext(Dispatchers.IO) {
                 try {
                     val ids = if(ref.isLocal) c.store.documentIndex(ref.id).chapters.map { it.id }
                     else {
-                        // Reading progress must not start an extra request or block chapter loading.
+                        // 优先复用目录；缺失当前章或落后于更新计数时异步补齐，不阻塞正文。
                         val account = c.session.capture().account ?: "guest"
-                        c.metadataCache.read(hashName("$account:novel/${ref.key}"))
-                            ?.let { appJson.decodeFromString<WebDetail>(it).toc.mapNotNull { item -> item.chapterId } }
+                        val cachedIds = c.metadataCache.read(hashName("$account:novel/${ref.key}"))
+                            ?.let { raw -> runCatching { appJson.decodeFromString<WebDetail>(raw).toc.mapNotNull { it.chapterId } }.getOrNull() }
+                        if(cachedIds != null && chapterId in cachedIds && cachedIds.size >= knownChapterCount) cachedIds
+                        else c.detail<WebDetail>("novel/${ref.key}", forceNetwork = cachedIds != null).toc.mapNotNull { it.chapterId }
                     }
                     ids?.let { chapters -> chapters.indexOf(chapterId).takeIf { it >= 0 }?.let { it to chapters.size } }
                 } catch(e: CancellationException) { throw e }
@@ -216,7 +225,7 @@ import kotlinx.coroutines.withContext
                 delay(600)
                 try { ChapterOffline(c.store, c.api, c.session).prefetch(ref, chapter.nextId, settings.prefetchChapters, settings.prefetchWifiOnly) }
                 catch(e: CancellationException) { throw e }
-                catch(_: Exception) { /* Preloading is optional and never interrupts the foreground chapter. */ }
+                catch(_: Exception) { /* 预加载为可选操作，失败不得中断当前章节阅读。 */ }
             }
         }
         var cachedWrittenAt by remember(ref, chapterId, chapter, version) { mutableLongStateOf(Long.MAX_VALUE) }
@@ -257,7 +266,7 @@ import kotlinx.coroutines.withContext
             if(chapterPull.active || reducedMotion) chapterPullReturn.snapTo(chapterPull.offset)
             else chapterPullReturn.animateTo(chapterPull.offset, tween(AppMotion.Release))
         }
-        // Touch and the motion preference take effect in this frame, even during an old return.
+        // 触摸状态和动画偏好在当前帧立即生效，即使旧回弹尚未结束。
         val chapterPullOffset = if(eInkInteraction) 0f else if(chapterPull.active || reducedMotion) chapterPull.offset else chapterPullReturn.value
         val eInk = remember { EInkPageState(position) }
         var readerViewportWidth by remember { mutableIntStateOf(0) }
@@ -271,9 +280,9 @@ import kotlinx.coroutines.withContext
         fun scrollTextOffset(source: Int?): Int {
             if(scroll.firstVisibleItemIndex == 0) return 0
             val restored = restoredScrollAnchor
-            // The two renderers may wrap a character onto different lines. Preserve the
-            // requested character until the reader actually moves, avoiding a whole-page
-            // retreat when switching back from a line that starts just before that anchor.
+            // 两种渲染器可能把同一字符排到不同的行；在用户实际移动前，
+            // 保留原请求字符，避免从起点略早于锚点的行切回另一模式时，
+            // 阅读位置退回整整一页。
             if(restored != null && restored.layoutGeneration === layoutGeneration && restored.itemIndex == scroll.firstVisibleItemIndex && restored.pixelOffset == scroll.firstVisibleItemScrollOffset)
                 return restored.textOffset
             return source?.let { scrollLayouts[it]?.textOffsetAt(scroll.firstVisibleItemScrollOffset) } ?: 0
@@ -332,16 +341,16 @@ import kotlinx.coroutines.withContext
         var searchGeneration by remember { mutableIntStateOf(0) }
         DisposableEffect(layoutGeneration) {
             onDispose {
-                // A search must never wait on geometry discarded by language/mode/font changes.
+                // 语言、模式或字号变化后，搜索不得继续等待已废弃的布局几何。
                 searchGeneration++; searchJob?.cancel(); searchJob = null; finding = false
             }
         }
         var topOverlayHeight by remember { mutableIntStateOf(0) }
         var bottomOverlayHeight by remember { mutableIntStateOf(0) }
         val density = LocalDensity.current
-        // Reserve a stable footer in paged mode, independent of toolbar/button visibility.
+        // 分页模式预留固定页脚，不随工具栏或按钮显隐变化。
         val pageProgressHeight = with(density) { 16.sp.toDp() } + 12.dp
-        // Search and its keyboard are overlays too; only system bars/cutouts bound the reading viewport.
+        // 搜索框和键盘也属于浮层，正文视口仅受系统栏和屏幕缺口约束。
         val readingInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
         val safeTop = readingInsets.getTop(density)
         val volumeKeysActive = !preferences && !search && (!toc || wide) && !speechSheet && !bookSearch && !nextVolumePrompt && selected == null && note == null
@@ -359,8 +368,8 @@ import kotlinx.coroutines.withContext
                     Position(chapterId, scroll.firstVisibleItemIndex, scroll.firstVisibleItemScrollOffset, chapter.title, textOffset = textOffset)
                 }
             val saved = c.store.state.value.positions[ref.key]?.takeIf { it.chapterId == chapterId }
-            // A final page can begin halfway through the last paragraph. Keep that exact
-            // restore anchor while recording completion separately, including after rereading.
+            // 末页可能从最后一段中间开始；应保留精确恢复锚点，
+            // 另行记录读完状态，回看后再次到末页也遵循此规则。
             val chapterCompleted = saved?.chapterCompleted == true ||
                 if(settings.staticPagination) !eInk.canGoForward else !scroll.canScrollForward
             val next = visible.copy(chapterIndex = chapterProgress?.first ?: saved?.chapterIndex,
@@ -379,7 +388,7 @@ import kotlinx.coroutines.withContext
             c.readPreparedChapter(loaded)
             leaving = true
             c.nav.currentBackStackEntry?.savedStateHandle?.apply {
-                // Chapter navigation recreates the reader; carry its toolbar state forward.
+                // 切换章节会重建阅读器，需一并交接工具栏可见状态。
                 set("readerMenuVisible", menu)
                 set("readerTocQuery", tocQuery)
                 set("readerTocReversed", tocReversed)
@@ -442,7 +451,7 @@ import kotlinx.coroutines.withContext
                 if(!eInk.ready) return
                 if(direction > 0 && !eInk.canGoForward && eInk.pages.isNotEmpty()) { if(chapter.nextId != null) openChapter(chapter.nextId) else if(nextVolume != null) nextVolumePrompt = true }
                 else if(direction < 0 && !eInk.canGoBack && eInk.pages.isNotEmpty()) chapter.prevId?.let { id ->
-                    // A previous-page turn lands at the end of the preceding chapter.
+                    // 从章首向前翻页时，落在上一章末页。
                     openChapter(id, startAtEnd = true)
                 }
                 else { eInk.move(direction); savePosition() }
@@ -466,7 +475,7 @@ import kotlinx.coroutines.withContext
                     if(settings.staticPagination) eInk.move(chapterSeekPage(target, eInk.pages.size) - eInk.pageIndex)
                     else scroll.seekChapter(target, seekIndex, paragraphs, scrollLayouts, animate = !reducedMotion)
                 } finally {
-                    // A cancelled preview cannot overwrite a newer drag's pending target.
+                    // 已取消的预览不得覆盖新一轮拖动的待定位目标。
                     if(seekGeneration == generation) { seekTarget = null; savePosition() }
                 }
             }
@@ -477,7 +486,7 @@ import kotlinx.coroutines.withContext
             activeMatch = match
             if(settings.staticPagination) { eInk.find(match.paragraph, textOffset); savePosition() }
             else {
-                // First mount the lazy item, then use measured line geometry within its language part.
+                // 先挂载惰性列表项，再使用该语言片段已测量的行几何定位。
                 scroll.scrollToItem(match.paragraph + 1)
                 val layout = snapshotFlow { scrollLayouts[paragraph.index] }
                     .first { it != null && it.parts.size == paragraph.parts.size }!!
@@ -514,8 +523,8 @@ import kotlinx.coroutines.withContext
             else if(!leaving) { seekGeneration++; seekJob?.cancel(); seekTarget = null; savePosition(); leaving = true; c.back() }
         }
         val lifecycleOwner = LocalLifecycleOwner.current
-        // Local callable references compare by declaration, so rememberUpdatedState can
-        // retain a reference whose captured settings belong to the previous reading mode.
+        // 局部函数引用按声明比较，rememberUpdatedState 可能因此保留
+        // 捕获了上一阅读模式设置的旧引用。
         val latestSavePosition by rememberUpdatedState<() -> Unit>({ savePosition() })
         LaunchedEffect(chapterProgress) { if(chapterProgress != null) latestSavePosition() }
         DisposableEffect(lifecycleOwner, ref, chapterId) {
@@ -532,8 +541,8 @@ import kotlinx.coroutines.withContext
                 if(settled != null) { delay(500); latestSavePosition() }
             }
         }
-        // Capture continuously while the scrolling layout is still mounted. Its geometry
-        // disappears on a mode switch, so do not try to read it after disposal.
+        // 滚动布局仍挂载时持续捕获锚点；切换模式后其测量数据会消失，
+        // 不能等布局销毁后再尝试读取。
         var scrollAnchor by remember { mutableStateOf(Triple((position?.index ?: 1) - 1, position?.textOffset ?: 0, paragraphs.getOrNull((position?.index ?: 1) - 1)?.index)) }
         LaunchedEffect(scroll, scrollLayouts, settings.staticPagination) {
             if(!settings.staticPagination) snapshotFlow {
@@ -591,10 +600,10 @@ import kotlinx.coroutines.withContext
             if(c.session.profile.value != null && !ref.isLocal && !local.historyPaused) {
                 try { c.cloudMutation("PUT", "user/read-history/${ref.key}", chapterId, "text/plain") }
                 catch(e: CancellationException) { throw e }
-                catch(_: Exception) { /* Local progress remains available when history sync fails. */ }
+                catch(_: Exception) { /* 历史同步失败时，本地阅读进度仍然可用。 */ }
             }
         }
-        // Keep reader-specific colors inside the page; all settings sheets inherit the app theme.
+        // 阅读器专用颜色仅作用于正文页面，所有设置弹层继承应用主题。
         ReaderPageTheme(settings.resolvedTheme == "monochrome") {
         Row(Modifier.fillMaxSize().background(background).testTag(if(wide) "reader-wide-layout" else "reader-compact-layout")) {
         if(wide) {
@@ -610,8 +619,8 @@ import kotlinx.coroutines.withContext
                 true
             } else false
         }.focusable()) {
-            // Both modes have a fixed viewport. Toolbars are sibling overlays and must
-            // never contribute padding or constraints to the text's layout.
+            // 两种模式均使用固定正文视口；工具栏是同级浮层，
+            // 不得给正文布局增加内边距或尺寸约束。
             if(settings.staticPagination) EInkPage(paragraphs, settings, eInk,
                 Modifier.testTag("reader-page").align(Alignment.TopCenter).fillMaxHeight().windowInsetsPadding(readingInsets)
                     .padding(bottom = pageProgressHeight)
@@ -664,15 +673,15 @@ import kotlinx.coroutines.withContext
                             else if(nextVolume != null) { Text("下一分卷：${nextVolume.book.title}", color = foreground, modifier = Modifier.padding(bottom = 12.dp)); Button(onClick = { nextVolumePrompt = true }, modifier = Modifier.heightIn(min = 48.dp), enabled = !leaving) { Text("阅读下一分卷") } }
                             else OutlinedButton(onClick = { if(wide) { tocQuery = ""; tocLocateRequest++ } else toc = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text("返回目录") }
                         }
-                        // Footer clearance keeps this same sentence above the controls at the end.
-                        // It does not resize the reading viewport or repaginate the chapter.
+                        // 章末留白让同一提示句位于控件上方，
+                        // 不会改变正文视口高度或使章节重新分页。
                         Spacer(Modifier.height(with(density) { (bottomOverlayHeight - readingInsets.getBottom(density)).coerceAtLeast(0).toDp() }))
                     }
                 }
             }
             ReaderOverlayVisibility(menu, Modifier.align(Alignment.TopCenter), enter = if(reducedMotion) EnterTransition.None else fadeIn(tween(AppMotion.Quick)) + slideInVertically(tween(AppMotion.Standard)) { -it }, exit = if(reducedMotion) ExitTransition.None else fadeOut(tween(AppMotion.Exit)) + slideOutVertically(tween(AppMotion.Release)) { -it }) {
                 Surface(Modifier.testTag("reader-top-toolbar"), color = toolbarBackground, contentColor = foreground) {
-                // This height is used only to place search results below the overlay.
+                // 此高度仅用于把搜索结果放在浮层下方。
                 Column(Modifier.onSizeChanged { topOverlayHeight = it.height }) {
                     TopAppBar(title = { Text(chapter.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium) }, navigationIcon = {
                         IconButton(onClick = { if(!leaving) { seekGeneration++; seekJob?.cancel(); seekTarget = null; chapterLoad.cancel(); savePosition(); leaving = true; c.back() } }) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "返回") }
@@ -845,7 +854,7 @@ import kotlinx.coroutines.withContext
     }
 }
 
-// Keep the overlay independent of the outer adaptive Row's size-affecting visibility extension.
+// 浮层显隐独立于外层自适应 Row 中会影响尺寸的扩展函数。
 @Composable private fun ReaderOverlayVisibility(
     visible: Boolean,
     modifier: Modifier,

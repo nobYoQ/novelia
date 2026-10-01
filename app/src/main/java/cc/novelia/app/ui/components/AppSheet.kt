@@ -12,8 +12,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import cc.novelia.app.ui.theme.appReducedMotion
 
+/** 标记内容已在应用面板中，使内部组件能选择合适的滚动和翻屏处理。 */
 internal val LocalInAppSheet = compositionLocalOf { false }
 
+/**
+ * 普通交互使用底部弹层，减少动画时改用静态对话框；每次挂载分配独立浏览会话。
+ * 两种容器切换会重建内部组合，需要保留的表单状态应提升到调用方，滚动位置按会话管理。
+ */
 @Composable internal fun AppSheet(onDismissRequest: () -> Unit, sheetState: SheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), content: @Composable ColumnScope.() -> Unit) {
     val session = remember { Any() }
     if (!appReducedMotion()) ModalBottomSheet(onDismissRequest = onDismissRequest, sheetState = sheetState) {

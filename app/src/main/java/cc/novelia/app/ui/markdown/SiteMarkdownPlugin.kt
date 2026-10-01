@@ -31,8 +31,8 @@ import org.commonmark.parser.Parser
 
 internal class SiteMarkdownPlugin(context: Context) : AbstractMarkwonPlugin() {
     private val density = context.resources.displayMetrics.density
-    // Each image occurrence owns its drawable for the lifetime of its parsed document.
-    // Rebuilding a fold must not reset images elsewhere to their unloaded alt text.
+    // 每处图片在其解析文档生命周期内独享 drawable；
+    // 重建折叠块不能把其他位置的图片重置为尚未加载的替代文本。
     private val imageSpans = WeakHashMap<Image, Any>()
     override fun configureParser(builder: Parser.Builder) = configureSiteMarkdownParser(builder)
     override fun beforeRender(node: Node) = prepareSiteMarkdown(node)

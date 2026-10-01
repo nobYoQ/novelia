@@ -19,7 +19,7 @@ import kotlinx.coroutines.CancellationException
         } catch(e: CancellationException) {
             throw e
         } catch(_: Exception) {
-            // Keep known metadata offline; an unresolved cloud position is never shown as unread.
+            // 离线时保留已知元数据，尚未解析的云端位置不得显示成未读。
         }
     }
     return resolved

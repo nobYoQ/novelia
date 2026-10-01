@@ -49,10 +49,10 @@ fun pageForAnchor(pages: List<StaticPage>, paragraph: Int, offset: Int): Int {
     return pages.indexOfLast { page -> page.lines.firstOrNull()?.let { it.paragraph <= paragraph } == true }.coerceAtLeast(0)
 }
 
-/** Android key codes, kept pure so remote/page-turner mapping can be regression tested. */
+/** 保留纯函数形式的 Android 按键映射，便于回归验证遥控器和翻页器。 */
 fun readerKeyDirection(keyCode: Int, volumeKeys: Boolean): Int = when (keyCode) {
-    92, 19, 21 -> -1 // Page Up, D-pad Up/Left
-    93, 20, 22, 62 -> 1 // Page Down, D-pad Down/Right, Space
+    92, 19, 21 -> -1 // 上一页键、方向键上/左。
+    93, 20, 22, 62 -> 1 // 下一页键、方向键下/右、空格键。
     24 -> if (volumeKeys) -1 else 0
     25 -> if (volumeKeys) 1 else 0
     else -> 0

@@ -12,6 +12,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 
+/**
+ * 一次跨章意图：普通跳转到章首，向前翻章可到末页，全书搜索可携带精确命中位置。
+ * 目标与加载任务一起保存，重试继续使用同一意图。
+ */
 internal data class ReaderChapterTarget(
     val id: String,
     val startAtEnd: Boolean = false,
@@ -39,6 +43,7 @@ internal class ReaderChapterLoad<T>(
     private var job: Job? = null
     private var generation = 0
 
+    /** 相同的在途目标不重复加载；不同目标先使旧代次失效，再启动可取消的新请求。 */
     fun request(next: ReaderChapterTarget) {
         if(loading && target == next) return
         cancel()

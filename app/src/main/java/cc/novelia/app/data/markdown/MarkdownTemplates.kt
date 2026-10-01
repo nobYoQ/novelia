@@ -1,7 +1,7 @@
 package cc.novelia.app.data.markdown
 
 
-/** Templates and toggle semantics from the original site's MarkdownToolbar.vue. */
+/** 沿用原站 MarkdownToolbar.vue 的模板和格式切换规则。 */
 internal enum class MarkdownTemplate(val label: String, val prefix: String, val suffix: String, val placeholder: String, val block: Boolean = false) {
     Bold("粗体", "**", "**", "粗体"),
     Italic("斜体", "*", "*", "斜体"),

@@ -20,7 +20,7 @@ import cc.novelia.app.ui.navigation.SHOW_SHELF_LIST
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
-/** One shelf destination owns the selection, so reading and tab navigation can restore it. */
+/** 书架导航项统一持有选中书目，使阅读返回和标签切换能够恢复选择。 */
 @Composable fun AdaptiveLibraryScreen(c: AppController, navigationState: SavedStateHandle, onCompactDetailChanged: (Boolean) -> Unit = {}) {
     var selectedKey by rememberSaveable { mutableStateOf<String?>(null) }
     val showShelfList by navigationState.getStateFlow(SHOW_SHELF_LIST, false).collectAsStateWithLifecycle()
@@ -35,8 +35,8 @@ import kotlinx.coroutines.flow.map
     LaunchedEffect(selectedKey, books) {
         val ref = selectedKey?.let { BookRef.fromKey(it) } ?: return@LaunchedEffect
         if(ref.isLocal) {
-            // Restored selection is checked only after the library has finished loading.
-            // Read the latest state after awaiting, not the composition's earlier snapshot.
+            // 等书库完成加载后，再检查恢复的选中项；
+            // 等待结束后读取最新状态，避免使用组合开始时的旧快照。
             c.app.initialization.await()
             if(c.store.state.value.books.none { it.book.ref == ref }) selectedKey = null
         }
@@ -47,8 +47,8 @@ import kotlinx.coroutines.flow.map
         onCompactDetailChanged = onCompactDetailChanged,
         shelf = { expanded ->
             ShelfScreen(c, onOpenBook = { ref ->
-                // Preserve the phone's one-tap opening of a local novel. A selection made
-                // on a larger display still becomes a full detail page when resized.
+                // 手机仍保持单击打开本地小说；在大屏上选择的书籍，
+                // 缩小窗口后转为完整详情页。
                 if(ref.isLocal && !expanded) c.book(ref) else selectedKey = ref.key
             }, selectedBookKey = selectedKey)
         },
@@ -56,7 +56,11 @@ import kotlinx.coroutines.flow.map
     )
 }
 
-/** Move live pane compositions on resize; save hidden panes when navigating between books. */
+/**
+ * 尺寸变化时通过 movableContentOf 移动现有面板，保留仍在使用的输入和滚动状态。
+ * 隐藏面板由 SaveableStateHolder 按书目键保存可恢复状态；两个机制负责不同生命周期。
+ * 840 dp 起显示书架与详情双栏，更窄时显示当前选中的一栏，选择本身由导航页面持有。
+ */
 @Composable internal fun AdaptiveLibraryLayout(
     selectedKey: String?,
     onBack: () -> Unit,

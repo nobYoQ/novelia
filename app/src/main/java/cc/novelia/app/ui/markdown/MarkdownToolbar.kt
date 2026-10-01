@@ -84,7 +84,7 @@ internal fun TextFieldValue.format(template: MarkdownTemplate, limit: Int): Text
             OutlinedTextField(current, ::change, label = { Text(label) }, modifier = Modifier.weight(1f).focusRequester(focus).testTag("comment-body")
                 .onFocusChanged { if(it.isFocused) toolbarSelection = null }
                 .onPreviewKeyEvent {
-                    // TextField collapses selection on blur. Capture it before Tab transfers focus.
+                    // TextField 失焦会收起选区，需在 Tab 转移焦点之前捕获。
                     if(it.type == KeyEventType.KeyDown && it.key == Key.Tab && !it.isCtrlPressed && !it.isAltPressed && !it.isMetaPressed) toolbarSelection = current
                     false
                 }, maxLines = 4)

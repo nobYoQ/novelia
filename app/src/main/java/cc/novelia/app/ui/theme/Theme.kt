@@ -43,7 +43,7 @@ private val DarkColors = darkColorScheme(
     surfaceContainerLowest = Color(0xFF0B100D), surfaceContainerLow = Color(0xFF191E1A), surfaceContainer = Color(0xFF1D221E), surfaceContainerHigh = Color(0xFF272C28), surfaceContainerHighest = Color(0xFF323732)
 )
 
-/** Reading surfaces are separate from the app theme used by preferences and other sheets. */
+/** 正文阅读配色独立于偏好设置和其他弹层使用的应用主题。 */
 internal data class ReaderColors(val background: Color, val foreground: Color, val toolbar: Color)
 
 internal fun readerColors(theme: String, appColors: ColorScheme): ReaderColors = when(theme) {

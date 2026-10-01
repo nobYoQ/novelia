@@ -32,7 +32,7 @@ import cc.novelia.app.ui.theme.LocalEInkMode
 import kotlin.math.abs
 import kotlinx.coroutines.launch
 
-/** Keep a little of the previous screen in view, including lines or cards split at the edge. */
+/** 翻屏时保留少量上一屏内容，防止跳过边缘被截开的文字行或卡片。 */
 internal fun screenPageDistance(viewport: Int, overlap: Float): Float =
     (viewport - minOf(overlap, viewport * .2f)).coerceAtLeast(0f)
 
@@ -92,7 +92,7 @@ internal fun screenPageDistance(viewport: Int, overlap: Float): Float =
     }
 }
 
-/** Keep an exhausted upward fling in the list; downward motion may still dismiss the sheet. */
+/** 列表到末尾后的向上惯性留在列表内，向下运动仍可关闭底部弹层。 */
 internal class SheetEndOverscrollConnection(private val canScrollForward: () -> Boolean) : NestedScrollConnection {
     override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset =
         if (source == NestedScrollSource.UserInput && available.y < 0f && !canScrollForward()) Offset(0f, available.y)
@@ -141,7 +141,7 @@ internal class SheetEndOverscrollConnection(private val canScrollForward: () -> 
         .semantics {
             scrollBy { x, y ->
                 val amount = if(horizontal) x else y
-                // Focus/accessibility requests may expose only part of a field; jump exactly to it.
+                // 焦点或无障碍请求可能只显露输入框的一部分，应精确跳到请求位置。
                 if(amount != 0f) latestScroll(amount)
                 amount != 0f
             }

@@ -14,7 +14,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
-/** Older reading records have an anchor but no totals from which the shelf can show progress. */
+/** 旧阅读记录只有锚点，缺少书架显示进度所需的章节和段落总数。 */
 internal fun LibraryState.localReadingProgressCandidates(): Map<BookRef, Position> = buildMap {
     for(saved in books) {
         val ref = saved.book.ref
@@ -24,7 +24,7 @@ internal fun LibraryState.localReadingProgressCandidates(): Map<BookRef, Positio
     }
 }
 
-/** Read only the catalogue and the current chapter, then publish one guarded batch of metadata. */
+/** 仅读取目录和当前章，再通过受保护的单次更新批量补齐进度元数据。 */
 internal suspend fun LocalStore.restoreLocalReadingProgress(
     candidates: Map<BookRef, Position> = state.value.localReadingProgressCandidates(),
 ) = withContext(Dispatchers.IO) {
@@ -52,15 +52,15 @@ internal suspend fun resolveLocalReadingProgress(
                 val chapter = readChapter(ref.id, position.chapterId)
                 job.ensureActive()
                 if(chapter.id != position.chapterId) continue
-                // Local chapters use their text for both original and translation in AppController.
-                // Share the reader's projection so blank lines and illustrations count identically.
+                // AppController 将本地章节正文同时用作原文和译文；
+                // 复用阅读器投影规则，使空行和插图的计数一致。
                 val count = projectParagraphs(Chapter(paragraphs = chapter.paragraphs, youdaoParagraphs = chapter.paragraphs),
                     ReaderSettings()) { job.ensureActive() }.size
                 put(ref, position.copy(chapterIndex = ordinal, chapterCount = document.chapters.size, paragraphCount = count))
             } catch(error: CancellationException) {
                 throw error
             } catch(_: Exception) {
-                // Missing or damaged content cannot justify inventing a progress value.
+                // 正文缺失或损坏时，不推测或伪造阅读进度。
             }
         }
     }

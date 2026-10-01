@@ -57,7 +57,7 @@ class LibraryStateCodecTest {
             val state = LibraryState(drafts = mapOf("draft" to "不能丢失"))
             val committed = codec.encode(state)
             codec.encode(state.copy(drafts = mapOf("draft" to "未提交的新版")))
-            // Simulate failure before the library pointer is committed.
+            // 模拟书库引用提交之前发生失败。
             assertEquals(state, codec.decode(committed))
             val changed = codec.encode(state.copy(drafts = mapOf("draft" to "恢复副本")))
             directory.listFiles()!!.forEach { it.writeText("corrupt") }

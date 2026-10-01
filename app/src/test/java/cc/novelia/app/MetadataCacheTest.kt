@@ -102,4 +102,16 @@ class MetadataCacheTest {
         File(temporary.root, "$firstKey.json").delete()
         assertNull(cache.read(firstKey, now = 2_000))
     }
+
+    @Test fun delayedDetailsCannotReplaceANewerChapterDirectoryOrItsObservationTime() {
+        val cache = MetadataCache(temporary.root)
+        cache.write(firstKey, "最新目录", fetchedAt = 3_000)
+        cache.write(firstKey, "旧目录", fetchedAt = 2_000)
+        val snapshot = cache.readSnapshot(firstKey, now = 4_000)!!
+        assertEquals("最新目录", snapshot.text)
+        assertEquals(3_000L, snapshot.fetchedAt)
+        assertEquals(snapshot, MetadataCache(temporary.root).readSnapshot(firstKey, now = 5_000))
+        assertNull(cache.readSnapshot(firstKey, now = 5_000, maxAgeMillis = 1_000))
+        assertEquals(3_000L, File(temporary.root, "$firstKey.json").lastModified())
+    }
 }

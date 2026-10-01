@@ -18,7 +18,7 @@ import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.model.Folder
 import cc.novelia.app.ui.components.AppDropdownMenu
 
-/** Folder management and sorting stay reachable without opening the filter panel. */
+/** 收藏夹管理和排序直接可达，无需先打开筛选面板。 */
 @Composable internal fun CloudShelfToolbar(
     folders: List<Folder>, current: Folder?, onFolder: (String) -> Unit,
     sort: String, onSort: (String) -> Unit,
@@ -73,7 +73,7 @@ import cc.novelia.app.ui.components.AppDropdownMenu
         }
     }
     BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 20.dp).testTag("cloud-toolbar")) {
-        // Keep labels and touch targets intact when the system font needs another line.
+        // 系统字号需要换行时，仍保留完整标签和触摸区域。
         if(maxWidth < (260 * LocalDensity.current.fontScale).dp) {
             Column {
                 folderButton(Modifier.fillMaxWidth())

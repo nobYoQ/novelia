@@ -20,6 +20,7 @@ import kotlinx.coroutines.ensureActive
 /**
  * 页面共用的加载容器。key 表示内容身份，变化时清空结果；refreshKey 或内部重试只刷新同一内容。
  * 已有成功内容时刷新保留原组合和列表/编辑状态，失败显示附加错误，不退回整页空白。
+ * initialResult 是同一内容的首帧种子，会跳过一次初始加载；后续显式刷新仍执行 load。
  * load 必须可取消且自行切换耗时工作的调度器；取消不转换为错误页，结果发布前再次检查取消。
  */
 @Composable fun <T> AsyncContent(key: Any?, load: suspend () -> T, modifier: Modifier = Modifier, refreshKey: Any? = Unit,
@@ -54,7 +55,7 @@ import kotlinx.coroutines.ensureActive
             current == null -> Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) { if(!appReducedMotion()) CircularProgressIndicator(); Text("正在加载…", color = MaterialTheme.colorScheme.onSurfaceVariant) }
             current.isFailure -> if(loading) { if(appReducedMotion()) Text("正在加载…", Modifier.align(Alignment.Center)) else CircularProgressIndicator(Modifier.align(Alignment.Center)) } else EmptyState("暂时无法加载", current.exceptionOrNull().friendlyMessage(), Icons.Outlined.CloudOff, "重试", retry, sticker = MidoriSticker.Concerned)
             else -> {
-                // Keep the same composition during refresh so list positions and editor state survive.
+                // 刷新时保留原组合，使列表位置和编辑器状态得以延续。
                 MotionContent(key, Modifier.fillMaxSize(), animateInitial = false) {
                     content(current.getOrThrow(), retry)
                 }
@@ -74,6 +75,7 @@ import kotlinx.coroutines.ensureActive
     }
 }
 
+/** 非空输入等待短暂稳定后发布，清空查询立即生效；新输入会取消上一次等待。 */
 @Composable fun rememberDebouncedQuery(query: String): String {
     val settled by produceState(query, query) {
         if(query.isNotBlank()) delay(180)

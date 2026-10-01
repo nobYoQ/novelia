@@ -18,6 +18,8 @@ import cc.novelia.app.data.model.Page
 import cc.novelia.app.data.model.Chapter
 import cc.novelia.app.data.model.PendingAction
 import cc.novelia.app.data.model.WebDetail
+import cc.novelia.app.data.model.WenkuDetail
+import cc.novelia.app.data.updates.withBookUpdate
 import cc.novelia.app.data.library.withCloudReadingMetadata
 import cc.novelia.app.data.library.withCloudFavoriteLocalCopy
 import cc.novelia.app.data.library.CloudBookMetadataLoader
@@ -43,7 +45,8 @@ import kotlinx.serialization.decodeFromString
 
 /**
  * 页面共享的导航和业务调用入口，将 Compose 事件连接到应用级服务。
- * 由主界面 remember 创建，并非 ViewModel；登录续接、弹窗和章节交接等临时状态不保证跨进程保留。
+ * 由主界面 remember 创建，并非 ViewModel；afterLogin 回调、弹窗和正文交接只保留在内存中。
+ * 需要跨重建恢复的收藏登录意图由 LoginContinuation 写入登录导航项，而非依赖此处回调。
  * scope 属于当前组合生命周期，action 中的耗时任务必须自行切换 IO/计算调度器。
  */
 class AppController(val app: NoveliaApplication, val nav: NavHostController, val scope: CoroutineScope, val snackbar: SnackbarHostState) {
@@ -55,13 +58,14 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
     var pendingFavorite by mutableStateOf<BookCard?>(null)
     var pendingFavoriteCloud by mutableStateOf(false)
     private var celebration: Job? = null
-    /** Keep the latest discovery page while a book detail covers its navigation entry. */
+    /** 进入书籍详情覆盖发现页时，保留最近一页的发现结果。 */
     internal var discoverPage: Pair<Any, Page<BookCard>>? = null
+    /** 一次性正文交接，附带账号绑定和缓存代次，避免跨章导航后再次请求或接收过期内容。 */
     internal data class ReaderHandoff(val ref: BookRef, val id: String, val value: Pair<Chapter, Boolean>, val binding: SessionBinding, val generation: Long)
     private var readerHandoff: ReaderHandoff? = null
     private val cloudBookMetadata = CloudBookMetadataLoader(session) { ref -> detail<WebDetail>("novel/${ref.key}") }
 
-    /** Cloud-only favorites also need chapter metadata; do not implicitly add them to the local shelf. */
+    /** 仅云端收藏也需要章节元数据，补取详情时不隐式加入本地书架。 */
     suspend fun refreshCloudReading(book: BookCard): BookCard {
         val binding = session.capture()
         val card = cloudBookMetadata.load(book)
@@ -69,8 +73,8 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
         store.update { it.withCloudReadingMetadata(listOf(card), binding.account) }
         return card
     }
-    // Different arguments of the same destination still need separate history entries.
-    // Root-tab switching manages its own singleTop/restoreState in MainActivity.
+    // 同一路由的不同参数仍需独立的历史记录；
+    // 根标签切换的 singleTop/restoreState 由 MainActivity 单独处理。
     fun go(route: String, replaceTop: Boolean = false) { nav.navigate(route) { launchSingleTop = replaceTop } }
     fun back() { nav.popBackStack() }
     fun book(ref: BookRef) {
@@ -89,7 +93,7 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
         session.ensureCurrent(binding)
         return ReaderHandoff(ref, id, value, binding, generation)
     }
-    /** Validate before leaving the current reader; consume the loaded body once, without another request. */
+    /** 离开当前阅读器前先校验目标章，已加载正文只交接一次，避免重复请求。 */
     internal fun readPreparedChapter(prepared: ReaderHandoff) {
         session.ensureCurrent(prepared.binding)
         check(prepared.generation == store.cacheGeneration.value) { "缓存已更新，请重新加载章节" }
@@ -130,6 +134,15 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
         runCatching { app.startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.onFailure { message("设备没有可用的浏览器") }
     }
     fun share(text: String) { app.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text), "分享").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    /** 完整详情确认增量；缓存沿用原始获取时间，重复显示不重复提醒。 */
+    fun observeBookUpdate(path: String, detail: Any?, observedAt: Long) {
+        val book = when {
+            detail is WebDetail && path.startsWith("novel/") -> detail.card(BookRef.fromKey(path.removePrefix("novel/")), session.capture().account)
+            detail is WenkuDetail && path.startsWith("wenku/") -> detail.card(BookRef("wenku", path.removePrefix("wenku/")))
+            else -> return
+        }
+        store.update { it.withBookUpdate(book, observedAt) }
+    }
     /**
      * 读取账号隔离的详情：优先使用五分钟内的缓存，再请求网络。
      * 普通 IO 失败可回退旧缓存，HTTP 业务错误直接抛出；forceNetwork 跳过首次缓存命中，
@@ -142,8 +155,13 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
         val mutation = api.lastMutationAt
         val generation = store.cacheGeneration.value
         if (!forceNetwork) {
-            metadataCache.read(key, maxAgeMillis = 5 * 60_000L, newerThan = mutation)?.let { raw ->
-                runCatching { appJson.decodeFromString<T>(raw) }.getOrNull()?.let { api.observeKeywords(it); return@withContext it }
+            metadataCache.readSnapshot(key, maxAgeMillis = 5 * 60_000L, newerThan = mutation)?.let { cached ->
+                runCatching { appJson.decodeFromString<T>(cached.text) }.getOrNull()?.let {
+                    session.ensureCurrent(binding)
+                    api.observeKeywords(it)
+                    observeBookUpdate(path, it, cached.fetchedAt)
+                    return@withContext it
+                }
             }
         }
         try {
@@ -152,13 +170,19 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
             val parsed = appJson.decodeFromString<T>(raw)
             api.observeKeywords(parsed)
             if (mutation == api.lastMutationAt && generation == store.cacheGeneration.value && account == (session.profile.value?.username ?: "guest")) {
+                session.ensureCurrent(binding)
+                observeBookUpdate(path, parsed, fetchedAt)
                 runCatching { store.withCacheGeneration(generation) { metadataCache.write(key, raw, fetchedAt) } }
             }
             parsed
         } catch (e: IOException) {
             if (e is ApiException) throw e
-            val cached = metadataCache.read(key) ?: throw e
-            runCatching { appJson.decodeFromString<T>(cached).also { api.observeKeywords(it) } }.getOrElse { throw e }
+            val cached = metadataCache.readSnapshot(key) ?: throw e
+            val parsed = runCatching { appJson.decodeFromString<T>(cached.text) }.getOrElse { throw e }
+            session.ensureCurrent(binding)
+            api.observeKeywords(parsed)
+            observeBookUpdate(path, parsed, cached.fetchedAt)
+            parsed
         }
     }
     /**
@@ -215,7 +239,7 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
         if (queued) message("操作已保存，等待同步")
         return queued
     }
-    /** Pair an explicit cloud favorite with an optional local copy of the same book. */
+    /** 显式云端收藏操作可同时为同一本书创建可选的本地副本。 */
     suspend fun addCloudFavorite(book: BookCard, folderId: String): Boolean {
         val binding = session.capture()
         val path = if(book.ref.isWenku) "user/favored-wenku/$folderId/${book.ref.id}"

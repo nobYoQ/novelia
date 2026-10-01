@@ -61,7 +61,7 @@ fun projectParagraphs(chapter: Chapter, settings: ReaderSettings, checkCancelled
  * ICU 转换器每次调用独享；长文本分块转换且不拆开 UTF-16 代理对，兼顾取消响应和字符完整性。
  */
 fun prepareReadingParagraphs(chapter: Chapter, settings: ReaderSettings, checkCancelled: () -> Unit = {}): List<ReadingParagraph> {
-    // ICU converters are mutable, so each preparation owns its converter instead of sharing one across threads.
+    // ICU 转换器可变，每轮正文准备独享实例，避免跨线程共享。
     val converter by lazy { Transliterator.getInstance("Simplified-Traditional") }
     return projectParagraphs(chapter, settings, checkCancelled).map { paragraph ->
         checkCancelled()
@@ -70,7 +70,7 @@ fun prepareReadingParagraphs(chapter: Chapter, settings: ReaderSettings, checkCa
             checkCancelled()
             val text = part.text.trim()
             val prepared = if(settings.traditional && part.source != "日文" && !part.source.startsWith("原文")) {
-                // Bound each ICU operation so leaving a very long chapter cancels promptly.
+                // 限制单次 ICU 转换规模，离开超长章节时也能及时响应取消。
                 buildString(text.length) {
                     var start = 0
                     while(start < text.length) {
@@ -87,7 +87,7 @@ fun prepareReadingParagraphs(chapter: Chapter, settings: ReaderSettings, checkCa
     }
 }
 
-/** [after] is a projected paragraph offset, not its original source index. Wrap once at the end. */
+/** [after] 是投影列表的段落下标，而非原始段落编号；到末尾后最多回绕一次。 */
 fun findNextReadingParagraph(paragraphs: List<ReadingParagraph>, query: String, after: Int): Int {
     val term = query.trim()
     if(term.isEmpty() || paragraphs.isEmpty()) return -1

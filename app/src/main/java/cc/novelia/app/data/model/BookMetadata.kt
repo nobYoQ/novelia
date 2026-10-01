@@ -1,6 +1,6 @@
 package cc.novelia.app.data.model
 
-/** Partial metadata responses must not erase a previously known update time or cover classification. */
+/** 部分元数据响应不得抹去已有的更新时间或封面分类。 */
 fun BookCard.withKnownUpdateTime(previous: BookCard?): BookCard = copy(
     updateAt = updateAt?.takeIf { it > 0 }
         ?: previous?.takeIf { it.ref == ref }?.updateAt?.takeIf { it > 0 },
@@ -8,7 +8,7 @@ fun BookCard.withKnownUpdateTime(previous: BookCard?): BookCard = copy(
     attentions = attentions ?: previous?.takeIf { it.ref == ref }?.attentions,
 )
 
-/** A coarse list marker must not discard a known chapter unless its timestamp is newer. */
+/** 列表中的粗略历史标记只有时间更新时，才可替换已知的具体章节。 */
 fun CloudReadingProgress.withKnownChapter(previous: CloudReadingProgress?): CloudReadingProgress {
     if(chapterResolved || previous?.account != account || !previous.chapterResolved || !previous.hasHistory) return this
     return if((lastReadAt ?: 0) <= (previous.lastReadAt ?: 0)) previous else this

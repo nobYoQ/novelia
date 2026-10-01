@@ -116,7 +116,7 @@ class LibraryInteractionTest {
         compose.onNodeWithText("模拟完成登录验证").performClick()
         compose.runOnIdle { assertEquals(1, ordinaryActionCount); assertNull(controller.pendingFavorite) }
 
-        // Cancelling a later favorite login must not leak its intent into an ordinary login.
+        // 取消后一次收藏登录时，不得把该意图带入普通登录。
         compose.runOnIdle { loginForFavorite(controller, book) }
         compose.runOnIdle { controller.back() }
         compose.waitForIdle()

@@ -63,8 +63,8 @@ import kotlinx.coroutines.withContext
  * 避免连续多次中间测量把位置逐步向前“吸附”。ready 为 false 时禁止按旧页表翻页。
  */
 @Stable internal class EInkPageState(initial: Position?) {
-    // The renderer binds this exact list to its measured text snapshot. Equal line
-    // values from a new measurement still need to replace the previous list instance.
+    // 渲染器将此列表实例绑定到已测量文本快照；即使新测量的行值相等，
+    // 也须替换旧列表实例，避免关联到旧快照。
     var pages by mutableStateOf<List<StaticPage>>(emptyList(), referentialEqualityPolicy())
         private set
     var pageIndex by mutableIntStateOf(0)
@@ -88,14 +88,14 @@ import kotlinx.coroutines.withContext
             anchorParagraph = paragraphs.indexOfFirst { it.index >= source }.takeIf { it >= 0 }
                 ?: paragraphs.lastIndex.coerceAtLeast(0)
         }
-        // A concatenated character offset changes meaning when the language order changes.
-        // Restore the complete source paragraph so its translation cannot become an orphan.
+        // 语言顺序变化后，拼接文本中的字符偏移含义也会变化；
+        // 此时恢复整个原始段落，避免译文与原文分离。
         if(previousParagraph != null && previousParagraph.parts != paragraphs.getOrNull(anchorParagraph)?.parts) anchorOffset = 0
         content = paragraphs
         sourceParagraph = paragraphs.getOrNull(anchorParagraph)?.index
         pages = next
-        // Keep the requested character through every intermediate viewport measurement.
-        // Snapping the anchor to each temporary page start progressively loses position.
+        // 视口连续测量期间始终保留请求的字符位置；
+        // 若每次对齐到临时页首，会逐步丢失原来的阅读位置。
         pageIndex = pageForAnchor(next, anchorParagraph, anchorOffset)
         ready = true
     }
@@ -120,7 +120,7 @@ internal data class MeasuredEInkChapter(val paragraphs: List<ReadingParagraph>, 
 private data class EInkMeasureInput(val paragraphs: List<ReadingParagraph>, val typography: List<Any>, val width: Int, val height: Int, val density: Float, val fontScale: Float)
 private data class EInkMeasurement(val input: EInkMeasureInput, val chapter: MeasuredEInkChapter)
 
-/** Apply secondary opacity to the current theme's paint without storing a fixed color. */
+/** 在当前主题画笔上应用辅文本透明度，不保存固定颜色。 */
 private class SecondaryOpacity(private val alpha: Float) : CharacterStyle(), UpdateAppearance {
     override fun updateDrawState(paint: TextPaint) { paint.alpha = (paint.alpha * alpha).toInt().coerceIn(0, 255) }
 }
@@ -211,11 +211,11 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
     }) {
         val width = constraints.maxWidth.coerceAtLeast(1)
         val height = constraints.maxHeight.coerceAtLeast(1)
-        // Reflow only for typography/content/viewport changes. Turning a page reuses all layouts.
+        // 仅在文字样式、正文或视口变化时重新排版，翻页复用全部测量布局。
         val typography = listOf(settings.fontSize, settings.lineHeight, settings.paragraphSpacing, settings.weight, settings.indent, settings.parallel, settings.underline, settings.secondaryAlpha)
         val input = EInkMeasureInput(paragraphs, typography, width, height, density.density, density.fontScale)
         val measured by produceState<EInkMeasurement?>(null, input) {
-            // Coalesce viewport changes and repeated preference updates before measuring.
+            // 测量前合并连续的视口变化和重复偏好更新。
             if(value != null) delay(120)
             if (width != Constraints.Infinity && height != Constraints.Infinity) {
                 val next = withContext(Dispatchers.Default) {
@@ -226,15 +226,15 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
                 value = EInkMeasurement(input, next)
             }
         }
-        // produceState retains the previous value until its new effect starts. Never pair
-        // that value (or the previous state's page) with this composition's new content.
+        // produceState 在新副作用启动前会保留旧值；不得把旧测量结果
+        // 或旧状态中的页面与本轮组合的新正文配对。
         val chapter = measured?.takeIf { it.input == input && state.pages === it.chapter.pages }?.chapter
         SideEffect { if(chapter == null) state.invalidate() }
         if (chapter == null) Text("正在分页…", Modifier.align(Alignment.Center), color = foreground)
         else {
             val page = state.current
             Column(Modifier.fillMaxSize().graphicsLayer {
-                // A new turn cancels the prior effect and immediately displays the latest page.
+                // 再次翻页会取消上一轮副作用，并立即显示最新目标页。
                 translationX = if(animate) pageShift.value * 12.dp.toPx() else 0f
                 alpha = if(animate) 1f - abs(pageShift.value) * .12f else 1f
             }.combinedClickable(onClickLabel = "显示或收起阅读工具栏", onClick = onToggleMenu)) {
@@ -258,8 +258,8 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
                         val layout = chapter.layouts.getValue(index)
                         val top = layout.getLineTop(layout.getLineForOffset(lines.first().start))
                         val sliceHeight = lines.sumOf { it.height }
-                        // Extremely large system fonts can make even one line taller than a
-                        // landscape viewport. Fit that single line instead of clipping its glyphs.
+                        // 超大系统字号可能使一行文字高于整个横屏视口；
+                        // 此时缩放适配该行，避免裁切字形。
                         val drawScale = (height.toFloat() / sliceHeight).coerceAtMost(1f)
                         val visibleText = layout.text.subSequence(lines.first().start, lines.last().end).toString()
                         Canvas(Modifier.fillMaxWidth().height(with(density) { (sliceHeight * drawScale).toDp() }).clipToBounds()

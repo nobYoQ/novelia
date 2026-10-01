@@ -21,7 +21,7 @@ import cc.novelia.app.ui.components.AppDropdownMenu
 import cc.novelia.app.ui.theme.LocalEInkMode
 import kotlin.math.abs
 
-/** The draft lives only for the gesture; one completed drop produces one persisted update. */
+/** 排序草稿仅在手势期间存在，完成一次拖放只持久化一次。 */
 internal class VolumeReorderState(
     private val list: LazyListState,
     private val sourceRows: List<ShelfRowItem>,
@@ -78,7 +78,7 @@ internal class VolumeReorderState(
         val key = draggedKey ?: return
         val visible = list.layoutInfo.visibleItemsInfo
         val current = visible.firstOrNull { it.key == key } ?: return
-        // Wait for the new item positions before considering another crossing.
+        // 等待列表更新条目位置后，再判断下一次跨越。
         if(pendingIndex != null && current.index != pendingIndex) return
         pendingIndex = null
         val center = top + height / 2f
@@ -89,7 +89,7 @@ internal class VolumeReorderState(
             else lastDirection < 0 && to < from && center < it.offset + it.size / 2f
         }.minByOrNull { abs(center - (it.offset + it.size / 2f)) } ?: return
         val to = order.indexOf(target.key)
-        // Keep the viewport in place when the first visible item is reordered.
+        // 首个可见项被重排时，保持视口位置稳定。
         list.requestScrollToItem(list.firstVisibleItemIndex, list.firstVisibleItemScrollOffset)
         pendingIndex = target.index
         order = order.toMutableList().apply { add(to, removeAt(from)) }

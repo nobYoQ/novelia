@@ -17,7 +17,7 @@ import kotlinx.coroutines.sync.withLock
  */
 class CloudMutationQueue {
     private val running = MutableStateFlow<Map<String, PendingAction>>(emptyMap())
-    /** Runtime-only: a stopped process must never restore a stale syncing indicator. */
+    /** 仅保存于运行时，进程停止后不得恢复过期的同步中指示。 */
     val inFlight = running.asStateFlow()
     private class Entry(val mutex: Mutex = Mutex(), var users: Int = 0)
     private val resources = mutableMapOf<Pair<String, String>, Entry>()
@@ -44,8 +44,8 @@ class CloudMutationQueue {
         validate: () -> Unit = {}, onQueuedFailure: (IOException) -> Unit = {}, execute: suspend (PendingAction) -> Unit): Boolean = ordered(action) {
         validate()
         val queueable = action.method in listOf("PUT", "DELETE")
-        // Record the newest intent before sending. Cancellation after a remote success must not
-        // leave an older queued value behind; replaying this idempotent write is safe instead.
+        // 发送前先记录最新意图；远端成功后发生取消时，不应留下
+        // 更旧的排队值，保留本次幂等写入以便安全重放。
         if (queueable) updatePending { pending -> pending.filterNot { sameResource(it, action) } + action }
         val offline = try { executeTracked(action, execute); false }
         catch (error: IOException) {
@@ -64,7 +64,7 @@ class CloudMutationQueue {
         updatePending: ((List<PendingAction>) -> List<PendingAction>) -> Unit,
         execute: suspend (PendingAction) -> Unit) {
         for (action in readPending().filter { it.account == account }) ordered(action) {
-            // A newer online write or another replay may have superseded this captured queue item.
+            // 较新的在线写入或另一轮重放可能已经替代本次捕获的队列项。
             if (readPending().none { it.id == action.id }) return@ordered
             executeTracked(action, execute)
             updatePending { pending -> pending.filterNot { it.id == action.id } }
@@ -102,7 +102,7 @@ class CloudMutationQueue {
                     }
                 }
             }
-            if(requiresLogin || retry) break // Respect server backoff; do not storm it with queued work.
+            if(requiresLogin || retry) break // 遵守服务器退避要求，避免继续集中发送排队请求。
         }
         return CloudReplayResult(completed, failures, blocked, retry, requiresLogin)
     }
@@ -110,7 +110,7 @@ class CloudMutationQueue {
     private fun sameResource(left: PendingAction, right: PendingAction) = left.account == right.account && resource(left.path) == resource(right.path)
     private fun resource(path: String): String {
         val segments = path.trim('/').split('/')
-        // Favorites have one current folder per book, so folder moves also share one ordering key.
+        // 每本书只有一个当前云端收藏夹，移动收藏夹也使用同一串行排序键。
         return if (segments.size >= 4 && segments[0] == "user" && segments[1] in listOf("favored-web", "favored-wenku"))
             (segments.take(2) + segments.drop(3)).joinToString("/") else segments.joinToString("/")
     }

@@ -3,7 +3,7 @@ package cc.novelia.app.data.sync
 import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.PendingAction
 
-/** Match complete resource segments; similarly named books and other user operations cannot collide. */
+/** 按完整资源路径段匹配，避免相似书名或其他用户操作相互冲突。 */
 internal fun pendingBookKey(action: PendingAction): String? {
     val segments = action.path.trim('/').split('/')
     if (segments.firstOrNull() != "user") return null

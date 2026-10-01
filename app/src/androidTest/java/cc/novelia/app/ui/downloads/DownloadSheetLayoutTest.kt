@@ -42,7 +42,7 @@ class DownloadSheetLayoutTest {
                 }
             }
         }
-        // Scroll only: this test must never enqueue a download or contact the original site.
+        // 只测试滚动，不得创建下载任务或访问原站。
         compose.onNodeWithText("开始下载").performScrollTo().assertIsDisplayed()
     }
 }

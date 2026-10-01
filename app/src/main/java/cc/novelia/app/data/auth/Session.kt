@@ -96,7 +96,7 @@ class Session(context: Context) : AuthenticationSession {
     }
     suspend fun logout() = withContext(Dispatchers.IO) {
         var cookie: String? = null
-        // Invalidate refreshes immediately. A slow logout response must never clear a later login.
+        // 立即使旧刷新失效，缓慢返回的退出响应不得清除后续新登录。
         state.clear {
             cookie = CookieManager.getInstance().getCookie(AUTH_URL)
             preferences.edit().clear().apply()

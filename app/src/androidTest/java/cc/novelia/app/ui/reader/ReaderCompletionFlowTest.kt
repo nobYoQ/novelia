@@ -68,7 +68,7 @@ class ReaderCompletionFlowTest {
                     bookUpdates = state.bookUpdates + (ref.key to BookUpdateInfo(checkedAt = readAt + 1_000,
                         translations = mapOf("gpt" to 1)))) }
             }
-            compose.onNode(hasText(title) and hasText("有更新")).assertIsDisplayed()
+            compose.onNode(hasText(title) and hasText("译文更新")).assertIsDisplayed()
             assertEquals(position, app.store.state.value.positions[ref.key])
         } finally {
             compose.runOnIdle { app.store.update { previous } }
@@ -99,6 +99,15 @@ class ReaderCompletionFlowTest {
             compose.onNodeWithText(title).performClick()
             compose.waitUntil(15_000) { app.store.state.value.positions[ref.key]?.chapterCount == 1 }
             compose.runOnIdle { assertFalse("长段落的开头不能被判为读完", app.store.state.value.positions.getValue(ref.key).chapterCompleted) }
+            // 最新章刚打开就同步书架进度和更新标记，无需先翻到本章末屏。
+            compose.onNodeWithContentDescription("返回").performClick()
+            compose.onNodeWithTag("book-reading-progress-${ref.key}", useUnmergedTree = true)
+                .assertContentDescriptionEquals("已读 100%")
+            compose.onNode(hasText(title) and hasText("更新 1 章")).assertDoesNotExist()
+            compose.onNode(hasText(title) and hasText("译文更新")).assertDoesNotExist()
+            compose.runOnIdle { assertFalse(app.store.state.value.positions.getValue(ref.key).chapterCompleted) }
+            compose.onNodeWithText(title).performClick()
+            compose.waitUntil(15_000) { compose.onAllNodesWithContentDescription("阅读设置").fetchSemanticsNodes().isNotEmpty() }
             if(mode == "auto") {
                 compose.waitUntil(15_000) { compose.onAllNodesWithTag("reader-page-counter").fetchSemanticsNodes().isNotEmpty() }
                 val pages = pageNumbers().second
@@ -136,7 +145,7 @@ class ReaderCompletionFlowTest {
                 assertTrue(restored.chapterCompleted)
                 assertAnchorEquals(finalScreen, restored)
             }
-            // Revisiting an earlier screen keeps the completion record, but stores the new anchor.
+            // 回看前面的屏幕时保留读完记录，同时保存新的阅读锚点。
             compose.onNodeWithText(if(mode == "auto") "上一页" else "上一屏").performClick()
             compose.waitUntil(10_000) { app.store.state.value.positions[ref.key]?.textOffset != finalScreen.textOffset }
             compose.runOnIdle { assertTrue(app.store.state.value.positions.getValue(ref.key).chapterCompleted) }

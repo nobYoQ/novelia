@@ -21,8 +21,8 @@ import java.util.UUID
 @Composable fun DownloadSheet(c: AppController, book: BookCard, volume: String?, dismiss: () -> Unit) {
     val settings = remember(book.ref) { c.store.state.value.reader }
     var mode by remember { mutableStateOf(if(settings.mode == "jp" && book.ref.isWenku) "zh" else settings.mode) }; var type by remember { mutableStateOf("epub") }; var engine by remember { mutableStateOf(settings.engines.first()) }; var parallel by remember { mutableStateOf(false) }
-    // This form can exceed one screen at large font sizes. A half-expanded sheet would
-    // hide part of its measured scroll viewport from focus/accessibility scroll requests.
+    // 大字号下表单可能超过一屏；半展开弹层会让已测量滚动视口的一部分
+    // 无法被焦点或无障碍滚动请求显露，因此直接完整展开。
     AppSheet(onDismissRequest = dismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         AppScrollColumn(contentModifier = Modifier.padding(bottom = 28.dp)) {
             Text("下载小说", Modifier.padding(20.dp), style = MaterialTheme.typography.titleLarge)

@@ -26,7 +26,7 @@ import androidx.compose.ui.unit.dp
 
 internal data class QuickFilter(val label: String, val options: List<String>, val selected: Int, val onSelect: (Int) -> Unit)
 
-/** Show the highest-priority filters that fit on the current screen. */
+/** 按优先级显示当前屏幕能容纳的快捷筛选项。 */
 @Composable internal fun QuickFilterBar(filters: List<QuickFilter>, modifier: Modifier = Modifier) {
     BoxWithConstraints(modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
         val count = when {

@@ -93,7 +93,7 @@ class NoveliaApi(val session: AuthenticationSession?, val baseUrl: String = "htt
         val raw = request("GET", path, params = params)
         return withContext(Dispatchers.Default) { appJson.decodeFromString<T>(raw).also { observeKeywords(it) } }
     }
-    /** Learn only from content already requested by the user; never fetch a global tag list. */
+    /** 只从用户已请求的内容中观察标签，不额外拉取全站标签列表。 */
     fun observeKeywords(value: Any?) {
         val keywords = when(value) {
             is Page<*> -> { value.items.forEach(::observeKeywords); return }
@@ -126,7 +126,7 @@ class NoveliaApi(val session: AuthenticationSession?, val baseUrl: String = "htt
     /** 服务端写入已成功才推进失效时间；本地缓存通知失败不能把成功写操作伪装成失败。 */
     @Synchronized private fun recordMutation() {
         lastMutationAt = System.currentTimeMillis()
-        // The remote write already succeeded; a local cache failure must not invite a duplicate post.
+        // 远端写入已成功，本地缓存失效失败不能促使用户重复发帖。
         runCatching { onMutation(lastMutationAt) }
     }
 }

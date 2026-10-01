@@ -23,7 +23,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
-/** Opt-in: -e live true. Only GET requests to public site resources; never writes to an account. */
+/** 需显式启用：-e live true。只对公开站点资源发送 GET 请求，不写入账号数据。 */
 @RunWith(AndroidJUnit4::class)
 class LiveReadOnlyTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()

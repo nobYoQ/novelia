@@ -20,7 +20,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 
-/** Zero-based pages; null marks a gap between the endpoints and the current window. */
+/** 页码从 0 开始；null 表示两端页码与当前页窗口之间的省略区间。 */
 internal fun paginationItems(page: Int, count: Int): List<Int?> {
     val total = count.coerceAtLeast(1)
     if (total <= 7) return (0 until total).toList()

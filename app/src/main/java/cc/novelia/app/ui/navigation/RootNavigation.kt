@@ -12,8 +12,8 @@ internal fun NavHostController.switchRootTab(target: String) {
     navigate(target) {
         popUpTo(graph.findStartDestination().id) { saveState = true }
         launchSingleTop = true
-        // The start destination is still on the stack. Restoring its saved stack
-        // can immediately put a detail-linked search back above it.
+        // 起始页面仍在返回栈中；若恢复其已保存栈，
+        // 可能立即把从详情进入的搜索页重新放到起始页面之上。
         restoreState = target != "shelf"
     }
 }

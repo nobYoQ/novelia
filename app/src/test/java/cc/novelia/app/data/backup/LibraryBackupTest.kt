@@ -34,7 +34,7 @@ class LibraryBackupTest {
 
     private fun fails(block: () -> Unit) {
         try { block(); fail("expected backup validation failure") }
-        catch (expected: IllegalArgumentException) { /* rejection leaves the live library untouched */ }
+        catch (expected: IllegalArgumentException) { /* 拒绝恢复时不改动当前书库。 */ }
     }
 
     @Test fun lineHeightBelowOneRestoresForGlobalAndPerBookSettingsButInvalidValuesAreRejected() {

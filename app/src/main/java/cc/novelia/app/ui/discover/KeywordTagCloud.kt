@@ -28,7 +28,11 @@ import kotlinx.coroutines.withContext
 
 private data class MeasuredKeyword(val entry: KeywordEntry, val width: Int)
 
-/** Pack variable-width chips on a worker, then compose only the visible rows. */
+/**
+ * 按可用宽度、字体缩放与文字方向在后台测量标签，再由惰性列表仅组合可见行。
+ * 排布任务不依赖包含/排除选择，点击只改变样式和语义，无需重新测量整份词表。
+ * 词条或尺寸变化会取消旧任务，测量器不跨任务共享可变缓存。
+ */
 @Composable internal fun KeywordTagCloud(
     entries: List<KeywordEntry>, included: List<String>, excluded: List<String>,
     onClick: (KeywordEntry) -> Unit, modifier: Modifier = Modifier,
@@ -48,7 +52,7 @@ private data class MeasuredKeyword(val entry: KeywordEntry, val width: Int)
         val rows by produceState<List<List<MeasuredKeyword>>?>(null, entries, available, density, direction, fonts, style) {
             value = null
             value = withContext(Dispatchers.Default) {
-                // Each job owns its measurer, so cancelled/replaced searches never share its mutable cache.
+                // 每轮任务独享测量器，取消或替换的搜索不共享可变测量缓存。
                 val measurer = TextMeasurer(fonts, density, direction, cacheSize = 0)
                 val packed = mutableListOf<List<MeasuredKeyword>>()
                 var row = mutableListOf<MeasuredKeyword>()

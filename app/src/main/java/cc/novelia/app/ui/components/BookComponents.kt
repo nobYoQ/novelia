@@ -96,7 +96,7 @@ import coil.decode.DataSource
         BookCover(book)
         BoxWithConstraints(Modifier.weight(1f)) {
             val showDate = showBookMetadata && updated != null
-            // A split-screen list is much narrower than the screen. Wrap the date instead of hiding it.
+            // 分屏列表远窄于整屏，日期应换行显示而非直接隐藏。
             val inlineDate = showDate && maxWidth >= (320 * fontScale).dp
             val updateLabel = reading.updateLabel.takeIf { showBookMetadata }
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -127,7 +127,7 @@ import coil.decode.DataSource
 }
 
 @Composable internal fun BookReadingProgressBar(reading: BookRowStatus, modifier: Modifier = Modifier) {
-    // A server history marker alone is not a numeric position: do not render it as 0%.
+    // 服务器仅提供历史标记时，不能推导数值进度或显示为 0%。
     reading.progress?.let { progress ->
         LinearProgressIndicator(progress = { progress }, modifier = modifier.fillMaxWidth().height(3.dp)
             .semantics { contentDescription = reading.progressLabel }, gapSize = 0.dp, drawStopIndicator = {})

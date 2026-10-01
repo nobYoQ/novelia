@@ -6,7 +6,7 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class SearchExpressionBoundaryTest {
-    /** Mirrors the upstream boundary before tokens are passed to its simpleQueryString query. */
+    /** 模拟上游将词元传入 simpleQueryString 查询前的预处理边界。 */
     private fun siteFilters(expression: String): List<String> = expression.split(" ").filter { token ->
         ((token.startsWith('>') || token.startsWith('<')) && token.substring(1).toUIntOrNull() != null) || token.endsWith('$')
     }
@@ -21,7 +21,7 @@ class SearchExpressionBoundaryTest {
         val original = "pay$ >20 now <50 end$"
         val expression = SearchExpression.build("", "", original, "", "", "", "", "")
         assertTrue(siteFilters(expression).isEmpty())
-        // Lucene's phrase parser consumes a backslash and copies the next character literally.
+        // Lucene 短语解析器消费反斜杠，并按字面复制下一个字符。
         val decoded = expression.removeSurrounding("\"").replace(Regex("\\\\(.)")) { it.groupValues[1] }
         assertEquals(original, decoded)
     }

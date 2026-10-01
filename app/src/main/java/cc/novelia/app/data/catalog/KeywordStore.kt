@@ -68,6 +68,10 @@ class KeywordStore(context: Context) {
     fun exportSnapshot(): List<KeywordEntry> = state.value.entries
     fun mergeLibrary(library: KeywordLibrary) = change { it.merge(library) }
     fun mergeSnapshot(entries: List<KeywordEntry>) = mergeLibrary(KeywordLibrary.fromLegacy(entries, addDefaults = false))
+    /**
+     * 写锁保护重载与落盘顺序，磁盘读取期间仍允许内存编辑；仅保留此期间发生的并发修改。
+     * 读取失败继续发布原内存状态，并保留损坏文件供下次保存前备份。
+     */
     fun reload() = synchronized(writeLock) {
         val before = synchronized(lock) { mutable.value }
         val loaded = read()
@@ -76,7 +80,7 @@ class KeywordStore(context: Context) {
             return@synchronized
         }
         val prior = before.entries.associateBy { it.original }
-        // Disk IO can overlap reader edits. Only those concurrent changes override the reload.
+        // 磁盘 IO 期间用户仍可编辑，仅让这段时间内的并发改动覆盖重载结果。
         change { current ->
             if(current === before) loaded
             else {
@@ -88,15 +92,15 @@ class KeywordStore(context: Context) {
         mutableError.value = null
     }
 
-    /** Call from an IO dispatcher when a backup or lifecycle event requires a durable snapshot. */
+    /** 备份或生命周期事件需要可靠落盘时，应从 IO 调度器调用。 */
     fun flush() = synchronized(writeLock) {
-        // Capture after taking the write lock: an older waiting flush cannot overwrite a newer one.
-        // Lists and entries are immutable; subsequent changes enqueue their own persistence request.
+        // 获得写锁后再获取快照，避免较早等待的 flush 覆盖较新的写入。
+        // 列表和条目均不可变；后续修改会各自提交持久化请求。
         val snapshot = synchronized(lock) { mutable.value }
         try {
             val encoded = appJson.encodeToString(snapshot).toByteArray(Charsets.UTF_8)
             if(failedRead && file.exists()) {
-                // Preserve unreadable input before any subsequent browsing can replace it.
+                // 先保留无法读取的原始文件，避免后续浏览触发写入将其覆盖。
                 file.copyTo(File(file.parentFile, "$FILE_NAME.corrupt-${System.currentTimeMillis()}"))
                 failedRead = false
             }
@@ -117,7 +121,7 @@ class KeywordStore(context: Context) {
     private fun change(transform: (KeywordLibrary) -> KeywordLibrary) {
         while(true) {
             val snapshot = synchronized(lock) { Snapshot(revision, mutable.value) }
-            // Catalog ranking/merging also stays outside the state lock used by the UI and flush.
+            // 词条排序和合并也放在界面及 flush 使用的状态锁之外。
             val next = transform(snapshot.library)
             val changed = next != snapshot.library
             val committed = synchronized(lock) {

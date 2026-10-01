@@ -5,7 +5,10 @@ import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.SavedBook
 
-/** Restore only the removal's changes; concurrent folder/mount edits must win. */
+/**
+ * 将移除前后快照作字段差异比较，只撤销仍与本次移除结果相同的字段，保留期间的新编辑。
+ * 不恢复整份书库快照；若父书目已被另行移除，恢复分卷时解绑，并清除失效的顺序引用。
+ */
 internal fun restoreRemovedShelfBook(current: LibraryState, before: List<SavedBook>, ref: BookRef): LibraryState {
     if(current.books.any { it.book.ref == ref }) return current
     val removed = before.firstOrNull { it.book.ref == ref } ?: return current
@@ -27,7 +30,7 @@ internal fun restoreRemovedShelfBook(current: LibraryState, before: List<SavedBo
     val candidates = books + removed
     val parents = candidates.filter { it.book.ref.isWenku }.map { it.book.ref.key }.toSet()
     val restored = candidates.map { saved ->
-        // Another operation may have removed this volume's parent while its undo was pending.
+        // 等待撤销期间，其他操作可能已经移除了此分卷的父书目。
         saved.copy(parentWenkuKey = saved.parentWenkuKey?.takeIf { it in parents })
     }
     val mounted = restored.groupBy { it.parentWenkuKey }.mapValues { (_, volumes) -> volumes.map { it.book.ref.key }.toSet() }

@@ -7,7 +7,11 @@ import cc.novelia.app.data.model.WebDetail
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 
-/** Resolve visible list entries without waiting for every book on the page. */
+/**
+ * 为可见网络书目逐项补齐章节进度和分类，最多并发两项，无需等整页完成才显示结果。
+ * 等待并发许可前捕获账号绑定，许可取得后与响应返回后均复核，防止旧账号结果流入新会话。
+ * 本地文件、文库和游客直接沿用已有书目，不为元数据补齐创建本地收藏。
+ */
 class CloudBookMetadataLoader(
     private val session: AuthenticationSession,
     private val detail: suspend (BookRef) -> WebDetail,

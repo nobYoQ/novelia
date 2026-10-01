@@ -36,6 +36,10 @@ import kotlinx.coroutines.flow.first
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
+/**
+ * 普通屏幕拖动时实时定位，墨水屏只更新预览并在松手后提交，减少整页刷新。
+ * pageCount 非空时按静态页表离散选择，否则使用字符加权进度；取消手势丢弃草稿。
+ */
 @Composable internal fun ReaderSeekBar(
     progress: Float, pageCount: Int?, enabled: Boolean, foreground: Color,
     onSeek: (Float) -> Unit, modifier: Modifier = Modifier,
@@ -47,7 +51,7 @@ import kotlin.math.roundToInt
     val dragging by interaction.collectIsDraggedAsState()
     val current = draft ?: progress.safeFraction()
     val latestSeek by rememberUpdatedState(onSeek)
-    // A cancelled OS gesture must not leave an e-ink preview stuck on the control.
+    // 系统取消手势时，不能让墨水屏预览状态残留在进度控件上。
     LaunchedEffect(interaction) {
         interaction.interactions.collect { if(it is DragInteraction.Cancel) draft = null }
     }
@@ -93,7 +97,7 @@ import kotlin.math.roundToInt
     }
 }
 
-/** Resolve an exact text line, then animate at most half a viewport even for a very distant seek. */
+/** 先解析精确文字行，再用至多半个视口的动画接近目标，远距离定位也如此。 */
 internal suspend fun LazyListState.seekChapter(
     progress: Float, index: ChapterSeekIndex, paragraphs: List<ReadingParagraph>,
     layouts: Map<Int, ParagraphScrollLayout>, animate: Boolean,
@@ -121,7 +125,7 @@ internal suspend fun LazyListState.seekChapter(
     else {
         val direction = if(item < previousItem || (item == previousItem && offset < previousOffset)) -1f else 1f
         scrollToItem(item, offset)
-        // Scroll only the available approach distance; boundaries remain exactly 0% and 100%.
+        // 仅滚动实际可用的接近距离，确保两端仍精确对应 0% 和 100%。
         var approach = 0f
         scroll { approach = scrollBy(-direction * limit.coerceAtMost(160f)) }
         animateScrollBy(-approach, tween(AppMotion.Page))

@@ -27,7 +27,7 @@ import cc.novelia.app.ui.theme.motionClickable
     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if(options.isNotEmpty()) BoxWithConstraints(Modifier.fillMaxWidth()) {
-            // Measure actual labels so long translations and large fonts get fewer columns.
+            // 测量实际标签宽度，让较长译名和大字号自动减少列数。
             val widestLabel = options.maxOf { measurer.measure(it, textStyle, softWrap = false).size.width }
             val preferredWidth = (with(density) { widestLabel.toDp() } + 32.dp).coerceAtLeast(88.dp)
             val maxColumns = ((maxWidth + ChipSpacing) / (preferredWidth + ChipSpacing)).toInt().coerceIn(1, minOf(3, options.size))

@@ -73,7 +73,7 @@ class FileImportRegressionTest {
         val directory = bytes.indices.first { offset -> offset + 28 < bytes.size &&
             bytes[offset] == 0x50.toByte() && bytes[offset + 1] == 0x4b.toByte() &&
             bytes[offset + 2] == 0x01.toByte() && bytes[offset + 3] == 0x02.toByte() }
-        // Change the first central-directory uncompressed size without changing its actual stream.
+        // 只修改中央目录首个条目声明的解压大小，不改变其实际数据流。
         bytes[directory + 24] = 1
         for (offset in 25..27) bytes[directory + offset] = 0
         file.writeBytes(bytes)

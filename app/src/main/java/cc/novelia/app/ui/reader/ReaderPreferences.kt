@@ -40,7 +40,7 @@ import cc.novelia.app.ui.theme.motionClickable
 import kotlin.math.roundToInt
 import kotlin.math.abs
 
-/** Owned outside the sheet: switching between dialog and bottom sheet recreates their composition. */
+/** 状态由弹层外部持有，避免对话框与底部弹层切换重建组合时丢失。 */
 @Stable class ReaderPreferencesState internal constructor(
     internal val tab: MutableIntState,
     internal val expandedGroup: MutableState<String>,

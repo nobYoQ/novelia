@@ -29,7 +29,7 @@ class ChapterBatchTest {
         }) { done, total ->
             assertEquals(12, total)
             progress += done
-            // Suspending UI updates must not produce overlapping or out-of-order callbacks.
+            // 即使界面更新会挂起，回调也不得重叠或乱序。
             delay(1)
         }
         assertEquals(3, peak)

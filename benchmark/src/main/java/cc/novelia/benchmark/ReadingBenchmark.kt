@@ -63,7 +63,7 @@ class ReadingBaselineProfile {
         pressHome(); startActivityAndWait(); waitForShelf()
     }
 
-    // Navigation belongs in the general baseline profile, not the startup dex layout.
+    // 导航流程属于通用基线配置，不纳入启动 dex 布局。
     @Test fun localNavigation(): Unit = profile.collect(PACKAGE, includeInStartupProfile = false) {
         startActivityAndWait(); waitForShelf()
         device.findObject(By.text("本地文件")).click()

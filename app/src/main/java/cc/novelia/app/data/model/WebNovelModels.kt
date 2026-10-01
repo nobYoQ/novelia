@@ -9,7 +9,7 @@ import kotlinx.serialization.Serializable
     val total: Int = 0, val jp: Int = 0, val youdao: Int = 0, val gpt: Int = 0, val sakura: Int = 0, val updateAt: Long? = null
 ) {
     fun card() = BookCard(BookRef(providerId, novelId), titleZh?.takeIf { it.isNotBlank() } ?: titleJp, titleJp, subtitle = "$type · $total 章", tags = keywords, translated = maxOf(gpt, sakura, youdao), total = total, favored = favored, updateAt = updateAt, translations = mapOf("gpt" to gpt, "sakura" to sakura, "youdao" to youdao), novelType = type, attentions = attentions)
-    // Favorites omit history, even for books the account has read. Absence is unknown, not unread.
+    // 收藏响应不提供阅读历史，即使账号读过该书；缺失表示未知，不能当作未读。
     fun card(account: String?) = card().copy(cloudReading = account?.takeIf { (lastReadAt ?: 0) > 0 }
         ?.let { CloudReadingProgress(it, lastReadAt = lastReadAt) })
 }
@@ -27,7 +27,7 @@ import kotlinx.serialization.Serializable
     val updateAt: Long? = null
 ) {
     val title get() = titleZh?.takeIf { it.isNotBlank() } ?: titleJp
-    // The site detail endpoint derives its update date from chapter publication times.
+    // 原站详情接口根据章节发布时间推导书籍更新时间。
     val lastUpdatedAt get() = updateAt?.takeIf { it > 0 } ?: toc.asSequence()
         .filter { it.chapterId != null }.mapNotNull { it.createAt?.takeIf { time -> time > 0 } }.maxOrNull()
     val lastUpdatedChapter get() = toc.withIndex().filter { it.value.chapterId != null }

@@ -9,7 +9,7 @@ import java.nio.file.Path
 import java.nio.file.SimpleFileVisitor
 import java.nio.file.attribute.BasicFileAttributes
 
-/** Removes only the discontinued tool's private models, without following any symbolic links. */
+/** 只移除已停用工具的私有模型，不跟随任何符号链接。 */
 internal fun removeRetiredModels(noBackupDirectory: File) {
     val target = noBackupDirectory.toPath().toAbsolutePath().normalize().resolve("ocr-models")
     if (Files.notExists(target, LinkOption.NOFOLLOW_LINKS)) return

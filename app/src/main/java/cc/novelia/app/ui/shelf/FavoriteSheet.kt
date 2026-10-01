@@ -48,7 +48,7 @@ import cc.novelia.app.ui.navigation.loginForFavorite
             else AsyncContent(listOf(book.ref, profile?.username), refreshKey = listOf(version, state.syncStatus[profile?.username]?.lastSuccessAt), load = {
                 val binding = c.session.capture()
                 val folders = c.api.get<CloudFolders>("user/favored")
-                // Saved BookCards can belong to an earlier account; read membership from this session's detail cache.
+                // 保存的 BookCard 可能来自旧账号，收藏归属应读取当前会话的详情缓存。
                 val favored = if(book.ref.isWenku) c.detail<WenkuDetail>("wenku/${book.ref.id}").favored
                     else c.detail<WebDetail>("novel/${book.ref.key}").favored
                 c.session.ensureCurrent(binding)

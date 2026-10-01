@@ -13,6 +13,7 @@ internal val LocalPanelSession = compositionLocalOf<Any?> { null }
 
 private class PanelScrollSession(var state: ScrollState = ScrollState(0))
 
+/** 同一会话的收起阶段保留位置，再次展开重置到顶部；表单数据应由面板外部另行持有。 */
 @Composable internal fun rememberPanelScrollState(expanded: Boolean = true): ScrollState {
     val session = LocalPanelSession.current
     val scroll = remember(session) { PanelScrollSession() }

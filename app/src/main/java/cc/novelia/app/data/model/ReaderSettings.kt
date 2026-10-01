@@ -2,7 +2,7 @@ package cc.novelia.app.data.model
 
 import kotlinx.serialization.Serializable
 
-/** The settings changed by the e-ink preset, saved separately for each side of its toggle. */
+/** 保存墨水屏预设会改变的设置，分别记住开关两侧的选择。 */
 @Serializable data class ReaderPagingState(
     val paginationMode: String = "scroll", val scrollPageTurn: Boolean = false,
     val horizontalPageTurn: Boolean = false, val showPageButtons: Boolean = false, val volumeKeys: Boolean = false
@@ -20,16 +20,16 @@ import kotlinx.serialization.Serializable
     val keepScreenOn: Boolean = false, val volumeKeys: Boolean = false, val paged: Boolean = false, val eInkMode: Boolean = false,
     val monochrome: Boolean = false, val scrollPageTurn: Boolean = eInkMode, val horizontalPageTurn: Boolean = eInkMode,
     val brightness: Float = -1f, val speechRate: Float = 1f, val speechMinutes: Int = 30, val traditional: Boolean = false, val speechLanguage: String = "auto",
-    // Defaults migrate the old implicit paging mode and always-visible static-page buttons.
+    // 通过默认值迁移旧版隐式分页模式和始终显示的静态翻页按钮。
     val paginationMode: String = if(eInkMode || scrollPageTurn || horizontalPageTurn) "auto" else "scroll",
     val showPageButtons: Boolean = paged || paginationMode == "auto",
     val beforeEInk: ReaderPagingState? = null, val eInkPreferences: ReaderPagingState? = null,
     val toolbarTransparency: Float = .25f,
     val prefetchChapters: Int = 3, val prefetchWifiOnly: Boolean = true,
     val paragraphSpacing: Float = 8f,
-    // Chapter-end navigation in continuous reading; independent of toolbar buttons and e-ink presets.
+    // 连续阅读的章末导航独立于工具栏按钮和墨水屏预设。
     val showScrollPageButtons: Boolean = true,
-    // The chapter scrubber is independent of page buttons and survives e-ink preset changes.
+    // 章节进度条独立于翻页按钮，切换墨水屏预设时保留其设置。
     val showProgressBar: Boolean = true
 ) {
     companion object {
@@ -39,12 +39,12 @@ import kotlinx.serialization.Serializable
 
     val resolvedParagraphSpacing get() = if(paragraphSpacing.isFinite()) paragraphSpacing.coerceIn(0f, 32f) else 8f
     val resolvedToolbarTransparency get() = if(toolbarTransparency.isFinite()) toolbarTransparency.coerceIn(0f, 1f) else .25f
-    // Compatibility with settings saved before black-and-white became a theme choice.
+    // 兼容黑白模式尚未成为主题选项之前保存的设置。
     val resolvedTheme get() = if(monochrome) "monochrome" else theme
     fun withTheme(selected: String) = copy(theme = selected, monochrome = false)
     val staticPagination get() = paginationMode == "auto"
     fun withPaginationMode(selected: String): ReaderSettings {
-        // Give the first switch from a scrolling reader usable gestures. Existing choices survive mode changes.
+        // 从滚动阅读首次切换分页时提供可用手势；之后切换模式保留已有选择。
         val needsGestures = selected == "auto" && !staticPagination && !scrollPageTurn && !horizontalPageTurn && !showPageButtons
         return copy(paginationMode = selected, scrollPageTurn = scrollPageTurn || needsGestures,
             horizontalPageTurn = horizontalPageTurn || needsGestures)
@@ -64,7 +64,7 @@ import kotlinx.serialization.Serializable
                 horizontalPageTurn = true, showPageButtons = true, volumeKeys = true)
             withPagingState(target).copy(eInkMode = true, beforeEInk = pagingState())
         } else {
-            // Older versions never recorded the prior mode. Fall back to the original scrolling defaults.
+            // 旧版没有记录切换前模式，回退到原来的滚动阅读默认设置。
             val target = beforeEInk ?: ReaderPagingState(showPageButtons = paged)
             withPagingState(target).copy(eInkMode = false, beforeEInk = null, eInkPreferences = pagingState())
         }

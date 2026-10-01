@@ -8,7 +8,7 @@ import cc.novelia.app.data.model.ReaderSettings
  */
 data class ReadingTextMatch(val paragraph: Int, val part: Int, val start: Int, val end: Int)
 
-// Keep languages in the same source paragraph visually closer than separate paragraphs.
+// 同一原始段落的不同语言之间，视觉间距小于独立段落之间的间距。
 internal const val READING_PART_SEPARATOR = "\n"
 
 internal fun ReadingTextMatch.textOffset(paragraph: ReadingParagraph, settings: ReaderSettings): Int =
@@ -17,7 +17,7 @@ internal fun ReadingTextMatch.textOffset(paragraph: ReadingParagraph, settings: 
 internal fun readerPartFontSize(settings: ReaderSettings, secondary: Boolean): Float = settings.fontSize - if(secondary) 1f else 0f
 internal fun readerPartLineHeight(settings: ReaderSettings, secondary: Boolean): Float = readerPartFontSize(settings, secondary) * settings.lineHeight
 
-/** Continue from the active occurrence, or the actual visible character within a long paragraph. */
+/** 从当前搜索命中继续，或从长段落中实际可见的字符位置开始。 */
 internal fun nextReadingMatchIndex(matches: List<ReadingTextMatch>, current: ReadingTextMatch?, direction: Int,
     paragraph: Int, offset: Int, textOffset: (ReadingTextMatch) -> Int): Int {
     if(matches.isEmpty()) return -1

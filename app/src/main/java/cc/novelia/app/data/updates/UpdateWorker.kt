@@ -4,11 +4,10 @@ import android.content.Context
 import androidx.work.*
 import cc.novelia.app.NoveliaApplication
 import cc.novelia.app.data.auth.SessionChangedException
-import cc.novelia.app.data.library.acknowledgeReadChapterUpdates
 import cc.novelia.app.data.model.WebDetail
 import cc.novelia.app.data.model.WenkuDetail
-import cc.novelia.app.data.model.withKnownUpdateTime
 import cc.novelia.app.data.storage.appJson
+import cc.novelia.app.data.storage.hashName
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
@@ -33,22 +32,23 @@ open class UpdateWorker(context: Context, params: WorkerParameters) : CoroutineW
             if(isStopped) return Result.failure()
             try {
                 val ref = saved.book.ref
+                val observedAt = System.currentTimeMillis()
+                val generation = app.store.cacheGeneration.value
                 val raw = app.api.request("GET", if(ref.isWenku) "wenku/${ref.id}" else "novel/${ref.key}", binding = binding)
                 val updated = if(ref.isWenku) appJson.decodeFromString<WenkuDetail>(raw).also(app.api::observeKeywords).card(ref)
                     else appJson.decodeFromString<WebDetail>(raw).also(app.api::observeKeywords).card(ref, binding.account)
                 app.session.ensureCurrent(binding)
-                val current = updated.updateSnapshot(System.currentTimeMillis())
+                val current = updated.updateSnapshot(observedAt)
+                // 检查取得的目录同时供阅读器使用，避免新章计数已更新而目录仍停在旧末章。
+                app.store.withCacheGeneration(generation) {
+                    app.metadataCache.write(hashName("${binding.account ?: "guest"}:${if(ref.isWenku) "wenku/${ref.id}" else "novel/${ref.key}"}"), raw, observedAt)
+                }
                 app.store.update { state ->
                     val existing = state.books.firstOrNull { it.book.ref == ref } ?: return@update state
                     val previous = state.updateSnapshots[ref.key] ?: existing.book.updateSnapshot()
                     val delta = detectBookUpdate(previous, current, ref.isWenku)
-                    val prior = state.bookUpdates[ref.key]
-                    val changes = if(delta.hasChanges) prior?.accumulate(delta) ?: delta else prior
-                    val next = state.copy(
-                        books = state.books.map { b -> if(b.book.ref == ref) b.copy(book = updated.withKnownUpdateTime(b.book), hasUpdates = b.hasUpdates || delta.hasChanges) else b },
-                        updateSnapshots = state.updateSnapshots + (ref.key to current),
-                        bookUpdates = if(changes != null) state.bookUpdates + (ref.key to changes) else state.bookUpdates - ref.key
-                    ).acknowledgeReadChapterUpdates(ref)
+                    val next = state.withBookUpdate(updated, observedAt)
+                    if(next === state) return@update state
                     val unread = next.bookUpdates[ref.key]
                     val unreadDelta = delta.copy(newChapters = if((unread?.newChapters ?: 0) > 0) delta.newChapters else 0,
                         translations = delta.translations.filterKeys { (unread?.translations?.get(it) ?: 0) > 0 })
@@ -58,8 +58,8 @@ open class UpdateWorker(context: Context, params: WorkerParameters) : CoroutineW
             } catch(e: kotlinx.coroutines.CancellationException) { throw e }
             catch(_: SessionChangedException) { return Result.success() }
             catch(e: Exception) { failed++ }
-            // Persist progress before yielding. If the OS stops a long run, the next one begins
-            // with the books that would otherwise remain permanently at the end of the shelf.
+            // 让出执行前保存检查进度；若系统中断长任务，下一轮优先处理
+            // 原本会一直留在书架尾部、得不到检查的书目。
             app.store.update { it.copy(drafts = it.drafts + ("updates:cursor" to saved.book.ref.key)) }
             app.store.flush()
             delay(1500)

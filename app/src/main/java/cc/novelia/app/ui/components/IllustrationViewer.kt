@@ -41,7 +41,7 @@ import kotlin.math.roundToInt
 internal fun IllustrationViewer(model: Any, onDismiss: () -> Unit) {
     val context = LocalContext.current
     var retry by remember(model) { mutableIntStateOf(0) }
-    // Bound decoding memory while retaining enough resolution to inspect illustrations.
+    // 限制图片解码内存，同时保留查看插图所需的分辨率。
     val request = remember(context, model, retry) {
         ImageRequest.Builder(context).data(model).size(4096, 4096).build()
     }
@@ -87,7 +87,7 @@ internal fun IllustrationViewer(model: Any, onDismiss: () -> Unit) {
                             if(transform.scale > 1f) transform = IllustrationTransform() else zoom(2.5f, point)
                         })
                     }, contentAlignment = Alignment.Center) {
-                    // Coil treats equivalent requests as the same model; retry needs a fresh painter.
+                    // Coil 将等价请求视为同一模型，重试需创建新的 painter。
                     key(retry) { AsyncImage(request, "放大的小说插图", Modifier.fillMaxSize().graphicsLayer {
                         scaleX = transform.scale; scaleY = transform.scale
                         translationX = transform.offset.x; translationY = transform.offset.y

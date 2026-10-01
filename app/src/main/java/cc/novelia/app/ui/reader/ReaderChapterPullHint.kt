@@ -22,7 +22,7 @@ import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.LocalEInkMode
 import cc.novelia.app.ui.theme.appReducedMotion
 
-/** The existing chapter-end sentence is also the pull indicator; it never adds a second panel. */
+/** 复用已有章末句子作为上拉提示，不额外增加提示面板。 */
 @Composable internal fun ReaderChapterPullHint(
     progress: Float, active: Boolean, ready: Boolean, loading: Boolean, foreground: Color,
     modifier: Modifier = Modifier,

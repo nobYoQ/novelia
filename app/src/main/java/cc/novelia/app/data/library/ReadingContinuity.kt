@@ -7,7 +7,7 @@ import cc.novelia.app.data.model.SavedBook
 import cc.novelia.app.data.model.TocItem
 import cc.novelia.app.data.model.withKnownChapter
 
-/** Directory section headings never contribute to a reader-facing chapter number. */
+/** 目录分组标题不计入向读者显示的章节序号。 */
 data class ReadingDestination(val chapterId: String, val number: Int, val title: String) {
     val label get() = "第 $number 章 · $title"
 }
@@ -21,7 +21,7 @@ fun resumeDestination(toc: List<TocItem>, localId: String?, cloudId: String?): R
     readingDestination(toc, localId) ?: readingDestination(toc, cloudId)
     ?: toc.firstOrNull { it.chapterId != null }?.let { ReadingDestination(requireNotNull(it.chapterId), 1, it.title) }
 
-/** Public cover metadata also applies to guests; cloud reading remains bound to the active account. */
+/** 公开封面元数据也供游客使用；云端阅读进度仍须绑定当前账号。 */
 fun LibraryState.withCloudReadingMetadata(cards: List<BookCard>, account: String?): LibraryState {
     val metadata = cards.associateBy { it.ref.key }
     if(metadata.isEmpty()) return this
@@ -37,6 +37,7 @@ fun LibraryState.withCloudReadingMetadata(cards: List<BookCard>, account: String
     })
 }
 
+/** 按书架当前分卷顺序继续阅读，只选择同一文库父书目下已挂载的下一份本地文件。 */
 fun LibraryState.nextMountedVolume(ref: BookRef): SavedBook? {
     val parentKey = books.firstOrNull { it.book.ref == ref }?.parentWenkuKey ?: return null
     val volumes = shelfGroups(localOnly = false, folder = "全部", query = "", sort = 0)
@@ -45,7 +46,7 @@ fun LibraryState.nextMountedVolume(ref: BookRef): SavedBook? {
     return if(index >= 0) volumes.getOrNull(index + 1) else null
 }
 
-/** One manual operation is deliberately bounded; the user can start another range. */
+/** 单次手动操作限制处理范围，用户可另选下一批继续。 */
 fun chapterCacheRange(toc: List<TocItem>, first: Int, last: Int): List<String> {
     val chapters = toc.mapNotNull { it.chapterId }.distinct()
     require(first in 1..chapters.size && last in first..chapters.size) { "请输入目录范围内的起止章节" }

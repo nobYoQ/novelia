@@ -40,7 +40,7 @@ internal class StatePersistence<T>(
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Exception) {
-                    // Keep the latest snapshot and the writer alive after a transient disk failure.
+                    // 短暂磁盘故障后保留最新快照，并让写入协程继续运行。
                     delay(retryMillis)
                     requests.trySend(Unit)
                 }

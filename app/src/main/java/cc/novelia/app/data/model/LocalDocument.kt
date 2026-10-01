@@ -10,5 +10,5 @@ import kotlinx.serialization.Serializable
  * images 在可移植格式中保存 Base64 内容，落盘后由独立图片文件承担，不应长期装入内存。
  */
 @Serializable data class LocalDocument(val id: String, val name: String, val format: String, val chapters: List<LocalChapter>, val importedAt: Long = System.currentTimeMillis(), val images: Map<String, String> = emptyMap(), val coverImage: String? = null, val sourceHash: String = "",
-    /** Content-addressed chapter files; empty for the portable/legacy full-document format. */
+    /** 以正文哈希寻址的章节文件索引；可移植格式和旧版完整文档中为空。 */
     val chapterFiles: Map<String, String> = emptyMap())

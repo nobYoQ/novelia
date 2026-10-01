@@ -29,7 +29,7 @@ class DownloadWorker(context: Context, parameters: WorkerParameters) : Coroutine
             ensureActive()
             val saved = app.store.state.value.downloads.find { it.id == id } ?: return@withTaskLock null
             if (isStopped || saved.status == "已暂停" || (saved.workId != null && saved.workId != workId)) return@withTaskLock null
-            // Existing installs have no workId. Claim only while their current worker is active.
+            // 兼容尚无 workId 的旧安装记录，只允许正在运行的 Worker 认领。
             val current = saved.copy(workId = workId)
             app.store.update { state -> state.copy(downloads = state.downloads.map { if (it.id == id) current else it }) }
             current
@@ -101,7 +101,7 @@ class DownloadWorker(context: Context, parameters: WorkerParameters) : Coroutine
         suspend fun remove(app: NoveliaApplication, id: String) = withContext(Dispatchers.IO) {
             DownloadFiles.withTaskLock(app.store.downloadsDir, id) {
                 withContext(NonCancellable) {
-                    // Operation waits for the cancellation command, not worker termination.
+                    // Operation 等待的是取消命令完成，旧 Worker 此时可能尚未退出。
                     WorkManager.getInstance(app).cancelUniqueWork("download-$id").result.get()
                     val entry = app.store.state.value.downloads.find { it.id == id }
                     app.store.update { it.copy(downloads = it.downloads.filterNot { task -> task.id == id }) }
@@ -124,6 +124,7 @@ class DownloadWorker(context: Context, parameters: WorkerParameters) : Coroutine
                 }
             }
         }
+        /** 暂停以取消当前 Worker 并保存状态实现；再次启动会重新下载，不复用 .part 断点。 */
         suspend fun pause(app: NoveliaApplication, id: String) = withContext(Dispatchers.IO) {
             DownloadFiles.withTaskLock(app.store.downloadsDir, id) {
                 withContext(NonCancellable) {

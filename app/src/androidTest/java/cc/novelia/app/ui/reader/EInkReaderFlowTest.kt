@@ -98,7 +98,7 @@ class EInkReaderFlowTest {
             compose.waitUntil(10_000) { (app.store.state.value.positions[ref.key]?.textOffset ?: 0) > 0 }
             val firstOffset = app.store.state.value.positions.getValue(ref.key).textOffset
             val instrumentation = InstrumentationRegistry.getInstrumentation()
-            // Native input injection must wait for the preceding Compose touch/focus work.
+            // 注入原生输入前，等待上一轮 Compose 触摸和焦点处理结束。
             compose.waitForIdle()
             compose.waitUntil(10_000) { compose.activity.hasWindowFocus() }
             instrumentation.waitForIdleSync()
@@ -106,7 +106,7 @@ class EInkReaderFlowTest {
             compose.waitForIdle()
             compose.waitUntil(10_000) { app.store.state.value.positions.getValue(ref.key).textOffset > firstOffset }
             val saved = app.store.state.value.positions.getValue(ref.key)
-            // A multi-screen paragraph must keep its character anchor through both modes.
+            // 跨越多屏的长段落在两种阅读模式之间切换时，应保留字符锚点。
             compose.onNodeWithContentDescription("阅读设置").performClick()
             compose.onNodeWithText("连续滚动").performScrollTo().performClick()
             compose.onNodeWithText("关闭面板").performClick()

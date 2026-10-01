@@ -81,8 +81,8 @@ class MarkdownToolbarInteractionTest {
         val field = compose.onNodeWithTag(if(comment) "comment-body" else "article-body")
         field.performTextInputSelection(TextRange(0, 5))
         field.assertIsFocused()
-        // Start at a known focus target and use actual Shift+Tab events. Clearing Android
-        // focus first may itself restore a target, so moveFocus(Next) would skip that target.
+        // 从已知焦点开始发送真实 Shift+Tab 事件；先清除 Android 焦点
+        // 可能自行恢复焦点，使 moveFocus(Next) 跳过本应测试的目标。
         listOf("Markdown 格式帮助", "插入折叠内容", "插入评分", "插入剧透", "插入链接", "插入删除线", "插入斜体", "插入粗体").forEach { description ->
             compose.onRoot().performKeyInput {
                 keyDown(Key.ShiftLeft)

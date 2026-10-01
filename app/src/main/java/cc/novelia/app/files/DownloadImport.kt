@@ -15,6 +15,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
+/** imported 仅在本次创建新文档时为 true；命中源文件哈希会返回现有引用。 */
 data class DocumentImportResult(val ref: BookRef, val imported: Boolean)
 private val importLock = Mutex()
 
@@ -87,7 +88,7 @@ suspend fun importLocalDocument(store: LocalStore, file: File, name: String = fi
                     subtitle = "${document.format.uppercase()} · ${document.chapters.size} 章"))
                 DocumentImportResult(ref, true)
             } catch (error: Exception) {
-                // This newly generated ID can never be an existing reading copy.
+                // 本次生成的新 ID 不可能对应已有的阅读副本。
                 runCatching { store.removeDocument(document.id) }
                 throw error
             }
@@ -95,7 +96,7 @@ suspend fun importLocalDocument(store: LocalStore, file: File, name: String = fi
     }
 }
 
-/** Reimporting preserves explicit choices to detach or move an existing volume. */
+/** 重新导入时，保留用户已明确选择的分卷解绑或移动结果。 */
 suspend fun importDownloadedDocument(store: LocalStore, entry: DownloadEntry): BookRef {
     val result = importLocalDocument(store, File(store.downloadsDir, entry.fileName), entry.fileName, entry.title)
     if (result.imported) store.update { state ->

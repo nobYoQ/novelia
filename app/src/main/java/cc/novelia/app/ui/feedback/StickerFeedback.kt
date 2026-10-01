@@ -35,7 +35,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
-/** A finite accent that rests after one gesture; it never resumes an interrupted animation. */
+/** 一次交互只播放一轮有限动画，结束后静止，不续播被中断的动画。 */
 @Composable
 fun StickerAccent(sticker: MidoriSticker, trigger: Any? = Unit, modifier: Modifier = Modifier) {
     val motion = stickerMotionEnabled()
@@ -151,7 +151,7 @@ fun ObserveDownloadCelebrations(c: AppController, route: String?) {
         c.store.state.map { it.downloads }.distinctUntilChanged().collect { entries ->
             val finished = newlyCompletedDownloads(previous, entries)
             previous = entries.associate { it.id to it.status }
-            // Background completions stay in download history; do not replay celebrations on return.
+            // 后台完成结果留在下载历史中，返回页面时不补播庆祝动画。
             if(finished.isNotEmpty() && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) && latestRoute?.startsWith("reader/") != true) {
                 c.celebrate(if(finished.size == 1) "「${finished.single().title}」下载完成" else "${finished.size} 本小说下载完成", MidoriSticker.Celebrate)
             }

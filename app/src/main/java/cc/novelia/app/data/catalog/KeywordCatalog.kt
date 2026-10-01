@@ -2,6 +2,11 @@ package cc.novelia.app.data.catalog
 
 import kotlinx.serialization.Serializable
 
+/**
+ * 以原文为唯一键的本地标签；翻译和分类仅用于展示与选择，不替换发给原站的原文。
+ * translationEdited/categoryEdited 分别保护用户的翻译和分类修改，显式清空翻译也是用户选择。
+ * lastUsedAt 记录用于搜索的时间，影响推荐与容量淘汰；浏览观察本身不会更新它。
+ */
 @Serializable
 data class KeywordEntry(
     val original: String,
@@ -15,7 +20,11 @@ data class KeywordEntry(
     val label: String get() = if(translation.isBlank()) original else "$original ($translation)"
 }
 
-/** The initial vocabulary comes from the site's web/src/util/web/keyword.ts mapping. */
+/**
+ * 标签词表的纯变换与匹配规则，初始映射来自原站 web/src/util/web/keyword.ts。
+ * 原文、用户译名、内置译名和别名均可用于查找，搜索表达式始终使用 original。
+ * 容量限制用于浏览时渐进收集；完整导入由 KeywordLibrary 先校验，避免静默截断。
+ */
 object KeywordCatalog {
     const val MAX_TEXT_LENGTH = 256
     const val MAX_ENTRIES = 20_000
@@ -50,11 +59,11 @@ object KeywordCatalog {
         "ラブコメ" to listOf("恋爱喜剧"),
     )
 
-    /** An existing entry, including an explicitly empty translation, always wins over defaults. */
+    /** 已有条目始终优先于默认值，包括用户显式设为空的翻译。 */
     fun withDefaults(entries: Collection<KeywordEntry>): List<KeywordEntry> =
         bounded(entries + common)
 
-    /** Keep reader edits and recently used vocabulary, then make room for newly observed tags. */
+    /** 优先保留用户编辑和最近使用的词条，再为新观察到的标签腾出容量。 */
     fun bounded(entries: Collection<KeywordEntry>, limit: Int = MAX_ENTRIES): List<KeywordEntry> {
         require(limit > 0)
         val valid = entries.filter { it.original.isNotBlank() && it.original.length <= MAX_TEXT_LENGTH && it.translation.length <= MAX_TEXT_LENGTH }
@@ -87,6 +96,7 @@ object KeywordCatalog {
         return bounded(entries.filterNot { it.original == original } + existing.copy(translation = translation, translationEdited = true))
     }
 
+    /** 翻译和分类分别按编辑标记合并，最近使用时间取较新值；同原文仍只保留一个词条。 */
     fun merge(current: List<KeywordEntry>, incoming: Collection<KeywordEntry>, addDefaults: Boolean = true): List<KeywordEntry> {
         val imported = incoming.filter { it.original.isNotBlank() }.associateBy { it.original }
         val merged = current.map { entry ->
@@ -101,6 +111,7 @@ object KeywordCatalog {
         return if(addDefaults) withDefaults(merged + incoming) else bounded(merged + incoming)
     }
 
+    /** 完全匹配优先，其次是前缀和包含匹配；同分时优先最近使用及常用词条。 */
     fun suggestions(entries: List<KeywordEntry>, query: String, category: String = "全部", limit: Int = 20): List<KeywordEntry> {
         val normalized = query.trim().lowercase()
         fun score(entry: KeywordEntry): Int {
@@ -127,7 +138,7 @@ object KeywordCatalog {
         }
     }
 
-    /** The upstream parser removes one suffix '$'; internal/trailing '$' in the original is safe. */
+    /** 上游解析器只移除末尾一个 '$'，原词内部或末尾已有的 '$' 可被保留。 */
     fun canSearch(original: String): Boolean = original.isNotBlank() && original.length <= MAX_TEXT_LENGTH && original.none(Char::isWhitespace) &&
         !original.startsWith('-')
 }

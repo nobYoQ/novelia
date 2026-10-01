@@ -5,6 +5,11 @@ import cc.novelia.app.data.network.ApiException
 import java.io.IOException
 import kotlinx.serialization.Serializable
 
+/**
+ * 某一账号的持久同步摘要，由 LibraryState.syncStatus 按账号名隔离。
+ * failures 和 blockedActions 均按操作 ID 保存；后者需手动重试，requiresLogin 等待重新认证。
+ * “正在同步”由 CloudMutationQueue.inFlight 提供，不随此摘要落盘。
+ */
 @Serializable data class CloudSyncStatus(
     val lastAttemptAt: Long = 0,
     val lastSuccessAt: Long = 0,
@@ -38,6 +43,7 @@ internal fun syncFailureMessage(error: IOException): String = when(classifySyncF
     }
 }
 
+/** 单轮重放结果，completed 为本轮成功项数，失败和阻塞信息由调用方并入持久账号摘要。 */
 data class CloudReplayResult(
     val completed: Int = 0,
     val failures: Map<String, String> = emptyMap(),

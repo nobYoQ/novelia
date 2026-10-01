@@ -7,7 +7,7 @@ import kotlin.math.min
 
 internal data class IllustrationTransform(val scale: Float = 1f, val offset: Offset = Offset.Zero)
 
-/** Clamp to the fitted bitmap, including letterboxed portrait/landscape images. */
+/** 按适配后位图边界限制变换，兼容横竖图产生的留白区域。 */
 internal fun transformIllustration(
     current: IllustrationTransform,
     viewport: Size,

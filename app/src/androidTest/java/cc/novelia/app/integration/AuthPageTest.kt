@@ -22,7 +22,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
-/** Opens the public login form without entering credentials or submitting a form. */
+/** 打开公开登录表单，不填写凭据或提交表单。 */
 @RunWith(AndroidJUnit4::class)
 class AuthPageTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
@@ -49,7 +49,7 @@ class AuthPageTest {
                     return true
                 }
             }
-            // Inspect only element visibility, never values, passwords, cookies or page storage.
+            // 只检查元素是否可见，不读取字段值、密码、Cookie 或页面存储。
             WebViewCompat.addWebMessageListener(web, "NoveliaFormTest", setOf("https://auth.novelia.cc")) { _, message, origin, mainFrame, _ ->
                 if (!mainFrame && origin.host == "auth.novelia.cc" && message.data == "visible") formVisible.set(true)
             }

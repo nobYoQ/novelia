@@ -15,7 +15,7 @@ import cc.novelia.app.ui.theme.pressFeedback
 private val ChipShape = RoundedCornerShape(14.dp)
 internal val ChipSpacing = 12.dp
 
-/** Give wrapped rows the same breathing room as their horizontal neighbours. */
+/** 换行标签的纵向间距与同一行中的横向间距一致。 */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable fun AppChipFlowRow(modifier: Modifier = Modifier, content: @Composable FlowRowScope.() -> Unit) {
     FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(ChipSpacing),

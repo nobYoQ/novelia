@@ -169,8 +169,8 @@ class CompactLayoutTest {
             .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
         assertTrue("$text has a text layout", layouts.isNotEmpty())
         layouts.forEach { layout ->
-            // A short, wrap-content Text can retain a wider measured paragraph. Its actual
-            // line edges and visible character range determine whether any text is clipped.
+            // 按内容宽度布局的短 Text 仍可能保留更宽的段落测量结果；应结合实际
+            // 行边界和可见字符范围判断文字是否被裁切。
             for(line in 0 until layout.lineCount) {
                 assertTrue("$text line $line fits horizontally at ${layout.layoutInput.density.fontScale}x",
                     layout.getLineLeft(line) >= -1f && layout.getLineRight(line) <= layout.size.width + 1f)

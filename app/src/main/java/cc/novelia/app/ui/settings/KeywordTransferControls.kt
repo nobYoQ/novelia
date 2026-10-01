@@ -21,7 +21,7 @@ import kotlinx.coroutines.withContext
 
 internal data class KeywordTransferState(val busy: Boolean, val error: String?, val export: () -> Unit, val importLibrary: () -> Unit)
 
-// Keep document launchers and the checked import alive even when their settings row scrolls off screen.
+// 文件选择器和已校验的导入状态持续存在，不随设置行滚出屏幕而销毁。
 @Composable internal fun rememberKeywordTransfer(c: AppController): KeywordTransferState {
     var pending by remember { mutableStateOf<KeywordLibrary?>(null) }
     var error by remember { mutableStateOf<String?>(null) }

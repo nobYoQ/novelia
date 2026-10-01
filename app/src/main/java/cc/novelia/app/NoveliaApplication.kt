@@ -47,15 +47,15 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
         initialization
         applicationScope.launch {
             initialization.await()
-            // The first frame does not need to load and merge the tag translation catalogue.
+            // 首帧无需加载和合并标签翻译目录，延后处理以减轻启动负担。
             delay(500)
             keywords.observe(store.state.value.books.flatMap { it.book.tags })
         }
         applicationScope.launch {
             initialization.await()
             cc.novelia.app.files.DownloadFiles.cleanup(store.downloadsDir)
-            // Reclaim optional model downloads left by the discontinued image recognition tool.
-            // User-edited text remains in drafts and can be recovered in the ordinary text tools.
+            // 回收已停用图片识别工具遗留的可选模型下载。
+            // 用户编辑的文字仍保留在草稿中，可通过普通文本工具继续使用。
             runCatching { cc.novelia.app.files.removeRetiredModels(noBackupFilesDir) }
         }
         applicationScope.launch {
@@ -77,7 +77,7 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
             combine(store.state.map { it.autoSync to it.pending.map { action -> action.account to action.id } }.distinctUntilChanged(),
                 session.profile.map { it?.let { user -> user.username to user.expiresAt } }.distinctUntilChanged()) { pending, login -> pending to login?.first }
                 .collectLatest { (pending, account) ->
-                    // Successful foreground mutations disappear quickly; schedule only durable intents.
+                    // 前台成功的写入意图会很快移出队列，只为仍待处理的意图调度后台任务。
                     delay(750)
                     if(pending.first && account != null && pending.second.any { it.first == account } && store.recoveryIssue.value == null) {
                         while(true) {
@@ -98,7 +98,7 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
     fun persistState() {
         applicationScope.launch {
             initialization.await()
-            // LocalStore publishes a recoverable error for the UI and retries on subsequent writes.
+            // LocalStore 向界面发布可恢复的保存错误，并在后续写入时重试。
             runCatching { store.flush() }
             runCatching { keywords.flush() }
         }

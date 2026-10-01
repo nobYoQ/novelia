@@ -5,6 +5,7 @@ import cc.novelia.app.data.library.acknowledgeCompletedBookUpdates
 import cc.novelia.app.data.library.withReadingPosition
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
+import cc.novelia.app.data.model.CloudReadingProgress
 import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.Position
 import cc.novelia.app.data.model.SavedBook
@@ -37,8 +38,18 @@ class ReadingProgressUpdatesTest {
         assertEquals(result, appJson.decodeFromString<LibraryState>(appJson.encodeToString(result)))
     }
 
-    @Test fun openingTheLastChapterOrFinishingAnEarlierChapterDoesNotClearTheBadge() {
-        for(position in listOf(lastPage.copy(chapterCompleted = false), lastPage.copy(chapterIndex = 98),
+    @Test fun openingTheLatestChapterClearsTheBadgeWithoutRequiringItsFinalScreen() {
+        val entered = lastPage.copy(index = 1, offset = 0, textOffset = 0, chapterCompleted = false)
+        val result = library.withReadingPosition(ref, entered)
+        assertEquals(entered, result.positions[ref.key])
+        assertFalse(result.books.single().hasUpdates)
+        assertNull(result.bookUpdates[ref.key])
+        assertEquals("已读 100%", bookRowStatus(book.book, result.books.single(), entered, null).progressLabel)
+        assertEquals("在读", result.books.single().status)
+    }
+
+    @Test fun anEarlierChapterOrAnUnknownDirectoryDoesNotClearTheBadge() {
+        for(position in listOf(lastPage.copy(chapterIndex = 98),
             lastPage.copy(chapterIndex = null), lastPage.copy(chapterCount = 0))) {
             val result = library.withReadingPosition(ref, position)
             assertTrue(result.books.single().hasUpdates)
@@ -98,7 +109,7 @@ class ReadingProgressUpdatesTest {
         val current = library.copy(positions = mapOf(ref.key to lastPage), bookUpdates = mapOf(ref.key to update))
             .acknowledgeCompletedBookUpdates()
         assertTrue(current.books.single().hasUpdates)
-        assertEquals("有更新", bookRowStatus(book.book, current.books.single(), lastPage, current.bookUpdates[ref.key]).updateLabel)
+        assertEquals("译文更新", bookRowStatus(book.book, current.books.single(), lastPage, current.bookUpdates[ref.key]).updateLabel)
         val reread = current.withReadingPosition(ref, lastPage.copy(updatedAt = 40))
         assertFalse(reread.books.single().hasUpdates)
         assertNull(bookRowStatus(book.book, reread.books.single(), lastPage, reread.bookUpdates[ref.key]).updateLabel)
@@ -165,5 +176,33 @@ class ReadingProgressUpdatesTest {
         val result = state.withReadingPosition(local.book.ref, lastPage)
         assertEquals(parent, result.books.first())
         assertEquals(state.bookUpdates, result.bookUpdates)
+    }
+
+    @Test fun enteringNewChaptersAcknowledgesThemOneAtATimeAndRereadingDoesNotRestoreThem() {
+        val pending = library.copy(bookUpdates = mapOf(ref.key to BookUpdateInfo(newChapters = 3)))
+        val first = lastPage.copy(chapterIndex = 97, chapterCompleted = false)
+        val afterFirst = pending.withReadingPosition(ref, first)
+        assertEquals(2, afterFirst.bookUpdates.getValue(ref.key).newChapters)
+        val afterSecond = afterFirst.withReadingPosition(ref, first.copy(chapterIndex = 98))
+        assertEquals(1, afterSecond.bookUpdates.getValue(ref.key).newChapters)
+        assertEquals(1, afterSecond.withReadingPosition(ref, first).bookUpdates.getValue(ref.key).newChapters)
+        val afterLatest = afterSecond.withReadingPosition(ref, lastPage.copy(chapterCompleted = false))
+        assertFalse(afterLatest.books.single().hasUpdates)
+        assertNull(afterLatest.bookUpdates[ref.key])
+    }
+
+    @Test fun cloudChapterAcknowledgementUsesOnlyTheActiveAccountAndKeepsLaterTranslations() {
+        val cloud = CloudReadingProgress("alice", lastReadAt = 20, chapterId = "last", chapterIndex = 99,
+            chapterCount = 100, chapterResolved = true)
+        val source = library.copy(books = listOf(book.copy(book = book.book.copy(cloudReading = cloud))),
+            bookUpdates = mapOf(ref.key to BookUpdateInfo(checkedAt = 30_000, newChapters = 1, translations = mapOf("gpt" to 1))))
+        assertSame(source, source.acknowledgeReadChapterUpdates(ref, "bob"))
+        assertSame(source, source.acknowledgeReadChapterUpdates(ref))
+        val result = source.acknowledgeReadChapterUpdates(ref, "alice")
+        assertEquals(0, result.bookUpdates.getValue(ref.key).newChapters)
+        assertEquals(mapOf("gpt" to 1), result.bookUpdates.getValue(ref.key).translations)
+        val row = bookRowStatus(book.book, result.books.single(), null, result.bookUpdates[ref.key], "alice")
+        assertEquals(1f, row.progress!!, 0f)
+        assertEquals("译文更新", row.updateLabel)
     }
 }

@@ -41,7 +41,7 @@ class ChapterOffline(private val store: LocalStore, private val api: NoveliaApi,
                 store.chapterRequests.load(api, session, binding, generation, ref, id)
                 currentCoroutineContext().ensureActive()
                 session.ensureCurrent(binding)
-                // A network policy change must not allow the next request in this batch.
+                // 网络策略改变后，本批次不得继续发出下一项请求。
                 check(store.cachedChapter(ref, id) != null) { "章节缓存未保存，请检查可用存储空间" }
             }
         }, progress = progress)

@@ -26,8 +26,8 @@ internal class DocumentStorage(
             require(document.chapterFiles.keys == document.chapters.map { it.id }.toSet()) { "本地章节索引不完整" }
             return document
         }
-        // Older imports and restored portable backups migrate once, without touching their source file.
-        // A storage shortage must not make an otherwise readable legacy book inaccessible.
+        // 旧导入和恢复的可移植备份只迁移一次，不改动原始文件。
+        // 存储空间不足时，仍应允许读取原本可用的旧格式文档。
         return try { save(document) } catch (_: IOException) { document }
     }
 

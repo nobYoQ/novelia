@@ -81,7 +81,7 @@ class MainActivity : ComponentActivity() {
     private val incoming = MutableStateFlow<String?>(null)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState); enableEdgeToEdge()
-        // Navigation restores itself. Only replay an intent that had not yet been consumed.
+        // 导航栈自行恢复，只重放尚未消费的外部意图。
         if (savedInstanceState == null) receive(intent)
         else incoming.value = savedInstanceState.getString("novelia.pendingLink")
         setContent {
@@ -180,7 +180,7 @@ class MainActivity : ComponentActivity() {
                                 composable("updates") { BookUpdatesScreen(controller) }
                                 composable("downloads") { DownloadsScreen(controller) }
                                 composable("tools") { ToolsScreen(controller) }
-                                // Keep saved back stacks from the removed feature restorable after an update.
+                                // 保留已移除功能的路由，使升级前保存的返回栈仍能恢复。
                                 composable("ocr") {
                                     LaunchedEffect(Unit) {
                                         nav.navigate("tools") { popUpTo("ocr") { inclusive = true }; launchSingleTop = true }

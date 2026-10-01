@@ -34,7 +34,7 @@ class StickerFeaturesTest {
     }
     private fun screenshot(name: String) {
         compose.waitForIdle()
-        // Compose idleness does not include the platform Dialog window transition.
+        // Compose 空闲状态不包含平台 Dialog 窗口的过渡动画。
         android.os.SystemClock.sleep(350)
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val file = File(instrumentation.targetContext.getExternalFilesDir("sticker-screenshots"), "$name.png")
@@ -77,7 +77,7 @@ class StickerFeaturesTest {
             screenshot("v2-illustration-zoom")
             compose.onNodeWithContentDescription("关闭插图").performClick()
             assertEquals(before, compose.onNodeWithContentDescription("小说插图").fetchSemanticsNode().boundsInRoot)
-            // Exercise the renderer's real service status without starting audible TTS in a UI test.
+            // 验证渲染器接收的真实服务状态，UI 测试中不启动有声 TTS。
             compose.runOnIdle { ReadAloudService.status.value = ReadAloudService.SLEEP_TIMER_FINISHED }
             compose.onNodeWithContentDescription("朗读定时已结束，打开朗读设置").performClick()
             compose.onNodeWithText("朗读定时已结束").assertIsDisplayed()

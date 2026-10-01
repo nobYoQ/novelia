@@ -66,7 +66,7 @@ class KeywordLibraryActions(
     val activeCategory = category.takeIf { it == "全部" || it in categories } ?: "全部"
     LaunchedEffect(categories) { if(category != "全部" && category !in categories) category = "全部" }
     val settledQuery = rememberDebouncedQuery(query)
-    // Observe here before Scaffold subcomposes its content, including results that finish before layout.
+    // 在 Scaffold 子组合内容前观察状态，也能接收布局开始前已完成的结果。
     val results = produceState<List<KeywordEntry>?>(null, entries, settledQuery, activeCategory) {
         value = null
         value = withContext(Dispatchers.Default) { KeywordCatalog.suggestions(entries, settledQuery, activeCategory, KeywordCatalog.MAX_ENTRIES) }

@@ -39,7 +39,7 @@ fun LibraryState.moveShelfBooks(keys: Set<String>, folder: String): LibraryState
     if(saved.book.ref.key in keys) saved.copy(folder = folder, parentWenkuKey = saved.parentWenkuKey?.takeIf { it in keys }) else saved
 }).pruneVolumeOrders()
 
-/** Stores a complete sibling order; it cannot move books between Wenku favorites. */
+/** 保存同一父书目下的完整分卷顺序，不用于跨文库收藏移动书籍。 */
 fun LibraryState.withWenkuVolumeOrder(parentKey: String, volumeKeys: List<String>): LibraryState {
     require(books.any { it.book.ref.key == parentKey && it.book.ref.isWenku }) { "请先收藏目标文库小说" }
     val siblings = books.filter { it.book.ref.isLocal && it.parentWenkuKey == parentKey }.map { it.book.ref.key }.toSet()
@@ -90,7 +90,7 @@ fun LibraryState.shelfGroups(localOnly: Boolean, folder: String, query: String, 
         .thenBy { it.saved.book.title }).toList()
 }
 
-// Numeric filenames should read 1, 2, 10, even when they have no zero padding.
+// 文件名中的数字按 1、2、10 排序，即使没有补齐前导零。
 private val volumeTitleTokens = Regex("\\d+|\\D+")
 internal fun compareVolumeTitles(left: String, right: String): Int {
     val a = volumeTitleTokens.findAll(left).map { it.value }.toList()

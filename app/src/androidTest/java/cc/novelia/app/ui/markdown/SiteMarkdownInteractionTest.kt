@@ -65,7 +65,7 @@ class SiteMarkdownInteractionTest {
                 val standard = rememberMarkdownRenderer(c)
                 val renderer = remember(standard, localImageFixture) {
                     if (!localImageFixture && imageHandler == null) standard else Markwon.builderNoCore(app).usePlugins(standard.plugins.map {
-                        // The production renderer plus a file loader for offline test fixtures.
+                        // 使用生产渲染器，并通过文件加载器提供离线测试资源。
                         if (it is ImagesPlugin) ImagesPlugin.create { plugin -> plugin.addSchemeHandler(imageHandler ?: FileSchemeHandler.create()) } else it
                     }).build()
                 }
@@ -109,7 +109,7 @@ class SiteMarkdownInteractionTest {
             compose.runOnIdle {
                 val view = textView()
                 val position = IntArray(2).also(view::getLocationOnScreen)
-                // There are several return links; use the one currently visible.
+                // 存在多个返回链接，选择当前可见的那个。
                 val indices = Regex(Regex.escape(label)).findAll(view.text).map { it.range.first }
                 val index = indices.first { start ->
                     val line = view.layout.getLineForOffset(start)
@@ -190,7 +190,7 @@ class SiteMarkdownInteractionTest {
                 assertEquals(0, view.scrollY)
                 loaded = (view.text as Spanned).getSpans(0, view.text.length, AsyncDrawableSpan::class.java).single()
             }
-            // Toggling another block must not reload the image above that block.
+            // 切换其他折叠块时，不应重新加载该块上方的图片。
             tap("第二组")
             compose.runOnIdle { assertSame(loaded, (textView().text as Spanned).getSpans(0, textView().text.length, AsyncDrawableSpan::class.java).single()) }
             tap("第一组")
@@ -374,8 +374,8 @@ class SiteMarkdownInteractionTest {
                 }
             }
             screenshot("site-markdown-image-before-touch")
-            // Native View.postDelayed uses the real uptime clock, unlike Compose's synthetic
-            // longClick timestamps. Hold the pointer across dispatches until the timer fires.
+            // 原生 View.postDelayed 使用真实运行时间，不同于 Compose 合成的
+            // longClick 时间戳；指针需跨事件派发持续按住，直到定时器触发。
             compose.onNodeWithTag("site-markdown").performTouchInput { down(offset) }
             try {
                 compose.waitUntil(5_000) {

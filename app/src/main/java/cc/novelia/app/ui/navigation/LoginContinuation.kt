@@ -6,7 +6,10 @@ import kotlinx.serialization.encodeToString
 
 private const val FAVORITE_AFTER_LOGIN = "novelia.favoriteAfterLogin"
 
-/** Store the concrete intent in the login entry so NavHost restores it after recreation. */
+/**
+ * 将待收藏书目序列化到此次登录导航项，旋转或进程重建后仍可续接。
+ * 登录前清除旧 afterLogin 回调，取消本次登录时意图随导航项一起丢弃，避免串入后续登录。
+ */
 internal fun loginForFavorite(c: AppController, book: BookCard) {
     if(c.session.profile.value != null) {
         c.pendingFavoriteCloud = true
@@ -18,7 +21,7 @@ internal fun loginForFavorite(c: AppController, book: BookCard) {
     c.nav.currentBackStackEntry?.savedStateHandle?.set(FAVORITE_AFTER_LOGIN, appJson.encodeToString(book))
 }
 
-/** Call only after authentication succeeds. A cancelled login discards its whole back-stack entry. */
+/** 仅认证成功后调用；取消登录会丢弃整个登录返回栈项。 */
 internal fun finishLoginNavigation(c: AppController) {
     val entry = c.nav.currentBackStackEntry?.takeIf { it.destination.route == "login" } ?: return
     val favorite = entry.savedStateHandle.remove<String>(FAVORITE_AFTER_LOGIN)

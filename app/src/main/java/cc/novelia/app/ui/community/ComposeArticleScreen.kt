@@ -42,7 +42,7 @@ import kotlinx.serialization.encodeToString
     LaunchedEffect(title, content, category) { kotlinx.coroutines.delay(700); draftPersistence.save() }
     Screen(if(article == null) "写一篇帖子" else "编辑帖子", c::back, actions = { TextButton(onClick = { focusManager.clearFocus(); preview = !preview }) { Text(if(preview) "编辑" else "预览") } }) { padding ->
         BoxWithConstraints(Modifier.padding(padding).consumeWindowInsets(padding).imePadding().fillMaxSize()) {
-        // Bound the inner text scroll area to the space left above the keyboard, including landscape.
+        // 把编辑区内部滚动高度限制在键盘上方的剩余空间，横屏也如此。
         val editorHeight = maxHeight.coerceIn(1.dp, 420.dp)
         MotionContent(preview, Modifier.fillMaxSize(), animateInitial = false) {
             editorState.SaveableStateProvider(preview) {

@@ -7,7 +7,11 @@ import java.net.URLEncoder
 
 internal data class ClipboardSiteLink(val url: String, val route: String, val label: String)
 
-/** 只识别原站已支持的内容页面，不把接口、认证页面或外站链接变成跳转建议。 */
+/**
+ * 有界扫描剪贴板文本，只识别原站支持的内容页面，拒绝接口、认证页、外站及歧义路径。
+ * 无查询或锚点时可进入原生路由；带这些上下文时保留完整地址，由站内 WebView 承接。
+ * 此处只生成跳转建议，是否读取剪贴板及何时提示由导航层生命周期处理。
+ */
 internal object ClipboardLinks {
     private val urls = Regex("https?://[^\\s<>\"']+", RegexOption.IGNORE_CASE)
     private val id = Regex("[a-zA-Z0-9_-]+")

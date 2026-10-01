@@ -15,9 +15,14 @@ import kotlinx.serialization.Serializable
     val chapterIndex: Int? = null, val chapterCount: Int? = null, val paragraphCount: Int? = null,
     val chapterCompleted: Boolean = false)
 
+/**
+ * 本地书架条目，不代表当前账号的云端收藏关系。parentWenkuKey 将本地文件挂到文库父书目，
+ * volumeOrder 保存父书目的显式分卷顺序，缺失或失效引用由分卷整理逻辑处理。
+ */
 @Serializable data class SavedBook(val book: BookCard, val folder: String = "默认收藏", val pinned: Boolean = false, val status: String = "在读", val addedAt: Long = System.currentTimeMillis(), val hasUpdates: Boolean = false,
     val parentWenkuKey: String? = null, val volumesExpanded: Boolean = false, val volumeOrder: List<String> = emptyList())
 
+/** key 为 BookRef.key；text 可为空，此时仍是一条保留章节和段落位置的书签。 */
 @Serializable data class Note(val id: String, val key: String, val chapterId: String, val paragraph: Int, val quote: String, val text: String, val createdAt: Long = System.currentTimeMillis(), val bookTitle: String = "", val chapterTitle: String = "")
 
 /**

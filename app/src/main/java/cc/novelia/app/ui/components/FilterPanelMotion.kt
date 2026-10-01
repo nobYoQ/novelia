@@ -29,7 +29,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
 }
 
 @Composable internal fun FilterPanelVisibility(expanded: Boolean, content: @Composable () -> Unit) {
-    // Switching reduced motion on also finishes an already-running transition immediately.
+    // 开启减少动画后，正在进行的过渡也立即结束。
     if(appReducedMotion()) {
         if(expanded) content()
     } else AnimatedVisibility(expanded,

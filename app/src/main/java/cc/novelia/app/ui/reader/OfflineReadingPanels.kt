@@ -59,7 +59,7 @@ import kotlinx.coroutines.withContext
                 OutlinedTextField(last, { last = it.filter(Char::isDigit).take(7) }, label = { Text("结束章") }, singleLine = true, enabled = !busy, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f).testTag("cache-last"))
             }
             if(!busy) TogglePreference("仅 Wi-Fi 缓存", "离开 Wi-Fi 后停止后续请求", wifiOnly) { wifiOnly = it }
-            // Determinate progress follows completed work directly, without a repeating animation.
+            // 确定进度直接跟随已完成工作量，不使用循环动画。
             if(busy) { if(!LocalEInkMode.current) LinearProgressIndicator(progress = { completed.toFloat() / total.coerceAtLeast(1) }, modifier = Modifier.fillMaxWidth()); Text("正在缓存 $completed / $total 章") }
             if(message.isNotBlank()) Text(message)
         }
@@ -101,8 +101,8 @@ private data class SearchScope(val toc: List<TocItem>, val document: LocalDocume
                 SearchScope(document.chapters.map { TocItem(it.title, it.title, it.id) }, document, document.chapters.map { it.id }.toSet())
             } else {
                 val account = c.session.capture().account ?: "guest"
-                // Read-history writes invalidate fresh metadata. Offline search can still use the
-                // last directory snapshot without turning the action into a network request.
+                // 阅读历史写入会使新鲜元数据失效；离线搜索仍可使用
+                // 最近的目录快照，避免因此额外发起网络请求。
                 val cachedDirectory = File(c.store.metadataDir, hashName("$account:novel/${ref.key}") + ".json")
                 val savedToc = runCatching { appJson.decodeFromString<WebDetail>(cachedDirectory.readText(Charsets.UTF_8)).toc }
                     .getOrNull()?.takeIf { it.any { entry -> entry.chapterId != null } }

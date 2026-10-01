@@ -40,7 +40,7 @@ class MarkdownTest {
         val input = "!!" + ('\u2000'..'\u2bff').filter {
             Character.getType(it) == Character.OTHER_PUNCTUATION.toInt()
         }.joinToString("")
-        // This is the original short audit reproducer, not a large-input stress test.
+        // 保留最初审查时的短文本复现用例，不用于大输入压力测试。
         assertEquals(50, input.length)
         assertTrue(spoilers(input).isEmpty())
         val plain = StringBuilder()

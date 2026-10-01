@@ -54,7 +54,7 @@ suspend fun synchronizePending(app: NoveliaApplication, manual: Boolean = false,
         }
         result
     } finally {
-        // Preserve removals even when WorkManager or an account switch cancels the running job.
+        // 即使 WorkManager 或账号切换取消任务，也要落盘保存已完成项的移除。
         withContext(NonCancellable) { app.store.flush() }
     }
 }
@@ -90,7 +90,7 @@ open class CloudSyncWorker(context: Context, params: WorkerParameters) : Corouti
         fun configure(context: Context, enabled: Boolean) {
             val manager = WorkManager.getInstance(context)
             if(!enabled) { manager.cancelAllWorkByTag(TAG); return }
-            // A fallback also covers process death or a new intent arriving as one-time work ends.
+            // 后备调度也覆盖进程退出，以及一次性任务结束时恰好出现新意图的情况。
             val periodic = PeriodicWorkRequestBuilder<CloudSyncWorker>(15, TimeUnit.MINUTES)
                 .addTag(TAG).setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS).build()

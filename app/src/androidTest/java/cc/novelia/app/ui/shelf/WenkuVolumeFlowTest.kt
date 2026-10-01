@@ -304,8 +304,8 @@ class WenkuVolumeFlowTest {
     }
 
     private fun pageTo(matcher: SemanticsMatcher) {
-        // Exercise the visible e-paper controls. Lazy prefetch can expose semantics for a
-        // nested button before it enters a short landscape viewport, so check visibility too.
+        // 操作实际可见的电子纸控件；惰性预取可能提前暴露嵌套按钮的语义，
+        // 但按钮尚未进入较矮的横屏视口，因此还须检查可见性。
         repeat(20) {
             if(compose.onAllNodes(hasText("上一屏") and isEnabled()).fetchSemanticsNodes().isNotEmpty()) compose.onNodeWithText("上一屏").performClick()
         }
@@ -323,7 +323,7 @@ class WenkuVolumeFlowTest {
         val bounds = list.fetchSemanticsNode().boundsInRoot
         val start = compose.onNodeWithTag("volume-drag-$key").fetchSemanticsNode().boundsInRoot.center - bounds.topLeft
         val distance = compose.onNodeWithTag("shelf-volume-$key").fetchSemanticsNode().size.height + 48f
-        // Keep the finger inside the list on short screens, then let edge scrolling reveal the sibling.
+        // 矮屏中让手指留在列表内，再通过边缘滚动显露相邻分卷。
         val end = (start.y + direction * distance).coerceIn(20f, bounds.height - 20f)
         compose.mainClock.autoAdvance = false
         try {
@@ -345,7 +345,7 @@ class WenkuVolumeFlowTest {
 
     private fun scrollTo(matcher: SemanticsMatcher) {
         compose.onNodeWithTag("shelf-books").performScrollToNode(matcher)
-        // A parent book and its disclosure can exceed a short landscape viewport.
+        // 父书目及其展开内容可能超出较矮的横屏视口。
         compose.onNode(matcher).performScrollTo()
     }
 

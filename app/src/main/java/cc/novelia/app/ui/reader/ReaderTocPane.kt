@@ -32,7 +32,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** The list and filters belong to ReaderContent, so a pane/sheet change keeps their state. */
+/** 目录列表和筛选由 ReaderContent 持有，侧栏与弹层切换时保留状态。 */
 @Composable internal fun ReaderTocPane(
     c: AppController,
     ref: BookRef,
@@ -69,7 +69,7 @@ import kotlinx.coroutines.withContext
             }
         }
         LaunchedEffect(locateRequest, currentIndex) {
-            // Initial opening must settle at the current chapter immediately, even deep in a long book.
+            // 初次打开立即定位到当前章，长书中较靠后的章节也无需长距离动画。
             if(locateRequest > 0) { scroll.scrollToItem(currentIndex.coerceAtLeast(0)); onLocated() }
         }
         Column {

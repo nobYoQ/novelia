@@ -51,8 +51,8 @@ import cc.novelia.app.ui.theme.appReducedMotion
                 applyMotionPreference()
                 canGoBack = canScrollVertically(-1); canGoForward = canScrollVertically(1)
                 if (url != null && MarkdownLinks.isInternal(url) && !android.net.Uri.parse(url).fragment.isNullOrEmpty()) {
-                    // The SPA fetches article content after the document load. Its router
-                    // may try to find the heading before it exists on a cold navigation.
+                    // 单页应用在文档加载后才请求文章正文，首次导航时
+                    // 路由可能在标题尚未生成之前就尝试定位锚点。
                     view.evaluateJavascript(SITE_ANCHOR_SCRIPT, null)
                 }
             }
@@ -78,8 +78,8 @@ import cc.novelia.app.ui.theme.appReducedMotion
     } }
     SideEffect { web.eInkMode = eInk; web.reducedMotion = reducedMotion }
     fun back() { if (web.canGoBack()) web.goBack() else c.back() }
-    // SPA pushState/hash changes do not always trigger onPageFinished; inspect
-    // WebView's current history for both the system and toolbar back actions.
+    // 单页应用的 pushState 和片段变化不一定触发 onPageFinished；
+    // 系统返回键和工具栏返回均须检查 WebView 当前历史记录。
     BackHandler { back() }
     DisposableEffect(web) { onDispose { web.stopLoading(); web.destroy() } }
     Screen("原站页面", ::back) { padding ->
@@ -95,7 +95,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
     }
 }
 
-/** Only uses the current page's fragment; no URL/text interpolation or native JS bridge. */
+/** 只读取当前页面的片段，不插入外部 URL/文本，也不提供原生 JS 桥。 */
 private val SITE_ANCHOR_SCRIPT = """
     (() => {
         if (!location.hash) return;

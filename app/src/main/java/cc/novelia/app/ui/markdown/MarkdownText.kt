@@ -104,7 +104,7 @@ import org.commonmark.node.Heading
                 if (document == null) view.text = text
                 else markwon.setParsedMarkdown(view, markwon.render(document))
             } catch (_: RuntimeException) {
-                // Parsing and plugin rendering are separate failure boundaries.
+                // 解析和插件渲染分别处理失败，避免单个边界出错使整页不可读。
                 view.text = text
             }
             view.movementMethod = movement
@@ -125,7 +125,7 @@ private class AnchorRequest(val view: SpoilerTextView, val heading: Heading?)
 private suspend fun View.awaitMarkdownLayout() {
     if (isLaidOut && !isLayoutRequested) return
     suspendCancellableCoroutine { continuation ->
-        // Leave AndroidView/Compose's layout pass before a scroll can request remeasurement.
+        // 离开 AndroidView/Compose 布局阶段后再滚动，避免滚动请求重入测量。
         val resumeAfterLayout = Runnable { if (continuation.isActive) continuation.resume(Unit) }
         val listener = object : View.OnLayoutChangeListener {
             override fun onLayoutChange(view: View, l: Int, t: Int, r: Int, b: Int, oldL: Int, oldT: Int, oldR: Int, oldB: Int) {

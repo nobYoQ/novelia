@@ -78,7 +78,7 @@ class AppFlowTest {
             compose.onNodeWithText("已完成").assertIsDisplayed()
             compose.onNodeWithText("开始阅读").assertIsDisplayed()
             screenshot("download-complete")
-            // Dismiss the completion overlay before tapping rows near the bottom of the next screen.
+            // 先关闭完成提示浮层，再点击下一页靠近底部的列表项。
             if(compose.onAllNodesWithContentDescription("关闭提示").fetchSemanticsNodes().isNotEmpty()) {
                 compose.onNodeWithContentDescription("关闭提示").performClick()
             }

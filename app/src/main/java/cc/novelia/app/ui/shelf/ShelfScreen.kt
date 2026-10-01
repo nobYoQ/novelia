@@ -1,6 +1,8 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.shelf
 
+import cc.novelia.app.data.updates.withAcknowledgedBookUpdates
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -154,7 +156,7 @@ import kotlinx.coroutines.withContext
                         val canReorder = tab == 0 && !managing && query.isBlank() && settledQuery.isBlank()
                         val reorder = rememberVolumeReorderState(listState, rows, canReorder) { parent, keys ->
                             c.store.update { current ->
-                                // A download can finish during a gesture. Keep newly mounted volumes at the end.
+                                // 下载可能在拖动期间完成，新挂载的分卷保留在顺序末尾。
                                 val siblings = current.books.filter { it.book.ref.isLocal && it.parentWenkuKey == parent }.map { it.book.ref.key }
                                 if(current.books.none { it.book.ref.key == parent && it.book.ref.isWenku }) current
                                 else current.withWenkuVolumeOrder(parent, keys.filter { it in siblings } + siblings.filter { it !in keys })
@@ -236,7 +238,7 @@ import kotlinx.coroutines.withContext
                                     if(profile == null || saved.book.ref.isLocal || saved.book.ref.isWenku) return@LaunchedEffect
                                     try { c.refreshCloudReading(saved.book) }
                                     catch(e: kotlinx.coroutines.CancellationException) { throw e }
-                                    catch(_: Exception) { /* Keep the known local/cloud position when offline. */ }
+                                    catch(_: Exception) { /* 离线时保留已知的本地和云端位置。 */ }
                                 }
                                 val dragging = reorder.draggedKey == saved.book.ref.key
                                 val selectionColor = animateColorAsState(
@@ -294,7 +296,7 @@ import kotlinx.coroutines.withContext
     } }, confirmButton = {})
     selected?.let { saved -> AppSheet(onDismissRequest = { selected = null }) { AppScrollColumn(modifier = Modifier.navigationBarsPadding(), contentModifier = Modifier.padding(bottom = 28.dp)) {
         Text(saved.book.title, Modifier.padding(20.dp), style = MaterialTheme.typography.titleLarge, maxLines = 2)
-        if(saved.hasUpdates) MenuRow("标记更新已读", "清除本书的更新提示", Icons.Outlined.DoneAll, { c.store.update { it.copy(books = it.books.map { b -> if(b.book.ref == saved.book.ref) b.copy(hasUpdates = false) else b }, bookUpdates = it.bookUpdates - saved.book.ref.key) }; selected = null })
+        if(saved.hasUpdates) MenuRow("标记更新已读", "清除本书的更新提示", Icons.Outlined.DoneAll, { c.store.update { it.withAcknowledgedBookUpdates(saved.book.ref) }; selected = null })
         MenuRow(if(saved.pinned) "取消置顶" else "置顶", "在书架顶部显示", Icons.Outlined.PushPin, { c.store.update { it.copy(books = it.books.map { b -> if(b.book.ref == saved.book.ref) b.copy(pinned = !b.pinned) else b }) }; selected = null })
         ChoiceRow("阅读状态", listOf("在读", "想读", "读完"), listOf("在读", "想读", "读完").indexOf(saved.status)) { status -> c.store.update { it.copy(books = it.books.map { b -> if(b.book.ref == saved.book.ref) b.copy(status = listOf("在读", "想读", "读完")[status]) else b }) }; selected = null }
         val parent = state.books.firstOrNull { it.book.ref.isWenku && it.book.ref.key == saved.parentWenkuKey }

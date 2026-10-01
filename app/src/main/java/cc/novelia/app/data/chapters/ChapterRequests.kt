@@ -34,7 +34,7 @@ class ChapterRequests(private val store: LocalStore) {
             val fetched = appJson.decodeFromString<Chapter>(api.request("GET", "novel/${ref.key}/chapter/${encodeSegment(id)}", binding = binding))
             currentCoroutineContext().ensureActive()
             session.ensureCurrent(binding)
-            // A cache write failure does not prevent foreground reading of a successful response.
+            // 缓存写入失败不妨碍前台阅读已成功返回的正文。
             store.withCacheGeneration(generation) {
                 runCatching { store.cacheChapter(ref, id, fetched); recordChapterFreshness(store, ref, id) }
             } ?: throw CancellationException("缓存已清理")

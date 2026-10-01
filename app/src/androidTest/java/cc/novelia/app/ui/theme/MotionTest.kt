@@ -97,7 +97,7 @@ class MotionTest {
         compose.runOnIdle { reducedMotion = true }
         compose.mainClock.advanceTimeByFrame()
         val image = compose.onNodeWithTag("frame").captureToImage().toPixelMap()
-        // Check the top as well as the centre: an unfinished slide would expose white at the top.
+        // 同时检查顶部和中央；未结束的滑入动画会在顶部露出白色区域。
         assertEquals(Color.Red, image[image.width / 2, 1])
         assertEquals(Color.Red, image[image.width / 2, image.height / 2])
         compose.runOnIdle { reducedMotion = false }

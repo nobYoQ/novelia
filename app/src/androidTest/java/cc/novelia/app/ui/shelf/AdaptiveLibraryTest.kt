@@ -157,7 +157,7 @@ class AdaptiveLibraryTest {
             compose.onNodeWithText("选择一本书").assertExists()
             compose.onNodeWithText("双栏阅读测试").assertExists()
 
-            // Removing the selected local book must dispose its cached detail immediately.
+            // 移除当前选中的本地书籍时，应立即销毁其缓存详情。
             compose.onNodeWithText("双栏阅读测试").performSemanticsAction(SemanticsActions.OnClick) { it() }
             compose.waitUntil(5_000) { compose.onAllNodesWithText("目录 2").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithContentDescription("管理 双栏阅读测试").performSemanticsAction(SemanticsActions.OnClick) { it() }
@@ -167,7 +167,7 @@ class AdaptiveLibraryTest {
             compose.onNodeWithTag("shelf-book-${ref.key}").assertDoesNotExist()
             compose.runOnIdle { assertEquals("双栏阅读测试", app.store.documentIndex(id).name) }
 
-            // Re-add the retained document, then exercise the destructive file action as well.
+            // 重新加入保留的文档，再验证删除文件的操作。
             compose.runOnIdle { app.store.saveBook(BookCard(ref, "双栏阅读测试")) }
             compose.onNodeWithText("双栏阅读测试").performSemanticsAction(SemanticsActions.OnClick) { it() }
             compose.waitUntil(5_000) { compose.onAllNodesWithText("目录 2").fetchSemanticsNodes().isNotEmpty() }

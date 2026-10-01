@@ -23,12 +23,12 @@ import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 
 @Composable internal fun rememberReaderChapterOverscrollGesture(): ReaderChapterOverscrollGesture {
-    // A short pull, independent of viewport height; the body follows with light resistance.
+    // 上拉阈值不随视口高度变化，正文带轻微阻力跟随手指。
     val threshold = with(LocalDensity.current) { 56.dp.toPx() }
     return remember(threshold) { ReaderChapterOverscrollGesture(threshold) }
 }
 
-/** Consume only the chapter-end remainder; ordinary scrolling and text selection stay with the list. */
+/** 只消费章末无法继续滚动的余量，普通滚动和文字选择仍交给列表。 */
 @Composable internal fun Modifier.readerChapterOverscroll(
     state: LazyListState,
     gesture: ReaderChapterOverscrollGesture,
@@ -40,7 +40,7 @@ import androidx.compose.ui.unit.dp
     val connection = remember(state, gesture) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                // First put the pulled body back, then let any remaining downward drag scroll.
+                // 先收回已上拉的正文，再把剩余向下拖动交给正常滚动。
                 if(source == NestedScrollSource.UserInput && available.y > 0f)
                     return Offset(0f, gesture.withdraw(available.y))
                 return Offset.Zero
@@ -48,7 +48,7 @@ import androidx.compose.ui.unit.dp
 
             override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
                 if(source == NestedScrollSource.UserInput) {
-                    // The list's native overscroll is disabled: it must not swallow this distance.
+                    // 关闭列表原生越界效果，避免它吞掉这里用于章末上拉的距离。
                     return Offset(0f, gesture.pull(available.y, !state.canScrollForward && state.layoutInfo.totalItemsCount > 0))
                 }
                 return Offset.Zero
@@ -66,7 +66,7 @@ import androidx.compose.ui.unit.dp
                 if(down.type != PointerType.Touch || down.isConsumed || currentEvent.changes.size != 1) gesture.cancel()
                 try {
                     while(true) {
-                        // The Initial pass observes cancellation/extra fingers before the list handles them.
+                        // 在 Initial 阶段先观察取消和多指输入，再由列表处理事件。
                         val event = awaitPointerEvent(PointerEventPass.Initial)
                         val pointer = event.changes.firstOrNull { it.id == down.id }
                         if(pointer == null) { gesture.cancel(); break }
@@ -83,13 +83,18 @@ import androidx.compose.ui.unit.dp
                 }
             }
         } finally {
-            // Removing/ disabling the modifier or an OS gesture cancellation must never turn a chapter.
+            // 修饰符移除、禁用或系统手势取消时，均不得切换章节。
             gesture.cancel()
         }
     }
 }
 
-/** Only an uninterrupted, single-finger drag may commit the current chapter-end pull. */
+/**
+ * 只有未中断的单指拖动，才能提交章末上拉；distance/threshold 为正向像素距离，
+ * pull 接收嵌套滚动剩余位移，向上为负。正文跟随距离带阻力，上拉累计最多两倍阈值。
+ * cancel 清理可视状态，但保留本次抑制惯性的标记，避免松手后的惯性继续传给弹层；
+ * 下一次 begin 或向下拖回普通滚动区时才解除抑制。
+ */
 internal class ReaderChapterOverscrollGesture(private val threshold: Float) {
     var active by mutableStateOf(false)
         private set
@@ -117,7 +122,7 @@ internal class ReaderChapterOverscrollGesture(private val threshold: Float) {
         if(!active || availableY <= 0f) return 0f
         val consumed = availableY.coerceAtMost(distance)
         distance -= consumed
-        // The remainder goes back to normal reading; its eventual fling belongs to that scroll.
+        // 剩余位移交还普通阅读滚动，之后的惯性也由该滚动处理。
         if(availableY > consumed) suppressFling = false
         return consumed
     }

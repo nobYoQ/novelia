@@ -23,7 +23,7 @@ class ChapterSeekIndexTest {
         val paragraph = ReadingParagraph(12, listOf(TextPart("abc", "jp"), TextPart("译文", "gpt")))
         val style = settings.copy(indent = true, parallel = true)
         val index = ChapterSeekIndex(listOf(paragraph), style)
-        // 2 + 3 + newline + GPT/newline + 2 + 2 = 14 characters.
+        // 2 + 3 + 换行 + GPT/换行 + 2 + 2，共 14 个字符。
         assertEquals(ChapterSeekAnchor(0, 7), index.anchorAt(.5f))
         assertEquals(1f, index.fractionAt(0, 14), 0f)
     }

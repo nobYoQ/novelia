@@ -43,7 +43,7 @@ class LibraryBackupService(private val store: LocalStore, private val keywords: 
             val source = File(store.documentsDir, "$id.json")
             if (!source.isFile) { missing += id; return@forEach }
             val document = store.document(id) { work.ensureActive() }
-            // Archives remain self-contained version 1 documents, including on older app versions.
+            // 归档保持自包含的版本 1 格式，旧版应用也可读取。
             val portableDocument = File(exportStage, "$id.json").apply { writeText(appJson.encodeToString(document), Charsets.UTF_8) }
             documents += id; files["documents/$id.json"] = portableDocument
             val images = document.chapters.flatMap { it.paragraphs }.filter { it.startsWith("novelia-image:") }.map { it.removePrefix("novelia-image:") }.toSet() + listOfNotNull(document.coverImage)
@@ -56,7 +56,7 @@ class LibraryBackupService(private val store: LocalStore, private val keywords: 
                 store.documentSource(id, format).takeIf { it.isFile }?.let { files["documents/$id.$format"] = it }
             }
         }
-        // Device-specific cover paths are reconstructed from each parsed document on import.
+        // 导入时从各文档的解析结果重建封面路径，不沿用其他设备的私有路径。
         val portable = snapshot.copy(books = snapshot.books.map { saved ->
             if (saved.book.ref.isLocal) saved.copy(book = saved.book.copy(cover = null)) else saved
         })
@@ -100,13 +100,13 @@ class LibraryBackupService(private val store: LocalStore, private val keywords: 
             try {
                 manifest.documents.forEach { sourceId ->
                     work.ensureActive()
-                    // Keep only one parsed book in memory, even for a library-sized backup.
+                    // 即使备份整个书库，内存中也只保留一本已解析的书。
                     val document = appJson.decodeFromString<LocalDocument>(File(directory, "documents/$sourceId.json").readText(Charsets.UTF_8))
                     val indexedId = if (document.sourceHash.isNotBlank()) store.findDocumentByHash(document.sourceHash) { work.ensureActive() }?.id else null
                     val candidateIds = sequenceOf(indexedId).filterNotNull() + current.books.asSequence()
                         .filter { it.book.ref.isLocal && it.book.ref.id != indexedId }.map { it.book.ref.id }
-                    // A protected damaged copy may share its source hash with a later repaired copy.
-                    // Prefer a complete candidate instead of repeatedly creating another restored book.
+                    // 受保护的损坏副本可能与之后修复的副本具有相同源文件哈希；
+                    // 优先使用完整副本，避免反复创建新的恢复书目。
                     val old = candidateIds.mapNotNull { candidate ->
                         work.ensureActive()
                         val index = runCatching { store.documentIndex(candidate) }.getOrNull() ?: return@mapNotNull null
@@ -125,7 +125,7 @@ class LibraryBackupService(private val store: LocalStore, private val keywords: 
                     if (old != null) {
                         val retained = old
                         mapping[sourceId] = retained.id; covers[retained.id] = document.coverImage
-                        // A later backup may add originals omitted from the first restoration.
+                        // 后续备份可以补回首次恢复时缺少的原始文件。
                         listOf("epub", "txt", "srt").forEach { format ->
                             work.ensureActive()
                             val path = "documents/$sourceId.$format"
@@ -137,7 +137,7 @@ class LibraryBackupService(private val store: LocalStore, private val keywords: 
                         }
                         return@forEach
                     }
-                    // Fresh IDs eliminate overwrites even when the archive came from this device.
+                    // 重新生成 ID，即使归档来自本机，也不会覆盖现有文档。
                     val targetId = UUID.randomUUID().toString(); mapping[sourceId] = targetId; covers[targetId] = document.coverImage
                     manifest.assets.keys.filter { it == "documents/$sourceId.json" || it.startsWith("documents/$sourceId-images/") || it in listOf("documents/$sourceId.epub", "documents/$sourceId.txt", "documents/$sourceId.srt") }.forEach { path ->
                         work.ensureActive()
@@ -159,12 +159,12 @@ class LibraryBackupService(private val store: LocalStore, private val keywords: 
                     covers[documentId]?.let { store.documentImage(documentId, it).absolutePath }
                 }
                 work.ensureActive()
-                // Past this boundary we must finish reporting the disk commit, even if the screen closes.
+                // 越过此边界后，即使页面关闭，也必须完成磁盘提交结果的报告。
                 withContext(NonCancellable) {
                     store.commitRestore { latest -> mergeLibraryBackup(latest, imported) }
                     committed = true
-                    // A catalogue failure does not invalidate the successfully committed library.
-                    // Keep the stage for a retry; merge is idempotent and existing translations win.
+                    // 标签目录写入失败不影响已经提交成功的书库；
+                    // 保留暂存数据供重试，合并可重复执行且已有翻译优先。
                     val catalogueError = runCatching { keywords.mergeLibrary(manifest.keywordLibrary()); keywords.flush() }.exceptionOrNull()
                     if (catalogueError == null) directory.deleteRecursively()
                     if (catalogueError == null) null else "阅读资料已恢复，但标签词典暂未保存；请保留备份并稍后重试。"
@@ -200,10 +200,10 @@ private fun installMissingBackupFile(source: File, target: File, installed: Muta
         } }
         checkCancelled()
         try {
-            // Same-directory move publishes only complete bytes and never replaces an existing original.
+            // 同目录移动仅发布完整文件，且不替换已经存在的原始文件。
             Files.move(pending.toPath(), target.toPath())
             installed += target
-        } catch (_: FileAlreadyExistsException) { /* Another completed operation already supplied the original. */ }
+        } catch (_: FileAlreadyExistsException) { /* 另一项已完成的操作已经补齐原始文件。 */ }
     } finally { pending.delete() }
 }
 

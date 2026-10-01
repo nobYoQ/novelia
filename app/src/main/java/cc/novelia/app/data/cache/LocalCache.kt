@@ -54,11 +54,11 @@ internal class ChapterCacheIndex(private val directory: File, private val maxByt
         initialize()
         val entry = entries[file.name] ?: return
         val now = System.currentTimeMillis()
-        // Preserve useful LRU order across launches without a disk metadata write on every hit.
+        // 跨启动保留有效的 LRU 顺序，同时避免每次命中都写入磁盘时间戳。
         if (now - entry.touchedAt >= 60_000 && file.setLastModified(now)) entry.touchedAt = now
     }
 
-    /** Returns evicted names so the decoded memory cache cannot retain deleted disk entries. */
+    /** 返回已淘汰的文件名，让解码后的内存缓存同步移除对应条目。 */
     @Synchronized fun written(file: File): List<String> {
         initialize()
         entries.remove(file.name)?.let { bytes -= it.bytes }

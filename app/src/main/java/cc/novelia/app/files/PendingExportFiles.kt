@@ -36,7 +36,7 @@ internal class PendingExportFiles(private val directory: File) {
         }
     }
 
-    /** A null destination means the user cancelled the picker. Every finished attempt releases its payload. */
+    /** 目标为空表示用户取消文件选择；每次结束的尝试都会释放暂存载荷。 */
     fun finish(id: String, destination: (() -> OutputStream?)?, checkCancelled: () -> Unit = {}) {
         val source = file(id)
         try {

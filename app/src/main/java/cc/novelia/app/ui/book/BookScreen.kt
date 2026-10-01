@@ -226,7 +226,7 @@ import kotlinx.coroutines.withContext
     }
 }
 
-/** Keep the same saved panel keys when rotating or resizing between single and dual panes. */
+/** 旋转或在单栏、双栏间调整尺寸时，保持相同的面板状态保存键。 */
 @Composable internal fun AdaptiveBookDetail(
     selected: Int,
     onSelect: (Int) -> Unit,
@@ -236,9 +236,9 @@ import kotlinx.coroutines.withContext
     panel: @Composable (Int) -> Unit,
 ) {
     val latestPanel by rememberUpdatedState(panel)
-    // A plain provider at two different call sites loses its live state during the same
-    // resize composition: the new registry is created before the old one is disposed.
-    // Move each panel's existing composition instead, including its scroll/field state.
+    // 若两个调用位置各建普通状态提供器，调整尺寸的同一次组合中，
+    // 新注册表会先于旧注册表销毁而创建，导致实时状态丢失；
+    // 因此移动面板现有的组合，连同滚动位置和输入字段状态一起保留。
     val panels = remember(state, titles.size) {
         List(titles.size) { index -> movableContentOf { state.SaveableStateProvider(index) { latestPanel(index) } } }
     }

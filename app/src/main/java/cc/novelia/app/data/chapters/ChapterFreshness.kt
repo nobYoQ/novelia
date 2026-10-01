@@ -13,12 +13,15 @@ private fun readFreshness(store: LocalStore): Map<String, Long> = runCatching {
     appJson.decodeFromString<Map<String, Long>>(freshnessFile(store).openRead().bufferedReader(Charsets.UTF_8).use { it.readText() })
 }.getOrDefault(emptyMap())
 
-/** Cache file mtimes are LRU access times; they cannot tell when a translation was fetched. */
+/**
+ * 获取章节实际下载时间；缓存文件修改时间用于 LRU 最近访问，不能代表译文新鲜度。
+ * 正文不存在或旧缓存缺少时间记录时返回 0，允许界面保守提示可能需要刷新。
+ */
 fun chapterFreshness(store: LocalStore, ref: BookRef, id: String): Long = synchronized(chapterFreshnessLock) {
     if(!store.chapterFile(ref, id).isFile) 0L else readFreshness(store)[store.chapterFile(ref, id).name] ?: 0L
 }
 
-/** Call in the same cache-generation critical section as the successful chapter write. */
+/** 必须与章节成功写入处于同一缓存代次临界区，保持正文和获取时间一致。 */
 fun recordChapterFreshness(store: LocalStore, ref: BookRef, id: String, fetchedAt: Long = System.currentTimeMillis()) = synchronized(chapterFreshnessLock) {
     val file = store.chapterFile(ref, id)
     val alive = store.cacheDir.listFiles()?.asSequence()?.filter { it.isFile && it.extension == "json" }?.map { it.name }?.toSet().orEmpty()

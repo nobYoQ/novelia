@@ -30,7 +30,7 @@ import coil.request.ImageRequest
     var failed by remember(model) { mutableStateOf(false) }
     var expanded by remember(model) { mutableStateOf(false) }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        // Reserve a portrait illustration frame before decoding so incoming images cannot shift later paragraphs.
+        // 解码前预留竖图区域，防止图片加载后推移后续段落。
         Box(Modifier.fillMaxWidth().height((maxWidth * 1.35f).coerceIn(180.dp, 900.dp))
             .background(foreground.copy(alpha = .035f))
             .combinedClickable(onClickLabel = "显示或收起阅读工具栏", onClick = onToggleMenu,

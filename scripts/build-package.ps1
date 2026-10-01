@@ -32,7 +32,7 @@ $logPath = Join-Path $logDirectory ("build-$mode-$Abi-" + (Get-Date -Format 'yyy
 $tasks = @()
 if ($Verify) { $tasks += ":app:test${Variant}UnitTest", ":app:lint$Variant" }
 $tasks += ":app:assemble$Variant"
-# Explicit false values override machine-local Gradle properties as well as the default.
+# 显式传入 false，覆盖机器本地的 Gradle 属性及其默认值。
 $tasks += '-PreleaseSigning=false'
 $tasks += if ($mode -eq 'release-local') { '-PlocalReleaseSigning=true' } else { '-PlocalReleaseSigning=false' }
 $tasks += "-PtargetAbi=$Abi"

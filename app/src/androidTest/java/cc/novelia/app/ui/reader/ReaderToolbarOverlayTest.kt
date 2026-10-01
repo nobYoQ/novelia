@@ -454,7 +454,7 @@ class ReaderToolbarOverlayTest {
             assertToolbarHidden()
         }
 
-        // Explicitly showing the toolbar still works, and chapter buttons retain that state.
+        // 仍可显式打开工具栏，章节按钮也应保留这一可见状态。
         if(settings.staticPagination) compose.onNodeWithTag(bodyTag).performTouchInput { click(center) }
         else compose.onNodeWithText("星光照亮归途。", substring = true).performClick()
         compose.onNodeWithContentDescription("阅读设置").assertIsDisplayed()
@@ -503,7 +503,7 @@ class ReaderToolbarOverlayTest {
     private fun verifyOverlay(mode: String) = withReader(ReaderSettings(paginationMode = mode, showPageButtons = true)) { app, ref ->
         val bodyTag = if(mode == "auto") "reader-page" else "reader-scroll"
         val next = if(mode == "auto") "下一页" else "下一屏"
-        // Verify both the chapter start and a position inside a long paragraph.
+        // 同时验证章首和长段落内部的位置。
         repeat(2) { page ->
             if(page > 0) {
                 compose.onNodeWithText(next).performClick()
@@ -619,7 +619,7 @@ class ReaderToolbarOverlayTest {
         compose.waitForIdle()
         val matching = compose.onAllNodes(hasAnyAncestor(hasTestTag(tag)) and
             SemanticsMatcher.keyIsDefined(SemanticsProperties.Text), useUnmergedTree = true)
-        // LazyColumn also exposes cached, unplaced items; compare only the text actually on screen.
+        // LazyColumn 也会暴露已缓存但未放置的项，只比较屏幕上实际可见的文本。
         val nodes = matching.fetchSemanticsNodes().filterIndexed { index, _ -> matching[index].isDisplayed() }
         assertTrue("正文应已加载", nodes.isNotEmpty())
         return nodes.map { it.config[SemanticsProperties.Text].joinToString { text -> text.text } to it.boundsInRoot }

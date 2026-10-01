@@ -35,7 +35,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
     AppSheet(onDismissRequest, rememberModalBottomSheetState(skipPartiallyExpanded = true), content)
 }
 
-/** Keep most of the page visible while adjusting its appearance. Other reader sheets remain full size. */
+/** 调整外观时保留大部分正文可见，其他阅读器弹层仍采用完整高度。 */
 @Composable internal fun ReaderPreferencesSheet(onDismissRequest: () -> Unit,
     content: @Composable ColumnScope.(expanded: Boolean, onExpandedChange: (Boolean) -> Unit) -> Unit) {
     var expanded by remember { mutableStateOf(false) }

@@ -50,7 +50,7 @@ internal fun readEpubFile(
             if (count < 0) require(consumed == entry.size) { "压缩包条目不完整" }
             else {
                 consumed += count
-                // Sum(entry.size) was checked above; actual bytes must also fit that budget.
+                // 前面已检查条目声明大小之和，实际读取字节也必须满足同一预算。
                 require(consumed <= entry.size) { "压缩包条目大小与内容不符" }
             }
             return count
@@ -81,7 +81,7 @@ internal fun readEpubFile(
         if (entry.size > 16 * 1024 * 1024) return null
         checkCancelled()
         val hash = open(entry).use { DocumentTools.digest(it, 16 * 1024 * 1024L, checkCancelled) }
-        // The second pass streams to disk; no image ByteArray/Base64 is retained by file imports.
+        // 第二轮读取将图片流式写入磁盘，文件导入不保留图片 ByteArray 或 Base64。
         open(entry).use { imageSink(hash, it) }
         imageHashes[path] = hash
         return hash

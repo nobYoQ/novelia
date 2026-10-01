@@ -2,7 +2,7 @@ import java.util.zip.ZipFile
 import java.util.zip.ZipInputStream
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 
-// Use the actual release graph, including transitive libraries; no account or new plugin is required.
+// 使用实际发行依赖图并包含传递依赖，无需账号或新增插件。
 val runtimeLibraries = providers.provider { configurations.getByName("releaseRuntimeClasspath") }
 val noticeAssets = layout.buildDirectory.dir("generated/openSourceAssets/open-source")
 tasks.register("generateOpenSourceNotices") {

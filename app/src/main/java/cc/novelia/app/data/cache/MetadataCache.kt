@@ -22,6 +22,14 @@ class MetadataCache(private val directory: File, private val maxBytes: Long = 32
     private var total = 0L
     private var invalidatedAt = 0L
 
+    data class Snapshot(val text: String, val fetchedAt: Long)
+
+    /** 内容和原始获取时间一并读取，缓存命中不能伪装成刚发现的更新。 */
+    @Synchronized fun readSnapshot(key: String, now: Long = System.currentTimeMillis(), maxAgeMillis: Long = Long.MAX_VALUE, newerThan: Long = 0): Snapshot? {
+        val text = read(key, now, maxAgeMillis, newerThan) ?: return null
+        return Snapshot(text, file(key).lastModified())
+    }
+
     /** 仅返回未过期且晚于本地/调用方失效时间的内容；时钟回拨形成的未来缓存也视为未命中。 */
     @Synchronized fun read(key: String, now: Long = System.currentTimeMillis(), maxAgeMillis: Long = Long.MAX_VALUE, newerThan: Long = 0): String? {
         val file = file(key)
@@ -55,6 +63,7 @@ class MetadataCache(private val directory: File, private val maxBytes: Long = 32
         directory.mkdirs()
         initialize()
         val destination = file(key)
+        if(destination.isFile && destination.lastModified() > fetchedAt) return
         val pending = File.createTempFile("metadata-", ".tmp", directory)
         try {
             pending.writeBytes(bytes)

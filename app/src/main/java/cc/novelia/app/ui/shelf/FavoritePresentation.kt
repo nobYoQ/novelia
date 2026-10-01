@@ -20,7 +20,7 @@ internal data class BookFavoriteState(val local: Boolean, val cloudFolder: Strin
     }
 }
 
-/** Cloud membership is account-specific; a local copy must never mask it. */
+/** 云端收藏归属按账号区分，本地副本不能掩盖当前账号的收藏状态。 */
 internal fun bookFavoriteState(
     ref: BookRef,
     local: Boolean,

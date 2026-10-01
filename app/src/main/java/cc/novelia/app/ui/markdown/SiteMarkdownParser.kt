@@ -56,7 +56,7 @@ internal fun configureSiteMarkdownParser(builder: Parser.Builder) {
 private class RatingParser(private val node: RatingNode) : AbstractBlockParser() {
     override fun getBlock() = node
     override fun tryContinue(state: ParserState): BlockContinue? {
-        // The toolbar emits just one line; accept an optional closing fence as well.
+        // 工具栏仅生成一行评分标记，同时兼容可选的闭合围栏。
         val line = state.line.subSequence(state.nextNonSpaceIndex, state.line.length).toString().trimEnd()
         return if (state.indent < 4 && line.matches(Regex(":{3,}"))) BlockContinue.finished() else BlockContinue.none()
     }
@@ -71,12 +71,12 @@ private class DetailsParser(private val node: DetailsNode) : AbstractBlockParser
         val line = state.line.subSequence(state.nextNonSpaceIndex, state.line.length).toString().trimEnd()
         if (state.activeBlockParser.block !is FencedCodeBlock && state.indent < 4 &&
             line.length >= node.fenceLength && line.all { it == ':' }) {
-            // Let the innermost details container consume its own closing fence.
+            // 让最内层 details 容器消费自己的闭合围栏。
             var active: Node? = state.activeBlockParser.block
             while (active != null && (active !is DetailsNode || active.closed)) active = active.parent
             if (active === node) {
-                // CommonMark 0.13's finished() only pops a leaf parser. Consume an empty
-                // closing line first so its open paragraph closes, then end this container.
+                // CommonMark 0.13 的 finished() 只弹出叶解析器；先消费空的
+                // 闭合行以结束尚未关闭的段落，再结束当前容器。
                 node.closed = true
                 return BlockContinue.atIndex(state.line.length)
             }
@@ -96,7 +96,7 @@ internal fun prepareSiteMarkdown(root: Node) {
         while (child != null) {
             val next = child.next
             if (child is DetailsNode) {
-                // Also accept the original site's copied !! / details / !! block notation.
+                // 同时兼容从原站复制的 !! / details / !! 块级写法。
                 fun Node?.isWrapper(): Boolean {
                     if (this !is Paragraph) return false
                     val value = StringBuilder()

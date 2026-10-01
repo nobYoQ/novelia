@@ -22,7 +22,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 
-/** Shared timing for ordinary screens. Reader/e-ink policies still decide whether to animate. */
+/** 普通页面共用动画时长，阅读器和墨水屏策略仍决定是否播放动画。 */
 internal object AppMotion {
     const val Quick = 160
     const val Standard = 220
@@ -39,11 +39,11 @@ internal object AppMotion {
     const val StickerIdle = 4400
 }
 
-/** Also works for previews and isolated dialogs that do not inherit the activity's provider. */
+/** 也适用于未继承 Activity 提供器的预览和独立对话框。 */
 @Composable internal fun appReducedMotion(): Boolean =
     LocalReducedMotion.current || LocalEInkMode.current || !ValueAnimator.areAnimatorsEnabled()
 
-/** Reveals changed content without retaining an outgoing page or replacing its remembered state. */
+/** 为变化后的内容播放入场效果，不保留离开的页面，也不替换已有记忆状态。 */
 @Composable
 fun MotionContent(
     targetKey: Any?,
@@ -64,11 +64,11 @@ fun MotionContent(
             progress.snapTo(0f)
             progress.animateTo(1f, tween(AppMotion.Standard, easing = FastOutSlowInEasing))
         } else {
-            // Changing the preference alone must never replay already visible content.
+            // 仅改变动画偏好，不应重播已经可见的内容。
             progress.snapTo(1f)
         }
     }
-    // Read animated values during drawing: animation frames do not recompose the page.
+    // 在绘制阶段读取动画值，动画帧无需触发页面重组。
     Box(modifier.graphicsLayer {
         val fraction = if(reducedMotion) 1f else progress.value
         alpha = fraction
@@ -76,7 +76,7 @@ fun MotionContent(
     }, content = content)
 }
 
-/** Uses the control's own interaction source, keeping ripple and press feedback in sync. */
+/** 复用控件自身的交互源，让涟漪与按压反馈同步。 */
 @Composable
 fun Modifier.pressFeedback(interactionSource: MutableInteractionSource): Modifier {
     val reducedMotion = appReducedMotion()
@@ -96,7 +96,7 @@ fun Modifier.pressFeedback(interactionSource: MutableInteractionSource): Modifie
 @Composable
 fun Modifier.motionClickable(enabled: Boolean = true, onClick: () -> Unit): Modifier {
     val interactionSource = remember { MutableInteractionSource() }
-    // Keep click semantics and hit bounds outside the visual transform.
+    // 点击语义和命中边界保持在视觉变换之外。
     return clickable(
         interactionSource = interactionSource,
         indication = LocalIndication.current,

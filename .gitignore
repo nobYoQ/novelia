@@ -11,12 +11,12 @@ local.properties
 *.keystore
 captures/
 
-# Build packages, logs and release bundles
+# 构建安装包、日志与发行附件
 /outputs/
-# Legacy local output directories
+# 旧版本使用的本地产物目录
 artifacts/
 
-# Local release bundles and generated Android packages
+# 本地发行附件及生成的 Android 安装包
 /releases/
 *.apk
 *.aab
@@ -27,7 +27,7 @@ artifacts/
 
 resource/
 
-# Local credentials and signing configuration
+# 本地凭据与签名配置
 .env
 .env.*
 !.env.example

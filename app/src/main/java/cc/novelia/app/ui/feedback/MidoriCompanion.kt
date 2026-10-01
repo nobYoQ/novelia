@@ -37,7 +37,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** Original local WebP assets; preserve their transparent edges and aspect ratio. */
+/** 使用原始本地 WebP 素材，保留透明边缘和宽高比。 */
 enum class MidoriSticker(@get:DrawableRes val drawable: Int, val description: String) {
     Neutral(R.drawable.midori_neutral, "等你打招呼"),
     Happy(R.drawable.midori_happy, "开心地笑了"),
@@ -63,7 +63,7 @@ fun MidoriIllustration(sticker: MidoriSticker, modifier: Modifier = Modifier) {
 }
 
 private val HappyReactions = listOf(MidoriSticker.Happy, MidoriSticker.Wink, MidoriSticker.Love)
-// Matches the hearts in the original sticker artwork, rather than an error/status color.
+// 颜色取自原始贴纸中的爱心，避免被理解为错误或状态提示。
 private val StickerHeartPink = Color(0xFFE15C86)
 
 @Composable
@@ -94,7 +94,7 @@ fun MidoriCompanion(modifier: Modifier = Modifier, visible: Boolean = true) {
     val pressed by interactionSource.collectIsPressedAsState()
     val sticker = if(reacting && active) HappyReactions[reactionIndex] else MidoriSticker.Neutral
 
-    // One replaceable reaction: rapid taps restart it without accumulating particles or jobs.
+    // 同时只保留一个可替换反馈，快速点击重新开始，不累积粒子或任务。
     LaunchedEffect(taps, active) {
         if(!active || taps == 0) {
             reacting = false
@@ -161,7 +161,7 @@ fun MidoriCompanion(modifier: Modifier = Modifier, visible: Boolean = true) {
         contentAlignment = Alignment.Center,
     ) {
         Crossfade(sticker, modifier = Modifier.size(112.dp).testTag("midori-artwork").graphicsLayer {
-            // Read frames in the draw phase; the card and account data do not recompose.
+            // 在绘制阶段读取动画帧，卡片和账号数据无需逐帧重组。
             transformOrigin = TransformOrigin(.5f, .85f)
             rotationZ = if(animate) tilt.value else 0f
             translationY = if(animate) lift.value.dp.toPx() else 0f

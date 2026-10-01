@@ -192,7 +192,7 @@ object DocumentTools {
     }
     fun epubToTxt(bytes: ByteArray) = parseEpub(bytes).joinToString("\n\n") { it.title + "\n\n" + it.paragraphs.filterNot { p -> p.startsWith("novelia-image:") }.joinToString("\n\n") }
     fun repairOcr(text: String, checkCancelled: () -> Unit = {}): String = buildString(text.length) {
-        // Keep the previous paragraph/separator behavior while avoiding copies of the accumulated block.
+        // 保留原来的段落和分隔符规则，同时避免反复复制已累积的文本块。
         var cursor = 0
         val normalized = text.replace("\r\n", "\n")
         val boundaries = Regex("\n[\\t ]*\n").findAll(normalized).iterator()

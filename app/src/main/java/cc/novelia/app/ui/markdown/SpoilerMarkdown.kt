@@ -39,7 +39,7 @@ internal class SpoilerNode : CustomNode() {
     var renderedSpan: SpoilerSpan? = null
 }
 
-/** Parse alongside Markdown, so escaped punctuation and code remain literal. */
+/** 与 Markdown 一同解析，转义标点和代码仍按字面显示。 */
 internal class SpoilerDelimiterProcessor(private val marker: Char) : DelimiterProcessor {
     override fun getOpeningCharacter() = marker
     override fun getClosingCharacter() = marker
@@ -59,20 +59,20 @@ internal class SpoilerDelimiterProcessor(private val marker: Char) : DelimiterPr
     }
 }
 
-/** CommonMark 0.13 reserves '!' for images before consulting delimiter processors. */
+/** CommonMark 0.13 在调用分隔符处理器前，先将 '!' 保留给图片语法。 */
 internal fun configureSpoilerParser(builder: Parser.Builder) {
     builder.inlineParserFactory { context ->
         InlineParser { input, block ->
             if (!input.contains("!!")) {
                 InlineParserImpl(context).parse(input, block)
             } else {
-                // Pick punctuation absent from this input, including decoded character entities.
+                // 选择输入中未出现的标点，也检查解码后的字符实体。
                 val decoded = Escaping.unescapeString(input)
                 val marker = ('\u2000'..'\u2bff').firstOrNull { char ->
                     Character.getType(char) == Character.OTHER_PUNCTUATION.toInt() && char !in input && char !in decoded
                 }
-                // Untrusted text can contain every candidate. Keep it readable as ordinary
-                // Markdown instead of crashing while looking for a spare delimiter.
+                // 不可信文本可能占满所有候选分隔符；此时按普通 Markdown 显示，
+                // 避免因找不到备用分隔符而崩溃。
                 if (marker == null) {
                     InlineParserImpl(context).parse(input, block)
                     return@InlineParser
@@ -91,7 +91,7 @@ internal fun configureSpoilerParser(builder: Parser.Builder) {
                     override fun getCustomDelimiterProcessors() = context.customDelimiterProcessors + SpoilerDelimiterProcessor(marker)
                 }
                 InlineParserImpl(adaptedContext).parse(adapted, block)
-                // Code and unclosed delimiters stay literal; destinations keep their original URL.
+                // 代码和未闭合分隔符按字面保留，链接目标继续使用原始 URL。
                 block.accept(object : AbstractVisitor() {
                     private fun restore(value: String) = value.replace(marker, '!')
                     override fun visit(text: Text) { text.literal = restore(text.literal) }
@@ -127,8 +127,8 @@ internal class SpoilerSpan : ClickableSpan() {
         revealed = !revealed
         val buffer = (widget as? TextView)?.text as? Spannable
         if (buffer != null) {
-            // Selectable TextViews cache rendered text. Invalidating the view alone leaves the
-            // old black glyphs in that cache; notify its span watcher of the appearance change.
+            // 可选中文字的 TextView 会缓存渲染结果，仅使视图失效仍会留下
+            // 旧的黑色字形；需通知 span 监听器外观已经改变。
             val changed = if (buffer.getSpanStart(this) >= 0) arrayOf<Any>(this)
                 else buffer.getSpans(0, buffer.length, ReplacementSpan::class.java).map { it as Any }.toTypedArray()
             for (span in changed) {
@@ -143,7 +143,7 @@ internal class SpoilerSpan : ClickableSpan() {
         widget.sendAccessibilityEvent(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED)
     }
 
-    // The view paints a mask last, covering nested links, code, images and selection too.
+    // 最后绘制遮罩，同时覆盖嵌套链接、代码、图片和选区。
     override fun updateDrawState(ds: TextPaint) {
         ds.color = Color.BLACK
         ds.bgColor = if (revealed) Color.WHITE else Color.BLACK
@@ -152,8 +152,8 @@ internal class SpoilerSpan : ClickableSpan() {
 }
 
 internal class SpoilerTextView(context: Context) : TextView(context) {
-    // Reading scroll belongs to the surrounding Compose list. TextView otherwise
-    // tries to bring its selection into view when an async image calls setText().
+    // 阅读滚动由外围 Compose 列表负责；否则异步图片调用 setText() 时，
+    // TextView 会尝试滚动以显露自身选区。
     override fun bringPointIntoView(offset: Int): Boolean = false
 
     private val mask = Paint().apply { color = Color.BLACK }
@@ -205,7 +205,7 @@ internal class SpoilerTextView(context: Context) : TextView(context) {
                 val image = pressedImage!!
                 pressedImage = null
                 if (!imageOpened && !imageDragged) {
-                    // A linked image still follows its link on a short tap.
+                    // 带链接的图片在短按时仍按链接跳转。
                     val buffer = text as Spanned
                     buffer.getSpans(buffer.getSpanStart(image), buffer.getSpanEnd(image), ClickableSpan::class.java)
                         .firstOrNull { it !is SpoilerSpan }?.onClick(this)
@@ -233,9 +233,9 @@ internal class SpoilerTextView(context: Context) : TextView(context) {
         canvas.save()
         canvas.translate(totalPaddingLeft.toFloat(), totalPaddingTop.toFloat())
         val spoilers = spanned.getSpans(0, spanned.length, SpoilerSpan::class.java)
-        // Native focus highlighting is drawn after onDraw, and can tint revealed white
-        // backgrounds gray. Finish only spoiler ranges after the full View draw, keeping
-        // the surrounding keyboard focus feedback. Merge clips to redraw the layout once.
+        // 原生焦点高亮在 onDraw 之后绘制，可能把已揭示的白色背景染灰；
+        // 整个 View 绘制结束后仅重绘剧透区间，保留周围的键盘焦点反馈，
+        // 并合并裁切区，使布局只需重绘一次。
         revealedPath.reset()
         spoilers.filter { it.revealed }.forEach {
             maskPath.reset()
@@ -285,13 +285,13 @@ internal fun textOffsetAt(widget: TextView, event: MotionEvent): Int {
     if (y < 0 || y >= layout.height) return -1
     val line = layout.getLineForVertical(y.toInt())
     if (x < layout.getLineLeft(line) || x > layout.getLineRight(line)) return -1
-    // getOffsetForHorizontal returns the nearest caret. In a replacement span (image), the
-    // right half maps to its end; use the preceding glyph when the point is left of that caret.
+    // getOffsetForHorizontal 返回最近的光标位置；图片替换 span 的右半边
+    // 会映射到末尾，触点在该光标左侧时应使用前一个字形位置。
     val offset = layout.getOffsetForHorizontal(line, x)
     return if (offset > layout.getLineStart(line) && x < layout.getPrimaryHorizontal(offset)) offset - 1 else offset
 }
 
-/** A hidden link must reveal its spoiler first, never navigate on that first tap. */
+/** 隐藏链接首次点击只揭示剧透，不能同时触发跳转。 */
 internal class SpoilerMovementMethod : LinkMovementMethod() {
     private var pressed: ClickableSpan? = null
     private var handlingSpoiler = false

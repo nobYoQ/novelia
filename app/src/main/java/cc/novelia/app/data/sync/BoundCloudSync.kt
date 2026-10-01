@@ -25,7 +25,7 @@ internal class BoundCloudSync {
 internal fun pendingForSync(pending: List<PendingAction>, binding: SessionBinding, bookKey: String?): List<PendingAction> =
     pending.filter { it.account == binding.account && (bookKey == null || pendingBookKey(it) == bookKey) }
 
-/** A stale confirmation cannot change the queue, even after signing back into the same account. */
+/** 过期确认不得修改队列，即使退出后重新登录同一账号也须拒绝。 */
 internal fun LibraryState.removePendingForSession(action: PendingAction, owner: SessionBinding, current: SessionBinding): LibraryState {
     if(owner != current || owner.account != action.account) return this
     return updateCloudPending { items -> items.filterNot { it.id == action.id && it.account == owner.account } }

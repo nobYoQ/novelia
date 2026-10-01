@@ -33,7 +33,7 @@ internal class LibraryStateCodec(
             val text = appJson.encodeToString(payload)
             val name = hashName(text)
             directory.mkdirs()
-            // Rewrite an existing hash too: a prior corrupt payload must be repairable by restore.
+            // 即使哈希已存在也重新写入，使恢复能够修复先前损坏的正文载荷。
             write(file(name), text)
             fallbackHash = previousHash
             previous = payload; previousHash = name
@@ -49,7 +49,7 @@ internal class LibraryStateCodec(
     fun decode(text: String): LibraryState {
         val json = appJson.parseToJsonElement(text).jsonObject
         val state = appJson.decodeFromJsonElement(LibraryState.serializer(), json)
-        val hash = json[PAYLOAD]?.jsonPrimitive?.content ?: return state // Existing library.json remains readable.
+        val hash = json[PAYLOAD]?.jsonPrimitive?.content ?: return state // 仍兼容读取已有的 library.json。
         val payloadText = read(file(hash))
         require(hashName(payloadText) == hash) { "文章或草稿文件校验失败" }
         val payload = appJson.decodeFromString<LongText>(payloadText)

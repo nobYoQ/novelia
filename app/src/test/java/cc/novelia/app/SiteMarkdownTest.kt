@@ -73,7 +73,7 @@ class SiteMarkdownTest {
         assertEquals(listOf("https://example.com/a", "https://www.example.org", "https://example.net", "https://secret.test"), nodes<Link>(root).map { it.destination })
         assertEquals(1, nodes<StrikeNode>(root).size)
         assertEquals(1, nodes<SpoilerNode>(root).size)
-        // Re-rendering after toggling details must not nest or duplicate automatic links.
+        // 切换 details 后重新渲染，不应使自动链接嵌套或重复。
         prepareSiteMarkdown(root)
         assertEquals(4, nodes<Link>(root).size)
     }

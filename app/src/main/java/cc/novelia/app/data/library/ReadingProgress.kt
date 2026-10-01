@@ -4,11 +4,14 @@ import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.Position
 
-/** Save the real reading anchor and acknowledge chapters only after reaching the known ending. */
+/**
+ * 保存真实阅读锚点；同一章的完成标记只增不减，回看或笔记跳转仍能更新位置。
+ * historyPaused 时不写历史，也不确认更新已读；缺少的目录计数沿用该章已知值。
+ */
 fun LibraryState.withReadingPosition(ref: BookRef, position: Position): LibraryState {
     if(historyPaused) return this
     val previous = positions[ref.key]?.takeIf { it.chapterId == position.chapterId }
-    // Note jumps provide just an anchor. They must not erase known completion of the same chapter.
+    // 从笔记跳转只提供锚点，不应抹去同一章已有的读完状态。
     val next = position.copy(
         chapterIndex = position.chapterIndex ?: previous?.chapterIndex,
         chapterCount = position.chapterCount ?: previous?.chapterCount,
@@ -18,17 +21,30 @@ fun LibraryState.withReadingPosition(ref: BookRef, position: Position): LibraryS
     return copy(positions = positions + (ref.key to next)).acknowledgeReadChapterUpdates(ref)
 }
 
-/** Keep translation freshness and update-check baselines; a completed old directory is not current. */
-fun LibraryState.acknowledgeReadChapterUpdates(ref: BookRef): LibraryState {
+/**
+ * 按已到达的章节逐章确认新增内容；进入最新已知章节即可确认本轮更新。
+ * 读完之后才发现的译文增量继续保留；译文新鲜度时间和检查基线始终留给缓存刷新使用。
+ * 文库父书目不在此确认，因为实际阅读的是单独导入的本地分卷。
+ */
+fun LibraryState.acknowledgeReadChapterUpdates(ref: BookRef, account: String? = null): LibraryState {
     if(ref.isWenku) return this
-    val position = positions[ref.key] ?: return this
-    val count = position.chapterCount ?: return this
-    if(!position.chapterCompleted || count <= 0 || position.chapterIndex != count - 1) return this
     val saved = books.firstOrNull { it.book.ref == ref } ?: return this
-    if(count < maxOf(saved.book.total, updateSnapshots[ref.key]?.total ?: 0)) return this
-    val remaining = bookUpdates[ref.key]?.acknowledgeThrough(position.updatedAt)
+    val position = positions[ref.key]
+    val cloud = saved.book.cloudReading?.takeIf { account != null && it.account == account && it.chapterResolved }
+    val localReached = position?.chapterIndex?.takeIf { it in 0 until (position.chapterCount ?: 0) }?.plus(1) ?: 0
+    val cloudReached = cloud?.chapterIndex?.takeIf { it in 0 until (cloud.chapterCount ?: 0) }?.plus(1) ?: 0
+    val reached = maxOf(localReached, cloudReached)
+    if(reached == 0) return this
+    val total = maxOf(saved.book.total, updateSnapshots[ref.key]?.total ?: 0,
+        if(localReached > 0) position?.chapterCount ?: 0 else 0, if(cloudReached > 0) cloud?.chapterCount ?: 0 else 0)
+    val chaptersAhead = (total - reached).coerceAtLeast(0)
+    val readAt = maxOf(if(localReached == total) position?.updatedAt ?: 0L else 0L,
+        if(cloudReached == total) (cloud?.lastReadAt ?: 0L) * 1000 else 0L)
+    val update = bookUpdates[ref.key]
+    val remaining = (if(chaptersAhead == 0) update?.acknowledgeThrough(readAt)
+        else update?.copy(newChapters = minOf(update.newChapters, chaptersAhead)))
         ?.takeIf { it.hasChanges || it.translationUpdatedAt.isNotEmpty() }
-    val hasUpdates = remaining?.hasChanges == true
+    val hasUpdates = remaining?.hasChanges == true || (update == null && saved.hasUpdates && chaptersAhead > 0)
     if(saved.hasUpdates == hasUpdates && bookUpdates[ref.key] == remaining) return this
     return copy(
         books = books.map { if(it.book.ref == ref) it.copy(hasUpdates = hasUpdates) else it },
@@ -36,8 +52,8 @@ fun LibraryState.acknowledgeReadChapterUpdates(ref: BookRef): LibraryState {
     )
 }
 
-/** Reconcile completed records from earlier versions without requiring the reader to reopen them. */
-fun LibraryState.acknowledgeCompletedBookUpdates(): LibraryState {
+/** 兼容修正旧版已到达章节的更新记录，无需用户重新打开阅读器。 */
+fun LibraryState.acknowledgeCompletedBookUpdates(account: String? = null): LibraryState {
     val candidates = books.filter { it.hasUpdates || bookUpdates[it.book.ref.key]?.hasChanges == true }
-    return candidates.fold(this) { state, saved -> state.acknowledgeReadChapterUpdates(saved.book.ref) }
+    return candidates.fold(this) { state, saved -> state.acknowledgeReadChapterUpdates(saved.book.ref, account) }
 }

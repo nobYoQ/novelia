@@ -11,6 +11,7 @@ plugins {
 val appVersion = Properties().apply {
     rootProject.file("version.properties").inputStream().use { load(it) }
 }
+// 正式发行证书与本地测试签名互斥；两者都关闭时生成未签名 Release。
 val releaseSigning = providers.gradleProperty("releaseSigning").orNull == "true"
 val localReleaseSigning = providers.gradleProperty("localReleaseSigning").orNull == "true"
 require(!(releaseSigning && localReleaseSigning)) { "Choose releaseSigning or localReleaseSigning, not both." }

@@ -7,6 +7,11 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.JsonArray
 
+/**
+ * 与账号无关的本机标签库快照，分类索引与词条一起保存，独立 JSON 导出也沿用此结构。
+ * “其他”是不可删除的兜底分类；分类改名或删除同步修改词条并标记用户编辑，
+ * 防止后续观察内置标签或恢复默认映射时撤销用户整理结果。
+ */
 @Serializable data class KeywordLibrary(
     val entries: List<KeywordEntry>,
     val categories: List<String> = KeywordCatalog.defaultCategories,
@@ -45,11 +50,12 @@ import kotlinx.serialization.json.JsonArray
         return copy(entries = KeywordCatalog.bounded(entries.filterNot { it.original == original } + edited))
     }
 
-    /** Never revive a removed category when a built-in tag is observed again. */
+    /** 再次观察到内置标签时，不恢复用户已删除的分类。 */
     fun withEntries(updated: List<KeywordEntry>): KeywordLibrary = copy(entries = updated.map {
         if(it.category in categories) it else it.copy(category = OTHER)
     })
 
+    /** 先检查合并后的分类和词条总量，超限则整体拒绝；已有用户编辑按字段分别优先。 */
     fun merge(incoming: KeywordLibrary): KeywordLibrary {
         KeywordLibraryFormat.validate(incoming)
         val combinedCategories = (categories + incoming.categories).distinct()
@@ -57,7 +63,7 @@ import kotlinx.serialization.json.JsonArray
         require((entries.map { it.original } + incoming.entries.map { it.original }).distinct().size <= KeywordCatalog.MAX_ENTRIES) {
             "合并后标签超过 ${KeywordCatalog.MAX_ENTRIES} 个，未导入任何内容"
         }
-        // Existing reader edits win, while untouched built-in translations/categories can be restored.
+        // 用户编辑优先；未修改的内置翻译和分类可由默认词表补回。
         val merged = KeywordCatalog.merge(entries, incoming.entries, addDefaults = false)
         return copy(categories = combinedCategories).withEntries(merged)
     }
@@ -79,7 +85,7 @@ import kotlinx.serialization.json.JsonArray
     }
 }
 
-/** Shared by local persistence, standalone JSON transfer and full reading backups. */
+/** 本地持久化、独立 JSON 导入导出和完整阅读资料备份共用此编解码器。 */
 object KeywordLibraryFormat {
     const val MAX_BYTES = 32 * 1024 * 1024
 
@@ -92,11 +98,12 @@ object KeywordLibraryFormat {
             it.translation.length <= KeywordCatalog.MAX_TEXT_LENGTH && it.category in library.categories && it.lastUsedAt >= 0 }) { "标签原文、翻译或分类无效" }
     }
 
+    /** 兼容旧版词条数组；导入只解析和校验，不擅自补默认词条或删除重复项。 */
     fun decode(text: String): KeywordLibrary {
         val tree = appJson.parseToJsonElement(text.removePrefix("\uFEFF"))
         val result = if(tree is JsonArray) {
             val entries = appJson.decodeFromJsonElement(kotlinx.serialization.builtins.ListSerializer(KeywordEntry.serializer()), tree)
-            // Validate before adding defaults/deduplicating so an invalid import cannot silently lose data.
+            // 保留旧数组的完整条目交给统一校验，不先去重或裁剪，以免掩盖非法导入。
             KeywordLibrary.fromLegacy(entries, addDefaults = false)
         } else appJson.decodeFromJsonElement(KeywordLibrary.serializer(), tree)
         validate(result)

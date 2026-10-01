@@ -100,7 +100,7 @@ class BoundCloudSyncTest {
 
     @Test fun validRemovalClearsOnlyOwnedActionAndItsFailureMetadata() {
         val owner = SessionBinding("alice", 1)
-        // Defend even against a restored backup containing the same action id in two accounts.
+        // 即使恢复备份在两个账号中包含相同操作 ID，也应保持账号隔离。
         val bob = favorite.copy(account = "bob")
         val initial = LibraryState(pending = listOf(favorite, bob, history), syncStatus = mapOf(
             "alice" to CloudSyncStatus(failures = mapOf(favorite.id to "offline", history.id to "unavailable"), blockedActions = setOf(favorite.id)),

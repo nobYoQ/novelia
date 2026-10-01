@@ -98,8 +98,8 @@ class MidoriCompanionTest {
     }
 
     @Test fun systemDisabledMotionKeepsTheReactionVisuallyStill() {
-        // Run this case with Android's animator_duration_scale=0. Compose's test clock
-        // otherwise uses its own duration scale, so verify the actual rendered pixels.
+        // 此用例需在 Android animator_duration_scale=0 时运行；Compose 测试时钟
+        // 通常使用自身的时长缩放，因此要检查实际渲染的像素。
         assumeFalse(ValueAnimator.areAnimatorsEnabled())
         compose.setContent {
             MaterialTheme {

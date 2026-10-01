@@ -20,7 +20,7 @@ data class CloudWebFilter(
     val translate: Int = 0,
 )
 
-/** Empty provider selection deliberately stays empty: the site returns no matches. */
+/** 保留空书源选择，原站对此返回无匹配结果。 */
 suspend fun NoveliaApi.cloudFavorites(
     wenku: Boolean,
     folderId: String,

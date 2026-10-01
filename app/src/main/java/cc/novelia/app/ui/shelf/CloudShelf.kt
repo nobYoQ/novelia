@@ -77,8 +77,8 @@ import cc.novelia.app.ui.navigation.AppController
     var level by rememberSaveable { mutableIntStateOf(0) }
     var translate by rememberSaveable { mutableIntStateOf(0) }
     var expanded by remember { mutableStateOf(false) }
-    // A row-level or background retry can finish without this screen's own menu callback.
-    // Refresh remote results after success while AsyncContent keeps the current viewport.
+    // 行内重试或后台重试可能独立于本页菜单回调完成；
+    // 成功后刷新远端结果，由 AsyncContent 保留当前视口。
     val refreshKey = listOf(version, local.syncStatus[account]?.lastSuccessAt ?: 0L)
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { expanded = false }
     val focus = LocalFocusManager.current
@@ -158,7 +158,7 @@ import cc.novelia.app.ui.navigation.AppController
                             if(c.session.profile.value?.username != account) return@LaunchedEffect
                             c.store.update { it.withCloudReadingMetadata(result.items, account) }
                         }
-                        // Retain the scroll anchor inside the viewport; panel resizing must not scroll the books.
+                        // 把滚动锚点保留在视口内，筛选面板改变大小时不滚动书目。
                         AppLazyColumn(state = listState, modifier = Modifier.fillMaxSize().nestedScroll(collapse),
                             onPageTurn = { direction -> if(direction > 0 && local.autoCollapseCloudFilters) expanded = false }) {
                             if (result.items.isEmpty()) item {
@@ -183,7 +183,7 @@ import cc.novelia.app.ui.navigation.AppController
                                     } }) { Text("撤销") }
                                     else
                                     IconButton(onClick = { c.action {
-                                        // The server deletes by user + novel; `all` is also valid for this route.
+                                        // 服务器按用户和小说删除收藏，此路由的收藏夹参数也接受 `all`。
                                         val queued = c.cloudMutation("DELETE", "$path/${current.id}/${if (kind == 0) book.ref.key else book.ref.id}")
                                         if(!queued) {
                                             if (result.items.size == 1 && page > 0) page--

@@ -8,9 +8,13 @@ package cc.novelia.app.data.catalog
  */
 object SearchExpression {
     private fun escape(value: String) = value.replace(Regex("[+|\\-\"()*~:<>\\\\]")) { "\\${it.value}" }
-    // The site's space-split preprocessing runs before the Lucene simple-query parser.
+    // 原站先按空格预处理，再交给 Lucene 简单查询解析器。
     private fun word(value: String): String = escape(value).let { if(value.endsWith('$')) "\"$it\"" else it }
     private fun phrase(value: String): String = escape(value).replace("$ ", "$\\ ")
+    /**
+     * 普通条件按空白分词，精确短语整体保留；同一标签同时选中包含和排除时，排除优先。
+     * 标签必须满足原站空格预处理的边界，无法解析或为负的数量条件直接忽略。
+     */
     fun build(all: String, any: String, exact: String, excluded: String, tags: String, excludedTags: String, minimum: String, maximum: String): String {
         fun words(text: String) = text.split(Regex("\\s+")).filter(String::isNotBlank)
         return buildList {
@@ -26,6 +30,7 @@ object SearchExpression {
         }.joinToString(" ")
     }
 
+    /** 按原站预处理规则识别标签词元，用于记录使用历史；不尝试完整解析 Lucene 查询。 */
     fun tagsIn(expression: String): List<String> = expression.split(' ').filter { it.endsWith('$') }
         .map { it.removePrefix("-").removeSuffix("$") }.filter(KeywordCatalog::canSearch).distinct()
 

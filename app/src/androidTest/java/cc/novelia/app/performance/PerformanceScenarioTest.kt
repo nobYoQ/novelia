@@ -37,7 +37,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
-/** Offline measurement harness. Every library file belongs to a disposable isolated context. */
+/** 离线性能测量入口；所有书库文件均属于可丢弃的隔离上下文。 */
 @RunWith(AndroidJUnit4::class)
 class PerformanceScenarioTest {
     private class IsolatedContext(base: Context, private val directory: File) : ContextWrapper(base) {
@@ -105,7 +105,7 @@ class PerformanceScenarioTest {
                 val sample = "旅人沿着森林小路前行，寻找远处的小镇。阅读时保持文字清晰，章节之间自然接续。"
                 for(characters in listOf(10_000, 100_000, 500_000)) {
                     val text = buildString(characters) { while(length < characters) append(sample.take(characters - length)) }
-                    // 500-character paragraphs keep the fixture deterministic across devices.
+                    // 每段固定 500 个字符，保证不同设备使用相同的测试数据。
                     val chapter = Chapter(paragraphs = text.chunked(500))
                     for(iteration in 0 until iterations) {
                         val settings = ReaderSettings(mode = "jp", fontSize = 20f, lineHeight = 1.8f, indent = true)
@@ -135,7 +135,7 @@ class PerformanceScenarioTest {
                 withContext(NonCancellable + Dispatchers.IO) {
                     try { store?.flush() }
                     finally {
-                        // The only recursive cleanup target is this run's generated child of cacheDir.
+                        // 递归清理仅限本轮测试在 cacheDir 下创建的子目录。
                         check(root.canonicalFile.parentFile == base.cacheDir.canonicalFile && root.name == "performance-fixture-$runId")
                         report.data.put("fixtureRemoved", root.deleteRecursively())
                     }

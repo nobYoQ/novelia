@@ -10,7 +10,7 @@ import android.webkit.WebView
 import cc.novelia.app.ui.components.screenPageDistance
 import kotlin.math.abs
 
-/** Original-site pages use the same release-to-page gesture as native screens. */
+/** 原站网页沿用原生页面的松手翻屏手势。 */
 internal class PagedSiteWebView(context: Context) : WebView(context) {
     var onPageAvailabilityChanged: (Boolean, Boolean) -> Unit = { _, _ -> }
     private var availablePages: Pair<Boolean, Boolean>? = null
@@ -59,7 +59,7 @@ internal class PagedSiteWebView(context: Context) : WebView(context) {
         """.trimIndent() else "(() => { const style = document.getElementById('novelia-eink-motion'); if (style) style.remove(); })();", null)
     }
 
-    // WebView already handles DOM taps and accessibility activation; intercept only drag streams.
+    // DOM 点击和无障碍激活已由 WebView 处理，这里只拦截拖动事件流。
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if(!eInkMode) return super.onTouchEvent(event)
