@@ -38,6 +38,7 @@ import kotlinx.serialization.encodeToString
 @Composable fun SettingsScreen(c: AppController) {
     val state by c.store.state.collectAsStateWithLifecycle(); var reader by remember { mutableStateOf(false) }; var clear by remember { mutableStateOf(false) }; var size by remember { mutableStateOf<Long?>(null) }
     var clearing by remember { mutableStateOf(false) }
+    var echSettings by remember { mutableStateOf(false) }
     val preferenceState = rememberReaderPreferencesState(reader)
     val keywordTransfer = rememberKeywordTransfer(c)
     LaunchedEffect(c) { size = withContext(Dispatchers.IO) { c.store.cacheSize() + (c.app.imageLoader.diskCache?.size ?: 0L) } }
@@ -56,6 +57,7 @@ import kotlinx.serialization.encodeToString
         item { TogglePreference("剪贴板链接提示", "返回应用时识别原站链接，点击提示后打开", state.clipboardLinkHints) { value -> c.store.update { it.copy(clipboardLinkHints = value) } } }
         item { TogglePreference("滚动时自动收起云端收藏筛选", "向下浏览列表时收起，点击筛选按钮展开", state.autoCollapseCloudFilters) { value -> c.store.update { it.copy(autoCollapseCloudFilters = value) } } }
         item { SectionTitle("下载与同步") }
+        item { MenuRow("ECH 连接测试", "加密握手开关与网络诊断", Icons.Outlined.Wifi, { echSettings = true }) }
         item { TogglePreference("仅在 Wi-Fi 下载", "新建下载任务等待非计费网络", state.wifiOnly) { value -> c.store.update { it.copy(wifiOnly = value) } } }
         item { TogglePreference("云端收藏同时保存到本地", "仅影响之后的云端收藏；关闭不会移除已有本地收藏", state.autoSaveCloudFavoritesLocally) { value -> c.store.update { it.copy(autoSaveCloudFavoritesLocally = value) } } }
         item { TogglePreference("书架更新提醒", "约每 6 小时检查，系统调度可能延后", state.updateNotifications) { value -> c.store.update { it.copy(updateNotifications = value) }; UpdateWorker.schedule(c.app, value); if(value && Build.VERSION.SDK_INT >= 33) notifications.launch(android.Manifest.permission.POST_NOTIFICATIONS) } }
@@ -71,6 +73,7 @@ import kotlinx.serialization.encodeToString
         item { MetaParagraph("本地数据", "小说文件、书签和偏好保存在此设备。系统文件选择器负责导入和导出，无需申请全部存储空间权限。卸载应用会删除这些数据，请先导出需要保留的文件。") }
     } }
     if(reader) AppSheet(onDismissRequest = { reader = false }) { ReaderPreferences(state.reader, state = preferenceState) { value -> c.store.update { it.copy(reader = value) } } }
+    if(echSettings) EchSettings(c.app.ech) { echSettings = false }
     if(clear) ConfirmDialog("清理阅读与图片缓存？", "已缓存的网络章节、详情和图片会被删除，之后需要联网加载。本地导入的小说和下载文件不受影响。", { clear = false }, confirmLabel = "清理缓存") {
         clearing = true
         c.action("缓存已清理") {

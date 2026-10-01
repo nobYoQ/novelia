@@ -20,6 +20,12 @@ AndroidX / Compose、Kotlin、kotlinx.coroutines、kotlinx.serialization、OkHtt
 
 完整通用条款及来源记录位于 [licenses](licenses/README.md)。构建时还会从实际 Release 依赖图生成包含版本及 JAR/AAR 内原始 LICENSE/NOTICE 的报告，随 APK 打包；可在「我的 → 帮助与关于 → 开源许可证」离线查看。变更依赖后应复核报告，为依赖包未携带的许可证补入完整文本。
 
+## ECH 测试分支的本地传输库
+
+本分支从源码构建 `native/ech`，使用 [Jissr Bypass v0.1.1](https://github.com/inqadh/jissr-bypass/tree/v0.1.1) 的加密 DNS 解析与握手探测（Apache-2.0），未采用其有整包大小限制的 Android 适配器。Novelia 自行管理实际 HTTP 连接与 TLS 期限，并实现 JNI 流式上传/下载、取消、有限连接重试和主机边界；上游核心源码不作修改。
+
+工具链固定为 Go 1.27.1，使用 Go 标准库 TLS 1.3/ECH 和证书校验；运行时包含 `golang.org/x/net v0.56.0`、`x/sync v0.21.0`、`x/text v0.38.0` 及 `x/mobile 68735029466e` 生成的 JNI 绑定（BSD-3-Clause）。完整版本和完整性校验见 `native/ech/go.mod`、`go.sum` 与 `scripts/build-ech.ps1`；原始许可证合并于 `licenses/ECH-native.txt` 并随 APK 附带。构建用的 `x/tools` 和 `x/mod` 不作为应用运行时库打包。
+
 ## 内容与素材
 
 网站上的小说、封面、译文和用户内容属于相应权利人，不属于本项目开源授权范围。测试夹具中的《风与书页》短文为此工程自行编写。

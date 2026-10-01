@@ -39,6 +39,16 @@ if ($CheckEnvironment) {
     Write-Host '环境路径检测完成；未运行 Gradle、下载依赖或修改 local.properties。SDK 组件完整性由实际构建检查。'
     return
 }
+# ECH 分支的本地库随源码构建，不提交二进制。首次构建或源码变更时才重建。
+$echRoot = Join-Path $rootPath 'native/ech'
+$echAar = Join-Path $echRoot 'build/novelia-ech.aar'
+$echInputs = @(Get-ChildItem -LiteralPath $echRoot -File) + @(Get-Item -LiteralPath (Join-Path $rootPath 'scripts/build-ech.ps1'))
+$echStale = -not (Test-Path -LiteralPath $echAar)
+if (-not $echStale) {
+    $echBuiltAt = (Get-Item -LiteralPath $echAar).LastWriteTimeUtc
+    $echStale = @($echInputs | Where-Object { $_.LastWriteTimeUtc -gt $echBuiltAt }).Count -gt 0
+}
+if ($echStale) { & (Join-Path $rootPath 'scripts/build-ech.ps1') -Offline:$Offline }
 Set-BuildLocalSdk -SdkPath $sdk.Path -RootPath $rootPath
 if (-not $LogPath) {
     $LogPath = Join-Path $rootPath ('outputs/logs/build-gradle-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff') + '.log')

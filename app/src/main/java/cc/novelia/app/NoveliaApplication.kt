@@ -6,6 +6,8 @@ import cc.novelia.app.data.catalog.KeywordStore
 import cc.novelia.app.data.catalog.ClipboardLinkHistory
 import cc.novelia.app.data.model.User
 import cc.novelia.app.data.network.NoveliaApi
+import cc.novelia.app.data.network.EchTransport
+import cc.novelia.app.data.network.echRedirects
 import cc.novelia.app.data.storage.LocalStore
 import cc.novelia.app.data.sync.CloudSyncWorker
 import cc.novelia.app.data.updates.UpdateWorker
@@ -35,11 +37,13 @@ import kotlinx.coroutines.launch
 class NoveliaApplication : Application(), ImageLoaderFactory {
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     val store by lazy { LocalStore(this) }
-    val session by lazy { Session(this) }
+    val ech by lazy { EchTransport(this) }
+    private val httpTransport by lazy { ech.client() }
+    val session by lazy { Session(this, client = httpTransport) }
     val keywords by lazy { KeywordStore(this) }
     internal val clipboardLinkHistory = ClipboardLinkHistory()
     val metadataCache get() = store.metadataCache
-    val api by lazy { NoveliaApi(session, onMutation = { metadataCache.invalidate(it) }, onKeywords = { tags -> applicationScope.launch { keywords.observe(tags) } }) }
+    val api by lazy { NoveliaApi(session, transport = httpTransport, onMutation = { metadataCache.invalidate(it) }, onKeywords = { tags -> applicationScope.launch { keywords.observe(tags) } }) }
     val initialization by lazy { applicationScope.async { store; session; Unit } }
 
     override fun onCreate() {
@@ -105,7 +109,7 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
     }
 
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
-        .okHttpClient { api.transport.newBuilder().followRedirects(true).build() }
+        .okHttpClient { api.transport.newBuilder().echRedirects(true).build() }
         .memoryCache { MemoryCache.Builder(this).maxSizePercent(0.15).build() }
         .diskCache { DiskCache.Builder().directory(File(cacheDir, "images")).maxSizeBytes(128L * 1024 * 1024).build() }
         .build()

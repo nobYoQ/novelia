@@ -1,6 +1,8 @@
 # Novelia Android
 
-面向 [轻小说机翻机器人](https://n.novelia.cc/) 的非官方原生安卓客户端，当前源码配置版本为 [0.2.2](version.properties)。使用 Kotlin、Jetpack Compose 与 Material 3，支持 Android 8.0（API 26）及以上。
+面向 [轻小说机翻机器人](https://n.novelia.cc/) 的非官方原生安卓客户端，当前源码配置版本为 [0.2.3-ech.4](version.properties)。使用 Kotlin、Jetpack Compose 与 Material 3，支持 Android 8.0（API 26）及以上。
+
+当前 `codex/ech-adaptation` 分支基于 `main` 增加实验性 ECH 网络传输，并保留后续独立论坛接入所需的域名支持与匿名 API 诊断。开关位于「我的 → 设置 → ECH 连接测试」；适配范围、构建要求与后续接入说明见 [ECH 连接测试版](docs/network/ech-test.md)。
 
 ## 下载与反馈
 
