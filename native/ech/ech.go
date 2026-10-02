@@ -81,6 +81,7 @@ type Call struct {
 	executed       bool
 	body           io.ReadCloser
 	failure        string
+	diagnostics    *connectionDiagnostics
 }
 
 // Upload is fed by a bounded Android pipe; no request body is saved to disk.
@@ -120,6 +121,8 @@ func (c *Client) NewCall(method, rawURL, headersJSON string, upload Upload, cont
 		return nil, errors.New("invalid request headers")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
+	diagnostics := &connectionDiagnostics{start: time.Now()}
+	ctx = context.WithValue(ctx, diagnosticKey{}, diagnostics)
 	request, err := http.NewRequestWithContext(ctx, method, rawURL, nil)
 	if err != nil {
 		cancel()
@@ -146,7 +149,7 @@ func (c *Client) NewCall(method, rawURL, headersJSON string, upload Upload, cont
 		connectTimeout: time.Duration(connectTimeoutMillis) * time.Millisecond,
 		readTimeout:    time.Duration(readTimeoutMillis) * time.Millisecond,
 		writeTimeout:   time.Duration(writeTimeoutMillis) * time.Millisecond,
-		ctx:            ctx, cancel: cancel}, nil
+		ctx:            ctx, cancel: cancel, diagnostics: diagnostics}, nil
 }
 
 // Reply contains headers only. The body remains streamed through Call.Read.
@@ -173,16 +176,36 @@ func (c *Call) Execute() (*Reply, error) {
 	if err := c.ctx.Err(); err != nil {
 		return nil, err
 	}
-	phase := newPhaseDeadline(func(reason string) { c.fail(reason); c.Cancel() })
+	phase := newPhaseDeadline(func(reason string) {
+		stage := "response_headers"
+		if reason == "请求发送超时" {
+			stage = "request_sent"
+		}
+		diagnostic(c.ctx, diagnosticEvent{Stage: stage, Outcome: "failed", Reason: "timeout"})
+		c.fail(reason)
+		c.Cancel()
+	})
 	defer phase.stop()
 	trace := &httptrace.ClientTrace{
-		GotConn:      func(httptrace.GotConnInfo) { phase.start(c.writeTimeout, "请求发送超时") },
-		WroteRequest: func(httptrace.WroteRequestInfo) { phase.start(c.readTimeout, "响应读取超时") },
+		GotConn: func(info httptrace.GotConnInfo) {
+			outcome := "new"
+			if info.Reused {
+				outcome = "reused"
+			}
+			diagnostic(c.ctx, diagnosticEvent{Stage: "connection", Outcome: outcome})
+			phase.start(c.writeTimeout, "请求发送超时")
+		},
+		WroteRequest: func(info httptrace.WroteRequestInfo) {
+			diagnostic(c.ctx, diagnosticEvent{Stage: "request_sent", Outcome: "done", Reason: diagnosticReason(info.Err)})
+			phase.start(c.readTimeout, "响应读取超时")
+		},
+		GotFirstResponseByte: func() { diagnostic(c.ctx, diagnosticEvent{Stage: "first_byte", Outcome: "ok"}) },
 	}
 	request := c.request.Clone(httptrace.WithClientTrace(c.request.Context(), trace))
 	response, err := doWithConnectRetry(c.client.do, request, c.connectTimeout)
 	phase.stop()
 	if err != nil {
+		diagnostic(c.ctx, diagnosticEvent{Stage: "request", Outcome: "failed", Reason: diagnosticReason(err)})
 		c.fail(failureReason(err.Error()))
 		if c.request.Body != nil {
 			c.request.Body.Close()
@@ -191,6 +214,7 @@ func (c *Call) Execute() (*Reply, error) {
 		return nil, errors.New("ECH connection or request failed")
 	}
 	if response.TLS == nil || !response.TLS.ECHAccepted || response.TLS.Version != tls.VersionTLS13 {
+		diagnostic(c.ctx, diagnosticEvent{Stage: "tls", Outcome: "failed", Reason: "ech_not_accepted"})
 		response.Body.Close()
 		c.Cancel()
 		return nil, errors.New("server did not accept TLS 1.3 ECH")
@@ -208,6 +232,7 @@ func (c *Call) Execute() (*Reply, error) {
 		c.Cancel()
 		return nil, errors.New("invalid response headers")
 	}
+	diagnostic(c.ctx, diagnosticEvent{Stage: "response_headers", Outcome: "ok", Protocol: response.Proto})
 	return &Reply{code: response.StatusCode, protocol: response.Proto, headers: string(headers), length: response.ContentLength}, nil
 }
 
@@ -245,7 +270,11 @@ func (c *Call) Read(maxBytes int) ([]byte, error) {
 	if err := c.ctx.Err(); err != nil {
 		return nil, err
 	}
-	deadline := newPhaseDeadline(func(reason string) { c.fail(reason); c.Cancel() })
+	deadline := newPhaseDeadline(func(reason string) {
+		diagnostic(c.ctx, diagnosticEvent{Stage: "body", Outcome: "failed", Reason: "timeout"})
+		c.fail(reason)
+		c.Cancel()
+	})
 	deadline.start(c.readTimeout, "响应读取超时")
 	buffer := make([]byte, maxBytes)
 	n, err := body.Read(buffer)
@@ -254,10 +283,12 @@ func (c *Call) Read(maxBytes int) ([]byte, error) {
 		return buffer[:n], nil
 	}
 	if err == io.EOF {
+		diagnostic(c.ctx, diagnosticEvent{Stage: "body", Outcome: "complete"})
 		c.Cancel()
 		return []byte{}, nil
 	}
 	if err != nil {
+		diagnostic(c.ctx, diagnosticEvent{Stage: "body", Outcome: "failed", Reason: diagnosticReason(err)})
 		c.Cancel()
 		return nil, errors.New("ECH response read failed")
 	}

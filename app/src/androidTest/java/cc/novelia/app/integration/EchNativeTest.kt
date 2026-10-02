@@ -10,6 +10,8 @@ import cc.novelia.app.files.DownloadWorker
 import cc.novelia.nativeech.ech.Ech
 import cc.novelia.nativeech.ech.Upload
 import java.io.File
+import java.io.ByteArrayInputStream
+import java.util.zip.ZipInputStream
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.flow.first
@@ -26,7 +28,9 @@ class EchNativeTest {
         val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
         assertNull("Live downloads require a dedicated anonymous test device", app.session.profile.value)
         val wasEnabled = app.ech.enabled.value
+        val wasRecording = app.ech.recording.value
         app.ech.setEnabled(true)
+        app.ech.setRecording(true)
         try {
             val api = NoveliaApi(null, transport = app.api.transport)
             val ref = api.webList(0).items.filter { it.total > 0 }.minBy { it.total }.card().ref
@@ -53,7 +57,7 @@ class EchNativeTest {
                     else assertTrue(file.readText().isNotBlank())
                 } finally { DownloadWorker.remove(app, id) }
             }
-        } finally { app.ech.setEnabled(wasEnabled) }
+        } finally { app.ech.setEnabled(wasEnabled); app.ech.setRecording(wasRecording) }
     }
 
     @Test fun applicationTransportReadsCompleteResponsesAndParsesDiscovery() = runBlocking {
@@ -96,8 +100,19 @@ class EchNativeTest {
         assumeTrue(InstrumentationRegistry.getArguments().getString("echLive") == "true")
         val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
         val report = app.ech.diagnose()
-        assertTrue(report, report.contains("论坛分类 API\nHTTP 200，读取和解析成功"))
-        assertTrue(report, report.contains("论坛帖子 API\nHTTP 200，读取和解析成功"))
+        assertTrue(report, report.contains("论坛分类 API · ECH\nHTTP 200"))
+        assertTrue(report, report.contains("论坛帖子 API · ECH\nHTTP 200"))
+        assertTrue(report, report.contains("网络小说列表 · 直连"))
+        val archive = app.ech.exportNetworkLogs()
+        val entries = mutableMapOf<String, String>()
+        ZipInputStream(ByteArrayInputStream(archive)).use { zip ->
+            while (true) { val entry = zip.nextEntry ?: break; entries[entry.name] = zip.readBytes().toString(Charsets.UTF_8) }
+        }
+        val events = entries.filterKeys { it.endsWith("jsonl") }.values.joinToString("\n")
+        assertTrue(events.contains("native.tls"))
+        assertTrue(events.contains("native.resolution"))
+        assertTrue(events.contains("\"route\":\"direct\""))
+        File(app.getExternalFilesDir(null), "network-diagnostics-test.zip").writeBytes(archive)
     }
 
     @Test fun resettingNetworkStatePreservesActiveBodyAndAllowsFreshConnections() {

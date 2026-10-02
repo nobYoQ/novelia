@@ -32,21 +32,26 @@ internal class EchNativeEngine(context: Context) : EchEngine {
             native.newCall(request.method, request.url.toString(), appJson.encodeToString(headers), upload,
                 request.body?.contentLength() ?: 0, timeouts.connectMillis, timeouts.readMillis, timeouts.writeMillis)
         } catch (error: Exception) { upload?.close(); throw error }
+        val trace = request.tag(NetworkRequestTrace::class.java)
+        val exchangeId = trace?.nextNativeExchange() ?: 0
+        if (trace != null) call.enableDiagnostics()
+        fun recordNative() { if (trace != null) runCatching { trace.native(exchangeId, call.diagnosticsJSON()) } }
         return object : EchExchange {
             override fun execute(): EchReply {
                 upload?.start()
                 val reply = try { call.execute() }
                 catch (_: Exception) { throw connectionFailure(call.failureReason()) }
+                finally { recordNative() }
                 val protocol = if (reply.protocol() == "HTTP/2.0") Protocol.HTTP_2 else Protocol.HTTP_1_1
                 return EchReply(reply.statusCode().toInt(), protocol, decodeEchResponseHeaders(reply.headersJSON()), reply.contentLength())
             }
 
             override fun read(maxBytes: Long): ByteArray = try {
                 // gomobile maps an empty Go slice to Java null: both represent normal EOF here.
-                call.read(maxBytes) ?: ByteArray(0)
-            } catch (_: Exception) { throw connectionFailure(call.failureReason(), "响应读取失败") }
+                (call.read(maxBytes) ?: ByteArray(0)).also { if (it.isEmpty()) recordNative() }
+            } catch (_: Exception) { recordNative(); throw connectionFailure(call.failureReason(), "响应读取失败") }
 
-            override fun cancel() { call.cancel(); upload?.close() }
+            override fun cancel() { call.cancel(); upload?.close(); recordNative() }
         }
     }
 

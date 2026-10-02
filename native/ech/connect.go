@@ -23,6 +23,7 @@ func doWithConnectRetry(do func(*http.Request) (*http.Response, error), request 
 		if err := request.Context().Err(); err != nil {
 			return nil, err
 		}
+		diagnostic(request.Context(), diagnosticEvent{Stage: "connect_attempt", Outcome: "start", Attempt: attempt + 1})
 		ctx, cancel := context.WithCancel(request.Context())
 		var connected atomic.Bool
 		var timer *time.Timer
@@ -47,11 +48,17 @@ func doWithConnectRetry(do func(*http.Request) (*http.Response, error), request 
 			// response remains readable after the connect budget has elapsed.
 			return response, nil
 		}
+		connectExpired := ctx.Err() != nil && request.Context().Err() == nil
 		cancel()
 		if response != nil && response.Body != nil {
 			response.Body.Close()
 		}
 		last = err
+		reason := diagnosticReason(err)
+		if !connected.Load() && connectExpired {
+			reason = "timeout"
+		}
+		diagnostic(request.Context(), diagnosticEvent{Stage: "connect_attempt", Outcome: "failed", Attempt: attempt + 1, Reason: reason})
 		var certificate *tls.CertificateVerificationError
 		if connected.Load() || errors.As(err, &certificate) {
 			break
