@@ -40,7 +40,7 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
     val ech by lazy { EchTransport(this) }
     private val httpTransport by lazy { ech.client() }
     val session by lazy { Session(this, client = httpTransport) }
-    val keywords by lazy { KeywordStore(this) }
+    val keywords by lazy { KeywordStore(this) { store.state.value.keywordLimit } }
     internal val clipboardLinkHistory = ClipboardLinkHistory()
     val metadataCache get() = store.metadataCache
     val api by lazy { NoveliaApi(session, transport = httpTransport, onMutation = { metadataCache.invalidate(it) }, onKeywords = { tags -> applicationScope.launch { keywords.observe(tags) } }) }

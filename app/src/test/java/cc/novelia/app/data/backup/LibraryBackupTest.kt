@@ -54,6 +54,19 @@ class LibraryBackupTest {
         } finally { root.deleteRecursively() }
     }
 
+    @Test fun keywordCapacityPreferenceSurvivesBackupAndRejectsInvalidLimits() {
+        val root = temp()
+        try {
+            for(limit in listOf(null, 30_000, 0, -1)) {
+                val state = LibraryState(keywordLimit = limit)
+                val bytes = archive(mapOf("manifest.json" to appJson.encodeToString(manifest(state)).toByteArray()))
+                val stage = File(root, "limit-$limit").apply { mkdirs() }
+                if(limit == null || limit > 0) assertEquals(state, LibraryBackupArchive.extract(ByteArrayInputStream(bytes), stage).library)
+                else fails { LibraryBackupArchive.extract(ByteArrayInputStream(bytes), stage) }
+            }
+        } finally { root.deleteRecursively() }
+    }
+
     @Test fun unsafeZipPathsAreRejectedBeforeWritingOutsideStage() {
         val root = temp()
         try {

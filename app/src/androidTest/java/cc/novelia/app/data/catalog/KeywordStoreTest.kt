@@ -65,4 +65,26 @@ class KeywordStoreTest {
         assertEquals("已分类", restored.entries.single { it.original == "ハーレム" }.category)
         assertEquals("后宫译名", restored.entries.single { it.original == "ハーレム" }.translation)
     }
+
+    @Test fun changingCapacityPreservesStoredTagsAndUnlimitedResumesCollection() = fixture { context, _ ->
+        val settings = LocalStore(context)
+        val store = KeywordStore(context) { settings.state.value.keywordLimit }
+        store.observe(listOf("已收集"))
+        val original = store.state.value
+        settings.update { it.copy(keywordLimit = 1) }
+        store.observe(listOf("暂停收集"))
+        assertEquals(original, store.state.value)
+        assertTrue(runCatching { store.mergeLibrary(KeywordLibrary(listOf(KeywordEntry("禁止新增")))) }.isFailure)
+        store.setTranslation("已收集", "保留修改")
+        settings.flush(); store.flush()
+        val restoredSettings = LocalStore(context)
+        assertEquals(1, restoredSettings.state.value.keywordLimit)
+        val reopened = KeywordStore(context) { restoredSettings.state.value.keywordLimit }
+        assertEquals(original.entries.size, reopened.state.value.entries.size)
+        assertEquals("保留修改", reopened.state.value.entries.single { it.original == "已收集" }.translation)
+        restoredSettings.update { it.copy(keywordLimit = null) }
+        reopened.observe(listOf("恢复收集"))
+        reopened.flush()
+        assertEquals(original.entries.size + 1, KeywordStore(context).state.value.entries.size)
+    }
 }

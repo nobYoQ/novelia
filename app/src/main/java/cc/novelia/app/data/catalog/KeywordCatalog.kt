@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 /**
  * 以原文为唯一键的本地标签；翻译和分类仅用于展示与选择，不替换发给原站的原文。
  * translationEdited/categoryEdited 分别保护用户的翻译和分类修改，显式清空翻译也是用户选择。
- * lastUsedAt 记录用于搜索的时间，影响推荐与容量淘汰；浏览观察本身不会更新它。
+ * lastUsedAt 记录用于搜索的时间，影响推荐排序；浏览观察本身不会更新它。
  */
 @Serializable
 data class KeywordEntry(
@@ -23,11 +23,10 @@ data class KeywordEntry(
 /**
  * 标签词表的纯变换与匹配规则，初始映射来自原站 web/src/util/web/keyword.ts。
  * 原文、用户译名、内置译名和别名均可用于查找，搜索表达式始终使用 original。
- * 容量限制用于浏览时渐进收集；完整导入由 KeywordLibrary 先校验，避免静默截断。
+ * 数量默认不限；用户设置上限后停止收集新标签，完整导入由 KeywordLibrary 校验，已有标签不被淘汰。
  */
 object KeywordCatalog {
     const val MAX_TEXT_LENGTH = 256
-    const val MAX_ENTRIES = 20_000
     val defaultCategories = listOf("题材", "人物", "情节", "其他")
     val common = listOf(
         KeywordEntry("ファンタジー", "奇幻", "题材", true),
@@ -61,39 +60,43 @@ object KeywordCatalog {
 
     /** 已有条目始终优先于默认值，包括用户显式设为空的翻译。 */
     fun withDefaults(entries: Collection<KeywordEntry>): List<KeywordEntry> =
-        bounded(entries + common)
+        normalize(entries + common)
 
-    /** 优先保留用户编辑和最近使用的词条，再为新观察到的标签腾出容量。 */
-    fun bounded(entries: Collection<KeywordEntry>, limit: Int = MAX_ENTRIES): List<KeywordEntry> {
-        require(limit > 0)
-        val valid = entries.filter { it.original.isNotBlank() && it.original.length <= MAX_TEXT_LENGTH && it.translation.length <= MAX_TEXT_LENGTH }
+    /** 仅校验与去重，不因数量或使用频率丢弃已有词条。 */
+    fun normalize(entries: Collection<KeywordEntry>): List<KeywordEntry> =
+        entries.filter { it.original.isNotBlank() && it.original.length <= MAX_TEXT_LENGTH && it.translation.length <= MAX_TEXT_LENGTH }
             .distinctBy { it.original }
-        if(valid.size <= limit) return valid
-        return valid.withIndex().sortedWith(compareByDescending<IndexedValue<KeywordEntry>> { it.value.translationEdited || it.value.categoryEdited }
-            .thenByDescending { it.value.lastUsedAt }.thenByDescending { it.value.common }.thenByDescending { it.index })
-            .take(limit).sortedBy { it.index }.map { it.value }
+
+    /** 调低上限不删除词条，达到或超过上限时仍允许编辑已有词条。 */
+    fun requireCapacity(currentCount: Int, nextCount: Int, limit: Int?) {
+        require(limit == null || limit > 0) { "标签数量上限需为正整数或不限" }
+        require(limit == null || nextCount <= limit || nextCount <= currentCount) {
+            "标签数量将超过设置的上限 $limit 个，未添加新标签；请在设置中调整标签数量上限"
+        }
     }
 
-    fun observe(entries: List<KeywordEntry>, originals: Collection<String>): List<KeywordEntry> {
+    fun observe(entries: List<KeywordEntry>, originals: Collection<String>, limit: Int? = null): List<KeywordEntry> {
+        requireCapacity(entries.size, entries.size, limit)
         val known = entries.mapTo(mutableSetOf()) { it.original }
         val defaults = common.associateBy { it.original }
-        val added = originals.map(String::trim).filter { it.isNotBlank() && it.length <= MAX_TEXT_LENGTH && known.add(it) }
-            .map { defaults[it] ?: KeywordEntry(it) }
-        return if(added.isEmpty()) entries else bounded(entries + added)
+        val remaining = limit?.let { (it - entries.size).coerceAtLeast(0) } ?: Int.MAX_VALUE
+        val added = originals.asSequence().map(String::trim).filter { it.isNotBlank() && it.length <= MAX_TEXT_LENGTH && known.add(it) }
+            .take(remaining).map { defaults[it] ?: KeywordEntry(it) }.toList()
+        return if(added.isEmpty()) entries else entries + added
     }
 
-    fun markUsed(entries: List<KeywordEntry>, originals: Collection<String>, now: Long): List<KeywordEntry> {
+    fun markUsed(entries: List<KeywordEntry>, originals: Collection<String>, now: Long, limit: Int? = null): List<KeywordEntry> {
         val selected = originals.map(String::trim).filter { it.isNotBlank() && it.length <= MAX_TEXT_LENGTH }.toSet()
         if(selected.isEmpty()) return entries
-        val lookup = (common + entries).associateBy { it.original }
-        val used = selected.map { (lookup[it] ?: KeywordEntry(it)).copy(lastUsedAt = now) }
-        return bounded(entries.filterNot { it.original in selected } + used)
+        val observed = observe(entries, selected, limit)
+        return observed.map { if(it.original in selected) it.copy(lastUsedAt = now) else it }
     }
 
-    fun translate(entries: List<KeywordEntry>, original: String, translation: String): List<KeywordEntry> {
+    fun translate(entries: List<KeywordEntry>, original: String, translation: String, limit: Int? = null): List<KeywordEntry> {
         require(original.isNotBlank() && original.length <= MAX_TEXT_LENGTH && translation.length <= MAX_TEXT_LENGTH) { "标签原文和翻译最多 $MAX_TEXT_LENGTH 字符" }
+        requireCapacity(entries.size, entries.size + if(entries.any { it.original == original }) 0 else 1, limit)
         val existing = entries.firstOrNull { it.original == original } ?: common.firstOrNull { it.original == original } ?: KeywordEntry(original)
-        return bounded(entries.filterNot { it.original == original } + existing.copy(translation = translation, translationEdited = true))
+        return normalize(entries.filterNot { it.original == original } + existing.copy(translation = translation, translationEdited = true))
     }
 
     /** 翻译和分类分别按编辑标记合并，最近使用时间取较新值；同原文仍只保留一个词条。 */
@@ -108,7 +111,7 @@ object KeywordCatalog {
                 category = if(restored != null && !entry.categoryEdited) restored.category else entry.category,
                 categoryEdited = entry.categoryEdited || restored?.categoryEdited == true)
         }
-        return if(addDefaults) withDefaults(merged + incoming) else bounded(merged + incoming)
+        return if(addDefaults) withDefaults(merged + incoming) else normalize(merged + incoming)
     }
 
     /** 完全匹配优先，其次是前缀和包含匹配；同分时优先最近使用及常用词条。 */

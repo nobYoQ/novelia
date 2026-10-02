@@ -69,7 +69,7 @@ class KeywordLibraryActions(
     // 在 Scaffold 子组合内容前观察状态，也能接收布局开始前已完成的结果。
     val results = produceState<List<KeywordEntry>?>(null, entries, settledQuery, activeCategory) {
         value = null
-        value = withContext(Dispatchers.Default) { KeywordCatalog.suggestions(entries, settledQuery, activeCategory, KeywordCatalog.MAX_ENTRIES) }
+        value = withContext(Dispatchers.Default) { KeywordCatalog.suggestions(entries, settledQuery, activeCategory, entries.size) }
     }.value
     Screen("标签库", onBack, actions = {
         if(actions != null) TextButton(onClick = { managing = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text("管理分类") }

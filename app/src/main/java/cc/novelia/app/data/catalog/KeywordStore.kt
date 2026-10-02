@@ -20,7 +20,7 @@ import kotlinx.serialization.encodeToString
  * 内存状态即时发布，合并/排序在状态锁外完成，磁盘写入由独立写锁串行化并合并短时间更新。
  * 原文件损坏时先使用常用标签，后续写入前保留损坏副本，避免无声覆盖用户词典。
  */
-class KeywordStore(context: Context) {
+class KeywordStore(context: Context, private val entryLimit: () -> Int? = { null }) {
     companion object { const val FILE_NAME = "keyword-catalog.json" }
     private val file = File(context.filesDir, FILE_NAME)
     private val atomic = AtomicFile(file)
@@ -50,23 +50,23 @@ class KeywordStore(context: Context) {
         }
     }
 
-    fun observe(originals: Collection<String>) = change { it.withEntries(KeywordCatalog.observe(it.entries, originals)) }
+    fun observe(originals: Collection<String>) = change { it.withEntries(KeywordCatalog.observe(it.entries, originals, entryLimit())) }
     fun markUsed(originals: Collection<String>) {
         val now = System.currentTimeMillis()
-        change { it.withEntries(KeywordCatalog.markUsed(it.entries, originals, now)) }
+        change { it.withEntries(KeywordCatalog.markUsed(it.entries, originals, now, entryLimit())) }
     }
     fun setTranslation(original: String, translation: String) {
         val normalized = original.trim()
         if(normalized.isBlank()) return
-        change { it.withEntries(KeywordCatalog.translate(it.entries, normalized, translation.trim())) }
+        change { it.withEntries(KeywordCatalog.translate(it.entries, normalized, translation.trim(), entryLimit())) }
     }
     fun createCategory(name: String) = change { it.createCategory(name.trim()) }
     fun renameCategory(old: String, name: String) = change { it.renameCategory(old, name.trim()) }
     fun deleteCategory(name: String) = change { it.deleteCategory(name) }
-    fun editEntry(original: String, translation: String, category: String) = change { it.editEntry(original.trim(), translation.trim(), category) }
+    fun editEntry(original: String, translation: String, category: String) = change { it.editEntry(original.trim(), translation.trim(), category, entryLimit()) }
     fun exportLibrary(): KeywordLibrary = state.value
     fun exportSnapshot(): List<KeywordEntry> = state.value.entries
-    fun mergeLibrary(library: KeywordLibrary) = change { it.merge(library) }
+    fun mergeLibrary(library: KeywordLibrary) = change { it.merge(library, entryLimit()) }
     fun mergeSnapshot(entries: List<KeywordEntry>) = mergeLibrary(KeywordLibrary.fromLegacy(entries, addDefaults = false))
     /**
      * 写锁保护重载与落盘顺序，磁盘读取期间仍允许内存编辑；仅保留此期间发生的并发修改。

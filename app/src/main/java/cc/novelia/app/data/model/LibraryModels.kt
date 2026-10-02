@@ -48,5 +48,6 @@ import kotlinx.serialization.Serializable
     val autoSync: Boolean = true, val syncStatus: Map<String, CloudSyncStatus> = emptyMap(),
     val updateSnapshots: Map<String, BookUpdateSnapshot> = emptyMap(),
     val bookUpdates: Map<String, BookUpdateInfo> = emptyMap(),
-    val clipboardLinkHints: Boolean = true
+    val clipboardLinkHints: Boolean = true,
+    val keywordLimit: Int? = null
 )

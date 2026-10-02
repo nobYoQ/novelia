@@ -68,28 +68,35 @@ class KeywordCatalogTest {
         assertEquals(listOf("ハーレム"), SearchExpression.conflictingTags("-ハーレム$", "ハーレム$"))
     }
 
-    @Test fun fullCatalogKeepsReaderEditsAndRecentUseWhileLearningNewTags() {
-        val full = (0 until KeywordCatalog.MAX_ENTRIES).map { KeywordEntry("tag-$it") }.toMutableList()
+    @Test fun reachingOrLoweringUserCapacityRetainsEveryExistingTag() {
+        val full = (0 until 5).map { KeywordEntry("tag-$it") }.toMutableList()
         full[0] = full[0].copy(translationEdited = true)
         full[1] = full[1].copy(lastUsedAt = 100)
-        val observed = KeywordCatalog.observe(full, listOf("new-tag"))
-        assertEquals(KeywordCatalog.MAX_ENTRIES, observed.size)
-        assertTrue(observed.any { it.original == "tag-0" && it.translationEdited })
-        assertTrue(observed.any { it.original == "tag-1" })
-        assertTrue(observed.any { it.original == "new-tag" })
-        assertFalse(observed.any { it.original == "tag-2" })
+        assertEquals(full, KeywordCatalog.observe(full, listOf("new-tag"), limit = 5))
+        assertEquals(full, KeywordCatalog.observe(full, listOf("new-tag"), limit = 2))
+        assertEquals(full + KeywordEntry("new-tag"), KeywordCatalog.observe(full, listOf("new-tag")))
+        assertEquals(listOf("tag-0", "tag-1", "new-tag"), KeywordCatalog.observe(full.take(2), listOf("tag-0", "new-tag", "another"), limit = 3).map { it.original })
     }
 
-    @Test fun usingOrEditingNewTagsCanEnterAFullCatalogAndDoesNotResetTranslations() {
-        val full = (0 until KeywordCatalog.MAX_ENTRIES).map { KeywordEntry("tag-$it", lastUsedAt = 100) }
-        val used = KeywordCatalog.markUsed(full, listOf("new-tag"), now = 200)
-        assertEquals(KeywordCatalog.MAX_ENTRIES, used.size)
-        assertEquals(200L, used.single { it.original == "new-tag" }.lastUsedAt)
-        val edited = KeywordCatalog.translate(full, "new-tag", "新标签")
-        assertEquals(KeywordCatalog.MAX_ENTRIES, edited.size)
-        assertTrue(edited.single { it.original == "new-tag" }.translationEdited)
+    @Test fun userCapacityStillAllowsUsingAndEditingExistingTags() {
+        val full = (0 until 2).map { KeywordEntry("tag-$it", lastUsedAt = 100) }
+        val used = KeywordCatalog.markUsed(full, listOf("tag-0", "new-tag"), now = 200, limit = 1)
+        assertEquals(2, used.size)
+        assertEquals(200L, used.single { it.original == "tag-0" }.lastUsedAt)
+        assertEquals(100L, used.single { it.original == "tag-1" }.lastUsedAt)
+        assertTrue(runCatching { KeywordCatalog.translate(full, "new-tag", "新标签", limit = 2) }.isFailure)
+        assertEquals("已有译名", KeywordCatalog.translate(full, "tag-0", "已有译名", limit = 1).single { it.original == "tag-0" }.translation)
+        assertEquals(3, KeywordCatalog.translate(full, "new-tag", "新标签").size)
+        assertEquals(3, KeywordCatalog.markUsed(full, listOf("new-tag"), now = 200).size)
         val cleared = KeywordEntry("ハーレム", "", translationEdited = true)
         assertEquals("", KeywordCatalog.markUsed(listOf(cleared), listOf("ハーレム"), 200).single().translation)
+    }
+
+    @Test fun unlimitedCatalogRetainsMoreThanTwentyThousandTagsAcrossUpdates() {
+        val large = (0..20_000).map { KeywordEntry("tag-$it") }
+        assertEquals(large.size + 1, KeywordCatalog.observe(large, listOf("new-tag")).size)
+        assertEquals(large.size + 1, KeywordCatalog.markUsed(large, listOf("new-tag"), now = 200).size)
+        assertEquals(large.size + KeywordCatalog.common.size, KeywordCatalog.withDefaults(large).size)
     }
 
     @Test fun catalogLimitsMatchTheBackupContractWithoutSilentlyTruncatingUserTranslations() {

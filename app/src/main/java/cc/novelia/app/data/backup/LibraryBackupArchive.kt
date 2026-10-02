@@ -126,6 +126,7 @@ internal object LibraryBackupArchive {
         require(state.pending.isEmpty() && state.downloads.isEmpty() && state.syncStatus.isEmpty()) { "备份不应包含账号队列或运行中的任务" }
         require(state.books.map { it.book.ref.key }.distinct().size == state.books.size && state.notes.map { it.id }.distinct().size == state.notes.size) { "备份含重复的书籍或笔记标识" }
         require(state.theme in setOf("system", "light", "dark")) { "备份主题设置无效" }
+        require(state.keywordLimit == null || state.keywordLimit > 0) { "备份标签数量上限无效" }
         (listOf(state.reader) + state.bookSettings.values).forEach { settings ->
             require(settings.fontSize in 10f..60f && settings.lineHeight in ReaderSettings.MIN_LINE_HEIGHT..4f && settings.width in 200f..2000f &&
                 settings.engines.size == 3 && settings.engines.toSet() == setOf("sakura", "gpt", "youdao") && settings.speechRate in .1f..5f &&
