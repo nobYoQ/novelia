@@ -94,34 +94,47 @@ class CompactLayoutTest {
     @Test fun readingChapterWrapsInsideItsButtonAndSecondaryActionsStayIndependent() {
         val chapter = ReadingDestination("chapter-20", 20, "关于春天的邂逅、离别和我们尚未说完的那些话")
         var destination by mutableStateOf<ReadingDestination?>(chapter)
+        var favoriteState by mutableStateOf(BookFavoriteState(false, null))
         var fontScale by mutableFloatStateOf(1f)
         var read = 0
-        var favorite = 0
+        var localFavorite = 0
+        var cloudFavorite = 0
         var download = 0
         compose.setContent {
             val density = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale)) {
                 NoveliaTheme("dark") {
                     Surface(Modifier.requiredWidth(320.dp).testTag("compact-layout")) {
-                        BookReadingActions(destination, true, BookFavoriteState(false, null, "PUT"),
-                            onFavorite = { favorite++ }, onRead = { read++ }, onDownload = { download++ })
+                        BookReadingActions(destination, true, favoriteState,
+                            onLocalFavorite = { localFavorite++ }, onCloudFavorite = { cloudFavorite++ },
+                            onRead = { read++ }, onDownload = { download++ })
                     }
                 }
             }
         }
         for(scale in listOf(1f, 1.5f, 2f)) {
-            compose.runOnIdle { fontScale = scale }
+            compose.runOnIdle { fontScale = scale; favoriteState = BookFavoriteState(false, null) }
             assertTextFits(chapter.label)
-            assertTextFits("云端收藏待同步")
+            assertTextFits("收藏到本地")
+            assertTextFits("收藏到云端")
             val button = compose.onNodeWithTag("book-read-action").assertHeightIsAtLeast(76.dp).fetchSemanticsNode().boundsInRoot
             val title = compose.onNodeWithTag("book-resume-chapter", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
             assertTrue(title.left > button.left && title.right < button.right && title.bottom < button.bottom)
             if(scale == 1f || scale == 2f) capture("book-reading-$scale")
+            compose.runOnIdle { favoriteState = BookFavoriteState(false, "reading", "PUT") }
+            assertTextFits("云端收藏待同步")
         }
+        compose.runOnIdle { favoriteState = BookFavoriteState(true, null) }
+        compose.onNodeWithText("已本地收藏").assertIsDisplayed()
+        compose.onNodeWithText("收藏到云端").assertIsDisplayed()
+        compose.runOnIdle { favoriteState = BookFavoriteState(false, "reading") }
+        compose.onNodeWithText("收藏到本地").assertIsDisplayed()
+        compose.onNodeWithText("已云端收藏").assertIsDisplayed()
         compose.onNodeWithTag("book-resume-chapter", useUnmergedTree = true).performTouchInput { click(center) }
-        compose.onNodeWithTag("book-manage-favorite").assertHeightIsAtLeast(48.dp).performClick()
+        compose.onNodeWithTag("book-local-favorite").assertHeightIsAtLeast(48.dp).performClick()
+        compose.onNodeWithTag("book-cloud-favorite").assertHeightIsAtLeast(48.dp).performClick()
         compose.onNodeWithTag("book-download").assertHeightIsAtLeast(48.dp).performClick()
-        compose.runOnIdle { assertEquals(1, read); assertEquals(1, favorite); assertEquals(1, download); destination = null }
+        compose.runOnIdle { assertEquals(1, read); assertEquals(1, localFavorite); assertEquals(1, cloudFavorite); assertEquals(1, download); destination = null }
         compose.onNodeWithTag("book-read-action").assertIsNotEnabled()
         compose.onNodeWithTag("book-resume-chapter", useUnmergedTree = true).assertDoesNotExist()
     }

@@ -1,6 +1,7 @@
 @file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.shelf
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import cc.novelia.app.ui.components.AppSelectionChip
 import cc.novelia.app.ui.components.AppChipFlowRow
@@ -21,6 +22,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -29,7 +31,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import cc.novelia.app.data.catalog.providers
+import cc.novelia.app.data.auth.SessionChangedException
+import cc.novelia.app.data.library.removeCloudFavorites
+import cc.novelia.app.data.library.withCloudFavoritesAddedLocally
 import cc.novelia.app.data.library.withCloudReadingMetadata
+import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.CloudFolders
 import cc.novelia.app.data.model.Folder
@@ -49,6 +55,7 @@ import cc.novelia.app.ui.components.EmptyState
 import cc.novelia.app.ui.components.PageControls
 import cc.novelia.app.ui.components.TextPrompt
 import cc.novelia.app.ui.components.rememberCloudFilterCollapse
+import cc.novelia.app.ui.components.friendlyMessage
 import cc.novelia.app.ui.navigation.AppController
 
 @Composable fun CloudShelf(c: AppController, onOpenBook: (BookRef) -> Unit = c::book, selectedBookKey: String? = null) {
@@ -77,14 +84,25 @@ import cc.novelia.app.ui.navigation.AppController
     var level by rememberSaveable { mutableIntStateOf(0) }
     var translate by rememberSaveable { mutableIntStateOf(0) }
     var expanded by remember { mutableStateOf(false) }
+    var managing by remember { mutableStateOf(false) }
+    var selection by remember { mutableStateOf(mapOf<String, BookCard>()) }
+    var bulkBusy by remember { mutableStateOf(false) }
+    var bulkRefreshAt by remember { mutableLongStateOf(0L) }
+    var bulkProgress by remember { mutableIntStateOf(0) }
+    var bulkLocal by remember { mutableStateOf<List<BookCard>?>(null) }
+    var bulkRemoval by remember { mutableStateOf<Pair<String, List<BookCard>>?>(null) }
+    fun toggleSelection(book: BookCard) {
+        if(!bulkBusy) selection = if(book.ref.key in selection) selection - book.ref.key else selection + (book.ref.key to book)
+    }
+    BackHandler(managing && !bulkBusy) { managing = false; selection = emptyMap() }
     // 行内重试或后台重试可能独立于本页菜单回调完成；
     // 成功后刷新远端结果，由 AsyncContent 保留当前视口。
-    val refreshKey = listOf(version, local.syncStatus[account]?.lastSuccessAt ?: 0L)
+    val refreshKey = listOf(version, if(bulkBusy) bulkRefreshAt else local.syncStatus[account]?.lastSuccessAt ?: 0L)
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { expanded = false }
     val focus = LocalFocusManager.current
     val path = if (kind == 0) "user/favored-web" else "user/favored-wenku"
     val filter = CloudWebFilter(submitted, source, type, level, translate)
-    fun submit() { submitted = query.trim(); page = 0; focus.clearFocus() }
+    fun submit() { if(!bulkBusy) { submitted = query.trim(); page = 0; focus.clearFocus() } }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val filterHeight = maxHeight * .55f
@@ -92,6 +110,9 @@ import cc.novelia.app.ui.navigation.AppController
             val realFolders = if (kind == 0) folders.favoredWeb else folders.favoredWenku
             val choices = cloudFolderChoices(realFolders)
             val current = choices.find { it.id == folderId } ?: choices.firstOrNull()
+            LaunchedEffect(kind, current?.id, sort, filter) {
+                managing = false; selection = emptyMap(); bulkLocal = null; bulkRemoval = null
+            }
             val editable = current?.takeUnless { it.id == ALL_CLOUD_FAVORITES }
             val selectedSources = source.split(',').filter(String::isNotBlank).toSet()
             val activeFilters = buildList {
@@ -105,22 +126,22 @@ import cc.novelia.app.ui.navigation.AppController
             }
             val summary = activeFilters.joinToString(" · ")
             Column(Modifier.fillMaxSize()) {
-                CloudNovelKindSwitch(kind) { kind = it; folderId = ""; page = 0; expanded = false }
-                key(kind) { CloudShelfToolbar(choices, current, { folderId = it; page = 0 },
-                    sort, { sort = it; page = 0 }, activeFilters.size, expanded,
-                    if(kind == 0) ({ expanded = !expanded; focus.clearFocus() }) else null) { close ->
-                    DropdownMenuItem({ Text("新建收藏夹") }, { close(); create = true }, leadingIcon = { Icon(Icons.Outlined.Add, null) })
+                CloudNovelKindSwitch(kind) { if(!bulkBusy) { kind = it; folderId = ""; page = 0; expanded = false } }
+                key(kind) { CloudShelfToolbar(choices, current, { if(!bulkBusy) { folderId = it; page = 0 } },
+                    sort, { if(!bulkBusy) { sort = it; page = 0 } }, activeFilters.size, expanded,
+                    if(kind == 0) ({ if(!bulkBusy) { expanded = !expanded; focus.clearFocus() } }) else null) { close ->
+                    DropdownMenuItem({ Text("新建收藏夹") }, { close(); create = true }, enabled = !bulkBusy, leadingIcon = { Icon(Icons.Outlined.Add, null) })
                     if(editable != null) {
-                        DropdownMenuItem({ Text("重命名收藏夹") }, { close(); rename = editable })
-                        if(editable.id != "default") DropdownMenuItem({ Text("删除收藏夹") }, { close(); deleting = editable })
+                        DropdownMenuItem({ Text("重命名收藏夹") }, { close(); rename = editable }, enabled = !bulkBusy)
+                        if(editable.id != "default") DropdownMenuItem({ Text("删除收藏夹") }, { close(); deleting = editable }, enabled = !bulkBusy)
                     }
-                    DropdownMenuItem({ Text("刷新收藏夹") }, { close(); refresh() }, leadingIcon = { Icon(Icons.Outlined.Refresh, null) })
+                    DropdownMenuItem({ Text("刷新收藏夹") }, { close(); refresh() }, enabled = !bulkBusy, leadingIcon = { Icon(Icons.Outlined.Refresh, null) })
                 } }
                 if(activeFilters.isNotEmpty()) Text(summary,
                     Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 8.dp).testTag("cloud-filter-summary"),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary,
                     maxLines = 2, overflow = TextOverflow.Ellipsis)
-                CollapsibleCloudFilters(expanded, { expanded = !expanded }, summary, filterHeight, showHeader = false) {
+                CollapsibleCloudFilters(expanded && !bulkBusy, { expanded = !expanded }, summary, filterHeight, showHeader = false) {
                     if (kind == 0) {
                         OutlinedTextField(query, { query = it }, label = { Text("搜索中 / 日标题或作者") }, singleLine = true,
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { submit() }),
@@ -158,46 +179,87 @@ import cc.novelia.app.ui.navigation.AppController
                             if(c.session.profile.value?.username != account) return@LaunchedEffect
                             c.store.update { it.withCloudReadingMetadata(result.items, account) }
                         }
-                        // 把滚动锚点保留在视口内，筛选面板改变大小时不滚动书目。
-                        AppLazyColumn(state = listState, modifier = Modifier.fillMaxSize().nestedScroll(collapse),
-                            onPageTurn = { direction -> if(direction > 0 && local.autoCollapseCloudFilters) expanded = false }) {
-                            if (result.items.isEmpty()) item {
-                                EmptyState("没有匹配的收藏", "可调整筛选、切换收藏夹，或在书籍详情中添加云端收藏。", action = "重新加载", onAction = retry)
-                            }
-                            items(result.items, key = { it.ref.key }, contentType = { "book" }) { book ->
-                                val displayed = rememberCloudBookMetadata(c, book, account, refreshKey)
-                                val pending = pendingFavoriteAction(local.pending, account, book.ref)
-                                val cancelling = pending?.method == "DELETE"
-                                Column {
-                                val selectedBook = book.ref.key == selectedBookKey
-                                BookRow(displayed, { expanded = false; onOpenBook(book.ref) }, Modifier.semantics { selected = selectedBook }
-                                    .then(if(selectedBook) Modifier.background(MaterialTheme.colorScheme.secondaryContainer) else Modifier),
-                                    status = bookRowStatus(displayed, local.books.firstOrNull { it.book.ref == book.ref }, local.positions[book.ref.key], local.bookUpdates[book.ref.key], account, preferCloud = true), trailing = {
-                                    if(cancelling) TextButton(onClick = { c.action {
-                                        val restoreFolder = book.favored?.takeIf { it != ALL_CLOUD_FAVORITES && it.isNotBlank() }
-                                            ?: current.id.takeUnless { it == ALL_CLOUD_FAVORITES }
-                                        if(restoreFolder != null) {
-                                            c.addCloudFavorite(displayed, restoreFolder)
-                                            version++
-                                        } else { c.pendingFavoriteCloud = true; c.pendingFavorite = book }
-                                    } }) { Text("撤销") }
-                                    else
-                                    IconButton(onClick = { c.action {
-                                        // 服务器按用户和小说删除收藏，此路由的收藏夹参数也接受 `all`。
-                                        val queued = c.cloudMutation("DELETE", "$path/${current.id}/${if (kind == 0) book.ref.key else book.ref.id}")
-                                        if(!queued) {
-                                            if (result.items.size == 1 && page > 0) page--
-                                            version++
-                                            c.message("已取消云端收藏")
-                                        }
-                                    } }) { Icon(Icons.Outlined.BookmarkRemove, "取消云端收藏") }
-                                })
+                        Column(Modifier.fillMaxSize()) {
+                            val pageKeys = result.items.map { it.ref.key }.toSet()
+                            val allOnPageSelected = pageKeys.isNotEmpty() && selection.keys.containsAll(pageKeys)
+                            CloudFavoriteBatchControls(managing, selection.size, result.items.size, allOnPageSelected,
+                                bulkBusy, bulkProgress, onManage = {
+                                    managing = !managing; selection = emptyMap(); expanded = false
+                                }, onSelectPage = {
+                                    selection = if(allOnPageSelected) selection - pageKeys else selection + result.items.associateBy { it.ref.key }
+                                }, onClear = { selection = emptyMap() }, onLocal = { bulkLocal = selection.values.toList() },
+                                onRemove = { bulkRemoval = current.id to selection.values.toList() })
+                            // 把滚动锚点保留在视口内，筛选面板改变大小时不滚动书目。
+                            AppLazyColumn(state = listState, modifier = Modifier.weight(1f).nestedScroll(collapse),
+                                onPageTurn = { direction -> if(direction > 0 && local.autoCollapseCloudFilters) expanded = false }) {
+                                if (result.items.isEmpty()) item {
+                                    EmptyState("没有匹配的收藏", "可调整筛选、切换收藏夹，或在书籍详情中添加云端收藏。", action = "重新加载", onAction = retry)
                                 }
+                                items(result.items, key = { it.ref.key }, contentType = { "book" }) { book ->
+                                    val displayed = rememberCloudBookMetadata(c, book, account, refreshKey)
+                                    val pending = pendingFavoriteAction(local.pending, account, book.ref)
+                                    val cancelling = pending?.method == "DELETE"
+                                    val selectedBook = if(managing) book.ref.key in selection else book.ref.key == selectedBookKey
+                                    BookRow(displayed, { if(managing) toggleSelection(displayed) else { expanded = false; onOpenBook(book.ref) } },
+                                        Modifier.testTag("cloud-book-${book.ref.key}").semantics { selected = selectedBook }
+                                            .then(if(selectedBook) Modifier.background(MaterialTheme.colorScheme.secondaryContainer) else Modifier),
+                                        status = bookRowStatus(displayed, local.books.firstOrNull { it.book.ref == book.ref }, local.positions[book.ref.key], local.bookUpdates[book.ref.key], account, preferCloud = true), trailing = {
+                                            if(managing) Checkbox(book.ref.key in selection, { toggleSelection(displayed) }, enabled = !bulkBusy,
+                                                modifier = Modifier.semantics { contentDescription = "选择${book.title}" })
+                                            else if(cancelling) TextButton(onClick = { c.action {
+                                                val restoreFolder = book.favored?.takeIf { it != ALL_CLOUD_FAVORITES && it.isNotBlank() }
+                                                    ?: current.id.takeUnless { it == ALL_CLOUD_FAVORITES }
+                                                if(restoreFolder != null) {
+                                                    c.addCloudFavorite(displayed, restoreFolder)
+                                                    version++
+                                                } else { c.pendingFavoriteCloud = true; c.pendingFavorite = book }
+                                            } }) { Text("撤销") }
+                                            else IconButton(onClick = { c.action {
+                                                // 服务器按用户和小说删除收藏，此路由的收藏夹参数也接受 `all`。
+                                                val queued = c.cloudMutation("DELETE", "$path/${current.id}/${if (kind == 0) book.ref.key else book.ref.id}")
+                                                if(!queued) {
+                                                    if (result.items.size == 1 && page > 0) page--
+                                                    version++
+                                                    c.message("已取消云端收藏")
+                                                }
+                                            } }) { Icon(Icons.Outlined.BookmarkRemove, "取消云端收藏") }
+                                        })
+                                }
+                                item { PageControls(page, result.pageNumber) { if(!bulkBusy) page = it } }
                             }
-                            item { PageControls(page, result.pageNumber) { page = it } }
                         }
                     }
                 }
+            }
+        }
+    }
+    bulkLocal?.let { books -> CloudFavoriteLocalSheet(local.folders, books.size, { bulkLocal = null }) { folder ->
+        val added = books.count { book -> c.store.state.value.books.none { it.book.ref == book.ref } }
+        c.store.update { it.withCloudFavoritesAddedLocally(books, folder) }
+        bulkLocal = null; managing = false; selection = emptyMap()
+        c.message("已加入 $added 本到「$folder」" + if(added < books.size) "，${books.size - added} 本已在本地" else "")
+    } }
+    bulkRemoval?.let { (selectedFolder, books) ->
+        ConfirmDialog("取消 ${books.size} 本云端收藏？", "仅取消所选作品的云端收藏，本地收藏和阅读记录会保留。",
+            { bulkRemoval = null }, confirmLabel = "取消云端收藏") {
+            val binding = c.session.capture()
+            // 一批完成后统一刷新，避免每本成功都触发列表与元数据请求。
+            bulkRefreshAt = local.syncStatus[account]?.lastSuccessAt ?: 0L
+            bulkBusy = true; bulkProgress = 0; expanded = false
+            c.action {
+                try {
+                    if(binding.account != account) throw SessionChangedException()
+                    val result = removeCloudFavorites(books, selectedFolder, { c.session.ensureCurrent(binding) },
+                        remove = { c.cloudMutation("DELETE", it, notifyQueued = false) }, onProgress = { bulkProgress = it })
+                    selection = selection.filterKeys { it in result.failed }
+                    managing = result.failed.isNotEmpty()
+                    if(result.removed.isNotEmpty()) { page = 0; version++ }
+                    c.message(buildList {
+                        if(result.removed.isNotEmpty()) add("已取消 ${result.removed.size} 本")
+                        if(result.queued.isNotEmpty()) add("${result.queued.size} 本待同步")
+                        if(result.failed.isNotEmpty()) add("${result.failed.size} 本失败，已保留选择：${result.failed.values.first().friendlyMessage()}")
+                    }.joinToString("；"))
+                } finally { bulkBusy = false }
             }
         }
     }

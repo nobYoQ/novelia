@@ -11,12 +11,12 @@ internal fun pendingFavoriteAction(pending: List<PendingAction>, account: String
 
 internal data class BookFavoriteState(val local: Boolean, val cloudFolder: String?, val pendingMethod: String? = null) {
     val isSaved get() = local || cloudFolder != null
-    val label get() = when {
-        pendingMethod == "PUT" -> "云端收藏待同步 · 管理收藏"
-        pendingMethod == "DELETE" -> "取消云端收藏待同步 · 管理收藏"
-        cloudFolder != null -> "已云端收藏 · 管理收藏"
-        local -> "已本地收藏 · 管理收藏"
-        else -> "收藏到书架"
+    val localLabel get() = if(local) "已本地收藏" else "收藏到本地"
+    val cloudLabel get() = when {
+        pendingMethod == "PUT" -> "云端收藏待同步"
+        pendingMethod == "DELETE" -> "取消云端收藏待同步"
+        cloudFolder != null -> "已云端收藏"
+        else -> "收藏到云端"
     }
 }
 

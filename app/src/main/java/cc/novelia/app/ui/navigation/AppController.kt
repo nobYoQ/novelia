@@ -220,7 +220,7 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
      * 提交绑定当前账号的云端意图，并把队列变换和失败信息接入 LocalStore。
      * 返回 true 表示仍待同步，不能当作远端已更新；返回 false 才表示此次发送成功。
      */
-    suspend fun cloudMutation(method: String, path: String, body: String? = null, contentType: String = "application/json"): Boolean {
+    suspend fun cloudMutation(method: String, path: String, body: String? = null, contentType: String = "application/json", notifyQueued: Boolean = true): Boolean {
         val binding = session.capture()
         val account = binding.account ?: throw ApiException(401, "请先登录")
         val action = PendingAction(UUID.randomUUID().toString(), account, method, path, body, contentType)
@@ -236,7 +236,7 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
             val status = state.syncStatus[account] ?: CloudSyncStatus()
             state.copy(syncStatus = state.syncStatus + (account to status.copy(lastSuccessAt = System.currentTimeMillis(), requiresLogin = false)))
         }
-        if (queued) message("操作已保存，等待同步")
+        if (queued && notifyQueued) message("操作已保存，等待同步")
         return queued
     }
     /** 显式云端收藏操作可同时为同一本书创建可选的本地副本。 */

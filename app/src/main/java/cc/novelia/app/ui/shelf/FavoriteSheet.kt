@@ -28,7 +28,7 @@ import cc.novelia.app.ui.navigation.loginForFavorite
 
 @Composable fun FavoriteSheet(c: AppController, book: BookCard, initialCloud: Boolean = false, dismiss: () -> Unit) {
     val state by c.store.state.collectAsStateWithLifecycle(); val profile by c.session.profile.collectAsStateWithLifecycle()
-    var cloud by rememberSaveable(book.ref.key, profile?.username) { mutableStateOf(initialCloud) }
+    var cloud by rememberSaveable(book.ref.key, profile?.username, initialCloud) { mutableStateOf(initialCloud) }
     var create by remember { mutableStateOf(false) }
     var version by remember { mutableIntStateOf(0) }
     AppSheet(onDismissRequest = dismiss) {

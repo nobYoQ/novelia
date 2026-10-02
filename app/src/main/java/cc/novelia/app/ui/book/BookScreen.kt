@@ -3,9 +3,7 @@ package cc.novelia.app.ui.book
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -18,7 +16,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -57,14 +54,12 @@ import cc.novelia.app.ui.markdown.format
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.reader.ChapterCacheDialog
 import cc.novelia.app.ui.shelf.FavoriteSheet
-import cc.novelia.app.ui.shelf.BookFavoriteState
 import cc.novelia.app.ui.shelf.bookFavoriteState
 import cc.novelia.app.data.library.withCloudReadingMetadata
 import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.MotionContent
 import cc.novelia.app.ui.theme.appReducedMotion
 import cc.novelia.app.ui.theme.motionClickable
-import cc.novelia.app.ui.theme.pressFeedback
 import java.io.File
 import kotlin.math.abs
 import kotlinx.coroutines.Dispatchers
@@ -76,7 +71,7 @@ import kotlinx.coroutines.withContext
         LocalBookDetailScreen(c, ref, onBack)
         return
     }
-    var menu by remember { mutableStateOf(false) }; var favorite by remember { mutableStateOf<BookCard?>(null) }; var download by remember { mutableStateOf<Pair<BookCard, String?>?>(null) }; var version by remember { mutableIntStateOf(0) }
+    var menu by remember { mutableStateOf(false) }; var favorite by remember { mutableStateOf<Pair<BookCard, Boolean>?>(null) }; var download by remember { mutableStateOf<Pair<BookCard, String?>?>(null) }; var version by remember { mutableIntStateOf(0) }
     val state by c.store.state.collectAsStateWithLifecycle(); val profile by c.session.profile.collectAsStateWithLifecycle()
     val localSaved = remember(state.books, ref) { state.books.any { it.book.ref == ref } }
     val refreshKey = listOf(version, state.syncStatus[profile?.username]?.lastSuccessAt ?: 0L)
@@ -105,7 +100,9 @@ import kotlinx.coroutines.withContext
             AdaptiveBookDetail(tab, { tab = it }, listOf("简介", "分卷", "讨论"), tabState) { panel ->
                     when(panel) {
                         0 -> AppLazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
-                            item { BookHero(book, "${detail.level} · ${detail.volumes.size} 卷", favoriteState, { favorite = book }) }
+                            item { BookHero(book, "${detail.level} · ${detail.volumes.size} 卷") {
+                                BookFavoriteActions(favoriteState, { favorite = book to false }, { favorite = book to true })
+                            } }
                             detail.latestPublishAt?.takeIf { it > 0 }?.let { item { MetaParagraph("最近出版", displayDate(it)) } }
                             item { MetaParagraph("简介", detail.introduction) }
                             item { TagList(detail.keywords, c) }
@@ -153,9 +150,9 @@ import kotlinx.coroutines.withContext
             AdaptiveBookDetail(tab, { tab = it }, listOf("简介", "目录 $chapterCount", "讨论"), tabState) { panel ->
                     when(panel) {
                         0 -> AppLazyColumn(contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            item { BookHero(book, "${detail.type} · ${providers[ref.provider]}", favoriteState, { favorite = book }, bottomPadding = 0.dp, showFavorite = false) }
+                            item { BookHero(book, "${detail.type} · ${providers[ref.provider]}", bottomPadding = 0.dp) }
                             item { BookReadingActions(destination, continuing,
-                                favoriteState = favoriteState, onFavorite = { favorite = book },
+                                favoriteState = favoriteState, onLocalFavorite = { favorite = book to false }, onCloudFavorite = { favorite = book to true },
                                 onRead = { start?.let { if(localDestination != null && cloudDestination != null && localDestination.chapterId != cloudDestination.chapterId) progressChoice = localDestination to cloudDestination else c.read(ref, it) } },
                                 onDownload = { download = book to null }) }
                             item { BookUpdateSummary(detail) { id -> c.read(ref, id) } }
@@ -187,7 +184,7 @@ import kotlinx.coroutines.withContext
             }
         }
     }
-    favorite?.let { FavoriteSheet(c, it, initialCloud = profile != null) { favorite = null } }
+    favorite?.let { (book, cloud) -> FavoriteSheet(c, book, initialCloud = cloud) { favorite = null } }
     download?.let { (book, volume) -> DownloadSheet(c, book, volume) { download = null } }
     progressChoice?.let { (localChapter, cloudChapter) -> AppAlertDialog(onDismissRequest = { progressChoice = null }, title = { Text("选择继续阅读的位置") }, text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { Text("本机与原站记录的章节不同，请选择这次从哪里继续。"); Text("本机：${localChapter.label}"); Text("原站：${cloudChapter.label}") } }, confirmButton = { TextButton(onClick = { progressChoice = null; c.read(ref, cloudChapter.chapterId) }) { Text("原站进度") } }, dismissButton = { TextButton(onClick = { progressChoice = null; c.read(ref, localChapter.chapterId) }) { Text("本机进度") } }) }
 }
@@ -264,31 +261,13 @@ import kotlinx.coroutines.withContext
     }
 }
 @Composable private fun Stat(label: String, value: String) { Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(value, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary); Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
-@Composable private fun BookHero(book: BookCard, subtitle: String, favoriteState: BookFavoriteState, favorite: () -> Unit, bottomPadding: Dp = 20.dp, showFavorite: Boolean = true) {
-    val interaction = remember { MutableInteractionSource() }
-    val savedColor by animateColorAsState(
-        if(favoriteState.isSaved) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-        animationSpec = tween(if(appReducedMotion()) 0 else AppMotion.Standard), label = "favorite-container"
-    )
+@Composable private fun BookHero(book: BookCard, subtitle: String, bottomPadding: Dp = 20.dp, actions: (@Composable () -> Unit)? = null) {
     Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = bottomPadding), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             BookCover(book, Modifier.width(94.dp).height(134.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) { Text(book.title, style = MaterialTheme.typography.titleLarge); Text(subtitle, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary); Text(book.originalTitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
-        if(showFavorite) OutlinedButton(
-            onClick = favorite,
-            modifier = Modifier.fillMaxWidth().pressFeedback(interaction),
-            interactionSource = interaction,
-            colors = ButtonDefaults.outlinedButtonColors(containerColor = savedColor)
-        ) {
-            MotionContent(favoriteState, animateInitial = false) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(if(favoriteState.isSaved) Icons.Outlined.BookmarkAdded else Icons.Outlined.BookmarkAdd, null, Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(favoriteState.label)
-                }
-            }
-        }
+        actions?.invoke()
     }
 }
 @Composable fun TocPanel(c: AppController, ref: BookRef, toc: List<TocItem>, current: String?, onRead: (String) -> Unit) {
