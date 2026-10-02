@@ -40,8 +40,8 @@ import cc.novelia.app.ui.components.AppDropdownMenu
     var sortMenu by remember { mutableStateOf(false) }
     val folderButton: @Composable (Modifier) -> Unit = { modifier ->
         Box(modifier) {
-            TextButton(onClick = { folderMenu = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                .testTag("$tagPrefix-folder-picker"), contentPadding = PaddingValues(horizontal = 4.dp)) {
+            OutlinedButton(onClick = { folderMenu = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                .testTag("$tagPrefix-folder-picker"), shape = MaterialTheme.shapes.medium, contentPadding = PaddingValues(horizontal = 12.dp)) {
                 Text(current?.title ?: "收藏夹", Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
                 Icon(Icons.Outlined.ExpandMore, null, Modifier.size(18.dp))

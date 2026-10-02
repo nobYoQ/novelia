@@ -23,6 +23,23 @@ class KeywordStoreTest {
         override fun getFilesDir() = File(root, "files").apply { mkdirs() }
         override fun getCacheDir() = File(root, "cache").apply { mkdirs() }
     }
+
+    @Test fun oldLibrarySeedsEditableCategoriesOnceAndPersistsSiteTranslations() = fixture { context, _ ->
+        val old = KeywordLibrary(listOf(KeywordEntry("BL", category = "题材"), KeywordEntry("TS", category = "题材"),
+            KeywordEntry("ヤンデレヒロイン")), categories = listOf("题材", "人物", "情节", "其他"))
+        File(context.filesDir, KeywordStore.FILE_NAME).writeText(appJson.encodeToString(old), Charsets.UTF_8)
+        val store = KeywordStore(context)
+        assertEquals("BL／男性恋爱", store.state.value.entries.single { it.original == "BL" }.category)
+        assertEquals("病娇女主角", store.state.value.entries.single { it.original == "ヤンデレヒロイン" }.translation)
+        store.renameCategory("BL／男性恋爱", "我的 BL")
+        store.deleteCategory("TS／性转")
+        store.flush()
+        val reopened = KeywordStore(context)
+        assertEquals(store.state.value, reopened.state.value)
+        assertFalse("BL／男性恋爱" in reopened.state.value.categories)
+        assertFalse("TS／性转" in reopened.state.value.categories)
+        assertEquals("我的 BL", reopened.state.value.entries.single { it.original == "BL" }.category)
+    }
     private fun fixture(block: suspend (Context, Context) -> Unit) = runBlocking {
         withContext(Dispatchers.IO) {
             val base = InstrumentationRegistry.getInstrumentation().targetContext

@@ -38,6 +38,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.library.moveShelfBooks
+import cc.novelia.app.data.catalog.CharacterCountFilter
+import cc.novelia.app.ui.components.CharacterCountFilterSaver
 import cc.novelia.app.data.library.ShelfBookType
 import cc.novelia.app.data.library.readingStatuses
 import cc.novelia.app.data.library.shelfGroups
@@ -80,6 +82,7 @@ import kotlinx.coroutines.withContext
     var fileType by rememberSaveable { mutableStateOf(ShelfBookType.All) }
     var filtersExpanded by remember(tab) { mutableStateOf(false) }
     var readingStatus by rememberSaveable { mutableStateOf("全部") }
+    var characterFilter by rememberSaveable(stateSaver = CharacterCountFilterSaver) { mutableStateOf(CharacterCountFilter()) }
     var bulkStatus by remember { mutableStateOf(false) }
     var createFolder by remember { mutableStateOf(false) }; var selected by remember { mutableStateOf<SavedBook?>(null) }; var managing by remember { mutableStateOf(false) }; var selection by remember { mutableStateOf(setOf<String>()) }; var bulkMove by remember { mutableStateOf(false) }
     var renameFolder by remember { mutableStateOf(false) }; var deleteFolder by remember { mutableStateOf(false) }; var localExportId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -128,10 +131,15 @@ import kotlinx.coroutines.withContext
     val filteringVolumes = settledQuery.isNotBlank() || readingStatus != "全部"
     val reducedMotion = appReducedMotion()
     val tabState = rememberSaveableStateHolder()
-    val groups = remember(state.books, state.positions, tab, folder, settledQuery, sort, bookType, fileType, readingStatus) {
+    val baseGroups = remember(state.books, state.positions, tab, folder, settledQuery, sort, bookType, fileType, readingStatus) {
         state.shelfGroups(localOnly = tab == 1, folder = folder, query = settledQuery, sort = sort,
             type = if(tab == 0) bookType else fileType, status = readingStatus)
     }
+    val filterCharacters = tab == 0 && bookType == ShelfBookType.Web && characterFilter.active
+    val countCandidates = if(tab == 0 && bookType == ShelfBookType.Web) baseGroups.map { it.saved.book } else emptyList()
+    val cacheGeneration by c.store.cacheGeneration.collectAsStateWithLifecycle()
+    val characterCounts = rememberShelfCharacterCounts(c, countCandidates, filterCharacters, profile?.username, cacheGeneration)
+    val groups = if(filterCharacters) baseGroups.filter { characterFilter.matches(characterCounts.count(it.saved.book)) } else baseGroups
     val books = remember(groups) { groups.flatMap { (if(it.matchesFilters) listOf(it.saved) else emptyList()) + it.volumes } }
     val selectableKeys = remember(books) { books.map { it.book.ref.key }.toSet() }
     LaunchedEffect(selectableKeys) { selection = selection.intersect(selectableKeys) }
@@ -173,7 +181,13 @@ import kotlinx.coroutines.withContext
                             Column(Modifier.fillMaxSize()) {
                                 LocalShelfFilters(tab == 1, if(tab == 0) bookType else fileType, { if(tab == 0) bookType = it else fileType = it },
                                     state.folders, folder, { folder = it }, sort, { sort = it }, query, { query = it }, readingStatus, { readingStatus = it },
-                                    filtersExpanded, { filtersExpanded = it }, filterHeight, { createFolder = true }, { renameFolder = true }, { deleteFolder = true })
+                                    filtersExpanded, { filtersExpanded = it }, filterHeight, { createFolder = true }, { renameFolder = true }, { deleteFolder = true },
+                                    characters = characterFilter, onCharacters = { characterFilter = it })
+                                if(filterCharacters) Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    val unknown = countCandidates.count { characterCounts.count(it) == null }
+                                    Text(if(characterCounts.loading) "正在补全字数…" else "$unknown 本字数未知", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                                    if(unknown > 0) TextButton(onClick = { characterCounts.loadMore(countCandidates) }, enabled = !characterCounts.loading) { Text("补全字数") }
+                                }
                                 AppLazyColumn(modifier = Modifier.weight(1f).nestedScroll(collapse), listModifier = Modifier.testTag("shelf-books"), state = listState,
                                     onPageTurn = { if(it > 0) filtersExpanded = false }) {
                                     val importedBooks = importedKeys.mapNotNull { key -> state.books.firstOrNull { it.book.ref.key == key } }
@@ -234,7 +248,7 @@ import kotlinx.coroutines.withContext
                                     } } }
                                     if(books.isEmpty()) item {
                                         if(query.isNotBlank() || folder != "全部" || readingStatus != "全部" || (if(tab == 0) bookType else fileType) != ShelfBookType.All)
-                                            EmptyState("没有符合条件的小说", "试试其他书名、作者、类型或阅读状态。", action = "清除筛选", onAction = { query = ""; folder = "全部"; readingStatus = "全部"; bookType = ShelfBookType.All; fileType = ShelfBookType.All })
+                                            EmptyState("没有符合条件的小说", if(filterCharacters) "可以放宽字数范围、包含未知作品或继续补全字数。" else "试试其他书名、作者、类型或阅读状态。", action = "清除筛选", onAction = { query = ""; folder = "全部"; readingStatus = "全部"; bookType = ShelfBookType.All; fileType = ShelfBookType.All; characterFilter = CharacterCountFilter() })
                                         else EmptyState(if(tab == 1) "把故事装进口袋" else "书架等你来填满", if(tab == 1) "支持 EPUB、TXT 和 SRT，导入后即可离线阅读。" else "去发现喜欢的小说，或导入你已有的文件。", action = if(tab == 1) "导入文件" else "去发现", onAction = { if(tab == 1) importer.launch(arrayOf("*/*")) else c.go("discover") }, sticker = MidoriSticker.Welcome)
                                     }
                                     items(reorder.rows, key = { it.saved.book.ref.key }, contentType = { if(it.parent == null) "book" else "volume" }) { row ->
@@ -270,7 +284,9 @@ import kotlinx.coroutines.withContext
                                             } else null)
                                         else Column(itemMotion.testTag("shelf-book-${saved.book.ref.key}").drawBehind { drawRect(selectionColor.value) }
                                             .semantics { if(!managing && saved.book.ref.key == selectedBookKey) stateDescription = "已选中" }) {
-                                            BookRow(saved.book, onOpen, status = bookRowStatus(saved.book, saved, state.positions[saved.book.ref.key], state.bookUpdates[saved.book.ref.key], profile?.username), trailing = trailing)
+                                            BookRow(if(filterCharacters) saved.book.copy(totalCharacters = characterCounts.count(saved.book)) else saved.book, onOpen,
+                                                status = bookRowStatus(saved.book, saved, state.positions[saved.book.ref.key], state.bookUpdates[saved.book.ref.key], profile?.username),
+                                                showCharacterCount = filterCharacters, trailing = trailing)
                                             if(saved.book.ref.isWenku && !managing) {
                                                 val rotation by animateFloatAsState(if(row.expanded) 180f else 0f, tween(if(reducedMotion) 0 else AppMotion.Standard), label = "wenku-volume-disclosure")
                                                 TextButton(onClick = {

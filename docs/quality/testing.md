@@ -47,7 +47,9 @@ JVM 报告在 `app/build/reports/tests/testDebugUnitTest/`，XML 结果在 `app/
 
 | 改动 | 优先测试 |
 | --- | --- |
+| 桌面图标与启动入口 | `launcher.LauncherIconControllerTest`；设备 `launcher.LauncherIconLifecycleTest`、`ui.settings.LauncherIconPickerTest`。检查前台不切换、重建不切换、后台单入口、恢复默认、图标冷启动和切换后立即重开、站内链接和分享；真实厂商桌面另行验收 |
 | 请求与会话 | `ApiContractTest`、`NetworkPerformanceTest`、`data.auth.SessionIsolationTest`、`data.network.SharedRequestTest` |
+| 原站/镜像切换 | `data.network.BookSourceTest`、`data.auth.MirrorAuthCookiesTest`、`ClipboardLinksTest`；设备 `data.auth.MirrorSessionTest`、`ui.settings.BookSourcePickerTest`、`ui.settings.BookSourceNavigationTest`，覆盖认证协议、Cookie 隔离、401 续期、跨域下载、来源切换及重建 |
 | 云端收藏和待同步 | `CloudFavoritesTest`、`CloudFavoriteLocalCopyTest`、`data.sync.CloudMutationQueueTest`、`data.sync.CloudSyncPolicyTest`、`data.sync.CloudSyncRuntimeTest`、`data.sync.BoundCloudSyncTest` |
 | 书库状态与恢复 | `data.storage.StatePersistenceTest`、`data.storage.LibraryStateCodecTest`、`data.backup.LibraryBackupTest`、`data.cache.LocalCacheTest`、`MetadataCacheTest` |
 | 文档存储与导入 | `data.documents.DocumentStorageTest`、`data.documents.DocumentHashIndexTest`、`FileImportRegressionTest`、`DocumentToolsTest` |
@@ -56,7 +58,7 @@ JVM 报告在 `app/build/reports/tests/testDebugUnitTest/`，XML 结果在 `app/
 | 阅读投影/进度 | `ReaderProjectionTest`、`ReaderPreferencesTest`、`ReadingContinuityTest`、`ReadingProgressUpdatesTest`、`ReaderChapterLoadTest`、`ReaderSafetyTest` |
 | 书籍摘要、云端元数据和进度展示 | `BookMetadataTest`、`CloudBookMetadataTest`、`BookListPresentationTest`、`FavoritePresentationTest`、`WebCoverTest` |
 | 分页/搜索/插图 | `StaticPaginationTest`、`ReaderExactSearchTest`、`ReaderChapterOverscrollTest`、`IllustrationTransformTest` |
-| 搜索、关键词、书源与屏蔽 | `ReaderAndLinksTest`、`SearchExpressionBoundaryTest`、`KeywordCatalogTest`、`KeywordObservationTest`、`BookVisibilityTest` |
+| 搜索、关键词、书源与屏蔽 | `ReaderAndLinksTest`、`SearchExpressionBoundaryTest`、`KeywordCatalogTest`、`KeywordLibraryTest`、`KeywordObservationTest`、`NovelLocalFilterTest`、`BookVisibilityTest`；设备 `ui.discover.KeywordLibraryUiTest`、`ui.discover.SearchAssistantTest`、`data.catalog.KeywordStoreTest`，覆盖原站组合标签译名、分类批量添加后逐项调整、迁移后重命名／删除与重启 |
 | 分卷与更新检查 | `WenkuVolumesTest`、`BookUpdatesTest`、`TranslationFreshnessTest`、`data.updates.BookUpdateStateTest`、`data.updates.UpdateCheckOrderTest` |
 | 列表页码窗口与跳转 | `PageControlsTest` |
 | 旧后台任务升级兼容 | `data.compat.LegacyWorkerCompatibilityTest`：检查两个旧 Worker 类名可反射加载且保留 WorkManager 构造签名 |

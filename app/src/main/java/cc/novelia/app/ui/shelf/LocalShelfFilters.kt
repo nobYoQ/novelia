@@ -17,6 +17,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.library.ShelfBookType
 import cc.novelia.app.data.library.readingStatuses
+import cc.novelia.app.data.catalog.CharacterCountFilter
+import cc.novelia.app.ui.components.CharacterCountFilterFields
 import cc.novelia.app.data.model.Folder
 import cc.novelia.app.ui.components.ChoiceRow
 import cc.novelia.app.ui.components.CollapsibleCloudFilters
@@ -27,6 +29,7 @@ import cc.novelia.app.ui.components.CollapsibleCloudFilters
     sort: Int, onSort: (Int) -> Unit, query: String, onQuery: (String) -> Unit,
     status: String, onStatus: (String) -> Unit, expanded: Boolean, onExpanded: (Boolean) -> Unit,
     maxHeight: Dp, onCreateFolder: () -> Unit, onRenameFolder: () -> Unit, onDeleteFolder: () -> Unit,
+    characters: CharacterCountFilter = CharacterCountFilter(), onCharacters: (CharacterCountFilter) -> Unit = {},
 ) {
     val focus = LocalFocusManager.current
     val types = if(localFiles) listOf(ShelfBookType.All, ShelfBookType.Wenku, ShelfBookType.Local)
@@ -36,6 +39,7 @@ import cc.novelia.app.ui.components.CollapsibleCloudFilters
     val active = buildList {
         if(query.isNotBlank()) add("搜索：${query.trim()}")
         if(status != "全部") add(status)
+        if(!localFiles && type == ShelfBookType.Web && characters.active) add(characters.summary())
     }
     val summary = active.joinToString(" · ")
     ShelfKindSwitch(labels, types.indexOf(type).coerceAtLeast(0), "local-novel-kind") { onType(types[it]) }
@@ -57,8 +61,9 @@ import cc.novelia.app.ui.components.CollapsibleCloudFilters
             trailingIcon = { IconButton(onClick = { focus.clearFocus(); onExpanded(false) }) { Icon(Icons.Outlined.Search, "搜索本地书架") } },
             modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 12.dp))
         ChoiceRow("阅读状态", listOf("全部") + readingStatuses, (listOf("全部") + readingStatuses).indexOf(status)) { onStatus((listOf("全部") + readingStatuses)[it]) }
+        if(!localFiles && type == ShelfBookType.Web) CharacterCountFilterFields(characters, onCharacters)
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = { onQuery(""); onStatus("全部") }) { Text("重置筛选") }
+            TextButton(onClick = { onQuery(""); onStatus("全部"); onCharacters(CharacterCountFilter()) }) { Text("重置筛选") }
             TextButton(onClick = { focus.clearFocus(); onExpanded(false) }) { Text("完成") }
         }
     }

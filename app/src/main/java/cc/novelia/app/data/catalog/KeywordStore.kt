@@ -29,6 +29,7 @@ class KeywordStore(context: Context, private val entryLimit: () -> Int? = { null
     private data class Snapshot(val revision: Long, val library: KeywordLibrary)
     private var revision = 0L
     private var failedRead = false
+    private var needsMigrationSave = false
     private val mutable = MutableStateFlow(read())
     val state: StateFlow<KeywordLibrary> = mutable.asStateFlow()
     private val mutableError = MutableStateFlow<String?>(null)
@@ -48,6 +49,7 @@ class KeywordStore(context: Context, private val entryLimit: () -> Int? = { null
                 }
             }
         }
+        if(needsMigrationSave) writes.trySend(Unit)
     }
 
     fun observe(originals: Collection<String>) = change { it.withEntries(KeywordCatalog.observe(it.entries, originals, entryLimit())) }
@@ -139,11 +141,13 @@ class KeywordStore(context: Context, private val entryLimit: () -> Int? = { null
     }
     private fun read(): KeywordLibrary {
         failedRead = false
+        needsMigrationSave = false
         if(!file.exists() && !File(file.path + ".bak").exists()) return KeywordLibrary.defaults()
         return try {
             val text = atomic.openRead().bufferedReader(Charsets.UTF_8).use { it.readText() }
             val loaded = KeywordLibraryFormat.decode(text)
-            if(text.trimStart().startsWith("[")) KeywordLibrary.fromLegacy(loaded.entries) else loaded
+            val library = if(text.trimStart().startsWith("[")) KeywordLibrary.fromLegacy(loaded.entries) else loaded
+            library.upgradeDefaults(entryLimit()).also { needsMigrationSave = it != loaded }
         } catch(_: Exception) { failedRead = true; KeywordLibrary.defaults() }
     }
 }

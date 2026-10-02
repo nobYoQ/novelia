@@ -19,15 +19,16 @@ fun KeywordEditorDialog(
     onExclude: (() -> Unit)? = null,
     categories: List<String> = emptyList(),
     onSaveDetails: ((String, String, String) -> Unit)? = null,
+    onRemove: (() -> Unit)? = null,
 ) {
-    var translation by rememberSaveable(entry.original) { mutableStateOf(entry.translation) }
+    var translation by rememberSaveable(entry.original) { mutableStateOf(entry.displayTranslation) }
     var category by rememberSaveable(entry.original) { mutableStateOf(entry.category) }
     var error by remember { mutableStateOf<String?>(null) }
     val tooLong = translation.length > KeywordCatalog.MAX_TEXT_LENGTH || entry.original.length > KeywordCatalog.MAX_TEXT_LENGTH
     fun saveChanges(force: Boolean = false): Boolean = try {
         if(onSaveDetails != null) {
-            if(force || translation != entry.translation || category != entry.category) onSaveDetails(entry.original, translation, category)
-        } else if(force || translation != entry.translation) onSave(entry.original, translation)
+            if(force || translation != entry.displayTranslation || category != entry.category) onSaveDetails(entry.original, translation, category)
+        } else if(force || translation != entry.displayTranslation) onSave(entry.original, translation)
         true
     } catch(failure: IllegalArgumentException) { error = failure.message; false }
     AppAlertDialog(onDismissRequest = onDismiss, title = { Text(entry.original) },
@@ -46,6 +47,7 @@ fun KeywordEditorDialog(
                     }
                     if(!KeywordCatalog.canSearch(entry.original)) Text("此标签包含原站语法不支持的字符，请使用普通关键词搜索。", style = MaterialTheme.typography.bodySmall)
                 }
+                if(onRemove != null) TextButton(onClick = onRemove, modifier = Modifier.testTag("keyword-remove")) { Text("移除搜索条件") }
             }
         },
         confirmButton = { TextButton(onClick = { if(saveChanges(force = true)) onDismiss() }, enabled = !tooLong) { Text(if(onSaveDetails != null) "保存标签" else "保存翻译") } },

@@ -25,6 +25,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.catalog.KeywordCatalog
 import cc.novelia.app.data.catalog.KeywordEntry
 import cc.novelia.app.data.catalog.providers
+import cc.novelia.app.data.catalog.formatApproximateCharacters
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.theme.AppMotion
@@ -83,13 +84,14 @@ import coil.decode.DataSource
         }
     }
 }
-@Composable internal fun BookRow(book: BookCard, onClick: () -> Unit, modifier: Modifier = Modifier, status: BookRowStatus? = null, showReadingProgress: Boolean = true, showBookMetadata: Boolean = true, trailing: @Composable (() -> Unit)? = null) {
+@Composable internal fun BookRow(book: BookCard, onClick: () -> Unit, modifier: Modifier = Modifier, status: BookRowStatus? = null, showReadingProgress: Boolean = true, showBookMetadata: Boolean = true, showCharacterCount: Boolean = false, trailing: @Composable (() -> Unit)? = null) {
     val presentation = LocalBookListPresentation.current
     val saved = presentation.books[book.ref.key]
     val reading = status ?: bookRowStatus(book, saved, presentation.positions[book.ref.key], presentation.updates[book.ref.key], presentation.account)
     val showProgress = showReadingProgress && !book.ref.isWenku
     val updated = bookUpdateDate(book.updateAt ?: saved?.book?.updateAt?.takeIf { showBookMetadata })
     val subtitle = book.subtitle.ifBlank { providers[book.ref.provider] ?: "本地小说" }
+    val characters = book.totalCharacters ?: saved?.book?.totalCharacters
     val fontScale = LocalDensity.current.fontScale
     Row(modifier.fillMaxWidth().motionClickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -104,6 +106,8 @@ import coil.decode.DataSource
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(book.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if(showBookMetadata && (characters != null || showCharacterCount)) Text(characters?.let(::formatApproximateCharacters) ?: "字数未知",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     trailing?.invoke()
                 }

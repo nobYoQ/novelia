@@ -41,7 +41,9 @@ class DownloadWorker(context: Context, parameters: WorkerParameters) : Coroutine
         try {
             update(app, id, "下载中", 0)
             val client = app.api.downloadTransport
-            val parsed = entry.url.toHttpUrl(); require(parsed.scheme == "https" && parsed.host == "n.novelia.cc")
+            val parsed = entry.url.toHttpUrl()
+            require(parsed.scheme == "https" && parsed.port == 443 && parsed.username.isEmpty() && parsed.password.isEmpty() &&
+                parsed.host in setOf("n.novelia.cc", "book.xkvi.top"))
             val request = Request.Builder().url(parsed).build()
             val workContext = coroutineContext
             app.api.withAuthenticatedResponse(request, binding, client) { response ->

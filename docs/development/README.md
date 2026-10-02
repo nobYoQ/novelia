@@ -8,5 +8,7 @@
 | --- | --- |
 | [环境搭建与构建](getting-started.md) | 第一次运行、选择 Debug/Release、离线构建、ABI 和产物位置 |
 | [日常开发与扩展](development.md) | 新页面、新偏好、API、书源和依赖变更 |
+| [预置桌面图标](../../app/launcher-icons/README.md) | 添加图标图片、配置名称、升级保留旧入口 |
+| [反代镜像书源](book-source-mirrors.md) | 切换线路、注入镜像入口配置、账号会话隔离与回归 |
 
 完成首次构建后，按 [源码目录](../architecture/source-layout.md)找到对应包，阅读[功能索引](../features/README.md)中的专题，再确定[回归测试](../quality/testing.md)。构建失败先查[排障](../maintenance/troubleshooting.md)，准备正式分发则转到[发布维护](../maintenance/release-and-maintenance.md)。

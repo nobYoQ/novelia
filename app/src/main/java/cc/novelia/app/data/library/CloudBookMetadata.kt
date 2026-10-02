@@ -35,6 +35,7 @@ class CloudBookMetadataLoader(
                 total = maxOf(book.total, resolved.total),
                 novelType = resolved.novelType,
                 attentions = resolved.attentions,
+                totalCharacters = resolved.totalCharacters ?: book.totalCharacters,
             )
         }
     }

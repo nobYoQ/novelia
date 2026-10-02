@@ -33,7 +33,7 @@ import kotlinx.serialization.Serializable
     val lastUpdatedChapter get() = toc.withIndex().filter { it.value.chapterId != null }
         .maxWithOrNull(compareBy<IndexedValue<TocItem>> { it.value.createAt?.takeIf { time -> time > 0 } ?: 0L }
             .thenBy { it.index })?.value
-    fun card(ref: BookRef) = BookCard(ref, title, titleJp, subtitle = authors.joinToString { it.name }, tags = keywords, total = toc.count { it.chapterId != null }, translated = maxOf(gpt, sakura, youdao), favored = favored, updateAt = lastUpdatedAt, translations = mapOf("gpt" to gpt, "sakura" to sakura, "youdao" to youdao), authors = authors.map { it.name }, novelType = type, attentions = attentions)
+    fun card(ref: BookRef) = BookCard(ref, title, titleJp, subtitle = authors.joinToString { it.name }, tags = keywords, total = toc.count { it.chapterId != null }, translated = maxOf(gpt, sakura, youdao), favored = favored, updateAt = lastUpdatedAt, translations = mapOf("gpt" to gpt, "sakura" to sakura, "youdao" to youdao), authors = authors.map { it.name }, novelType = type, attentions = attentions, totalCharacters = totalCharacters?.takeIf { it >= 0 })
     fun card(ref: BookRef, account: String?): BookCard {
         val chapters = toc.mapNotNull { it.chapterId }
         return card(ref).copy(cloudReading = account?.let {

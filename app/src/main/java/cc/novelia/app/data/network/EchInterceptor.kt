@@ -191,11 +191,13 @@ private fun sameOrigin(a: HttpUrl, b: HttpUrl) = a.scheme == b.scheme && a.host 
 
 /** newBuilder 保留拦截器，因此同步更新桥接层的重定向策略。 */
 internal fun OkHttpClient.Builder.echRedirects(enabled: Boolean): OkHttpClient.Builder = apply {
-    followRedirects(enabled)
+    val source = interceptors().filterIsInstance<BookSourceInterceptor>().singleOrNull()
+    followRedirects(enabled && source == null)
+    if(source != null) interceptors()[interceptors().indexOf(source)] = source.withRedirects(enabled)
     val existing = interceptors().filterIsInstance<EchInterceptor>().singleOrNull()
     if (existing != null) {
         // Preserve ordering: later interceptors must not move ahead of the ECH route.
         val index = interceptors().indexOf(existing)
-        interceptors()[index] = existing.withRedirects(enabled)
+        interceptors()[index] = existing.withRedirects(enabled && source == null)
     }
 }

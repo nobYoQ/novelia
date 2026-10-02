@@ -18,6 +18,7 @@ internal fun readerSettingsDifferences(book: ReaderSettings, defaults: ReaderSet
         "分页模式" to if(staticPagination) "自动分页" else "连续滚动", "滚动翻页" to scrollPageTurn.label(),
         "左右翻页" to horizontalPageTurn.label(), "翻页按钮" to showPageButtons.label(),
         "章节末尾按钮" to showScrollPageButtons.label(), "阅读进度条" to showProgressBar.label(),
+        "列表与面板翻屏按钮" to showEInkScreenButtons.label(), "阅读时隐藏状态栏" to hideStatusBar.label(),
         "屏幕亮度" to if(brightness < 0) "跟随系统" else "${(brightness * 100).toInt()}%",
         "工具栏透明度" to "${(resolvedToolbarTransparency * 100).toInt()}%", "繁体显示" to traditional.label(),
         "朗读速度" to "$speechRate×", "朗读定时停止" to "$speechMinutes 分钟",

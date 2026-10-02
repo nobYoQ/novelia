@@ -60,8 +60,8 @@ import java.util.Locale
     AppSheet(onDismissRequest = onDismiss) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("网络诊断与日志", style = MaterialTheme.typography.titleLarge)
-            TogglePreference("启用 ECH", "对小说、论坛和认证接口使用加密握手", enabled, transport::setEnabled)
-            Text("检测会对照直连和 ECH 的实际接口请求，最长约 3 分钟。关闭此面板后仍会继续，可返回查看结果。", style = MaterialTheme.typography.bodyMedium)
+            TogglePreference("启用 ECH", "对原站小说、论坛和认证接口使用加密握手；镜像线路使用普通 HTTPS", enabled, transport::setEnabled)
+            Text("检测针对原站，对照直连和 ECH 的实际接口请求，最长约 3 分钟。关闭此面板后仍会继续，可返回查看结果。", style = MaterialTheme.typography.bodyMedium)
             Button(enabled = !diagnosis.running, onClick = transport::startDiagnostics) { Text("运行网络诊断") }
             if (diagnosis.running) {
                 Text("正在检测 ${diagnosis.completed}/${diagnosis.total}")

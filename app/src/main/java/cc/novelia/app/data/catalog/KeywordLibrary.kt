@@ -19,7 +19,21 @@ import kotlinx.serialization.json.JsonPrimitive
     val categories: List<String> = KeywordCatalog.defaultCategories,
     val format: String = "novelia-keywords",
     val version: Int = 1,
+    val categorySeedsVersion: Int = 0,
 ) {
+    /** 分类只补建一次；之后用户重命名、删除或移动标签均不被启动迁移撤销。 */
+    fun upgradeDefaults(limit: Int? = null): KeywordLibrary {
+        val seedCategories = if(categorySeedsVersion < 1) keywordCategorySeeds.map { it.name }.filterNot { it in categories }
+            .take((MAX_CATEGORIES - categories.size).coerceAtLeast(0)) else emptyList()
+        val updatedCategories = categories + seedCategories
+        val translated = KeywordCatalog.fillMissingTranslations(entries)
+        val categorized = if(categorySeedsVersion < 1) translated.map { entry ->
+            KeywordCatalog.seededCategory(entry)?.takeIf { it in updatedCategories }?.let { entry.copy(category = it) } ?: entry
+        } else translated
+        return copy(categories = updatedCategories, categorySeedsVersion = maxOf(1, categorySeedsVersion)).withEntries(
+            KeywordCatalog.observe(categorized, KeywordCatalog.common.map { it.original }, limit))
+    }
+
     fun createCategory(name: String): KeywordLibrary {
         requireCategoryName(name)
         require(name !in categories) { "分类名称已存在" }
@@ -48,7 +62,7 @@ import kotlinx.serialization.json.JsonPrimitive
         KeywordCatalog.requireCapacity(entries.size, entries.size + if(entries.any { it.original == original }) 0 else 1, limit)
         val previous = entries.firstOrNull { it.original == original } ?: KeywordEntry(original)
         val edited = previous.copy(translation = translation, category = category,
-            translationEdited = previous.translationEdited || translation != previous.translation,
+            translationEdited = previous.translationEdited || translation != previous.displayTranslation,
             categoryEdited = previous.categoryEdited || category != previous.category)
         return copy(entries = KeywordCatalog.normalize(entries.filterNot { it.original == original } + edited))
     }
@@ -73,7 +87,7 @@ import kotlinx.serialization.json.JsonPrimitive
         const val OTHER = "其他"
         const val MAX_CATEGORIES = 100
         const val MAX_CATEGORY_LENGTH = 40
-        fun defaults() = KeywordLibrary(KeywordCatalog.common)
+        fun defaults() = KeywordLibrary(KeywordCatalog.common, categorySeedsVersion = 1)
         fun fromLegacy(entries: List<KeywordEntry>, addDefaults: Boolean = true): KeywordLibrary {
             val vocabulary = if(addDefaults) KeywordCatalog.withDefaults(entries) else entries
             return KeywordLibrary(vocabulary, (KeywordCatalog.defaultCategories + vocabulary.map { it.category }).distinct())

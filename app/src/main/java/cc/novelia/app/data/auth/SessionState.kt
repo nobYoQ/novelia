@@ -9,15 +9,18 @@ import kotlinx.coroutines.flow.asStateFlow
  * 请求发起时捕获的会话身份。account 区分账号，generation 区分退出后重新登录等会话变化；
  * 即使用户名相同，旧请求也不能提交到新会话。这里不携带令牌，令牌由会话按绑定即时读取。
  */
-data class SessionBinding(val account: String?, val generation: Long)
+data class SessionBinding(val account: String?, val generation: Long, val source: String = "original", val sourceRevision: Long = 0) {
+    val cacheAccount: String get() = if(source == "original") account ?: "guest" else "$source\u0000${account ?: "guest"}"
+}
 
-class SessionChangedException : ApiException(401, "登录账号已变化，请重新操作")
+class SessionChangedException : ApiException(401, "账号或书源已变化，请重新操作")
 
 /** 网络层依赖的最小认证接口，允许测试替换真实 Keystore、Cookie 和刷新请求。 */
 interface AuthenticationSession {
     fun capture(): SessionBinding
     fun tokenFor(binding: SessionBinding): String?
     fun ensureCurrent(binding: SessionBinding) { tokenFor(binding) }
+    fun bindRequest(request: okhttp3.Request, binding: SessionBinding): okhttp3.Request = request
     suspend fun refreshIfCurrent(binding: SessionBinding, previousToken: String?): Boolean
 }
 
@@ -36,6 +39,12 @@ internal class SessionState(initialToken: String? = null, initialProfile: Profil
     @Synchronized fun tokenFor(binding: SessionBinding): String? {
         if (binding != capture()) throw SessionChangedException()
         return accessToken
+    }
+
+    @Synchronized fun replace(token: String?, profile: Profile?) {
+        generation++
+        accessToken = token.takeIf { profile != null }
+        mutable.value = profile
     }
 
     /**

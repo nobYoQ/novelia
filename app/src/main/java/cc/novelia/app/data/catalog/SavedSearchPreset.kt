@@ -17,12 +17,15 @@ data class SavedSearchPreset(
     val sort: Int = 0,
     val webLevel: Int = 0,
     val wenkuLevel: Int = 0,
+    val localFilter: NovelLocalFilter = NovelLocalFilter(),
 ) {
     fun normalized() = copy(
-        name = name.trim().take(80), query = query.trim(), category = category.coerceIn(1, 2),
+        name = name.trim().take(80), query = if(category == 2) query.trim() else SearchExpression.append(query, localFilter.legacyTagExpression()),
+        category = category.coerceIn(1, 2),
         source = source.split(',').map(String::trim).filter { it in providers }.distinct().sorted().joinToString(","),
         type = type.coerceIn(0, 3), translate = translate.coerceIn(0, 2), sort = sort.coerceIn(0, 2),
         webLevel = webLevel.coerceIn(0, 2), wenkuLevel = wenkuLevel.coerceIn(0, 6),
+        localFilter = localFilter.normalized(),
     )
 
     fun hasSameConditions(other: SavedSearchPreset): Boolean =
@@ -38,6 +41,7 @@ data class SavedSearchPreset(
                 add(listOf("全部译文", "GPT", "Sakura")[value.translate])
                 add(listOf("更新时间", "点击量", "相关度")[value.sort])
                 if(value.webLevel != 0) add(listOf("全部分级", "一般向", "R18")[value.webLevel])
+                addAll(value.localFilter.summaries())
             } else add(listOf("全部小说", "轻小说", "轻文学", "文学", "非小说", "R18男性向", "R18女性向")[value.wenkuLevel])
         }.joinToString(" · ")
     }

@@ -37,6 +37,28 @@ import org.junit.runner.RunWith
 class AppPagingTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun screenButtonsCanBeHiddenWhileEInkSwipeStillPages() {
+        val state = LazyListState()
+        var buttons by mutableStateOf(true)
+        compose.setContent {
+            CompositionLocalProvider(cc.novelia.app.ui.theme.LocalScreenPageButtons provides buttons) {
+                AppInteractionMode(true, true) { NoveliaTheme("light") {
+                    AppLazyColumn(Modifier.width(360.dp).height(460.dp), state, listModifier = Modifier.testTag("toggle-pages")) {
+                        items(30) { Text("作品 $it", Modifier.fillMaxWidth().height(80.dp)) }
+                    }
+                } }
+            }
+        }
+        compose.onNodeWithText("下一屏").assertExists()
+        compose.runOnIdle { buttons = false }
+        compose.onNodeWithText("下一屏").assertDoesNotExist()
+        compose.onNodeWithText("上一屏").assertDoesNotExist()
+        compose.onNodeWithTag("toggle-pages").performTouchInput { swipeUp() }
+        compose.runOnIdle { assertTrue(state.firstVisibleItemIndex > 0) }
+        compose.runOnIdle { buttons = true }
+        compose.onNodeWithText("上一屏").assertIsEnabled()
+    }
+
     @Test fun reducedMotionDisablesEmbeddedPageAnimationsWithoutChangingPagingMode() {
         lateinit var web: PagedSiteWebView
         var ready by mutableStateOf(false)

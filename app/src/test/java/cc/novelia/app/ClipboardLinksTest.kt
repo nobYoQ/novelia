@@ -11,6 +11,12 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ClipboardLinksTest {
+    @Test fun mirrorLinksShareNativeRoutesButRejectLookalikeHosts() {
+        assertEquals("book/syosetu/n1234", ClipboardLinks.find("https://book.xkvi.top/novel/syosetu/n1234")?.route)
+        assertEquals("https://n.novelia.cc/novel/syosetu/n1234", ClipboardLinks.find("https://book.xkvi.top/novel/syosetu/n1234")?.url)
+        assertNull(ClipboardLinks.find("https://book.xkvi.top.example/novel/syosetu/n1234"))
+        assertNull(ClipboardLinks.find("https://book.xkvi.top:8443/novel/syosetu/n1234"))
+    }
     @Test fun supportedSitePagesOpenTheirNativeScreen() {
         mapOf(
             "novel/syosetu/n1234" to "book/syosetu/n1234",

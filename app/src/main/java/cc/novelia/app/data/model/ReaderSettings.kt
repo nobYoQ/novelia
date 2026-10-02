@@ -33,7 +33,9 @@ import kotlinx.serialization.Serializable
     val showProgressBar: Boolean = true,
     // 默认连读本地/缓存及联网章节，整个播放会话共用一次定时停止。
     val speechContinueChapters: Boolean = true,
-    val speechNetworkContinuation: Boolean = true
+    val speechNetworkContinuation: Boolean = true,
+    val showEInkScreenButtons: Boolean = true,
+    val hideStatusBar: Boolean = false
 ) {
     companion object {
         const val MIN_LINE_HEIGHT = .5f

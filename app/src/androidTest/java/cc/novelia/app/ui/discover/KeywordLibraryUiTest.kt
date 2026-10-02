@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -23,6 +22,81 @@ import org.junit.Test
 
 class KeywordLibraryUiTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun categoryBatchIncludesEveryMemberThenAllowsIndividualRemovalAndExclusionBeforeApplying() {
+        val members = (0..15).map { KeywordEntry("成员$it", "译名%02d".format(it), "自建分类") }
+        val entries = members + KeywordEntry("有 空格", category = "自建分类") + KeywordEntry("其他标签")
+        var query = "手工条件"
+        var expanded by mutableStateOf(true)
+        compose.setContent { NoveliaTheme("light") { AppInteractionMode(false, true) {
+            SearchAssistantPanel(query, entries, expanded, { expanded = it }, { query = it }, { _, _ -> }, {},
+                categoryNames = listOf("其他", "自建分类"))
+        } } }
+        compose.onNodeWithText("同类标签一起筛选").assertDoesNotExist()
+        compose.onNodeWithTag("assistant-open-library").performScrollTo().performClick()
+        compose.onNode(hasTestTag("keyword-category-自建分类") and hasAnyAncestor(hasTestTag("keyword-library-categories"))).performClick()
+        compose.onNodeWithTag("keyword-library-search").performTextInput("译名00")
+        compose.waitUntil { compose.onAllNodesWithTag("library-tag-成员0").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("keyword-category-include").assertTextEquals("包含整类（16）").performClick()
+        compose.onNodeWithText("包含 16 · 排除 0").assertIsDisplayed()
+        compose.onNodeWithTag("keyword-category-include").performClick()
+        compose.onNodeWithText("包含 16 · 排除 0").assertIsDisplayed()
+        compose.onNodeWithTag("keyword-category-exclude").performClick()
+        compose.onNodeWithText("包含 0 · 排除 16").assertIsDisplayed()
+        compose.onNodeWithTag("keyword-category-include").performClick()
+        capture("keyword-category-batch")
+        compose.runOnIdle { assertEquals("手工条件", query) }
+        compose.onNodeWithTag("library-tag-成员0").performClick()
+        compose.onNodeWithTag("keyword-remove").performClick()
+        compose.onNodeWithTag("library-tag-成员0").assertIsNotSelected()
+        compose.onNodeWithTag("keyword-library-search").performTextReplacement("译名01")
+        compose.waitUntil { compose.onAllNodesWithTag("library-tag-成员1").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("library-tag-成员1").performClick()
+        compose.onNodeWithTag("keyword-exclude").performClick()
+        compose.onNodeWithContentDescription("返回").performClick()
+        val expected = (2..15).joinToString(" ") { "成员$it$" } + " -成员1$"
+        compose.onNodeWithTag("assistant-preview").performScrollTo().assertTextEquals(expected)
+        capture("keyword-category-adjusted")
+        compose.onNodeWithTag("assistant-append").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals("手工条件 $expected", query); assertFalse(expanded) }
+    }
+
+    @Test fun builtInCategoriesAreSelectableInTheLibraryAndCanBeExcludedAsOrdinaryTags() {
+        var expression = ""
+        compose.setContent { NoveliaTheme("light") { AppInteractionMode(false, true) {
+            SearchAssistantPanel("", KeywordCatalog.common, true, {}, { expression = it }, { _, _ -> }, {})
+        } } }
+        compose.onNodeWithTag("assistant-open-library").performScrollTo().performClick()
+        for((category, count) in listOf("BL／男性恋爱" to 6, "GL／百合" to 7, "TS／性转" to 9)) {
+            compose.onNode(hasTestTag("keyword-category-$category") and hasAnyAncestor(hasTestTag("keyword-library-categories")))
+                .performScrollTo().performClick()
+            compose.onNodeWithTag("keyword-category-exclude").assertTextEquals("排除整类（$count）")
+        }
+        compose.onNodeWithTag("keyword-category-exclude").performClick()
+        compose.onNodeWithText("包含 0 · 排除 9").assertIsDisplayed()
+        capture("keyword-ts-category")
+        compose.onNodeWithContentDescription("返回").performClick()
+        compose.onNodeWithTag("assistant-append").performScrollTo().performClick()
+        compose.runOnIdle {
+            assertTrue(expression.contains("-TS$"))
+            assertTrue(expression.contains("-性転換$"))
+            assertFalse(expression.contains("女装"))
+            assertEquals(9, SearchExpression.tagsIn(expression).size)
+        }
+    }
+
+    @Test fun automaticCompoundTranslationIsVisibleInLibraryAndEditorWithoutSavingItAsAUserEdit() {
+        var saves = 0
+        compose.setContent { NoveliaTheme("light") { AppInteractionMode(false, true) {
+            KeywordLibraryContent(listOf(KeywordEntry("ヤンデレヒロイン")), listOf("其他"), {}, { _, _ -> saves++ })
+        } } }
+        compose.onNodeWithTag("keyword-library-search").performTextInput("病娇女主角")
+        compose.waitUntil { compose.onAllNodesWithTag("library-tag-ヤンデレヒロイン").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("library-tag-ヤンデレヒロイン").assertTextEquals("ヤンデレヒロイン (病娇女主角)").performClick()
+        compose.onNodeWithTag("keyword-translation").assertTextContains("病娇女主角")
+        compose.onNodeWithText("关闭").performClick()
+        compose.runOnIdle { assertEquals(0, saves) }
+    }
 
     @Test fun fullLibraryFindsTagsBeyondThePreviewAndReturnsConditionsToTheAssistant() {
         val entries = (0..40).map { KeywordEntry("tag-$it", "中文标签 $it") }
@@ -78,7 +152,7 @@ class KeywordLibraryUiTest {
         compose.onNodeWithText("保存标签").performClick()
         compose.runOnIdle { assertEquals("人物收藏", library.entries.single { it.original == "ヤンデレ" }.category) }
         compose.onNodeWithTag("keyword-library-search").performTextClearance()
-        compose.waitUntil { compose.onAllNodesWithText("20 个标签").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil { compose.onAllNodesWithText("${KeywordCatalog.common.size} 个标签").fetchSemanticsNodes().isNotEmpty() }
         capture("keyword-library")
         compose.onNodeWithText("管理分类").performClick()
         capture("keyword-categories")
@@ -87,12 +161,12 @@ class KeywordLibraryUiTest {
         compose.runOnIdle {
             assertFalse("人物收藏" in library.categories)
             assertEquals("其他", library.entries.single { it.original == "ヤンデレ" }.category)
-            assertEquals(20, library.entries.size)
+            assertEquals(KeywordCatalog.common.size, library.entries.size)
         }
     }
 
     @Test fun chipsWrapAndLargeCatalogsStayLazyWhileCategoriesScrollHorizontally() {
-        val entries = listOf(KeywordEntry("勇者", lastUsedAt = 999)) + KeywordCatalog.common + (0 until 1000).map {
+        val entries = listOf(KeywordEntry("勇者", lastUsedAt = 999), KeywordEntry("短标签", lastUsedAt = 998)) + KeywordCatalog.common.filterNot { it.original == "勇者" } + (0 until 1000).map {
             KeywordEntry("标记%04d".format(it), category = "分类${it % 8}")
         }
         var fontScale by mutableFloatStateOf(1f)
@@ -107,7 +181,7 @@ class KeywordLibraryUiTest {
         }
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("library-tag-勇者").fetchSemanticsNodes().isNotEmpty() }
         val first = compose.onNodeWithTag("library-tag-勇者").assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp).getUnclippedBoundsInRoot()
-        val second = compose.onNodeWithTag("library-tag-ほのぼの").assertHeightIsAtLeast(48.dp).getUnclippedBoundsInRoot()
+        val second = compose.onNodeWithTag("library-tag-短标签").assertHeightIsAtLeast(48.dp).getUnclippedBoundsInRoot()
         assertEquals("短标签应该并排展示", first.top, second.top)
         assertTrue("标签之间需要留白", second.left - first.right >= 10.dp)
         val composedTags = compose.onAllNodes(SemanticsMatcher("tag chip") { it.config.getOrNull(SemanticsProperties.TestTag)?.startsWith("library-tag-") == true }).fetchSemanticsNodes().size
@@ -126,8 +200,12 @@ class KeywordLibraryUiTest {
     }
 
     private fun capture(name: String) {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val bitmap = compose.onAllNodes(isRoot()).onLast().captureToImage().asAndroidBitmap()
+        compose.waitForIdle()
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        // 弹窗与底层辅助面板各有一个根，截取实际屏幕以包含最上层弹窗。
+        val bitmap = instrumentation.uiAutomation.takeScreenshot()
         File(context.getExternalFilesDir("ux-screenshots"), "$name.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        bitmap.recycle()
     }
 }

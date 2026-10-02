@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<lint>
+    <!-- 这些图片由 icons.json 生成的 Manifest 引用，源码资源扫描看不到生成的 alias。 -->
+    <issue id="UnusedResources">
+        <ignore path="launcher-icons/res/drawable-nodpi/" />
+    </issue>
+    <!-- 必须检查 commit() 的成功返回值，避免在选择未落盘时执行切换；KTX edit 返回 Unit。 -->
+    <issue id="UseKtx">
+        <ignore path="src/main/java/cc/novelia/app/launcher/LauncherIconManager.kt" />
+        <ignore path="src/main/java/cc/novelia/app/data/network/BookSources.kt" />
+    </issue>
+</lint>

@@ -54,8 +54,8 @@ flowchart TD
 | --- | --- |
 | 语言 | `mode`：`zh`、`jp`、`zh-jp`、`jp-zh`；`engines` 为优先序；`parallel` 为并列译文 |
 | 排版 | `fontSize`、`lineHeight`、`paragraphSpacing`、`width`、`weight`、`indent`、`secondaryAlpha`、`underline`、`traditional` |
-| 颜色/屏幕 | `theme`、`brightness`、`keepScreenOn`、`toolbarTransparency` |
-| 分页/输入 | `paginationMode`、`showPageButtons`、`scrollPageTurn`、`horizontalPageTurn`、`volumeKeys` |
+| 颜色/屏幕 | `theme`、`brightness`、`keepScreenOn`、`toolbarTransparency`、`hideStatusBar` |
+| 分页/输入 | `paginationMode`、`showPageButtons`、`showScrollPageButtons`、`showEInkScreenButtons`、`scrollPageTurn`、`horizontalPageTurn`、`volumeKeys` |
 | 电子纸 | `eInkMode`、`beforeEInk`、`eInkPreferences` |
 | 预读 | `prefetchChapters`、`prefetchWifiOnly` |
 | 朗读 | `speechLanguage`、`speechRate`、`speechMinutes`、`speechContinueChapters`、`speechNetworkContinuation` |
@@ -63,6 +63,10 @@ flowchart TD
 `staticPagination` 仅判断 `paginationMode == "auto"`，不要把它等同于 `eInkMode`。电子纸首次开启使用自动分页和可用的翻页控制，关闭时恢复 `beforeEInk`，并保存电子纸内的选择供下次使用。旧字段 `paged`、`monochrome` 仍参与历史配置兼容；新增偏好应有默认值，调整这些字段前先读 [ReaderPreferencesTest](../../app/src/test/java/cc/novelia/app/ReaderPreferencesTest.kt)。
 
 设置 UI 位于 [ReaderPreferences.kt](../../app/src/main/java/cc/novelia/app/ui/reader/ReaderPreferences.kt) 的 `ReaderPreferences`，由阅读器和 [SettingsScreen.kt](../../app/src/main/java/cc/novelia/app/ui/settings/SettingsScreen.kt) 复用。行距范围为 0.5–2.6，设置导入使用相同范围。段距单独设置为 0–32dp，默认 8dp；滚动正文按实际文字高度布局，不再强制保留 48dp 段落高度。滚动与分页模式共用段距，分页测量和绘制使用同一数值。中文模式只布局中文，不为隐藏的日文预留空间。普通滑杆先维护临时值，松手时再提交昂贵的排版变化；电子纸改用步进按钮。亮度和常亮标志只在阅读器中生效，并在 `DisposableEffect` 清理时恢复。
+
+“阅读偏好 → 翻页”中的“显示翻页按钮”控制正文上一页／下一页或上一屏／下一屏；“列表与面板翻屏按钮”独立控制电子纸目录、设置等列表的翻屏控件，关闭后仍可滑动。全局设置也有对应开关，单书偏好仅影响该书阅读界面。
+
+“阅读偏好 → 翻页 → 工具栏 → 阅读时隐藏状态栏”隐藏系统顶部时间、电量及 Wi-Fi 图标，从顶部下滑可临时唤出。根导航统一管理系统栏，跨章和返回前台继续遵守当前设置，退出阅读恢复显示。这两项新偏好支持全局默认、单书覆盖与设置／阅读资料备份，切换电子纸模式不会重置。
 
 ## 3. 章节加载、缓存与切换
 

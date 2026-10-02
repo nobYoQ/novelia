@@ -93,6 +93,7 @@ import cc.novelia.app.ui.theme.AppInteractionMode
 import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.LocalEInkMode
 import cc.novelia.app.ui.theme.LocalReducedMotion
+import cc.novelia.app.ui.theme.LocalScreenPageButtons
 import cc.novelia.app.ui.theme.ReaderPageTheme
 import cc.novelia.app.ui.theme.activityOrNull
 import cc.novelia.app.ui.theme.appReducedMotion
@@ -122,10 +123,12 @@ import kotlinx.serialization.encodeToString
     val settings = local.bookSettings[ref.key] ?: local.reader
     val eInk = settings.eInkMode
     val appEInk = LocalEInkMode.current || eInk
+    CompositionLocalProvider(LocalScreenPageButtons provides settings.showEInkScreenButtons) {
     AppInteractionMode(appEInk, LocalReducedMotion.current || eInk) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             ReaderContent(c, ref, chapterId, wide = maxWidth >= 840.dp)
         }
+    }
     }
 }
 

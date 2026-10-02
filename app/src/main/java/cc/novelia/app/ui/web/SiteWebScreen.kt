@@ -3,6 +3,7 @@ package cc.novelia.app.ui.web
 import android.annotation.SuppressLint
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -15,6 +16,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import cc.novelia.app.data.markdown.MarkdownLinks
+import cc.novelia.app.data.network.BookSource
+import cc.novelia.app.data.network.echRedirects
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.Request
+import java.io.ByteArrayInputStream
 import cc.novelia.app.ui.components.Screen
 import cc.novelia.app.ui.components.ScreenPageButtons
 import cc.novelia.app.ui.navigation.AppController
@@ -29,6 +35,10 @@ import cc.novelia.app.ui.theme.appReducedMotion
 @SuppressLint("SetJavaScriptEnabled")
 @Composable internal fun SiteWebScreen(c: AppController, destination: String) {
     val context = LocalContext.current
+    val source = remember(c) { c.app.bookSources.capture() }
+    val binding = remember(c) { c.session.capture() }
+    val pageClient = remember(c) { c.api.transport.newBuilder().echRedirects(true).build() }
+    fun pageUrl(url: String): String = url.toHttpUrlOrNull()?.let { c.app.bookSources.route(it, source).toString() } ?: url
     var loading by remember(destination) { mutableStateOf(true) }
     var failed by remember(destination) { mutableStateOf(false) }
     val eInk = LocalEInkMode.current
@@ -43,6 +53,32 @@ import cc.novelia.app.ui.theme.appReducedMotion
         settings.allowContentAccess = false
         settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
         webViewClient = object : WebViewClient() {
+            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                if(source.source != BookSource.XKVI) return null
+                val url = request.url.toString().toHttpUrlOrNull() ?: return null
+                if(url.host !in setOf("book.xkvi.top", "n.novelia.cc", "books.fishhawk.top")) return null
+                // 网页补充阅读通过同一网络层加载，入口 Cookie 不放进 WebView 的持久 Cookie 库。
+                // 网页写操作统一回到已支持的原生页面；WebView 不提供请求体，不能安全重放 POST。
+                if(request.method != "GET") return WebResourceResponse("text/plain", "UTF-8", 405, "Use app controls", emptyMap(), ByteArrayInputStream(ByteArray(0)))
+                return try {
+                    val builder = Request.Builder().url(pageUrl(url.toString()))
+                    request.requestHeaders.filterKeys { it.lowercase() in setOf("accept", "accept-language", "user-agent", "range") }
+                        .forEach { (name, value) -> builder.header(name, value) }
+                    c.session.tokenFor(binding)?.let { builder.header("Authorization", "Bearer $it") }
+                    val response = pageClient.newCall(c.session.bindRequest(builder.build(), binding)).execute()
+                    if(response.code !in 200..299) {
+                        response.close()
+                        throw java.io.IOException("Page unavailable")
+                    }
+                    val body = response.body
+                    val media = body?.contentType()
+                    WebResourceResponse(media?.let { "${it.type}/${it.subtype}" } ?: "text/html", media?.charset()?.name() ?: "UTF-8",
+                        response.code, "OK", response.headers.toMultimap().filterKeys { it.lowercase() !in setOf("set-cookie", "content-length", "content-encoding") }
+                            .mapValues { it.value.joinToString(", ") }, body?.byteStream() ?: ByteArrayInputStream(ByteArray(0)))
+                } catch(_: Exception) {
+                    WebResourceResponse("text/plain", "UTF-8", 502, "Page unavailable", emptyMap(), ByteArrayInputStream("镜像页面暂不可用，请返回使用应用内功能或切换原站。".toByteArray()))
+                }
+            }
             override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
                 loading = true; failed = false
             }
@@ -59,13 +95,16 @@ import cc.novelia.app.ui.theme.appReducedMotion
             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
                 if (request.isForMainFrame) { loading = false; failed = true }
             }
+            override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, response: WebResourceResponse) {
+                if(request.isForMainFrame) { loading = false; failed = true }
+            }
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 if (!request.isForMainFrame) return false
                 val requested = request.url.toString()
                 val url = MarkdownLinks.resolve(requested) ?: return true
                 if (MarkdownLinks.isInternal(url) && MarkdownLinks.nativeRoute(url) == null) {
-                    if (url == requested) return false
-                    view.loadUrl(url)
+                    if (pageUrl(url) == requested) return false
+                    view.loadUrl(pageUrl(url))
                     return true
                 }
                 c.openMarkdownLink(url)
@@ -73,7 +112,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
             }
         }
         setOnScrollChangeListener { _, _, _, _, _ -> canGoBack = canScrollVertically(-1); canGoForward = canScrollVertically(1) }
-        MarkdownLinks.resolve(destination)?.takeIf(MarkdownLinks::isInternal)?.let(::loadUrl)
+        MarkdownLinks.resolve(destination)?.takeIf(MarkdownLinks::isInternal)?.let { loadUrl(pageUrl(it)) }
             ?: run { loading = false; failed = true }
     } }
     SideEffect { web.eInkMode = eInk; web.reducedMotion = reducedMotion }
@@ -82,7 +121,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
     // 系统返回键和工具栏返回均须检查 WebView 当前历史记录。
     BackHandler { back() }
     DisposableEffect(web) { onDispose { web.stopLoading(); web.destroy() } }
-    Screen("原站页面", ::back) { padding ->
+    Screen(if(source.source == BookSource.ORIGINAL) "原站页面" else "镜像页面", ::back) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
             if (loading) { if(reducedMotion) Text("正在加载…", Modifier.padding(horizontal = 16.dp)) else LinearProgressIndicator(Modifier.fillMaxWidth()) }
             if (failed) Row(Modifier.padding(16.dp)) {

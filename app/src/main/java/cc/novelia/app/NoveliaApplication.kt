@@ -7,10 +7,13 @@ import cc.novelia.app.data.catalog.ClipboardLinkHistory
 import cc.novelia.app.data.model.User
 import cc.novelia.app.data.network.NoveliaApi
 import cc.novelia.app.data.network.EchTransport
+import cc.novelia.app.data.network.BookSources
+import cc.novelia.app.data.network.BookSourceInterceptor
 import cc.novelia.app.data.network.echRedirects
 import cc.novelia.app.data.storage.LocalStore
 import cc.novelia.app.data.sync.CloudSyncWorker
 import cc.novelia.app.data.updates.UpdateWorker
+import cc.novelia.app.launcher.LauncherIconManager
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.disk.DiskCache
@@ -38,16 +41,21 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     val store by lazy { LocalStore(this) }
     val ech by lazy { EchTransport(this) }
-    private val httpTransport by lazy { ech.client() }
-    val session by lazy { Session(this, client = httpTransport) }
+    val bookSources by lazy { BookSources.load(this) }
+    private val httpTransport by lazy { ech.client().newBuilder().apply {
+        interceptors().add(0, BookSourceInterceptor(bookSources))
+    }.build() }
+    val session by lazy { Session(this, client = httpTransport, sources = bookSources) }
     val keywords by lazy { KeywordStore(this) { store.state.value.keywordLimit } }
     internal val clipboardLinkHistory = ClipboardLinkHistory()
     val metadataCache get() = store.metadataCache
     val api by lazy { NoveliaApi(session, transport = httpTransport, onMutation = { metadataCache.invalidate(it) }, onKeywords = { tags -> applicationScope.launch { keywords.observe(tags) } }) }
     val initialization by lazy { applicationScope.async { store; session; Unit } }
+    internal val launcherIcons by lazy { LauncherIconManager(this) }
 
     override fun onCreate() {
         super.onCreate()
+        launcherIcons
         initialization
         applicationScope.launch {
             initialization.await()
@@ -79,7 +87,8 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
             // 只观察影响调度的字段，避免每次保存阅读位置都重新安排后台同步。
             // collectLatest 会取消旧一轮等待；切换账号或队列变化后必须基于最新状态判断。
             combine(store.state.map { it.autoSync to it.pending.map { action -> action.account to action.id } }.distinctUntilChanged(),
-                session.profile.map { it?.let { user -> user.username to user.expiresAt } }.distinctUntilChanged()) { pending, login -> pending to login?.first }
+                session.profile.map { it?.let { user -> user.username to user.expiresAt } }.distinctUntilChanged(),
+                bookSources.state) { pending, login, _ -> pending to login?.first }
                 .collectLatest { (pending, account) ->
                     // 前台成功的写入意图会很快移出队列，只为仍待处理的意图调度后台任务。
                     delay(750)

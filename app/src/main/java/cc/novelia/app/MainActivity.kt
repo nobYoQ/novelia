@@ -69,8 +69,10 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 
-private data class AppAppearance(val theme: String, val reducedMotion: Boolean, val eInk: Boolean, val eInkBooks: Set<String>)
-private fun LibraryState.appearance() = AppAppearance(theme, reducedMotion || reader.eInkMode, reader.eInkMode, bookSettings.filterValues { it.eInkMode }.keys)
+private data class AppAppearance(val theme: String, val reducedMotion: Boolean, val eInk: Boolean, val eInkBooks: Set<String>,
+    val screenButtons: Boolean, val hideStatusBar: Boolean, val bookStatusBars: Map<String, Boolean>)
+private fun LibraryState.appearance() = AppAppearance(theme, reducedMotion || reader.eInkMode, reader.eInkMode,
+    bookSettings.filterValues { it.eInkMode }.keys, reader.showEInkScreenButtons, reader.hideStatusBar, bookSettings.mapValues { it.value.hideStatusBar })
 
 /**
  * Android 生命周期与 Compose 界面的连接点：等待应用初始化，装配主题、控制器和导航图。
@@ -99,10 +101,13 @@ class MainActivity : ComponentActivity() {
             AppInteractionMode(appearance.eInk, appearance.reducedMotion) {
             NoveliaTheme(appearance.theme) {
                 val nav = rememberNavController(); val scope = rememberCoroutineScope(); val snackbar = remember { SnackbarHostState() }
-                val controller = remember { AppController(app, nav, scope, snackbar) }
+                val source by app.bookSources.state.collectAsStateWithLifecycle()
+                val controller = remember(source.revision) { AppController(app, nav, scope, snackbar) }
+                key(source.revision) {
                 val bookSync = rememberBookSyncPresentation(controller)
                 val bookList = rememberBookListPresentation(controller)
-                CompositionLocalProvider(LocalBookSyncPresentation provides bookSync, LocalBookListPresentation provides bookList) {
+                CompositionLocalProvider(LocalBookSyncPresentation provides bookSync, LocalBookListPresentation provides bookList,
+                    cc.novelia.app.ui.theme.LocalScreenPageButtons provides appearance.screenButtons) {
                 controller.pendingFavorite?.let { book ->
                     FavoriteSheet(controller, book, initialCloud = controller.pendingFavoriteCloud) { controller.pendingFavorite = null }
                 }
@@ -118,6 +123,9 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(link) { link?.let { controller.openLink(it); incoming.value = null } }
                 LaunchedEffect(Unit) { runCatching { app.session.refresh() } }
                 val entry by nav.currentBackStackEntryAsState(); val route = entry?.destination?.route
+                val readingKey = "${entry?.arguments?.getString("provider")}/${entry?.arguments?.getString("id")}"
+                cc.novelia.app.ui.reader.ReadingStatusBar(route?.startsWith("reader/") == true &&
+                    (appearance.bookStatusBars[readingKey] ?: appearance.hideStatusBar))
                 ObserveDownloadCelebrations(controller, route)
                 ObserveClipboardLinks(controller, externalLinkPending = link != null)
                 val roots = listOf("shelf", "discover?query={query}", "community", "profile")
@@ -197,6 +205,7 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
+                }
                 }
                 }
             }

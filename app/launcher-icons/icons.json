@@ -1,0 +1,5 @@
+[
+  { "id": "default", "title": "经典绿", "drawable": "ic_launcher" },
+  { "id": "ink", "title": "水墨黑", "drawable": "launcher_ink" },
+  { "id": "night", "title": "夜读蓝", "drawable": "launcher_night" }
+]

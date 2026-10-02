@@ -160,8 +160,7 @@ import kotlinx.coroutines.withContext
                             item { FlowRow(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 4.dp),
                                 horizontalArrangement = Arrangement.spacedBy(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text("${book.total} 章", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                val characters = detail.totalCharacters?.let { if(it > 10000) "${it / 10000}万" else "$it" } ?: "—"
-                                Text("$characters 字", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                BookCharacterCount(detail.totalCharacters)
                                 Text("${detail.visited} 浏览", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             } }
                             item { MetaParagraph("简介", detail.introductionZh?.takeIf(String::isNotBlank) ?: detail.introductionJp) }

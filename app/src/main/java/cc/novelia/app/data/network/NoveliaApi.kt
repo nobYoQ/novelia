@@ -63,7 +63,8 @@ class NoveliaApi(val session: AuthenticationSession?, val baseUrl: String = "htt
         var retry = true
         while (true) {
             val token = bound?.let { session?.tokenFor(it) }
-            val authenticated = request.newBuilder().removeHeader("Authorization").apply { token?.let { header("Authorization", "Bearer $it") } }.build()
+            val authorized = request.newBuilder().removeHeader("Authorization").apply { token?.let { header("Authorization", "Bearer $it") } }.build()
+            val authenticated = bound?.let { session?.bindRequest(authorized, it) } ?: authorized
             val result = try {
                 client.newCall(authenticated).awaitBody { response ->
                     ensureCurrent()

@@ -8,6 +8,8 @@
 
 默认 API 根地址为 `https://n.novelia.cc/api/`，统一认证地址为 `https://auth.novelia.cc`。这些是当前代码配置，不是由 GitHub Release 地址决定的；切换 APK 分发渠道不会切换内容服务端。
 
+「设置 → 书源线路」可显式切换到 `https://book.xkvi.top` 反代，内容 API 路径不变，认证 API 使用镜像的 `/api/v1/auth/`。请求发出前绑定来源及来源代次；入口 Cookie 只给镜像，账号会话按来源独立保存，详情及字数元数据缓存也按来源区分。镜像走普通 HTTPS，原站继续遵从 ECH 设置。见[反代镜像书源](../development/book-source-mirrors.md)。
+
 `NoveliaApplication` 持有应用级 `Session`、`NoveliaApi` 和 `LocalStore`。Compose 页面通过 `AppController` 使用它们，Worker 也复用应用实例。不要每个页面创建独立 API/云写入队列，否则可能破坏跨页面的写入排序。
 
 | 入口 | 使用场景 |

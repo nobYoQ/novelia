@@ -17,7 +17,8 @@ data class KeywordEntry(
     val translationEdited: Boolean = false,
     val categoryEdited: Boolean = false,
 ) {
-    val label: String get() = if(translation.isBlank()) original else "$original ($translation)"
+    val displayTranslation: String get() = KeywordCatalog.displayTranslation(this)
+    val label: String get() = displayTranslation.let { if(it.isBlank() || it == original) original else "$original ($it)" }
 }
 
 /**
@@ -27,8 +28,9 @@ data class KeywordEntry(
  */
 object KeywordCatalog {
     const val MAX_TEXT_LENGTH = 256
-    val defaultCategories = listOf("题材", "人物", "情节", "其他")
-    val common = listOf(
+    val defaultCategories = listOf("题材", "人物", "情节", "其他") + keywordCategorySeeds.map { it.name }
+    // 保留旧默认值用于升级识别，不把已有的自定义译名或分类当作默认值覆盖。
+    private val previousCommon = listOf(
         KeywordEntry("ファンタジー", "奇幻", "题材", true),
         KeywordEntry("ラブコメ", "爱情喜剧", "题材", true),
         KeywordEntry("スクールラブ", "校园爱情", "题材", true),
@@ -49,7 +51,88 @@ object KeywordCatalog {
         KeywordEntry("嘘コク", "假告白", "情节", true),
         KeywordEntry("ダンジョン", "迷宫", "情节", true),
         KeywordEntry("チート", "作弊", "情节", true),
+        KeywordEntry("異世界", "异世界", "题材", true),
+        KeywordEntry("異世界転生", "异世界转生", "情节", true),
+        KeywordEntry("異世界転移", "异世界穿越", "情节", true),
+        KeywordEntry("現代ファンタジー", "现代奇幻", "题材", true),
+        KeywordEntry("ハイファンタジー", "架空世界奇幻", "题材", true),
+        KeywordEntry("ローファンタジー", "现实世界奇幻", "题材", true),
+        KeywordEntry("ダークファンタジー", "黑暗奇幻", "题材", true),
+        KeywordEntry("恋愛", "恋爱", "题材", true),
+        KeywordEntry("青春", "青春", "题材", true),
+        KeywordEntry("学園", "校园", "题材", true),
+        KeywordEntry("日常", "日常", "题材", true),
+        KeywordEntry("冒険", "冒险", "情节", true),
+        KeywordEntry("魔法", "魔法", "题材", true),
+        KeywordEntry("剣と魔法", "剑与魔法", "题材", true),
+        KeywordEntry("SF", "科幻", "题材", true),
+        KeywordEntry("ホラー", "恐怖", "题材", true),
+        KeywordEntry("サスペンス", "悬疑", "题材", true),
+        KeywordEntry("推理", "推理", "题材", true),
+        KeywordEntry("歴史", "历史", "题材", true),
+        KeywordEntry("戦記", "战争故事", "题材", true),
+        KeywordEntry("VRMMO", "虚拟现实网游", "题材", true),
+        KeywordEntry("男主人公", "男主角", "人物", true),
+        KeywordEntry("女主人公", "女主角", "人物", true),
+        KeywordEntry("主人公最強", "最强主角", "人物", true),
+        KeywordEntry("悪役令嬢", "反派大小姐", "人物", true),
+        KeywordEntry("幼馴染", "青梅竹马", "人物", true),
+        KeywordEntry("幼なじみ", "青梅竹马", "人物", true),
+        KeywordEntry("聖女", "圣女", "人物", true),
+        KeywordEntry("勇者", "勇者", "人物", true),
+        KeywordEntry("魔王", "魔王", "人物", true),
+        KeywordEntry("人外", "非人类", "人物", true),
+        KeywordEntry("獣人", "兽人", "人物", true),
+        KeywordEntry("溺愛", "溺爱", "情节", true),
+        KeywordEntry("純愛", "纯爱", "情节", true),
+        KeywordEntry("ざまぁ", "打脸／恶有恶报", "情节", true),
+        KeywordEntry("追放", "放逐", "情节", true),
+        KeywordEntry("婚約破棄", "解除婚约", "情节", true),
+        KeywordEntry("復讐", "复仇", "情节", true),
+        KeywordEntry("成り上がり", "逆袭崛起", "情节", true),
+        KeywordEntry("勘違い", "误会", "情节", true),
+        KeywordEntry("すれ違い", "彼此错过", "情节", true),
+        KeywordEntry("スローライフ", "悠闲生活", "情节", true),
+        KeywordEntry("もふもふ", "毛茸茸", "题材", true),
+        KeywordEntry("シリアス", "严肃剧情", "情节", true),
+        KeywordEntry("ギャグ", "搞笑", "题材", true),
+        KeywordEntry("残酷な描写あり", "含残酷描写", "其他", true),
+        KeywordEntry("暴力描写あり", "含暴力描写", "其他", true),
+        KeywordEntry("性描写あり", "含性描写", "其他", true),
+        KeywordEntry("男の娘", "伪娘", "人物", true),
+        KeywordEntry("女装", "女装", "人物", true),
+        KeywordEntry("BL", "男性恋爱", "题材", true),
+        KeywordEntry("ボーイズラブ", "男性恋爱", "题材", true),
+        KeywordEntry("ボーイズラブ要素あり", "含男性恋爱要素", "题材", true),
+        KeywordEntry("ボーイズラブあり", "含男性恋爱", "题材", true),
+        KeywordEntry("BL要素あり", "含男性恋爱要素", "题材", true),
+        KeywordEntry("耽美", "耽美", "题材", true),
+        KeywordEntry("GL", "百合", "题材", true),
+        KeywordEntry("ガールズラブ", "百合", "题材", true),
+        KeywordEntry("ガールズラブ要素あり", "含百合要素", "题材", true),
+        KeywordEntry("ガールズラブあり", "含百合", "题材", true),
+        KeywordEntry("百合", "百合", "题材", true),
+        KeywordEntry("百合要素あり", "含百合要素", "题材", true),
+        KeywordEntry("GL要素あり", "含百合要素", "题材", true),
+        KeywordEntry("TS", "性转", "题材", true),
+        KeywordEntry("TSF", "性别转换幻想", "题材", true),
+        KeywordEntry("性転換", "性转", "情节", true),
+        KeywordEntry("性別転換", "性别转换", "情节", true),
+        KeywordEntry("女体化", "变为女性", "情节", true),
+        KeywordEntry("男体化", "变为男性", "情节", true),
+        KeywordEntry("TS転生", "性转转生", "情节", true),
+        KeywordEntry("TS転移", "性转穿越", "情节", true),
+        KeywordEntry("TS要素あり", "含性转要素", "题材", true),
     )
+    private val previousByName = previousCommon.associateBy { normalizeKeyword(it.original) }
+    private val categoriesByName = keywordCategorySeeds.flatMap { seed ->
+        seed.originals.map { normalizeKeyword(it) to seed.name }
+    }.toMap()
+    val common = (previousCommon + SiteKeywordTranslations.mappings.map { (jp, zh) -> KeywordEntry(jp, zh, common = true) })
+        .distinctBy { it.original }.map { entry ->
+            entry.copy(translation = SiteKeywordTranslations.translate(entry.original) ?: entry.translation,
+                category = categoriesByName[normalizeKeyword(entry.original)] ?: entry.category)
+        }
     private val aliases = mapOf(
         "ほのぼの" to listOf("日常", "温馨", "治愈"),
         "ハッピーエンド" to listOf("HappyEnd", "HE", "好结局"),
@@ -57,10 +140,34 @@ object KeywordCatalog {
         "チート" to listOf("开挂"),
         "ラブコメ" to listOf("恋爱喜剧"),
     )
+    private val defaultsByName = common.associateBy { normalizeKeyword(it.original) }
+    private val categoryNames = keywordCategorySeeds.flatMap { category ->
+        category.originals.map { normalizeKeyword(it) to (category.originals + category.name) }
+    }.toMap()
+
+    private fun defaultTranslation(original: String): String = SiteKeywordTranslations.translate(original)
+        ?: defaultsByName[normalizeKeyword(original)]?.translation.orEmpty()
+
+    /** 原站组合标签也可直接显示译名，不依赖是否已收集进本地词库。显式清空仍受保护。 */
+    fun displayTranslation(entry: KeywordEntry): String {
+        if(entry.translationEdited) return entry.translation
+        val previous = previousByName[normalizeKeyword(entry.original)]
+        return if(entry.translation.isBlank() || entry.translation == previous?.translation)
+            defaultTranslation(entry.original).ifBlank { entry.translation } else entry.translation
+    }
+
+    internal fun seededCategory(entry: KeywordEntry): String? = categoriesByName[normalizeKeyword(entry.original)]?.takeIf {
+        !entry.categoryEdited && (entry.category == "其他" || entry.category == previousByName[normalizeKeyword(entry.original)]?.category)
+    }
 
     /** 已有条目始终优先于默认值，包括用户显式设为空的翻译。 */
     fun withDefaults(entries: Collection<KeywordEntry>): List<KeywordEntry> =
-        normalize(entries + common)
+        normalize(fillMissingTranslations(entries) + common)
+
+    /** 补齐原站译名并更新旧默认映射，保留自定义译名、显式清空与分类。 */
+    fun fillMissingTranslations(entries: Collection<KeywordEntry>): List<KeywordEntry> = entries.map { entry ->
+        entry.copy(translation = displayTranslation(entry))
+    }
 
     /** 仅校验与去重，不因数量或使用频率丢弃已有词条。 */
     fun normalize(entries: Collection<KeywordEntry>): List<KeywordEntry> =
@@ -78,10 +185,10 @@ object KeywordCatalog {
     fun observe(entries: List<KeywordEntry>, originals: Collection<String>, limit: Int? = null): List<KeywordEntry> {
         requireCapacity(entries.size, entries.size, limit)
         val known = entries.mapTo(mutableSetOf()) { it.original }
-        val defaults = common.associateBy { it.original }
         val remaining = limit?.let { (it - entries.size).coerceAtLeast(0) } ?: Int.MAX_VALUE
         val added = originals.asSequence().map(String::trim).filter { it.isNotBlank() && it.length <= MAX_TEXT_LENGTH && known.add(it) }
-            .take(remaining).map { defaults[it] ?: KeywordEntry(it) }.toList()
+            .take(remaining).map { original -> defaultsByName[normalizeKeyword(original)]?.copy(original = original)
+                ?: KeywordEntry(original, defaultTranslation(original)) }.toList()
         return if(added.isEmpty()) entries else entries + added
     }
 
@@ -116,13 +223,14 @@ object KeywordCatalog {
 
     /** 完全匹配优先，其次是前缀和包含匹配；同分时优先最近使用及常用词条。 */
     fun suggestions(entries: List<KeywordEntry>, query: String, category: String = "全部", limit: Int = 20): List<KeywordEntry> {
-        val normalized = query.trim().lowercase()
+        val normalized = normalizeKeyword(query)
         fun score(entry: KeywordEntry): Int {
             if(normalized.isEmpty()) return 0
-            val names = listOf(entry.original, entry.translation) +
-                listOfNotNull(common.firstOrNull { it.original == entry.original }?.translation) + aliases[entry.original].orEmpty()
+            val names = listOf(entry.original, entry.displayTranslation, entry.category) +
+                listOfNotNull(defaultsByName[normalizeKeyword(entry.original)]?.translation) + aliases[entry.original].orEmpty() +
+                categoryNames[normalizeKeyword(entry.original)].orEmpty()
             return names.filter(String::isNotBlank).minOfOrNull { name ->
-                val value = name.lowercase()
+                val value = normalizeKeyword(name)
                 when { value == normalized -> 0; value.startsWith(normalized) -> 1; normalized in value -> 2; else -> 3 }
             } ?: 3
         }
@@ -136,7 +244,7 @@ object KeywordCatalog {
     fun exactMatch(entries: List<KeywordEntry>, query: String): KeywordEntry? {
         val text = query.trim()
         return suggestions(entries, text).firstOrNull { entry ->
-            (listOf(entry.original, entry.translation) + listOfNotNull(common.firstOrNull { it.original == entry.original }?.translation) +
+            (listOf(entry.original, entry.displayTranslation) + listOfNotNull(common.firstOrNull { it.original == entry.original }?.translation) +
                 aliases[entry.original].orEmpty()).any { it.equals(text, ignoreCase = true) }
         }
     }

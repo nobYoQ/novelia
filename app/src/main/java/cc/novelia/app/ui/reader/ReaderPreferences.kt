@@ -110,10 +110,12 @@ import kotlin.math.roundToInt
                             TogglePreference("左右翻页", "向左滑动下一页，向右滑动上一页", value.horizontalPageTurn, defaultValue = defaults?.horizontalPageTurn) { onChange(value.copy(horizontalPageTurn = it)) }
                         }
                         TogglePreference("显示翻页按钮", if(value.staticPagination) "显示上一页、下一页按钮" else "显示上一屏、下一屏，每次移动约一屏正文", value.showPageButtons, defaultValue = defaults?.showPageButtons) { onChange(value.copy(showPageButtons = it)) }
+                        TogglePreference("列表与面板翻屏按钮", "电子纸模式下显示目录、设置等面板的上一屏／下一屏；关闭后仍可滑动翻屏", value.showEInkScreenButtons, defaultValue = defaults?.showEInkScreenButtons) { onChange(value.copy(showEInkScreenButtons = it)) }
                         TogglePreference("音量键翻页", "音量键控制阅读位置", value.volumeKeys, defaultValue = defaults?.volumeKeys) { onChange(value.copy(volumeKeys = it)) }
                         ReaderPreferenceHeading("滚动分页")
                         TogglePreference("章节末尾按钮", "连续滚动时显示章末的下一章、下一分卷或返回目录按钮；关闭后仍可上拉进入下一章", value.showScrollPageButtons, defaultValue = defaults?.showScrollPageButtons) { onChange(value.copy(showScrollPageButtons = it)) }
                         ReaderPreferenceHeading("工具栏")
+                        TogglePreference("阅读时隐藏状态栏", "隐藏顶部时间、电量和 Wi-Fi 等图标；从顶部下滑可临时显示，退出阅读后恢复", value.hideStatusBar, defaultValue = defaults?.hideStatusBar) { onChange(value.copy(hideStatusBar = it)) }
                         TogglePreference("阅读进度条", "展开工具栏时显示，可快速跳转本章位置", value.showProgressBar, defaultValue = defaults?.showProgressBar) { onChange(value.copy(showProgressBar = it)) }
                         ReaderSlider("工具栏透明度 ${(value.resolvedToolbarTransparency * 100).roundToInt()}%", value.resolvedToolbarTransparency, 0f..1f,
                             modifier = Modifier.testTag("reader-toolbar-transparency"), defaultValue = defaults?.resolvedToolbarTransparency) { onChange(value.copy(toolbarTransparency = it)) }

@@ -27,6 +27,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.catalog.BookLinks
 import cc.novelia.app.data.catalog.SearchExpression
 import cc.novelia.app.data.catalog.SavedSearchPreset
+import cc.novelia.app.data.catalog.NovelLocalFilter
 import cc.novelia.app.data.catalog.withMigratedSearchPresets
 import cc.novelia.app.data.catalog.providers
 import cc.novelia.app.data.model.Page
@@ -41,6 +42,8 @@ import cc.novelia.app.ui.components.AppSheet
 import cc.novelia.app.ui.components.AsyncContent
 import cc.novelia.app.ui.components.BookRow
 import cc.novelia.app.ui.components.ChoiceRow
+import cc.novelia.app.ui.components.CharacterCountFilterFields
+import cc.novelia.app.ui.components.NovelLocalFilterSaver
 import cc.novelia.app.ui.components.QuickFilter
 import cc.novelia.app.ui.components.QuickFilterBar
 import cc.novelia.app.ui.components.EmptyState
@@ -73,19 +76,22 @@ import kotlinx.coroutines.sync.withPermit
     val assistantState = rememberSaveableStateHolder()
     var source by rememberSaveable { mutableStateOf("") }; var type by rememberSaveable { mutableIntStateOf(0) }; var translate by rememberSaveable { mutableIntStateOf(0) }; var sort by rememberSaveable { mutableIntStateOf(0) }
     var webLevel by rememberSaveable { mutableIntStateOf(0) }; var wenkuLevel by rememberSaveable { mutableIntStateOf(0) }
+    var localFilter by rememberSaveable(stateSaver = NovelLocalFilterSaver) { mutableStateOf(NovelLocalFilter()) }
     val reducedMotion = appReducedMotion()
     val local by c.store.state.collectAsStateWithLifecycle(); val profile by c.session.profile.collectAsStateWithLifecycle()
+    val cacheGeneration by c.store.cacheGeneration.collectAsStateWithLifecycle()
     val keywords by c.app.keywords.state.collectAsStateWithLifecycle()
     val keywordPersistenceError by c.app.keywords.persistenceError.collectAsStateWithLifecycle()
     LaunchedEffect(local.savedSearches) { c.store.update { it.withMigratedSearchPresets() } }
     fun currentPreset() = SavedSearchPreset(name = submitted.ifBlank { if(category == 2) "文库小说筛选" else "网络小说筛选" }.take(80),
         query = submitted, category = category, source = source, type = type, translate = translate, sort = sort,
-        webLevel = webLevel, wenkuLevel = wenkuLevel).normalized()
+        webLevel = webLevel, wenkuLevel = wenkuLevel, localFilter = localFilter).normalized()
     fun applyPreset(preset: SavedSearchPreset) {
         val value = preset.normalized()
         query = value.query; submitted = value.query; category = value.category
         source = value.source; type = value.type; translate = value.translate; sort = value.sort
         webLevel = value.webLevel; wenkuLevel = value.wenkuLevel; page = 0; searchRevision++
+        localFilter = value.localFilter
         c.store.rememberSearch(value.query)
         if(value.category == 1) c.app.keywords.markUsed(SearchExpression.tagsIn(value.query))
     }
@@ -96,8 +102,8 @@ import kotlinx.coroutines.sync.withPermit
             page = 0; searchRevision++; submitted = query.trim(); if(category == 0) category = 1
         }
     }
-    fun resetFilters() { source = ""; type = 0; translate = 0; sort = 0; webLevel = 0; wenkuLevel = 0; page = 0 }
-    val filterSummary = remember(category, source, type, translate, sort, webLevel, wenkuLevel, profile?.canEdit) {
+    fun resetFilters() { source = ""; type = 0; translate = 0; sort = 0; webLevel = 0; wenkuLevel = 0; page = 0; localFilter = NovelLocalFilter() }
+    val filterSummary = remember(category, source, type, translate, sort, webLevel, wenkuLevel, localFilter, profile?.canEdit) {
         buildList {
             if(category == 1) {
                 if(source.isNotBlank()) add(source.split(',').mapNotNull { providers[it] }.joinToString("、"))
@@ -105,6 +111,7 @@ import kotlinx.coroutines.sync.withPermit
                 if(translate != 0) add(listOf("全部译文", "GPT", "Sakura")[translate])
                 if(sort != 0) add(listOf("更新时间", "点击量排序", "相关度排序")[sort])
                 if(profile?.canEdit == true && webLevel != 0) add(listOf("全部分级", "一般向", "R18")[webLevel])
+                addAll(localFilter.summaries())
             } else if(wenkuLevel != 0) add(listOf("全部小说", "轻小说", "轻文学", "文学", "非小说", "R18男性向", "R18女性向")[wenkuLevel.coerceIn(0, if(profile?.canEdit == true) 6 else 4)])
         }
     }
@@ -183,8 +190,12 @@ import kotlinx.coroutines.sync.withPermit
                         val effectiveWebLevel = if(profile?.canEdit == true) webLevel.coerceIn(0, 2) else 1
                         val effectiveWenkuLevel = wenkuLevel.coerceIn(0, if(profile?.canEdit == true) 6 else 4)
                         val requestKey = listOf(category, page, submitted, source, type, translate, sort, effectiveWebLevel,
-                            effectiveWenkuLevel, profile?.username, profile?.canEdit, local.blockedAuthors, searchRevision)
-                        AsyncContent(requestKey, load = {
+                            effectiveWenkuLevel, profile?.username, profile?.canEdit, local.blockedAuthors, searchRevision,
+                            localFilter, local.blockedBooks, local.blockedTags, cacheGeneration)
+                        if(category == 1 && localFilter.active) FilteredNovelList(c, requestKey, localFilter, local,
+                            loadPage = { next, refresh -> c.filteredWebList(next, submitted, source, type, effectiveWebLevel, translate, sort, refresh) },
+                            onReset = ::resetFilters)
+                        else AsyncContent(requestKey, load = {
                             if(category == 1) c.api.webList(page, submitted, source, type, effectiveWebLevel, translate, sort).let {
                                 Page(it.pageNumber, enrichAuthors(it.items.map(WebOutline::card), c, local.blockedAuthors))
                             } else c.api.wenkuList(page, submitted, effectiveWenkuLevel).let {
@@ -222,6 +233,8 @@ import kotlinx.coroutines.sync.withPermit
                 ChoiceRow("已有译文", listOf("全部", "GPT", "Sakura"), translate) { translate = it; page = 0 }
                 ChoiceRow("排序", listOf("更新", "点击", "相关"), sort) { sort = it; page = 0 }
                 if(profile?.canEdit == true) ChoiceRow("分级", listOf("全部", "一般向", "R18"), webLevel.coerceIn(0, 2)) { webLevel = it; page = 0 }
+                CharacterCountFilterFields(localFilter.characters) { localFilter = localFilter.copy(characters = it); page = 0 }
+                Text("按作品提供的字数筛选；首次查找会补取字数，可继续加载更多结果。", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.bodySmall)
             } else ChoiceRow("文库分类", if(profile?.canEdit == true) listOf("全部小说", "轻小说", "轻文学", "文学", "非小说", "R18男性向", "R18女性向") else listOf("全部小说", "轻小说", "轻文学", "文学", "非小说"), wenkuLevel.coerceIn(0, if(profile?.canEdit == true) 6 else 4)) { wenkuLevel = it; page = 0 }
             if(category == 1) FilledTonalButton(onClick = { filterOpen = false; assistantOpen = true }, Modifier.padding(horizontal = 20.dp)) { Text("打开辅助搜索") }
             Text("搜索框支持原站查询表达式。规则与示例可在站内使用教程中查看。", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.bodyMedium)
@@ -273,20 +286,39 @@ import kotlinx.coroutines.sync.withPermit
     } }
 }
 
-/** 列表摘要可能没有作者，仅在启用作者屏蔽时补取作者信息。 */
-internal suspend fun enrichAuthors(books: List<BookCard>, c: AppController, blockedAuthors: Set<String>): List<BookCard> {
-    if(blockedAuthors.isEmpty()) return books
-    val limit = Semaphore(4)
-    return coroutineScope {
+/** 列表缺少作者或字数时，按已启用的本地条件合并补查，复用详情缓存。 */
+internal suspend fun enrichAuthors(books: List<BookCard>, c: AppController, blockedAuthors: Set<String>, characters: Boolean = false,
+    forceNetwork: Boolean = false): List<BookCard> {
+    if(blockedAuthors.isEmpty() && !characters) return books
+    val binding = c.session.capture()
+    val limit = Semaphore(5)
+    val enriched = coroutineScope {
         books.map { book -> async {
-            if(book.authors.isNotEmpty()) book else limit.withPermit {
+            val needsAuthors = blockedAuthors.isNotEmpty() && book.authors.isEmpty()
+            val needsCharacters = characters && !book.ref.isWenku && !book.ref.isLocal && (book.totalCharacters == null || forceNetwork)
+            if(!needsAuthors && !needsCharacters) book else limit.withPermit {
                 try {
-                    val authors = if(book.ref.isWenku) c.detail<WenkuDetail>("wenku/${book.ref.id}").authors
-                        else c.detail<WebDetail>("novel/${book.ref.key}").authors.map { it.name }
-                    book.copy(authors = authors)
+                    if(book.ref.isWenku) book.copy(authors = c.detail<WenkuDetail>("wenku/${book.ref.id}").authors)
+                    else if(characters) c.filterBookMetadata(book, forceNetwork)
+                    else c.detail<WebDetail>("novel/${book.ref.key}").let { detail ->
+                        book.copy(authors = detail.authors.map { it.name }, totalCharacters = detail.totalCharacters?.takeIf { it >= 0 } ?: book.totalCharacters)
+                    }
                 } catch(e: CancellationException) { throw e }
                   catch(_: Exception) { book }
             }
         } }.map { it.await() }
     }
+    c.session.ensureCurrent(binding)
+    if(characters) {
+        val lookup = enriched.associateBy { it.ref.key }
+        // 每批一次合并，避免逐本更新整份书架；筛选元数据不冒充已读取完整目录。
+        c.store.update { state -> state.copy(books = state.books.map { saved ->
+            val found = lookup[saved.book.ref.key]
+            if(found == null) saved else saved.copy(book = saved.book.copy(
+                totalCharacters = found.totalCharacters ?: saved.book.totalCharacters,
+                authors = found.authors.ifEmpty { saved.book.authors },
+            ))
+        }) }
+    }
+    return enriched
 }

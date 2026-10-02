@@ -43,11 +43,13 @@ class KeywordLibraryActions(
     onSaveTranslation: (String, String) -> Unit, actions: KeywordLibraryActions?,
     onInclude: (KeywordEntry) -> Unit, onExclude: (KeywordEntry) -> Unit,
     included: List<String>, excluded: List<String>, persistenceError: String?,
+    onIncludeCategory: (List<String>) -> Unit, onExcludeCategory: (List<String>) -> Unit,
+    onRemove: (KeywordEntry) -> Unit,
 ) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize().imePadding()) {
             KeywordLibraryContent(entries, categories, onDismiss, onSaveTranslation, actions, onInclude, onExclude,
-                included, excluded, persistenceError)
+                included, excluded, persistenceError, onIncludeCategory, onExcludeCategory, onRemove)
         }
     }
 }
@@ -58,6 +60,8 @@ class KeywordLibraryActions(
     actions: KeywordLibraryActions? = null,
     onInclude: ((KeywordEntry) -> Unit)? = null, onExclude: ((KeywordEntry) -> Unit)? = null,
     included: List<String> = emptyList(), excluded: List<String> = emptyList(), persistenceError: String? = null,
+    onIncludeCategory: ((List<String>) -> Unit)? = null, onExcludeCategory: ((List<String>) -> Unit)? = null,
+    onRemove: ((KeywordEntry) -> Unit)? = null,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var category by rememberSaveable { mutableStateOf("全部") }
@@ -66,6 +70,9 @@ class KeywordLibraryActions(
     val activeCategory = category.takeIf { it == "全部" || it in categories } ?: "全部"
     LaunchedEffect(categories) { if(category != "全部" && category !in categories) category = "全部" }
     val settledQuery = rememberDebouncedQuery(query)
+    // 操作整个分类，不跟随搜索词或可见标签数量截断；一次回调更新整批条件。
+    val categoryMembers = remember(entries, activeCategory) { entries.filter { it.category == activeCategory }.map { it.original } }
+    val searchableMembers = remember(categoryMembers) { categoryMembers.filter(KeywordCatalog::canSearch) }
     // 在 Scaffold 子组合内容前观察状态，也能接收布局开始前已完成的结果。
     val results = produceState<List<KeywordEntry>?>(null, entries, settledQuery, activeCategory) {
         value = null
@@ -79,6 +86,20 @@ class KeywordLibraryActions(
                 leadingIcon = { Icon(Icons.Outlined.Search, null) }, shape = MaterialTheme.shapes.large,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 12.dp, bottom = 8.dp).testTag("keyword-library-search"))
             KeywordCategoryChips(listOf("全部") + categories, activeCategory, { category = it }, Modifier.fillMaxWidth().testTag("keyword-library-categories"))
+            if(activeCategory != "全部" && onIncludeCategory != null && onExcludeCategory != null) {
+                Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilledTonalButton(onClick = { onIncludeCategory(searchableMembers) }, enabled = searchableMembers.isNotEmpty(),
+                            modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("keyword-category-include")) { Text("包含整类（${searchableMembers.size}）") }
+                        OutlinedButton(onClick = { onExcludeCategory(searchableMembers) }, enabled = searchableMembers.isNotEmpty(),
+                            modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("keyword-category-exclude")) { Text("排除整类（${searchableMembers.size}）") }
+                    }
+                    Text("加入“$activeCategory”的全部标签，不受搜索词限制。包含需全部满足，加入后可逐项调整。",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if(searchableMembers.size < categoryMembers.size) Text("${categoryMembers.size - searchableMembers.size} 个标签因原站搜索语法限制无法加入。",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                }
+            }
             Column(Modifier.padding(horizontal = 20.dp).padding(top = 8.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(when { results == null -> "正在检索…"; results!!.size == entries.size -> "${entries.size} 个标签";
@@ -102,7 +123,8 @@ class KeywordLibraryActions(
         KeywordEditorDialog(latest, { editing = null }, onSaveTranslation,
             onInclude = onInclude?.let { include -> { include(latest); editing = null } },
             onExclude = onExclude?.let { exclude -> { exclude(latest); editing = null } },
-            categories = categories, onSaveDetails = actions?.editEntry)
+            categories = categories, onSaveDetails = actions?.editEntry,
+            onRemove = onRemove?.takeIf { latest.original in included || latest.original in excluded }?.let { remove -> { remove(latest); editing = null } })
     }
     if(managing && actions != null) KeywordCategoriesSheet(entries, categories, actions) { managing = false }
 }

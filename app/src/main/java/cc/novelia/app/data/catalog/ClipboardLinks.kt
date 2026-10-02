@@ -24,7 +24,7 @@ internal object ClipboardLinks {
         if(url.length > 2_048) return null
         val uri = URI(url)
         val scheme = uri.scheme.lowercase()
-        if(scheme !in setOf("http", "https") || !uri.host.equals("n.novelia.cc", true) || uri.userInfo != null) return null
+        if(!SiteUrls.isInternal(uri)) return null
         if(uri.port != -1 && uri.port != if(scheme == "https") 443 else 80) return null
         if(uri.rawPath.contains("%2f", true) || uri.rawPath.contains("%5c", true)) return null
         val parts = uri.path.trim('/').split('/')

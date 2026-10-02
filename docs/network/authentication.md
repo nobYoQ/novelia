@@ -6,6 +6,8 @@
 
 ## 1. 登录链路
 
+设置可在原站和 `book.xkvi.top` 镜像之间切换。下述 WebView 链路适用于原站；镜像使用原生表单调用同源 `login`、`register`、`otp/request`，成功时接收直接返回的 JWT，或携带认证 Cookie 请求 `refresh?app=n` 获取 JWT。镜像入口 Cookie 由打包配置注入并自动携带，不能与账号 JWT 混用。完整协议和配置见[反代镜像书源](../development/book-source-mirrors.md)。
+
 [LoginScreen.kt](../../app/src/main/java/cc/novelia/app/ui/account/LoginScreen.kt) 使用 WebView 展示原站认证流程。当前代码的页面基准来源为 `https://n.novelia.cc`，其中的认证 iframe 指向 `https://auth.novelia.cc/?app=n&theme=system`。
 
 ```mermaid
@@ -49,16 +51,18 @@ sequenceDiagram
 
 Cookie 属于 WebView/认证服务的会话材料，不能和访问令牌、设备书架混为一谈。不要在日志、截图、测试夹具或问题反馈中记录它们的实际值。
 
+原站 JWT 沿用 `session`；镜像 JWT 和认证 Cookie 独立保存到 `session-xkvi` 并经 Keystore 加密。镜像不借用原站已有登录令牌；首次使用需要重新登录。切回已有登录的线路可以恢复该线路的会话，退出仅清除当前线路的会话。
+
 ## 5. 为什么请求需要绑定会话
 
-[SessionState.kt](../../app/src/main/java/cc/novelia/app/data/auth/SessionState.kt) 用 `SessionBinding(account, generation)` 标识请求发起时的身份。账号区分用户，代次区分退出后重新登录等变化；即使用户名相同，旧请求也不能跨越新的登录会话继续提交。
+[SessionState.kt](../../app/src/main/java/cc/novelia/app/data/auth/SessionState.kt) 用 `SessionBinding(account, generation, source, sourceRevision)` 标识请求发起时的身份。账号区分用户，登录代次及来源代次区分退出重登和书源切换；即使用户名相同、切走再切回同一来源，旧请求也不能跨越变化继续提交。
 
 | 场景 | 预期处理 |
 | --- | --- |
 | 同一账号正常令牌刷新 | 保持会话归属，更新令牌 |
 | 多个请求同时收到 401 | 刷新锁合并续期；已经获得新令牌的请求不重复刷新 |
 | 请求期间退出登录 | 旧绑定失效，旧响应不能重新写回登录状态 |
-| 请求期间切换账号 | 返回“登录账号已变化”，不能自动改绑新账号再发送 |
+| 请求期间切换账号或书源 | 返回“账号或书源已变化”，不能自动改绑后再发送 |
 | 退出后重新登录同一账号 | 新代次使退出前的请求失效 |
 
 [NoveliaApi.kt](../../app/src/main/java/cc/novelia/app/data/network/NoveliaApi.kt) 在鉴权请求中捕获绑定、读取对应令牌，并在请求和响应的关键边界核对绑定。401 触发的认证刷新与重试受限，不是无限重试；重试继续使用原绑定。

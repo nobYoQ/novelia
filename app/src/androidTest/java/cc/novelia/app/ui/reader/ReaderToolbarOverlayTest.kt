@@ -42,6 +42,52 @@ class ReaderToolbarOverlayTest {
 
     @Test fun eInkScrollingKeepsToolbarHiddenAcrossChapters() = verifyChapterNavigation(ReaderSettings().withEInkMode(true).withPaginationMode("scroll"))
 
+    @Test fun readerControlsAndStatusBarRespectPerBookSettingsAcrossChaptersAndExit() = withReader(
+        ReaderSettings().withEInkMode(true),
+        listOf(
+            LocalChapter("first", "第一章 林间旅途", listOf("旅人沿着森林小路前行。".repeat(100))),
+            LocalChapter("second", "第二章 归来", listOf("星光照亮归途。".repeat(100)))
+        )
+    ) { app, ref ->
+        fun awaitStatusBar(visible: Boolean) {
+            compose.waitUntil(10_000) {
+                androidx.core.view.ViewCompat.getRootWindowInsets(compose.activity.window.decorView)
+                    ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.statusBars()) == visible
+            }
+        }
+        awaitStatusBar(true)
+        compose.onNodeWithContentDescription("阅读设置").performClick()
+        compose.onNodeWithText("仅应用于这本书").performClick()
+        compose.onNodeWithText("翻页").performClick()
+        compose.onNodeWithText("显示翻页按钮").performScrollTo().performClick()
+        compose.onNodeWithText("列表与面板翻屏按钮").performScrollTo().performClick()
+        compose.onNodeWithText("上一屏").assertDoesNotExist()
+        compose.onNodeWithText("下一屏").assertDoesNotExist()
+        compose.onNodeWithText("阅读时隐藏状态栏").performScrollTo().performClick()
+        screenshot("reader-display-preferences")
+        compose.onNodeWithText("关闭面板").performClick()
+        awaitStatusBar(false)
+        compose.onNodeWithText("上一页").assertDoesNotExist()
+        compose.onNodeWithText("下一页").assertDoesNotExist()
+        compose.onNodeWithContentDescription("下一章").performClick()
+        waitForChapter(app, ref, "second")
+        awaitStatusBar(false)
+        screenshot("reader-hidden-status-bar")
+        runBlocking { app.store.flush() }
+        val saved = LocalStore(compose.activity).state.value
+        assertTrue(saved.reader.showPageButtons)
+        assertTrue(saved.reader.showEInkScreenButtons)
+        assertFalse(saved.reader.hideStatusBar)
+        assertFalse(saved.bookSettings.getValue(ref.key).showPageButtons)
+        assertFalse(saved.bookSettings.getValue(ref.key).showEInkScreenButtons)
+        assertTrue(saved.bookSettings.getValue(ref.key).hideStatusBar)
+        compose.onNodeWithContentDescription("返回").performClick()
+        awaitStatusBar(true)
+        compose.onNodeWithText("工具栏覆盖测试").performClick()
+        compose.waitUntil(15_000) { compose.onAllNodesWithTag("reader-page-counter").fetchSemanticsNodes().isNotEmpty() }
+        awaitStatusBar(false)
+    }
+
     @Test fun scrollingSeekReachesLongParagraphsAndChapterBoundariesWithoutTurningChapters() = withReader(
         ReaderSettings(paginationMode = "scroll", showPageButtons = false),
         listOf(LocalChapter("first", "第一章 长段落", listOf("旅人沿着森林小路前行，寻找远处的小镇。".repeat(600))),

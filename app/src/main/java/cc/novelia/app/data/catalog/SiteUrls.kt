@@ -5,7 +5,7 @@ import java.net.URI
 /** 原站迁移前后的内容地址共用入口；只接受已知域名，不按小说路径猜测外站身份。 */
 internal object SiteUrls {
     private const val host = "n.novelia.cc"
-    private val hosts = setOf(host, "books.fishhawk.top")
+    private val hosts = setOf(host, "books.fishhawk.top", "book.xkvi.top")
 
     fun isInternal(uri: URI): Boolean {
         val scheme = uri.scheme?.lowercase()

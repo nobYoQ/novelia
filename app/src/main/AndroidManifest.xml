@@ -9,18 +9,22 @@
         android:label="Novelia" android:icon="@drawable/ic_launcher" android:roundIcon="@drawable/ic_launcher"
         android:supportsRtl="true" android:usesCleartextTraffic="false" android:theme="@style/Theme.Novelia">
         <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop" android:windowSoftInputMode="adjustResize">
-            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+            <!-- 桌面入口由 launcher-icons 清单生成；主界面的任务始终使用稳定的 MainActivity。 -->
             <intent-filter android:autoVerify="false">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" /><category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" />
                 <data android:host="n.novelia.cc" />
+                <data android:host="book.xkvi.top" />
                 <data android:pathPrefix="/novel/" />
                 <data android:pathPrefix="/wenku/" />
                 <data android:pathPrefix="/forum/" />
             </intent-filter>
             <intent-filter><action android:name="android.intent.action.SEND" /><category android:name="android.intent.category.DEFAULT" /><data android:mimeType="text/plain" /></intent-filter>
         </activity>
+        <activity android:name=".launcher.LauncherEntryActivity" android:exported="false"
+            android:theme="@android:style/Theme.NoDisplay" android:taskAffinity=""
+            android:excludeFromRecents="true" android:noHistory="true" />
         <service android:name=".reader.ReadAloudService" android:exported="false" android:foregroundServiceType="mediaPlayback" />
         <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.files" android:exported="false" android:grantUriPermissions="true">
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />

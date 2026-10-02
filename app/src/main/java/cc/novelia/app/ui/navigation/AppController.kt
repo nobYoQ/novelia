@@ -11,6 +11,10 @@ import cc.novelia.app.NoveliaApplication
 import cc.novelia.app.data.auth.SessionBinding
 import cc.novelia.app.data.catalog.BookLinks
 import cc.novelia.app.data.catalog.SiteLink
+import cc.novelia.app.data.catalog.NovelFilterDetails
+import cc.novelia.app.data.catalog.NovelFilterMetadataCache
+import cc.novelia.app.data.catalog.NovelFilterPageCache
+import cc.novelia.app.data.cache.MetadataCache
 import cc.novelia.app.data.markdown.MarkdownLinks
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
@@ -60,6 +64,59 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
     private var celebration: Job? = null
     /** 进入书籍详情覆盖发现页时，保留最近一页的发现结果。 */
     internal var discoverPage: Pair<Any, Page<BookCard>>? = null
+    internal var filteredDiscoverPage: Pair<Any, cc.novelia.app.data.catalog.FilteredNovelBatch>? = null
+    private val filterMetadataCache = NovelFilterMetadataCache(metadataCache)
+    private val filterPageCache = NovelFilterPageCache()
+
+    internal suspend fun filteredWebList(page: Int, query: String, provider: String, type: Int, level: Int,
+        translate: Int, sort: Int, forceNetwork: Boolean = false): Page<BookCard> {
+        val binding = session.capture()
+        val generation = store.cacheGeneration.value
+        val mutation = api.lastMutationAt
+        val key = listOf(binding, generation, mutation, page, query, provider, type, level, translate, sort)
+        if(!forceNetwork) filterPageCache.get(key)?.let { session.ensureCurrent(binding); return it }
+        val fetchedAt = System.currentTimeMillis()
+        val remote = api.webList(page, query, provider, type, level, translate, sort)
+        session.ensureCurrent(binding)
+        return Page(remote.pageNumber, remote.items.map { it.card() }).also {
+            if(generation == store.cacheGeneration.value && mutation == api.lastMutationAt) filterPageCache.put(key, it, fetchedAt)
+        }
+    }
+
+    /** 小字段缓存优先，来源列表发生更新才重新补查；显式重新查找可强制刷新。 */
+    internal suspend fun filterBookMetadata(book: BookCard, forceNetwork: Boolean = false): BookCard = withContext(Dispatchers.IO) {
+        val binding = session.capture()
+        val account = binding.cacheAccount
+        val generation = store.cacheGeneration.value
+        val mutation = api.lastMutationAt
+        val cached = filterMetadataCache.read(book.ref, account, mutation)
+        if(!forceNetwork && cached?.reusable(book) == true) {
+            session.ensureCurrent(binding)
+            return@withContext cached.metadata.details.applyTo(book)
+        }
+        val path = "novel/${book.ref.key}"
+        val detailKey = hashName("$account:$path")
+        // 已知列表发生变化时，不拿更新前的完整详情重新生成看似新鲜的字数缓存。
+        val existing = if(!forceNetwork && (cached == null || cached.matchesSource(book)))
+            metadataCache.readSnapshot(detailKey, maxAgeMillis = 5 * 60_000L, newerThan = mutation) else null
+        try {
+            val fetchedAt = System.currentTimeMillis()
+            val raw = existing ?: MetadataCache.Snapshot(api.request("GET", path, binding = binding), fetchedAt)
+            val details = appJson.decodeFromString<NovelFilterDetails>(raw.text)
+            session.ensureCurrent(binding)
+            if(mutation == api.lastMutationAt) runCatching {
+                store.withCacheGeneration(generation) {
+                    if(existing == null) metadataCache.write(detailKey, raw.text, raw.fetchedAt)
+                    filterMetadataCache.write(book, account, details, raw.fetchedAt)
+                }
+            }
+            details.applyTo(book)
+        } catch(error: IOException) {
+            session.ensureCurrent(binding)
+            if(error is ApiException || forceNetwork || cached?.matchesSource(book) != true) throw error
+            cached.metadata.details.applyTo(book)
+        }
+    }
     /** 一次性正文交接，附带账号绑定和缓存代次，避免跨章导航后再次请求或接收过期内容。 */
     internal data class ReaderHandoff(val ref: BookRef, val id: String, val value: Pair<Chapter, Boolean>, val binding: SessionBinding, val generation: Long)
     private var readerHandoff: ReaderHandoff? = null
@@ -151,7 +208,7 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
     suspend inline fun <reified T> detail(path: String, forceNetwork: Boolean = false): T = withContext(Dispatchers.IO) {
         val binding = session.capture()
         val account = binding.account ?: "guest"
-        val key = hashName("$account:$path")
+        val key = hashName("${binding.cacheAccount}:$path")
         val mutation = api.lastMutationAt
         val generation = store.cacheGeneration.value
         if (!forceNetwork) {

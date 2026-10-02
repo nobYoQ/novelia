@@ -14,6 +14,50 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class KeywordLibraryTest {
+    @Test fun categoryUpgradeSeedsOnceAndPreservesCustomMembershipAndCapacity() {
+        val old = KeywordLibrary(listOf(KeywordEntry("BL", "男性恋爱", "题材"),
+            KeywordEntry("GL", "百合", "我的分类", categoryEdited = true), KeywordEntry("TS", category = "题材"),
+            KeywordEntry("ボーイズラブ", category = "情节", categoryEdited = true)),
+            categories = listOf("题材", "情节", "其他", "我的分类"))
+        val upgraded = old.upgradeDefaults(limit = 1)
+        assertEquals(old.entries.size, upgraded.entries.size)
+        assertEquals("BL／男性恋爱", upgraded.entries[0].category)
+        assertEquals("我的分类", upgraded.entries[1].category)
+        assertEquals("TS／性转", upgraded.entries[2].category)
+        assertEquals("情节", upgraded.entries[3].category)
+        val arranged = upgraded.renameCategory("BL／男性恋爱", "我的 BL").deleteCategory("TS／性转")
+        assertEquals(arranged, arranged.upgradeDefaults(limit = 1))
+        val restored = KeywordLibraryFormat.decode(appJson.encodeToString(arranged))
+        assertEquals(arranged, restored.upgradeDefaults(limit = 1))
+    }
+
+    @Test fun seedingRespectsCategoryLimitAndExplicitlyClearingAnAutomaticTranslationPersists() {
+        val full = KeywordLibrary(listOf(KeywordEntry("BL")), categories = listOf("其他") + (1..99).map { "分类$it" })
+        val upgraded = full.upgradeDefaults(limit = 1)
+        assertEquals(100, upgraded.categories.size)
+        assertEquals("其他", upgraded.entries.single().category)
+        KeywordLibraryFormat.validate(upgraded)
+        val imported = KeywordLibrary(listOf(KeywordEntry("ヤンデレヒロイン")))
+        val cleared = imported.editEntry("ヤンデレヒロイン", "", "其他")
+        assertTrue(cleared.entries.single().translationEdited)
+        assertEquals("ヤンデレヒロイン", cleared.upgradeDefaults(limit = 1).entries.single().label)
+    }
+
+    @Test fun categoryExpansionIsAFlatEditableSelectionAndRepeatedActionsDoNotDuplicate() {
+        val originals = (0..24).map { "标签$it" } + listOf("有 空格", "-非法")
+        val initial = KeywordSelection(listOf("已有"), listOf("标签0", "保留排除"))
+        val included = initial.add(originals, true)
+        assertEquals(listOf("已有") + originals.take(25), included.included)
+        assertEquals(listOf("保留排除"), included.excluded)
+        assertEquals(included, included.add(originals, true))
+        val adjusted = included.add(listOf("标签1"), false).copy(included = included.included - "标签1" - "标签2")
+        assertFalse("标签2" in adjusted.included)
+        assertEquals(listOf("保留排除", "标签1"), adjusted.excluded)
+        val excluded = adjusted.add(originals, false)
+        assertEquals(listOf("已有"), excluded.included)
+        assertEquals(26, excluded.excluded.size)
+    }
+
     @Test fun renamingAndDeletingCategoriesRetainsLabelsAndMovesMembers() {
         val base = KeywordLibrary.defaults().createCategory("我的分类")
             .editEntry("ヤンデレ", "自定病娇", "我的分类")
@@ -42,7 +86,7 @@ class KeywordLibraryTest {
         val restored = KeywordLibraryFormat.decode(appJson.encodeToString(legacy))
         assertEquals(legacy, restored.entries)
         assertTrue("旧分类" in restored.categories)
-        assertEquals(20, KeywordLibrary.fromLegacy(emptyList()).entries.size)
+        assertEquals(KeywordCatalog.common, KeywordLibrary.fromLegacy(emptyList()).entries)
     }
 
     @Test fun mergeRestoresUntouchedDefaultsButPreservesEditedEmptyTranslationsAndCategories() {
@@ -115,7 +159,7 @@ class KeywordLibraryTest {
         assertEquals("其他", library.entries.single { it.original == "a" }.category)
         val bytes = ByteArrayOutputStream().also { KeywordLibraryFormat.write(it, library) }.toByteArray()
         val native = appJson.parseToJsonElement(bytes.toString(Charsets.UTF_8)).jsonObject
-        assertEquals(setOf("entries", "categories", "format", "version"), native.keys)
+        assertEquals(setOf("entries", "categories", "format", "version", "categorySeedsVersion"), native.keys)
         assertEquals("novelia-keywords", native.getValue("format").jsonPrimitive.content)
         assertEquals("1", native.getValue("version").jsonPrimitive.content)
         assertEquals("首条译名", native.getValue("entries").jsonArray.first().jsonObject.getValue("translation").jsonPrimitive.content)

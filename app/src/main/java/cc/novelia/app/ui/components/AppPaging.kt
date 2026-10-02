@@ -29,6 +29,7 @@ import androidx.compose.ui.semantics.scrollBy
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.ui.theme.LocalEInkMode
+import cc.novelia.app.ui.theme.LocalScreenPageButtons
 import kotlin.math.abs
 import kotlinx.coroutines.launch
 
@@ -66,7 +67,7 @@ internal fun screenPageDistance(viewport: Int, overlap: Float): Float =
             horizontalAlignment = horizontalAlignment, userScrollEnabled = !eInk,
             modifier = listModifier.weight(1f).then(if (sheetEnd != null) Modifier.nestedScroll(sheetEnd) else Modifier).screenPageInput(eInk, page = page,
                 scroll = { amount -> scope.launch { state.scrollBy(amount) }; Unit }), content = content)
-        if(eInk && (state.canScrollBackward || state.canScrollForward)) ScreenPageButtons(state.canScrollBackward, state.canScrollForward, page)
+        if(eInk && LocalScreenPageButtons.current && (state.canScrollBackward || state.canScrollForward)) ScreenPageButtons(state.canScrollBackward, state.canScrollForward, page)
     }
 }
 
@@ -88,7 +89,7 @@ internal fun screenPageDistance(viewport: Int, overlap: Float): Float =
         Column(Modifier.weight(1f, fill = false).then(if (sheetEnd != null) Modifier.nestedScroll(sheetEnd) else Modifier)
             .appVerticalScroll(state).then(contentModifier),
             verticalArrangement = verticalArrangement, horizontalAlignment = horizontalAlignment, content = content)
-        if(eInk && (state.canScrollBackward || state.canScrollForward)) ScreenPageButtons(state.canScrollBackward, state.canScrollForward, page)
+        if(eInk && LocalScreenPageButtons.current && (state.canScrollBackward || state.canScrollForward)) ScreenPageButtons(state.canScrollBackward, state.canScrollForward, page)
     }
 }
 

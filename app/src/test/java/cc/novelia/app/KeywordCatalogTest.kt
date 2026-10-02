@@ -9,6 +9,39 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class KeywordCatalogTest {
+    @Test fun vocabularyUpgradeFillsObservedBlanksWithoutReplacingUserTranslationsOrClears() {
+        val entries = listOf(KeywordEntry("ガールズラブ"), KeywordEntry("TS", translationEdited = true),
+            KeywordEntry("ボーイズラブ", "自定义", translationEdited = true))
+        val updated = KeywordCatalog.fillMissingTranslations(entries)
+        assertEquals("GL", updated[0].translation)
+        assertEquals("", updated[1].translation)
+        assertEquals("自定义", updated[2].translation)
+        assertEquals("男性恋爱", KeywordCatalog.observe(emptyList(), listOf("bl")).single().translation)
+        val gl = KeywordCatalog.suggestions(KeywordCatalog.common, "GL", limit = 100).map { it.original }
+        assertTrue("ガールズラブ" in gl)
+        assertTrue("百合" in gl)
+    }
+
+    @Test fun siteTranslationsCoverMissingMappingsAndCompoundTagsWithoutChangingOriginals() {
+        val originals = listOf("ディストピア", "ざまあ", "コミカライズ", "ヤンデレヒロイン", "ダークファンタジー", "ボーイズラブ要素あり")
+        val translated = KeywordCatalog.observe(emptyList(), originals)
+        assertEquals(listOf("反乌托邦", "活该", "漫画化", "病娇女主角", "黑暗奇幻", "BL要素あり"), translated.map { it.translation })
+        assertEquals(originals, translated.map { it.original })
+        assertEquals("ヤンデレヒロイン", KeywordCatalog.exactMatch(translated, "病娇女主角")?.original)
+        // 没有词库条目（例如容量已满）也能展示原站译名，仍尊重显式清空。
+        assertEquals("ヤンデレヒロイン (病娇女主角)", KeywordEntry("ヤンデレヒロイン").label)
+        assertEquals("ヤンデレヒロイン", KeywordEntry("ヤンデレヒロイン", translationEdited = true).label)
+        assertEquals("病娇ヤンデレ", KeywordEntry("ヤンデレヤンデレ").displayTranslation)
+    }
+
+    @Test fun siteTranslationUpgradeOnlyReplacesOldDefaultsOrUneditedBlanks() {
+        val entries = listOf(KeywordEntry("ざまぁ", "打脸／恶有恶报"), KeywordEntry("コミカライズ"),
+            KeywordEntry("シリアス", "我的严肃故事"), KeywordEntry("ガールズラブ", "百合", translationEdited = true),
+            KeywordEntry("ヤンデレヒロイン", "", translationEdited = true))
+        assertEquals(listOf("活该", "漫画化", "我的严肃故事", "百合", ""),
+            KeywordCatalog.fillMissingTranslations(entries).map { it.translation })
+    }
+
     @Test fun aliasesFindOriginalsAndLabelsKeepOriginalFirst() {
         assertEquals("ハーレム", KeywordCatalog.exactMatch(KeywordCatalog.common, "后宫")?.original)
         assertEquals("ハーレム (后宫)", KeywordCatalog.exactMatch(KeywordCatalog.common, "后宫")?.label)

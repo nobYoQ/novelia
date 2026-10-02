@@ -64,7 +64,8 @@ internal class NetworkRecorder(private val store: NetworkLogStore, private val e
             val probe = request.tag(DiagnosticRequestTag::class.java)
             if (probe == null && !enabled()) EventListener.NONE else {
                 val epoch = generation.get()
-                val trace = NetworkRequestTrace(request, probe?.route ?: if (echEnabled() && request.url.host in echHosts) "ECH" else "direct") {
+                val trace = NetworkRequestTrace(request, probe?.route ?: if(request.tag(SourceSelection::class.java)?.source == BookSource.XKVI) "mirror"
+                    else if (echEnabled() && request.url.host in echHosts) "ECH" else "direct") {
                     event -> write(epoch) { store.append(event) }
                 }
                 traces[call] = trace
@@ -162,11 +163,11 @@ internal class NetworkRequestTrace(request: Request, private val route: String, 
 
 /** Store categories, never IDs, filenames, search terms, redirect URLs or query parameters. */
 internal fun networkTarget(request: Request): String {
-    if (request.url.host !in echHosts) return "external"
+    if (request.url.host !in echHosts && request.url.host != "book.xkvi.top") return "external"
     val path = request.url.pathSegments
     return when {
         path == listOf("cdn-cgi", "trace") -> "connectivity_trace"
-        request.url.host == "auth.novelia.cc" -> "authentication"
+        request.url.host == "auth.novelia.cc" || path.take(3) == listOf("api", "v1", "auth") -> "authentication"
         request.url.host == "forum.novelia.cc" -> "forum_api"
         path.firstOrNull() == "files-temp" -> "download_file"
         path.getOrNull(1) == "novel" -> when { "file" in path -> "novel_download"; "chapter" in path -> "chapter"; path.size == 2 -> "novel_list"; else -> "novel_api" }

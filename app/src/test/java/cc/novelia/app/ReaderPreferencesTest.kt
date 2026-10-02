@@ -9,6 +9,24 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ReaderPreferencesTest {
+    @Test fun hiddenStatusBarAndScreenButtonsRemainIndependentAcrossProfilesAndBackups() {
+        val legacy = appJson.decodeFromString<ReaderSettings>("{}")
+        assertTrue(legacy.showEInkScreenButtons)
+        assertFalse(legacy.hideStatusBar)
+        val custom = ReaderSettings(hideStatusBar = true, showEInkScreenButtons = false).withEInkMode(true).copy(showPageButtons = false)
+        val backup = SettingsBackup(reader = custom)
+        val restored = appJson.decodeFromString<SettingsBackup>(appJson.encodeToString(backup)).reader
+        assertFalse(restored.showPageButtons)
+        assertFalse(restored.showEInkScreenButtons)
+        assertTrue(restored.hideStatusBar)
+        val toggled = restored.withEInkMode(false).withEInkMode(true)
+        assertFalse(toggled.showPageButtons)
+        assertFalse(toggled.showEInkScreenButtons)
+        assertTrue(toggled.hideStatusBar)
+        val library = LibraryState(reader = legacy, bookSettings = mapOf("local/book" to restored))
+        assertEquals(library, appJson.decodeFromString<LibraryState>(appJson.encodeToString(library)))
+    }
+
     @Test fun progressBarDefaultsRemainCompatibleAndItsSwitchSurvivesBackupAndEInkChanges() {
         assertTrue(appJson.decodeFromString<ReaderSettings>("{}").showProgressBar)
         val hidden = ReaderSettings(showProgressBar = false)

@@ -6,6 +6,7 @@ fun BookCard.withKnownUpdateTime(previous: BookCard?): BookCard = copy(
         ?: previous?.takeIf { it.ref == ref }?.updateAt?.takeIf { it > 0 },
     novelType = novelType?.takeIf { it.isNotBlank() } ?: previous?.takeIf { it.ref == ref }?.novelType,
     attentions = attentions ?: previous?.takeIf { it.ref == ref }?.attentions,
+    totalCharacters = totalCharacters?.takeIf { it >= 0 } ?: previous?.takeIf { it.ref == ref }?.totalCharacters,
 )
 
 /** 列表中的粗略历史标记只有时间更新时，才可替换已知的具体章节。 */

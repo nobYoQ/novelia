@@ -23,6 +23,10 @@ import kotlinx.coroutines.launch
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable fun LoginScreen(c: AppController) {
+    if(c.app.bookSources.capture().source == cc.novelia.app.data.network.BookSource.XKVI) {
+        MirrorLoginScreen(c)
+        return
+    }
     var busy by remember { mutableStateOf(false) }; var error by remember { mutableStateOf<String?>(null) }; var loading by remember { mutableStateOf(true) }; val scope = rememberCoroutineScope()
     val context = LocalContext.current
     fun complete() {
