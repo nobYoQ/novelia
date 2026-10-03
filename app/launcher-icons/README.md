@@ -4,7 +4,7 @@
 
 ## 添加图片
 
-1. 推荐正方形 PNG 或 WebP（例如 512×512），也支持 Android VectorDrawable XML。图案留出边距，不要把主要内容贴边，实际桌面形状由系统决定。
+1. 推荐正方形 PNG 或 WebP（例如 512×512），也支持 Android drawable XML，包括 VectorDrawable 和自适应图标。图案留出边距，不要把主要内容贴边，实际桌面形状由系统决定。
 2. 文件名使用小写英文字母、数字、下划线，以字母开头。例如 `launcher_sakura.png`。同一资源名只能有一个文件，不要同时保留同名 PNG 和 XML。
 3. 在 `icons.json` 数组中增加一项，`drawable` 不带扩展名：
 
@@ -14,7 +14,23 @@
 
 4. 在仓库根目录运行 `./build-debug.ps1` 或 `./build-release.ps1`，安装新 APK。Gradle 会检查清单并自动生成桌面入口；不需要手工修改 Manifest 或 Kotlin。
 
-`id` 是安装后保持稳定的标识，只能使用小写字母、数字和下划线，以字母开头。`title` 是设置中的名称，桌面应用名称保持 Novelia。默认图标 `default` 使用现有的 `ic_launcher`；示例的水墨黑、夜读蓝可以直接替换图片内容，保持资源名即可。
+`id` 是安装后保持稳定的标识，只能使用小写字母、数字和下划线，以字母开头。`title` 是设置中的名称，桌面应用名称保持 Novelia。默认图标 `default` 使用现有的 `ic_launcher`。
+
+## 星川绿素材
+
+`rawIcon/` 保存原始素材，不直接参与资源打包。三张图片均为带透明通道的正方形；正式资源保留原始像素，以 Android 合法文件名复制到 `res/drawable-nodpi/`，使用自适应图标 XML 包装：
+
+| 原始素材 | 尺寸 | 设置中的名称 | 稳定 id / 图标 XML |
+| --- | --- | --- | --- |
+| `星川绿.webp` | 512×512 | 星川绿 | `xingchuan_green` / `launcher_xingchuan_green.xml` |
+| `星川绿01.png` | 1254×1254 | 星川绿·心动 | `xingchuan_green_01` / `launcher_xingchuan_green_01.xml` |
+| `星川绿02.png` | 1254×1254 | 星川绿·招手 | `xingchuan_green_02` / `launcher_xingchuan_green_02.xml` |
+
+- 图标采用脸部特写构图，背景使用与「经典绿」相同的 `#006C4C`。108dp 前景图层中的人物画布为 97.2dp，相比最初保留全图的 54dp 方案放大 1.8 倍，并向上移动 10.8dp；允许耳朵、身体和装饰被系统遮罩裁切，优先突出眼睛与表情。
+- 背景和取景参数统一定义在 `res/values/launcher_icon_styles.xml`：左右各 `5%`，顶部 `-5%`，底部 `15%`。上下与左右的边距总和相等，保持原图比例；负的上边距用于向上取景。圆形、圆角方形等遮罩仍由系统应用，参照 [Android 自适应图标规范](https://developer.android.com/develop/ui/compose/system/icon_design_adaptive)。
+- 原始 WebP 的边缘清晰度弱于两张 PNG，保留其原画风格；位图启用缩放过滤。PNG 主体的 alpha 大多为 254，接近完全不透明，不需要重新抠图。
+- 每张图片使用 `launcher_xingchuan_green*_artwork` 资源名，`icons.json` 登记对应的 XML 名称。替换图片时更新 `rawIcon/` 和对应的 `*_artwork` 文件，保持已发布的 id 和 XML 名称稳定。
+- 项目最低支持 Android 8.0（API 26），可以直接使用自适应图标；设置页通过系统 Drawable 渲染预览，兼容位图、矢量及自适应图标。
 
 **已经发布过的 id 不能删除或改名。** Android 会跨升级保留入口启停状态，移除正在使用的入口可能使桌面找不到应用。要下架旧图标，保留该行和资源，并增加 `"hidden": true`；它不再提供给新选择，正在使用它的用户仍可启动和换回其他图标。默认图标不能隐藏。
 

@@ -113,6 +113,7 @@ fun StickerSnackbarHost(state: SnackbarHostState) {
         if(visuals is StickerSnackbarVisuals) {
             Snackbar(
                 modifier = Modifier.padding(12.dp).heightIn(min = 80.dp),
+                actionOnNewLine = visuals.actionLabel != null,
                 action = visuals.actionLabel?.let { label -> ({ TextButton(onClick = data::performAction) { Text(label) } }) },
                 dismissAction = if(visuals.withDismissAction) ({ IconButton(onClick = data::dismiss) { Icon(Icons.Outlined.Close, "关闭提示") } }) else null,
             ) {
@@ -153,7 +154,8 @@ fun ObserveDownloadCelebrations(c: AppController, route: String?) {
             previous = entries.associate { it.id to it.status }
             // 后台完成结果留在下载历史中，返回页面时不补播庆祝动画。
             if(finished.isNotEmpty() && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) && latestRoute?.startsWith("reader/") != true) {
-                c.celebrate(if(finished.size == 1) "「${finished.single().title}」下载完成" else "${finished.size} 本小说下载完成", MidoriSticker.Celebrate)
+                c.celebrate(if(finished.size == 1) "「${finished.single().title}」下载完成" else "${finished.size} 个文件下载完成",
+                    MidoriSticker.Celebrate, actionLabel = "查看下载") { c.go("downloads", replaceTop = true) }
             }
         }
     }

@@ -2,18 +2,24 @@ package cc.novelia.app.files
 
 import android.net.Uri
 import android.provider.OpenableColumns
+import cc.novelia.app.NoveliaApplication
 import cc.novelia.app.data.library.withDownloadedVolume
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.DownloadEntry
+import cc.novelia.app.data.model.WenkuDetail
 import cc.novelia.app.data.storage.LocalStore
+import cc.novelia.app.data.storage.appJson
+import cc.novelia.app.data.storage.hashName
 import java.io.File
 import java.io.InputStream
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** imported 仅在本次创建新文档时为 true；命中源文件哈希会返回现有引用。 */
 data class DocumentImportResult(val ref: BookRef, val imported: Boolean)
@@ -101,9 +107,34 @@ suspend fun importLocalDocument(store: LocalStore, file: File, name: String = fi
     }
 }
 
-/** 每次开始阅读均补齐父文库并挂载，重复文件复用已有副本和阅读位置。 */
-suspend fun importDownloadedDocument(store: LocalStore, entry: DownloadEntry, sourceCard: BookCard? = entry.sourceCard): BookRef {
-    val result = importLocalDocument(store, File(store.downloadsDir, entry.fileName), entry.fileName, entry.title)
+/** 开始阅读和批量导入共用来源解析、文件去重和文库挂载。 */
+suspend fun importDownloadedDocument(app: NoveliaApplication, entry: DownloadEntry, onProgress: (String) -> Unit = {}): DocumentImportResult {
+    require(entry.status == "已完成") { "文件尚未下载完成" }
+    val parent = entry.sourceBook?.takeIf { it.isWenku }
+    val sourceCard = entry.sourceCard ?: parent?.let { source ->
+        app.store.state.value.books.firstOrNull { it.book.ref == source }?.book ?: try {
+            val binding = app.session.capture()
+            val cached = withContext(Dispatchers.IO) {
+                val key = hashName("${binding.cacheAccount}:wenku/${source.id}")
+                app.metadataCache.read(key)?.let { runCatching { appJson.decodeFromString<WenkuDetail>(it).card(source) }.getOrNull() }
+            }
+            app.session.ensureCurrent(binding)
+            cached ?: withTimeoutOrNull(1_500) {
+                app.api.get<WenkuDetail>("wenku/${source.id}").card(source).also { app.session.ensureCurrent(binding) }
+            }
+        } catch(e: CancellationException) { throw e }
+        catch(_: Exception) { null }
+    }
+    return importDownloadedDocumentResult(app.store, entry, sourceCard, onProgress)
+}
+
+/** 每次导入均补齐父文库并挂载，重复文件复用已有副本和阅读位置。 */
+suspend fun importDownloadedDocument(store: LocalStore, entry: DownloadEntry, sourceCard: BookCard? = entry.sourceCard): BookRef =
+    importDownloadedDocumentResult(store, entry, sourceCard).ref
+
+private suspend fun importDownloadedDocumentResult(store: LocalStore, entry: DownloadEntry, sourceCard: BookCard?,
+    onProgress: (String) -> Unit = {}): DocumentImportResult {
+    val result = importLocalDocument(store, File(store.downloadsDir, entry.fileName), entry.fileName, entry.title, onProgress)
     entry.sourceBook?.takeIf { it.isWenku }?.let { source -> store.update { state ->
         val parent = state.books.firstOrNull { it.book.ref == source }?.book
             ?: sourceCard?.takeIf { it.ref == source }
@@ -111,5 +142,5 @@ suspend fun importDownloadedDocument(store: LocalStore, entry: DownloadEntry, so
         state.withDownloadedVolume(result.ref, parent)
     }
     }
-    return result.ref
+    return result
 }

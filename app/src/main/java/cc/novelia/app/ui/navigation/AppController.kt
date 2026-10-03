@@ -3,6 +3,8 @@ package cc.novelia.app.ui.navigation
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -174,10 +176,16 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
             else -> external(url)
         }
     }
-    fun message(text: String) { scope.launch { snackbar.showSnackbar(text) } }
-    fun celebrate(text: String, sticker: MidoriSticker) {
+    fun message(text: String, actionLabel: String? = null, onAction: () -> Unit = {}) { scope.launch {
+        if(snackbar.showSnackbar(text, actionLabel = actionLabel, withDismissAction = actionLabel != null,
+                duration = if(actionLabel == null) SnackbarDuration.Short else SnackbarDuration.Long) == SnackbarResult.ActionPerformed) onAction()
+    } }
+    fun celebrate(text: String, sticker: MidoriSticker, actionLabel: String? = null, onAction: () -> Unit = {}) {
         celebration?.cancel()
-        celebration = scope.launch { snackbar.showSnackbar(StickerSnackbarVisuals(text, sticker)) }
+        celebration = scope.launch {
+            if(snackbar.showSnackbar(StickerSnackbarVisuals(text, sticker, actionLabel = actionLabel,
+                    duration = if(actionLabel == null) SnackbarDuration.Short else SnackbarDuration.Long)) == SnackbarResult.ActionPerformed) onAction()
+        }
     }
     fun action(success: String? = null, sticker: MidoriSticker? = null, block: suspend () -> Unit) { scope.launch(Dispatchers.Main.immediate) {
         try { block(); success?.let { if(sticker != null) celebrate(it, sticker) else snackbar.showSnackbar(it) } }

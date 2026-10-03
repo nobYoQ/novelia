@@ -28,8 +28,10 @@ class DownloadSheetLayoutTest {
 
     @Test fun downloadActionRemainsReachableWithLargeFonts() = checkSheet(false)
     @Test fun eInkDownloadActionRemainsReachableWithLargeFonts() = checkSheet(true)
+    @Test fun batchDownloadActionRemainsReachableWithLargeFonts() = checkSheet(false, batch = true)
+    @Test fun eInkBatchDownloadActionRemainsReachableWithLargeFonts() = checkSheet(true, batch = true)
 
-    private fun checkSheet(eInk: Boolean) {
+    private fun checkSheet(eInk: Boolean, batch: Boolean = false) {
         val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
         runBlocking { app.initialization.await() }
         compose.setContent {
@@ -37,7 +39,8 @@ class DownloadSheetLayoutTest {
                 AppInteractionMode(eInk, true) {
                     NoveliaTheme("light") {
                         val controller = AppController(app, rememberNavController(), rememberCoroutineScope(), remember { SnackbarHostState() })
-                        DownloadSheet(controller, BookCard(BookRef("syosetu", "layout-test"), "大字体下载面板布局测试"), null) {}
+                        DownloadSheet(controller, BookCard(BookRef(if(batch) "wenku" else "syosetu", "layout-test"), "大字体下载面板布局测试"),
+                            if(batch) listOf("第1卷.epub", "第2卷.epub") else emptyList()) {}
                     }
                 }
             }

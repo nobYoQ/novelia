@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="launcher_xingchuan_background">#006C4C</color>
+    <!-- 人物画布放大到 97.2dp，并上移 10.8dp，让脸部居中；允许裁切耳朵、身体和装饰。 -->
+    <!-- 左右之和与上下之和均为 10%，保持原图比例。负的上边距用于向上取景。 -->
+    <fraction name="launcher_xingchuan_inset_horizontal">5%</fraction>
+    <fraction name="launcher_xingchuan_inset_top">-5%</fraction>
+    <fraction name="launcher_xingchuan_inset_bottom">15%</fraction>
+</resources>

@@ -26,6 +26,7 @@ artifacts/
 *.aab.sha256
 
 resource/
+app/launcher-icons/rawIcon/
 
 # 本地凭据与签名配置
 .env

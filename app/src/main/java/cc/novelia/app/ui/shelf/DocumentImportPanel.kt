@@ -3,13 +3,7 @@ package cc.novelia.app.ui.shelf
 
 import android.net.Uri
 import android.provider.OpenableColumns
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -18,11 +12,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.storage.LocalStore
 import cc.novelia.app.files.*
-import cc.novelia.app.ui.components.AppLazyColumn
-import cc.novelia.app.ui.components.AppSheet
+import cc.novelia.app.ui.components.ImportResultsPanel
 import cc.novelia.app.ui.components.friendlyMessage
 import cc.novelia.app.ui.navigation.AppController
-import cc.novelia.app.ui.theme.appReducedMotion
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -91,40 +83,5 @@ internal class DocumentImportViewModel(private val store: LocalStore) : ViewMode
 
 @Composable internal fun DocumentImportPanel(model: DocumentImportViewModel, onRead: (BookRef) -> Unit) {
     val state by model.state.collectAsStateWithLifecycle()
-    var open by rememberSaveable { mutableStateOf(false) }
-    if (state.items.isEmpty()) return
-    val reducedMotion = appReducedMotion()
-    val counts = listOf(ImportStatus.Success, ImportStatus.Duplicate, ImportStatus.Failed, ImportStatus.Pending)
-        .joinToString(" · ") { status -> "${status.label} ${state.items.count { it.status == status }}" }
-    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp)) {
-        TextButton(onClick = { open = true }) {
-            Text("${if (state.running) "正在导入" else "导入清单"} ${state.completed}/${state.items.size} · 查看结果")
-        }
-        if (state.running) {
-            state.items.firstOrNull { it.status == ImportStatus.Running }?.let { Text("${it.name} · ${it.detail}", maxLines = 2, style = MaterialTheme.typography.bodySmall) }
-            LinearProgressIndicator(progress = { state.completed.toFloat() / state.items.size }, modifier = Modifier.fillMaxWidth())
-        } else Text(counts, style = MaterialTheme.typography.bodySmall)
-    }
-    if (open) AppSheet(onDismissRequest = { open = false }) {
-        Text("批量导入结果", Modifier.padding(horizontal = 20.dp, vertical = 12.dp), style = MaterialTheme.typography.titleLarge)
-        Text(counts, Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.bodySmall)
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
-            if (state.running) TextButton(onClick = model::pause) { Text("暂停导入") }
-            else {
-                TextButton(onClick = model::retryFailed, enabled = state.items.any { it.status == ImportStatus.Failed }) { Text("仅重试失败项") }
-                if (state.items.any { it.status == ImportStatus.Pending }) TextButton(onClick = model::resume) { Text("继续尚未处理项") }
-            }
-        }
-        AppLazyColumn(modifier = Modifier.fillMaxWidth().weight(1f, fill = false)) {
-            itemsIndexed(state.items, key = { index, _ -> index }) { index, item ->
-                Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("${index + 1}. ${item.name}", style = MaterialTheme.typography.titleSmall)
-                    Text("${item.status.label}${if (item.detail.isBlank()) "" else " · ${item.detail}"}", color = if (item.status == ImportStatus.Failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
-                    if (item.status == ImportStatus.Running && !reducedMotion) LinearProgressIndicator(Modifier.fillMaxWidth())
-                    item.bookKey?.let { key -> TextButton(onClick = { open = false; onRead(BookRef.fromKey(key)) }) { Text("开始阅读") } }
-                }
-                HorizontalDivider()
-            }
-        }
-    }
+    ImportResultsPanel(state.items, state.running, model::pause, model::retryFailed, model::resume, onRead)
 }

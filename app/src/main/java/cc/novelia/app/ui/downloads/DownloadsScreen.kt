@@ -2,6 +2,7 @@
 package cc.novelia.app.ui.downloads
 
 import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateContentSize
@@ -10,6 +11,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -18,18 +20,17 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.model.DownloadEntry
-import cc.novelia.app.data.model.WenkuDetail
-import cc.novelia.app.data.storage.appJson
-import cc.novelia.app.data.storage.hashName
 import cc.novelia.app.files.*
 import cc.novelia.app.ui.components.AppDropdownMenu
 import cc.novelia.app.ui.components.AppLazyColumn
 import cc.novelia.app.ui.components.ConfirmDialog
 import cc.novelia.app.ui.components.EmptyState
+import cc.novelia.app.ui.components.ImportResultsPanel
 import cc.novelia.app.ui.components.Screen
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.theme.AppMotion
@@ -37,14 +38,20 @@ import cc.novelia.app.ui.theme.MotionContent
 import cc.novelia.app.ui.theme.appReducedMotion
 import java.io.File
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 
 @Composable fun DownloadsScreen(c: AppController) {
     val state by c.store.state.collectAsStateWithLifecycle(); var exportId by rememberSaveable { mutableStateOf<String?>(null) }; var remove by remember { mutableStateOf<DownloadEntry?>(null) }
     val reducedMotion = appReducedMotion()
     var importing by remember { mutableStateOf(setOf<String>()) }
+    val importer = rememberDownloadImporter(c.app)
+    val batch by importer.state.collectAsStateWithLifecycle()
+    var selecting by rememberSaveable { mutableStateOf(false) }
+    var selection by rememberSaveable { mutableStateOf(emptyList<String>()) }
+    val available = remember(state.downloads, importing) { state.downloads.filter { it.status == "已完成" && it.id !in importing }.map { it.id } }
+    val selected = available.filter { it in selection }
+    LaunchedEffect(available) { selection = selection.filter { it in available } }
+    BackHandler(selecting) { selecting = false; selection = emptyList() }
     val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
         val pendingId = exportId
         exportId = null
@@ -53,13 +60,46 @@ import kotlinx.coroutines.withTimeoutOrNull
             withContext(Dispatchers.IO) { c.app.contentResolver.openOutputStream(uri)?.use { output -> File(c.store.downloadsDir, entry.fileName).inputStream().use { it.copyTo(output) } } ?: error("无法写入") }
         }
     }
-    Screen("下载管理", c::back) { padding -> AppLazyColumn(Modifier.padding(padding), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Screen("下载管理", c::back, actions = {
+        TextButton(onClick = { selecting = !selecting; selection = emptyList() },
+            enabled = !batch.running && importing.isEmpty() && (selecting || available.isNotEmpty())) {
+            Icon(if(selecting) Icons.Outlined.Close else Icons.Outlined.LibraryAdd, null, Modifier.size(18.dp))
+            Spacer(Modifier.width(4.dp))
+            Text(if(selecting) "取消" else "批量导入")
+        }
+    }) { padding -> Column(Modifier.padding(padding)) {
+        if(selecting) FlowRow(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("已选 ${selected.size} 个", Modifier.align(Alignment.CenterVertically), style = MaterialTheme.typography.labelLarge)
+            val allSelected = available.isNotEmpty() && selected.size == available.size
+            TextButton(onClick = { selection = if(allSelected) emptyList() else available }, enabled = available.isNotEmpty()) {
+                Text(if(allSelected) "取消全选" else "全选已完成")
+            }
+            FilledTonalButton(onClick = {
+                importer.start(state.downloads.filter { it.id in selected })
+                selecting = false
+                selection = emptyList()
+            }, enabled = !batch.running && importing.isEmpty() && selected.isNotEmpty(), modifier = Modifier.testTag("download-batch-import")) {
+                Icon(Icons.Outlined.LibraryAdd, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("导入书架（${selected.size}）")
+            }
+        }
+        ImportResultsPanel(batch.items, batch.running, importer::pause, importer::retryFailed, importer::resume, c::book)
+        AppLazyColumn(Modifier.weight(1f).testTag("downloads-list"), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         if(state.downloads.isEmpty()) item { EmptyState("还没有下载任务", "在作品详情或文库分卷中下载小说，完成后可以导出或导入阅读。", Icons.Outlined.Download) }
         items(state.downloads, key = { it.id }, contentType = { "download" }) { entry ->
             var more by remember(entry.id) { mutableStateOf(false) }
             val itemMotion = if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(AppMotion.Release), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit))
-            Card(itemMotion.fillMaxWidth().animateContentSize(tween(if(reducedMotion) 0 else AppMotion.Standard))) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(entry.title, style = MaterialTheme.typography.titleMedium, maxLines = 2)
+            val selectionModifier = if(selecting) Modifier.testTag("download-select-${entry.id}")
+                .toggleable(entry.id in selected, enabled = entry.id in available, role = Role.Checkbox) { checked ->
+                    selection = if(checked) selection + entry.id else selection - entry.id
+                } else Modifier
+            Card(itemMotion.fillMaxWidth().animateContentSize(tween(if(reducedMotion) 0 else AppMotion.Standard)).then(selectionModifier)) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(entry.title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, maxLines = 2)
+                if(selecting) Checkbox(entry.id in selected, onCheckedChange = null, enabled = entry.id in available)
+            }
             MotionContent(entry.status, animateInitial = false) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     val statusIcon = when(entry.status) { "已完成" -> Icons.Outlined.CheckCircle; "已暂停" -> Icons.Outlined.PauseCircle; "失败" -> Icons.Outlined.ErrorOutline; "等待下载" -> Icons.Outlined.Schedule; "需要登录" -> Icons.Outlined.AccountCircle; else -> Icons.Outlined.Downloading }
@@ -74,29 +114,15 @@ import kotlinx.coroutines.withTimeoutOrNull
             }
             entry.error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
             if(entry.status == "已暂停") Text("重新开始会从头下载此文件。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            if(!selecting) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 when(entry.status) {
                     "下载中", "等待下载" -> TextButton(onClick = { c.action { DownloadWorker.pause(c.app, entry.id) } }) { Text("暂停") }
                     "已完成" -> {
-                        Button(enabled = entry.id !in importing, modifier = Modifier.testTag("download-read-${entry.id}"), onClick = {
+                        Button(enabled = !batch.running && entry.id !in importing, modifier = Modifier.testTag("download-read-${entry.id}"), onClick = {
                             importing = importing + entry.id
                             c.action {
                                 try {
-                                    val parent = entry.sourceBook?.takeIf { it.isWenku }
-                                    val sourceCard = entry.sourceCard ?: parent?.let { source ->
-                                        c.store.state.value.books.firstOrNull { it.book.ref == source }?.book ?: try {
-                                            val binding = c.session.capture()
-                                            val cached = withContext(Dispatchers.IO) {
-                                                val key = hashName("${binding.account ?: "guest"}:wenku/${source.id}")
-                                                c.metadataCache.read(key)?.let { runCatching { appJson.decodeFromString<WenkuDetail>(it).card(source) }.getOrNull() }
-                                            }
-                                            c.session.ensureCurrent(binding)
-                                            cached ?: withTimeoutOrNull(1_500) { c.detail<WenkuDetail>("wenku/${source.id}").card(source) }
-                                        } catch(e: CancellationException) { throw e }
-                                        catch(_: Exception) { null }
-                                    }
-                                    val ref = importDownloadedDocument(c.store, entry, sourceCard)
-                                    c.book(ref)
+                                    c.book(importDownloadedDocument(c.app, entry).ref)
                                 } finally { importing = importing - entry.id }
                             }
                         }) { Icon(Icons.Outlined.MenuBook, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(if(entry.id in importing) "正在准备…" else "开始阅读") }
@@ -107,7 +133,7 @@ import kotlinx.coroutines.withTimeoutOrNull
                     }) { Text(downloadRecoveryLabel(entry.status)) }
                 }
                 Box {
-                    IconButton(onClick = { more = true }) { Icon(Icons.Outlined.MoreVert, "更多下载操作 ${entry.title}") }
+                    IconButton(onClick = { more = true }, enabled = !batch.running && entry.id !in importing) { Icon(Icons.Outlined.MoreVert, "更多下载操作 ${entry.title}") }
                     AppDropdownMenu(expanded = more, onDismissRequest = { more = false }) {
                         if(entry.status == "已完成") {
                             DropdownMenuItem(text = { Text("用其他应用打开") }, onClick = {
@@ -128,6 +154,6 @@ import kotlinx.coroutines.withTimeoutOrNull
                 }
             }
         } } }
-    } }
+    } } }
     remove?.let { entry -> ConfirmDialog("删除下载？", "移除该任务及其下载文件，已导入书架的副本不受影响。", { remove = null }, confirmLabel = "删除下载") { c.action { DownloadWorker.remove(c.app, entry.id) } } }
 }

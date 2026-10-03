@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/launcher_xingchuan_background" />
+    <foreground>
+        <inset android:insetLeft="@fraction/launcher_xingchuan_inset_horizontal"
+            android:insetRight="@fraction/launcher_xingchuan_inset_horizontal"
+            android:insetTop="@fraction/launcher_xingchuan_inset_top"
+            android:insetBottom="@fraction/launcher_xingchuan_inset_bottom">
+            <bitmap android:src="@drawable/launcher_xingchuan_green_artwork"
+                android:gravity="fill" android:filter="true" android:mipMap="true" />
+        </inset>
+    </foreground>
+</adaptive-icon>

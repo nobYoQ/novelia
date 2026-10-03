@@ -1,5 +1,6 @@
 [
   { "id": "default", "title": "经典绿", "drawable": "ic_launcher" },
-  { "id": "ink", "title": "水墨黑", "drawable": "launcher_ink" },
-  { "id": "night", "title": "夜读蓝", "drawable": "launcher_night" }
+  { "id": "xingchuan_green", "title": "星川绿", "drawable": "launcher_xingchuan_green" },
+  { "id": "xingchuan_green_01", "title": "星川绿·心动", "drawable": "launcher_xingchuan_green_01" },
+  { "id": "xingchuan_green_02", "title": "星川绿·招手", "drawable": "launcher_xingchuan_green_02" }
 ]

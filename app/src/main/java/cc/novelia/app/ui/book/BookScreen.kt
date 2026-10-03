@@ -32,14 +32,12 @@ import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.TocItem
 import cc.novelia.app.data.model.WebDetail
 import cc.novelia.app.data.model.WenkuDetail
-import cc.novelia.app.data.network.encodeSegment
 import cc.novelia.app.ui.community.CommentsPanel
 import cc.novelia.app.ui.components.AppAlertDialog
 import cc.novelia.app.ui.components.AppDropdownMenu
 import cc.novelia.app.ui.components.AppLazyColumn
 import cc.novelia.app.ui.components.AsyncContent
 import cc.novelia.app.ui.components.BookCover
-import cc.novelia.app.ui.components.BookRow
 import cc.novelia.app.ui.components.EmptyState
 import cc.novelia.app.ui.components.MenuRow
 import cc.novelia.app.ui.components.MetaParagraph
@@ -71,12 +69,11 @@ import kotlinx.coroutines.withContext
         LocalBookDetailScreen(c, ref, onBack)
         return
     }
-    var menu by remember { mutableStateOf(false) }; var favorite by remember { mutableStateOf<Pair<BookCard, Boolean>?>(null) }; var download by remember { mutableStateOf<Pair<BookCard, String?>?>(null) }; var version by remember { mutableIntStateOf(0) }
+    var menu by remember { mutableStateOf(false) }; var favorite by remember { mutableStateOf<Pair<BookCard, Boolean>?>(null) }; var download by remember { mutableStateOf<BookCard?>(null) }; var version by remember { mutableIntStateOf(0) }
     val state by c.store.state.collectAsStateWithLifecycle(); val profile by c.session.profile.collectAsStateWithLifecycle()
     val localSaved = remember(state.books, ref) { state.books.any { it.book.ref == ref } }
     val refreshKey = listOf(version, state.syncStatus[profile?.username]?.lastSuccessAt ?: 0L)
     LaunchedEffect(ref, profile?.username) { favorite = null }
-    val reducedMotion = appReducedMotion()
     var progressChoice by remember { mutableStateOf<Pair<ReadingDestination, ReadingDestination>?>(null) }
     var uploadBusy by remember { mutableStateOf(false) }
     val uploader = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let { c.action("分卷上传完成") { uploadBusy = true; try { withContext(Dispatchers.IO) { val (name, bytes) = readDocument(c, it); require(name.substringAfterLast('.').lowercase() in listOf("epub", "txt") && bytes.size <= 40 * 1024 * 1024) { "文库上传支持不超过 40 MB 的 EPUB / TXT" }; val file = File(c.app.cacheDir, "upload-${System.nanoTime()}"); try { file.writeBytes(bytes); c.api.uploadVolume(ref, name, file) } finally { file.delete() } }; version++ } finally { uploadBusy = false } } } }
@@ -115,20 +112,8 @@ import kotlinx.coroutines.withContext
                             if(detail.volumeJp.isNotEmpty() || detail.volumeZh.isNotEmpty()) item { MetaParagraph("译文情况", "中文文件 ${detail.volumeZh.size} 卷 · 日文分卷 ${detail.volumeJp.size} 卷\nSakura ${detail.volumeJp.sumOf { it.sakura }} · GPT ${detail.volumeJp.sumOf { it.gpt }} · 有道 ${detail.volumeJp.sumOf { it.youdao }} / ${detail.volumeJp.sumOf { it.total }}") }
                             if(detail.webIds.isNotEmpty()) item { SectionTitle("关联网络版"); detail.webIds.forEach { id -> TextButton(onClick = { c.book(BookRef.fromKey(id)) }, Modifier.padding(horizontal = 12.dp)) { Text(id) } } }
                         }
-                        1 -> AppLazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
-                            if(profile == null) item { EmptyState("登录后查看文库文件", "文库的资源目录与下载遵循原站权限。", action = "登录", onAction = { c.go("login") }) }
-                            if(detail.volumeJp.isNotEmpty()) item { SectionTitle("已有译文的分卷") }
-                            items(detail.volumeJp, key = { "jp-${it.volumeId}" }, contentType = { "translated-volume" }) { volume ->
-                                val complete = maxOf(volume.sakura, volume.gpt, volume.youdao) >= volume.total && volume.total > 0
-                                ListItem(headlineContent = { Text(volume.volumeId) }, supportingContent = { Text("Sakura ${volume.sakura} · GPT ${volume.gpt} · 有道 ${volume.youdao} / ${volume.total}") }, trailingContent = { IconButton(onClick = { download = book to volume.volumeId }, enabled = complete) { Icon(Icons.Outlined.Download, if(complete) "下载分卷" else "译文尚未完成") } }, modifier = if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(AppMotion.Release), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit)))
-                            }
-                            if(detail.volumeZh.isNotEmpty()) item { SectionTitle("中文文件") }
-                            if(profile?.role == "admin") items(detail.volumeZh, key = { "zh-$it" }, contentType = { "chinese-volume" }) { name -> MenuRow(name, "打开原站提供的中文资源", Icons.Outlined.Description, { c.external("https://n.novelia.cc/files-wenku/${ref.id}/${encodeSegment(name)}") }) }
-                            if(detail.volumes.isNotEmpty()) item { SectionTitle("出版卷目") }
-                            items(detail.volumes, key = { "published-${it.asin}" }, contentType = { "book" }) { volume -> BookRow(BookCard(ref, volume.titleZh ?: volume.title, volume.title, volume.cover, volume.publisher.orEmpty()), { volume.coverHires?.let(c::external) }, modifier = if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(AppMotion.Release), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit)), showReadingProgress = false, showBookMetadata = false) }
-                            if(profile?.canEdit == true) item { OutlinedButton(onClick = { uploader.launch(arrayOf("*/*")) }, enabled = !uploadBusy, modifier = Modifier.fillMaxWidth().padding(20.dp)) { Text(if(uploadBusy) "正在上传…" else "上传日文分卷") } }
-                            if(detail.volumes.isEmpty() && detail.volumeJp.isEmpty() && profile != null) item { EmptyState("暂时没有可用分卷", "可刷新资料，或在具有编辑权限时上传资源。", action = "刷新", onAction = refresh) }
-                        }
+                        1 -> WenkuVolumesPanel(c, book, detail, uploadBusy,
+                            onUpload = { uploader.launch(arrayOf("*/*")) }, onRefresh = refresh)
                         2 -> CommentsPanel(c, "wenku-${ref.id}")
                     }
             }
@@ -154,7 +139,7 @@ import kotlinx.coroutines.withContext
                             item { BookReadingActions(destination, continuing,
                                 favoriteState = favoriteState, onLocalFavorite = { favorite = book to false }, onCloudFavorite = { favorite = book to true },
                                 onRead = { start?.let { if(localDestination != null && cloudDestination != null && localDestination.chapterId != cloudDestination.chapterId) progressChoice = localDestination to cloudDestination else c.read(ref, it) } },
-                                onDownload = { download = book to null }) }
+                                onDownload = { download = book }) }
                             item { BookUpdateSummary(detail) { id -> c.read(ref, id) } }
                             if(!continuing && (state.positions.containsKey(ref.key) || detail.lastReadChapterId != null)) item { Text("原进度章节已不在目录中，将从第一章开始。", Modifier.padding(horizontal = 24.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                             item { FlowRow(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 4.dp),
@@ -184,7 +169,7 @@ import kotlinx.coroutines.withContext
         }
     }
     favorite?.let { (book, cloud) -> FavoriteSheet(c, book, initialCloud = cloud) { favorite = null } }
-    download?.let { (book, volume) -> DownloadSheet(c, book, volume) { download = null } }
+    download?.let { book -> DownloadSheet(c, book, emptyList()) { download = null } }
     progressChoice?.let { (localChapter, cloudChapter) -> AppAlertDialog(onDismissRequest = { progressChoice = null }, title = { Text("选择继续阅读的位置") }, text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { Text("本机与原站记录的章节不同，请选择这次从哪里继续。"); Text("本机：${localChapter.label}"); Text("原站：${cloudChapter.label}") } }, confirmButton = { TextButton(onClick = { progressChoice = null; c.read(ref, cloudChapter.chapterId) }) { Text("原站进度") } }, dismissButton = { TextButton(onClick = { progressChoice = null; c.read(ref, localChapter.chapterId) }) { Text("本机进度") } }) }
 }
 @Composable private fun LocalBookDetailScreen(c: AppController, ref: BookRef, onBack: () -> Unit) {

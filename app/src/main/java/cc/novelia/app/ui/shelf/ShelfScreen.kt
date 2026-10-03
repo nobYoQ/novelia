@@ -239,7 +239,7 @@ import kotlinx.coroutines.withContext
                                                         val url = c.api.downloadUrl(saved.book.ref, null, reader.mode, reader.engines, reader.parallel, "epub", filename)
                                                         cc.novelia.app.files.DownloadWorker.enqueue(c.app, DownloadEntry(id, saved.book.title, "$id-$filename", url))
                                                     }
-                                                    c.message("已加入 ${chosen.size} 本网络小说到下载列表")
+                                                    c.message("已开始下载 ${chosen.size} 本网络小说", actionLabel = "查看下载") { c.go("downloads", replaceTop = true) }
                                                     managing = false
                                                     selection = emptySet()
                                                 } finally { queueingDownloads = false }

@@ -160,7 +160,7 @@ abstract class LauncherIconManifestTask : DefaultTask() {
             } else {
                 val files = iconResources.get().asFile.resolve("drawable-nodpi").listFiles().orEmpty()
                     .filter { it.nameWithoutExtension == drawable && it.extension in setOf("png", "webp", "xml") }
-                require(files.size == 1) { "Provide one PNG, WebP or vector XML in launcher-icons/res/drawable-nodpi for $drawable." }
+                require(files.size == 1) { "Provide one PNG, WebP or drawable XML in launcher-icons/res/drawable-nodpi for $drawable." }
             }
             Icon(id, title, drawable, row["hidden"] == true)
         }
