@@ -16,6 +16,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.files.*
 import cc.novelia.app.ui.components.AppScrollColumn
 import cc.novelia.app.ui.components.ChoiceRow
+import cc.novelia.app.ui.components.CreateBookDocument
 import cc.novelia.app.ui.components.MenuRow
 import cc.novelia.app.ui.components.Screen
 import cc.novelia.app.ui.components.readDocument
@@ -34,7 +35,7 @@ import kotlinx.coroutines.withContext
     var pendingExportId by rememberSaveable { mutableStateOf<String?>(null) }
     var preparingExport by remember { mutableStateOf(false) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let { c.action { val file = withContext(Dispatchers.IO) { readDocument(c, it) }; picked = file; if(tool >= 2) input = withContext(Dispatchers.Default) { DocumentTools.decodeText(file.second) } } } }
-    val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+    val exporter = rememberLauncherForActivityResult(CreateBookDocument()) { uri ->
         val id = pendingExportId
         pendingExportId = null
         if(id == null) {
@@ -42,7 +43,7 @@ import kotlinx.coroutines.withContext
         } else c.action(if(uri != null) "结果已导出" else null) {
             withContext(Dispatchers.IO) {
                 val workContext = coroutineContext
-                val destination: (() -> java.io.OutputStream?)? = uri?.let { target -> { c.app.contentResolver.openOutputStream(target) } }
+                val destination: (() -> java.io.OutputStream?)? = uri?.let { target -> { c.app.contentResolver.openOutputStream(target, "wt") } }
                 exportFiles.finish(id, destination) { workContext.ensureActive() }
             }
         }

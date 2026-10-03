@@ -59,6 +59,9 @@ import cc.novelia.app.ui.components.BookRow
 import cc.novelia.app.ui.components.bookRowStatus
 import cc.novelia.app.ui.components.ChoiceRow
 import cc.novelia.app.ui.components.ConfirmDialog
+import cc.novelia.app.ui.components.CreateBookDocument
+import cc.novelia.app.files.prepareLocalBookExport
+import cc.novelia.app.files.exportLocalBook
 import cc.novelia.app.ui.components.EmptyState
 import cc.novelia.app.ui.components.MenuRow
 import cc.novelia.app.ui.components.Screen
@@ -72,6 +75,7 @@ import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.MotionContent
 import cc.novelia.app.ui.theme.appReducedMotion
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
 @Composable fun ShelfScreen(c: AppController, onOpenBook: (BookRef) -> Unit = c::book, selectedBookKey: String? = null) {
@@ -86,33 +90,22 @@ import kotlinx.coroutines.withContext
     var bulkStatus by remember { mutableStateOf(false) }
     var createFolder by remember { mutableStateOf(false) }; var selected by remember { mutableStateOf<SavedBook?>(null) }; var managing by remember { mutableStateOf(false) }; var selection by remember { mutableStateOf(setOf<String>()) }; var bulkMove by remember { mutableStateOf(false) }
     var renameFolder by remember { mutableStateOf(false) }; var deleteFolder by remember { mutableStateOf(false) }; var localExportId by rememberSaveable { mutableStateOf<String?>(null) }
+    var localExportOriginal by rememberSaveable { mutableStateOf(true) }
     var queueingDownloads by remember { mutableStateOf(false) }
     var volumeManager by remember { mutableStateOf<SavedBook?>(null) }
     var volumeParentPicker by remember { mutableStateOf<SavedBook?>(null) }
     var deletingDocument by remember { mutableStateOf<SavedBook?>(null) }
     var renamingDocument by remember { mutableStateOf<SavedBook?>(null) }
     var importedKeys by rememberSaveable { mutableStateOf(emptyList<String>()) }
-    val sourceExporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+    val sourceExporter = rememberLauncherForActivityResult(CreateBookDocument()) { uri ->
         val pendingId = localExportId
+        val original = localExportOriginal
         localExportId = null
-        if(uri != null) c.action("原文件已导出") {
+        if(uri != null) c.action(if(original) "原文件已导出" else "正文已导出为 TXT") {
             val id = requireNotNull(pendingId) { "待导出的小说已不存在，请重新选择" }
             withContext(Dispatchers.IO) {
-                val doc = c.store.documentIndex(id)
-                val source = c.store.documentSource(id, doc.format)
-                c.app.contentResolver.openOutputStream(uri)?.use { output ->
-                    if(source.exists()) source.inputStream().use { it.copyTo(output) }
-                    else output.bufferedWriter(Charsets.UTF_8).use { writer ->
-                        doc.chapters.forEachIndexed { index, metadata ->
-                            val chapter = c.store.documentChapter(id, metadata.id)
-                            if(index > 0) writer.write("\n\n")
-                            chapter.paragraphs.forEachIndexed { paragraphIndex, text ->
-                                if(paragraphIndex > 0) writer.write("\n\n")
-                                writer.write(text)
-                            }
-                        }
-                    }
-                } ?: error("无法写入文件")
+                val workContext = coroutineContext
+                exportLocalBook(c.store, id, original, { c.app.contentResolver.openOutputStream(uri, "wt") }) { workContext.ensureActive() }
             }
         }
     }
@@ -339,7 +332,13 @@ import kotlinx.coroutines.withContext
         if(saved.book.ref.isLocal) MenuRow(if(parent == null) "挂载到文库小说" else "更换或取消挂载", parent?.let { "当前挂载：${it.book.title}" } ?: "归入指定的文库收藏", Icons.Outlined.DriveFileMove, { selected = null; volumeParentPicker = saved })
         if(saved.book.ref.isLocal) MenuRow("重命名", "修改本地小说或分卷名称", Icons.Outlined.Edit, { selected = null; renamingDocument = saved })
         if(saved.book.ref.isLocal) MenuRow("本地术语表", "维护此文件的专有名词", Icons.Outlined.Translate, { selected = null; c.go("glossary/${saved.book.ref.key}") })
-        if(saved.book.ref.isLocal) MenuRow("导出原文件", "保留导入时的格式与内容", Icons.Outlined.IosShare, { c.action { val doc = withContext(Dispatchers.IO) { c.store.documentIndex(saved.book.ref.id) }; localExportId = saved.book.ref.id; selected = null; sourceExporter.launch("${doc.name}.${doc.format}") } })
+        if(saved.book.ref.isLocal) MenuRow("导出原文件", "保留原格式；原件缺失时导出正文 TXT", Icons.Outlined.IosShare, { c.action {
+            val export = withContext(Dispatchers.IO) { prepareLocalBookExport(c.store, saved.book.ref.id) }
+            localExportId = saved.book.ref.id
+            localExportOriginal = export.original
+            selected = null
+            sourceExporter.launch(export.fileName)
+        } })
         MenuRow("移出书架", "保留文件和阅读记录，移除后可撤销", Icons.Outlined.RemoveCircleOutline, {
             val previous = c.store.state.value.books
             c.store.removeBook(saved.book.ref); selected = null

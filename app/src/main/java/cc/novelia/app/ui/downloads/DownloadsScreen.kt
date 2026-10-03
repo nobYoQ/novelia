@@ -4,7 +4,6 @@ package cc.novelia.app.ui.downloads
 import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -29,6 +28,7 @@ import cc.novelia.app.files.*
 import cc.novelia.app.ui.components.AppDropdownMenu
 import cc.novelia.app.ui.components.AppLazyColumn
 import cc.novelia.app.ui.components.ConfirmDialog
+import cc.novelia.app.ui.components.CreateBookDocument
 import cc.novelia.app.ui.components.EmptyState
 import cc.novelia.app.ui.components.ImportResultsPanel
 import cc.novelia.app.ui.components.Screen
@@ -52,12 +52,14 @@ import kotlinx.coroutines.withContext
     val selected = available.filter { it in selection }
     LaunchedEffect(available) { selection = selection.filter { it in available } }
     BackHandler(selecting) { selecting = false; selection = emptyList() }
-    val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+    val exporter = rememberLauncherForActivityResult(CreateBookDocument()) { uri ->
         val pendingId = exportId
         exportId = null
         if(uri != null) c.action("文件已导出") {
             val entry = c.store.state.value.downloads.firstOrNull { it.id == pendingId } ?: error("下载任务已不存在，请重新选择文件")
-            withContext(Dispatchers.IO) { c.app.contentResolver.openOutputStream(uri)?.use { output -> File(c.store.downloadsDir, entry.fileName).inputStream().use { it.copyTo(output) } } ?: error("无法写入") }
+            withContext(Dispatchers.IO) { File(c.store.downloadsDir, entry.fileName).inputStream().use { input ->
+                c.app.contentResolver.openOutputStream(uri, "wt")?.use { input.copyTo(it) } ?: error("无法写入")
+            } }
         }
     }
     Screen("下载管理", c::back, actions = {
@@ -139,14 +141,14 @@ import kotlinx.coroutines.withContext
                             DropdownMenuItem(text = { Text("用其他应用打开") }, onClick = {
                                 more = false
                                 val file = File(c.store.downloadsDir, entry.fileName); val uri = FileProvider.getUriForFile(c.app, "${c.app.packageName}.files", file)
-                                val mime = if(file.extension.lowercase() == "epub") "application/epub+zip" else "text/plain"
+                                val mime = bookFileMimeType(file.name)
                                 runCatching { c.app.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)) }.onFailure { c.message("没有找到可打开该文件的应用，可选择开始阅读") }
                             })
                             DropdownMenuItem(text = { Text("导出文件") }, onClick = { more = false; exportId = entry.id; exporter.launch(entry.fileName.substringAfter("${entry.id}-")) })
                             DropdownMenuItem(text = { Text("分享") }, onClick = {
                                 more = false
                                 val uri = FileProvider.getUriForFile(c.app, "${c.app.packageName}.files", File(c.store.downloadsDir, entry.fileName))
-                                c.app.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("application/octet-stream").putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), "分享文件").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                                c.app.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType(bookFileMimeType(entry.fileName)).putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), "分享文件").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                             })
                         }
                         DropdownMenuItem(text = { Text("删除") }, onClick = { more = false; remove = entry }, leadingIcon = { Icon(Icons.Outlined.DeleteOutline, null) })

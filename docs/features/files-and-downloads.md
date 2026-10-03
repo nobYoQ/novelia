@@ -15,6 +15,7 @@
 | WorkManager 下载及任务操作 | [DownloadWorker.kt](../../app/src/main/java/cc/novelia/app/files/DownloadWorker.kt) |
 | 下载锁、临时文件与完成提交 | [DownloadFiles.kt](../../app/src/main/java/cc/novelia/app/files/DownloadFiles.kt) |
 | 工具结果的待导出文件 | [PendingExportFiles.kt](../../app/src/main/java/cc/novelia/app/files/PendingExportFiles.kt) |
+| 导出格式与本地原件/正文输出 | [BookExport.kt](../../app/src/main/java/cc/novelia/app/files/BookExport.kt)、[CreateBookDocument.kt](../../app/src/main/java/cc/novelia/app/ui/components/CreateBookDocument.kt) |
 | 书架导入及原件导出 | [ShelfScreen.kt](../../app/src/main/java/cc/novelia/app/ui/shelf/ShelfScreen.kt)、[DocumentAccess.kt](../../app/src/main/java/cc/novelia/app/ui/components/DocumentAccess.kt) |
 | 下载表单、下载管理 | [DownloadSheet.kt](../../app/src/main/java/cc/novelia/app/ui/downloads/DownloadSheet.kt)、[DownloadsScreen.kt](../../app/src/main/java/cc/novelia/app/ui/downloads/DownloadsScreen.kt) |
 | 文件工具、术语表导入导出 | [ToolsScreen.kt](../../app/src/main/java/cc/novelia/app/ui/tools/ToolsScreen.kt)、[GlossaryScreen.kt](../../app/src/main/java/cc/novelia/app/ui/book/GlossaryScreen.kt) |
@@ -150,9 +151,9 @@ Worker 先获取任务锁，核对记录仍存在、未暂停、`workId` 一致�
 
 ### 文档选择器
 
-导入使用 `OpenDocument` / `OpenMultipleDocuments`，导出使用 `CreateDocument` 后经 `ContentResolver.openOutputStream` 写入用户选择的位置。当前流程不调用 `takePersistableUriPermission`：导入即时复制到私有存储，导出只在选择结果返回后使用目标 URI。
+导入使用 `OpenDocument` / `OpenMultipleDocuments`。书籍和文件工具的导出使用 `CreateBookDocument`，按本次文件名设置 MIME：EPUB 为 `application/epub+zip`、TXT 为 `text/plain`、SRT 为 `application/x-subrip`、TSV 为 `text/tab-separated-values`，避免统一声明二进制导致文件提供器补上 `.bin`。选择完成后经 `ContentResolver.openOutputStream(uri, "wt")` 写入，覆盖已有文件时截断旧内容。当前流程不调用 `takePersistableUriPermission`：导入即时复制到私有存储，导出只在选择结果返回后使用目标 URI。
 
-书架“导出原文件”优先复制导入时保留的原件。旧数据没有原件时，回退为按章节读取的段落文本输出；这不是重建原 EPUB 的流程。下载导出则直接复制完整下载文件。两类界面都通过 `rememberSaveable` 保存待导出的记录 ID，在选择器返回后重新查找记录，避免依赖已失效的对象引用。
+书架“导出原文件”优先复制导入时保留的原件，保留原始字节及编码。旧数据没有原件时，在打开选择器前就将文件名和 MIME 改为 TXT，按章节输出标题与正文并过滤内部图片标记；这不是重建原 EPUB 的流程。原件/正文的选择与待导出 ID 一同通过 `rememberSaveable` 保存，页面重建后继续沿用；若已选择导出原件，但原件在选择期间丢失，则明确报错，不能把正文写进 `.epub`。下载导出则直接复制完整下载文件，同样保存待导出 ID 并在选择器返回后重新查找记录。
 
 工具结果使用 `PendingExportFiles`：
 
@@ -167,7 +168,7 @@ Worker 先获取任务锁，核对记录仍存在、未暂停、`workId` 一致�
 
 [AndroidManifest.xml](../../app/src/main/AndroidManifest.xml) 将 FileProvider 注册为 `${applicationId}.files`，`exported=false`、`grantUriPermissions=true`。[file_paths.xml](../../app/src/main/res/xml/file_paths.xml) 只开放应用私有 `filesDir` 下的 `downloads/` 和 `exports/`。
 
-已完成下载通过 `content://` URI 交给其他应用，附加 `FLAG_GRANT_READ_URI_PERMISSION`。外部打开对 EPUB 使用 `application/epub+zip`，其他下载使用 `text/plain`；分享使用 `application/octet-stream`。不要改用 `file://`，也不要为方便分享而把整个私有文件目录加入 FileProvider。
+已完成下载通过 `content://` URI 交给其他应用，附加 `FLAG_GRANT_READ_URI_PERMISSION`。外部打开、分享和导出共用按文件扩展名确定的 MIME 类型，只有未知格式使用 `application/octet-stream`。不要改用 `file://`，也不要为方便分享而把整个私有文件目录加入 FileProvider。
 
 Manifest 没有申请广泛的存储读写权限，也没有将应用注册成所有 EPUB/TXT 文件的外部打开目标；当前文档导入入口在应用内的系统文档选择器。应用接收的 `ACTION_SEND text/plain` 不能等同于文件附件导入支持。
 
@@ -207,6 +208,7 @@ Manifest 没有申请广泛的存储读写权限，也没有将应用注册成�
 | [PendingExportFilesTest](../../app/src/test/java/cc/novelia/app/PendingExportFilesTest.kt) | 仅凭已保存 ID 恢复导出、取消/失败清理、缺失文件、非法 ID、准备过程取消 |
 | [RetiredModelsTest](../../app/src/test/java/cc/novelia/app/files/RetiredModelsTest.kt) | 旧模型清理与其他目录保留、重复清理 |
 | [FileToolsUpgradeTest](../../app/src/androidTest/java/cc/novelia/app/ui/tools/FileToolsUpgradeTest.kt) | Android 界面中恢复旧校对文本 |
+| [BookExportUiTest](../../app/src/androidTest/java/cc/novelia/app/ui/components/BookExportUiTest.kt) | 下载及书架 EPUB/TXT 的 MIME、文件名、字节与编码保留、覆盖截断、页面重建后导出、旧数据回退 TXT 和选择期间原件丢失 |
 | [DownloadSheetLayoutTest](../../app/src/androidTest/java/cc/novelia/app/ui/downloads/DownloadSheetLayoutTest.kt) | 下载表单布局与滚动可访问性 |
 | [DownloadLiveTest](../../app/src/androidTest/java/cc/novelia/app/integration/DownloadLiveTest.kt) | 真实服务生成 EPUB、WorkManager 下载及解析；需显式 `live=true` |
 
