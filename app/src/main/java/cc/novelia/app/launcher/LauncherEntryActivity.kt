@@ -12,6 +12,7 @@ import cc.novelia.app.MainActivity
 class LauncherEntryActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        synchronizeLauncherEntrySplashScreen()
         startActivity(Intent(this, MainActivity::class.java).apply {
             action = Intent.ACTION_MAIN
             addCategory(Intent.CATEGORY_LAUNCHER)

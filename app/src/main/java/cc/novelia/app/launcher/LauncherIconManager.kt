@@ -40,7 +40,7 @@ internal class AndroidLauncherIconBackend(private val context: Context) : Launch
             val id = data.getString("novelia.launcher.id")?.removePrefix("icon:") ?: return@mapNotNull null
             if (activity.targetActivity != LauncherEntryActivity::class.java.name) return@mapNotNull null
             LauncherIcon(id, data.getString("novelia.launcher.title")?.removePrefix("title:") ?: id,
-                activity.icon, activity.name, data.getBoolean("novelia.launcher.hidden"))
+                activity.icon, activity.name, data.getBoolean("novelia.launcher.hidden"), data.getInt(LAUNCHER_SPLASH_THEME_META_DATA))
         }.sortedWith(compareBy<LauncherIcon> { it.id != DEFAULT_LAUNCHER_ICON }.thenBy { it.id })
         check(icons.any { it.id == DEFAULT_LAUNCHER_ICON })
         val saved = preferences.getString("selected_id", DEFAULT_LAUNCHER_ICON)

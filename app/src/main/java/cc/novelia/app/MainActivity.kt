@@ -24,6 +24,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.*
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.LibraryState
+import cc.novelia.app.launcher.observeLauncherSplashScreen
 import cc.novelia.app.ui.about.AboutScreen
 import cc.novelia.app.ui.about.OpenSourceLicensesScreen
 import cc.novelia.app.ui.account.LoginScreen
@@ -82,7 +83,9 @@ private fun LibraryState.appearance() = AppAppearance(theme, reducedMotion || re
 class MainActivity : ComponentActivity() {
     private val incoming = MutableStateFlow<String?>(null)
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState); enableEdgeToEdge()
+        super.onCreate(savedInstanceState)
+        observeLauncherSplashScreen((application as NoveliaApplication).launcherIcons)
+        enableEdgeToEdge()
         // 导航栈自行恢复，只重放尚未消费的外部意图。
         if (savedInstanceState == null) receive(intent)
         else incoming.value = savedInstanceState.getString("novelia.pendingLink")

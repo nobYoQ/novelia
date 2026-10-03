@@ -9,6 +9,7 @@ import javax.xml.transform.dom.DOMSource
 import javax.xml.transform.stream.StreamResult
 import org.w3c.dom.Element
 
+import java.io.File
 import java.util.Properties
 
 plugins {
@@ -130,6 +131,67 @@ baselineProfile { automaticGenerationDuringBuild = false }
 extra["echAndroidSdkDirectory"] = androidComponents.sdkComponents.sdkDirectory
 apply(from = rootProject.file("gradle/ech-native.gradle.kts"))
 apply(from = rootProject.file("gradle/open-source-notices.gradle.kts"))
+data class BundledLauncherIcon(val id: String, val title: String, val drawable: String, val hidden: Boolean) {
+    // Android 持久化启动主题的资源名，必须和已发布的图标 id 一样保持稳定。
+    val splashTheme get() = "Theme.Novelia.Launcher.$id"
+}
+
+object LauncherIconCatalog {
+    fun read(catalog: File, iconResources: File): List<BundledLauncherIcon> {
+        val entries = JsonSlurper().parse(catalog, "UTF-8") as? List<*>
+            ?: error("launcher-icons/icons.json must contain an array.")
+        val icons = entries.map { value ->
+            val row = value as? Map<*, *> ?: error("Each launcher icon must be an object.")
+            val id = row["id"] as? String ?: error("Missing launcher icon id.")
+            val title = row["title"] as? String ?: error("Missing launcher icon title: $id")
+            val drawable = row["drawable"] as? String ?: error("Missing launcher icon drawable: $id")
+            require(id.matches(Regex("[a-z][a-z0-9_]*"))) { "Invalid launcher icon id: $id" }
+            require(drawable.matches(Regex("[a-z][a-z0-9_]*"))) { "Invalid launcher drawable: $drawable" }
+            require(title.isNotBlank()) { "Empty launcher icon title: $id" }
+            require(row["hidden"] == null || row["hidden"] is Boolean) { "hidden must be a boolean: $id" }
+            if (id == "default") {
+                require(drawable == "ic_launcher" && row["hidden"] != true) { "Keep the default icon visible with ic_launcher." }
+            } else {
+                val files = iconResources.resolve("drawable-nodpi").listFiles().orEmpty()
+                    .filter { it.nameWithoutExtension == drawable && it.extension in setOf("png", "webp", "xml") }
+                require(files.size == 1) { "Provide one PNG, WebP or drawable XML in launcher-icons/res/drawable-nodpi for $drawable." }
+            }
+            BundledLauncherIcon(id, title, drawable, row["hidden"] == true)
+        }
+        require(icons.count { it.id == "default" } == 1) { "Keep exactly one default launcher icon." }
+        require(icons.map { it.id }.distinct().size == icons.size) { "Launcher icon IDs must be unique." }
+        return icons
+    }
+}
+
+/** 给每个入口生成可由系统持久化的 Android 12 启动主题。 */
+abstract class LauncherSplashResourcesTask : DefaultTask() {
+    @get:InputFile @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val catalog: RegularFileProperty
+
+    @get:InputDirectory @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val iconResources: DirectoryProperty
+
+    @get:OutputDirectory abstract val outputDirectory: DirectoryProperty
+
+    @TaskAction fun generate() {
+        val icons = LauncherIconCatalog.read(catalog.get().asFile, iconResources.get().asFile)
+        val output = outputDirectory.file("values-v31/launcher_splash_themes.xml").get().asFile
+        output.parentFile.mkdirs()
+        output.writeText(buildString {
+            appendLine("<?xml version=\"1.0\" encoding=\"utf-8\"?>")
+            appendLine("<resources>")
+            icons.forEach { icon ->
+                appendLine("    <style name=\"${icon.splashTheme}\" parent=\"Theme.Novelia\">")
+                appendLine("        <item name=\"android:windowSplashScreenAnimatedIcon\">@drawable/${icon.drawable}</item>")
+                appendLine("        <item name=\"android:windowSplashScreenBackground\">#F7FAF5</item>")
+                appendLine("    </style>")
+            }
+            appendLine("</resources>")
+        }, Charsets.UTF_8)
+    }
+}
+
 /** 在合并后的 Manifest 登记图标，不改写源码；Debug、Release 和基准构建共用一份清单。 */
 abstract class LauncherIconManifestTask : DefaultTask() {
     @get:InputFile @get:PathSensitive(PathSensitivity.RELATIVE)
@@ -144,28 +206,7 @@ abstract class LauncherIconManifestTask : DefaultTask() {
     @get:OutputFile abstract val outputManifest: RegularFileProperty
 
     @TaskAction fun generate() {
-        val entries = JsonSlurper().parse(catalog.get().asFile, "UTF-8") as? List<*>
-            ?: error("launcher-icons/icons.json must contain an array.")
-        val icons = entries.map { value ->
-            val row = value as? Map<*, *> ?: error("Each launcher icon must be an object.")
-            val id = row["id"] as? String ?: error("Missing launcher icon id.")
-            val title = row["title"] as? String ?: error("Missing launcher icon title: $id")
-            val drawable = row["drawable"] as? String ?: error("Missing launcher icon drawable: $id")
-            require(id.matches(Regex("[a-z][a-z0-9_]*"))) { "Invalid launcher icon id: $id" }
-            require(drawable.matches(Regex("[a-z][a-z0-9_]*"))) { "Invalid launcher drawable: $drawable" }
-            require(title.isNotBlank()) { "Empty launcher icon title: $id" }
-            require(row["hidden"] == null || row["hidden"] is Boolean) { "hidden must be a boolean: $id" }
-            if (id == "default") {
-                require(drawable == "ic_launcher" && row["hidden"] != true) { "Keep the default icon visible with ic_launcher." }
-            } else {
-                val files = iconResources.get().asFile.resolve("drawable-nodpi").listFiles().orEmpty()
-                    .filter { it.nameWithoutExtension == drawable && it.extension in setOf("png", "webp", "xml") }
-                require(files.size == 1) { "Provide one PNG, WebP or drawable XML in launcher-icons/res/drawable-nodpi for $drawable." }
-            }
-            Icon(id, title, drawable, row["hidden"] == true)
-        }
-        require(icons.count { it.id == "default" } == 1) { "Keep exactly one default launcher icon." }
-        require(icons.map { it.id }.distinct().size == icons.size) { "Launcher icon IDs must be unique." }
+        val icons = LauncherIconCatalog.read(catalog.get().asFile, iconResources.get().asFile)
 
         val androidNs = "http://schemas.android.com/apk/res/android"
         val builder = DocumentBuilderFactory.newInstance().apply {
@@ -200,6 +241,7 @@ abstract class LauncherIconManifestTask : DefaultTask() {
             alias.child("meta-data", mapOf("name" to "novelia.launcher.id", "value" to "icon:${icon.id}"))
             alias.child("meta-data", mapOf("name" to "novelia.launcher.title", "value" to "title:${icon.title}"))
             alias.child("meta-data", mapOf("name" to "novelia.launcher.hidden", "value" to icon.hidden.toString()))
+            alias.child("meta-data", mapOf("name" to "novelia.launcher.splashTheme", "resource" to "@style/${icon.splashTheme}"))
         }
         val output = outputManifest.get().asFile.apply { parentFile.mkdirs() }
         TransformerFactory.newInstance().apply { setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true) }
@@ -207,11 +249,17 @@ abstract class LauncherIconManifestTask : DefaultTask() {
             .transform(DOMSource(manifest), StreamResult(output))
     }
 
-    private data class Icon(val id: String, val title: String, val drawable: String, val hidden: Boolean)
 }
 
 extensions.getByType<ApplicationAndroidComponentsExtension>().onVariants { variant ->
-    val generate = tasks.register<LauncherIconManifestTask>("generate${variant.name.replaceFirstChar { it.uppercaseChar() }}LauncherIcons") {
+    val variantName = variant.name.replaceFirstChar { it.uppercaseChar() }
+    val splashResources = tasks.register<LauncherSplashResourcesTask>("generate${variantName}LauncherSplashResources") {
+        catalog.set(layout.projectDirectory.file("launcher-icons/icons.json"))
+        iconResources.set(layout.projectDirectory.dir("launcher-icons/res"))
+        outputDirectory.set(layout.buildDirectory.dir("generated/launcherSplash/${variant.name}/res"))
+    }
+    variant.sources.res?.addGeneratedSourceDirectory(splashResources, LauncherSplashResourcesTask::outputDirectory)
+    val generate = tasks.register<LauncherIconManifestTask>("generate${variantName}LauncherIcons") {
         catalog.set(layout.projectDirectory.file("launcher-icons/icons.json"))
         iconResources.set(layout.projectDirectory.dir("launcher-icons/res"))
     }

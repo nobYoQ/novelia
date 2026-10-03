@@ -18,7 +18,8 @@ internal data class LauncherIcon(
     val title: String,
     val drawable: Int,
     val component: String,
-    val hidden: Boolean = false
+    val hidden: Boolean = false,
+    val splashTheme: Int = 0
 )
 
 internal data class LauncherIconState(

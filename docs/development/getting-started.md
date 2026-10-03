@@ -117,7 +117,7 @@ sh ./gradlew --no-daemon :app:assembleDebug :app:testDebugUnitTest :app:lintDebu
 | `release-local` | `build-release.ps1` | `outputs/packages/release-local/` |
 | `release-unsigned` | `build-release.ps1 -Unsigned` | `outputs/packages/release-unsigned/` |
 
-构建日志写入 `outputs/logs/build-<模式>-<ABI>-<时间戳>.log`。直接调用 `build.ps1` 时，默认日志为 `outputs/logs/build-gradle-<时间戳>.log`，仍可通过 `-LogPath` 指定其他位置。本地脚本允许工作区有未提交修改，无需版本标签；重复构建会覆盖同版本、模式和 ABI 的归档文件，日志另存。它们不安装应用、不生成正式发行附件，也不上传文件。需要保留某次本地安装包时应另行归档。
+构建日志写入 `outputs/logs/build-<模式>-<ABI>-<时间戳>.log`。直接调用 `build.ps1` 时，默认日志为 `outputs/logs/build-gradle-<时间戳>.log`；`-LogPath` 仅允许指定仓库根目录 `outputs/` 内的位置，例如 `-LogPath outputs/logs/custom.log`，相对路径始终按仓库根目录解析，与调用时的工作目录无关。本地脚本允许工作区有未提交修改，无需版本标签；重复构建会覆盖同版本、模式和 ABI 的归档文件，日志另存。它们不安装应用、不生成正式发行附件，也不上传文件。需要保留某次本地安装包时应另行归档。
 
 正式分发使用 [prepare-release.ps1](../../scripts/prepare-release.ps1)：要求干净工作区、匹配版本的标签和正式证书，输出到 `outputs/releases/`，详见 [发布指南](../../RELEASING.md)。本地 Release 的测试证书不适合公开发行。
 
@@ -144,7 +144,9 @@ versionCode=15
 
 通常不需要先 `clean`，无需提交或打标签即可本地编译。APK 内版本、APK 文件名和校验文件自动采用新值，例如 `outputs/packages/release-local/Novelia-0.2.3-release-local-arm64-v8a.apk`。脚本会核对 APK 元数据，发现版本不一致时不会整理产物。这里的数值只是示例，不会自动修改仓库版本；正式发布还需同步发行说明、版本展示、标签并使用长期发布证书，按 [发布流程](../../RELEASING.md) 执行。
 
-`outputs/` 由脚本自动创建并整体忽略，是收集安装包、日志和正式附件的统一目录。Gradle 中间文件与原始测试报告仍位于各模块的 `build/`，具体路径见下表。清理旧日志、测试截图或临时夹具前，应确认没有需要保留的发行映射和验证记录；不要将依赖缓存、`local.properties`、签名材料或尚未提交的源码当作临时产物删除。
+仓库根目录的 `outputs/` 由脚本自动创建并整体忽略，是脚本产物的唯一出口：安装包位于 `outputs/packages/`，日志位于 `outputs/logs/`，正式附件位于 `outputs/releases/`，ECH 的 Go 工具链及缓存位于 `outputs/ech-tools/`。旧 `artifacts/` 的验证记录归档到 `outputs/archive/artifacts/`。新增脚本也应遵循这一约定。
+
+Gradle 中间文件与原始测试报告仍位于各模块的 `build/`，具体路径见下表。清理旧日志、测试截图或临时夹具前，应确认没有需要保留的发行映射和验证记录；不要将依赖缓存、`local.properties`、签名材料或尚未提交的源码当作临时产物删除。
 
 ## 运行与 Gradle 构建产物
 

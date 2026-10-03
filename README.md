@@ -62,7 +62,7 @@ sh ./gradlew --no-daemon :app:assembleDebug :app:testDebugUnitTest :app:lintDebu
 
 修改版本后打包：编辑根目录 `version.properties` 的 `versionName`（例如 `0.2.3`）和递增的 `versionCode`（例如由 `14` 改为 `15`），保存后运行 `./build-release.ps1` 或 `./build-debug.ps1`，APK 内版本和归档文件名会自动更新。具体示例见 [修改版本号并重新编译](docs/development/getting-started.md#修改版本号并重新编译)。
 
-`outputs/`、Gradle 构建目录、APK/AAB 安装包、签名旁文件及安装包校验文件由 `.gitignore` 排除，不纳入源码提交。正式附件准备脚本写入 `outputs/releases/`，正式安装包上传为 GitHub Release 附件；旧 `artifacts/`、`releases/` 仍在忽略规则内。
+仓库根目录的 `outputs/` 是脚本产物的唯一出口，包含安装包、日志、正式附件及 ECH 工具链；Gradle 中间文件仍使用各模块的 `build/`。这些目录、APK/AAB 安装包、签名旁文件及安装包校验文件由 `.gitignore` 排除，不纳入源码提交。正式附件准备脚本写入 `outputs/releases/`，正式安装包上传为 GitHub Release 附件；旧 `artifacts/`、`releases/` 仅保留忽略规则，脚本不再写入。
 
 ## 验证
 

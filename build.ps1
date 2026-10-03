@@ -24,6 +24,16 @@ $ManualAndroidUserHome = ''
 # ===== 手动环境配置区结束；版本号请修改根目录 version.properties =====
 
 if (-not $IsWindows) { throw '这些 PowerShell 构建入口用于 Windows；Linux/macOS 请使用 sh ./gradlew。' }
+$outputRoot = Join-Path $rootPath 'outputs'
+if (-not $LogPath) {
+    $LogPath = Join-Path $outputRoot ('logs/build-gradle-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff') + '.log')
+}
+# 相对路径始终以仓库根目录为基准；自定义日志也必须留在 outputs 内。
+$LogPath = [IO.Path]::GetFullPath($LogPath, $rootPath)
+$outputPrefix = $outputRoot + [IO.Path]::DirectorySeparatorChar
+if (-not $LogPath.StartsWith($outputPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+    throw '-LogPath 必须位于仓库根目录的 outputs/ 下，例如 outputs/logs/custom.log。'
+}
 . (Join-Path $rootPath 'scripts/build-environment.ps1')
 $jdk = Resolve-BuildJdk -ManualPath $ManualJavaHome -RootPath $rootPath
 $sdk = Resolve-BuildAndroidSdk -ManualPath $ManualAndroidSdk -RootPath $rootPath
@@ -41,10 +51,6 @@ if ($CheckEnvironment) {
 }
 # ECH AAR 由 Gradle 的 buildEchNative 任务按内容增量生成，所有构建入口使用同一依赖图。
 Set-BuildLocalSdk -SdkPath $sdk.Path -RootPath $rootPath
-if (-not $LogPath) {
-    $LogPath = Join-Path $rootPath ('outputs/logs/build-gradle-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff') + '.log')
-}
-$LogPath = [IO.Path]::GetFullPath($LogPath)
 [IO.Directory]::CreateDirectory((Split-Path -Parent $LogPath)) | Out-Null
 Write-Host "Gradle 日志：$LogPath"
 $arguments = @('-classpath', (Join-Path $rootPath 'gradle/wrapper/gradle-wrapper.jar'), 'org.gradle.wrapper.GradleWrapperMain', '--no-daemon', '--console=plain') + $Tasks

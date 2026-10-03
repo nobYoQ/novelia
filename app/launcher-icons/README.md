@@ -12,7 +12,7 @@
    { "id": "sakura", "title": "樱花", "drawable": "launcher_sakura" }
    ```
 
-4. 在仓库根目录运行 `./build-debug.ps1` 或 `./build-release.ps1`，安装新 APK。Gradle 会检查清单并自动生成桌面入口；不需要手工修改 Manifest 或 Kotlin。
+4. 在仓库根目录运行 `./build-debug.ps1` 或 `./build-release.ps1`，安装新 APK。Gradle 会检查清单并自动生成桌面入口及对应的系统启动主题；不需要手工修改 Manifest、启动主题或 Kotlin。
 
 `id` 是安装后保持稳定的标识，只能使用小写字母、数字和下划线，以字母开头。`title` 是设置中的名称，桌面应用名称保持 Novelia。默认图标 `default` 使用现有的 `ic_launcher`。
 
@@ -40,6 +40,7 @@
 - 整个应用进入后台后，使用 `ProcessLifecycleOwner.ON_STOP` 执行切换；仅打开面板、暂停 Activity 或旋转屏幕不会切换。
 - 待处理的选择保存在本机，进程重启后继续保留；只有再次进入后台才会应用。不随普通设置或资料备份迁移。
 - Android 13 及以上原子更新入口；旧版先启用新图标，再禁用旧图标。无界面的图标入口把启动交给独立、稳定的 MainActivity 任务，避免旧入口被禁用时系统把阅读/设置任务一起移除。MainActivity 一直启用，站内链接和分享入口不受图标选择影响。失败会保留选择，在下次进入后台时重试。
+- Android 12 及以上的系统启动画面跟随**已生效**的桌面图标：主界面在后台仍监听切换结果，通过 `SplashScreen.setSplashScreenTheme` 将对应主题交给系统持久化，杀进程后冷启动也使用该图标。桌面入口在转交 MainActivity 前再次同步，覆盖升级后的首次启动。前台待切换或取消选择不会提前更换启动画面；Android 8–11 保持原有窗口启动行为。
 - 桌面刷新速度、图标位置和已有固定快捷方式的处理取决于桌面应用，需在目标厂商桌面上验收。此功能切换启动器图标，通知图标仍沿用原有设置。
 
-实现：`app/build.gradle.kts` 中的 `LauncherIconManifestTask`、`app/src/main/java/cc/novelia/app/launcher/`。入口必须在安装时存在，参见 Android 官方的 [activity-alias](https://developer.android.com/guide/topics/manifest/activity-alias-element)、[批量切换组件](https://developer.android.com/reference/android/content/pm/PackageManager#setComponentEnabledSettings(java.util.List)) 与 [应用进程生命周期](https://developer.android.com/reference/androidx/lifecycle/ProcessLifecycleOwner) 文档。
+实现：`app/build.gradle.kts` 中的 `LauncherIconManifestTask`、`LauncherSplashResourcesTask` 和 `app/src/main/java/cc/novelia/app/launcher/`。启动主题名 `Theme.Novelia.Launcher.<id>` 也必须跨版本保持稳定；Manifest 元数据直接引用主题，Release 资源压缩会保留它。入口必须在安装时存在，参见 Android 官方的 [activity-alias](https://developer.android.com/guide/topics/manifest/activity-alias-element)、[启动主题持久化](https://developer.android.com/reference/android/window/SplashScreen#setSplashScreenTheme(int))、[批量切换组件](https://developer.android.com/reference/android/content/pm/PackageManager#setComponentEnabledSettings(java.util.List)) 与 [应用进程生命周期](https://developer.android.com/reference/androidx/lifecycle/ProcessLifecycleOwner) 文档。
