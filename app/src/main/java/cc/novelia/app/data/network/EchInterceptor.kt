@@ -38,6 +38,25 @@ internal interface EchExchange {
 
 internal data class EchReply(val code: Int, val protocol: Protocol, val headers: Headers, val length: Long)
 
+/** Start after dispatcher queueing, before any application interceptor or redirect work. */
+internal object EchCallTimeoutInterceptor : Interceptor {
+    override fun intercept(chain: Interceptor.Chain): Response {
+        val timeout = chain.call().timeout()
+        val budget = timeout.timeoutNanos()
+        val now = System.nanoTime()
+        if (budget > 0 && (!timeout.hasDeadline() || budget < timeout.deadlineNanoTime() - now)) {
+            timeout.deadlineNanoTime(now + budget)
+        }
+        return chain.proceed(chain.request())
+    }
+}
+
+/** Call after inserting application interceptors; newBuilder keeps this start marker. */
+internal fun OkHttpClient.Builder.echCallTimeout(): OkHttpClient.Builder = apply {
+    interceptors().removeAll { it === EchCallTimeoutInterceptor }
+    interceptors().add(0, EchCallTimeoutInterceptor)
+}
+
 /** ECH 必须成功才返回响应；不因失败重放写请求或降级到明文 SNI。 */
 internal class EchInterceptor(
     private val engine: EchEngine,
@@ -125,7 +144,8 @@ internal class EchInterceptor(
                 .headers(reply.headers)
                 .body(object : ResponseBody() {
                     override fun contentType() = reply.headers["Content-Type"]?.toMediaTypeOrNull()
-                    override fun contentLength() = reply.length
+                    // HEAD's Content-Length describes GET, while its actual body is empty.
+                    override fun contentLength() = if (request.method == "HEAD") 0L else reply.length
                     override fun source() = source
                 })
                 .sentRequestAtMillis(started).receivedResponseAtMillis(System.currentTimeMillis()).build()
@@ -141,19 +161,27 @@ internal class EchInterceptor(
         val finalBody = AtomicBoolean(false)
         private val timedOut = AtomicBoolean(false)
         private val finished = AtomicBoolean(false)
+        private val deadlineNanos: Long?
         private val timeoutTask: ScheduledFuture<*>?
         init {
             val timeout = chain.call().timeout()
-            val remaining = if (timeout.hasDeadline()) (timeout.deadlineNanoTime() - System.nanoTime()).coerceAtLeast(1) else 0L
-            val budget = listOf(timeout.timeoutNanos(), remaining).filter { it > 0 }.minOrNull()
-            timeoutTask = budget?.let { cancellationMonitor.schedule({
-                if (finished.compareAndSet(false, true)) {
-                    timedOut.set(true)
-                    chain.call().cancel()
-                }
-            }, it, TimeUnit.NANOSECONDS) }
+            val now = System.nanoTime()
+            val remaining = if (timeout.hasDeadline()) timeout.deadlineNanoTime() - now else null
+            val budget = timeout.timeoutNanos().takeIf { it > 0 }
+            deadlineNanos = listOfNotNull(remaining, budget).minOrNull()?.let { now + it }
+            timeoutTask = deadlineNanos?.let { deadline ->
+                cancellationMonitor.schedule(::expire, (deadline - System.nanoTime()).coerceAtLeast(0), TimeUnit.NANOSECONDS)
+            }
+        }
+        private fun expire() {
+            if (finished.compareAndSet(false, true)) {
+                timedOut.set(true)
+                chain.call().cancel()
+            }
         }
         fun checkActive() {
+            // Do not depend on the monitor thread running before a late native reply.
+            if (deadlineNanos?.let { it - System.nanoTime() <= 0 } == true) expire()
             if (timedOut.get()) throw InterruptedIOException("timeout")
             if (chain.call().isCanceled()) throw IOException("Canceled")
         }

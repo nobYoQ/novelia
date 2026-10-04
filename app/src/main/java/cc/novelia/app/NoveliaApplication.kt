@@ -10,6 +10,7 @@ import cc.novelia.app.data.network.EchTransport
 import cc.novelia.app.data.network.BookSources
 import cc.novelia.app.data.network.BookSourceInterceptor
 import cc.novelia.app.data.network.echRedirects
+import cc.novelia.app.data.network.echCallTimeout
 import cc.novelia.app.data.storage.LocalStore
 import cc.novelia.app.data.sync.CloudSyncWorker
 import cc.novelia.app.data.updates.UpdateWorker
@@ -44,7 +45,7 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
     val bookSources by lazy { BookSources.load(this) }
     private val httpTransport by lazy { ech.client().newBuilder().apply {
         interceptors().add(0, BookSourceInterceptor(bookSources))
-    }.build() }
+    }.echCallTimeout().build() }
     val session by lazy { Session(this, client = httpTransport, sources = bookSources) }
     val keywords by lazy { KeywordStore(this) { store.state.value.keywordLimit } }
     internal val clipboardLinkHistory = ClipboardLinkHistory()

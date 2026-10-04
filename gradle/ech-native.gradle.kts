@@ -30,7 +30,7 @@ val echGo = providers.provider {
 val echSdk = (extra["echAndroidSdkDirectory"] as Provider<Directory>).map { it.asFile }
 val echNdk = echSdk.map { it.resolve("ndk/$echNdkVersion") }
 val echSources = fileTree(echRoot) {
-    include("**/*.go", "go.mod", "go.sum")
+    include("**/*.go", "**/go.mod", "**/go.sum", "**/LICENSE", "**/README.novelia.md")
     exclude("build/**")
 }
 val echScript = rootProject.file("gradle/ech-native.gradle.kts")
@@ -128,6 +128,7 @@ val testEchNative = tasks.register("testEchNative") {
     outputs.file(result)
     doLast {
         runEchCommand(listOf(echGo.get().absolutePath, "test", "./..."), echEnvironment())
+        runEchCommand(listOf(echGo.get().absolutePath, "test", "github.com/inqadh/jissr-bypass"), echEnvironment())
         result.parentFile.mkdirs()
         result.writeText("Go $echGoVersion unit tests passed\n", Charsets.UTF_8)
     }

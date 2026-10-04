@@ -48,6 +48,7 @@ class EchTransport(context: Context) {
             .writeTimeout(60, TimeUnit.SECONDS)
             .followRedirects(false)
             .addInterceptor(EchInterceptor(engine, { state.value }))
+            .echCallTimeout()
             .build()
     }
 
@@ -79,7 +80,8 @@ class EchTransport(context: Context) {
     private fun diagnosticClient(ech: Boolean) = recorder.attach(OkHttpClient.Builder()) { ech }
         .connectTimeout(8, TimeUnit.SECONDS).readTimeout(20, TimeUnit.SECONDS)
         .writeTimeout(20, TimeUnit.SECONDS).callTimeout(35, TimeUnit.SECONDS)
-        .followRedirects(false).apply { if (ech) addInterceptor(EchInterceptor(diagnosticEngine, { true })) }.build()
+        .followRedirects(false).apply { if (ech) addInterceptor(EchInterceptor(diagnosticEngine, { true })) }
+        .echCallTimeout().build()
 
     @Synchronized fun setRecording(value: Boolean) {
         recordingJob?.cancel()

@@ -92,6 +92,14 @@ func TestConnectFailureDoesNotMisreportAllErrorsAsTimeout(t *testing.T) {
 	}
 }
 
+func TestMissingAddressClassificationSupportsBothResolverVersions(t *testing.T) {
+	for _, detail := range []string{"no A record", "no A/AAAA record"} {
+		if diagnosticReason(errors.New(detail)) != "dns_no_address" {
+			t.Fatal("missing address was not classified")
+		}
+	}
+}
+
 func TestResolverFailureRecordsProviderAndClassificationOnly(t *testing.T) {
 	d := &connectionDiagnostics{start: time.Now()}
 	d.enabled.Store(true)

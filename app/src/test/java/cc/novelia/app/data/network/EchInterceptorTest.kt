@@ -1,9 +1,11 @@
 package cc.novelia.app.data.network
 
 import java.io.IOException
+import java.io.InterruptedIOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -90,6 +92,25 @@ class EchInterceptorTest {
         assertTrue(cancelled.get())
     }
 
+    @Test fun headRetainsRepresentationLengthButReadsAnEmptyBody() {
+        val cancelled = AtomicBoolean()
+        val engine = object : EchEngine {
+            override fun open(request: Request, timeouts: EchTimeouts) = object : EchExchange {
+                override fun execute() = EchReply(200, Protocol.HTTP_2,
+                    Headers.Builder().add("Content-Length", "512").build(), 512)
+                override fun read(maxBytes: Long) = ByteArray(0)
+                override fun cancel() { cancelled.set(true) }
+            }
+        }
+        val client = OkHttpClient.Builder().addInterceptor(EchInterceptor(engine, { true })).echCallTimeout().build()
+        client.newCall(Request.Builder().url("https://n.novelia.cc/file").head().build()).execute().use {
+            assertEquals("512", it.header("Content-Length"))
+            assertEquals(0L, it.body!!.contentLength())
+            assertArrayEquals(ByteArray(0), it.body!!.bytes())
+        }
+        assertTrue(cancelled.get())
+    }
+
     @Test fun cancellationInterruptsNativeHeaders() {
         val started = CountDownLatch(1); val cancelled = CountDownLatch(1); val completed = CountDownLatch(1)
         val engine = object : EchEngine {
@@ -155,13 +176,131 @@ class EchInterceptorTest {
             }
         }
         val client = OkHttpClient.Builder().callTimeout(150, TimeUnit.MILLISECONDS)
-            .readTimeout(0, TimeUnit.MILLISECONDS).addInterceptor(EchInterceptor(engine, { true })).build()
+            .readTimeout(0, TimeUnit.MILLISECONDS).addInterceptor(EchInterceptor(engine, { true })).echCallTimeout().build()
         val call = client.newCall(Request.Builder().url("https://n.novelia.cc/").build())
         call.execute().use { response ->
             try { response.body!!.string(); fail("unlimited read ignored total call budget") }
             catch (error: IOException) { assertTrue(call.isCanceled()); assertTrue(error.message in setOf("timeout", "Canceled")) }
         }
         assertEquals(0, cancelled.count)
+    }
+
+    @Test fun callTimeoutIncludesEarlierInterceptorWork() {
+        val client = OkHttpClient.Builder().callTimeout(600, TimeUnit.MILLISECONDS)
+            .addInterceptor { chain -> Thread.sleep(350); chain.proceed(chain.request()) }
+            .addInterceptor(EchInterceptor(delayedBodyEngine(), { true })).echCallTimeout().build()
+        val call = client.newCall(Request.Builder().url("https://n.novelia.cc/").build())
+        assertThrows(InterruptedIOException::class.java) { call.execute().use { it.body!!.bytes() } }
+        assertTrue(call.isCanceled())
+    }
+
+    @Test fun callTimeoutSurvivesBookSourceRedirectsAndDerivedClients() {
+        var attempts = 0
+        val bodyEngine = delayedBodyEngine()
+        val engine = object : EchEngine {
+            override fun open(request: Request, timeouts: EchTimeouts): EchExchange {
+                attempts++
+                if (attempts > 1) return bodyEngine.open(request, timeouts)
+                return object : EchExchange {
+                    override fun execute(): EchReply {
+                        Thread.sleep(350)
+                        return reply(302, Headers.Builder().add("Location", "/next").build())
+                    }
+                    override fun read(maxBytes: Long) = ByteArray(0)
+                    override fun cancel() {}
+                }
+            }
+        }
+        val original = OkHttpClient.Builder().addInterceptor(EchInterceptor(engine, { true })).echCallTimeout().build()
+        // Match NoveliaApplication's source routing insertion and download/image derivation.
+        val client = original.newBuilder().apply { interceptors().add(0, BookSourceInterceptor(BookSources())) }
+            .echCallTimeout().echRedirects(true).callTimeout(600, TimeUnit.MILLISECONDS).build()
+        assertSame(EchCallTimeoutInterceptor, client.interceptors.first())
+        assertEquals(1, client.interceptors.count { it === EchCallTimeoutInterceptor })
+        val call = client.newCall(Request.Builder().url("https://n.novelia.cc/").build())
+        assertThrows(InterruptedIOException::class.java) { call.execute().use { it.body!!.bytes() } }
+        assertEquals(2, attempts)
+        assertTrue(call.isCanceled())
+    }
+
+    @Test fun earlierExplicitDeadlineIsPreserved() {
+        val client = OkHttpClient.Builder().callTimeout(2, TimeUnit.SECONDS)
+            .addInterceptor(EchInterceptor(delayedBodyEngine(), { true })).echCallTimeout().build()
+        val call = client.newCall(Request.Builder().url("https://n.novelia.cc/").build())
+        call.timeout().deadline(150, TimeUnit.MILLISECONDS)
+        val deadline = call.timeout().deadlineNanoTime()
+        assertThrows(InterruptedIOException::class.java) { call.execute().use { it.body!!.bytes() } }
+        assertEquals(deadline, call.timeout().deadlineNanoTime())
+    }
+
+    @Test fun zeroCallTimeoutDoesNotInstallADeadline() {
+        val client = OkHttpClient.Builder().callTimeout(0, TimeUnit.MILLISECONDS)
+            .addInterceptor(EchInterceptor(delayedBodyEngine(0), { true })).echCallTimeout().build()
+        val call = client.newCall(Request.Builder().url("https://n.novelia.cc/").build())
+        call.execute().use { assertArrayEquals(byteArrayOf(42), it.body!!.bytes()) }
+        assertFalse(call.timeout().hasDeadline())
+        assertFalse(call.isCanceled())
+    }
+
+    @Test fun asynchronousDispatcherQueueDoesNotConsumeCallTimeout() {
+        val started = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val completed = CountDownLatch(2)
+        val failure = AtomicReference<Throwable?>()
+        val dispatcher = Dispatcher().apply { maxRequests = 1; maxRequestsPerHost = 1 }
+        val engine = object : EchEngine {
+            override fun open(request: Request, timeouts: EchTimeouts) = object : EchExchange {
+                override fun execute(): EchReply {
+                    if (request.url.encodedPath == "/hold") {
+                        started.countDown()
+                        check(release.await(3, TimeUnit.SECONDS))
+                    }
+                    return reply()
+                }
+                override fun read(maxBytes: Long) = ByteArray(0)
+                override fun cancel() {}
+            }
+        }
+        val client = OkHttpClient.Builder().dispatcher(dispatcher).callTimeout(150, TimeUnit.MILLISECONDS)
+            .addInterceptor(EchInterceptor(engine, { true })).echCallTimeout().build()
+        val callback = object : Callback {
+            override fun onFailure(call: Call, e: IOException) { failure.compareAndSet(null, e); completed.countDown() }
+            override fun onResponse(call: Call, response: Response) {
+                try { response.use { assertArrayEquals(ByteArray(0), it.body!!.bytes()) } }
+                catch (error: Throwable) { failure.compareAndSet(null, error) }
+                finally { completed.countDown() }
+            }
+        }
+        val holding = client.newCall(Request.Builder().url("https://n.novelia.cc/hold").build())
+        holding.timeout().timeout(0, TimeUnit.MILLISECONDS)
+        try {
+            holding.enqueue(callback)
+            assertTrue(started.await(2, TimeUnit.SECONDS))
+            client.newCall(Request.Builder().url("https://n.novelia.cc/queued").build()).enqueue(callback)
+            Thread.sleep(250)
+            assertEquals(1, dispatcher.queuedCallsCount())
+            release.countDown()
+            assertTrue(completed.await(2, TimeUnit.SECONDS))
+            failure.get()?.let { throw AssertionError("queueing consumed the execution budget", it) }
+        } finally {
+            release.countDown()
+            dispatcher.cancelAll()
+            dispatcher.executorService.shutdownNow()
+        }
+    }
+
+    private fun delayedBodyEngine(delayMillis: Long = 350) = object : EchEngine {
+        override fun open(request: Request, timeouts: EchTimeouts) = object : EchExchange {
+            private var emitted = false
+            override fun execute() = reply()
+            override fun read(maxBytes: Long): ByteArray {
+                if (emitted) return ByteArray(0)
+                emitted = true
+                Thread.sleep(delayMillis)
+                return byteArrayOf(42)
+            }
+            override fun cancel() {}
+        }
     }
 
     @Test fun responseCloseReleasesCallDeadlineAndCancelsNativeOnce() {
@@ -174,7 +313,7 @@ class EchInterceptorTest {
             }
         }
         val client = OkHttpClient.Builder().callTimeout(100, TimeUnit.MILLISECONDS)
-            .addInterceptor(EchInterceptor(engine, { true })).build()
+            .addInterceptor(EchInterceptor(engine, { true })).echCallTimeout().build()
         val call = client.newCall(Request.Builder().url("https://n.novelia.cc/").build())
         call.execute().close()
         Thread.sleep(180)

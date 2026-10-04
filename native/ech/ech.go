@@ -28,7 +28,7 @@ type Client struct {
 
 func NewClient() *Client {
 	config := core.DefaultConfig()
-	// Each provider supplies both A and HTTPS records. Do not mix their answers.
+	// Each provider supplies A, AAAA and HTTPS records. Do not mix their answers.
 	// IP-literal endpoints also work when the system DNS resolver is unavailable.
 	config.WireResolvers = []string{
 		"https://dns.alidns.com/dns-query", "https://223.5.5.5/dns-query",
@@ -315,17 +315,21 @@ func (c *Client) Probe(host string) string {
 	if !protectedURL("https://" + host + "/") {
 		return "不支持的诊断域名"
 	}
-	result := c.probe.Probe(host)
-	if result.OK {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	connection, err := dialResolvedECH(ctx, c.probe, "tcp", host)
+	if err == nil {
+		connection.Close()
 		return "TLS 1.3 / ECH 握手成功"
 	}
-	switch result.Stage {
-	case "resolve":
+	detail := err.Error()
+	switch {
+	case strings.HasPrefix(detail, "resolve:"):
 		return "DNS / ECH 配置获取失败"
-	case "tcp":
-		return "TCP 连接失败：" + failureReason(result.Detail)
+	case strings.HasPrefix(detail, "tcp:"):
+		return "TCP 连接失败：" + failureReason(detail)
 	default:
-		return "ECH 握手失败：" + failureReason(result.Detail)
+		return "ECH 握手失败：" + failureReason(detail)
 	}
 }
 

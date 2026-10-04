@@ -3,7 +3,13 @@ package cc.novelia.app.data.network
 import cc.novelia.app.data.storage.appJson
 import java.io.ByteArrayInputStream
 import java.io.IOException
+import java.io.InterruptedIOException
+import java.net.SocketTimeoutException
+import java.security.cert.CertificateException
+import java.security.cert.CertPathValidatorException
 import java.util.zip.ZipInputStream
+import javax.net.ssl.SSLHandshakeException
+import javax.net.ssl.SSLPeerUnverifiedException
 import kotlinx.coroutines.runBlocking
 import okhttp3.Headers
 import okhttp3.OkHttpClient
@@ -18,6 +24,44 @@ import org.junit.rules.TemporaryFolder
 
 class NetworkLoggingTest {
     @get:Rule val temporary = TemporaryFolder()
+
+    @Test fun certificateFailuresAreRecognizedThroughNestedCauses() {
+        listOf(CertificateException(), CertPathValidatorException(), SSLPeerUnverifiedException("private-detail")).forEach { certificate ->
+            val handshake = SSLHandshakeException("private-handshake-detail").apply {
+                initCause(IOException("private-wrapper-detail", certificate))
+            }
+            assertEquals("certificate", networkFailure(handshake))
+            assertEquals("certificate", networkFailure(IOException("private-outer-detail", handshake)))
+        }
+    }
+
+    @Test fun ordinaryHandshakeFailureRemainsTlsRegardlessOfItsMessage() {
+        val handshake = SSLHandshakeException("certificate private-detail").apply { initCause(IOException()) }
+        assertEquals("tls", networkFailure(handshake))
+    }
+
+    @Test fun certificateClassificationPreservesTimeoutAndCancellationPrecedence() {
+        listOf(SocketTimeoutException(), InterruptedIOException()).forEach { timeout ->
+            timeout.initCause(CertificateException())
+            assertEquals("timeout", networkFailure(timeout))
+            assertEquals("timeout", networkFailure(timeout, cancelled = true))
+        }
+        val handshake = SSLHandshakeException("private-detail").apply { initCause(CertificateException()) }
+        assertEquals("cancelled", networkFailure(handshake, cancelled = true))
+    }
+
+    @Test(timeout = 1000) fun cyclicCausesDoNotPreventFailureClassification() {
+        val handshake = SSLHandshakeException("private-detail")
+        val wrapper = IOException(handshake)
+        handshake.initCause(wrapper)
+        assertEquals("tls", networkFailure(handshake))
+        assertEquals("io", networkFailure(wrapper))
+
+        val certificate = CertificateException()
+        val certificateWrapper = IOException(certificate)
+        certificate.initCause(certificateWrapper)
+        assertEquals("certificate", networkFailure(certificateWrapper))
+    }
 
     @Test fun rotatesWithinBoundAndExportsReadableUtf8Archive() {
         val directory = temporary.newFolder()

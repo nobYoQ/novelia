@@ -110,7 +110,7 @@ func diagnosticReason(err error) string {
 		return "unreachable"
 	case strings.Contains(text, "no valid ech"), strings.Contains(text, "no ech"):
 		return "ech_config_missing"
-	case strings.Contains(text, "no a record"):
+	case strings.Contains(text, "no a record"), strings.Contains(text, "no a/aaaa record"):
 		return "dns_no_address"
 	case strings.Contains(text, "certificate"), strings.Contains(text, "x509"):
 		return "certificate"

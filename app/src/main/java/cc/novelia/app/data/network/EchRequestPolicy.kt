@@ -5,7 +5,8 @@ package cc.novelia.app.data.network
  * connect: one DNS + TCP + TLS attempt (at most three for bodyless GET/HEAD).
  * write: the complete request-send phase, including upload production.
  * read: response headers after sending, then each individual streamed read.
- * The interceptor separately keeps callTimeout active until EOF or body.close().
+ * echCallTimeout freezes the total budget before application interceptors run;
+ * ECH keeps that same deadline active across redirects, until EOF or body.close().
  */
 internal data class EchTimeouts(
     val connectMillis: Long,

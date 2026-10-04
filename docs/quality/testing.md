@@ -49,6 +49,7 @@ JVM 报告在 `app/build/reports/tests/testDebugUnitTest/`，XML 结果在 `app/
 | --- | --- |
 | 桌面图标与启动入口 | `launcher.LauncherIconControllerTest`；设备 `launcher.LauncherIconLifecycleTest`、`ui.settings.LauncherIconPickerTest`。检查前台不切换、重建不切换、后台单入口、恢复默认、图标冷启动和切换后立即重开、站内链接和分享；真实厂商桌面另行验收 |
 | 请求与会话 | `ApiContractTest`、`NetworkPerformanceTest`、`data.auth.SessionIsolationTest`、`data.network.SharedRequestTest` |
+| ECH 连接与诊断 | `:app:testEchNative`（包含本地解析器依赖的测试）、`data.network.EchInterceptorTest`、`data.network.EchApiContractTest`、`data.network.EchDownloadTest`、`data.network.EchDiagnosticsTest`、`data.network.NetworkLoggingTest`；覆盖网络切换、DNS TTL、多地址回退、整个请求的超时、HEAD 和证书错误分类 |
 | 原站/镜像切换 | `data.network.BookSourceTest`、`data.auth.MirrorAuthCookiesTest`、`ClipboardLinksTest`；设备 `data.auth.MirrorSessionTest`、`ui.settings.BookSourcePickerTest`、`ui.settings.BookSourceNavigationTest`，覆盖认证协议、Cookie 隔离、401 续期、跨域下载、来源切换及重建 |
 | 云端收藏和待同步 | `CloudFavoritesTest`、`CloudFavoriteLocalCopyTest`、`data.sync.CloudMutationQueueTest`、`data.sync.CloudSyncPolicyTest`、`data.sync.CloudSyncRuntimeTest`、`data.sync.BoundCloudSyncTest` |
 | 书库状态与恢复 | `data.storage.StatePersistenceTest`、`data.storage.LibraryStateCodecTest`、`data.backup.LibraryBackupTest`、`data.cache.LocalCacheTest`、`MetadataCacheTest` |

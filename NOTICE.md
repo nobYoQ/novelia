@@ -22,7 +22,9 @@ AndroidX / Compose、Kotlin、kotlinx.coroutines、kotlinx.serialization、OkHtt
 
 ## ECH 测试分支的本地传输库
 
-本分支从源码构建 `native/ech`，使用 [Jissr Bypass v0.1.1](https://github.com/inqadh/jissr-bypass/tree/v0.1.1) 的加密 DNS 解析与握手探测（Apache-2.0），未采用其有整包大小限制的 Android 适配器。Novelia 自行管理实际 HTTP 连接与 TLS 期限，并实现 JNI 流式上传/下载、取消、有限连接重试和主机边界；上游核心源码不作修改。
+本分支从源码构建 `native/ech`，使用基于 [Jissr Bypass v0.1.1](https://github.com/inqadh/jissr-bypass/tree/v0.1.1) 的本地修改版本（Apache-2.0），源码、原始许可证及修改说明保存在 `native/ech/third_party/jissr-bypass`，通过 Go `replace` 固定使用。修改包括隔离网络切换前后的在途 DNS 查询、保留多个 A/AAAA 地址，以及按 DNS TTL 管理解析缓存。未采用上游有整包大小限制的 Android 适配器。
+
+Novelia 自行管理实际 HTTP 连接与 TLS 期限，并实现 JNI 流式上传/下载、取消、有限连接重试、多地址拨号和主机边界。修改后的第三方组件保留原有许可证，与本项目原创实现的许可分别记录。
 
 工具链固定为 Go 1.27.1，使用 Go 标准库 TLS 1.3/ECH 和证书校验；运行时包含 `golang.org/x/net v0.56.0`、`x/sync v0.21.0`、`x/text v0.38.0` 及 `x/mobile 68735029466e` 生成的 JNI 绑定（BSD-3-Clause）。完整版本和完整性校验见 `native/ech/go.mod`、`go.sum` 与 `scripts/build-ech.ps1`；原始许可证合并于 `licenses/ECH-native.txt` 并随 APK 附带。构建用的 `x/tools` 和 `x/mod` 不作为应用运行时库打包。
 

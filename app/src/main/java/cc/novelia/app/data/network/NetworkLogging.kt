@@ -9,7 +9,10 @@ import java.net.InetSocketAddress
 import java.net.Proxy
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
+import java.security.cert.CertificateException
+import java.security.cert.CertPathValidatorException
 import java.util.Collections
+import java.util.IdentityHashMap
 import java.util.UUID
 import java.util.WeakHashMap
 import java.util.concurrent.ArrayBlockingQueue
@@ -180,7 +183,7 @@ internal fun networkFailure(error: Throwable, cancelled: Boolean = false): Strin
     error is SocketTimeoutException || error is InterruptedIOException -> "timeout"
     cancelled -> "cancelled"
     error is UnknownHostException -> "dns"
-    error is SSLPeerUnverifiedException -> "certificate"
+    error.hasCertificateCause() -> "certificate"
     error is SSLHandshakeException -> "tls"
     error is LinkageError -> "native_library"
     error.message.orEmpty().contains("reset", ignoreCase = true) -> "reset"
@@ -189,6 +192,16 @@ internal fun networkFailure(error: Throwable, cancelled: Boolean = false): Strin
     error is EchIOException -> "ech" // Native events contain the precise stage and fixed failure reason.
     error is IOException -> "io"
     else -> "internal"
+}
+
+private fun Throwable.hasCertificateCause(): Boolean {
+    val visited = Collections.newSetFromMap(IdentityHashMap<Throwable, Boolean>())
+    var current: Throwable? = this
+    while (current != null && visited.add(current)) {
+        if (current is SSLPeerUnverifiedException || current is CertificateException || current is CertPathValidatorException) return true
+        current = current.cause
+    }
+    return false
 }
 
 private class NetworkEvents(private val trace: NetworkRequestTrace) : EventListener() {
