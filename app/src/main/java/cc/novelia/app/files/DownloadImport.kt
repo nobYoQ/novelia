@@ -70,19 +70,22 @@ suspend fun importDocumentUri(store: LocalStore, uri: Uri, onProgress: (String) 
  * 新文档使用新 ID；安装失败仅清理这个新文档，图片先流式写入暂存目录以控制内存占用。
  */
 suspend fun importLocalDocument(store: LocalStore, file: File, name: String = file.name, title: String? = null,
-    onProgress: (String) -> Unit = {}): DocumentImportResult = withContext(Dispatchers.IO) {
+    downloadMode: String? = null, onProgress: (String) -> Unit = {}): DocumentImportResult = withContext(Dispatchers.IO) {
     importLock.withLock {
         onProgress("正在检查重复文件")
         DocumentTools.requireImportSize(file.length())
         val workContext = coroutineContext
         val hash = file.inputStream().use { DocumentTools.digest(it) { workContext.ensureActive() } }
-        store.findDocumentByHash(hash) { workContext.ensureActive() }?.let { return@withLock DocumentImportResult(it, false) }
+        store.findDocumentByHash(hash) { workContext.ensureActive() }?.let {
+            if (downloadMode != null) store.recordDocumentDownloadMode(it.id, downloadMode)
+            return@withLock DocumentImportResult(it, false)
+        }
         val images = java.nio.file.Files.createTempDirectory(store.context.cacheDir.toPath(), "document-images-").toFile()
         try {
             onProgress("正在解析章节")
             val parsed = DocumentTools.parseFile(name, file, { imageHash, input ->
                 copyImport(input, File(images, imageHash)) { workContext.ensureActive() }
-            }, hash) { workContext.ensureActive() }
+            }, hash, downloadMode) { workContext.ensureActive() }
             val document = if (title == null) parsed else parsed.copy(name = title)
             val ref = BookRef("local", document.id)
             try {
@@ -134,7 +137,7 @@ suspend fun importDownloadedDocument(store: LocalStore, entry: DownloadEntry, so
 
 private suspend fun importDownloadedDocumentResult(store: LocalStore, entry: DownloadEntry, sourceCard: BookCard?,
     onProgress: (String) -> Unit = {}): DocumentImportResult {
-    val result = importLocalDocument(store, File(store.downloadsDir, entry.fileName), entry.fileName, entry.title, onProgress)
+    val result = importLocalDocument(store, File(store.downloadsDir, entry.fileName), entry.fileName, entry.title, entry.contentMode(), onProgress)
     entry.sourceBook?.takeIf { it.isWenku }?.let { source -> store.update { state ->
         val parent = state.books.firstOrNull { it.book.ref == source }?.book
             ?: sourceCard?.takeIf { it.ref == source }

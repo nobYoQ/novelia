@@ -261,9 +261,14 @@ import kotlinx.serialization.encodeToString
         }
         val position = remember(ref, chapterId) {
             val anchor = refreshAnchor
+            val noteSource = readerEntry?.savedStateHandle?.remove<Int>("readerNoteSourceIndex")
+            val noteAnchor = noteSource?.let { readingSourceAnchor(chapter, it) }
             val returned = readerEntry?.savedStateHandle?.remove<String>("readerRestorePosition")
                 ?.let { runCatching { appJson.decodeFromString<ReadingReturnPoint>(it).resolvedPosition(paragraphs) }.getOrNull() }
-            if(returned != null) returned
+            if(noteAnchor != null) Position(chapterId,
+                paragraphs.indexOfFirst { it.index >= noteAnchor }
+                    .takeIf { it >= 0 }?.plus(1) ?: paragraphs.size)
+            else if(returned != null) returned
             else if(searchArrival != null) Position(chapterId, searchArrival.coerceIn(0, paragraphs.lastIndex.coerceAtLeast(0)) + 1,
                 textOffset = paragraphs.getOrNull(searchArrival)?.let { arrivalMatch?.textOffset(it, settings) } ?: 0)
             else if(anchor != null) Position(chapterId, (anchor.sourceIndex?.let { source -> paragraphs.indexOfFirst { it.index >= source }.takeIf { it >= 0 } } ?: anchor.paragraph).coerceIn(0, paragraphs.lastIndex.coerceAtLeast(0)) + 1, textOffset = anchor.textOffset)

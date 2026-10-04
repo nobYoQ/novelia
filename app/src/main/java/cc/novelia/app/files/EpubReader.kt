@@ -7,11 +7,7 @@ import java.io.InputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import org.jsoup.Jsoup
-import org.jsoup.nodes.Element
-import org.jsoup.nodes.Node
-import org.jsoup.nodes.TextNode
 import org.jsoup.parser.Parser
-import org.jsoup.select.NodeVisitor
 
 internal data class EpubContents(val chapters: List<LocalChapter>, val cover: String?)
 
@@ -25,6 +21,8 @@ internal fun readEpubFile(
     file: File,
     imageSink: ((String, InputStream) -> Unit)?,
     checkCancelled: () -> Unit = {},
+    downloadMode: String? = null,
+    chapterId: String? = null,
 ): EpubContents = ZipFile(file).use { zip ->
     val entries = linkedMapOf<String, ZipEntry>()
     var expanded = 0L
@@ -94,47 +92,20 @@ internal fun readEpubFile(
     val manifest = opf.getElementsByTag("item").associate { it.attr("id") to it.attr("href") }
     val coverId = opf.getElementsByTag("meta").firstOrNull { it.attr("name") == "cover" }?.attr("content")
     val coverHref = opf.getElementsByTag("item").firstOrNull { it.attr("properties").split(' ').contains("cover-image") }?.attr("href") ?: manifest[coverId]
-    val cover = coverHref?.let { image(resource(directory, it)) }
+    val cover = if (chapterId == null) coverHref?.let { image(resource(directory, it)) } else null
     var textCharacters = 0L
     val chapters = opf.getElementsByTag("itemref").mapNotNull { item ->
         checkCancelled()
+        if (chapterId != null && item.attr("idref") != chapterId) return@mapNotNull null
         val href = manifest[item.attr("idref")] ?: return@mapNotNull null
         val path = resource(directory, href) ?: return@mapNotNull null
         val html = text(path) ?: return@mapNotNull null
-        val doc = Jsoup.parse(html)
-        doc.select("script,style,nav,rt,rp").remove()
-        val paragraphs = mutableListOf<String>()
-        val buffer = StringBuilder()
-        val blocks = setOf("h1", "h2", "h3", "h4", "p", "li", "blockquote", "pre", "div", "section", "br")
-        fun flush() {
-            val paragraph = buffer.toString().trim()
-            if (paragraph.isNotEmpty()) {
+        parseEpubChapter(item.attr("idref"), html, downloadMode,
+            image = { source -> image(resource(path.substringBeforeLast('/', ""), source)) },
+            checkCancelled = checkCancelled, onText = { paragraph ->
                 textCharacters += paragraph.length
                 require(textCharacters <= 16 * 1024 * 1024) { "EPUB 正文过长，请先拆分" }
-                paragraphs += paragraph
-            }
-            buffer.clear()
-        }
-        doc.body().traverse(object : NodeVisitor {
-            override fun head(node: Node, depth: Int) {
-                checkCancelled()
-                when (node) {
-                    is TextNode -> if (!node.isBlank || buffer.isNotEmpty()) buffer.append(node.wholeText)
-                    is Element -> {
-                        if (node.tagName() in blocks) flush()
-                        if (node.tagName() in setOf("img", "image")) {
-                            flush()
-                            val source = node.attr("src").ifBlank { node.attr("xlink:href").ifBlank { node.attr("href") } }
-                            image(resource(path.substringBeforeLast('/', ""), source))?.let { paragraphs += "novelia-image:$it" }
-                        }
-                    }
-                }
-            }
-            override fun tail(node: Node, depth: Int) { if (node is Element && node.tagName() in blocks) flush() }
-        })
-        flush()
-        val title = doc.selectFirst("h1,h2,h3,title")?.text()?.takeIf(String::isNotBlank) ?: "章节"
-        if (paragraphs.isEmpty()) null else LocalChapter(item.attr("idref"), title, paragraphs)
+            })
     }
     EpubContents(chapters, cover)
 }

@@ -1,12 +1,12 @@
 package cc.novelia.app.data.storage
 
 import cc.novelia.app.data.model.BookRef
-import cc.novelia.app.data.model.Chapter
 import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.LocalChapter
 import cc.novelia.app.data.model.LocalDocument
 import cc.novelia.app.data.model.Position
 import cc.novelia.app.data.model.ReaderSettings
+import cc.novelia.app.data.model.toReaderChapter
 import cc.novelia.app.reader.projectParagraphs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -52,9 +52,8 @@ internal suspend fun resolveLocalReadingProgress(
                 val chapter = readChapter(ref.id, position.chapterId)
                 job.ensureActive()
                 if(chapter.id != position.chapterId) continue
-                // AppController 将本地章节正文同时用作原文和译文；
-                // 复用阅读器投影规则，使空行和插图的计数一致。
-                val count = projectParagraphs(Chapter(paragraphs = chapter.paragraphs, youdaoParagraphs = chapter.paragraphs),
+                // 与阅读器复用本地对照、空行和插图的投影规则。
+                val count = projectParagraphs(chapter.toReaderChapter(),
                     ReaderSettings()) { job.ensureActive() }.size
                 put(ref, position.copy(chapterIndex = ordinal, chapterCount = document.chapters.size, paragraphCount = count))
             } catch(error: CancellationException) {

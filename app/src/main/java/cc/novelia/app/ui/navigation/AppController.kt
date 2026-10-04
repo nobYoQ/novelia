@@ -22,6 +22,7 @@ import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.Page
 import cc.novelia.app.data.model.Chapter
+import cc.novelia.app.data.model.toReaderChapter
 import cc.novelia.app.data.model.PendingAction
 import cc.novelia.app.data.model.WebDetail
 import cc.novelia.app.data.model.WenkuDetail
@@ -264,7 +265,7 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
         if(ref.isLocal) {
             val doc = store.documentIndex(ref.id); val index = doc.chapters.indexOfFirst { it.id == id }.coerceAtLeast(0)
             val c = store.documentChapter(ref.id, doc.chapters.getOrNull(index)?.id ?: error("这本小说没有可阅读的章节"))
-            Chapter(c.title, c.title, doc.name, doc.name, doc.chapters.getOrNull(index - 1)?.id, doc.chapters.getOrNull(index + 1)?.id, c.paragraphs, c.paragraphs) to true
+            c.toReaderChapter(doc.name, doc.chapters.getOrNull(index - 1)?.id, doc.chapters.getOrNull(index + 1)?.id) to true
         } else {
             val binding = session.capture()
             val generation = store.cacheGeneration.value

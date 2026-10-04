@@ -46,5 +46,6 @@ import kotlinx.serialization.Serializable
 @Serializable data class Chapter(
     val titleJp: String = "", val titleZh: String? = null, val novelTitleJp: String? = null, val novelTitleZh: String? = null,
     val prevId: String? = null, val nextId: String? = null, val paragraphs: List<String> = emptyList(),
-    val youdaoParagraphs: List<String>? = null, val gptParagraphs: List<String>? = null, val sakuraParagraphs: List<String>? = null
+    val youdaoParagraphs: List<String>? = null, val gptParagraphs: List<String>? = null, val sakuraParagraphs: List<String>? = null,
+    val localContent: LocalReadingContent? = null
 ) { val title get() = titleZh?.takeIf { it.isNotBlank() } ?: titleJp }

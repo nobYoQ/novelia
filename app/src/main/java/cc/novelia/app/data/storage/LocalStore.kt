@@ -18,7 +18,12 @@ import cc.novelia.app.data.model.Chapter
 import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.LocalChapter
 import cc.novelia.app.data.model.LocalDocument
+import cc.novelia.app.data.model.LocalReadingContent
 import cc.novelia.app.data.model.Position
+import cc.novelia.app.files.DocumentTools
+import cc.novelia.app.files.EPUB_CONTENT_VERSION
+import cc.novelia.app.files.contentMode
+import cc.novelia.app.files.recoverEpubChapter
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -74,9 +79,10 @@ class LocalStore(val context: Context) {
     val exportsDir = File(context.filesDir, "exports").apply { mkdirs() }
     private val chapterLock = Any()
     private val documentLock = Any()
+    private val checkedDocumentModes = mutableSetOf<String>()
     private val chapterMemory = WeightedMemoryCache<String, Chapter>(24, 12L * 1024 * 1024, ::chapterWeight)
     private val documentMemory = WeightedMemoryCache<String, LocalDocument>(4, 32L * 1024 * 1024, ::documentWeight)
-    private val localChapterMemory = WeightedMemoryCache<String, LocalChapter>(12, 12L * 1024 * 1024) { 64 + paragraphsWeight(it.paragraphs) }
+    private val localChapterMemory = WeightedMemoryCache<String, LocalChapter>(12, 12L * 1024 * 1024) { 64 + paragraphsWeight(it.paragraphs) + localContentWeight(it.readingContent) }
     private val documentStorage = DocumentStorage(documentsDir,
         { AtomicFile(it).openRead().bufferedReader(Charsets.UTF_8).use { reader -> reader.readText() } }, ::atomicText)
     private val sourceIndex by lazy {
@@ -193,7 +199,48 @@ class LocalStore(val context: Context) {
     fun documentChapter(id: String, chapterId: String): LocalChapter = synchronized(documentLock) {
         val index = documentIndex(id)
         val key = "${index.id}/${index.chapterFiles[chapterId] ?: chapterId}"
-        localChapterMemory[key] ?: documentStorage.chapter(index, chapterId).also { localChapterMemory.put(key, it) }
+        localChapterMemory[key] ?: recoverDocumentChapter(index, documentStorage.chapter(index, chapterId)).also {
+            val current = documentIndex(id)
+            localChapterMemory.put("${current.id}/${current.chapterFiles[chapterId] ?: chapterId}", it)
+        }
+    }
+
+    internal fun recordDocumentDownloadMode(id: String, mode: String) = synchronized(documentLock) {
+        if (recoveryIssue.value != null) return@synchronized
+        val index = documentIndex(id)
+        if (index.downloadMode == mode) return@synchronized
+        documentMemory.put(id, documentStorage.recordDownloadMode(index, mode))
+        localChapterMemory.clear()
+    }
+
+    /** 只在第一次读旧 EPUB 的当前章时解析原件；损坏或丢失原件不影响缓存正文阅读。 */
+    private fun recoverDocumentChapter(document: LocalDocument, chapter: LocalChapter): LocalChapter {
+        if (document.format != "epub" || document.chapterFiles.isEmpty() || recoveryIssue.value != null) return chapter
+        val source = documentSource(document.id, "epub")
+        if (!source.isFile) return chapter
+        var index = document
+        try {
+            if (index.downloadMode == null && checkedDocumentModes.add(index.id) && index.sourceHash.isNotBlank()) {
+                // 旧导入没有保存下载模式。只有完整文件哈希匹配，才沿用下载记录的参数。
+                val match = state.value.downloads.firstOrNull { entry ->
+                    val file = File(downloadsDir, entry.fileName)
+                    entry.contentMode() != null && entry.fileName == file.name && file.isFile && file.length() == source.length() &&
+                        runCatching { file.inputStream().use { DocumentTools.digest(it) } }.getOrNull() == index.sourceHash
+                }
+                match?.contentMode()?.let { mode ->
+                    index = documentStorage.recordDownloadMode(index, mode)
+                    documentMemory.put(index.id, index)
+                }
+            }
+            if (chapter.epubContentVersion >= EPUB_CONTENT_VERSION && chapter.downloadMode == index.downloadMode) return chapter
+            val restored = recoverEpubChapter(source, chapter, index.downloadMode)
+            val updated = documentStorage.replaceChapter(index, restored)
+            documentMemory.put(index.id, updated)
+            update { it.withRecoveredEpubChapter(index.id, chapter, restored) }
+            return restored
+        } catch (_: Exception) {
+            return chapter
+        }
     }
     /** 可移植的完整文档；仅显式备份或导出时才应分配整本文档内存。 */
     fun document(id: String, checkCancelled: () -> Unit = {}): LocalDocument =
@@ -255,10 +302,14 @@ class LocalStore(val context: Context) {
 
 private fun textWeight(text: String?): Long = if (text == null) 0 else 40L + text.length * 2L
 private fun paragraphsWeight(paragraphs: List<String>?): Long = paragraphs?.sumOf { 8 + textWeight(it) } ?: 0
+private fun localContentWeight(content: LocalReadingContent?): Long = if (content == null) 0 else
+    64L + content.secondary.size * 24L + content.groups.sumOf { group ->
+        96L + group.original.size * 24L + group.translations.sumOf { 32L + it.size * 24L }
+    }
 private fun chapterWeight(chapter: Chapter): Long = 128 + textWeight(chapter.titleJp) + textWeight(chapter.titleZh) +
     textWeight(chapter.novelTitleJp) + textWeight(chapter.novelTitleZh) +
     paragraphsWeight(chapter.paragraphs) + paragraphsWeight(chapter.youdaoParagraphs) +
-    paragraphsWeight(chapter.gptParagraphs) + paragraphsWeight(chapter.sakuraParagraphs)
+    paragraphsWeight(chapter.gptParagraphs) + paragraphsWeight(chapter.sakuraParagraphs) + localContentWeight(chapter.localContent)
 private fun documentWeight(document: LocalDocument): Long = 128 + textWeight(document.name) +
-    document.chapters.sumOf { 64 + textWeight(it.id) + textWeight(it.title) + paragraphsWeight(it.paragraphs) } +
+    document.chapters.sumOf { 64 + textWeight(it.id) + textWeight(it.title) + paragraphsWeight(it.paragraphs) + localContentWeight(it.readingContent) } +
     document.chapterFiles.entries.sumOf { 64 + textWeight(it.key) + textWeight(it.value) }

@@ -10,11 +10,7 @@ import java.nio.charset.CodingErrorAction
 import java.util.UUID
 import java.util.zip.ZipInputStream
 import org.jsoup.Jsoup
-import org.jsoup.nodes.Element
-import org.jsoup.nodes.Node
-import org.jsoup.nodes.TextNode
 import org.jsoup.parser.Parser
-import org.jsoup.select.NodeVisitor
 
 /**
  * EPUB、TXT、SRT 的解析与转换工具，统一限制输入大小和压缩内容展开体积。
@@ -51,11 +47,11 @@ object DocumentTools {
         }
         return digest.digest().joinToString("") { "%02x".format(it) }
     }
-    fun parseFile(name: String, file: File, imageSink: (String, InputStream) -> Unit, sourceHash: String? = null, checkCancelled: () -> Unit = {}): LocalDocument {
+    fun parseFile(name: String, file: File, imageSink: (String, InputStream) -> Unit, sourceHash: String? = null, downloadMode: String? = null, checkCancelled: () -> Unit = {}): LocalDocument {
         requireImportSize(file.length())
         val extension = name.substringAfterLast('.', "txt").lowercase()
         val contents = when (extension) {
-            "epub" -> readEpubFile(file, imageSink, checkCancelled)
+            "epub" -> readEpubFile(file, imageSink, checkCancelled, downloadMode)
             "txt", "srt" -> {
                 val text = file.inputStream().use { decodeText(readBounded(it, checkCancelled = checkCancelled)) }
                 checkCancelled()
@@ -67,19 +63,19 @@ object DocumentTools {
         require(contents.chapters.any { it.paragraphs.any(String::isNotBlank) }) { "文件没有可读取的正文" }
         checkCancelled()
         return LocalDocument(UUID.randomUUID().toString(), name.substringBeforeLast('.'), extension, contents.chapters,
-            coverImage = contents.cover, sourceHash = sourceHash ?: file.inputStream().use { digest(it, checkCancelled = checkCancelled) })
+            coverImage = contents.cover, sourceHash = sourceHash ?: file.inputStream().use { digest(it, checkCancelled = checkCancelled) }, downloadMode = downloadMode)
     }
-    fun parse(name: String, bytes: ByteArray): LocalDocument {
+    fun parse(name: String, bytes: ByteArray, downloadMode: String? = null): LocalDocument {
         require(bytes.size <= MAX_INPUT) { "文件超过 64 MB，请先拆分" }
         val extension = name.substringAfterLast('.', "txt").lowercase()
         val images = linkedMapOf<String, String>(); var cover: String? = null
         val chapters = when(extension) {
-            "epub" -> readEpub(bytes, images) { cover = it }
+            "epub" -> readEpub(bytes, images, downloadMode) { cover = it }
             "txt", "srt" -> parseText(decodeText(bytes), extension)
             else -> error("支持 EPUB、TXT 和 SRT 文件")
         }
         require(chapters.any { it.paragraphs.any(String::isNotBlank) }) { "文件没有可读取的正文" }
-        return LocalDocument(UUID.randomUUID().toString(), name.substringBeforeLast('.'), extension, chapters, images = images, coverImage = cover, sourceHash = digest(bytes))
+        return LocalDocument(UUID.randomUUID().toString(), name.substringBeforeLast('.'), extension, chapters, images = images, coverImage = cover, sourceHash = digest(bytes), downloadMode = downloadMode)
     }
     /** 优先按 BOM 判断 UTF-16，否则严格尝试 UTF-8；解码失败再回退 GB18030，最后移除 BOM。 */
     fun decodeText(bytes: ByteArray): String {
@@ -142,7 +138,7 @@ object DocumentTools {
     }
     fun parseEpub(bytes: ByteArray): List<LocalChapter> = readEpub(bytes, linkedMapOf()) {}
     private fun digest(bytes: ByteArray) = java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
-    private fun readEpub(bytes: ByteArray, images: MutableMap<String, String>, cover: (String?) -> Unit): List<LocalChapter> {
+    private fun readEpub(bytes: ByteArray, images: MutableMap<String, String>, downloadMode: String? = null, cover: (String?) -> Unit): List<LocalChapter> {
         val files = unzip(bytes)
         val container = files["META-INF/container.xml"]?.toString(Charsets.UTF_8) ?: error("EPUB 缺少 container.xml")
         val opfPath = Jsoup.parse(container, "", Parser.xmlParser()).getElementsByTag("rootfile").firstOrNull()?.attr("full-path") ?: error("EPUB 未指定内容文件")
@@ -167,27 +163,8 @@ object DocumentTools {
             val decoded = java.net.URLDecoder.decode(href.replace("+", "%2B"), "UTF-8")
             val path = normalize(if(directory.isBlank()) decoded else "$directory/$decoded") ?: return@mapNotNull null
             val html = files[path]?.toString(Charsets.UTF_8) ?: return@mapNotNull null
-            val doc = Jsoup.parse(html)
-            doc.select("script,style,nav,rt,rp").remove()
-            val paragraphs = mutableListOf<String>(); val buffer = StringBuilder(); val blocks = setOf("h1", "h2", "h3", "h4", "p", "li", "blockquote", "pre", "div", "section", "br")
-            fun flush() { val text = buffer.toString().trim(); if(text.isNotEmpty()) paragraphs += text; buffer.clear() }
-            doc.body().traverse(object : NodeVisitor {
-                override fun head(node: Node, depth: Int) {
-                    when(node) {
-                        is TextNode -> if(!node.isBlank || buffer.isNotEmpty()) buffer.append(node.wholeText)
-                        is Element -> {
-                            if(node.tagName() in blocks) flush()
-                            if(node.tagName() in setOf("img", "image")) {
-                                flush(); val source = node.attr("src").ifBlank { node.attr("xlink:href").ifBlank { node.attr("href") } }
-                                image(resource(path.substringBeforeLast('/', ""), source))?.let { paragraphs += "novelia-image:$it" }
-                            }
-                        }
-                    }
-                }
-                override fun tail(node: Node, depth: Int) { if(node is Element && node.tagName() in blocks) flush() }
-            }); flush()
-            val title = doc.selectFirst("h1,h2,h3,title")?.text()?.takeIf(String::isNotBlank) ?: "章节"
-            if(paragraphs.isEmpty()) null else LocalChapter(item.attr("idref"), title, paragraphs)
+            parseEpubChapter(item.attr("idref"), html, downloadMode,
+                image = { source -> image(resource(path.substringBeforeLast('/', ""), source)) })
         }
     }
     fun epubToTxt(bytes: ByteArray) = parseEpub(bytes).joinToString("\n\n") { it.title + "\n\n" + it.paragraphs.filterNot { p -> p.startsWith("novelia-image:") }.joinToString("\n\n") }

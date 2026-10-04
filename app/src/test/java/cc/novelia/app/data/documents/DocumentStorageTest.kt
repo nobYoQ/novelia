@@ -2,6 +2,8 @@ package cc.novelia.app.data.documents
 
 import cc.novelia.app.data.model.LocalChapter
 import cc.novelia.app.data.model.LocalDocument
+import cc.novelia.app.data.model.LocalBilingualGroup
+import cc.novelia.app.data.model.LocalReadingContent
 import cc.novelia.app.data.storage.appJson
 import java.io.File
 import java.nio.file.Files
@@ -13,6 +15,29 @@ class DocumentStorageTest {
     private val original = LocalDocument("book", "中文书名", "txt", listOf(
         LocalChapter("chapter/1", "第一章", listOf("正文甲")),
         LocalChapter("chapter/2", "第二章", listOf("正文乙"))), sourceHash = "source")
+
+    @Test fun bilingualMetadataStaysInChapterFilesAndAnInterruptedUpgradeKeepsTheOldChapter() {
+        val directory = Files.createTempDirectory("bilingual-documents").toFile()
+        try {
+            var failManifest = false
+            val storage = DocumentStorage(directory, { it.readText() }, { file, text ->
+                if (failManifest && file.name == "book.json") throw java.io.IOException("disk full")
+                file.writeText(text)
+            })
+            val chapter = LocalChapter("c", "章", listOf("日本語", "中文"))
+            val index = storage.save(LocalDocument("book", "卷", "epub", listOf(chapter), downloadMode = "jp-zh"))
+            val upgraded = chapter.copy(readingContent = LocalReadingContent(listOf(LocalBilingualGroup(listOf(0), listOf(listOf(1)))), listOf(0)), epubContentVersion = 1)
+            failManifest = true
+            assertThrows(java.io.IOException::class.java) { storage.replaceChapter(index, upgraded) }
+            assertEquals(chapter, storage.chapter(storage.index("book"), "c"))
+            failManifest = false
+            val next = storage.replaceChapter(index, upgraded)
+            assertTrue(next.chapters.single().readingContent.groups.isEmpty())
+            assertEquals(upgraded, storage.chapter(next, "c"))
+            assertEquals(upgraded, storage.full(storage.index("book")).chapters.single())
+            assertEquals("jp-zh", storage.full(next).downloadMode)
+        } finally { directory.deleteRecursively() }
+    }
 
     @Test fun chapterReadsDoNotLoadOtherChaptersAndPortableExportRoundTrips() {
         val directory = Files.createTempDirectory("documents").toFile()

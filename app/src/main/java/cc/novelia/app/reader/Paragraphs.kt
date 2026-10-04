@@ -18,6 +18,7 @@ private val localImageMarker = Regex("novelia-image:([a-f0-9]{64})")
  * 返回值只包含可显示段落，不修改原章节；耗时调用方可通过 checkCancelled 响应取消。
  */
 fun projectParagraphs(chapter: Chapter, settings: ReaderSettings, checkCancelled: () -> Unit = {}): List<ReadingParagraph> {
+    if (chapter.localContent != null) return projectLocalParagraphs(chapter, settings, checkCancelled)
     val engines = mapOf("sakura" to chapter.sakuraParagraphs, "gpt" to chapter.gptParagraphs, "youdao" to chapter.youdaoParagraphs)
     val count = maxOf(chapter.paragraphs.size, engines.values.maxOfOrNull { it?.size ?: 0 } ?: 0)
     val selectedEngines = settings.engines.distinct().mapNotNull { engine -> engines[engine]?.let { engine to it } }

@@ -17,7 +17,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.Note
-import cc.novelia.app.data.model.Position
 import cc.novelia.app.ui.components.AppLazyColumn
 import cc.novelia.app.ui.components.AppSheet
 import cc.novelia.app.ui.components.EmptyState
@@ -55,7 +54,11 @@ import cc.novelia.app.ui.navigation.AppController
             Text("${item.chapterTitle} · 第 ${note.paragraph + 1} 段", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(note.quote, maxLines = 5, style = MaterialTheme.typography.bodyMedium); if(note.text.isNotBlank()) Text(note.text, color = MaterialTheme.colorScheme.primary)
             FlowRow {
-                TextButton(onClick = { val ref = BookRef.fromKey(note.key); c.store.savePosition(ref, Position(note.chapterId, note.paragraph + 1)); c.read(ref, note.chapterId) }) { Text("回到原文") }
+                TextButton(onClick = {
+                    val ref = BookRef.fromKey(note.key)
+                    c.read(ref, note.chapterId)
+                    c.nav.currentBackStackEntry?.savedStateHandle?.set("readerNoteSourceIndex", note.paragraph)
+                }) { Text("回到原文") }
                 TextButton(onClick = { editing = note }, modifier = Modifier.heightIn(min = 48.dp)) { Text("编辑笔记") }
                 TextButton(onClick = { c.share("${item.bookTitle} · ${item.chapterTitle}\n\n${note.quote}" + if(note.text.isNotBlank()) "\n\n${note.text}" else "") }) { Text("分享") }
                 TextButton(onClick = {

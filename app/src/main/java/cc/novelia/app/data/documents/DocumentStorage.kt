@@ -2,6 +2,7 @@ package cc.novelia.app.data.documents
 
 import cc.novelia.app.data.model.LocalChapter
 import cc.novelia.app.data.model.LocalDocument
+import cc.novelia.app.data.model.LocalReadingContent
 import cc.novelia.app.data.storage.appJson
 import cc.novelia.app.data.storage.hashName
 import java.io.File
@@ -44,7 +45,7 @@ internal class DocumentStorage(
             chapter.id to hash
         }
         checkCancelled()
-        val index = document.copy(chapters = document.chapters.map { it.copy(paragraphs = emptyList()) }, images = emptyMap(), chapterFiles = files)
+        val index = document.copy(chapters = document.chapters.map { it.descriptor() }, images = emptyMap(), chapterFiles = files)
         write(manifest(document.id), appJson.encodeToString(index))
         return index
     }
@@ -62,6 +63,28 @@ internal class DocumentStorage(
 
     fun full(index: LocalDocument, checkCancelled: () -> Unit = {}): LocalDocument = index.copy(
         chapters = index.chapters.map { checkCancelled(); chapter(index, it.id) }, chapterFiles = emptyMap())
+
+    /** 只升级当前章；先提交新正文，再原子替换目录，失败时仍可读取旧章。 */
+    fun replaceChapter(index: LocalDocument, chapter: LocalChapter): LocalDocument {
+        require(index.chapterFiles.isNotEmpty() && index.chapters.any { it.id == chapter.id && it.title == chapter.title })
+        val text = appJson.encodeToString(chapter)
+        val hash = hashName(text)
+        val file = chapterFile(index.id, hash)
+        if (!file.isFile) { file.parentFile?.mkdirs(); write(file, text) }
+        val next = index.copy(chapters = index.chapters.map { if (it.id == chapter.id) chapter.descriptor() else it },
+            chapterFiles = index.chapterFiles + (chapter.id to hash))
+        write(manifest(index.id), appJson.encodeToString(next))
+        return next
+    }
+
+    fun recordDownloadMode(index: LocalDocument, mode: String): LocalDocument {
+        require(mode in setOf("zh", "jp", "jp-zh", "zh-jp"))
+        val next = index.copy(downloadMode = mode)
+        write(manifest(index.id), appJson.encodeToString(next))
+        return next
+    }
+
+    private fun LocalChapter.descriptor() = copy(paragraphs = emptyList(), readingContent = LocalReadingContent())
 
     /** 只更新目录名称；分卷 ID、源文件哈希和外置章节文件均保持稳定。 */
     fun rename(index: LocalDocument, name: String): LocalDocument {

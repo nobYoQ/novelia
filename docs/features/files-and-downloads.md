@@ -52,12 +52,16 @@
 
 - 从 `META-INF/container.xml` 找到 OPF，通过 `manifest` 解析资源，通过 `spine/itemref` 确定阅读顺序，不能以 ZIP 条目顺序代替阅读顺序。
 - 封面优先识别 `properties="cover-image"`，其次使用 OPF 的 `meta name="cover"`。
-- 用 Jsoup 提取正文，移除 `script`、`style`、`nav`、`rt`、`rp`。块元素和换行构成段落，标题从首个 `h1/h2/h3/title` 提取，缺少时使用“章节”。
+- 用 Jsoup 提取正文，移除 `script`、`style`、`nav`、`rt`、`rp`。块元素和 `<br>` 构成段落；普通行内文本折叠源码缩进与空行，中日文之间的源码换行直接连接文字，英文单词间保留一个空格。显式空格、全角空格和 `<pre>` 内的换行仍保留。标题从首个 `h1/h2/h3/title` 提取，缺少时使用“章节”。
 - `img` / `image` 的 `src`、`xlink:href` 或 `href` 对应本地资源时，生成 `novelia-image:<sha256>` 段落标记；图片在正文中的相对顺序保留。
 - 相对路径会去除片段标识并规范化，`+` 保留为加号；拒绝越出根目录的路径、绝对路径和反斜杠路径，外部 URI 不作为插图来源下载。
 - 缺失的正文资源会被跳过；没有任何非空正文或图片标记的文档会导入失败。超过单图限制的图片会跳过，而不是导致整个文档失败。
 
 这是将 EPUB 转为应用内部章节、段落与插图的解析器，不是完整的 EPUB 排版引擎。CSS、脚本、原页面布局、注音和复杂交互不会完整保留；不要据此承诺 EPUB 规范的全面兼容。
+
+应用内下载导入会保存请求中的内容模式。`EpubChapter.kt` 将日中／中日模式与原站加在日文 `p` 上的 `opacity:0.4` 标记结合，识别相邻译文；显式 `lang`／`xml:lang` 的 ja/zh 对照也可识别。配对保留原始平铺段落及其下标，不跨插图、标题或块外正文。文件内已经包含的多份译文全部保留，不能根据当前在线引擎设置重新挑选来源不明的译文。
+
+旧 EPUB 在读取当前章时，从保留的原件恢复对照元数据和普通行内文本的空白。缺少下载模式时，仅用完整文件 SHA-256 匹配下载记录；不依赖用户可修改的书名。段落数量和顺序必须保持一致，正文只允许按同一 HTML 空白规则折叠，其他变化拒绝升级。升级将阅读位置和笔记锚点留在对应段落，清除不再适用的段内偏移。缺少原件、下载来源或可靠语言标记时保留可读正文及能恢复的辅文本样式，不按段落奇偶、汉字或文件名猜配对；普通 TXT/SRT 同样只显示一份正文。
 
 ### TXT
 
@@ -153,7 +157,7 @@ Worker 先获取任务锁，核对记录仍存在、未暂停、`workId` 一致�
 
 导入使用 `OpenDocument` / `OpenMultipleDocuments`。书籍和文件工具的导出使用 `CreateBookDocument`，按本次文件名设置 MIME：EPUB 为 `application/epub+zip`、TXT 为 `text/plain`、SRT 为 `application/x-subrip`、TSV 为 `text/tab-separated-values`，避免统一声明二进制导致文件提供器补上 `.bin`。选择完成后经 `ContentResolver.openOutputStream(uri, "wt")` 写入，覆盖已有文件时截断旧内容。当前流程不调用 `takePersistableUriPermission`：导入即时复制到私有存储，导出只在选择结果返回后使用目标 URI。
 
-书架“导出原文件”优先复制导入时保留的原件，保留原始字节及编码。旧数据没有原件时，在打开选择器前就将文件名和 MIME 改为 TXT，按章节输出标题与正文并过滤内部图片标记；这不是重建原 EPUB 的流程。原件/正文的选择与待导出 ID 一同通过 `rememberSaveable` 保存，页面重建后继续沿用；若已选择导出原件，但原件在选择期间丢失，则明确报错，不能把正文写进 `.epub`。下载导出则直接复制完整下载文件，同样保存待导出 ID 并在选择器返回后重新查找记录。
+书架“导出原文件”优先复制导入时保留的原件，保留原始字节及编码。默认导出名先移除名称末尾已有的原格式或目标格式后缀（含大小写和重复后缀），再添加一次目标扩展名。旧数据没有原件时，在打开选择器前就将文件名和 MIME 改为 TXT，按章节输出标题与正文并过滤内部图片标记；这不是重建原 EPUB 的流程。原件/正文的选择与待导出 ID 一同通过 `rememberSaveable` 保存，页面重建后继续沿用；若已选择导出原件，但原件在选择期间丢失，则明确报错，不能把正文写进 `.epub`。下载导出则直接复制完整下载文件，同样保存待导出 ID 并在选择器返回后重新查找记录。
 
 工具结果使用 `PendingExportFiles`：
 
@@ -203,6 +207,8 @@ Manifest 没有申请广泛的存储读写权限，也没有将应用注册成�
 | 测试 | 主要覆盖 |
 | --- | --- |
 | [DocumentToolsTest](../../app/src/test/java/cc/novelia/app/DocumentToolsTest.kt) | EPUB spine 顺序、插图顺序、压缩包路径逃逸、SRT 时间戳、编码、文本整理、片假名计数 |
+| [LocalEpubReadingTest](../../app/src/test/java/cc/novelia/app/LocalEpubReadingTest.kt) | 下载对照方向、四种语言模式、并列译文、插图、换行、保守识别和旧进度迁移 |
+| [LocalEpubReadingFlowTest](../../app/src/androidTest/java/cc/novelia/app/ui/reader/LocalEpubReadingFlowTest.kt) | 隔离书库内的下载去重、旧原件恢复、重启、缺失原件和实际排版不透明度 |
 | [FileImportRegressionTest](../../app/src/test/java/cc/novelia/app/FileImportRegressionTest.kt) | 磁盘导入图片流、输入和 XHTML 上限、异常 ZIP 大小声明、文本处理取消 |
 | [DownloadFilesTest](../../app/src/test/java/cc/novelia/app/DownloadFilesTest.kt) | 活跃临时文件保护、删除与完成提交竞争、旧任务提交拒绝、任务间互不阻塞 |
 | [PendingExportFilesTest](../../app/src/test/java/cc/novelia/app/PendingExportFilesTest.kt) | 仅凭已保存 ID 恢复导出、取消/失败清理、缺失文件、非法 ID、准备过程取消 |

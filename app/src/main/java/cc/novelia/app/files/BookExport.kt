@@ -13,13 +13,21 @@ internal fun bookFileMimeType(fileName: String): String = when(fileName.substrin
 
 internal data class LocalBookExport(val fileName: String, val original: Boolean)
 
+internal fun localBookExportFileName(name: String, sourceFormat: String, format: String): String {
+    var stem = name.trim().replace(Regex("[\\\\/:*?\"<>|\\p{Cntrl}]"), "_")
+    // 下载分卷名及用户重命名可能自带后缀；也修正旧版导出留下的重复后缀。
+    while (stem.substringAfterLast('.', "").lowercase() in setOf(sourceFormat, format)) {
+        stem = stem.substringBeforeLast('.').trimEnd()
+    }
+    return "${stem.take(120).trimEnd().ifBlank { "小说" }}.$format"
+}
+
 /** 在打开文件选择器前确定格式，不能把缓存正文作为 EPUB 原件导出。 */
 internal fun prepareLocalBookExport(store: LocalStore, id: String): LocalBookExport {
     val doc = store.documentIndex(id)
     val original = store.documentSource(id, doc.format).isFile
     val format = if(original) doc.format else "txt"
-    val name = doc.name.trim().replace(Regex("[\\\\/:*?\"<>|\\p{Cntrl}]"), "_").take(120).ifBlank { "小说" }
-    return LocalBookExport("$name.$format", original)
+    return LocalBookExport(localBookExportFileName(doc.name, doc.format, format), original)
 }
 
 /** original 随文件选择器保存；原件在选择期间丢失时明确报错，不改写为另一种格式。 */

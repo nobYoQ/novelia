@@ -16,6 +16,7 @@ import cc.novelia.app.data.library.readingDestination
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.Chapter
 import cc.novelia.app.data.model.LocalDocument
+import cc.novelia.app.data.model.toReaderChapter
 import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.data.model.TocItem
 import cc.novelia.app.data.model.WebDetail
@@ -132,7 +133,7 @@ private data class SearchScope(val toc: List<TocItem>, val document: LocalDocume
                             val found = withContext(Dispatchers.Default) {
                                 searchBookText(source.toc, term, settings, load = { id ->
                                     currentCoroutineContext().ensureActive()
-                                    if(ref.isLocal) withContext(Dispatchers.IO) { c.store.documentChapter(ref.id, id).let { Chapter(titleJp = it.title, paragraphs = it.paragraphs, youdaoParagraphs = it.paragraphs) } }
+                                    if(ref.isLocal) withContext(Dispatchers.IO) { c.store.documentChapter(ref.id, id).toReaderChapter() }
                                     else if(id in source.cachedIds) withContext(Dispatchers.IO) { c.store.cachedChapter(ref, id) } else null
                                 })
                             }

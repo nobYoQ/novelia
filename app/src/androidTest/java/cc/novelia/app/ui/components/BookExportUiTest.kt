@@ -78,9 +78,12 @@ class BookExportUiTest {
 
     @Test fun localTxtKeepsItsOriginalEncodingAfterScreenRestoration() = localRoundTrip("txt", txtBytes())
 
+    @Test fun localDownloadTitleWithExtensionExportsOneSuffixAndUnchangedBytes() =
+        localRoundTrip("epub", epubBytes(), "导出测试.epub.epub")
+
     @Test fun missingEpubOriginalExportsCacheAsTxtAndKeepsThatChoiceAfterRestoration() {
         val id = UUID.randomUUID().toString()
-        val doc = LocalDocument(id, "旧版书籍", "epub", listOf(
+        val doc = LocalDocument(id, "旧版书籍.epub", "epub", listOf(
             LocalChapter("one", "第一章", listOf("第一段正文。", "novelia-image:${"a".repeat(64)}")),
             LocalChapter("two", "第二章", listOf("第二段正文。")),
         ))
@@ -141,8 +144,8 @@ class BookExportUiTest {
         assertTrue(parseExport(target).chapters.flatMap { it.paragraphs }.contains("导出验证正文。"))
     }
 
-    private fun localRoundTrip(format: String, bytes: ByteArray) {
-        val doc = DocumentTools.parse("导出测试.$format", bytes)
+    private fun localRoundTrip(format: String, bytes: ByteArray, name: String = "导出测试") {
+        val doc = DocumentTools.parse("导出测试.$format", bytes).copy(name = name)
         saveLocal(doc)
         app.store.documentSource(doc.id, format).writeBytes(bytes)
         val picker = ExportPicker()
