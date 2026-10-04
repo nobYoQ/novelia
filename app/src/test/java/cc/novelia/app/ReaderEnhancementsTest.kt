@@ -11,8 +11,8 @@ import org.junit.Test
 class ReaderEnhancementsTest {
     @Test fun settingsCompareEffectiveThemesAndRevealIndependentDifferences() {
         val defaults = ReaderSettings()
-        val book = defaults.copy(fontSize = 24f, speechContinueChapters = false, speechNetworkContinuation = false)
-        assertEquals(setOf("字号", "连续听书", "联网续章"), readerSettingsDifferences(book, defaults).map { it.label }.toSet())
+        val book = defaults.copy(fontSize = 24f, speechContinueChapters = false, speechNetworkContinuation = false, tapPageTurn = true)
+        assertEquals(setOf("字号", "连续听书", "联网续章", "点击区域翻页"), readerSettingsDifferences(book, defaults).map { it.label }.toSet())
         assertEquals("24.0 sp", readerSettingsDifferences(book, defaults).first { it.label == "字号" }.book)
         assertTrue(readerSettingsDifferences(defaults.copy(monochrome = true), defaults.withTheme("monochrome")).isEmpty())
         assertTrue(readerSettingsDifferences(defaults, defaults).isEmpty())

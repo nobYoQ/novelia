@@ -35,7 +35,9 @@ import kotlinx.serialization.Serializable
     val speechContinueChapters: Boolean = true,
     val speechNetworkContinuation: Boolean = true,
     val showEInkScreenButtons: Boolean = true,
-    val hideStatusBar: Boolean = false
+    val hideStatusBar: Boolean = false,
+    // 点击区域独立于滑动手势和电子纸预设，旧设置保持整页点击工具栏的行为。
+    val tapPageTurn: Boolean = false
 ) {
     companion object {
         const val MIN_LINE_HEIGHT = .5f
@@ -50,7 +52,7 @@ import kotlinx.serialization.Serializable
     val staticPagination get() = paginationMode == "auto"
     fun withPaginationMode(selected: String): ReaderSettings {
         // 从滚动阅读首次切换分页时提供可用手势；之后切换模式保留已有选择。
-        val needsGestures = selected == "auto" && !staticPagination && !scrollPageTurn && !horizontalPageTurn && !showPageButtons
+        val needsGestures = selected == "auto" && !staticPagination && !scrollPageTurn && !horizontalPageTurn && !showPageButtons && !tapPageTurn
         return copy(paginationMode = selected, scrollPageTurn = scrollPageTurn || needsGestures,
             horizontalPageTurn = horizontalPageTurn || needsGestures)
     }

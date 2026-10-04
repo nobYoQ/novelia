@@ -49,5 +49,7 @@ import kotlinx.serialization.Serializable
     val updateSnapshots: Map<String, BookUpdateSnapshot> = emptyMap(),
     val bookUpdates: Map<String, BookUpdateInfo> = emptyMap(),
     val clipboardLinkHints: Boolean = true,
-    val keywordLimit: Int? = null
+    val keywordLimit: Int? = null,
+    // 本机只提示一次，不随单书设置或翻页模式切换重复展示。
+    val readerTapTutorialSeen: Boolean = false
 )

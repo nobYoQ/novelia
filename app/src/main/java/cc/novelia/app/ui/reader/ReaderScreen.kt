@@ -52,6 +52,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
@@ -364,8 +365,6 @@ import kotlinx.serialization.encodeToString
         // 搜索框和键盘也属于浮层，正文视口仅受系统栏和屏幕缺口约束。
         val readingInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
         val safeTop = readingInsets.getTop(density)
-        val volumeKeysActive = !preferences && !search && (!toc || wide) && !speechSheet && !bookSearch && !nextVolumePrompt && selected == null && note == null
-        LaunchedEffect(volumeKeysActive) { if(volumeKeysActive) runCatching { focus.requestFocus() } }
         // 恢复定位或重新分页期间的中间画面不能覆盖真实进度。两种模式统一保存正文下标 + 1，
         // 因为滚动列表的第 0 项是章标题；字符偏移支持重排，像素偏移用于恢复原滚动布局。
         fun savePosition() {
@@ -433,6 +432,12 @@ import kotlinx.serialization.encodeToString
         }
         var inlineChapterLoad by remember { mutableStateOf(false) }
         DisposableEffect(chapterLoad) { onDispose { chapterLoad.cancel() } }
+        val panelsClosed = !preferences && !search && (!toc || wide) && !speechSheet && !bookSearch && !nextVolumePrompt && selected == null && note == null
+        val showTapTutorial = settings.tapPageTurn && !local.readerTapTutorialSeen && panelsClosed && !leaving &&
+            !chapterLoad.loading && chapterLoad.error == null && initialAnchorRestored && !restoringAnchor && seekTarget == null &&
+            (!settings.staticPagination || eInk.ready)
+        val volumeKeysActive = panelsClosed && !showTapTutorial
+        LaunchedEffect(volumeKeysActive) { if(volumeKeysActive) runCatching { focus.requestFocus() } }
         fun openChapter(id: String, startAtEnd: Boolean = false, match: ReadingTextMatch? = null, inline: Boolean = false,
             restore: ReadingReturnPoint? = null) {
             if(leaving || id == chapterId) return
@@ -573,7 +578,7 @@ import kotlinx.serialization.encodeToString
                 } finally { if(generation == searchGeneration) finding = false }
             }
         }
-        BackHandler(!preferences && (!toc || wide) && !search && !speechSheet && !bookSearch && !nextVolumePrompt && selected == null && note == null) {
+        BackHandler(panelsClosed && !showTapTutorial) {
             if(chapterLoad.loading || chapterLoad.error != null) chapterLoad.cancel()
             else if(!leaving) { seekGeneration++; seekJob?.cancel(); seekTarget = null; savePosition(); leaving = true; c.back() }
         }
@@ -674,16 +679,19 @@ import kotlinx.serialization.encodeToString
                 true
             } else false
         }.focusable()) {
+            Box(Modifier.matchParentSize().semantics { if(showTapTutorial) hideFromAccessibility() }) {
             // 两种模式均使用固定正文视口；工具栏是同级浮层，
             // 不得给正文布局增加内边距或尺寸约束。
+            val bodyInputEnabled = volumeKeysActive && !leaving && !chapterLoad.loading && !restoringAnchor && initialAnchorRestored && seekTarget == null
+            val tapNavigation = rememberReaderTapNavigation(settings.tapPageTurn, bodyInputEnabled, { menu = !menu }, { page(it) })
             if(settings.staticPagination) EInkPage(paragraphs, settings, eInk,
                 Modifier.testTag("reader-page").align(Alignment.TopCenter).fillMaxHeight().windowInsetsPadding(readingInsets)
                     .padding(bottom = pageProgressHeight)
-                    .widthIn(max = settings.width.dp).fillMaxWidth().padding(horizontal = 24.dp)
-                    .padding(vertical = 16.dp),
+                    .widthIn(max = settings.width.dp).fillMaxWidth(),
                 imageModel = { it.imageUrl ?: it.localImageId?.takeIf { ref.isLocal }?.let { id -> c.store.documentImage(ref.id, id) } },
                 onToggleMenu = { menu = !menu }, onSelect = { selected = it }, onPage = { page(it) },
-                background = background, foreground = foreground, activeMatch = activeMatch)
+                background = background, foreground = foreground, activeMatch = activeMatch,
+                interactionEnabled = bodyInputEnabled, contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp))
             else LazyColumn(state = scroll, overscrollEffect = null, modifier = Modifier.testTag("reader-scroll").align(Alignment.TopCenter).fillMaxHeight()
                 .windowInsetsPadding(readingInsets).widthIn(max = settings.width.dp).fillMaxWidth()
                 .onSizeChanged { size ->
@@ -692,13 +700,15 @@ import kotlinx.serialization.encodeToString
                     readerViewportWidth = size.width
                 }
                 .clipToBounds()
+                .readerTapFeedback(tapNavigation, foreground, settings.eInkMode || eInkInteraction)
+                .readerTapNavigation(tapNavigation)
                 .readerChapterOverscroll(scroll, chapterPull, chapter.nextId != null && !leaving && !chapterLoad.loading && seekTarget == null && !restoringAnchor && volumeKeysActive) {
                     chapter.nextId?.let { openChapter(it, inline = true) }
                 }
                 .graphicsLayer { translationY = -chapterPullOffset }
                 , contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(settings.resolvedParagraphSpacing.dp)) {
                 item("title", contentType = "title") {
-                    Column(Modifier.fillMaxWidth().clickable(onClickLabel = "显示或收起阅读工具栏") { menu = !menu }) {
+                    Column(Modifier.fillMaxWidth().clickable(onClickLabel = "显示或收起阅读工具栏", onClick = tapNavigation::click)) {
                         Text(chapter.title, Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium, color = foreground)
                         Spacer(Modifier.height(12.dp))
                         Text(if(ref.isLocal) "本地小说" else (providers[ref.provider].orEmpty() + " · " + if(settings.mode == "jp") "日文原文" else "机翻阅读"), style = MaterialTheme.typography.labelMedium, color = foreground.copy(alpha = .65f))
@@ -712,8 +722,8 @@ import kotlinx.serialization.encodeToString
                     val image = remember(ref, paragraph.imageUrl, paragraph.localImageId) {
                         paragraph.imageUrl ?: paragraph.localImageId?.takeIf { ref.isLocal }?.let { c.store.documentImage(ref.id, it) }
                     }
-                    if(image != null) ReaderIllustration(image, foreground) { menu = !menu }
-                    else ReaderTextParagraph(paragraph, settings, layoutGeneration, foreground, { menu = !menu }, { selected = paragraph }, activeMatch?.takeIf { it.paragraph == paragraphIndex }) { part, lines ->
+                    if(image != null) ReaderIllustration(image, foreground, tapNavigation::click)
+                    else ReaderTextParagraph(paragraph, settings, layoutGeneration, foreground, tapNavigation::click, { selected = paragraph }, activeMatch?.takeIf { it.paragraph == paragraphIndex }) { part, lines ->
                         val existing = scrollLayouts[paragraph.index] ?: ParagraphScrollLayout()
                         if(existing.parts[part] != lines) scrollLayouts[paragraph.index] = existing.copy(parts = existing.parts + (part to lines))
                     }
@@ -801,7 +811,8 @@ import kotlinx.serialization.encodeToString
                                 }
                                 IconButton(onClick = { if(chapter.nextId != null) openChapter(chapter.nextId) else nextVolumePrompt = true }, enabled = (chapter.nextId != null || nextVolume != null) && !leaving && !chapterLoad.loading) { Icon(Icons.Outlined.SkipNext, if(chapter.nextId == null && nextVolume != null) "下一分卷" else "下一章") }
                             }
-                            Text(if(settings.staticPagination) "${if(settings.eInkMode) "电子纸" else "分页阅读"} · 点击正文收起工具栏" else "${if(cached) "本地内容 · " else ""}点击正文收起工具栏", Modifier.align(Alignment.CenterHorizontally).padding(bottom = 8.dp), style = MaterialTheme.typography.labelSmall, color = foreground)
+                            val toolbarHint = if(settings.tapPageTurn) "点击中间区域收起工具栏" else "点击正文收起工具栏"
+                            Text(if(settings.staticPagination) "${if(settings.eInkMode) "电子纸" else "分页阅读"} · $toolbarHint" else "${if(cached) "本地内容 · " else ""}$toolbarHint", Modifier.align(Alignment.CenterHorizontally).padding(bottom = 8.dp), style = MaterialTheme.typography.labelSmall, color = foreground)
                         }
                     }
                 }
@@ -833,6 +844,11 @@ import kotlinx.serialization.encodeToString
                         TextButton(onClick = chapterLoad::cancel) { Text(if(chapterLoad.loading) "取消加载" else "继续阅读") }
                     }
                 }
+            }
+            }
+            if(showTapTutorial) ReaderTapTutorial(settings.staticPagination, settings.eInkMode || eInkInteraction,
+                readingInsets, settings.width, pageProgressHeight, Modifier.matchParentSize()) {
+                c.store.update { it.copy(readerTapTutorialSeen = true) }
             }
         }
         }

@@ -184,6 +184,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
     onToggleMenu: () -> Unit, onSelect: (ReadingParagraph) -> Unit, onPage: (Int) -> Unit,
     background: Color = Color.White, foreground: Color = Color.Black,
     activeMatch: ReadingTextMatch? = null,
+    interactionEnabled: Boolean = true, contentPadding: PaddingValues = PaddingValues(0.dp),
 ) {
     val density = LocalDensity.current
     val context = LocalContext.current
@@ -200,15 +201,18 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
         } else pageShift.snapTo(0f)
     }
     val latestPage by rememberUpdatedState(onPage)
-    BoxWithConstraints(modifier.background(background).clipToBounds().pointerInput(settings.scrollPageTurn, settings.horizontalPageTurn) {
+    val tapNavigation = rememberReaderTapNavigation(settings.tapPageTurn, interactionEnabled && expandedImage == null, onToggleMenu, onPage)
+    BoxWithConstraints(modifier.background(background).clipToBounds()
+        .readerTapFeedback(tapNavigation, foreground, settings.eInkMode || LocalEInkMode.current)
+        .readerTapNavigation(tapNavigation).pointerInput(settings.scrollPageTurn, settings.horizontalPageTurn) {
         var x = 0f; var y = 0f
         detectDragGestures(onDragStart = { x = 0f; y = 0f }, onDragCancel = { x = 0f; y = 0f }, onDragEnd = {
             val horizontal = abs(x) > abs(y)
             val enabled = if(horizontal) settings.horizontalPageTurn else settings.scrollPageTurn
             val delta = if(horizontal) x else y
-            if (enabled && abs(delta) >= 40.dp.toPx()) latestPage(if (delta < 0) 1 else -1)
+            if (enabled && tapNavigation.canSwipe && abs(delta) >= 40.dp.toPx()) latestPage(if (delta < 0) 1 else -1)
         }) { change, amount -> change.consume(); x += amount.x; y += amount.y }
-    }) {
+    }.padding(contentPadding).clipToBounds()) {
         val width = constraints.maxWidth.coerceAtLeast(1)
         val height = constraints.maxHeight.coerceAtLeast(1)
         // 仅在文字样式、正文或视口变化时重新排版，翻页复用全部测量布局。
@@ -237,7 +241,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
                 // 再次翻页会取消上一轮副作用，并立即显示最新目标页。
                 translationX = if(animate) pageShift.value * 12.dp.toPx() else 0f
                 alpha = if(animate) 1f - abs(pageShift.value) * .12f else 1f
-            }.combinedClickable(onClickLabel = "显示或收起阅读工具栏", onClick = onToggleMenu)) {
+            }.combinedClickable(onClickLabel = "显示或收起阅读工具栏", onClick = tapNavigation::click)) {
                 page?.lines?.groupBy { it.paragraph }?.entries?.forEachIndexed { groupIndex, (index, lines) ->
                     if (groupIndex > 0) Spacer(Modifier.height(settings.resolvedParagraphSpacing.dp))
                     val paragraph = chapter.paragraphs[index]
@@ -246,7 +250,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
                         var retry by remember(model) { mutableIntStateOf(0) }
                         val request = remember(context, model, retry) { ImageRequest.Builder(context).data(model).setParameter("readerRetry", retry).crossfade(false).build() }
                         var failed by remember(model) { mutableStateOf(false) }
-                        Box(Modifier.fillMaxSize().combinedClickable(onClick = onToggleMenu, onLongClickLabel = "放大查看插图", onLongClick = { expandedImage = model }), contentAlignment = Alignment.Center) {
+                        Box(Modifier.fillMaxSize().combinedClickable(onClick = tapNavigation::click, onLongClickLabel = "放大查看插图", onLongClick = { expandedImage = model }), contentAlignment = Alignment.Center) {
                             AsyncImage(request, "小说插图", Modifier.fillMaxSize(), contentScale = ContentScale.Fit,
                                 onLoading = { failed = false }, onSuccess = { failed = false }, onError = { failed = true })
                             if(failed) Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -264,7 +268,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
                         val visibleText = layout.text.subSequence(lines.first().start, lines.last().end).toString()
                         Canvas(Modifier.fillMaxWidth().height(with(density) { (sliceHeight * drawScale).toDp() }).clipToBounds()
                             .semantics { text = AnnotatedString(visibleText) }
-                            .combinedClickable(onClickLabel = "显示或收起阅读工具栏", onClick = onToggleMenu,
+                            .combinedClickable(onClickLabel = "显示或收起阅读工具栏", onClick = tapNavigation::click,
                                 onLongClickLabel = "选择段落、分享或添加笔记", onLongClick = { onSelect(paragraph) })) {
                             drawIntoCanvas { canvas ->
                                 val native = canvas.nativeCanvas

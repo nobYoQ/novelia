@@ -42,6 +42,111 @@ class ReaderToolbarOverlayTest {
 
     @Test fun eInkScrollingKeepsToolbarHiddenAcrossChapters() = verifyChapterNavigation(ReaderSettings().withEInkMode(true).withPaginationMode("scroll"))
 
+    @Test fun firstTapEnableShowsDismissibleGuideOnceWithoutMovingTheReadingPosition() = withReader(
+        ReaderSettings(), tapTutorialSeen = false
+    ) { app, ref ->
+        compose.onNodeWithTag("reader-tap-tutorial").assertDoesNotExist()
+        compose.onNodeWithContentDescription("阅读设置").performClick()
+        compose.onNodeWithText("翻页").performClick()
+        compose.onNodeWithText("点击区域翻页").performScrollTo().performClick()
+        compose.onNodeWithTag("reader-tap-tutorial").assertDoesNotExist()
+        compose.onNodeWithText("关闭面板").performClick()
+        val guide = compose.onNodeWithTag("reader-tap-tutorial").assertIsDisplayed()
+        val before = app.store.state.value.positions.getValue(ref.key)
+        compose.onNodeWithTag("reader-tap-guide-previous").assertIsDisplayed()
+        compose.onNodeWithTag("reader-tap-guide-menu").assertIsDisplayed()
+        compose.onNodeWithTag("reader-tap-guide-next").assertIsDisplayed()
+        screenshot("reader-tap-tutorial-scroll")
+        guide.performTouchInput { click(Offset(width * .85f, centerY)); swipeUp() }
+        assertAnchorEquals(before, app.store.state.value.positions.getValue(ref.key))
+        assertFalse(app.store.state.value.readerTapTutorialSeen)
+        compose.onNodeWithContentDescription("关闭点击翻页引导").assertHeightIsAtLeast(48.dp).performTouchInput { click() }
+        guide.assertDoesNotExist()
+        assertAnchorEquals(before, app.store.state.value.positions.getValue(ref.key))
+        assertTrue(app.store.state.value.reader.tapPageTurn)
+        runBlocking { app.store.flush() }
+        assertTrue(LocalStore(compose.activity).state.value.readerTapTutorialSeen)
+        compose.runOnIdle { app.store.update { it.copy(reader = it.reader.copy(tapPageTurn = false)) } }
+        compose.runOnIdle { app.store.update { it.copy(reader = it.reader.copy(tapPageTurn = true)) } }
+        guide.assertDoesNotExist()
+        compose.onNodeWithContentDescription("返回").performClick()
+        compose.onNodeWithText("工具栏覆盖测试").performClick()
+        compose.waitUntil(15_000) { compose.onAllNodesWithTag("reader-scroll").fetchSemanticsNodes().isNotEmpty() }
+        guide.assertDoesNotExist()
+        compose.onNodeWithTag("reader-scroll").performTouchInput { click(Offset(width * .85f, centerY)) }
+        compose.waitUntil(10_000) { app.store.state.value.positions[ref.key]?.let { it.index > before.index || it.offset > before.offset } == true }
+    }
+
+    @Test fun eInkTapGuideDismissesOnBackWithoutLeavingOrRepaginating() = withReader(
+        ReaderSettings().withEInkMode(true).copy(tapPageTurn = true), tapTutorialSeen = false
+    ) { app, ref ->
+        compose.onNodeWithTag("reader-tap-tutorial").assertIsDisplayed()
+        val before = app.store.state.value.positions.getValue(ref.key)
+        val counter = pageCounter()
+        screenshot("reader-tap-tutorial-eink")
+        compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }
+        compose.onNodeWithTag("reader-tap-tutorial").assertDoesNotExist()
+        assertEquals(counter, pageCounter())
+        assertAnchorEquals(before, app.store.state.value.positions.getValue(ref.key))
+        assertTrue(app.store.state.value.readerTapTutorialSeen)
+        compose.onNodeWithTag("reader-page").performTouchInput { click(Offset(width * .85f, centerY)) }
+        assertEquals(2, pageNumbers().first)
+    }
+
+    @Test fun tapPreferencePersistsPerBookAndScrollsWithoutTogglingTheToolbar() = withReader(ReaderSettings()) { app, ref ->
+        compose.onNodeWithContentDescription("阅读设置").performClick()
+        compose.onNodeWithText("仅应用于这本书").performClick()
+        compose.onNodeWithText("翻页").performClick()
+        compose.onNodeWithText("点击区域翻页").performScrollTo().performClick()
+        screenshot("reader-tap-preference")
+        compose.onNodeWithText("关闭面板").performClick()
+        runBlocking { app.store.flush() }
+        val saved = LocalStore(compose.activity).state.value
+        assertFalse(saved.reader.tapPageTurn)
+        assertTrue(saved.bookSettings.getValue(ref.key).tapPageTurn)
+        val body = compose.onNodeWithTag("reader-scroll")
+        body.performTouchInput { click(center) }
+        assertToolbarHidden()
+        val before = app.store.state.value.positions.getValue(ref.key)
+        body.performTouchInput { click(Offset(width * .85f, centerY)) }
+        compose.waitUntil(10_000) { app.store.state.value.positions[ref.key]?.let { it.index > before.index || it.offset > before.offset } == true }
+        assertToolbarHidden()
+        body.performTouchInput { click(Offset(width * .15f, centerY)) }
+        compose.waitUntil(10_000) { app.store.state.value.positions[ref.key]?.let { it.index == before.index && it.offset == before.offset } == true }
+        body.performTouchInput { click(center) }
+        compose.onNodeWithContentDescription("阅读设置").assertIsDisplayed()
+        compose.onNodeWithContentDescription("阅读设置").performClick()
+        compose.onNodeWithText("翻页").performClick()
+        compose.onNodeWithText("点击区域翻页").performScrollTo().performClick()
+        compose.onNodeWithText("关闭面板").performClick()
+        body.performTouchInput { click(Offset(width * .85f, centerY)) }
+        assertToolbarHidden()
+        assertAnchorEquals(before, app.store.state.value.positions.getValue(ref.key))
+    }
+
+    @Test fun tapZonesCrossChapterBoundariesWhileKeepingTheToolbarHidden() = withReader(
+        ReaderSettings(paginationMode = "auto", tapPageTurn = true, showPageButtons = false),
+        listOf(LocalChapter("first", "第一章", listOf("短章正文。")), LocalChapter("second", "第二章", listOf("故事到这里结束。")))
+    ) { app, ref ->
+        compose.onNodeWithTag("reader-page").performTouchInput { click(center) }
+        assertToolbarHidden()
+        compose.onNodeWithTag("reader-page").performTouchInput { click(Offset(width * .85f, centerY)) }
+        waitForChapter(app, ref, "second")
+        assertToolbarHidden()
+        compose.onNodeWithTag("reader-page").performTouchInput { click(Offset(width * .15f, centerY)) }
+        waitForChapter(app, ref, "first")
+        assertEquals(pageNumbers().second, pageNumbers().first)
+        assertToolbarHidden()
+        compose.onNodeWithTag("reader-page").performTouchInput { click(center) }
+        compose.onNodeWithContentDescription("搜索本章").performClick()
+        compose.onNodeWithTag("reader-page").performTouchInput { click(Offset(width * .85f, centerY)) }
+        assertChapterUnchanged(app, ref, "first")
+        assertToolbarHidden()
+        compose.onNodeWithTag("reader-page").performTouchInput { click(center) }
+        compose.onNodeWithText("搜索本章段落").assertIsDisplayed()
+        compose.onNodeWithContentDescription("搜索本章").performClick()
+    }
+
     @Test fun readerControlsAndStatusBarRespectPerBookSettingsAcrossChaptersAndExit() = withReader(
         ReaderSettings().withEInkMode(true),
         listOf(
@@ -338,7 +443,7 @@ class ReaderToolbarOverlayTest {
     }
 
     @Test fun shortChaptersIgnoreShortReverseAndCancelledPullsAndStopAtTheLastChapter() = withReader(
-        ReaderSettings(paginationMode = "scroll", showPageButtons = false),
+        ReaderSettings(paginationMode = "scroll", showPageButtons = false, tapPageTurn = true),
         listOf(
             LocalChapter("first", "第一章 短章", listOf("短章正文。")),
             LocalChapter("second", "第二章 终章", listOf("故事到这里结束。"))
@@ -638,7 +743,7 @@ class ReaderToolbarOverlayTest {
         LocalChapter("first", "第一章 林间旅途", List(6) { paragraph ->
             (1..80).joinToString("") { "第${paragraph + 1}段第${it}句，旅人沿着森林小路前行，寻找远处的小镇。" }
         })
-    ), block: (NoveliaApplication, BookRef) -> Unit) {
+    ), tapTutorialSeen: Boolean = true, block: (NoveliaApplication, BookRef) -> Unit) {
         compose.waitUntil(15_000) { compose.onAllNodesWithText("本地文件").fetchSemanticsNodes().isNotEmpty() }
         val app = compose.activity.application as NoveliaApplication
         val previous = app.store.state.value
@@ -646,7 +751,7 @@ class ReaderToolbarOverlayTest {
         try {
             compose.runOnIdle {
                 app.store.update { it.copy(reader = settings, reducedMotion = false, bookSettings = it.bookSettings - ref.key,
-                    positions = it.positions - ref.key, historyPaused = false) }
+                    positions = it.positions - ref.key, historyPaused = false, readerTapTutorialSeen = tapTutorialSeen) }
                 app.store.saveDocument(LocalDocument(ref.id, "工具栏覆盖测试", "txt", chapters))
                 app.store.saveBook(BookCard(ref, "工具栏覆盖测试"))
             }

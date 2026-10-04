@@ -9,6 +9,32 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ReaderPreferencesTest {
+    @Test fun tapTutorialAcknowledgementMigratesAndPersistsOutsideBookPreferences() {
+        assertFalse(appJson.decodeFromString<LibraryState>("{}").readerTapTutorialSeen)
+        val library = LibraryState(readerTapTutorialSeen = true, reader = ReaderSettings(tapPageTurn = true),
+            bookSettings = mapOf("local/book" to ReaderSettings(tapPageTurn = false)))
+        val restored = appJson.decodeFromString<LibraryState>(appJson.encodeToString(library))
+        assertEquals(library, restored)
+        assertTrue(restored.copy(reader = restored.reader.withEInkMode(true).copy(tapPageTurn = false), bookSettings = emptyMap()).readerTapTutorialSeen)
+    }
+
+    @Test fun tapPageTurnDefaultsOffAndSurvivesModesBackupsAndBookOverrides() {
+        assertFalse(appJson.decodeFromString<ReaderSettings>("{}").tapPageTurn)
+        assertFalse(appJson.decodeFromString<ReaderSettings>("""{"eInkMode":true}""").tapPageTurn)
+        val settings = ReaderSettings(tapPageTurn = true)
+        val paged = settings.withPaginationMode("auto")
+        assertTrue(paged.tapPageTurn)
+        assertFalse(paged.scrollPageTurn)
+        assertFalse(paged.horizontalPageTurn)
+        assertTrue(paged.withPaginationMode("scroll").tapPageTurn)
+        assertTrue(settings.withEInkMode(true).withEInkMode(false).tapPageTurn)
+        assertFalse(settings.withEInkMode(true).copy(tapPageTurn = false).withEInkMode(false).tapPageTurn)
+        val backup = SettingsBackup(reader = settings)
+        assertEquals(backup, appJson.decodeFromString<SettingsBackup>(appJson.encodeToString(backup)))
+        val library = LibraryState(reader = ReaderSettings(), bookSettings = mapOf("local/book" to settings))
+        assertEquals(library, appJson.decodeFromString<LibraryState>(appJson.encodeToString(library)))
+    }
+
     @Test fun hiddenStatusBarAndScreenButtonsRemainIndependentAcrossProfilesAndBackups() {
         val legacy = appJson.decodeFromString<ReaderSettings>("{}")
         assertTrue(legacy.showEInkScreenButtons)

@@ -169,6 +169,16 @@ UI 在 `Dispatchers.Default` 执行正文准备，依赖章节和语言/引擎/�
 
 章末原有提示直接承担反馈：上拉时文字由淡变亮，两侧横线向外延伸；达到阈值显示“松手加载下一章”，释放后原位显示加载状态，不再另加进度面板。加载失败保留当前章并显示重试/继续阅读操作。电子纸只切换普通/就绪状态，不连续平移正文或绘制渐变；减少动效关闭回弹过渡。
 
+### 点击区域翻页
+
+“阅读偏好 → 翻页 → 正文翻页 → 点击区域翻页”默认关闭，支持全局默认、单书覆盖和备份；切换分页模式或电子纸预设时保留选择。开启后，正文视口（含留白）的左侧三分之一向前翻，右侧三分之一向后翻，中间显示或收起工具栏；自动分页复用原有跨章逻辑，连续滚动每次移动视口高度约 85%，章末继续使用上拉或章末按钮。关闭后，正文单击继续显示或收起工具栏。
+
+首次开启后，在关闭设置面板、正文就绪时展示区域引导；右上角叉号、“开始阅读”或系统返回键均可关闭。引导不改变正文排版，关闭动作不穿透为翻页，确认状态保存在本机书库中，切书、重启或重新开启开关不会重复提示。区域按实际正文宽度划分，短视口采用紧凑说明。
+
+确认单击后，对命中的三分之一区域显示约 280 ms 的淡出高亮与轻微边缘阴影；不延迟翻页，也不额外捕获输入。关闭开关后清除反馈。减少动效时用短暂静态高亮，电子纸用约 180 ms 的细边框，避免正文连续闪动。长按、滑动、取消、多指和正文内控件操作不会触发区域反馈。
+
+[ReaderTapNavigation.kt](../../app/src/main/java/cc/novelia/app/ui/reader/ReaderTapNavigation.kt) 观察指针位置，但由原有点击控件确认单击，不消费拖动事件。超过移动阈值、长按、多指、系统取消或操作期间切换开关时不触发点击翻页；方向手势关闭后，滑动也不能被当作点击。段落选择、插图长按放大、章末上拉和控件操作保留原行为，键盘及无障碍点击保留工具栏入口。宽屏按正文视口分区，不包含目录侧栏。
+
 ### 拖动本章进度
 
 底部工具栏展开时显示可拖动的本章进度条，收起工具栏不影响正文视口和页数。“阅读偏好 → 翻页 → 工具栏 → 阅读进度条”可开关，默认开启，支持全局默认与单书覆盖，电子纸预设切换不会重置此选择。关闭进度条不隐藏原有翻页按钮或分页页码。连续滚动按展示字符长度定位到段内行（含双语、缩进及并列引擎标签），插图使用固定权重；百分比为章内位置估计，不是全书百分比。自动分页直接选择已测量的页索引，并显示目标页/总页数。进度两端只定位本章开头和末尾，不触发跨章加载。
@@ -243,6 +253,7 @@ UI 在 `Dispatchers.Default` 执行正文准备，依赖章节和语言/引擎/�
 | 偏好迁移、电子纸切换 | [ReaderPreferencesTest](../../app/src/test/java/cc/novelia/app/ReaderPreferencesTest.kt)、[EInkReaderFlowTest](../../app/src/androidTest/java/cc/novelia/app/ui/reader/EInkReaderFlowTest.kt) |
 | 切章取消/失败/重试 | [ReaderChapterLoadTest](../../app/src/test/java/cc/novelia/app/ReaderChapterLoadTest.kt) |
 | 章末上拉 | [ReaderChapterOverscrollTest](../../app/src/test/java/cc/novelia/app/ReaderChapterOverscrollTest.kt) |
+| 点击区域、首次引导和手势/反馈兼容 | [ReaderTapNavigationTest](../../app/src/androidTest/java/cc/novelia/app/ui/reader/ReaderTapNavigationTest.kt)、[ReaderTapFeedbackTest](../../app/src/androidTest/java/cc/novelia/app/ui/reader/ReaderTapFeedbackTest.kt)、[ReaderToolbarOverlayTest](../../app/src/androidTest/java/cc/novelia/app/ui/reader/ReaderToolbarOverlayTest.kt) |
 | 分页、锚点、翻页键 | [StaticPaginationTest](../../app/src/test/java/cc/novelia/app/StaticPaginationTest.kt)、[ReaderExactSearchTest](../../app/src/test/java/cc/novelia/app/ReaderExactSearchTest.kt) |
 | 精确搜索、边界/取消、朗读队列 | [ReaderExactSearchTest](../../app/src/test/java/cc/novelia/app/ReaderExactSearchTest.kt)、[ReaderSafetyTest](../../app/src/test/java/cc/novelia/app/ReaderSafetyTest.kt) |
 | 阅读连续性和分卷 | [ReadingContinuityTest](../../app/src/test/java/cc/novelia/app/ReadingContinuityTest.kt)、[ReadingContinuityUiTest](../../app/src/androidTest/java/cc/novelia/app/ui/reader/ReadingContinuityUiTest.kt) |

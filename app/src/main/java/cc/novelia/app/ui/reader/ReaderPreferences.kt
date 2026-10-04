@@ -105,6 +105,8 @@ import kotlin.math.roundToInt
                         ChoiceRow("分页模式", listOf("连续滚动", "自动分页"), if(value.staticPagination) 1 else 0, defaultSelected = defaults?.let { if(it.staticPagination) 1 else 0 }) { onChange(value.withPaginationMode(if(it == 1) "auto" else "scroll")) }
                         Text(if(value.staticPagination) "按屏幕大小提前排成独立页面，每次翻动一页。" else "整章连续排列，上下滑动浏览，不提前拆成独立页面。",
                             Modifier.padding(horizontal = 20.dp, vertical = 4.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        TogglePreference("点击区域翻页", if(value.staticPagination) "点击正文左侧三分之一翻到上一页，右侧三分之一翻到下一页；中间显示或收起工具栏" else "点击正文左侧三分之一翻到上一屏，右侧三分之一翻到下一屏；中间显示或收起工具栏",
+                            value.tapPageTurn, defaultValue = defaults?.tapPageTurn) { onChange(value.copy(tapPageTurn = it)) }
                         if(value.staticPagination) {
                             TogglePreference("滚动翻页", "向上滑动下一页，向下滑动上一页", value.scrollPageTurn, defaultValue = defaults?.scrollPageTurn) { onChange(value.copy(scrollPageTurn = it)) }
                             TogglePreference("左右翻页", "向左滑动下一页，向右滑动上一页", value.horizontalPageTurn, defaultValue = defaults?.horizontalPageTurn) { onChange(value.copy(horizontalPageTurn = it)) }

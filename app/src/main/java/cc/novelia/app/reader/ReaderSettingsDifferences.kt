@@ -16,7 +16,7 @@ internal fun readerSettingsDifferences(book: ReaderSettings, defaults: ReaderSet
         "辅文本不透明度" to "${(secondaryAlpha * 100).toInt()}%", "辅文本下划线" to underline.label(),
         "屏幕常亮" to keepScreenOn.label(), "音量键翻页" to volumeKeys.label(), "电子纸阅读模式" to eInkMode.label(),
         "分页模式" to if(staticPagination) "自动分页" else "连续滚动", "滚动翻页" to scrollPageTurn.label(),
-        "左右翻页" to horizontalPageTurn.label(), "翻页按钮" to showPageButtons.label(),
+        "左右翻页" to horizontalPageTurn.label(), "点击区域翻页" to tapPageTurn.label(), "翻页按钮" to showPageButtons.label(),
         "章节末尾按钮" to showScrollPageButtons.label(), "阅读进度条" to showProgressBar.label(),
         "列表与面板翻屏按钮" to showEInkScreenButtons.label(), "阅读时隐藏状态栏" to hideStatusBar.label(),
         "屏幕亮度" to if(brightness < 0) "跟随系统" else "${(brightness * 100).toInt()}%",
