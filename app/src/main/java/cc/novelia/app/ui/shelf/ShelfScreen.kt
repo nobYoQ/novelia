@@ -30,7 +30,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -67,7 +67,6 @@ import cc.novelia.app.ui.components.MenuRow
 import cc.novelia.app.ui.components.Screen
 import cc.novelia.app.ui.components.TextPrompt
 import cc.novelia.app.ui.components.rememberDebouncedQuery
-import cc.novelia.app.ui.components.rememberCloudFilterCollapse
 import cc.novelia.app.ui.feedback.MidoriSticker
 import cc.novelia.app.ui.markdown.format
 import cc.novelia.app.ui.navigation.AppController
@@ -159,6 +158,9 @@ import kotlinx.coroutines.withContext
                 tabState.SaveableStateProvider(tab) {
                     if(tab == 2) CloudShelf(c, onOpenBook, selectedBookKey) else {
                         val listState = rememberLazyListState()
+                        var controlsExpanded by rememberSaveable { mutableStateOf(false) }
+                        val focus = LocalFocusManager.current
+                        val collapseControls = { controlsExpanded = false; filtersExpanded = false; focus.clearFocus() }
                         val canReorder = tab == 0 && !managing && query.isBlank() && settledQuery.isBlank() && readingStatus == "全部"
                         val reorder = rememberVolumeReorderState(listState, rows, canReorder) { parent, keys ->
                             c.store.update { current ->
@@ -168,21 +170,49 @@ import kotlinx.coroutines.withContext
                                 else current.withWenkuVolumeOrder(parent, keys.filter { it in siblings } + siblings.filter { it !in keys })
                             }
                         }
-                        val collapse = rememberCloudFilterCollapse(true, filtersExpanded) { filtersExpanded = false }
                         BoxWithConstraints(Modifier.fillMaxSize()) {
                             val filterHeight = maxHeight * .55f
                             Column(Modifier.fillMaxSize()) {
                                 LocalShelfFilters(tab == 1, if(tab == 0) bookType else fileType, { if(tab == 0) bookType = it else fileType = it },
                                     state.folders, folder, { folder = it }, sort, { sort = it }, query, { query = it }, readingStatus, { readingStatus = it },
                                     filtersExpanded, { filtersExpanded = it }, filterHeight, { createFolder = true }, { renameFolder = true }, { deleteFolder = true },
-                                    characters = characterFilter, onCharacters = { characterFilter = it })
-                                if(filterCharacters) Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    val unknown = countCandidates.count { characterCounts.count(it) == null }
-                                    Text(if(characterCounts.loading) "正在补全字数…" else "$unknown 本字数未知", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-                                    if(unknown > 0) TextButton(onClick = { characterCounts.loadMore(countCandidates) }, enabled = !characterCounts.loading) { Text("补全字数") }
+                                    characters = characterFilter, onCharacters = { characterFilter = it },
+                                    controlsExpanded = controlsExpanded, onToggleControls = { if(controlsExpanded) collapseControls() else controlsExpanded = true }) {
+                                    if(filterCharacters) Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        val unknown = countCandidates.count { characterCounts.count(it) == null }
+                                        Text(if(characterCounts.loading) "正在补全字数…" else "$unknown 本字数未知", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                                        if(unknown > 0) TextButton(onClick = { characterCounts.loadMore(countCandidates) }, enabled = !characterCounts.loading) { Text("补全字数") }
+                                    }
                                 }
-                                AppLazyColumn(modifier = Modifier.weight(1f).nestedScroll(collapse), listModifier = Modifier.testTag("shelf-books"), state = listState,
-                                    onPageTurn = { if(it > 0) filtersExpanded = false }) {
+                                val volumeCount = groups.sumOf { it.volumes.size }
+                                ShelfBatchHeader(if(managing) "已选 ${selection.size} 本" else "${groups.size} 本" + if(volumeCount > 0) " · $volumeCount 分卷" else "",
+                                    managing, { managing = !managing; selection = emptySet(); filtersExpanded = false; focus.clearFocus() }, "local",
+                                    manageEnabled = managing || books.isNotEmpty())
+                                ShelfControlReveal(managing) { FlowRow(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    TextButton(onClick = { selection = books.map { it.book.ref.key }.toSet() }, enabled = managing) { Text("全选") }
+                                    FilledTonalButton(onClick = { bulkMove = true }, enabled = managing && selection.isNotEmpty()) { Text("移动 ${selection.size} 本") }
+                                    FilledTonalButton(onClick = { bulkStatus = true }, enabled = managing && selection.isNotEmpty()) { Text("修改阅读状态") }
+                                    TextButton(onClick = {
+                                        val chosen = downloadableSelection
+                                        queueingDownloads = true
+                                        c.action {
+                                            try {
+                                                val invalidFilenameChars = Regex("[\\/\\\\:*?\"<>|]")
+                                                val reader = state.reader
+                                                chosen.forEach { saved ->
+                                                    val id = java.util.UUID.randomUUID().toString()
+                                                    val filename = saved.book.title.replace(invalidFilenameChars, "_").take(120) + ".epub"
+                                                    val url = c.api.downloadUrl(saved.book.ref, null, reader.mode, reader.engines, reader.parallel, "epub", filename)
+                                                    cc.novelia.app.files.DownloadWorker.enqueue(c.app, DownloadEntry(id, saved.book.title, "$id-$filename", url))
+                                                }
+                                                c.message("已开始下载 ${chosen.size} 本网络小说", actionLabel = "查看下载") { c.go("downloads", replaceTop = true) }
+                                                managing = false
+                                                selection = emptySet()
+                                            } finally { queueingDownloads = false }
+                                        }
+                                    }, enabled = managing && !queueingDownloads && downloadableSelection.isNotEmpty()) { Text(if(queueingDownloads) "正在加入…" else "下载") }
+                                } }
+                                AppLazyColumn(modifier = Modifier.weight(1f), listModifier = Modifier.testTag("shelf-books"), state = listState) {
                                     val importedBooks = importedKeys.mapNotNull { key -> state.books.firstOrNull { it.book.ref.key == key } }
                                     if(importedBooks.isNotEmpty()) item(key = "imported-books", contentType = "hero") {
                                         Card(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
@@ -210,35 +240,6 @@ import kotlinx.coroutines.withContext
                                             }
                                         }
                                     }
-                                    item(key = "sort", contentType = "controls") { Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        val volumeCount = groups.sumOf { it.volumes.size }
-                                        Text("${groups.size} 本" + if(volumeCount > 0) " · $volumeCount 分卷" else "", Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelLarge)
-                                        IconButton(onClick = { managing = !managing; selection = emptySet() }) { MotionContent(managing, animateInitial = false) { Icon(if(managing) Icons.Outlined.Check else Icons.Outlined.Checklist, if(managing) "完成整理" else "批量整理") } }
-                                    } }
-                                    item(key = "bulk-actions", contentType = "controls") { ShelfControlReveal(managing) { FlowRow(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        TextButton(onClick = { selection = books.map { it.book.ref.key }.toSet() }, enabled = managing) { Text("全选") }
-                                        FilledTonalButton(onClick = { bulkMove = true }, enabled = managing && selection.isNotEmpty()) { Text("移动 ${selection.size} 本") }
-                                        FilledTonalButton(onClick = { bulkStatus = true }, enabled = managing && selection.isNotEmpty()) { Text("修改阅读状态") }
-                                        TextButton(onClick = {
-                                            val chosen = downloadableSelection
-                                            queueingDownloads = true
-                                            c.action {
-                                                try {
-                                                    val invalidFilenameChars = Regex("[\\/\\\\:*?\"<>|]")
-                                                    val reader = state.reader
-                                                    chosen.forEach { saved ->
-                                                        val id = java.util.UUID.randomUUID().toString()
-                                                        val filename = saved.book.title.replace(invalidFilenameChars, "_").take(120) + ".epub"
-                                                        val url = c.api.downloadUrl(saved.book.ref, null, reader.mode, reader.engines, reader.parallel, "epub", filename)
-                                                        cc.novelia.app.files.DownloadWorker.enqueue(c.app, DownloadEntry(id, saved.book.title, "$id-$filename", url))
-                                                    }
-                                                    c.message("已开始下载 ${chosen.size} 本网络小说", actionLabel = "查看下载") { c.go("downloads", replaceTop = true) }
-                                                    managing = false
-                                                    selection = emptySet()
-                                                } finally { queueingDownloads = false }
-                                            }
-                                        }, enabled = managing && !queueingDownloads && downloadableSelection.isNotEmpty()) { Text(if(queueingDownloads) "正在加入…" else "下载") }
-                                    } } }
                                     if(books.isEmpty()) item {
                                         if(query.isNotBlank() || folder != "全部" || readingStatus != "全部" || (if(tab == 0) bookType else fileType) != ShelfBookType.All)
                                             EmptyState("没有符合条件的小说", if(filterCharacters) "可以放宽字数范围、包含未知作品或继续补全字数。" else "试试其他书名、作者、类型或阅读状态。", action = "清除筛选", onAction = { query = ""; folder = "全部"; readingStatus = "全部"; bookType = ShelfBookType.All; fileType = ShelfBookType.All; characterFilter = CharacterCountFilter() })
@@ -279,7 +280,7 @@ import kotlinx.coroutines.withContext
                                             .semantics { if(!managing && saved.book.ref.key == selectedBookKey) stateDescription = "已选中" }) {
                                             BookRow(if(filterCharacters) saved.book.copy(totalCharacters = characterCounts.count(saved.book)) else saved.book, onOpen,
                                                 status = bookRowStatus(saved.book, saved, state.positions[saved.book.ref.key], state.bookUpdates[saved.book.ref.key], profile?.username),
-                                                showCharacterCount = filterCharacters, trailing = trailing)
+                                                showCharacterCount = filterCharacters, compactMetadata = tab == 0, trailing = trailing)
                                             if(saved.book.ref.isWenku && !managing) {
                                                 val rotation by animateFloatAsState(if(row.expanded) 180f else 0f, tween(if(reducedMotion) 0 else AppMotion.Standard), label = "wenku-volume-disclosure")
                                                 TextButton(onClick = {

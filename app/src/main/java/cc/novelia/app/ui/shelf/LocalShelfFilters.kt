@@ -30,6 +30,8 @@ import cc.novelia.app.ui.components.CollapsibleCloudFilters
     status: String, onStatus: (String) -> Unit, expanded: Boolean, onExpanded: (Boolean) -> Unit,
     maxHeight: Dp, onCreateFolder: () -> Unit, onRenameFolder: () -> Unit, onDeleteFolder: () -> Unit,
     characters: CharacterCountFilter = CharacterCountFilter(), onCharacters: (CharacterCountFilter) -> Unit = {},
+    controlsExpanded: Boolean = true, onToggleControls: () -> Unit = {},
+    trailingContent: @Composable () -> Unit = {},
 ) {
     val focus = LocalFocusManager.current
     val types = if(localFiles) listOf(ShelfBookType.All, ShelfBookType.Wenku, ShelfBookType.Local)
@@ -42,29 +44,35 @@ import cc.novelia.app.ui.components.CollapsibleCloudFilters
         if(!localFiles && type == ShelfBookType.Web && characters.active) add(characters.summary())
     }
     val summary = active.joinToString(" · ")
-    ShelfKindSwitch(labels, types.indexOf(type).coerceAtLeast(0), "local-novel-kind") { onType(types[it]) }
-    ShelfToolbar(choices, choices.firstOrNull { it.id == folder }, onFolder, sort.toString(), { onSort(it.toInt()) },
-        listOf("0" to "最近阅读", "1" to "添加时间", "2" to "书名排序"), active.size, expanded,
-        { onExpanded(!expanded); focus.clearFocus() }, "local") { close ->
-        DropdownMenuItem({ Text("新建收藏夹") }, { close(); onCreateFolder() }, leadingIcon = { Icon(Icons.Outlined.Add, null) })
-        if(folder != "全部" && folder != "默认收藏") {
-            DropdownMenuItem({ Text("重命名收藏夹") }, { close(); onRenameFolder() })
-            DropdownMenuItem({ Text("删除收藏夹") }, { close(); onDeleteFolder() })
+    val context = listOf(labels[types.indexOf(type).coerceAtLeast(0)],
+        choices.firstOrNull { it.id == folder }?.title ?: folder)
+    ShelfControlsPanel((context + active + listOf("最近阅读", "添加时间", "书名排序")[sort.coerceIn(0, 2)])
+        .joinToString(" · "), controlsExpanded, onToggleControls, "local") {
+        ShelfKindSwitch(labels, types.indexOf(type).coerceAtLeast(0), "local-novel-kind") { onType(types[it]) }
+        ShelfToolbar(choices, choices.firstOrNull { it.id == folder }, onFolder, sort.toString(), { onSort(it.toInt()) },
+            listOf("0" to "最近阅读", "1" to "添加时间", "2" to "书名排序"), active.size, expanded,
+            { onExpanded(!expanded); focus.clearFocus() }, "local") { close ->
+            DropdownMenuItem({ Text("新建收藏夹") }, { close(); onCreateFolder() }, leadingIcon = { Icon(Icons.Outlined.Add, null) })
+            if(folder != "全部" && folder != "默认收藏") {
+                DropdownMenuItem({ Text("重命名收藏夹") }, { close(); onRenameFolder() })
+                DropdownMenuItem({ Text("删除收藏夹") }, { close(); onDeleteFolder() })
+            }
         }
-    }
-    if(active.isNotEmpty()) Text(summary, Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 8.dp)
-        .testTag("local-filter-summary"), maxLines = 2, overflow = TextOverflow.Ellipsis,
-        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-    CollapsibleCloudFilters(expanded, { onExpanded(!expanded) }, summary, maxHeight, showHeader = false) {
-        OutlinedTextField(query, onQuery, label = { Text("搜索书名或作者") }, singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { focus.clearFocus(); onExpanded(false) }),
-            trailingIcon = { IconButton(onClick = { focus.clearFocus(); onExpanded(false) }) { Icon(Icons.Outlined.Search, "搜索本地书架") } },
-            modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 12.dp))
-        ChoiceRow("阅读状态", listOf("全部") + readingStatuses, (listOf("全部") + readingStatuses).indexOf(status)) { onStatus((listOf("全部") + readingStatuses)[it]) }
-        if(!localFiles && type == ShelfBookType.Web) CharacterCountFilterFields(characters, onCharacters)
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = { onQuery(""); onStatus("全部"); onCharacters(CharacterCountFilter()) }) { Text("重置筛选") }
-            TextButton(onClick = { focus.clearFocus(); onExpanded(false) }) { Text("完成") }
+        if(active.isNotEmpty()) Text(summary, Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 8.dp)
+            .testTag("local-filter-summary"), maxLines = 2, overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+        CollapsibleCloudFilters(expanded, { onExpanded(!expanded) }, summary, maxHeight, showHeader = false) {
+            OutlinedTextField(query, onQuery, label = { Text("搜索书名或作者") }, singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { focus.clearFocus(); onExpanded(false) }),
+                trailingIcon = { IconButton(onClick = { focus.clearFocus(); onExpanded(false) }) { Icon(Icons.Outlined.Search, "搜索本地书架") } },
+                modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 12.dp))
+            ChoiceRow("阅读状态", listOf("全部") + readingStatuses, (listOf("全部") + readingStatuses).indexOf(status)) { onStatus((listOf("全部") + readingStatuses)[it]) }
+            if(!localFiles && type == ShelfBookType.Web) CharacterCountFilterFields(characters, onCharacters)
+            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { onQuery(""); onStatus("全部"); onCharacters(CharacterCountFilter()) }) { Text("重置筛选") }
+                TextButton(onClick = { focus.clearFocus(); onExpanded(false) }) { Text("完成") }
+            }
         }
+        trailingContent()
     }
 }

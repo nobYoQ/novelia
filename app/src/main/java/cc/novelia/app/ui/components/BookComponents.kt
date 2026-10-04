@@ -84,7 +84,8 @@ import coil.decode.DataSource
         }
     }
 }
-@Composable internal fun BookRow(book: BookCard, onClick: () -> Unit, modifier: Modifier = Modifier, status: BookRowStatus? = null, showReadingProgress: Boolean = true, showBookMetadata: Boolean = true, showCharacterCount: Boolean = false, trailing: @Composable (() -> Unit)? = null) {
+@OptIn(ExperimentalLayoutApi::class)
+@Composable internal fun BookRow(book: BookCard, onClick: () -> Unit, modifier: Modifier = Modifier, status: BookRowStatus? = null, showReadingProgress: Boolean = true, showBookMetadata: Boolean = true, showCharacterCount: Boolean = false, compactMetadata: Boolean = false, trailing: @Composable (() -> Unit)? = null) {
     val presentation = LocalBookListPresentation.current
     val saved = presentation.books[book.ref.key]
     val reading = status ?: bookRowStatus(book, saved, presentation.positions[book.ref.key], presentation.updates[book.ref.key], presentation.account)
@@ -92,26 +93,43 @@ import coil.decode.DataSource
     val updated = bookUpdateDate(book.updateAt ?: saved?.book?.updateAt?.takeIf { showBookMetadata })
     val subtitle = book.subtitle.ifBlank { providers[book.ref.provider] ?: "本地小说" }
     val characters = book.totalCharacters ?: saved?.book?.totalCharacters
+    val novelType = book.novelType?.takeIf(String::isNotBlank) ?: saved?.book?.novelType?.takeIf(String::isNotBlank)
+    val metadata = when {
+        book.ref.isWenku -> if(book.total > 0) "${book.total} 卷" else ""
+        novelType != null -> "$novelType · ${book.total} 章"
+        book.total > 0 -> "${book.total} 章"
+        else -> ""
+    }
+    // 列表摘要可能以状态和章节数作为副标题，详情摘要则以作者为副标题。
+    val compactSubtitle = book.authors.ifEmpty { saved?.book?.authors.orEmpty() }.filter(String::isNotBlank).distinct()
+        .joinToString("、").ifBlank {
+            subtitle.takeUnless { it == metadata || it == "${book.novelType.orEmpty()} · ${book.total} 章" }.orEmpty()
+        }
     val fontScale = LocalDensity.current.fontScale
-    Row(modifier.fillMaxWidth().motionClickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier.fillMaxWidth().motionClickable(onClick = onClick).padding(horizontal = 20.dp, vertical = if(compactMetadata) 10.dp else 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(if(compactMetadata) 12.dp else 16.dp), verticalAlignment = Alignment.CenterVertically) {
         BookCover(book)
         BoxWithConstraints(Modifier.weight(1f)) {
             val showDate = showBookMetadata && updated != null
             // 分屏列表远窄于整屏，日期应换行显示而非直接隐藏。
-            val inlineDate = showDate && maxWidth >= (320 * fontScale).dp
+            val inlineDate = !compactMetadata && showDate && maxWidth >= (320 * fontScale).dp
             val updateLabel = reading.updateLabel.takeIf { showBookMetadata }
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(if(compactMetadata) 4.dp else 8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(book.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        if(showBookMetadata && (characters != null || showCharacterCount)) Text(characters?.let(::formatApproximateCharacters) ?: "字数未知",
+                        val byline = if(compactMetadata) compactSubtitle else subtitle
+                        if(byline.isNotBlank()) Text(byline, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if(!compactMetadata && showBookMetadata && (characters != null || showCharacterCount)) Text(characters?.let(::formatApproximateCharacters) ?: "字数未知",
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     trailing?.invoke()
                 }
-                if(showDate && !inlineDate) BookUpdateDateLabel(updated!!, book.ref.key)
+                if(compactMetadata && showBookMetadata && (metadata.isNotBlank() || showDate)) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if(metadata.isNotBlank()) Text(metadata, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if(showDate) BookUpdateDateLabel(updated!!, book.ref.key, compact = true)
+                }
+                else if(showDate && !inlineDate) BookUpdateDateLabel(updated!!, book.ref.key)
                 if(showProgress || inlineDate || updateLabel != null) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     if(showProgress) Text(reading.progressLabel, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     else Spacer(Modifier.weight(1f))
@@ -125,8 +143,8 @@ import coil.decode.DataSource
     }
 }
 
-@Composable private fun BookUpdateDateLabel(date: String, key: String) {
-    Text("更新于 $date", Modifier.testTag("book-update-date-$key"), style = MaterialTheme.typography.labelSmall,
+@Composable private fun BookUpdateDateLabel(date: String, key: String, compact: Boolean = false) {
+    Text("更新于 $date", Modifier.testTag("book-update-date-$key"), style = if(compact) MaterialTheme.typography.bodySmall else MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 

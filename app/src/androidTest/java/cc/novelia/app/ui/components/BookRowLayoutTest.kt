@@ -5,6 +5,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.*
 import androidx.compose.material3.Surface
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.Color
@@ -19,6 +23,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Density
 import androidx.test.platform.app.InstrumentationRegistry
+import cc.novelia.app.data.catalog.formatApproximateCharacters
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.CloudReadingProgress
@@ -39,6 +44,54 @@ import java.io.File
 
 class BookRowLayoutTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun favoriteMetadataSharesOneLineAndNeverShowsCachedOrLoadedCharacterCounts() {
+        var book by mutableStateOf(WebOutline(providerId = "syosetu", novelId = "compact-favorite", titleJp = "风与书页",
+            type = "连载中", total = 282, updateAt = 1704067200).card("alice"))
+        val cached = SavedBook(book.copy(totalCharacters = 123_456))
+        var width by mutableStateOf(412.dp)
+        var fontScale by mutableStateOf(1f)
+        var bookClicks = 0
+        var menuClicks = 0
+        compose.setContent {
+            NoveliaTheme("dark") {
+                CompositionLocalProvider(LocalDensity provides Density(1.5f, fontScale),
+                    LocalBookListPresentation provides BookListPresentation(books = mapOf(book.ref.key to cached), account = "alice")) {
+                    Surface(Modifier.requiredWidth(width).testTag("book-row-preview")) {
+                        BookRow(book, { bookClicks++ }, status = BookRowStatus(.38f, "已读 38%", "更新 3 章"),
+                            showCharacterCount = true, compactMetadata = true, trailing = {
+                                IconButton(onClick = { menuClicks++ }) { Icon(Icons.Outlined.MoreVert, "管理小说") }
+                            })
+                    }
+                }
+            }
+        }
+        val metadata = compose.onNodeWithText("连载中 · 282 章", useUnmergedTree = true)
+        val date = compose.onNodeWithTag("book-update-date-${book.ref.key}", useUnmergedTree = true)
+        compose.onAllNodesWithText("连载中 · 282 章", useUnmergedTree = true).assertCountEquals(1)
+        assertEquals(metadata.fetchSemanticsNode().boundsInRoot.top, date.fetchSemanticsNode().boundsInRoot.top)
+        compose.onNodeWithText(formatApproximateCharacters(123_456)).assertDoesNotExist()
+        compose.onNodeWithText("字数未知").assertDoesNotExist()
+        compose.onNodeWithText("已读 38%").assertIsDisplayed()
+        compose.onNodeWithText("更新 3 章").assertIsDisplayed()
+        compose.onNodeWithTag("book-reading-progress-${book.ref.key}", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithContentDescription("管理小说").performClick()
+        compose.runOnIdle { assertEquals(1, menuClicks); assertEquals(0, bookClicks) }
+        captureRow("favorite-row-compact.png")
+
+        compose.runOnIdle { book = book.copy(subtitle = "林间", authors = listOf("林间"), totalCharacters = 456_789) }
+        compose.onNodeWithText("林间").assertIsDisplayed()
+        compose.onNodeWithText(formatApproximateCharacters(456_789)).assertDoesNotExist()
+        assertEquals(metadata.fetchSemanticsNode().boundsInRoot.top, date.fetchSemanticsNode().boundsInRoot.top)
+        captureRow("favorite-row-with-author.png")
+
+        compose.runOnIdle { width = 320.dp; fontScale = 1.5f }
+        metadata.assertIsDisplayed()
+        date.assertIsDisplayed()
+        assertTrue("窄屏大字时应换行保留完整更新日期", date.fetchSemanticsNode().boundsInRoot.top > metadata.fetchSemanticsNode().boundsInRoot.top)
+        compose.onNodeWithContentDescription("管理小说").assertIsDisplayed()
+        captureRow("favorite-row-large-font.png")
+    }
 
     @Test fun discoveryAndWenkuRowsHideProgressWithoutHidingUpdateDates() {
         var book by mutableStateOf(BookCard(BookRef("syosetu", "visibility"), "可见性测试", updateAt = 1704067200))
@@ -86,7 +139,8 @@ class BookRowLayoutTest {
                 CompositionLocalProvider(LocalBookListPresentation provides BookListPresentation(books = mapOf(parent.book.ref.key to parent))) {
                     Column {
                         BookRow(parent.book, {})
-                        MountedVolumeRow(first, Position("two", index = 1, chapterIndex = 1, chapterCount = 2, paragraphCount = 8), Modifier, {}, {})
+                        // 进度按已到达的章节计；两章中的第一章才对应 50%。
+                        MountedVolumeRow(first, Position("one", index = 1, chapterIndex = 0, chapterCount = 2, paragraphCount = 8), Modifier, {}, {})
                         MountedVolumeRow(second, null, Modifier, {}, {})
                     }
                 }
@@ -150,7 +204,7 @@ class BookRowLayoutTest {
                         val resolved = rememberCloudBookMetadata(book, "alice", 0) { response.await() }
                         val localZero = Position("1", index = 1, chapterIndex = 0, chapterCount = 4, paragraphCount = 5)
                         Surface(Modifier.requiredWidth(428.dp).testTag("book-row-preview")) {
-                            BookRow(resolved, {}, status = bookRowStatus(resolved, null,
+                            BookRow(resolved, {}, compactMetadata = true, status = bookRowStatus(resolved, null,
                                 localZero.takeIf { resolved.cloudReading?.chapterResolved == true }, null, "alice", preferCloud = true))
                         }
                     }

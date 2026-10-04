@@ -108,6 +108,7 @@ class EInkReaderFlowTest {
             val saved = app.store.state.value.positions.getValue(ref.key)
             // 跨越多屏的长段落在两种阅读模式之间切换时，应保留字符锚点。
             compose.onNodeWithContentDescription("阅读设置").performClick()
+            compose.onNodeWithText("翻页").performClick()
             compose.onNodeWithText("连续滚动").performScrollTo().performClick()
             compose.onNodeWithText("关闭面板").performClick()
             compose.waitUntil(10_000) { (app.store.state.value.positions[ref.key]?.offset ?: 0) > 0 }
@@ -117,6 +118,7 @@ class EInkReaderFlowTest {
                 assertEquals(saved.textOffset, current.textOffset)
             }
             compose.onNodeWithContentDescription("阅读设置").performClick()
+            compose.onNodeWithText("翻页").performClick()
             compose.onNodeWithText("自动分页").performScrollTo().performClick()
             compose.onNodeWithText("关闭面板").performClick()
             compose.waitUntil(10_000) { (app.store.state.value.positions[ref.key]?.textOffset ?: 0) > 0 && app.store.state.value.positions[ref.key]?.offset == 0 }
@@ -134,6 +136,7 @@ class EInkReaderFlowTest {
             compose.waitUntil(10_000) { compose.onAllNodesWithText("独特的终点标记。", substring = true).fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithContentDescription("搜索本章").performClick()
             compose.onNodeWithContentDescription("阅读设置").performClick()
+            compose.onNodeWithText("翻页").performClick()
             compose.onNodeWithText("电子纸阅读模式").performScrollTo().assertIsDisplayed()
             screenshot("eink-settings")
             compose.onNodeWithText("关闭面板").performClick()
@@ -147,10 +150,15 @@ class EInkReaderFlowTest {
                 if(compose.onAllNodesWithText("设置").fetchSemanticsNodes().isEmpty()) compose.onNodeWithText("下一屏").performClick()
             }
             compose.onNodeWithText("设置").performScrollTo().performClick()
-            compose.onNodeWithText("滚动时自动收起云端收藏筛选").performScrollTo().assertIsDisplayed()
-            val oldCollapse = app.store.state.value.autoCollapseCloudFilters
-            compose.onNodeWithText("滚动时自动收起云端收藏筛选").performClick()
-            compose.runOnIdle { assertEquals(!oldCollapse, app.store.state.value.autoCollapseCloudFilters) }
+            compose.waitUntil(10_000) { compose.onAllNodesWithText("默认阅读偏好").fetchSemanticsNodes().isNotEmpty() }
+            // 电子纸关闭连续滚动，使用设置页实际提供的翻屏按钮定位。
+            repeat(4) {
+                if(runCatching { compose.onNodeWithText("剪贴板链接提示").assertIsDisplayed() }.isFailure) {
+                    compose.onNodeWithText("下一屏").performClick()
+                }
+            }
+            compose.onNodeWithText("剪贴板链接提示").assertIsDisplayed()
+            compose.onNodeWithText("滚动时自动收起云端收藏筛选").assertDoesNotExist()
         } finally {
             compose.runOnIdle { app.store.update { previous } }
         }

@@ -18,7 +18,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.selected
@@ -54,7 +53,6 @@ import cc.novelia.app.ui.components.ConfirmDialog
 import cc.novelia.app.ui.components.EmptyState
 import cc.novelia.app.ui.components.PageControls
 import cc.novelia.app.ui.components.TextPrompt
-import cc.novelia.app.ui.components.rememberCloudFilterCollapse
 import cc.novelia.app.ui.components.friendlyMessage
 import cc.novelia.app.ui.navigation.AppController
 
@@ -83,6 +81,7 @@ import cc.novelia.app.ui.navigation.AppController
     var type by rememberSaveable { mutableIntStateOf(0) }
     var level by rememberSaveable { mutableIntStateOf(0) }
     var translate by rememberSaveable { mutableIntStateOf(0) }
+    var controlsExpanded by rememberSaveable { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
     var managing by remember { mutableStateOf(false) }
     var selection by remember { mutableStateOf(mapOf<String, BookCard>()) }
@@ -100,6 +99,7 @@ import cc.novelia.app.ui.navigation.AppController
     val refreshKey = listOf(version, if(bulkBusy) bulkRefreshAt else local.syncStatus[account]?.lastSuccessAt ?: 0L)
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { expanded = false }
     val focus = LocalFocusManager.current
+    val collapseControls = { controlsExpanded = false; expanded = false; focus.clearFocus() }
     val path = if (kind == 0) "user/favored-web" else "user/favored-wenku"
     val filter = CloudWebFilter(submitted, source, type, level, translate)
     fun submit() { if(!bulkBusy) { submitted = query.trim(); page = 0; focus.clearFocus() } }
@@ -125,56 +125,65 @@ import cc.novelia.app.ui.navigation.AppController
                 }
             }
             val summary = activeFilters.joinToString(" · ")
+            val requestKey = listOf(account, kind, current?.id, page, sort, if(kind == 0) filter else null)
+            var pageCount by remember(requestKey) { mutableStateOf<Int?>(null) }
             Column(Modifier.fillMaxSize()) {
-                CloudNovelKindSwitch(kind) { if(!bulkBusy) { kind = it; folderId = ""; page = 0; expanded = false } }
-                key(kind) { CloudShelfToolbar(choices, current, { if(!bulkBusy) { folderId = it; page = 0 } },
-                    sort, { if(!bulkBusy) { sort = it; page = 0 } }, activeFilters.size, expanded,
-                    if(kind == 0) ({ if(!bulkBusy) { expanded = !expanded; focus.clearFocus() } }) else null) { close ->
-                    DropdownMenuItem({ Text("新建收藏夹") }, { close(); create = true }, enabled = !bulkBusy, leadingIcon = { Icon(Icons.Outlined.Add, null) })
-                    if(editable != null) {
-                        DropdownMenuItem({ Text("重命名收藏夹") }, { close(); rename = editable }, enabled = !bulkBusy)
-                        if(editable.id != "default") DropdownMenuItem({ Text("删除收藏夹") }, { close(); deleting = editable }, enabled = !bulkBusy)
-                    }
-                    DropdownMenuItem({ Text("刷新收藏夹") }, { close(); refresh() }, enabled = !bulkBusy, leadingIcon = { Icon(Icons.Outlined.Refresh, null) })
-                } }
-                if(activeFilters.isNotEmpty()) Text(summary,
-                    Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 8.dp).testTag("cloud-filter-summary"),
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary,
-                    maxLines = 2, overflow = TextOverflow.Ellipsis)
-                CollapsibleCloudFilters(expanded && !bulkBusy, { expanded = !expanded }, summary, filterHeight, showHeader = false) {
-                    if (kind == 0) {
-                        OutlinedTextField(query, { query = it }, label = { Text("搜索中 / 日标题或作者") }, singleLine = true,
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { submit() }),
-                            trailingIcon = { IconButton(onClick = ::submit) { Icon(Icons.Outlined.Search, "搜索云端收藏") } },
-                            modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 12.dp))
-                        Row(Modifier.padding(start = 20.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text("来源（可多选）", Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
-                            TextButton(onClick = { source = providers.keys.filterNot { it in selectedSources }.joinToString(","); page = 0 }) { Text("反选") }
+                ShelfControlsPanel(
+                    (listOf(if(kind == 0) "网络小说" else "文库小说", current?.title ?: "收藏夹") + activeFilters +
+                        if(sort == "update") "更新时间" else "收藏时间").joinToString(" · "),
+                    controlsExpanded, { if(controlsExpanded) collapseControls() else controlsExpanded = true }, "cloud") {
+                    CloudNovelKindSwitch(kind) { if(!bulkBusy) { kind = it; folderId = ""; page = 0; expanded = false } }
+                    key(kind) { CloudShelfToolbar(choices, current, { if(!bulkBusy) { folderId = it; page = 0 } },
+                        sort, { if(!bulkBusy) { sort = it; page = 0 } }, activeFilters.size, expanded,
+                        if(kind == 0) ({ if(!bulkBusy) { expanded = !expanded; focus.clearFocus() } }) else null) { close ->
+                        DropdownMenuItem({ Text("新建收藏夹") }, { close(); create = true }, enabled = !bulkBusy, leadingIcon = { Icon(Icons.Outlined.Add, null) })
+                        if(editable != null) {
+                            DropdownMenuItem({ Text("重命名收藏夹") }, { close(); rename = editable }, enabled = !bulkBusy)
+                            if(editable.id != "default") DropdownMenuItem({ Text("删除收藏夹") }, { close(); deleting = editable }, enabled = !bulkBusy)
                         }
-                        AppChipFlowRow(Modifier.padding(horizontal = 20.dp, vertical = 10.dp)) {
-                            providers.forEach { (id, title) -> AppSelectionChip(id in selectedSources, {
-                                source = selectedSources.toMutableSet().apply { if (!add(id)) remove(id) }.joinToString(","); page = 0
-                            }, label = { Text(title) }) }
+                        DropdownMenuItem({ Text("刷新收藏夹") }, { close(); refresh() }, enabled = !bulkBusy, leadingIcon = { Icon(Icons.Outlined.Refresh, null) })
+                    } }
+                    if(activeFilters.isNotEmpty()) Text(summary,
+                        Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 8.dp).testTag("cloud-filter-summary"),
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    CollapsibleCloudFilters(expanded && !bulkBusy, { expanded = !expanded }, summary, filterHeight, showHeader = false) {
+                        if (kind == 0) {
+                            OutlinedTextField(query, { query = it }, label = { Text("搜索中 / 日标题或作者") }, singleLine = true,
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { submit() }),
+                                trailingIcon = { IconButton(onClick = ::submit) { Icon(Icons.Outlined.Search, "搜索云端收藏") } },
+                                modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 12.dp))
+                            Row(Modifier.padding(start = 20.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text("来源（可多选）", Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
+                                TextButton(onClick = { source = providers.keys.filterNot { it in selectedSources }.joinToString(","); page = 0 }) { Text("反选") }
+                            }
+                            AppChipFlowRow(Modifier.padding(horizontal = 20.dp, vertical = 10.dp)) {
+                                providers.forEach { (id, title) -> AppSelectionChip(id in selectedSources, {
+                                    source = selectedSources.toMutableSet().apply { if (!add(id)) remove(id) }.joinToString(","); page = 0
+                                }, label = { Text(title) }) }
+                            }
+                            ChoiceRow("类型", listOf("全部", "连载中", "已完结", "短篇"), type) { type = it; page = 0 }
+                            ChoiceRow("分级", listOf("全部", "一般向", "R18"), level) { level = it; page = 0 }
+                            ChoiceRow("翻译", listOf("全部", "GPT", "Sakura"), translate) { translate = it; page = 0 }
                         }
-                        ChoiceRow("类型", listOf("全部", "连载中", "已完结", "短篇"), type) { type = it; page = 0 }
-                        ChoiceRow("分级", listOf("全部", "一般向", "R18"), level) { level = it; page = 0 }
-                        ChoiceRow("翻译", listOf("全部", "GPT", "Sakura"), translate) { translate = it; page = 0 }
-                    }
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                        TextButton(onClick = {
-                            query = ""; submitted = ""; source = providers.keys.joinToString(","); type = 0; level = 0; translate = 0; page = 0
-                        }, Modifier.heightIn(min = 48.dp)) { Text("重置筛选") }
-                        TextButton(onClick = { submit(); expanded = false }, Modifier.heightIn(min = 48.dp)) { Text("完成") }
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                            TextButton(onClick = {
+                                query = ""; submitted = ""; source = providers.keys.joinToString(","); type = 0; level = 0; translate = 0; page = 0
+                            }, Modifier.heightIn(min = 48.dp)) { Text("重置筛选") }
+                            TextButton(onClick = { submit(); expanded = false }, Modifier.heightIn(min = 48.dp)) { Text("完成") }
+                        }
                     }
                 }
+                ShelfBatchHeader(
+                    if(managing) "已选 ${selection.size} 本" else pageCount?.let { "本页 $it 本" } ?: "收藏管理",
+                    managing, { managing = !managing; selection = emptyMap(); expanded = false; focus.clearFocus() }, "cloud",
+                    manageEnabled = !bulkBusy && (managing || (pageCount ?: 0) > 0))
                 if (current == null) EmptyState("创建第一个云端收藏夹", "收藏夹与原站同步。", action = "新建收藏夹", onAction = { create = true })
                 else {
-                    val requestKey = listOf(account, kind, current.id, page, sort, if (kind == 0) filter else null)
                     val listState = key(requestKey) { rememberLazyListState() }
-                    val collapse = rememberCloudFilterCollapse(local.autoCollapseCloudFilters, expanded) { expanded = false }
                     AsyncContent(requestKey, refreshKey = refreshKey, modifier = Modifier.weight(1f), load = {
                         c.api.cloudFavorites(kind == 1, current.id, page, sort, filter)
-                    }) { result, retry ->
+                    }, onLoaded = { pageCount = it.items.size }) { result, retry ->
                         LaunchedEffect(result.items, account) {
                             if(c.session.profile.value?.username != account) return@LaunchedEffect
                             c.store.update { it.withCloudReadingMetadata(result.items, account) }
@@ -188,10 +197,9 @@ import cc.novelia.app.ui.navigation.AppController
                                 }, onSelectPage = {
                                     selection = if(allOnPageSelected) selection - pageKeys else selection + result.items.associateBy { it.ref.key }
                                 }, onClear = { selection = emptyMap() }, onLocal = { bulkLocal = selection.values.toList() },
-                                onRemove = { bulkRemoval = current.id to selection.values.toList() })
+                                onRemove = { bulkRemoval = current.id to selection.values.toList() }, showHeader = false)
                             // 把滚动锚点保留在视口内，筛选面板改变大小时不滚动书目。
-                            AppLazyColumn(state = listState, modifier = Modifier.weight(1f).nestedScroll(collapse),
-                                onPageTurn = { direction -> if(direction > 0 && local.autoCollapseCloudFilters) expanded = false }) {
+                            AppLazyColumn(state = listState, modifier = Modifier.weight(1f)) {
                                 if (result.items.isEmpty()) item {
                                     EmptyState("没有匹配的收藏", "可调整筛选、切换收藏夹，或在书籍详情中添加云端收藏。", action = "重新加载", onAction = retry)
                                 }
@@ -203,7 +211,7 @@ import cc.novelia.app.ui.navigation.AppController
                                     BookRow(displayed, { if(managing) toggleSelection(displayed) else { expanded = false; onOpenBook(book.ref) } },
                                         Modifier.testTag("cloud-book-${book.ref.key}").semantics { selected = selectedBook }
                                             .then(if(selectedBook) Modifier.background(MaterialTheme.colorScheme.secondaryContainer) else Modifier),
-                                        status = bookRowStatus(displayed, local.books.firstOrNull { it.book.ref == book.ref }, local.positions[book.ref.key], local.bookUpdates[book.ref.key], account, preferCloud = true), trailing = {
+                                        status = bookRowStatus(displayed, local.books.firstOrNull { it.book.ref == book.ref }, local.positions[book.ref.key], local.bookUpdates[book.ref.key], account, preferCloud = true), compactMetadata = true, trailing = {
                                             if(managing) Checkbox(book.ref.key in selection, { toggleSelection(displayed) }, enabled = !bulkBusy,
                                                 modifier = Modifier.semantics { contentDescription = "选择${book.title}" })
                                             else if(cancelling) TextButton(onClick = { c.action {

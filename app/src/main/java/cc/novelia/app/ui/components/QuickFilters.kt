@@ -3,8 +3,11 @@ package cc.novelia.app.ui.components
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowDropDown
@@ -13,6 +16,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,21 +41,31 @@ internal data class QuickFilter(val label: String, val options: List<String>, va
         }
         Row {
             filters.take(count).forEach { filter ->
-                Box(Modifier.weight(1f).padding(horizontal = 4.dp)) {
-                    var expanded by remember { mutableStateOf(false) }
-                    val selectedOption = filter.options.getOrElse(filter.selected) { filter.options.first() }
-                    OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth().semantics { contentDescription = "${filter.label}：$selectedOption" }, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp)) {
-                        Text(selectedOption,
-                            modifier = Modifier.weight(1f, fill = false), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            style = MaterialTheme.typography.labelMedium)
-                        Icon(Icons.Outlined.ArrowDropDown, null)
-                    }
-                    AppDropdownMenu(expanded, { expanded = false }, modifier = Modifier.widthIn(min = 144.dp)) {
-                        filter.options.forEachIndexed { index, option ->
-                            DropdownMenuItem(text = { Text(option) }, onClick = { expanded = false; filter.onSelect(index) })
-                        }
-                    }
-                }
+                QuickFilterButton(filter, Modifier.weight(1f).padding(horizontal = 4.dp))
+            }
+        }
+    }
+}
+
+@Composable internal fun QuickFilterButton(filter: QuickFilter, modifier: Modifier = Modifier, compact: Boolean = false) {
+    Box(modifier) {
+        var expanded by remember { mutableStateOf(false) }
+        val selectedOption = filter.options.getOrElse(filter.selected) { filter.options.first() }
+        val buttonModifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+            .semantics { contentDescription = "${filter.label}：$selectedOption" }
+        val content: @Composable RowScope.() -> Unit = {
+            Text(selectedOption, Modifier.weight(1f, fill = false), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                style = if(compact) MaterialTheme.typography.labelLarge else MaterialTheme.typography.labelMedium)
+            Icon(Icons.Outlined.ArrowDropDown, null, Modifier.size(18.dp))
+        }
+        if(compact) TextButton(onClick = { expanded = true }, modifier = buttonModifier,
+            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp), content = content)
+        else OutlinedButton(onClick = { expanded = true }, modifier = buttonModifier,
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp), content = content)
+        AppDropdownMenu(expanded, { expanded = false }, modifier = Modifier.widthIn(min = 144.dp)) {
+            filter.options.forEachIndexed { index, option ->
+                DropdownMenuItem(text = { Text(option) }, onClick = { expanded = false; filter.onSelect(index) })
             }
         }
     }

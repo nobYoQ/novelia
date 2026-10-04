@@ -51,15 +51,16 @@ class WenkuVolumeFlowTest {
         }
         compose.waitUntil(10_000) { app.store.state.value.positions[volumeRef.key] == expected }
         scrollTo(hasTestTag("shelf-volume-${volumeRef.key}"))
+        // 书架按已到达的章节显示进度；旧锚点补齐为第 2 / 2 章后应为 100%。
         compose.onNodeWithTag("book-reading-progress-${volumeRef.key}", useUnmergedTree = true)
-            .assertExists().assertContentDescriptionEquals("已读 75%")
-        compose.onNodeWithText("已读 75% · 第二章 重逢").assertIsDisplayed()
+            .assertExists().assertContentDescriptionEquals("已读 100%")
+        compose.onNodeWithText("已读 100% · 第二章 重逢").assertIsDisplayed()
         assertEquals(document, app.store.document(volumeRef.id))
 
         compose.onNodeWithText("本地文件").performClick()
         compose.onNodeWithText("我的收藏").performClick()
         scrollTo(hasTestTag("shelf-volume-${volumeRef.key}"))
-        compose.onNodeWithText("已读 75% · 第二章 重逢").assertIsDisplayed()
+        compose.onNodeWithText("已读 100% · 第二章 重逢").assertIsDisplayed()
         runBlocking { app.store.flush() }
         val reloaded = LocalStore(compose.activity)
         assertEquals(expected, reloaded.state.value.positions[volumeRef.key])
@@ -68,7 +69,7 @@ class WenkuVolumeFlowTest {
         compose.waitForIdle()
         scrollTo(hasTestTag("shelf-volume-${volumeRef.key}"))
         compose.onNodeWithTag("book-reading-progress-${volumeRef.key}", useUnmergedTree = true)
-            .assertExists().assertContentDescriptionEquals("已读 75%")
+            .assertExists().assertContentDescriptionEquals("已读 100%")
         assertEquals(expected, app.store.state.value.positions[volumeRef.key])
     }
 
@@ -125,6 +126,7 @@ class WenkuVolumeFlowTest {
         compose.runOnIdle { app.store.update { state -> state.withWenkuVolumes(parentRef.key, setOf(volumeRef.key, secondRef.key)).let { mounted ->
             mounted.copy(books = mounted.books.map { if(it.book.ref == parentRef) it.copy(volumesExpanded = false) else it }, theme = "dark")
         } } }
+        compose.onNodeWithTag("local-controls-expand").performClick()
         compose.onNodeWithTag("local-filter-toggle").performClick()
         compose.onNodeWithText("搜索书名或作者").performTextInput("春日")
         compose.onNodeWithText("搜索书名或作者").performImeAction()

@@ -60,7 +60,6 @@ import kotlinx.serialization.encodeToString
         item { ChoiceRow("应用主题", listOf("跟随系统", "浅色", "深色"), listOf("system", "light", "dark").indexOf(state.theme)) { index -> c.store.update { it.copy(theme = listOf("system", "light", "dark")[index]) } } }
         item { TogglePreference("减少动态效果", "", state.reducedMotion) { value -> c.store.update { it.copy(reducedMotion = value) } } }
         item { TogglePreference("剪贴板链接提示", "返回应用时识别原站链接，点击提示后打开", state.clipboardLinkHints) { value -> c.store.update { it.copy(clipboardLinkHints = value) } } }
-        item { TogglePreference("滚动时自动收起云端收藏筛选", "向下浏览列表时收起，点击筛选按钮展开", state.autoCollapseCloudFilters) { value -> c.store.update { it.copy(autoCollapseCloudFilters = value) } } }
         item { SectionTitle("下载与同步") }
         item { BookSourcePreference(c) }
         item { MenuRow("网络诊断与日志", "ECH 开关、连接检测与日志导出", Icons.Outlined.Wifi, { echSettings = true }) }

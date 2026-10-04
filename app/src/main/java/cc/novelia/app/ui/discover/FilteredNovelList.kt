@@ -22,7 +22,8 @@ import kotlinx.coroutines.ensureActive
 
 /** 本地筛选使用继续加载游标，不把原站页数当成筛选后的总页数。 */
 @Composable internal fun FilteredNovelList(c: AppController, requestKey: Any, filter: NovelLocalFilter, library: LibraryState,
-    loadPage: suspend (Int, Boolean) -> Page<BookCard>, onReset: () -> Unit) {
+    loadPage: suspend (Int, Boolean) -> Page<BookCard>, onReset: () -> Unit, keywordLabels: Map<String, String> = emptyMap(),
+    onPageTurn: (Int) -> Unit = {}) {
     var result by remember(requestKey) { mutableStateOf(c.filteredDiscoverPage?.takeIf { it.first == requestKey }?.second) }
     var request by remember(requestKey) { mutableIntStateOf(0) }
     var loading by remember(requestKey) { mutableStateOf(result == null) }
@@ -50,7 +51,7 @@ import kotlinx.coroutines.ensureActive
         finally { loading = false; forceNetwork = false }
     }
     val scroll = key(requestKey) { rememberLazyListState() }
-    AppLazyColumn(state = scroll, modifier = Modifier.fillMaxSize()) {
+    AppLazyColumn(state = scroll, modifier = Modifier.fillMaxSize(), onPageTurn = onPageTurn) {
         item {
             Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
                 Text("已检查 ${result?.scanned ?: 0} 本，找到 ${result?.books?.size ?: 0} 本", style = MaterialTheme.typography.bodySmall)
@@ -60,7 +61,7 @@ import kotlinx.coroutines.ensureActive
             }
         }
         items(result?.books.orEmpty(), key = { it.ref.key }) { book ->
-            BookRow(book, { c.book(book.ref) }, showReadingProgress = false, showCharacterCount = filter.characters.active)
+            DiscoverBookRow(book, { c.book(book.ref) }, keywordLabels = keywordLabels, showCharacterCount = filter.characters.active)
         }
         item {
             Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
