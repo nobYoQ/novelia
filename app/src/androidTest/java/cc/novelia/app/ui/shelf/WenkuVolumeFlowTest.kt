@@ -126,17 +126,15 @@ class WenkuVolumeFlowTest {
         compose.runOnIdle { app.store.update { state -> state.withWenkuVolumes(parentRef.key, setOf(volumeRef.key, secondRef.key)).let { mounted ->
             mounted.copy(books = mounted.books.map { if(it.book.ref == parentRef) it.copy(volumesExpanded = false) else it }, theme = "dark")
         } } }
-        compose.onNodeWithTag("local-controls-expand").performClick()
-        compose.onNodeWithTag("local-filter-toggle").performClick()
+        compose.onNodeWithTag("local-search-toggle").performClick()
         compose.onNodeWithText("搜索书名或作者").performTextInput("春日")
         compose.onNodeWithText("搜索书名或作者").performImeAction()
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("shelf-volume-${volumeRef.key}").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("青空物语").assertExists()
         compose.onNodeWithTag("volume-drag-${volumeRef.key}").assertDoesNotExist()
         screenshot("wenku-volumes-search-dark")
-        compose.onNodeWithTag("local-filter-toggle").performClick()
-        compose.onNodeWithText("搜索书名或作者").performTextClearance()
-        compose.onNodeWithText("完成").performClick()
+        compose.onNodeWithTag("local-search-clear").performClick()
+        compose.onNodeWithTag("local-search-toggle").performClick()
         compose.waitForIdle()
         openManager()
         compose.onNodeWithTag("wenku-volume-picker").performScrollToNode(hasTestTag("mount-volume-${secondRef.key}"))

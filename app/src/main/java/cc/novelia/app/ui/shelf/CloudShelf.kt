@@ -8,8 +8,6 @@ import cc.novelia.app.ui.components.AppChipFlowRow
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -23,7 +21,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -82,6 +79,7 @@ import cc.novelia.app.ui.navigation.AppController
     var level by rememberSaveable { mutableIntStateOf(0) }
     var translate by rememberSaveable { mutableIntStateOf(0) }
     var controlsExpanded by rememberSaveable { mutableStateOf(false) }
+    var searchExpanded by rememberSaveable { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
     var managing by remember { mutableStateOf(false) }
     var selection by remember { mutableStateOf(mapOf<String, BookCard>()) }
@@ -117,7 +115,6 @@ import cc.novelia.app.ui.navigation.AppController
             val selectedSources = source.split(',').filter(String::isNotBlank).toSet()
             val activeFilters = buildList {
                 if (kind == 0) {
-                    if (submitted.isNotBlank()) add("搜索：$submitted")
                     if (selectedSources.size != providers.size) add("${selectedSources.size} 个书源")
                     if (type != 0) add(listOf("全部", "连载中", "已完结", "短篇")[type])
                     if (level != 0) add(listOf("全部", "一般向", "R18")[level])
@@ -125,14 +122,18 @@ import cc.novelia.app.ui.navigation.AppController
                 }
             }
             val summary = activeFilters.joinToString(" · ")
+            val searchSummary = if(kind == 0 && submitted.isNotBlank()) listOf("搜索：$submitted") else emptyList()
             val requestKey = listOf(account, kind, current?.id, page, sort, if(kind == 0) filter else null)
             var pageCount by remember(requestKey) { mutableStateOf<Int?>(null) }
             Column(Modifier.fillMaxSize()) {
                 ShelfControlsPanel(
-                    (listOf(if(kind == 0) "网络小说" else "文库小说", current?.title ?: "收藏夹") + activeFilters +
+                    (listOf(if(kind == 0) "网络小说" else "文库小说", current?.title ?: "收藏夹") + searchSummary + activeFilters +
                         if(sort == "update") "更新时间" else "收藏时间").joinToString(" · "),
-                    controlsExpanded, { if(controlsExpanded) collapseControls() else controlsExpanded = true }, "cloud") {
-                    CloudNovelKindSwitch(kind) { if(!bulkBusy) { kind = it; folderId = ""; page = 0; expanded = false } }
+                    controlsExpanded, { if(controlsExpanded) collapseControls() else controlsExpanded = true }, "cloud", headerActions = {
+                        if(kind == 0) ShelfSearchToggle(searchExpanded, submitted.isNotBlank(),
+                            { searchExpanded = !searchExpanded; focus.clearFocus() }, "cloud", enabled = !bulkBusy)
+                    }) {
+                    CloudNovelKindSwitch(kind) { if(!bulkBusy) { kind = it; folderId = ""; page = 0; expanded = false; searchExpanded = false; focus.clearFocus() } }
                     key(kind) { CloudShelfToolbar(choices, current, { if(!bulkBusy) { folderId = it; page = 0 } },
                         sort, { if(!bulkBusy) { sort = it; page = 0 } }, activeFilters.size, expanded,
                         if(kind == 0) ({ if(!bulkBusy) { expanded = !expanded; focus.clearFocus() } }) else null) { close ->
@@ -149,10 +150,6 @@ import cc.novelia.app.ui.navigation.AppController
                         maxLines = 2, overflow = TextOverflow.Ellipsis)
                     CollapsibleCloudFilters(expanded && !bulkBusy, { expanded = !expanded }, summary, filterHeight, showHeader = false) {
                         if (kind == 0) {
-                            OutlinedTextField(query, { query = it }, label = { Text("搜索中 / 日标题或作者") }, singleLine = true,
-                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { submit() }),
-                                trailingIcon = { IconButton(onClick = ::submit) { Icon(Icons.Outlined.Search, "搜索云端收藏") } },
-                                modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 12.dp))
                             Row(Modifier.padding(start = 20.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Text("来源（可多选）", Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
                                 TextButton(onClick = { source = providers.keys.filterNot { it in selectedSources }.joinToString(","); page = 0 }) { Text("反选") }
@@ -168,12 +165,14 @@ import cc.novelia.app.ui.navigation.AppController
                         }
                         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                             TextButton(onClick = {
-                                query = ""; submitted = ""; source = providers.keys.joinToString(","); type = 0; level = 0; translate = 0; page = 0
+                                source = providers.keys.joinToString(","); type = 0; level = 0; translate = 0; page = 0
                             }, Modifier.heightIn(min = 48.dp)) { Text("重置筛选") }
-                            TextButton(onClick = { submit(); expanded = false }, Modifier.heightIn(min = 48.dp)) { Text("完成") }
+                            TextButton(onClick = { expanded = false; focus.clearFocus() }, Modifier.heightIn(min = 48.dp)) { Text("完成") }
                         }
                     }
                 }
+                ShelfSearchField(searchExpanded && kind == 0, query, { query = it }, onSubmit = ::submit,
+                    onClear = { query = ""; submitted = ""; page = 0 }, label = "搜索中 / 日标题或作者", tagPrefix = "cloud", enabled = !bulkBusy)
                 ShelfBatchHeader(
                     if(managing) "已选 ${selection.size} 本" else pageCount?.let { "本页 $it 本" } ?: "收藏管理",
                     managing, { managing = !managing; selection = emptyMap(); expanded = false; focus.clearFocus() }, "cloud",

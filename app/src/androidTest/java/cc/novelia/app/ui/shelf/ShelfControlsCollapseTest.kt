@@ -116,6 +116,9 @@ class ShelfControlsCollapseTest {
 
     @Test fun cloudSummaryAndBatchActionsFitNarrowScreensAndKeepSelectionWhenCollapsed() {
         var expanded by mutableStateOf(false)
+        var searchExpanded by mutableStateOf(false)
+        var query by mutableStateOf("")
+        var submitted by mutableStateOf("")
         var managing by mutableStateOf(false)
         var selected by mutableIntStateOf(0)
         var busy by mutableStateOf(false)
@@ -140,10 +143,15 @@ class ShelfControlsCollapseTest {
                                 }
                                 ShelfControlsPanel(
                                     "${if(kind == 0) "网络小说" else "文库小说"} · ${folder.title} · ${if(sort == "update") "更新时间" else "收藏时间"}",
-                                    expanded, { expanded = !expanded }, "cloud") {
-                                    CloudNovelKindSwitch(kind) { kind = it }
+                                    expanded, { expanded = !expanded }, "cloud", headerActions = {
+                                        if(kind == 0) ShelfSearchToggle(searchExpanded, submitted.isNotBlank(), { searchExpanded = !searchExpanded }, "cloud")
+                                    }) {
+                                    CloudNovelKindSwitch(kind) { kind = it; searchExpanded = false }
                                     CloudShelfToolbar(listOf(folder), folder, {}, sort, { sort = it }, 0, false, {}) {}
                                 }
+                                ShelfSearchField(searchExpanded && kind == 0, query, { query = it },
+                                    onSubmit = { submitted = query.trim() }, onClear = { query = ""; submitted = "" },
+                                    label = "搜索中 / 日标题或作者", tagPrefix = "cloud")
                                 ShelfBatchHeader(if(managing) "已选 $selected 本" else "本页 20 本",
                                     managing, manage, "cloud", !busy)
                                 CloudFavoriteBatchControls(managing, selected, 20, selected == 20, busy, 1,
@@ -165,6 +173,22 @@ class ShelfControlsCollapseTest {
         compose.onNodeWithTag("cloud-novel-kind").assertDoesNotExist()
         compose.onNodeWithTag("cloud-batch-manage").assertIsDisplayed().assertIsEnabled()
         val toggleBounds = arrowBounds("cloud")
+        compose.onNodeWithTag("cloud-search-toggle").performClick()
+        compose.onNodeWithTag("cloud-novel-kind").assertDoesNotExist()
+        compose.onNodeWithTag("cloud-search-field").performTextInput("森林")
+        compose.onNodeWithTag("cloud-search-field").performImeAction()
+        compose.runOnIdle { assertEquals("森林", submitted); assertFalse(expanded) }
+        val searchBounds = compose.onNodeWithTag("cloud-search-field").getUnclippedBoundsInRoot()
+        assertTrue(searchBounds.top >= compose.onNodeWithTag("cloud-controls").getUnclippedBoundsInRoot().bottom)
+        assertTrue(searchBounds.bottom <= compose.onNodeWithTag("cloud-batch-header").getUnclippedBoundsInRoot().top)
+        compose.onNodeWithTag("cloud-search-toggle").performClick()
+        compose.onNodeWithTag("cloud-search-field").assertDoesNotExist()
+        compose.runOnIdle { assertEquals("森林", submitted) }
+        compose.onNodeWithTag("cloud-search-toggle").performClick()
+        compose.onNodeWithTag("cloud-search-clear").performClick()
+        compose.runOnIdle { assertEquals("", query); assertEquals("", submitted) }
+        compose.onNodeWithTag("cloud-search-toggle").performClick()
+        assertEquals(toggleBounds, arrowBounds("cloud"))
         compose.onNodeWithTag("cloud-controls-expand").assertHeightIsAtLeast(48.dp).performClick()
         assertEquals(toggleBounds, arrowBounds("cloud"))
         assertToggleAboveBatch("cloud")

@@ -17,6 +17,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.model.Folder
 import cc.novelia.app.ui.components.AppDropdownMenu
+import cc.novelia.app.ui.components.FilterPanelExpandIcon
 
 /** 收藏夹管理和排序直接可达，无需先打开筛选面板。 */
 @Composable internal fun CloudShelfToolbar(
@@ -80,12 +81,15 @@ import cc.novelia.app.ui.components.AppDropdownMenu
                 Icon(Icons.Outlined.Tune, null, Modifier.size(18.dp))
                 Spacer(Modifier.width(4.dp))
                 Text(if(filterCount == 0) "筛选" else "筛选 $filterCount", Modifier.weight(1f, fill = false), style = MaterialTheme.typography.labelMedium)
+                Spacer(Modifier.width(4.dp))
+                Box(Modifier.size(18.dp).testTag("$tagPrefix-filter-arrow")) { FilterPanelExpandIcon(expanded) }
             }
         }
     }
     BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 20.dp).testTag("$tagPrefix-toolbar")) {
         // 系统字号需要换行时，仍保留完整标签和触摸区域。
-        if(maxWidth < (260 * LocalDensity.current.fontScale).dp) {
+        val compactWidth = if(onToggleFilters == null) 260 else 282
+        if(maxWidth < (compactWidth * LocalDensity.current.fontScale).dp) {
             Column {
                 folderButton(Modifier.fillMaxWidth())
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End,
