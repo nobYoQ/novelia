@@ -19,6 +19,20 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class KeywordStoreTest {
+    @Test fun categoryOrderSurvivesStoreRestartAndFurtherObservation() = fixture { context, _ ->
+        val store = KeywordStore(context)
+        store.createCategory("排序测试")
+        val order = store.state.value.categories.reversed()
+        val entries = store.state.value.entries
+        store.reorderCategories(order)
+        store.flush()
+        val reopened = KeywordStore(context)
+        assertEquals(order, reopened.state.value.categories)
+        assertEquals(entries, reopened.state.value.entries)
+        reopened.observe(listOf("新观察标签"))
+        assertEquals(order, reopened.state.value.categories)
+    }
+
     private class IsolatedContext(base: Context, private val root: File) : ContextWrapper(base) {
         override fun getFilesDir() = File(root, "files").apply { mkdirs() }
         override fun getCacheDir() = File(root, "cache").apply { mkdirs() }

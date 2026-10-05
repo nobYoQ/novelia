@@ -132,7 +132,8 @@ class KeywordLibraryUiTest {
             { library = library.createCategory(it) },
             { old, name -> library = library.renameCategory(old, name) },
             { library = library.deleteCategory(it) },
-            { original, translation, category -> library = library.editEntry(original, translation, category) })
+            { original, translation, category -> library = library.editEntry(original, translation, category) },
+            { library = library.reorderCategories(it) })
         compose.setContent { NoveliaTheme("dark") { AppInteractionMode(false, true) { Surface(Modifier.fillMaxSize()) {
             KeywordLibraryContent(library.entries, library.categories, {}, { _, _ -> }, actions)
         } } } }
@@ -140,6 +141,7 @@ class KeywordLibraryUiTest {
         compose.onNodeWithText("新建分类").performClick()
         compose.onNodeWithTag("keyword-category-name").performTextInput("我的收藏")
         compose.onNodeWithText("创建分类").performClick()
+        compose.onNodeWithTag("keyword-category-list").performScrollToNode(hasContentDescription("重命名分类 我的收藏"))
         compose.onNodeWithContentDescription("重命名分类 我的收藏").performClick()
         compose.onNodeWithTag("keyword-category-name").performTextReplacement("人物收藏")
         compose.onNodeWithText("保存名称").performClick()
@@ -156,6 +158,7 @@ class KeywordLibraryUiTest {
         capture("keyword-library")
         compose.onNodeWithText("管理分类").performClick()
         capture("keyword-categories")
+        compose.onNodeWithTag("keyword-category-list").performScrollToNode(hasContentDescription("删除分类 人物收藏"))
         compose.onNodeWithContentDescription("删除分类 人物收藏").performClick()
         compose.onNodeWithText("删除分类").performClick()
         compose.runOnIdle {

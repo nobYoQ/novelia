@@ -65,6 +65,7 @@ class KeywordStore(context: Context, private val entryLimit: () -> Int? = { null
     fun createCategory(name: String) = change { it.createCategory(name.trim()) }
     fun renameCategory(old: String, name: String) = change { it.renameCategory(old, name.trim()) }
     fun deleteCategory(name: String) = change { it.deleteCategory(name) }
+    fun reorderCategories(order: List<String>) = change { it.reorderCategories(order) }
     fun editEntry(original: String, translation: String, category: String) = change { it.editEntry(original.trim(), translation.trim(), category, entryLimit()) }
     fun exportLibrary(): KeywordLibrary = state.value
     fun exportSnapshot(): List<KeywordEntry> = state.value.entries

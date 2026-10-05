@@ -1,7 +1,9 @@
 package cc.novelia.app.ui.components
 
 import android.app.Activity
+import android.app.Instrumentation
 import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.activity.result.ActivityResultRegistry
 import androidx.activity.result.ActivityResultRegistryOwner
@@ -15,8 +17,10 @@ import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.core.app.ActivityOptionsCompat
 import androidx.core.content.FileProvider
 import androidx.navigation.compose.rememberNavController
@@ -41,6 +45,9 @@ import java.util.UUID
 import java.util.zip.CRC32
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+import java.util.zip.ZipFile
+import java.util.zip.ZipInputStream
+import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.*
@@ -73,6 +80,98 @@ class BookExportUiTest {
     @Test fun downloadedEpubKeepsItsFormatAndBytesAfterScreenRestoration() = downloadRoundTrip("epub", epubBytes())
 
     @Test fun downloadedTxtKeepsItsEncodingAndBytesAfterScreenRestoration() = downloadRoundTrip("txt", txtBytes())
+
+    @Test fun batchWithOneCompletedFileExportsOriginalEvenWhenAnUnfinishedTaskIsSelected() {
+        val payloads = batchDownloads(1)
+        val picker = ExportPicker()
+        val restoration = screen(picker) { DownloadsScreen(it) }
+        selectBatch()
+        compose.onNodeWithText("导出文件（1）").performClick()
+        assertPicker(picker, payloads.keys.single(), "text/plain")
+        restoration.emulateSavedInstanceStateRestore()
+        val target = finishExport(picker, "txt", payloads.values.single().size)
+        awaitMessage("文件已导出")
+        assertArrayEquals(payloads.values.single(), target.readBytes())
+    }
+
+    @Test fun batchWithMultipleFilesExportsZipAfterRestorationAndKeepsOriginalBytes() {
+        val payloads = batchDownloads(2)
+        val picker = ExportPicker()
+        val restoration = screen(picker) { DownloadsScreen(it) }
+        selectBatch()
+        compose.onNodeWithText("导出 ZIP（2）").performClick()
+        assertPicker(picker, "下载文件（2）.zip", "application/zip")
+        restoration.emulateSavedInstanceStateRestore()
+        val target = finishExport(picker, "zip", 16_384)
+        awaitMessage("压缩包已导出")
+        ZipFile(target, Charsets.UTF_8).use { zip ->
+            assertEquals(payloads.keys.toList(), zip.entries().toList().map { it.name })
+            payloads.forEach { (name, bytes) -> assertArrayEquals(bytes, zip.getInputStream(zip.getEntry(name)).readBytes()) }
+        }
+    }
+
+    @Test fun cancelledBatchZipExportReleasesStagingAndKeepsDownloads() {
+        batchDownloads(2)
+        val picker = ExportPicker()
+        screen(picker) { DownloadsScreen(it) }
+        selectBatch()
+        compose.onNodeWithTag("download-batch-export").performClick()
+        assertPicker(picker, "下载文件（2）.zip", "application/zip")
+        val staged = app.store.exportsDir.listFiles().orEmpty().filter { it.name.startsWith("download-export-") }
+        assertTrue(staged.isNotEmpty())
+        compose.runOnIdle { picker.dispatchResult(picker.pendingCode!!, Activity.RESULT_CANCELED, null) }
+        compose.waitUntil(5000) { staged.none(File::exists) }
+        compose.onNodeWithTag("download-batch-export").assertIsEnabled()
+        assertEquals(3, app.store.state.value.downloads.size)
+    }
+
+    @Test fun batchShareUsesOriginalForOneFileAndZipForMultipleFilesWithReadPermission() {
+        val payloads = batchDownloads(2)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val captured = CopyOnWriteArrayList<Intent>()
+        val monitor = object : Instrumentation.ActivityMonitor() {
+            override fun onStartActivity(intent: Intent): Instrumentation.ActivityResult? {
+                if(intent.action != Intent.ACTION_CHOOSER) return null
+                @Suppress("DEPRECATION") val send = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)!!
+                captured += send
+                return Instrumentation.ActivityResult(Activity.RESULT_CANCELED, null)
+            }
+        }
+        instrumentation.addMonitor(monitor)
+        try {
+            screen(ExportPicker()) { DownloadsScreen(it) }
+            compose.onNodeWithText("批量操作").performClick()
+            val first = app.store.state.value.downloads.first()
+            compose.onNodeWithTag("download-select-${first.id}").performClick()
+            compose.onNodeWithText("分享文件（1）").performClick()
+            compose.waitUntil(5000) { captured.size == 1 }
+            val single = captured[0]
+            assertEquals("text/plain", single.type)
+            @Suppress("DEPRECATION") val originalUri = single.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)!!
+            assertArrayEquals(payloads.values.first(), app.contentResolver.openInputStream(originalUri)!!.use { it.readBytes() })
+            assertTrue(single.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
+            assertEquals(originalUri, single.clipData!!.getItemAt(0).uri)
+
+            compose.onNodeWithText("全选").performClick()
+            compose.onNodeWithText("分享 ZIP（2）").performClick()
+            compose.waitUntil(5000) { captured.size == 2 }
+            val multiple = captured[1]
+            assertEquals("application/zip", multiple.type)
+            @Suppress("DEPRECATION") val archiveUri = multiple.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)!!
+            files += File(app.store.exportsDir, archiveUri.lastPathSegment!!)
+            val archived = linkedMapOf<String, ByteArray>()
+            ZipInputStream(app.contentResolver.openInputStream(archiveUri)!!, Charsets.UTF_8).use { zip ->
+                while(true) {
+                    val entry = zip.nextEntry ?: break
+                    archived[entry.name] = zip.readBytes()
+                }
+            }
+            assertEquals(payloads.keys, archived.keys)
+            payloads.forEach { (name, bytes) -> assertArrayEquals(bytes, archived.getValue(name)) }
+            assertTrue(multiple.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
+            assertEquals(archiveUri, multiple.clipData!!.getItemAt(0).uri)
+        } finally { instrumentation.removeMonitor(monitor) }
+    }
 
     @Test fun localEpubKeepsItsOriginalArchiveAfterScreenRestoration() = localRoundTrip("epub", epubBytes())
 
@@ -142,6 +241,23 @@ class BookExportUiTest {
         awaitMessage("文件已导出")
         assertArrayEquals(bytes, target.readBytes())
         assertTrue(parseExport(target).chapters.flatMap { it.paragraphs }.contains("导出验证正文。"))
+    }
+
+    private fun batchDownloads(count: Int): Map<String, ByteArray> {
+        val payloads = linkedMapOf("第一卷.txt" to txtBytes()).apply { if(count > 1) put("第二卷.epub", epubBytes()) }
+        val entries = payloads.map { (name, bytes) ->
+            val id = UUID.randomUUID().toString()
+            val file = File(app.store.downloadsDir, "$id-$name").apply { writeBytes(bytes) }
+            files += file
+            DownloadEntry(id, name, file.name, "https://example.invalid", status = "已完成")
+        } + DownloadEntry(UUID.randomUUID().toString(), "尚未完成", "unfinished.txt", "https://example.invalid", status = "已暂停")
+        app.store.update { it.copy(downloads = entries) }
+        return payloads
+    }
+
+    private fun selectBatch() {
+        compose.onNodeWithText("批量操作").performClick()
+        compose.onNodeWithText("全选").performClick()
     }
 
     private fun localRoundTrip(format: String, bytes: ByteArray, name: String = "导出测试") {

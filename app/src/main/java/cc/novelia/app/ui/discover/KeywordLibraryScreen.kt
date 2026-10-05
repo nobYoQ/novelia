@@ -3,20 +3,24 @@ package cc.novelia.app.ui.discover
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.catalog.*
 import cc.novelia.app.ui.components.*
 import cc.novelia.app.ui.navigation.AppController
+import cc.novelia.app.ui.theme.LocalEInkMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -25,10 +29,11 @@ class KeywordLibraryActions(
     val renameCategory: (String, String) -> Unit,
     val deleteCategory: (String) -> Unit,
     val editEntry: (String, String, String) -> Unit,
+    val reorderCategories: (List<String>) -> Unit,
 )
 
 @Composable fun rememberKeywordLibraryActions(store: KeywordStore): KeywordLibraryActions = remember(store) {
-    KeywordLibraryActions(store::createCategory, store::renameCategory, store::deleteCategory, store::editEntry)
+    KeywordLibraryActions(store::createCategory, store::renameCategory, store::deleteCategory, store::editEntry, store::reorderCategories)
 }
 
 @Composable fun KeywordLibraryScreen(c: AppController) {
@@ -135,14 +140,26 @@ class KeywordLibraryActions(
     var deleting by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val counts = remember(entries) { entries.groupingBy { it.category }.eachCount() }
+    val listState = rememberLazyListState()
+    val reorder = rememberKeywordCategoryReorderState(listState, categories) { order ->
+        runCatching { actions.reorderCategories(order) }.onFailure { error = it.message }
+    }
     AppSheet(onDismissRequest = onDismiss) {
         Text("分类管理", Modifier.padding(horizontal = 20.dp, vertical = 12.dp), style = MaterialTheme.typography.titleLarge)
+        Text(if(LocalEInkMode.current) "点按左侧箭头调整分类顺序。" else "拖动左侧手柄调整顺序，点按手柄也可逐项移动。", Modifier.padding(horizontal = 20.dp).padding(bottom = 12.dp),
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Button(onClick = { creating = true }, enabled = categories.size < KeywordLibrary.MAX_CATEGORIES,
             modifier = Modifier.padding(horizontal = 20.dp).heightIn(min = 48.dp)) { Icon(Icons.Outlined.Add, null); Text("新建分类") }
         error?.let { Text(it, Modifier.padding(20.dp), color = MaterialTheme.colorScheme.error) }
-        AppLazyColumn(Modifier.weight(1f, fill = false), contentPadding = PaddingValues(vertical = 12.dp)) {
-            items(categories, key = { it }) { name ->
+        AppLazyColumn(Modifier.weight(1f, fill = false), state = listState, contentPadding = PaddingValues(vertical = 12.dp),
+            listModifier = Modifier.testTag("keyword-category-list")) {
+            items(reorder.order, key = { it }) { name ->
+                val dragging = reorder.draggedName == name
                 ListItem(headlineContent = { Text(name) }, supportingContent = { Text("${counts[name] ?: 0} 个标签") },
+                    modifier = Modifier.testTag("keyword-category-row-$name").zIndex(if(dragging) 1f else 0f)
+                        .graphicsLayer { translationY = if(dragging) reorder.offset else 0f },
+                    colors = ListItemDefaults.colors(containerColor = if(dragging) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surface),
+                    leadingContent = { KeywordCategoryDragHandle(reorder, name) },
                     trailingContent = {
                         if(name == KeywordLibrary.OTHER) Text("默认归类", style = MaterialTheme.typography.labelSmall)
                         else Row {

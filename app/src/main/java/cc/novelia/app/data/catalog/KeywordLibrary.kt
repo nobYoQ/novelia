@@ -56,6 +56,11 @@ import kotlinx.serialization.json.JsonPrimitive
             entries = entries.map { if(it.category == name) it.copy(category = OTHER, categoryEdited = true) else it })
     }
 
+    fun reorderCategories(order: List<String>): KeywordLibrary {
+        require(order.size == categories.size && order.toSet() == categories.toSet()) { "分类已变化，请重新排序" }
+        return copy(categories = order.toList())
+    }
+
     fun editEntry(original: String, translation: String, category: String, limit: Int? = null): KeywordLibrary {
         require(original.isNotBlank() && original.length <= KeywordCatalog.MAX_TEXT_LENGTH && translation.length <= KeywordCatalog.MAX_TEXT_LENGTH) { "标签原文和翻译最多 ${KeywordCatalog.MAX_TEXT_LENGTH} 字符" }
         require(category in categories) { "分类已不存在，请重新选择" }

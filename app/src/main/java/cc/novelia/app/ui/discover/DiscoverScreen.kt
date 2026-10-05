@@ -2,9 +2,7 @@
 package cc.novelia.app.ui.discover
 
 import androidx.compose.animation.core.tween
-import cc.novelia.app.ui.components.AppSelectionChip
 import cc.novelia.app.ui.components.AppActionChip
-import cc.novelia.app.ui.components.AppChipFlowRow
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -125,15 +123,6 @@ import kotlinx.coroutines.sync.withPermit
                             val visibleWeb = remember(web, local.blockedBooks, local.blockedTags, local.blockedAuthors) { web.asSequence().filter { visibleBook(it, local) }.take(8).toList() }
                             val visibleWenku = remember(wenku, local.blockedBooks, local.blockedTags, local.blockedAuthors) { wenku.asSequence().filter { visibleBook(it, local) }.take(6).toList() }
                             AppLazyColumn(contentPadding = PaddingValues(bottom = 20.dp), onPageTurn = onPageTurn) {
-                                item(key = "rank-hero", contentType = "hero") {
-                                    Card(Modifier.fillMaxWidth().padding(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
-                                        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                            Text("热门小说排行榜", style = MaterialTheme.typography.headlineLarge)
-                                            Text("查看各书源榜单，快速挑选想读的小说。", style = MaterialTheme.typography.bodyMedium)
-                                            FilledTonalButton(onClick = { c.go("rank") }) { Icon(Icons.Outlined.Leaderboard, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("看看排行榜") }
-                                        }
-                                    }
-                                }
                                 if(local.recentSearches.isNotEmpty()) {
                                     item(key = "recent-searches", contentType = "searches") {
                                         Column(if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(AppMotion.Quick), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit))) {
@@ -208,9 +197,7 @@ import kotlinx.coroutines.sync.withPermit
             Text("筛选作品", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.titleLarge)
             TextButton(onClick = ::resetFilters, Modifier.padding(horizontal = 12.dp)) { Text("重置全部筛选") }
             if(category == 1) {
-                val selectedSources = remember(source) { source.split(',').filter(String::isNotEmpty).toSet() }
-                Text("书源（可多选）", Modifier.padding(start = 20.dp, top = 16.dp), style = MaterialTheme.typography.labelLarge)
-                AppChipFlowRow(Modifier.padding(horizontal = 20.dp, vertical = 10.dp)) { providers.forEach { (id, title) -> AppSelectionChip(id in selectedSources, onClick = { source = selectedSources.toMutableSet().apply { if(!add(id)) remove(id) }.joinToString(","); page = 0 }, label = { Text(title) }) } }
+                WebSourceFilter(source) { source = it; page = 0 }
                 ChoiceRow("连载状态", listOf("全部", "连载中", "已完结", "短篇"), type) { type = it; page = 0 }
                 ChoiceRow("已有译文", listOf("全部", "GPT", "Sakura"), translate) { translate = it; page = 0 }
                 ChoiceRow("排序", listOf("更新", "点击", "相关"), sort) { sort = it; page = 0 }

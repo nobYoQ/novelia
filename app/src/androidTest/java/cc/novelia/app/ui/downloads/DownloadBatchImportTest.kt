@@ -40,7 +40,7 @@ class DownloadBatchImportTest {
         app.store.update { it.withVolumeParent(existing.key, null) }
         val savedPosition = app.store.state.value.positions.getValue(existing.key)
         val restore = showDownloads(app)
-        compose.onNodeWithText("批量导入").performClick()
+        compose.onNodeWithText("批量操作").performClick()
         compose.onNodeWithTag("download-batch-import").assertIsNotEnabled()
         selectRow(entries[0]).performClick()
         compose.onNodeWithText("已选 1 个").assertIsDisplayed()
@@ -48,7 +48,10 @@ class DownloadBatchImportTest {
         compose.onNodeWithText("已选 1 个").assertIsDisplayed()
         compose.onNodeWithText("全选已完成").performClick()
         compose.onNodeWithText("已选 4 个").assertIsDisplayed()
-        selectRow(entries.last()).assertIsNotEnabled().assertIsOff()
+        selectRow(entries.last()).assertIsEnabled().assertIsOff()
+        selectRow(entries.last()).performClick()
+        compose.onNodeWithText("已选 5 个").assertIsDisplayed()
+        compose.onNodeWithText("导入书架（4）").assertIsDisplayed()
         compose.onNodeWithTag("download-batch-import").performClick()
         waitForSummary("成功 2 · 重复 1 · 失败 1 · 尚未处理 0")
         compose.runOnIdle {
@@ -83,7 +86,7 @@ class DownloadBatchImportTest {
 
     @Test fun importingOnlySelectedDownloadLeavesOtherFilesUntouchedAndReadingReusesIt() = withDownloads { app, parent, entries ->
         showDownloads(app)
-        compose.onNodeWithText("批量导入").performClick()
+        compose.onNodeWithText("批量操作").performClick()
         selectRow(entries[1]).performClick()
         compose.onNodeWithTag("download-batch-import").performClick()
         waitForSummary("成功 1 · 重复 0 · 失败 0 · 尚未处理 0")
@@ -98,6 +101,54 @@ class DownloadBatchImportTest {
             assertEquals(volume.book.ref.id, controller.nav.currentBackStackEntry?.arguments?.getString("id"))
             assertEquals(parent.book.ref.key, app.store.state.value.books.single { it.book.ref == volume.book.ref }.parentWenkuKey)
         }
+    }
+
+    @Test fun batchDeleteConfirmsMixedStatusesAndPreservesImportedBookAndUnselectedDownloads() = withDownloads { app, _, entries ->
+        val imported = runBlocking { importDownloadedDocument(app.store, entries[0]) }
+        val position = Position("0", index = 1, offset = 7)
+        app.store.savePosition(imported, position)
+        val savedPosition = app.store.state.value.positions.getValue(imported.key)
+        val savedBook = app.store.state.value.books.single { it.book.ref == imported }
+        showDownloads(app)
+        compose.onNodeWithText("批量操作").performClick()
+        compose.onNodeWithTag("download-batch-delete").assertIsNotEnabled()
+        selectRow(entries.last()).performClick()
+        compose.onNodeWithTag("download-batch-import").assertIsNotEnabled()
+        selectRow(entries[0]).performClick()
+        compose.onNodeWithTag("download-batch-delete").performClick()
+        compose.onNodeWithText("删除 2 个下载？").assertIsDisplayed()
+        compose.onNode(hasText("取消") and hasAnyAncestor(isDialog())).performClick()
+        compose.runOnIdle { assertEquals(entries, app.store.state.value.downloads) }
+        compose.onNodeWithTag("download-batch-delete").performClick()
+        compose.onNodeWithText("删除下载").performClick()
+        compose.waitUntil(10_000) { app.store.state.value.downloads.size == 3 }
+        compose.onNodeWithText("批量操作").assertIsDisplayed()
+        compose.runOnIdle {
+            assertEquals(entries.slice(1..3), app.store.state.value.downloads)
+            assertFalse(File(app.store.downloadsDir, entries[0].fileName).exists())
+            assertFalse(File(app.store.downloadsDir, entries.last().fileName).exists())
+            assertTrue(File(app.store.downloadsDir, entries[1].fileName).exists())
+            assertEquals(savedBook, app.store.state.value.books.single { it.book.ref == imported })
+            assertEquals(savedPosition, app.store.state.value.positions[imported.key])
+            assertTrue(app.store.documentSource(imported.id, "txt").exists())
+        }
+    }
+
+    @Test fun allPendingDownloadsCanBeSelectedAndBatchModeCanBeCancelled() = withDownloads { app, _, entries ->
+        app.store.update { it.copy(downloads = entries.map { entry -> entry.copy(status = "已暂停") }) }
+        showDownloads(app)
+        compose.onNodeWithText("批量操作").assertIsEnabled().performClick()
+        compose.onNodeWithText("全选").performClick()
+        compose.onNodeWithText("已选 5 个").assertIsDisplayed()
+        compose.onNodeWithTag("download-batch-import").assertIsNotEnabled()
+        compose.onNodeWithTag("download-batch-export").assertIsNotEnabled()
+        compose.onNodeWithTag("download-batch-share").assertIsNotEnabled()
+        compose.onNodeWithTag("download-batch-delete").assertIsEnabled()
+        compose.onNodeWithText("取消全选").performClick()
+        compose.onNodeWithText("已选 0 个").assertIsDisplayed()
+        compose.onNodeWithText("取消").performClick()
+        compose.onNodeWithTag("download-batch-delete").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(5, app.store.state.value.downloads.size) }
     }
 
     private fun selectRow(entry: DownloadEntry): SemanticsNodeInteraction {

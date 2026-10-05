@@ -14,6 +14,25 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class KeywordLibraryTest {
+    @Test fun reorderingCategoriesSurvivesRoundTripAndDefaultUpgradeWithoutChangingTags() {
+        val original = KeywordLibrary.defaults().createCategory("我的分类").editEntry("ヤンデレ", "自定译名", "我的分类")
+        val order = original.categories.reversed()
+        val reordered = original.reorderCategories(order)
+        assertEquals(order, reordered.categories)
+        assertEquals(original.entries, reordered.entries)
+        val bytes = ByteArrayOutputStream().also { KeywordLibraryFormat.write(it, reordered) }.toByteArray()
+        val restored = KeywordLibraryFormat.read(ByteArrayInputStream(bytes)).upgradeDefaults()
+        assertEquals(reordered, restored)
+        assertEquals(reordered, reordered.reorderCategories(order))
+    }
+
+    @Test fun reorderingRejectsMissingDuplicateAndUnknownCategories() {
+        val original = KeywordLibrary.defaults()
+        val invalid = listOf(original.categories.dropLast(1), original.categories + "新分类",
+            original.categories.dropLast(1) + original.categories.first(), original.categories.dropLast(1) + "不存在")
+        invalid.forEach { assertTrue(runCatching { original.reorderCategories(it) }.isFailure) }
+    }
+
     @Test fun categoryUpgradeSeedsOnceAndPreservesCustomMembershipAndCapacity() {
         val old = KeywordLibrary(listOf(KeywordEntry("BL", "男性恋爱", "题材"),
             KeywordEntry("GL", "百合", "我的分类", categoryEdited = true), KeywordEntry("TS", category = "题材"),
