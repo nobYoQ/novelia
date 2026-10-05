@@ -1,67 +1,54 @@
-# 安全与隐私开发约束
+# 安全与隐私边界
 
-[返回质量验证索引](README.md) · [文档总目录](../README.md)
+[质量目录](README.md) · [文档首页](../README.md)
 
-本文说明当前实现的边界和修改时要保留的约束，不是安全审计通过声明。漏洞报告渠道见 [SECURITY.md](../../SECURITY.md)；复现问题使用自己的测试环境和虚构数据。
+本页说明修改代码时要保持的边界，不是安全审计结论。漏洞报告使用 [SECURITY.md](../../SECURITY.md) 指定渠道；复现与回归优先使用合成数据。
 
-## 数据边界
+## 哪些数据被加密
 
-| 数据 | 当前处理 | 开发注意点 |
-| --- | --- | --- |
-| 访问令牌 | [Session.kt](../../app/src/main/java/cc/novelia/app/data/auth/Session.kt) 用 Android Keystore 的 AES-GCM 密钥加密后写入私有 SharedPreferences | 不进入日志、普通状态、备份、崩溃描述或截图 |
-| 认证 Cookie | 由 WebView `CookieManager` 管理，会话刷新使用认证站点 Cookie | 不把 Cookie 描述为同样受上述令牌加密机制保护；不要读取导出到调试文件 |
-| 本地书库、笔记、草稿、文件 | 应用私有存储和专用导出路径 | 设备共享资料不等于多账号独立数据库，退出登录也不会删除本地资料 |
-| 待同步操作 | 本地持久队列带账号归属，执行时绑定登录代次 | 包含写入内容，不能随普通设置或迁移备份导出重放 |
-| 用户主动导出的文件 | 通过系统文档选择器或受限 FileProvider 交付 | 离开应用后由接收方或目标存储管理；提醒用户妥善保存备份 |
+| 数据 | 当前存储 |
+| --- | --- |
+| 小说原站、镜像、论坛访问令牌 | Android Keystore AES-GCM 加密后写私有首选项 |
+| 镜像刷新 Cookie | 对应来源的加密首选项 |
+| 原站/论坛统一认证 Cookie | WebView CookieManager |
+| WebDAV 密码 | 独立设备密钥和配置 |
+| 小说、笔记、草稿、书库 JSON | 应用私有目录，无整库应用层加密 |
+| 用户导出的阅读资料 ZIP | 无加密；哈希只校验完整性 |
 
-Keystore 加密只覆盖会话令牌，不代表小说、笔记或整个应用数据已经加密。阅读资料 ZIP 使用哈希校验完整性，没有提供加密或来源签名，不能当作可信来源证明；详见 [数据与备份](../data/data-and-storage.md)。
+设备资料由账号共享，退出只影响对应会话，不清空本机书库。当前本地退出保留共享 SSO Cookie，详见[账号与会话](../network/authentication.md)。
 
-## 登录与权限
+## 认证和网络
 
-登录页面嵌入原站统一认证，密码由认证网站处理；客户端收到通过来源校验的固定消息后触发会话刷新，刷新成功才完成登录。令牌中的用户、角色和过期信息用于界面与会话管理，客户端解析不是服务端授权替代品。
+账号请求捕获 `SessionBinding`，取令牌、刷新及提交结果时再次核对账号、登录代次和来源。退出再登录同名账号也使旧请求失效。401 只能在原绑定下有限续期，不能在重试时换用另一账号。
 
-修改 [LoginScreen.kt](../../app/src/main/java/cc/novelia/app/ui/account/LoginScreen.kt)、[Session.kt](../../app/src/main/java/cc/novelia/app/data/auth/Session.kt) 或 [SessionState.kt](../../app/src/main/java/cc/novelia/app/data/auth/SessionState.kt) 时保持：
+客户端 JWT 解析、角色和 `canEdit` 等判断只用于交互，服务端才决定授权。403 不应被转换为离线待办或旧缓存成功。
 
-- Web 消息校验 origin、主框架和预期消息内容；不把任意网页字符串作为登录成功凭据。
-- 请求开始捕获 `SessionBinding`，响应和持久化提交前校验账号及登录代次。退出后同名账号再次登录也是新会话。
-- 401 的刷新和重试只限原绑定；不能在重试时悄悄换成另一个当前登录账号。
-- 退出登录立即失效旧会话，慢请求不能在退出后重新落盘旧令牌或清除后来的新登录。
-- `canPost` / `canEdit` 等界面判断不构成权限保证，403 必须保留含义，不转换为“离线稍后重试”。
+认证 WebView 核对 origin、主框架和固定消息，不直接信任网页的“成功”文本。它与普通站点 WebView 有不同职责；主框架白名单也不是全部子资源防火墙。
 
-相应回归重点是 [SessionIsolationTest.kt](../../app/src/test/java/cc/novelia/app/data/auth/SessionIsolationTest.kt)。云端待同步策略还见 [网络与同步](../network/network-and-sync.md)。
+普通 API、下载、图片和 WebDAV 的传输策略不同。小说镜像和 ECH 重定向实现会在跨来源时剥离 Authorization、Cookie 和 Proxy-Authorization；WebDAV 使用独立客户端并限制重定向。认证请求助手本身仍不能用于抓取任意用户 URL。修改目标校验时一起审查初始地址、每次跳转和凭据范围。
 
-## 网络、链接与 WebView
+镜像入口口令会进入 APK，属于供客户端使用的网关凭据，不应被当成仅服务器可知的秘密。打包配置见[书源线路](../development/book-source-mirrors.md)。
 
-[Manifest](../../app/src/main/AndroidManifest.xml) 禁止应用明文流量；API 和认证客户端关闭自动重定向。图片加载等路径有自己的配置，不能推断整个应用所有 HTTP 客户端都采用同一重定向策略。
+## 文件和数据迁移
 
-认证 WebView 和站点 WebView 有各自受信任来源和导航规则，入口见 [LoginScreen.kt](../../app/src/main/java/cc/novelia/app/ui/account/LoginScreen.kt)、[SiteWebScreen.kt](../../app/src/main/java/cc/novelia/app/ui/web/SiteWebScreen.kt)、[PagedSiteWebView.kt](../../app/src/main/java/cc/novelia/app/ui/web/PagedSiteWebView.kt)。调整规则时应审查主框架/子框架区别、JavaScript 桥、文件访问、混合内容和站外跳转，不把导航白名单误称为完整子资源防火墙。
+URI、文件名、压缩包条目和备份都视为待验证输入。保留实际读取大小限制、路径规范化、重复项检查、哈希与引用校验、取消及临时文件清理。内存工具与磁盘导入是两条路径，不能只验证其中一个。
 
-API 请求的 Bearer 令牌只能用于本项目预期的受信任接口；不要用认证请求方法抓取任意用户输入 URL。当前下载仅校验初始 URL，随后允许重定向；扩展时应单独审查跳转链和最终目标，不能宣称已有逐跳来源校验。Markdown 链接经 [MarkdownLinks.kt](../../app/src/main/java/cc/novelia/app/data/markdown/MarkdownLinks.kt) 处理，书源文本经 [BookLinks.kt](../../app/src/main/java/cc/novelia/app/data/catalog/BookLinks.kt) 处理；不要绕过它们直接启动任意 URI Scheme。
+书库损坏时进入保护状态，不写空状态掩盖故障。恢复使用验证、预览和提交流程；备份白名单排除凭据、下载任务和原站待办。
 
-调试认证故障时记录错误类别和 HTTP 状态即可，不记录 Authorization、Cookie、完整令牌、认证响应体或用户输入密码。诊断中不添加忽略 TLS 错误的逻辑。
+系统 SAF 负责用户指定位置的导入导出。FileProvider 仅开放 downloads 和 exports，见 [file_paths.xml](../../app/src/main/res/xml/file_paths.xml)，不开放应用根目录。
 
-剪贴板链接提示只在应用返回前台且窗口取得焦点后读取一次，后台不监听、不轮询；用户可在设置关闭。仅识别 `n.novelia.cc` 下受支持的小说、文库、论坛及列表页面，拒绝伪造域名、认证/API 路径和非法标识。识别本身不发起网络请求，不记录剪贴板原文；进程内最多保存 16 个链接摘要去重。用户点击“打开”后才导航，带查询或锚点的地址由站内网页完整承接。系统可能显示自己的剪贴板访问提示。
+系统自动备份和设备迁移数据域已排除，不能承诺卸载后自动恢复。资料迁移使用应用提供的显式[备份](../data/backup-and-recovery.md)。
 
-## 文件与恢复
+## 权限、入口和日志
 
-外部 URI、文件名、EPUB 条目、图片和 ZIP 备份都是待验证输入。扩展解析器要保留流式读取的容量上限、路径规范化与根目录边界、重复条目/冲突处理、临时文件清理以及取消检查。内存工具路径与磁盘解析路径的限制并不完全相同，不能复用一个未经核对的“安全解压”结论。
+Manifest 包含网络、通知和媒体播放前台服务相关权限，没有“管理所有文件”。MainActivity 接收链接和文本分享；桌面图标还会由构建生成入口配置，见[图标说明](../../app/launcher-icons/README.md)。TTS 服务与 FileProvider 不导出。修改时审查最终合并 Manifest，不能只看主源文件。
 
-恢复先验证清单、版本、大小和哈希，再走现有恢复流程；损坏书库的保护状态不能通过启动时写一份空状态掩盖。新增备份字段使用明确白名单，排除会话、Cookie、待同步操作与下载队列。
+剪贴板提示在前台取得焦点后检查支持的链接，后台不轮询，可由用户关闭。识别本身不联网，不保存剪贴板原文；点击后才导航。
 
-导出使用系统 SAF 或 `cc.novelia.app.files` FileProvider。当前 [file_paths.xml](../../app/src/main/res/xml/file_paths.xml) 只暴露 `files/downloads/` 与 `files/exports/`；不能扩大到应用根目录来解决 URI 报错。详见 [文件与下载](../features/files-and-downloads.md)。
+网络日志只记录固定类别和脱敏阶段，不记录认证头、Cookie、正文、搜索词和异常原文，详见[网络诊断](../network/network-diagnostics.md)。公开反馈不附真实备份、完整 logcat 或签名材料。
 
-## Android 权限与系统备份
+## 依赖与发布
 
-权限定义以 [AndroidManifest.xml](../../app/src/main/AndroidManifest.xml) 为准：网络状态、互联网、通知及媒体播放前台服务。应用通过系统文件选择器导入导出，没有申请“管理所有文件”。新增权限必须说明具体功能必要性、拒绝后的行为和相应 API 版本。
+签名私钥放仓库外，经安全的进程环境注入，不能写进文档、命令历史或附件。发布签名和迁移见[发布指南](../../RELEASING.md)。
 
-系统自动备份已关闭，并在 [data_extraction_rules.xml](../../app/src/main/res/xml/data_extraction_rules.xml) 排除云备份和设备迁移的数据域。项目提供的是用户主动导出的阅读资料迁移路径，不应向用户承诺卸载或换机后由系统自动恢复全部资料。
-
-外部入口是导出的主 Activity，TTS 服务和 FileProvider 不导出。更改 Manifest 时审查 exported、URI grant、深链和前台服务类型，不为测试方便开放新的生产组件。
-
-## 调试、依赖与发行
-
-公开 Issue 和 PR 使用最小脱敏日志，不上传完整 logcat、真实备份、小说内容、账号会话和签名文件。书籍 ID、用户名或本机路径也可能是用户隐私，保留定位所必需的字段即可。
-
-签名私钥放在仓库外，通过进程环境注入构建，不写进 Gradle 源码、命令历史或公开附件。签名操作与证书轮换见 [RELEASING.md](../../RELEASING.md)。`.gitignore` 只能防止新文件被普通添加，不会清除已有提交；发现历史泄露时先确认范围并处理凭据，历史重写另行制定方案。
-
-新依赖和素材需保留来源与许可，项目代码的 GPL 授权不替代第三方素材许可。当前 [NOTICE.md](../../NOTICE.md) 没有单独记录贴纸授权依据，公开分发时需核对实际许可并补全来源记录，不能从历史待办的删除推断授权状态。
+第三方代码、图片和角色素材保留各自权利，项目 GPL 不能替代它们的授权。按 [NOTICE.md](../../NOTICE.md) 和[许可维护](../../licenses/README.md) 核对来源。`.gitignore` 不清理已有历史，发现泄露应处理凭据和历史范围，不能只增加忽略规则。

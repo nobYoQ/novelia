@@ -1,274 +1,128 @@
-# 阅读器开发
+# 阅读器
 
-[返回业务功能索引](README.md) · [文档总目录](../README.md)
+[功能目录](README.md) · [文档首页](../README.md)
 
-本文描述当前阅读器的章节加载、正文投影、进度、分页、搜索、插图与朗读实现。一般 Compose 和导航约定见 [界面与导航](../architecture/ui-and-navigation.md)，返回 [开发文档首页](../README.md)。
+阅读器把原始章节按语言和译文偏好转换成显示文本，再交给滚动或分页布局。修改阅读器时，最重要的是保持**显示内容、阅读位置、搜索和朗读使用同一套语义**。
 
-## 1. 文件地图与数据流
-
-| 文件 | 负责内容 |
-| --- | --- |
-| [ReaderScreen.kt](../../app/src/main/java/cc/novelia/app/ui/reader/ReaderScreen.kt) | 阅读状态协调、滚动正文、工具栏、设置、章节切换、搜索定位和生命周期 |
-| [ReaderChapterLoad.kt](../../app/src/main/java/cc/novelia/app/ui/reader/ReaderChapterLoad.kt) | 保留当前正文的下一章节加载状态机 |
-| [ReaderTocPane.kt](../../app/src/main/java/cc/novelia/app/ui/reader/ReaderTocPane.kt) | 目录显示、筛选、倒序和定位 |
-| [ReaderPreferences.kt](../../app/src/main/java/cc/novelia/app/ui/reader/ReaderPreferences.kt) | 默认与单书共用的阅读偏好设置界面 |
-| [Paragraphs.kt](../../app/src/main/java/cc/novelia/app/reader/Paragraphs.kt) | 原文/译文投影、逐段回退、图片标记、繁体转换 |
-| [ReadingAnchors.kt](../../app/src/main/java/cc/novelia/app/reader/ReadingAnchors.kt) | 精确文本匹配、段内字符坐标、滚动行几何 |
-| [StaticPagination.kt](../../app/src/main/java/cc/novelia/app/reader/StaticPagination.kt) | 纯 Kotlin 整行分页、字符锚点到页码、翻页键映射 |
-| [EInkPage.kt](../../app/src/main/java/cc/novelia/app/ui/reader/EInkPage.kt) | 静态分页状态、Android 文字测量、Canvas 绘制 |
-| [BookTextSearch.kt](../../app/src/main/java/cc/novelia/app/reader/BookTextSearch.kt) | 按实际显示文本搜索多章 |
-| [OfflineReadingPanels.kt](../../app/src/main/java/cc/novelia/app/ui/reader/OfflineReadingPanels.kt) | 离线缓存范围和整本搜索 UI |
-| [ReaderChapterOverscroll.kt](../../app/src/main/java/cc/novelia/app/ui/reader/ReaderChapterOverscroll.kt) | 滚动模式章末上拉切章 |
-| [IllustrationViewer.kt](../../app/src/main/java/cc/novelia/app/ui/components/IllustrationViewer.kt) | 全屏图片查看 |
-| [ReadAloudService.kt](../../app/src/main/java/cc/novelia/app/reader/ReadAloudService.kt)、[SpeechQueue.kt](../../app/src/main/java/cc/novelia/app/reader/SpeechQueue.kt) | 系统 TTS 前台服务和句子队列 |
+## 一章内容经过哪些步骤
 
 ```mermaid
-flowchart TD
-    A[阅读路由 BookRef + chapterId] --> B[AppController.chapter]
-    B --> C[本地文档 或 章节缓存/网络]
-    C --> D[Chapter]
-    D --> E[prepareReadingParagraphs]
-    S[ReaderSettings] --> E
-    E --> F[ReadingParagraph 列表]
-    F --> G[连续滚动 Compose Text]
-    F --> H[StaticLayout 测量 + paginateLines]
-    H --> I[静态分页 Canvas]
-    G --> J[Position 段落/像素/字符进度]
-    I --> J
-    F --> K[精确搜索与朗读内容选择]
+flowchart LR
+    A[BookRef + chapterId] --> B[本地文档 / 缓存 / 网络]
+    B --> C[Chapter 原始内容]
+    C --> D[prepareReadingParagraphs]
+    S[ReaderSettings] --> D
+    D --> E[ReadingParagraph 显示段落]
+    E --> F[滚动 Text / 静态分页]
+    E --> G[搜索 / 朗读内容选择]
+    F --> H[Position 阅读锚点]
 ```
 
-`Chapter` 是服务端/本地读取模型，`ReadingParagraph` 是当前阅读偏好下的显示模型。原始章节不能因为切换语言或繁体而被覆写；搜索与显示应消费同一投影结果。
-
-## 2. 阅读偏好及兼容边界
-
-偏好界面分为“常用、翻页、更多”，低频设置按可展开分组展示。正文工具栏的翻页按钮由 `showPageButtons` 控制，连续滚动时章节末尾的下一章、下一分卷或返回目录按钮由独立的 `showScrollPageButtons` 控制；普通屏和电子纸均生效，关闭后仍可上拉进入下一章，且不影响电子纸列表/表单的翻屏按钮。交互控件保留至少 48dp 触控区域。
-
-实际配置为 `local.bookSettings[ref.key] ?: local.reader`。开启“仅应用于这本书”会为当前书保存完整设置副本，关闭则删除副本、重新继承默认值。它不是逐字段继承模型；修改全局偏好不会自动更新已有单书副本。
-
-面板顶部显示“正在修改默认设置”或“仅修改本书”。单书模式在原滑条轨道内标示默认进度，不增加滑条高度：当前值较小时以浅色余量延伸到默认位置，当前值较大时将默认范围显示为稍深的颜色。点击默认进度只复位该项，色阶切换和复位位置均有平滑过渡；拖动保持跟手，不因默认进度的点击区域受到阻挡。“减少动效”、系统关闭动画或电子纸模式会立即完成过渡，途中开启减少动效也会立即到达目标。单选按钮用浅色标记默认选项、实色标记当前选项；开关使用深浅色区分修改状态。电子纸模式提供同一精确默认值的复位按钮。关闭“仅应用于这本书”会删除整个单书副本并恢复跟随默认设置。
-
-[ReaderSettings](../../app/src/main/java/cc/novelia/app/data/model/ReaderSettings.kt) 包含以下相关配置：
-
-| 类别 | 主要字段与含义 |
+| 修改内容 | 主要入口 |
 | --- | --- |
-| 语言 | `mode`：`zh`、`jp`、`zh-jp`、`jp-zh`；`engines` 为优先序；`parallel` 为并列译文 |
-| 排版 | `fontSize`、`lineHeight`、`paragraphSpacing`、`width`、`weight`、`indent`、`secondaryAlpha`、`underline`、`traditional` |
-| 颜色/屏幕 | `theme`、`brightness`、`keepScreenOn`、`toolbarTransparency`、`hideStatusBar` |
-| 分页/输入 | `paginationMode`、`showPageButtons`、`showScrollPageButtons`、`showEInkScreenButtons`、`scrollPageTurn`、`horizontalPageTurn`、`volumeKeys` |
-| 电子纸 | `eInkMode`、`beforeEInk`、`eInkPreferences` |
-| 预读 | `prefetchChapters`、`prefetchWifiOnly` |
-| 朗读 | `speechLanguage`、`speechRate`、`speechMinutes`、`speechContinueChapters`、`speechNetworkContinuation` |
+| 阅读状态、工具栏、切章和位置保存 | [ReaderScreen.kt](../../app/src/main/java/cc/novelia/app/ui/reader/ReaderScreen.kt) |
+| 下一章加载、失败与取消 | [ReaderChapterLoad.kt](../../app/src/main/java/cc/novelia/app/ui/reader/ReaderChapterLoad.kt) |
+| 原文/译文投影 | [Paragraphs.kt](../../app/src/main/java/cc/novelia/app/reader/Paragraphs.kt)、[LocalParagraphs.kt](../../app/src/main/java/cc/novelia/app/reader/LocalParagraphs.kt) |
+| 精确锚点与搜索位置 | [ReadingAnchors.kt](../../app/src/main/java/cc/novelia/app/reader/ReadingAnchors.kt) |
+| 纯分页算法 / Android 测量绘制 | [StaticPagination.kt](../../app/src/main/java/cc/novelia/app/reader/StaticPagination.kt)、[EInkPage.kt](../../app/src/main/java/cc/novelia/app/ui/reader/EInkPage.kt) |
+| 整本搜索 | [BookTextSearch.kt](../../app/src/main/java/cc/novelia/app/reader/BookTextSearch.kt) |
+| 偏好控件 | [ReaderPreferences.kt](../../app/src/main/java/cc/novelia/app/ui/reader/ReaderPreferences.kt) |
+| 后台朗读 | [ReadAloudService.kt](../../app/src/main/java/cc/novelia/app/reader/ReadAloudService.kt)、[SpeechContinuation.kt](../../app/src/main/java/cc/novelia/app/reader/SpeechContinuation.kt) |
 
-`staticPagination` 仅判断 `paginationMode == "auto"`，不要把它等同于 `eInkMode`。电子纸首次开启使用自动分页和可用的翻页控制，关闭时恢复 `beforeEInk`，并保存电子纸内的选择供下次使用。旧字段 `paged`、`monochrome` 仍参与历史配置兼容；新增偏好应有默认值，调整这些字段前先读 [ReaderPreferencesTest](../../app/src/test/java/cc/novelia/app/ReaderPreferencesTest.kt)。
+## 设置如何生效
 
-设置 UI 位于 [ReaderPreferences.kt](../../app/src/main/java/cc/novelia/app/ui/reader/ReaderPreferences.kt) 的 `ReaderPreferences`，由阅读器和 [SettingsScreen.kt](../../app/src/main/java/cc/novelia/app/ui/settings/SettingsScreen.kt) 复用。行距范围为 0.5–2.6，设置导入使用相同范围。段距单独设置为 0–32dp，默认 8dp；滚动正文按实际文字高度布局，不再强制保留 48dp 段落高度。滚动与分页模式共用段距，分页测量和绘制使用同一数值。中文模式只布局中文，不为隐藏的日文预留空间。普通滑杆先维护临时值，松手时再提交昂贵的排版变化；电子纸改用步进按钮。亮度和常亮标志只在阅读器中生效，并在 `DisposableEffect` 清理时恢复。
+实际设置取 `bookSettings[ref.key] ?: reader`。单书设置是一整份快照；修改默认值不会同步修改已有单书快照，关闭“仅应用于这本书”才重新继承默认值。
 
-“阅读偏好 → 翻页”中的“显示翻页按钮”控制正文上一页／下一页或上一屏／下一屏；“列表与面板翻屏按钮”独立控制电子纸目录、设置等列表的翻屏控件，关闭后仍可滑动。全局设置也有对应开关，单书偏好仅影响该书阅读界面。
+语言、引擎、并列译文和简繁变化需要重新投影；字号、行距、段距与视口变化需要重新排版。昂贵计算放在 Default 调度器，滑块通常松手后提交，亮度等窗口效果在离开页面时恢复。
 
-“阅读偏好 → 翻页 → 工具栏 → 阅读时隐藏状态栏”隐藏系统顶部时间、电量及 Wi-Fi 图标，从顶部下滑可临时唤出。根导航统一管理系统栏，跨章和返回前台继续遵守当前设置，退出阅读恢复显示。这两项新偏好支持全局默认、单书覆盖与设置／阅读资料备份，切换电子纸模式不会重置。
+自动分页由 `paginationMode == "auto"` 决定，普通屏幕也能使用。电子纸切换通过 `withEInkMode` 保存和恢复两种模式的偏好，旧字段仍有兼容逻辑。不要只翻转布尔值绕过它。
 
-## 3. 章节加载、缓存与切换
+正文翻页按钮、连续滚动章末按钮、电子纸列表翻屏按钮、点击区域翻页和进度条是独立设置。字段和默认值以 [ReaderSettings.kt](../../app/src/main/java/cc/novelia/app/data/model/ReaderSettings.kt) 为准；控件范围、备份校验与预设切换需一起修改。
 
-### 首次进入
+## 章节加载和切换
 
-`ReaderContent` 通过 `AsyncContent(listOf(ref, chapterId), refreshKey = version)` 调用 [AppController.chapter](../../app/src/main/java/cc/novelia/app/ui/navigation/AppController.kt)。返回值为 `Pair<Chapter, Boolean>`，布尔值表示本地/缓存内容来源，不代表“内容最新”或“已经离线保存整本”。
+首次进入由 `AppController.chapter` 读取本地文件，或优先读取网络章节缓存。强制刷新必须实际请求网络，失败不能伪装为刷新成功。
 
-- 本地书：读取文档索引与章节正文，构造 `Chapter`，前后章来自本地索引。
-- 在线书：非强制刷新时先用现有章节缓存；缺失时通过 `chapterRequests.load` 共享请求。
-- 显式刷新：`forceNetwork = true`；失败应呈现刷新失败，不能悄悄当作刷新成功继续使用旧缓存。
-- 从同一阅读器预加载完成的切章可消费一次 `ReaderHandoff`，避免导航后重复请求。
+切章采用“先加载，成功后跳转”：
 
-在线请求与交接带有 `SessionBinding` 和 `cacheGeneration`。章节交接前检查当前账号会话和缓存代次，清理缓存或账号变化后不能把旧任务结果交给新的阅读器。
+1. 当前正文保留在屏幕上，`ReaderChapterLoad` 请求目标章。
+2. 同目标不重复请求，改选目标会取消旧任务。
+3. 成功后检查请求代次、会话、缓存代次和发起的返回栈项。
+4. 保存当前位置，传递预加载结果和目录状态，再切换阅读路由。
+5. 失败显示重试或取消；离开页面取消待切章任务。
 
-### 保留旧正文直到新章成功
+目录查询、倒序和切章标记通过导航状态传递，入场标记只消费一次。窄屏每次打开目录定位当前章，宽屏常驻目录保留浏览位置。
 
-`ReaderChapterLoad` 有 `target`、`loading`、`error`、Job 和内部 generation。选择下一章时先请求数据，成功后才保存当前进度并用 `readPreparedChapter` 替换阅读路由。失败时当前章留在屏幕上，用户可重试或取消。
+自动预读和手动离线缓存复用章节请求，数量、并发和落盘条件见[网络章节缓存](../network/network-and-sync.md#章节缓存和预读)。前台读到正文不一定表示离线副本已保存。
 
-必须保留的竞态保护：
+## 译文投影
 
-1. 相同目标的在途请求不会重复启动；请求另一个目标会取消旧任务。
-2. 被取消或代次过期的结果不能调用 `onLoaded`。
-3. 成功回调还检查当前返回栈项是否为发起请求的阅读器。转场中的旧页面可能仍在组合，不能让它夺取新页面的标记。
-4. 页面销毁时取消待切章任务。
+在线章节按原文和各引擎段落数的最大值遍历，逐段选择内容：
 
-切章通过新返回栈项的 `savedStateHandle` 传递菜单是否显示、目录查询/倒序/滚动位置、目录是否完成首次定位、上一章末尾标记和跨章搜索命中。目录首次加载后立即定位当前章；窄屏目录面板每次重新打开都会定位当前章，筛选隐藏当前章时从结果顶部开始，筛选文字和倒序选择保留。宽屏常驻目录保持浏览位置，也可用“定位当前”主动返回。每个标记消费一次，不能让普通刷新重复消费入场动作。
+- 非并列模式按 `engines` 顺序取首个可用译文；并列模式保留选中引擎的可用译文。
+- `jp` 显示原文，`zh` 显示译文；`jp-zh` 和 `zh-jp` 决定双语顺序。
+- 某段没有可用译文时回退原文，双语模式不会重复显示同一原文。
+- 空段可从显示列表去掉，但保留原始段落索引；图片先识别为独立内容。
+- 简繁转换只作用于译文，原文和日文回退保持不变。
 
-### 预读与译文更新
+本地 EPUB 的对照组由文件内容和可靠语言标记识别，独立于在线翻译引擎设置。已下载的多份译文保留；无法可靠配对的正文显示一次，不按奇偶段或文件名猜语言。解析和旧文件恢复见[文件与下载](files-and-downloads.md)。
 
-自动预读由 [ChapterOffline.kt](../../app/src/main/java/cc/novelia/app/data/chapters/ChapterOffline.kt) 执行。在阅读器生命周期达到 `STARTED` 后等待 600 ms，再按设置顺序读取后续章节。离开前台、取消协程或缓存代次变化时应停止；预读失败不能中断前台正文。
+## 阅读位置为什么不能只存页码
 
-手动离线缓存每批最多 200 章，去重后由最多三个 worker 并行处理，已有缓存直接复用。每个 worker 在新增请求前检查网络策略、账号绑定和缓存代次，落盘成功后才计入完成数；进度回调串行递增。失败或取消会停止整批，已成功缓存的章节保留，下次重试跳过这些章节。沿 `nextId` 的自动预读仍顺序执行，最多五章。
+字号、方向或译文改变后，页码和像素位置都会变。阅读器保留段落与字符锚点来跨布局恢复，同时兼容原有列表位置。
 
-“本书有新的译文”根据缓存写入时间和所选引擎的更新时间判断，参见 [ChapterFreshness.kt](../../app/src/main/java/cc/novelia/app/data/chapters/ChapterFreshness.kt)。它是刷新入口提示，不意味着所有段落必定有新译文。手动刷新先记录当前锚点，再增加 `version`，成功重新投影后恢复位置。
-
-## 4. 译文投影与逐段回退
-
-[projectParagraphs](../../app/src/main/java/cc/novelia/app/reader/Paragraphs.kt) 遍历原文与各引擎段落数的最大值，而不是最短列表。每一个原始索引独立选择译文，因此部分翻译不会截断后续正文。
-
-1. 引擎为 `sakura`、`gpt`、`youdao`，按去重后的 `settings.engines` 顺序处理。
-2. 非并列模式选取该段第一个非空译文；并列模式保留所有可用的选中引擎译文。
-3. `jp` 只显示原文；`jp-zh` 先原文再译文；`zh-jp` 先译文再原文。两种双语顺序都以中文为主、日文为辅助样式；默认中文模式显示译文。
-4. 所选引擎都没有该段译文时显示原文，并置 `fallback = true`。双语模式此时不会把相同原文重复显示两遍。
-5. 没有任何可见文本的段落不进入最终显示列表，但保留段落的原始 `index`。
-
-本地章节通过 `toReaderChapter` 提供独立的 `localContent`，不再把同一份正文作为有道译文。已识别的 EPUB 对照组在中文／日文模式只显示对应语言，日中／中日模式调整组内顺序，日文采用辅文本字号、不透明度和下划线；单独显示日文时使用主文本样式。文件内的译文独立于在线引擎优先级和并列开关，已下载的多份译文全部保留。未识别的本地正文只显示一次，解析与旧缓存恢复规则见[文件与下载](files-and-downloads.md)。
-
-图片在语言选择前识别：`<图片>http(s)://...` 产生 `imageUrl`，不合法地址成为“插图地址不可用”文本；`novelia-image:<64 位小写十六进制>` 产生 `localImageId`。本地图片 ID 只在本地书上下文中解析为文档图片。
-
-`prepareReadingParagraphs` 在投影后 trim 显示文字，并按需用 ICU `Simplified-Traditional` 转换译文。日文及原文回退不会被转为繁体。每次准备单独创建转换器，避免共享可变 ICU 对象；大文本按不拆分代理对的 4096 字符块处理，并定期检查取消。
-
-UI 在 `Dispatchers.Default` 执行正文准备，依赖章节和语言/引擎/并列/繁体变化。字号和视口变化应触发排版，不必重新做语言投影。增加新译文引擎时需要同步更新模型、引擎映射、来源标签、设置 UI、搜索与朗读的选择行为。
-
-## 5. 三种段落索引与字符锚点
-
-阅读器最容易出错的是把下列坐标混用：
-
-| 坐标 | 定义与用途 |
+| 坐标 | 含义 |
 | --- | --- |
-| 原始段落索引 | `ReadingParagraph.index`；对应 `Chapter` 原文/译文数组；笔记 `Note.paragraph` 使用它 |
-| 投影列表下标 | `paragraphs` 的零基下标；跳过空段后可能不同于原始索引；搜索 `ReadingTextMatch.paragraph` 和 `PageLine.paragraph` 使用它 |
-| 滚动列表下标 | `LazyColumn` 第 0 项是标题，正文第 n 段位于 `n + 1`；`Position.index` 保存这套兼容位置 |
+| `ReadingParagraph.index` | 原始段落索引；笔记 `Note.paragraph` 使用它 |
+| 显示段落下标 | 投影列表中的位置；空段过滤后可能不同于原始索引 |
+| `Position.index` | 兼容滚动列表的下标；第 0 项是标题，正文下标需加 1 |
+| `textOffset` / `offset` | 段内显示字符偏移 / 当前滚动布局的像素偏移 |
 
-`Position` 还包括滚动像素偏移 `offset` 和段落显示文本的 `textOffset`。静态分页保存 `paragraph + 1` 和页首字符偏移；滚动模式同时保存当前列表项、像素位置和测量到的字符位置。单纯保存页码在字号、宽度或方向变化后没有稳定含义。
+例如原始第 2 段被过滤后，原始第 3 段在显示列表里会前移；把显示下标直接当笔记原始段号，就会跳错内容。
 
-书籍列表的全书进度使用可选的 `chapterIndex`（零基）和 `chapterCount`，与云端历史统一按已到达的章节计算。进入最新已知章节即显示 100%，新增章节提示随阅读逐章减少；进入末章时还确认阅读时间之前已发现的译文更新，保留译文缓存刷新时间、独立的分卷更新和更新检查基线。章内滚动／分页进度与全书章节进度独立；滚动到底或自动分页到末页时仍单独保存 `chapterCompleted`，保留屏顶／页首恢复锚点。旧阅读记录进入应用时自动清理已到达章节的残留标识，阅读之后才发现的译文更新单独显示“译文更新”，不自动将整书状态改为“读完”；后续新增章节增加全书进度的分母，即使曾标记“读完”也正常显示剩余进度与提示。目录优先从缓存或本地索引异步读取；缺少当前章节或落后于已知更新计数时异步补齐远端目录，不阻塞正文。旧本地及挂载分卷记录缺少进度元数据时，后台读取本地目录及当前章补齐，保留原位置和阅读时间；文件不可用时仍显示“继续阅读”，不猜百分比。
+搜索命中的 `part/start/end` 相对于某份语言文本。转换为段内字符坐标时，还要加上双语换行、引擎标签和缩进。修改任何显示前缀，都要同步锚点计算和两种渲染器。
 
-云端列表只有 `lastReadAt` 时显示“有阅读记录”，不绘制伪造的 0% 进度条；收藏接口未填充这个字段，空值只能视为未知。取得详情中的章节 ID 和目录后，直接显示“读到第 X 章”，同一章节号按 `X / 总章节数` 填充进度条，不再单独添加云端标签；这是读到的位置，达到最后一章不等于手工标记读完。云端元数据保存所属账号和是否已解析详情，不能在登出或切换账号后串用，也不会覆写本机 `Position`。云端收藏和云端历史的文案、进度条统一使用云端记录。本地书架有时间戳时优先较新的记录；云端详情没有阅读时间戳时，采用更靠后的章节，同章保留本机段落精度；本地手工标记“读完”仍优先。已登录但尚未取得云端元数据且没有本机位置时显示“云端进度待同步”，不判为全局未读。本地网络书架、云端收藏和云端历史会为可见条目异步补齐章节元数据，复用已有详情缓存，最多并发两个请求，失败保留已知进度。
+滚动模式等待真实文字布局后把字符换算为行位置；分页模式把字符锚点映射到测量页。语言或正文变化时优先保留同一原文段，失效的字符/像素偏移应清除。布局代次变化要取消旧定位任务，避免新文字套用旧几何信息。
 
-静态分页中同一原文段的多个语言版本用单换行连接，整段能放入一页时保持同页；超长段仍按完整行跨页。双语顺序或译文内容变化后恢复同一原文段开头，避免继续使用语义已改变的拼接字符偏移。
+## 进度、历史和查阅返回
 
-`ReadingTextMatch` 的 `part/start/end` 相对于某一语言/译文文本，**不包括缩进**；`textOffset()` 再通过 `paragraphPartStarts()` 加上两段间换行、并列引擎标题及两个全角缩进空格，变成分页和滚动可共享的段内坐标。修改任何标签、换行或缩进时，两个渲染器和这套坐标计算都要同步。
+滚动停稳后会防抖保存，分页变化、切章、返回和生命周期结束也保存。恢复锚点、重新排版或视口尚未就绪时不提交中间位置。
 
-滚动文字通过 `onTextLayout` 与 `onGloballyPositioned` 记录每一行的 start/end/top。`ParagraphScrollLayout` 使用这些几何信息在字符和像素之间转换。跳转搜索结果时先挂载对应懒加载项，等待所有文字 part 的布局，再滚动到目标行；工具栏遮挡只影响目标定位偏移。
+**暂停阅读历史仍保存续读位置。** 当前 [ReadingProgress.kt](../../app/src/main/java/cc/novelia/app/data/library/ReadingProgress.kt) 分开维护 `positions` 和 `readingHistory`；暂停或清空历史不清除位置。暂停时也不继续上报原站阅读历史。
 
-布局代次 `layoutGeneration` 覆盖文字、字号、行距、段距、宽度、缩进、并列、粗体、分页模式和阅读视口宽度。搜索不能继续等待已被丢弃的几何数据，所以代次销毁时取消等待中的搜索 Job。
+书架全书进度按到达章节计算，章内进度按布局计算。进入最新已知章节可以显示 100%，但不等于用户手工标记“读完”。原站只上报章 ID，WebDAV 则可同步网络书籍的段落锚点，见[书架](library.md)和 [WebDAV](../network/webdav-sync.md)。
 
-### 保存与恢复时机
+目录或搜索的首次实际跳转会保存临时 `ReadingReturnPoint`，供“回到刚才阅读处”。后续查阅保留同一起点，跨章返回成功后才消费它；这个临时位置不替代普通续读记录。
 
-- 滚动停稳后防抖 500 ms 保存；分页状态变化、切章、返回、`ON_STOP` 和销毁也会保存。
-- 暂停阅读历史时不保存进度；未测量完成、正在恢复锚点、分页模式切换中或已离开时也不提交临时位置。
-- 未改变的章 ID、索引、像素、字符和标题不会重复写入。
-- 滚动与分页切换时使用段落+字符锚点，不直接套用原来的像素偏移。
-- 临时视口尺寸变化时保留原请求锚点，不能每次测量都将它改成中间页的页首，否则会逐次向前漂移。
-- 同一行的实际起始字符可能早于请求字符；用户尚未移动时保留请求字符，避免切回另一渲染器时退一整页。
+## 滚动、分页与输入
 
-云阅读历史目前上传章 ID，本地 `Position` 保存更细粒度的位置。不要将两者描述为完整的逐字符云进度同步。
+工具栏是正文上方的覆盖层，开关菜单和搜索框不改变正文视口，分页页码区也固定预留。否则每次开菜单都会重新分页。
 
-## 6. 连续滚动和静态分页
-
-### 固定正文视口
-
-两种模式都使用稳定的正文视口，顶部/底部工具栏是同级覆盖层。显示菜单、收起菜单或展开章内搜索不会参与正文尺寸计算；分页模式还固定预留页码栏空间。修改工具栏时不要把它改成给正文动态增加 padding 的布局，否则会改变页数和阅读位置。
-
-阅读器宽屏使用固定目录栏，窄屏使用目录面板。阅读区宽度仍受 `settings.width` 限制，正文安全区域考虑系统栏及刘海。
-
-### 连续滚动
-
-正文使用有稳定原始索引键的 `LazyColumn`，标题、正文、图片和章末有各自的 `contentType`。普通翻屏按钮移动视口高度约 85%；减少动效时直接移动，否则使用短动画。
-
-章末上拉由 [ReaderChapterOverscroll.kt](../../app/src/main/java/cc/novelia/app/ui/reader/ReaderChapterOverscroll.kt) 接管列表在末尾剩余的拖动距离，阈值 56 dp。仅未中断的单指触摸在松手时可提交；多指、指针取消、选择手势和禁用修饰符不能触发切章。列表原生 overscroll 关闭，避免先吞掉末尾距离。测试新手势时必须覆盖“达到阈值后取消”和“反向撤回”。
-
-章末原有提示直接承担反馈：上拉时文字由淡变亮，两侧横线向外延伸；达到阈值显示“松手加载下一章”，释放后原位显示加载状态，不再另加进度面板。加载失败保留当前章并显示重试/继续阅读操作。电子纸只切换普通/就绪状态，不连续平移正文或绘制渐变；减少动效关闭回弹过渡。
-
-### 点击区域翻页
-
-“阅读偏好 → 翻页 → 正文翻页 → 点击区域翻页”默认关闭，支持全局默认、单书覆盖和备份；切换分页模式或电子纸预设时保留选择。开启后，正文视口（含留白）的左侧三分之一向前翻，右侧三分之一向后翻，中间显示或收起工具栏；自动分页复用原有跨章逻辑，连续滚动每次移动视口高度约 85%，章末继续使用上拉或章末按钮。关闭后，正文单击继续显示或收起工具栏。
-
-首次开启后，在关闭设置面板、正文就绪时展示区域引导；右上角叉号、“开始阅读”或系统返回键均可关闭。引导不改变正文排版，关闭动作不穿透为翻页，确认状态保存在本机书库中，切书、重启或重新开启开关不会重复提示。区域按实际正文宽度划分，短视口采用紧凑说明。
-
-确认单击后，对命中的三分之一区域显示约 280 ms 的淡出高亮与轻微边缘阴影；不延迟翻页，也不额外捕获输入。关闭开关后清除反馈。减少动效时用短暂静态高亮，电子纸用约 180 ms 的细边框，避免正文连续闪动。长按、滑动、取消、多指和正文内控件操作不会触发区域反馈。
-
-[ReaderTapNavigation.kt](../../app/src/main/java/cc/novelia/app/ui/reader/ReaderTapNavigation.kt) 观察指针位置，但由原有点击控件确认单击，不消费拖动事件。超过移动阈值、长按、多指、系统取消或操作期间切换开关时不触发点击翻页；方向手势关闭后，滑动也不能被当作点击。段落选择、插图长按放大、章末上拉和控件操作保留原行为，键盘及无障碍点击保留工具栏入口。宽屏按正文视口分区，不包含目录侧栏。
-
-### 拖动本章进度
-
-底部工具栏展开时显示可拖动的本章进度条，收起工具栏不影响正文视口和页数。“阅读偏好 → 翻页 → 工具栏 → 阅读进度条”可开关，默认开启，支持全局默认与单书覆盖，电子纸预设切换不会重置此选择。关闭进度条不隐藏原有翻页按钮或分页页码。连续滚动按展示字符长度定位到段内行（含双语、缩进及并列引擎标签），插图使用固定权重；百分比为章内位置估计，不是全书百分比。自动分页直接选择已测量的页索引，并显示目标页/总页数。进度两端只定位本章开头和末尾，不触发跨章加载。
-
-普通屏幕随拖动预览正文，远距离滚动只播放最后一小段过渡，新的拖动取消旧定位；分页复用既有短切页动效。减少动效时直接定位；电子纸拖动只更新目标位置，松手后再刷新正文。进度条保留至少 48 dp 触摸高度和可访问性进度操作，重排或切章时取消在途定位，最终位置继续使用原有段落/字符锚点保存。
-
-### 自动分页
-
-1. `measureEInkChapter` 为每段建立 `SpannableStringBuilder` 和 `StaticLayout`，保留字号、粗体、行距、辅文本字号/透明度/下划线。
-2. 将文字布局转为不可拆分的 `PageLine`，再交给纯函数 `paginateLines`；只分完整行，段落之间加入间距。
-3. 插图独占一页，空正文仍产生可处理的空页。超过视口高度的单行由渲染器缩放显示，避免大字号横屏截掉文字。
-4. `EInkPageState` 保存页列表、页索引、就绪状态和待恢复字符锚点。
-5. Canvas 绘制当前页的已测量行，并提供可读取的可见文字语义。
-
-测量在 `Dispatchers.Default` 执行，后续变化有 120 ms 合并等待；翻页只切换索引，复用整章布局。输入键包含内容、排版、视口、密度和字体缩放。旧测量结果只有在输入相符、页列表实例匹配时才能显示，避免短暂把新文字和旧布局拼在一起。
-
-触摸翻页在抬手时按主要方向提交，阈值 40 dp。左右/上下手势可以分别关闭。当前页前后越界分别进入上一章末尾、下一章开头；本地挂载文库分卷在最后一章后提示下一分卷。`readerKeyDirection` 还映射 PageUp/PageDown、方向键、空格和可选音量键；设置、搜索、朗读等面板打开时阅读器停止拦截不该消费的按键。
-
-## 7. 精确搜索
-
-### 章内搜索
-
-`findReadingTextMatches` 搜索已经准备好的显示文本，忽略大小写，按投影段落、part、出现位置排序；支持同一段的多次命中和重叠匹配，最多 2000 条，跳过插图。上/下一处从当前命中继续；没有当前命中时参考真实可见字符位置，而非只参考段号。
-
-搜索计算在后台执行，定位回到主线程。查询或投影变化会清理旧匹配；布局变化取消旧定位 Job。修改这些代码时，需要验证同一超长段落中多次命中、双语辅文本、并列译文、繁体转换、缩进和图片前后的偏移。
-
-### 整本搜索
-
-[BookSearchPanel](../../app/src/main/java/cc/novelia/app/ui/reader/OfflineReadingPanels.kt) 是离线范围搜索：
-
-- 本地书读取本地目录与章节。
-- 在线书读取当前账号的离线目录快照及已缓存章节，不为搜索请求缺失章节。
-- 没有离线目录时降级到当前缓存章节，并在界面说明范围。
-
-`searchBookText` 同样调用 `prepareReadingParagraphs`，默认上限为 200 个结果、20,000,000 个已扫描文本字符。它返回扫描章数、可用章数、目录总章数和 `truncated`，结果为空不能被解释成全网小说没有命中。跳转结果携带 `paragraph/part/start/end`，到目标章后按真实布局定位并高亮。
-
-### 查阅后返回
-
-第一次实际跳转章内搜索命中、整本搜索结果或目录章节之前，保存 `ReadingReturnPoint`（章节、原始段落索引、字符锚点、像素回退）。后续查阅继续保留同一个起点，工具栏显示“回到刚才阅读处”。同章直接定位；跨章沿用可取消、可重试的章节加载流程，成功后才消费返回位置。字符锚点可在重新排版后恢复正文位置，插图和标题保留像素偏移。此临时查阅位置通过导航项和 `rememberSaveable` 保留，不受暂停阅读历史影响，也不替代普通阅读进度。
-
-## 8. 插图与笔记
-
-滚动插图先预留宽度 1.35 倍、限制在 180–900 dp 的显示框，下载解码完成后不会推动后续段落。静态分页中插图独占一页。两种模式都有失败重试和长按放大入口。
-
-[IllustrationViewer](../../app/src/main/java/cc/novelia/app/ui/components/IllustrationViewer.kt) 将解码尺寸限制为 4096×4096，使用 [IllustrationTransform.kt](../../app/src/main/java/cc/novelia/app/reader/IllustrationTransform.kt) 处理缩放中心和平移边界。普通模式支持捏合/拖动、双击与按钮；电子纸使用缩放及方向按钮，避免连续手势绘制。视口变化时重置变换。
-
-段落长按面板支持系统文本选择、分享和创建笔记。笔记保存 `BookRef.key`、章节 ID、原始段落索引、文本摘录及可选笔记，并附书名/章节名。它不是 `Position.index`，不要用滚动列表的标题偏移污染笔记定位。
-
-## 9. 系统朗读
-
-朗读采用 Android `TextToSpeech`，由 [AndroidManifest.xml](../../app/src/main/AndroidManifest.xml) 中的 `ReadAloudService` 前台服务提供后台播放。默认开启连续听书，当前章结束后由服务自动加载下一章，直到末章、停止或定时到期；关闭 `speechContinueChapters` 可只读本章。
-
-开始时按当前显示段落的原始索引选取起点。日文使用原文；中文使用中文投影的首个主文本，保留译文优先序和繁体设置，显式选择中文时不受屏幕日文模式影响。首章和续章使用同一选择逻辑。设置的 `speechLanguage` 为 `auto` 时依据显示模式是否以 `jp` 开头选择日文。
-
-[SpeechContinuation.kt](../../app/src/main/java/cc/novelia/app/reader/SpeechContinuation.kt) 管理续章顺序、文本选择和加载策略：本地书读取索引和文件，网络书优先使用缓存，仅在未缓存且 `speechNetworkContinuation` 开启时联网。纯插图/空章自动跳过，循环章节 ID 停止并报错。网络请求与播放绑定启动时账号会话，切换账号后旧播放不能推进；失败暂停并保留同一章，通知或面板的“继续”可重试。关闭联网续章后遇到未缓存章节会暂停并解释原因。
-
-`prepareSpeechQueue` 忽略空白和图片标记，按句号、问号、感叹号、换行等切分句子，每个 utterance 最多约 3500 个字符，并避免切断 UTF-16 代理对。暂停/恢复重读当前句子，不承诺从句中某个字精确恢复。
-
-长正文不放进 Intent extras：后台先把首章队列、书籍与下一章身份、阅读设置及无令牌会话绑定写入私有缓存目录的 `tts-queue-<UUID>.json`，服务只接收队列 ID。服务立即升为前台，再在 IO 线程读取并删除文件；准备取消和异常也负责清理文件。续章也在 IO 协程加载；停止、重新开始或服务销毁会取消待加载任务。更改这部分不能把整章通过 Binder 传递。
-
-服务用全局请求代次和唯一 utterance ID 隔离旧回调；新的开始/停止后，旧 `onDone` 不能推进新队列。它管理音频焦点、通知暂停/继续/停止按钮、定时停止、TTS 语言包检查和销毁清理。`status` 是供 UI 观察的 `StateFlow`。系统引擎或语音包缺失应显示失败原因，不应误报“本章朗读完成”。
-
-定时器只在新播放会话开始时设置一次，并使用单调时钟复核到期时间；跨章、暂停/恢复和失败重试都不会重置期限，到期会取消续章加载。`SpeechContinuationTest` 覆盖本地/缓存/联网策略、禁用联网、失败重试、取消、空章跳过、环路和语言一致性；真实 TTS 后台与通知行为仍需设备验证。
-
-## 10. 修改步骤与测试矩阵
-
-修改阅读器时先选择真实边界：纯文本/分页规则放在 `reader/`；章节和缓存操作保留在数据/控制器层；Compose 负责状态协调与呈现。避免把可独立测试的规则继续堆进 `ReaderContent`。
-
-| 修改范围 | 优先运行/扩展的测试 |
+| 模式 | 实现和交互 |
 | --- | --- |
-| 原文、译文回退、繁体 | [ReaderProjectionTest](../../app/src/test/java/cc/novelia/app/ReaderProjectionTest.kt)、[ReaderAndLinksTest](../../app/src/test/java/cc/novelia/app/ReaderAndLinksTest.kt) |
-| 偏好迁移、电子纸切换 | [ReaderPreferencesTest](../../app/src/test/java/cc/novelia/app/ReaderPreferencesTest.kt)、[EInkReaderFlowTest](../../app/src/androidTest/java/cc/novelia/app/ui/reader/EInkReaderFlowTest.kt) |
-| 切章取消/失败/重试 | [ReaderChapterLoadTest](../../app/src/test/java/cc/novelia/app/ReaderChapterLoadTest.kt) |
-| 章末上拉 | [ReaderChapterOverscrollTest](../../app/src/test/java/cc/novelia/app/ReaderChapterOverscrollTest.kt) |
-| 点击区域、首次引导和手势/反馈兼容 | [ReaderTapNavigationTest](../../app/src/androidTest/java/cc/novelia/app/ui/reader/ReaderTapNavigationTest.kt)、[ReaderTapFeedbackTest](../../app/src/androidTest/java/cc/novelia/app/ui/reader/ReaderTapFeedbackTest.kt)、[ReaderToolbarOverlayTest](../../app/src/androidTest/java/cc/novelia/app/ui/reader/ReaderToolbarOverlayTest.kt) |
-| 分页、锚点、翻页键 | [StaticPaginationTest](../../app/src/test/java/cc/novelia/app/StaticPaginationTest.kt)、[ReaderExactSearchTest](../../app/src/test/java/cc/novelia/app/ReaderExactSearchTest.kt) |
-| 精确搜索、边界/取消、朗读队列 | [ReaderExactSearchTest](../../app/src/test/java/cc/novelia/app/ReaderExactSearchTest.kt)、[ReaderSafetyTest](../../app/src/test/java/cc/novelia/app/ReaderSafetyTest.kt) |
-| 阅读连续性和分卷 | [ReadingContinuityTest](../../app/src/test/java/cc/novelia/app/ReadingContinuityTest.kt)、[ReadingContinuityUiTest](../../app/src/androidTest/java/cc/novelia/app/ui/reader/ReadingContinuityUiTest.kt) |
-| 章节进度、更新确认与旧记录兼容 | [ReadingProgressUpdatesTest](../../app/src/test/java/cc/novelia/app/ReadingProgressUpdatesTest.kt)、[BookUpdateStateTest](../../app/src/test/java/cc/novelia/app/data/updates/BookUpdateStateTest.kt)、[ReaderCompletionFlowTest](../../app/src/androidTest/java/cc/novelia/app/ui/reader/ReaderCompletionFlowTest.kt) |
-| 工具栏不改变排版 | [ReaderToolbarOverlayTest](../../app/src/androidTest/java/cc/novelia/app/ui/reader/ReaderToolbarOverlayTest.kt) |
-| 宽屏目录、窗口调整 | [ReaderAdaptiveUiTest](../../app/src/androidTest/java/cc/novelia/app/ui/reader/ReaderAdaptiveUiTest.kt) |
-| 图片缩放和平移 | [IllustrationTransformTest](../../app/src/test/java/cc/novelia/app/IllustrationTransformTest.kt)、[IllustrationViewerTest](../../app/src/androidTest/java/cc/novelia/app/ui/reader/IllustrationViewerTest.kt) |
+| 连续滚动 | LazyColumn；翻屏约移动视口的 85%；章末可上拉请求下一章 |
+| 自动分页 | StaticLayout 测量整章，按完整行分页；插图独占一页；翻页复用布局 |
+| 点击区域翻页 | 默认关闭；开启后左右三分之一翻页，中间切换工具栏 |
+| 章内进度条 | 滚动按显示字符权重定位，分页选已测量页；两端不触发跨章 |
 
-例如只验证纯阅读规则，可在仓库根目录用 PowerShell 7 执行：
+点击必须与长按选字、拖动、多指、图片操作和取消区分。章末上拉也只在有效手势松手时提交。电子纸与减少动效使用静态反馈；面板打开时不要拦截属于表单的按键。
 
-```powershell
-.\gradlew.bat :app:testDebugUnitTest --tests 'cc.novelia.app.ReaderProjectionTest' --tests 'cc.novelia.app.ReaderExactSearchTest' --tests 'cc.novelia.app.StaticPaginationTest'
-if ($LASTEXITCODE -ne 0) { throw '阅读器单元测试失败' }
-```
+## 搜索、图片和笔记
 
-交互变化还应在模拟器或真机验证：连续滚动/自动分页互换、普通/电子纸、窄屏/宽屏/横屏、大字号、菜单和键盘开关、后台再前台、离线切章失败后重试，以及长段落和图片混排。涉及朗读时另验证真实系统 TTS 的语言包、焦点变化和通知按钮。单元测试不能替代实际文字测量、窗口尺寸或系统服务行为验证。
+章内搜索针对实际显示文本，支持一段内多次命中。整本搜索读取本地文档或**已缓存的网络章节**，不会自动下载整本；没有完整离线目录时会降级并说明范围。结果数量和扫描量有上限，截断或缺缓存不能解读为全书没有命中。
+
+图片在滚动正文预留位置，分页中独占一页。长按进入全屏查看，电子纸提供按钮操作。正文长按可选字、分享和记笔记；笔记保存原始段落索引，不能使用标题偏移后的列表下标。
+
+## 系统朗读
+
+朗读由 Android TTS 前台服务执行。服务按选定语言和同一投影规则建立句子队列，忽略图片；暂停后继续会重读当前句，不承诺字级恢复。
+
+连续听书优先本地/缓存，只有开启联网续章时才读取缺失章节。失败暂停并保留目标供重试，空章可跳过，循环章节会停止。播放绑定开始时的会话，旧回调不能推进后来启动的新队列。
+
+长正文先写私有临时队列文件，Intent 只传队列 ID，避免 Binder 大载荷。定时停止沿用一次播放的原期限，跨章、暂停和重试不会重置。真实语言包、音频焦点和通知按钮需要设备验收。
+
+## 选择回归范围
+
+纯规则优先看 `ReaderProjectionTest`、`ReaderPreferencesTest`、`ReaderExactSearchTest`、`StaticPaginationTest`、`ReaderChapterLoadTest`、`ReadingProgressUpdatesTest` 和 `SpeechContinuationTest`，位于 [JVM 测试目录](../../app/src/test/java/cc/novelia/app)。
+
+布局与手势看 [ui/reader 设备测试](../../app/src/androidTest/java/cc/novelia/app/ui/reader)。至少检查滚动/分页互换、双语、大字号、横屏、工具栏开关、断网切章和后台再前台；锚点改动增加超长段落、空段和插图混排。执行方法见[测试指南](../quality/testing.md)。

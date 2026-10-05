@@ -1,57 +1,53 @@
-# Novelia 项目文档
+# Novelia 开发文档
 
-本目录按功能和维护职责组织 Android 客户端的使用边界、实现流程与开发说明。内容以当前工作树为准，不代表某次发行已经通过测试。版本和依赖以 [version.properties](../version.properties) 与 [Gradle 配置](../app/build.gradle.kts) 为准；当前功能见[业务功能索引](features/README.md)，已发布版本的变化与迁移说明见 [GitHub 发行说明](https://github.com/nobYoQ/novelia/releases)。
+Novelia 是轻小说机翻机器人的非官方 Android 客户端，使用 Kotlin 和 Jetpack Compose。它把在线小说、本地文件、阅读器和社区放在一个应用里；翻译生成和内容服务由原站提供，本仓库不包含服务端。
 
-Novelia 是 [轻小说机翻机器人](https://n.novelia.cc/) 的非官方 Android 客户端，提供阅读、收藏、社区和文件工具，不包含翻译中心、译文生成或翻译服务密钥配置。原站 API、内容和服务端权限不由本仓库控制。产品介绍与下载入口见 [项目首页](../README.md)。
+这里面向需要修改和维护客户端的开发者。产品介绍和下载见[项目首页](../README.md)，构建版本以 [version.properties](../version.properties) 为准。
 
-## 文档分类
+## 第一次接触项目
 
-| 分类 | 阅读内容 | 入口 |
-| --- | --- | --- |
-| 开发入门 | 环境、构建、开发约定与扩展步骤 | [development](development/README.md) |
-| 架构与界面基础 | 生命周期、源码目录、路由、状态和共享交互 | [architecture](architecture/README.md) |
-| 业务功能 | 书架、发现、书籍、阅读、社区、文件、设置与笔记 | [features](features/README.md) |
-| 数据与恢复 | 状态归属、文件布局、兼容、备份和恢复 | [data](data/README.md) |
-| 网络与认证 | 登录、会话隔离、API、缓存和云端同步 | [network](network/README.md) |
-| 质量验证 | 回归测试、性能、Profile 和安全隐私边界 | [quality](quality/README.md) |
-| 维护与排障 | 发布、故障定位及文档维护规则 | [maintenance](maintenance/README.md) |
+建议先读三篇：
 
-每个分类目录有独立索引；专题页顶部可以返回总目录。文档源码链接相对于所在文件解析，文中的构建与测试命令均在**仓库根目录**执行。
+1. [环境搭建与构建](development/getting-started.md)：把项目跑起来，了解本地包与正式发行包的区别。
+2. [架构与状态流](architecture/architecture.md)：认识应用服务、页面控制器和本地存储。
+3. [源码导航](architecture/source-layout.md)：按要改的功能找到代码，再用[测试指南](quality/testing.md)选择验证范围。
 
-## 推荐阅读路径
+所有命令默认在仓库根目录执行。Windows 示例使用 PowerShell 7。
 
-首次开发：
+## 按任务查阅
 
-1. [环境搭建与构建](development/getting-started.md)：准备 JDK、SDK 和本地构建入口。
-2. [源码目录导航](architecture/source-layout.md) → [架构与状态流](architecture/architecture.md)：找到模块和数据所有者。
-3. [日常开发与扩展](development/development.md)：确定页面、字段或接口的修改范围。
-4. 按下表选择业务专题，再按 [测试与验收](quality/testing.md) 选择验证范围。
+| 你要做什么 | 从这里开始 |
+| --- | --- |
+| 配环境、构建 APK、调整版本 | [构建指南](development/getting-started.md) |
+| 新增页面、偏好或 API | [开发流程](development/development.md)、[界面与导航](architecture/ui-and-navigation.md) |
+| 改书架、收藏、历史或更新提醒 | [书架](features/library.md) |
+| 改搜索、筛选、标签库或排行榜 | [发现与搜索](features/discovery.md) |
+| 改目录、继续阅读、文库资料或术语 | [书籍详情](features/book-details.md) |
+| 改排版、翻页、双语、定位或朗读 | [阅读器](features/reader.md) |
+| 改帖子、回复、Markdown 或草稿 | [社区](features/community.md)、[论坛接口](network/forum-api-preview.md) |
+| 改文件导入、下载、导出或转换 | [文件与下载](features/files-and-downloads.md) |
+| 改设置、书签或笔记 | [设置与笔记](features/settings-and-notes.md) |
+| 改持久化、迁移或备份恢复 | [数据存储](data/data-and-storage.md)、[备份与恢复](data/backup-and-recovery.md) |
+| 排查登录、请求或原站同步 | [认证](network/authentication.md)、[网络与同步](network/network-and-sync.md) |
+| 改镜像线路、ECH 或诊断 | [书源线路](development/book-source-mirrors.md)、[网络诊断](network/network-diagnostics.md) |
+| 改 WebDAV 多设备同步 | [WebDAV](network/webdav-sync.md) |
+| 做测试、性能分析或发布 | [测试](quality/testing.md)、[性能](quality/performance.md)、[发布](../RELEASING.md) |
+| 定位故障 | [排障指南](maintenance/troubleshooting.md) |
 
-定位功能：
+完整分类：[开发](development/README.md) · [架构](architecture/README.md) · [功能](features/README.md) · [数据](data/README.md) · [网络](network/README.md) · [质量](quality/README.md) · [维护](maintenance/README.md)。
 
-| 我要了解或修改 | 主要文档 | 关联边界 |
-| --- | --- | --- |
-| 收藏、文件夹、分卷、历史、更新提醒 | [书架与阅读资料管理](features/library.md) | [同步](network/network-and-sync.md)、[存储](data/data-and-storage.md) |
-| 搜索、书源、筛选、标签和排行榜 | [发现与搜索](features/discovery.md) | [界面状态](architecture/ui-and-navigation.md) |
-| 目录、继续阅读、更新摘要、编辑与术语 | [书籍详情与文库](features/book-details.md) | [阅读器](features/reader.md)、[认证](network/authentication.md) |
-| 双语、分页、定位、搜索、插图与朗读 | [阅读器开发](features/reader.md) | [设置与笔记](features/settings-and-notes.md) |
-| 帖子、评论、Markdown 和草稿 | [社区与内容编辑](features/community.md) | [导航与渲染](architecture/ui-and-navigation.md) |
-| 本地文件、下载、导出和文本工具 | [文件与下载](features/files-and-downloads.md) | [资料恢复](data/backup-and-recovery.md) |
-| 外观、电子纸、屏蔽、缓存和笔记 | [设置、笔记与个人数据](features/settings-and-notes.md) | [数据范围](data/data-and-storage.md) |
-| 登录、退出、401 或切换账号 | [账号与登录](network/authentication.md) | [网络与同步](network/network-and-sync.md) |
-| 换机、备份预览、恢复冲突或损坏书库 | [备份与恢复流程](data/backup-and-recovery.md) | [文件存储](data/data-and-storage.md) |
-| WebDAV 服务配置与多设备资料合并 | [WebDAV 多设备同步](network/webdav-sync.md) | [设置](features/settings-and-notes.md)、[存储](data/data-and-storage.md) |
-| 编译、安装、回归或性能问题 | [排障](maintenance/troubleshooting.md)、[测试](quality/testing.md) | [性能测量](quality/performance.md) |
+## 开发前先分清三件事
 
-## 经常需要区分的概念
+**书目、正文和缓存各有生命周期。** 收藏保存书籍信息；下载得到文件；导入才建立本地文档。取消收藏、删除文档和清缓存的影响不同。
 
-- **本地书架与云端收藏**分别存储；退出登录不会删除本机书籍、笔记和阅读进度。
-- **云端读到的章节与本机精确位置**精度不同；列表百分比是展示估计，不是可跨布局复用的阅读锚点。
-- **章节缓存、下载文件与导入文档**具有不同生命周期；清缓存不能等同于删除用户文件。
-- **普通设置 JSON 与阅读资料 ZIP**覆盖不同数据；换机迁移应阅读备份专题。
-- **内存更新与磁盘提交**不是同一个时刻；依赖持久状态的后台任务和恢复提交有显式边界。
-- **客户端按钮权限与原站授权**不是同一层判断；界面显示可操作仍需正确处理服务端拒绝。
+**原站同步、WebDAV 和备份用途不同。** 原站同步处理账号收藏和章节历史；WebDAV 合并选定的网络书籍阅读资料；阅读资料 ZIP 负责迁移本地小说等设备资料。三者都不会替用户迁移登录凭据。
 
-## 协作与维护入口
+**内存中的新状态可能还没写入磁盘。** 页面通过 `LocalStore.update` 修改状态；后台任务和恢复等流程需要明确的持久化边界。请求同时要绑定发起时的账号和书源，不能在完成时随手换成“当前用户”。
 
-[贡献指南](../CONTRIBUTING.md)规定代码协作；[安全政策](../SECURITY.md)规定漏洞报告；[手动发布指南](../RELEASING.md)规定正式签名和附件流程；[来源与素材声明](../NOTICE.md)及[许可证目录](../licenses/README.md)记录授权边界。
+## 文档依据与维护
+
+本轮按 **2026-10-06、源码提交 `24a3125`** 核对当前客户端行为。服务端在线状态、GitHub 后台设置和实际设备验收不由这次源码核对证明。已知的正式发布脚本问题见[发布指南](../RELEASING.md#准备附件)。
+
+功能说明描述当前实现；旧论坛部署适配记录单独放在[历史记录](maintenance/history/forum-adaptation.md)，其中的测试结果只属于对应日期。后续修改请同步相关专题，写法见[文档维护](maintenance/documentation.md)。
+
+协作规则见[贡献指南](../CONTRIBUTING.md)，漏洞报告见[安全政策](../SECURITY.md)，来源与许可见 [NOTICE](../NOTICE.md) 和[许可证目录](../licenses/README.md)。

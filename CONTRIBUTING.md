@@ -1,49 +1,34 @@
 # 参与贡献
 
-客户端问题请提交到 [Issues](https://github.com/nobYoQ/novelia/issues)；原站内容、账号与服务端权限问题应联系原站。较大的功能或架构调整请先开 Issue 讨论范围。
+客户端缺陷和建议提交到 [Issues](https://github.com/nobYoQ/novelia/issues)。较大的功能或架构调整先讨论范围；原站内容、账号和服务端权限问题联系原站。漏洞按 [SECURITY.md](SECURITY.md) 私密报告。
 
-首次参与请从 [项目文档](docs/README.md) 开始；架构、业务功能、扩展步骤和测试选择均在 `docs/` 按职责分类维护。新增或移动说明时遵循 [文档分类与维护规则](docs/maintenance/documentation.md)，同步更新分类索引和相对链接。
+## 开始开发
 
-## 开发环境
-
-- JDK 17（推荐的协作基线）、Android SDK Platform 36、Build Tools 35.0.0。
-- 使用仓库的 Gradle Wrapper；不要升级本地全局 Gradle 来解决项目问题。
-- 在 Android Studio 安装 SDK；脚本可自动查找并同步本机 `local.properties` 的 `sdk.dir`。不要提交该文件。
-- Windows 使用 PowerShell 7；`build.ps1` 自动查找 JDK/SDK，检测失败时填写其顶部“手动环境配置区”，或设置环境变量。优先级与检查命令见 [环境搭建](docs/development/getting-started.md#自动检测与手动配置)。
-
-Windows 检查命令：
+从[构建指南](docs/development/getting-started.md)准备环境：JDK、Android SDK，以及 ECH 构建所需的固定 Go/NDK。使用仓库 Wrapper，Windows 命令使用 PowerShell 7。普通开发不需要发布证书或原站账号。
 
 ```powershell
-./build.ps1 -Tasks @(':app:assembleDebug', ':app:testDebugUnitTest', ':app:lintDebug')
+./build-debug.ps1 -Verify
 ```
 
-Linux / macOS 检查命令（也适用于没有保留执行位的 ZIP 源码）：
+这会构建 Debug、运行 JVM 单元测试和 Lint。Release、设备、论坛/ECH 联调及性能检查按[测试指南](docs/quality/testing.md)选择。仓库没有 CI，提交者记录实际执行结果，维护者按改动复验。
 
-```sh
-sh ./gradlew --no-daemon :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
-```
+## 实现约定
 
-常规构建不需要发布证书或原站账号。当前暂未配置 CI，提交者运行检查并在 PR 中写明结果；维护者合并前复验，不能把未运行的测试标为通过。
+- 从 Fork 建立功能分支，一个 PR 聚焦一个问题；普通贡献不自行升版。
+- 按[源码导航](docs/architecture/source-layout.md)放文件，保持 package 与目录一致，使用 UTF-8 无 BOM 和现有 Kotlin 风格。
+- 涉及状态、账号、备份、解析或阅读位置的改动，增加能复现问题的回归用例。
+- UI 改动检查电子纸、减少动效、窄/宽屏和大字号；使用项目共享组件。
+- 移动 Worker 保留旧任务类名兼容，移动源码检查 Profile 描述符。
+- 更新相关功能文档；新增偏好或 API 的检查范围见[开发流程](docs/development/development.md)。
 
-## 修改与测试
-
-- 外部贡献者从 Fork 创建功能分支，通过 PR 合入 `main`；一个 PR 聚焦一个问题。
-- Kotlin 遵循现有风格与 `.editorconfig`，UTF-8 无 BOM；避免无关的全文件重排。
-- 源码按 [目录导航与归档规则](docs/architecture/source-layout.md) 放入所属功能包；独立页面使用独立文件，通用组件进入 `ui/components/`，数据层按职责归档，测试与对应包保持一致。同步维护 package、引用、测试类名筛选和文档链接。
-- 移动 Worker 时保留已排队任务的旧类名兼容，移动或拆分源码时检查性能 Profile 中的描述符；不能只修改 imports 就认为升级与性能采集产物也已同步。
-- 数据存储、备份、账号隔离、文件解析和阅读进度变更应补充有意义的回归测试。
-- UI 变更提供复现步骤和截图，说明普通模式、电子纸、减少动效及大屏布局的检查情况。
-- JVM 报告：`app/build/reports/tests/testDebugUnitTest/index.html`；Lint 报告：`app/build/reports/lint-results-debug.html`。
-- 设备测试使用 `:app:connectedDebugAndroidTest`，只在专用测试设备或模拟器运行；不要使用存有真实账号与阅读数据的主力设备。
-- 联网站点测试默认跳过。仅在明确需要时选择对应测试类，传入 `live=true` 或 `liveSite=true`；不要把生产站点请求设为普通贡献检查的必经步骤。
-- 性能测量参见 [benchmark/README.md](benchmark/README.md)，不根据单次模拟器数据宣称性能提升。
+设备测试使用专用模拟器或设备，避免真实账号与阅读资料。联网用例默认关闭，真实发帖、上传、删除不属于普通自动回归。
 
 ## 提交 PR
 
-说明问题、最终行为、验证结果以及未验证的范围，关联 Issue。用户可见变更写入 PR 描述并同步相关功能文档，由维护者发行时汇总到 GitHub Release 说明；仓库当前不维护独立的 `CHANGELOG.md`。普通贡献不自行升版，由维护者发布时统一修改 `version.properties`。
+说明具体问题、改后行为、执行的命令和结果，以及未验证范围。UI 附必要截图，性能改动附同条件前后数据，数据改动说明旧版本兼容。模板见 [.github/pull_request_template.md](.github/pull_request_template.md)。
 
-依赖更新应说明用途、版本与许可，复核生成的开源声明。不要提交 APK、构建缓存、密钥、账号会话、真实用户备份或未经授权的小说/图片。
+用户可见变化由维护者发行时汇总到 GitHub Release 正文，仓库不维护独立 CHANGELOG。文档写法见[维护规则](docs/maintenance/documentation.md)，不要把历史测试数字当成当前状态。
 
-贡献的原创代码和文档按本项目 GPL-3.0-only 许可提供；只提交你有权提供的内容。外部代码和素材注明来源、适用许可证或授权依据，保留版权声明，记录在 [NOTICE.md](NOTICE.md) 与对应许可文件中；第三方素材许可不能由项目代码的 GPL 授权替代。无需转让版权。
+不提交 APK、缓存、签名材料、令牌、真实备份或无权提供的小说/图片。依赖更新需复核生成的开源声明；来源及授权记录在 [NOTICE.md](NOTICE.md) 与[许可证目录](licenses/README.md)。原创代码和文档按 GPL-3.0-only 贡献，无需转让版权；第三方素材保留各自授权要求。
 
-交流遵循 [行为准则](CODE_OF_CONDUCT.md)，安全漏洞按 [安全政策](SECURITY.md) 私密报告。
+交流遵循[行为准则](CODE_OF_CONDUCT.md)。

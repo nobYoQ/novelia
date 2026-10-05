@@ -1,82 +1,72 @@
-# 手动发布到 GitHub Releases
+# 手动发布
 
-本项目通过 [GitHub Releases](https://github.com/nobYoQ/novelia/releases) 分发 APK，安装包不提交到 Git。当前不配置 CI 或自动发布工作流；以下操作由维护者在可信设备执行。
+本项目通过 [GitHub Releases](https://github.com/nobYoQ/novelia/releases) 分发 APK，没有 CI 或自动发布流程。普通测试使用 `build-debug.ps1` / `build-release.ps1`；本页只处理正式证书、对应源码和发行附件。
 
-日常本地打包使用 `./build-debug.ps1` 或 `./build-release.ps1`，详见 [本地构建指南](docs/development/getting-started.md)。本地 Release 默认使用 Debug 测试证书，输出到 `outputs/packages/`，允许未提交改动且无需标签；它不等于本页的正式发行流程。正式附件仍由 `scripts/prepare-release.ps1` 准备。
+## 发布前准备
 
-## 首次发布前
+确认长期发布证书及备份、公开 SHA-256 指纹、素材授权和 GitHub 仓库设置。相关入口：[NOTICE](NOTICE.md)、[仓库设置清单](.github/REPOSITORY_SETUP.md)、[测试指南](docs/quality/testing.md)。
 
-- [ ] 核对贴纸及相关形象的来源和公开分发授权，将适用的授权依据记录到 [NOTICE.md](NOTICE.md)；第三方素材许可不由项目代码的 GPL 授权替代。
-- [ ] 核对准备公开的源码和 Git 历史；旧历史中存在 `releases/Novelia-0.1.0-debug.apk`。忽略规则不会清除历史。普通旧安装包可保留历史；若因凭据或素材授权必须清理，应先备份并另行制定历史重写方案，不能直接强推。
-- [ ] 按 [仓库设置清单](.github/REPOSITORY_SETUP.md) 核对 GitHub 权限与安全设置。
-- [ ] 使用 Android Studio 的 Generate Signed App Bundle or APK 创建或选定长期发布证书。密钥库放在仓库外，并做好独立加密备份。
-- [ ] 记录证书的公开 SHA-256 指纹，用于后续每次发行校验。
-- [ ] 在测试设备验证新装、覆盖升级、阅读资料备份/恢复、电子纸及大屏的关键流程。
+本地 Release 默认使用 Debug 证书。它可以检查 R8 后的行为，但不能作为正式发行包。更换签名时，同包名通常无法覆盖安装；先验证[阅读资料备份](docs/data/backup-and-recovery.md)，再制定用户迁移说明。
 
-历史本地包使用测试证书。换用新证书时，同包名通常不能直接覆盖安装；应明确告知用户先通过应用的“阅读资料备份”导出 ZIP、保存其他需要的文件，再卸载旧版、安装新版并恢复。先在测试设备验证备份内容，勿声称全部数据会自动迁移。不要为了兼容旧测试包而公开分发 Debug 签名包。
+检查准备公开的 Git 历史。`.gitignore` 不移除已提交内容；若涉及凭据或未授权素材，另行处理范围与历史，不直接强推。
 
 ## 版本与源码
 
-1. 修改根目录 `version.properties`：`versionName` 使用 `X.Y.Z` 或 `X.Y.Z-beta.1`；`versionCode` 每次公开发包都递增，所有 ABI 使用同一版本码。
-2. 当前源码配置为 `0.2.2 / 14`，实际值以 `version.properties` 为准。后续发行继续递增版本码，不要静默替换已分发的旧版本附件；本地完成打包不代表已在 GitHub 发布。
-3. 汇总 PR 与功能文档中的变化、迁移影响和验证范围，准备 GitHub Release 正文并更新 README 展示版本。仓库当前不维护独立的 `CHANGELOG.md`。
-4. 运行检查、审查改动并提交，确认工作区干净。为该提交创建 `vX.Y.Z` 标签（含预发布后缀时必须一致），再切换到该提交构建。
-5. 发行附件、标签和公开源码必须对应同一个提交。发布后不移动标签，不覆盖已分发的同名包。
+1. 修改 [version.properties](version.properties)：版本名支持 `X.Y.Z` 和预发布后缀，版本码每次公开发包递增，各 ABI 共用。
+2. 汇总变化、迁移影响、已验证和未验证范围，准备 Release 正文。仓库不维护独立 CHANGELOG，也不在多篇文档中重复硬编码当前版本。
+3. 完成检查、审查并提交，确认工作区干净。
+4. 为该提交创建与版本名一致的 `v<versionName>` 标签，从同一提交构建。
 
-## 配置签名
+APK、源码、元数据和标签必须对应同一个提交。发布后不移动标签，不静默覆盖旧附件。
 
-直接调用 Gradle 或通过 `build.ps1` 执行 Release 任务时默认未签名，便于贡献者检查。根目录 `build-release.ps1` 默认显式开启本地测试签名，可通过 `-Unsigned` 改为未签名。只有显式使用 `-PreleaseSigning=true` 才读取以下进程环境变量：
+## 签名配置
 
-| 环境变量 | 内容 |
+直接执行 Gradle `assembleRelease` 默认未签名；`build-release.ps1` 默认使用本地测试签名。正式构建显式使用 `-PreleaseSigning=true`，读取以下进程环境变量：
+
+| 变量 | 用途 |
 | --- | --- |
-| `NOVELIA_KEYSTORE_PATH` | 仓库外密钥库的绝对路径 |
+| `NOVELIA_KEYSTORE_PATH` | 仓库外密钥库路径 |
 | `NOVELIA_KEYSTORE_PASSWORD` | 密钥库密码 |
 | `NOVELIA_KEY_ALIAS` | 密钥别名 |
 | `NOVELIA_KEY_PASSWORD` | 密钥密码 |
 
-通过本机凭据管理器或安全的进程环境注入，不要把真实值写入命令历史、源码、截图、Issue 或聊天；不要把密钥作为发行附件。签名变量不要持久化到公共开发配置。构建结束后清除当前进程变量，不共享签名构建的缓存，不对签名任务使用 `--scan` 或调试日志。
-
-`-PlocalReleaseSigning=true` 仅保留给本地测试，与正式签名选项互斥。正式附件准备脚本会拒绝 Android Debug 证书，并检查证书指纹。
+通过本机安全方式注入，不把真实值写入命令历史、源码或聊天。构建结束后清理进程变量，不公开签名缓存或使用 build scan。测试签名 `-PlocalReleaseSigning=true` 与正式签名互斥。
 
 ## 准备附件
 
-当前 `scripts/prepare-release.ps1` 仍要求复制根目录 `CHANGELOG.md`，而仓库已经删除该文件，会在附件收集时失败。正式使用下列命令前，需先同步脚本的附件清单与当前发行说明方式；本页记录的是这一现存限制，不代表正式附件流程已验证可用。日常本地打包入口不依赖该文件。
+**已知阻塞：** [prepare-release.ps1](scripts/prepare-release.ps1) 仍执行 `Copy-Item CHANGELOG.md`，但仓库没有该文件，因此会在收集附件阶段失败。正式使用前需要修正脚本的附件清单；本轮仅更新文档，未修改脚本。普通本地打包不依赖它。
 
-Windows PowerShell 7 示例；把工具路径和公开证书指纹换成你的实际值，先按上文配置签名环境：
+修正该问题后，按脚本的正式前提执行，例如：
 
 ```powershell
-$apkSigner = 'D:/Android/sdk/build-tools/35.0.0/apksigner.bat'
+$apkSigner = 'C:/Tools/Android/Sdk/build-tools/35.0.0/apksigner.bat'
 $certificateFingerprint = '<发布证书的 SHA-256 指纹>'
 ./scripts/prepare-release.ps1 -ApkSignerPath $apkSigner -CertificateSha256 $certificateFingerprint -Abi arm64-v8a
 ```
 
-脚本要求版本对应标签已存在且指向 HEAD、工作区干净，运行 Release 单元测试、Lint 和构建，再验证 APK 签名、版本及证书。已缓存依赖时可加 `-Offline`。支持 `arm64-v8a`、`armeabi-v7a`、`x86_64`、`x86` 和 `universal`；较老设备是否支持某个 ABI，应以实际安装验证为准。
+工具路径是示例，使用实际安装位置。脚本要求工作区干净、版本标签指向 HEAD，执行 Release 单元测试、Lint 和构建，再检查 APK 版本、签名及证书指纹；拒绝 Debug 证书。完整缓存下可加 `-Offline`。
 
-输出目录为 `outputs/releases/vX.Y.Z-ABI/`，构建日志默认写入 `outputs/logs/`。脚本拒绝覆盖已存在的输出目录，不会创建提交、标签、推送或上传。
+默认 ABI 为 `arm64-v8a`，也支持 `armeabi-v7a`、`x86_64`、`x86`、`universal`。正式脚本选择 universal 时不显式传 targetAbi，应确认外部 Gradle 配置没有留下单 ABI 限制。
 
-| 附件 | 用途 |
+输出到 `outputs/releases/v<版本>-<ABI>/`，不覆盖已有目录，不自动提交、打标签、推送或上传。上述失败可能留下部分附件，不能把目录存在当成准备成功。
+
+| 产物 | 用途 |
 | --- | --- |
-| `Novelia-X.Y.Z-ABI.apk` | 可安装的正式签名 APK |
-| `Novelia-X.Y.Z-source.zip` | 与二进制对应提交的源码和构建脚本 |
-| `OPEN_SOURCE_NOTICES.txt` | 与 APK 内相同的完整许可和依赖声明 |
-| `SHA256SUMS-ABI.txt` | 附件的 SHA-256 校验值 |
-| `Novelia-X.Y.Z-ABI-metadata.json` | 提交、版本、ABI 与证书公开指纹 |
-| GitHub Release 正文 | 版本变化、迁移说明和验证范围，填写在发布页面中 |
-| `Novelia-X.Y.Z-ABI-mapping.zip` | R8 混淆映射；维护者长期归档，可选择公开 |
+| `Novelia-<版本>-<ABI>.apk` | 正式签名安装包 |
+| `Novelia-<版本>-source.zip` | 精确提交的源码和构建脚本 |
+| `OPEN_SOURCE_NOTICES.txt` | 与 APK 内相同的第三方及项目许可 |
+| `SHA256SUMS-<ABI>.txt` | 附件校验 |
+| `Novelia-<版本>-<ABI>-metadata.json` | 提交、版本、ABI、证书公开指纹 |
+| `Novelia-<版本>-<ABI>-mapping.zip` | R8 映射，维护者长期归档 |
 
-同时发布多个 ABI 时，分别生成附件；脚本为 APK、校验文件、元数据和映射添加 ABI 名称以避免覆盖。相同源码 ZIP 和许可证只需上传一份，发行说明在 Release 正文中统一填写；保留文件原名以便校验。GitHub 自动生成的 Source code 档案也应保留。
+多 ABI 的共用源码和许可上传一份即可，保留校验文件引用的原名。Release 正文另填变化和迁移信息。
 
-Linux / macOS 可使用 `sh ./gradlew :app:testReleaseUnitTest :app:lintRelease :app:assembleRelease -PreleaseSigning=true -PtargetAbi=arm64-v8a` 构建，然后按相同要求验证签名、对应源码和附件校验值。上面的 PowerShell 附件工具以 Windows 为验证环境。
+Linux/macOS 可直接使用 Wrapper 完成正式签名构建，但仍需逐项准备和验证对应源码、证书、映射及校验附件；PowerShell 附件工具以 Windows 为目标环境。
 
 ## 上传与验收
 
-1. 推送已审查的提交和对应版本标签到 GitHub；不要推送密钥或本地 `outputs/`。
-2. 在 Releases 选择 **Draft a new release**，选中已经推送的准确标签。
-3. 填写版本变化、最低 Android 版本（API 26 / Android 8.0）、ABI、签名迁移说明、已验证及未验证范围。测试版本勾选 Pre-release。
-4. 上传 APK、对应源码、许可证、校验文件和版本元数据；归档混淆映射。
-5. 从草稿重新下载 APK，检查 SHA-256 与签名，并在专用设备上验证安装及数据迁移后再发布。
-6. 建议在首次发布前开启不可变发行版；先把所有附件放入草稿，再发布。不要把 Actions 临时产物链接作为长期下载地址。
+推送已审查提交及标签，创建对应标签的 Release 草稿，填写版本变化、最低 Android 8.0/API 26、ABI、迁移步骤和验证范围。上传正式附件并归档映射。
 
-SHA-256 用于发现文件损坏；只有来自可信仓库的校验信息和发布证书才能帮助确认来源。源码 GPL 授权不包含贴纸或网站小说内容。
+从草稿重新下载 APK，核对哈希和签名，在专用设备完成新装、覆盖升级或换签名恢复测试，再发布；测试版本标记预发布。发布后的修复使用新版本，不替换同名旧包。
 
-参考：[GitHub 管理发行版](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository)、[Android 应用签名](https://developer.android.com/studio/publish/app-signing)。
+SHA-256 只能帮助核对文件，来源还需结合可信仓库和证书。依赖与素材维护见[发布维护](docs/maintenance/release-and-maintenance.md)。

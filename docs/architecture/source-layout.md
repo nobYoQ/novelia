@@ -1,130 +1,80 @@
-# 源码目录导航与归档规则
+# 源码导航
 
-[返回架构与界面索引](README.md) · [文档总目录](../README.md) · [架构与状态流](architecture.md) · [界面与导航](ui-and-navigation.md)
+[架构目录](README.md) · [文档首页](../README.md)
 
-界面源码按用户看到的功能组织，数据层按模型、网络、存储等职责组织。先找到所属目录，再找页面、服务或规则；跨功能使用的基础设施有单独目录。目录与 Kotlin package 保持一致，例如书架页面属于 `cc.novelia.app.ui.shelf`，本地状态存储属于 `cc.novelia.app.data.storage`。
+先按功能找页面，再沿控制器进入数据层。下列 Kotlin 路径均相对于 `app/src/main/java/cc/novelia/app/`；包名与目录一致。
 
-## 工程入口
+## 工程地图
 
 ```text
-app/src/main/java/cc/novelia/app/
-├── MainActivity.kt          # 导航图、Intent、主题装配和全局界面
-├── NoveliaApplication.kt    # 应用服务和初始化
-├── data/                   # 14 个职责子包，以及旧 Worker 类名兼容入口
-├── files/                  # 文件解析、转换、下载和导出
-├── reader/                 # 阅读投影、锚点、搜索、分页算法和 TTS
-└── ui/                     # 下表中的 17 个功能与共享子包
+app/                         Android 应用
+  src/main/java/.../app/
+    NoveliaApplication.kt    应用服务与后台调度
+    MainActivity.kt          导航、主题与外部 Intent
+    launcher/                桌面图标和启动入口
+    ui/                      Compose 页面和共享界面组件
+    data/                    模型、存储、网络、同步
+    reader/                  正文投影、锚点、分页、搜索、TTS
+    files/                   导入、下载、导出、EPUB 与文本工具
+  src/test/                  JVM 测试
+  src/androidTest/           Android 设备测试
+benchmark/                   Macrobenchmark 与 Profile 采集
+native/ech/                  Go ECH 传输及测试
+gradle/                      工具链、原生构建和许可证生成配置
+scripts/                     PowerShell 构建与发行工具
 ```
 
-项目仍使用 `app` 和 `benchmark` 两个 Gradle 模块；这些子包只是源码组织方式。界面资源继续位于 `app/src/main/res/`，许可 assets 在构建时生成于 `app/build/generated/openSourceAssets/`；单元测试与设备测试分别位于 `app/src/test/`、`app/src/androidTest/`。移动测试文件并修改 package 后，需要同步更新运行命令中的测试类全名；测试应用 ID 和 runner 不随源码分包改变。
+源码包不是独立 Gradle 模块。`benchmark` 用来采集性能数据，不是应用运行时库。构建入口和产物目录见[构建指南](../development/getting-started.md)。
 
-## UI 目录地图
+## 按界面找代码
 
-下列路径均相对于 `app/src/main/java/cc/novelia/app/ui/`。
-
-| 目录 | 归档内容 | 主要入口 |
-| --- | --- | --- |
-| `shelf/` | 本地与云端书架、收藏夹、阅读历史、分卷整理和更新结果 | [AdaptiveLibrary.kt](../../app/src/main/java/cc/novelia/app/ui/shelf/AdaptiveLibrary.kt)、[ShelfScreen.kt](../../app/src/main/java/cc/novelia/app/ui/shelf/ShelfScreen.kt)、[CloudShelf.kt](../../app/src/main/java/cc/novelia/app/ui/shelf/CloudShelf.kt)、[HistoryScreen.kt](../../app/src/main/java/cc/novelia/app/ui/shelf/HistoryScreen.kt) |
-| `discover/` | 发现列表、排行榜、辅助搜索与发现页可见性判断 | [DiscoverScreen.kt](../../app/src/main/java/cc/novelia/app/ui/discover/DiscoverScreen.kt)、[RankScreen.kt](../../app/src/main/java/cc/novelia/app/ui/discover/RankScreen.kt)、[SearchAssistantPanel.kt](../../app/src/main/java/cc/novelia/app/ui/discover/SearchAssistantPanel.kt) |
-| `book/` | 书籍详情、元数据编辑、文库条目维护和术语表 | [BookScreen.kt](../../app/src/main/java/cc/novelia/app/ui/book/BookScreen.kt)、[EditBookScreen.kt](../../app/src/main/java/cc/novelia/app/ui/book/EditBookScreen.kt)、[WenkuEditor.kt](../../app/src/main/java/cc/novelia/app/ui/book/WenkuEditor.kt)、[GlossaryScreen.kt](../../app/src/main/java/cc/novelia/app/ui/book/GlossaryScreen.kt) |
-| `reader/` | 阅读器 Compose 界面、偏好、目录、插图、章节加载状态和离线面板 | [ReaderScreen.kt](../../app/src/main/java/cc/novelia/app/ui/reader/ReaderScreen.kt)、[ReaderPreferences.kt](../../app/src/main/java/cc/novelia/app/ui/reader/ReaderPreferences.kt)、[ReaderTocPane.kt](../../app/src/main/java/cc/novelia/app/ui/reader/ReaderTocPane.kt) |
-| `community/` | 社区列表、文章详情、发帖与编辑、评论和分类 | [CommunityScreen.kt](../../app/src/main/java/cc/novelia/app/ui/community/CommunityScreen.kt)、[ArticleScreen.kt](../../app/src/main/java/cc/novelia/app/ui/community/ArticleScreen.kt)、[ComposeArticleScreen.kt](../../app/src/main/java/cc/novelia/app/ui/community/ComposeArticleScreen.kt)、[CommentsPanel.kt](../../app/src/main/java/cc/novelia/app/ui/community/CommentsPanel.kt) |
-| `account/` | “我的”入口与认证登录页面 | [ProfileScreen.kt](../../app/src/main/java/cc/novelia/app/ui/account/ProfileScreen.kt)、[LoginScreen.kt](../../app/src/main/java/cc/novelia/app/ui/account/LoginScreen.kt) |
-| `settings/` | 阅读与外观设置、屏蔽、云同步状态、阅读资料备份与恢复 | [SettingsScreen.kt](../../app/src/main/java/cc/novelia/app/ui/settings/SettingsScreen.kt)、[BlockedScreen.kt](../../app/src/main/java/cc/novelia/app/ui/settings/BlockedScreen.kt)、[CloudSyncScreen.kt](../../app/src/main/java/cc/novelia/app/ui/settings/CloudSyncScreen.kt)、[LibraryBackupScreen.kt](../../app/src/main/java/cc/novelia/app/ui/settings/LibraryBackupScreen.kt) |
-| `notes/` | 书签与笔记列表、筛选及展示模型 | [NotesScreen.kt](../../app/src/main/java/cc/novelia/app/ui/notes/NotesScreen.kt)、[NotePresentation.kt](../../app/src/main/java/cc/novelia/app/ui/notes/NotePresentation.kt) |
-| `downloads/` | 下载创建表单、任务列表与恢复提示 | [DownloadSheet.kt](../../app/src/main/java/cc/novelia/app/ui/downloads/DownloadSheet.kt)、[DownloadsScreen.kt](../../app/src/main/java/cc/novelia/app/ui/downloads/DownloadsScreen.kt)、[DownloadPresentation.kt](../../app/src/main/java/cc/novelia/app/ui/downloads/DownloadPresentation.kt) |
-| `tools/` | EPUB 转换与压缩、文本换行整理、片假名统计的界面 | [ToolsScreen.kt](../../app/src/main/java/cc/novelia/app/ui/tools/ToolsScreen.kt) |
-| `about/` | 帮助、版本、项目链接和离线许可证 | [AboutScreen.kt](../../app/src/main/java/cc/novelia/app/ui/about/AboutScreen.kt)、[OpenSourceLicensesScreen.kt](../../app/src/main/java/cc/novelia/app/ui/about/OpenSourceLicensesScreen.kt) |
-| `web/` | 原站网页兜底和 WebView 分页交互 | [SiteWebScreen.kt](../../app/src/main/java/cc/novelia/app/ui/web/SiteWebScreen.kt)、[PagedSiteWebView.kt](../../app/src/main/java/cc/novelia/app/ui/web/PagedSiteWebView.kt) |
-| `navigation/` | 共享控制器、根标签切换、导航动作与登录后继续 | [AppController.kt](../../app/src/main/java/cc/novelia/app/ui/navigation/AppController.kt)、[RootNavigation.kt](../../app/src/main/java/cc/novelia/app/ui/navigation/RootNavigation.kt)、[LoginContinuation.kt](../../app/src/main/java/cc/novelia/app/ui/navigation/LoginContinuation.kt) |
-| `components/` | 多个功能复用的页面容器、加载态、书籍行、弹窗、分页与文档访问桥接 | [Screen.kt](../../app/src/main/java/cc/novelia/app/ui/components/Screen.kt)、[AsyncContent.kt](../../app/src/main/java/cc/novelia/app/ui/components/AsyncContent.kt)、[BookComponents.kt](../../app/src/main/java/cc/novelia/app/ui/components/BookComponents.kt)、[DocumentAccess.kt](../../app/src/main/java/cc/novelia/app/ui/components/DocumentAccess.kt) |
-| `theme/` | 应用与阅读配色、动效、电子纸及减少动效的交互环境 | [Theme.kt](../../app/src/main/java/cc/novelia/app/ui/theme/Theme.kt)、[Motion.kt](../../app/src/main/java/cc/novelia/app/ui/theme/Motion.kt)、[AppInteractionMode.kt](../../app/src/main/java/cc/novelia/app/ui/theme/AppInteractionMode.kt)、[InteractionLocals.kt](../../app/src/main/java/cc/novelia/app/ui/theme/InteractionLocals.kt) |
-| `markdown/` | Markdown 编辑、渲染、解析扩展、锚点与草稿生命周期 | [MarkdownText.kt](../../app/src/main/java/cc/novelia/app/ui/markdown/MarkdownText.kt)、[MarkdownEditor.kt](../../app/src/main/java/cc/novelia/app/ui/markdown/MarkdownEditor.kt)、[EditorDraft.kt](../../app/src/main/java/cc/novelia/app/ui/markdown/EditorDraft.kt) |
-| `feedback/` | 贴纸展示、全局反馈及下载完成提示 | [MidoriCompanion.kt](../../app/src/main/java/cc/novelia/app/ui/feedback/MidoriCompanion.kt)、[StickerFeedback.kt](../../app/src/main/java/cc/novelia/app/ui/feedback/StickerFeedback.kt) |
-
-## data 目录地图
-
-下列路径均相对于 `app/src/main/java/cc/novelia/app/data/`。
-
-| 目录 | 归档内容 | 主要入口 |
-| --- | --- | --- |
-| `model/` | 按领域拆分的 DTO、持久化快照、阅读设置和分页容器 | [BookModels.kt](../../app/src/main/java/cc/novelia/app/data/model/BookModels.kt)、[LibraryModels.kt](../../app/src/main/java/cc/novelia/app/data/model/LibraryModels.kt)、[ReaderSettings.kt](../../app/src/main/java/cc/novelia/app/data/model/ReaderSettings.kt) |
-| `network/` | HTTP API、可取消请求、共享请求与云端收藏读取 | [NoveliaApi.kt](../../app/src/main/java/cc/novelia/app/data/network/NoveliaApi.kt)、[HttpCalls.kt](../../app/src/main/java/cc/novelia/app/data/network/HttpCalls.kt)、[SharedRequest.kt](../../app/src/main/java/cc/novelia/app/data/network/SharedRequest.kt) |
-| `auth/` | 会话加密、账号绑定与会话代次检查 | [Session.kt](../../app/src/main/java/cc/novelia/app/data/auth/Session.kt)、[SessionState.kt](../../app/src/main/java/cc/novelia/app/data/auth/SessionState.kt) |
-| `storage/` | 本地状态、合并写入、编解码与损坏恢复 | [LocalStore.kt](../../app/src/main/java/cc/novelia/app/data/storage/LocalStore.kt)、[LibraryStateCodec.kt](../../app/src/main/java/cc/novelia/app/data/storage/LibraryStateCodec.kt)、[StorageFormat.kt](../../app/src/main/java/cc/novelia/app/data/storage/StorageFormat.kt) |
-| `library/` | 书架分组、文库挂载与阅读连续性规则 | [WenkuVolumes.kt](../../app/src/main/java/cc/novelia/app/data/library/WenkuVolumes.kt)、[ReadingContinuity.kt](../../app/src/main/java/cc/novelia/app/data/library/ReadingContinuity.kt) |
-| `cache/` | 有界内存缓存、章节缓存索引和元数据缓存 | [LocalCache.kt](../../app/src/main/java/cc/novelia/app/data/cache/LocalCache.kt)、[MetadataCache.kt](../../app/src/main/java/cc/novelia/app/data/cache/MetadataCache.kt) |
-| `documents/` | 本地文档分块存储与导入哈希索引 | [DocumentStorage.kt](../../app/src/main/java/cc/novelia/app/data/documents/DocumentStorage.kt)、[DocumentHashIndex.kt](../../app/src/main/java/cc/novelia/app/data/documents/DocumentHashIndex.kt) |
-| `backup/` | 阅读资料备份、归档校验与恢复合并 | [LibraryBackupService.kt](../../app/src/main/java/cc/novelia/app/data/backup/LibraryBackupService.kt)、[LibraryBackupArchive.kt](../../app/src/main/java/cc/novelia/app/data/backup/LibraryBackupArchive.kt) |
-| `sync/` | 云端变更队列、同步策略、会话隔离与后台重放 | [CloudMutationQueue.kt](../../app/src/main/java/cc/novelia/app/data/sync/CloudMutationQueue.kt)、[CloudSyncWorker.kt](../../app/src/main/java/cc/novelia/app/data/sync/CloudSyncWorker.kt) |
-| `webdav/` | 自有服务配置、可选资料投影、因果合并、冲突选择与自动同步 | [WebDavSyncManager.kt](../../app/src/main/java/cc/novelia/app/data/webdav/WebDavSyncManager.kt)、[WebDavProjection.kt](../../app/src/main/java/cc/novelia/app/data/webdav/WebDavProjection.kt)、[WebDavMerge.kt](../../app/src/main/java/cc/novelia/app/data/webdav/WebDavMerge.kt) |
-| `catalog/` | 书源、链接解析、查询表达式与关键词目录 | [Providers.kt](../../app/src/main/java/cc/novelia/app/data/catalog/Providers.kt)、[BookLinks.kt](../../app/src/main/java/cc/novelia/app/data/catalog/BookLinks.kt)、[KeywordCatalog.kt](../../app/src/main/java/cc/novelia/app/data/catalog/KeywordCatalog.kt) |
-| `chapters/` | 章节请求、离线批次与译文新鲜度 | [ChapterRequests.kt](../../app/src/main/java/cc/novelia/app/data/chapters/ChapterRequests.kt)、[ChapterOffline.kt](../../app/src/main/java/cc/novelia/app/data/chapters/ChapterOffline.kt)、[ChapterFreshness.kt](../../app/src/main/java/cc/novelia/app/data/chapters/ChapterFreshness.kt) |
-| `updates/` | 书架更新检查、检查顺序与系统通知 | [UpdateWorker.kt](../../app/src/main/java/cc/novelia/app/data/updates/UpdateWorker.kt)、[BookUpdates.kt](../../app/src/main/java/cc/novelia/app/data/updates/BookUpdates.kt)、[AppNotifications.kt](../../app/src/main/java/cc/novelia/app/data/updates/AppNotifications.kt) |
-| `markdown/` | 与界面无关的 Markdown 链接与编辑模板规则 | [MarkdownLinks.kt](../../app/src/main/java/cc/novelia/app/data/markdown/MarkdownLinks.kt)、[MarkdownTemplates.kt](../../app/src/main/java/cc/novelia/app/data/markdown/MarkdownTemplates.kt) |
-
-原来汇集不同模型的 `Models.kt` 已按领域拆入 `model/`，书源列表独立到 `catalog/Providers.kt`。`storage/StorageFormat.kt` 集中提供 `appJson` 与 `hashName`；新的模型或存储代码应引用同一序列化配置，避免另起一套格式。系统通知入口 `updates/AppNotifications.kt` 与更新任务实现分别存放。
-
-文件下载的独立网络调度配置位于 `network/DownloadTransport.kt`，由应用级 `NoveliaApi` 复用，任务与文件生命周期仍由 `files/DownloadWorker.kt` 管理。手动缓存章节的有界并行逻辑位于 `chapters/ChapterBatch.kt`，账号、网络策略与落盘检查由 `ChapterOffline.kt` 负责。
-
-书架更新状态变换集中在 [BookUpdateState.kt](../../app/src/main/java/cc/novelia/app/data/updates/BookUpdateState.kt)，详情刷新、后台检查与收藏移动共用基线；已到达章节的更新确认在 [ReadingProgress.kt](../../app/src/main/java/cc/novelia/app/data/library/ReadingProgress.kt)。显式云端收藏创建本地副本的规则在 [CloudFavoriteLocalCopy.kt](../../app/src/main/java/cc/novelia/app/data/library/CloudFavoriteLocalCopy.kt)，与补齐阅读元数据分开。站内新旧域名及端口规则由 [SiteUrls.kt](../../app/src/main/java/cc/novelia/app/data/catalog/SiteUrls.kt) 共用。
-
-`data/` 根目录保留 [CloudSyncWorker.kt](../../app/src/main/java/cc/novelia/app/data/CloudSyncWorker.kt) 和 [UpdateWorker.kt](../../app/src/main/java/cc/novelia/app/data/UpdateWorker.kt) 两个带 `@Keep` 的兼容入口，仅用于升级后继续构造旧版已排队的任务。WorkManager 会把 Worker 类全名保存到内部数据库，旧任务仍可能使用旧名字；因此不能像普通 helper 一样直接删除或改名。实际逻辑位于 `sync/` 与 `updates/`，新开发应从职责包中的实现入手。此次源码分包没有改变原有持久化数据格式或字段。
-
-## 测试目录地图
-
-JVM 测试位于 `app/src/test/java/cc/novelia/app/`，其中原 `data/` 测试按生产职责分别放入 `auth/`、`backup/`、`cache/`、`documents/`、`network/`、`storage/`、`sync/`、`updates/`。`data/compat/` 下的 [LegacyWorkerCompatibilityTest.kt](../../app/src/test/java/cc/novelia/app/data/compat/LegacyWorkerCompatibilityTest.kt) 验证两个旧 Worker 的反射类名与构造签名，防止破坏升级任务恢复。其余既有 JVM 测试沿用原位置。
-
-设备测试位于 `app/src/androidTest/java/cc/novelia/app/`，按下表中的界面、数据与验证职责存放。表中的类名均为示例；运行命令使用完整包名，见 [测试指南](../quality/testing.md)。
-
-| 目录 | 测试内容与示例 |
+| 目录 | 主要入口与用途 |
 | --- | --- |
-| `ui/account/` | 个人页与账号入口：`ProfileStickerTest` |
-| `ui/community/` | 文章编辑页面：`ArticleEditorLayoutTest` |
-| `ui/components/` | 共享加载态、页码跳转、分页与静态弹层：`AsyncContentTest`、`PageControlsTest`、`AppPagingTest`、`StaticOverlayTest` |
-| `ui/discover/` | 筛选与辅助搜索：`FilterPositionTest`、`SearchAssistantTest` |
-| `ui/downloads/` | 下载表单布局：`DownloadSheetLayoutTest` |
-| `ui/feedback/` | 贴纸与反馈：`MidoriCompanionTest`、`StickerFallbackTest`、`StickerFeaturesTest` |
-| `ui/markdown/` | Markdown 编辑、渲染与草稿生命周期：`EditorDraftLifecycleTest`、`SiteMarkdownInteractionTest` |
-| `ui/navigation/` | 根标签切换与返回书架：`RootNavigationTest` |
-| `ui/reader/` | 阅读流程、完成与更新确认、排版、电子纸与插图：`AppFlowTest`、`ReaderCompletionFlowTest`、`ReaderAdaptiveUiTest`、`EInkReaderFlowTest` |
-| `ui/shelf/` | 书架适配、同步提示与分卷交互：`AdaptiveLibraryTest`、`BookSyncUiTest`、`WenkuVolumeFlowTest` |
-| `ui/theme/` | 主题动效：`MotionTest` |
-| `ui/tools/` | 文件工具升级行为：`FileToolsUpgradeTest` |
-| `ui/web/` | 网页导航与原站链接：`SiteWebNavigationTest`，部分用例需 `liveSite=true` |
-| `data/backup/` | Android 文件环境下的备份恢复：`LibraryBackupFlowTest` |
-| `integration/` | 需 `live=true` 的公开站点联调：`AuthPageTest`、`DownloadLiveTest`、`LiveReadOnlyTest`、`ForumLinksLiveTest` |
-| `performance/` | 离线数据与排版测量：`PerformanceScenarioTest` |
+| [ui/shelf](../../app/src/main/java/cc/novelia/app/ui/shelf) | `AdaptiveLibrary`、`ShelfScreen`、`CloudShelf`、`HistoryScreen`：书架、收藏、历史和分卷 |
+| [ui/discover](../../app/src/main/java/cc/novelia/app/ui/discover) | `DiscoverScreen`、`RankScreen`、`SearchAssistantPanel`、`KeywordLibraryScreen` |
+| [ui/book](../../app/src/main/java/cc/novelia/app/ui/book) | `BookScreen`、`WenkuEditor`、`GlossaryScreen`：详情和资料维护 |
+| [ui/reader](../../app/src/main/java/cc/novelia/app/ui/reader) | `ReaderScreen`、`ReaderPreferences`、`EInkPage`：阅读界面与布局 |
+| [ui/community](../../app/src/main/java/cc/novelia/app/ui/community) | 社区列表、文章编辑、论坛回复、守则和处罚记录 |
+| [ui/account](../../app/src/main/java/cc/novelia/app/ui/account) | 个人页、原站/论坛登录及镜像表单 |
+| [ui/settings](../../app/src/main/java/cc/novelia/app/ui/settings) | 设置、恢复、原站同步、WebDAV、网络诊断 |
+| [ui/notes](../../app/src/main/java/cc/novelia/app/ui/notes) | 书签与笔记 |
+| [ui/downloads](../../app/src/main/java/cc/novelia/app/ui/downloads)、[ui/tools](../../app/src/main/java/cc/novelia/app/ui/tools) | 下载管理与文件工具 |
+| [ui/navigation](../../app/src/main/java/cc/novelia/app/ui/navigation) | 控制器、根标签切换、登录续接 |
+| [ui/components](../../app/src/main/java/cc/novelia/app/ui/components)、[ui/theme](../../app/src/main/java/cc/novelia/app/ui/theme) | 共享容器、列表、弹层、主题和动效 |
+| [ui/markdown](../../app/src/main/java/cc/novelia/app/ui/markdown)、[ui/web](../../app/src/main/java/cc/novelia/app/ui/web) | Markdown 编辑/渲染与网页兜底 |
+| [ui/about](../../app/src/main/java/cc/novelia/app/ui/about)、[ui/feedback](../../app/src/main/java/cc/novelia/app/ui/feedback) | 关于、许可证、贴纸与操作反馈 |
 
-测试 package 与目录对应，例如 `cc.novelia.app.ui.reader.AppFlowTest`；它与生产页面同包但处于不同 source set。目录分类不改变测试开关、数据隔离要求或执行副作用，不能仅凭目录名判断测试是否会访问网络。
+## 按数据职责找代码
 
-## 容易放错的代码
-
-| 修改内容 | 放置位置与边界 |
+| 目录 | 负责什么 |
 | --- | --- |
-| 阅读偏好控件 | `ui/reader/ReaderPreferences.kt`；全局设置页和单书阅读器共同调用，偏好数据模型在 `data/model/ReaderSettings.kt` |
-| 阅读段落投影、进度与 TTS | 顶层 `reader/`；需要 Compose 或界面生命周期的部分放 `ui/reader/` |
-| 文库分卷顺序和挂载 | `ui/shelf/WenkuVolumeSheets.kt`、`VolumeReorder.kt`；文库条目元数据编辑放 `ui/book/`，持久数据规则在 `data/library/WenkuVolumes.kt` |
-| 个人术语表 | `ui/book/GlossaryScreen.kt` 同时服务本地与原站术语表；文件工具页只提供进入它的入口 |
-| 收藏选择和待处理状态展示 | `ui/shelf/FavoriteSheet.kt`、`FavoritePresentation.kt`；笔记的展示模型独立在 `ui/notes/NotePresentation.kt` |
-| 下载进度页面与真正的下载任务 | 页面在 `ui/downloads/`；WorkManager、下载文件和解析逻辑在顶层 `files/` |
-| 通用弹窗、面板与阅读器面板 | `ui/components/AppDialogs.kt`、`AppSheet.kt` 提供跨页面入口；阅读器专用布局留在 `ui/reader/ReaderSheet.kt` |
-| 系统文档选择后的导入/读取桥接 | `ui/components/DocumentAccess.kt`；具体格式解析、持久化和恢复分别由 `files/` 与 `data/` 负责 |
-| 错误与日期文字 | `ui/components/UiMessages.kt`；同步时间展示在 `ui/components/SyncTime.kt` |
-| 全屏图片查看 | `ui/components/IllustrationViewer.kt` 为不同功能复用；阅读正文内的图片展示位于 `ui/reader/ReaderIllustration.kt` |
+| [data/model](../../app/src/main/java/cc/novelia/app/data/model) | `BookRef`、`LibraryState`、阅读设置、小说/文库/论坛 DTO |
+| [data/storage](../../app/src/main/java/cc/novelia/app/data/storage) | `LocalStore`、异步写盘、JSON 编解码、损坏恢复 |
+| [data/documents](../../app/src/main/java/cc/novelia/app/data/documents)、[data/backup](../../app/src/main/java/cc/novelia/app/data/backup) | 本地正文分块、来源哈希索引、ZIP 备份与合并恢复 |
+| [data/auth](../../app/src/main/java/cc/novelia/app/data/auth) | 令牌加密、认证流程、会话和来源绑定 |
+| [data/network](../../app/src/main/java/cc/novelia/app/data/network) | 小说/论坛 API、书源线路、ECH、请求合并和诊断 |
+| [data/cache](../../app/src/main/java/cc/novelia/app/data/cache)、[data/chapters](../../app/src/main/java/cc/novelia/app/data/chapters) | 有界缓存、章节请求、离线批次、译文新鲜度 |
+| [data/library](../../app/src/main/java/cc/novelia/app/data/library) | 收藏展示、分卷关系、阅读位置/历史及续读规则 |
+| [data/sync](../../app/src/main/java/cc/novelia/app/data/sync) | 原站云端写入队列和后台重放 |
+| [data/webdav](../../app/src/main/java/cc/novelia/app/data/webdav) | WebDAV 协议、资料投影、冲突合并和调度 |
+| [data/catalog](../../app/src/main/java/cc/novelia/app/data/catalog) | 书源标识、链接、搜索表达式、关键词词典 |
+| [data/updates](../../app/src/main/java/cc/novelia/app/data/updates) | 书籍更新检查、更新状态和系统通知 |
+| [data/markdown](../../app/src/main/java/cc/novelia/app/data/markdown) | 不依赖 UI 的链接及编辑模板规则 |
 
-## 新文件的放置规则
+`data/storage/StorageFormat.kt` 提供共用的 `appJson` 和 `hashName`。新的持久化代码应复用它们，避免相同资料出现多套序列化规则。
 
-1. **先按界面归属。** 新页面放入已有功能目录，文件通常命名为 `XxxScreen.kt`。同一个文件可以保留该页面的私有 Composable 和紧密相关 helper；无关的独立页面使用独立文件。只有确实新增了功能边界时才新增目录，并更新上表。
-2. **功能专用代码就近存放。** 例如笔记筛选模型、书架撤销逻辑和下载恢复提示与各自页面放在一起。纯 Kotlin 并不自动意味着应该移入全局工具目录。
-3. **跨功能复用再提取。** 没有业务归属的通用 UI 可放入 `components/`；主题、Markdown、导航与反馈优先进入已有专用包。新功能不应重新堆回 `ui/` 根目录，也不要创建一个持续增长的杂项文件。
-4. **目录与声明同步。** `ui/notes/NotesScreen.kt` 对应 `package cc.novelia.app.ui.notes`。移动文件时更新生产代码、测试和文档中的 imports/路径；按符号实际使用添加引用，避免依赖旧的全包导入。同时检查已提交的 [性能 Profile](../quality/baseline-profiles.md)，其中的类和方法描述符不会自动跟随源码移动。
-5. **保持可见性最小。** 同文件 helper 优先 `private`；同模块确需跨文件复用时使用 `internal`。移动代码前先核对文件私有声明，不能只移动文件后把所有 helper 改成公开接口。
-6. **保持职责边界。** 网络请求合约、存储、会话和后台任务继续由 `data/`、`files/` 等实现承担；不要为了让目录名称统一而把这些代码塞进页面文件。共享组件新增对具体功能包的依赖时，先考虑是否能用参数或回调表达需求。
-7. **让整理可验证。** 纯目录整理保持路由、资源名、测试标识和数据格式不变；验证编译、相关测试及文档链接。若同时改行为，在 PR 中明确说明并提供相应回归结果。
+## 三处容易找错
 
-## 查找与维护
+**阅读器有两个目录。** `ui/reader/` 管 Compose、布局和页面生命周期；顶层 `reader/` 管投影、锚点、分页算法、搜索和朗读。修改文字算法优先从后者入手。
 
-从页面定位时，先查目录地图，再读 [MainActivity.kt](../../app/src/main/java/cc/novelia/app/MainActivity.kt) 的路由装配。从业务行为定位时，结合 [架构](architecture.md)、[网络与同步](../network/network-and-sync.md)、[数据与存储](../data/data-and-storage.md)、[阅读器](../features/reader.md) 和 [文件与下载](../features/files-and-downloads.md) 查找实际执行代码。
+**下载页面不执行下载。** `ui/downloads/` 收集选项、展示任务；`files/DownloadWorker.kt` 管任务和文件提交；`data/network/DownloadTransport.kt` 管独立传输调度。
 
-新增页面、移动文件或拆分组件的 PR 应同时更新本页和受影响的专题文档。Kotlin package 变更不自动改变 Android 应用 ID、路由字符串或持久化键；测试 package 若有改动，需要更新类名筛选参数，但 runner 仍为 `cc.novelia.app.test/androidx.test.runner.AndroidJUnitRunner`。贴纸代码的归档不改变素材授权状态，见 [NOTICE.md](../../NOTICE.md)。
+**旧 Worker 类名是兼容入口。** `data/CloudSyncWorker.kt` 和 `data/UpdateWorker.kt` 保留旧安装已入队任务的反射类名。真实逻辑在 `data/sync/`、`data/updates/`。移动后台类时检查 [LegacyWorkerCompatibilityTest](../../app/src/test/java/cc/novelia/app/data/compat/LegacyWorkerCompatibilityTest.kt)，不能只更新 imports。
+
+## 新文件与测试放置
+
+页面和专用组件放所属功能包，真正跨页面复用的组件放 `ui/components/`。模型、I/O 和可独立测试的规则分别靠近对应数据职责。文件名可用 `XxxScreen.kt` 表达独立页面，无需为了每个私有 Composable 拆文件。
+
+JVM 测试在 [app/src/test](../../app/src/test)，其中许多历史测试仍在根包；新增的领域测试通常跟随 `data/<职责>/`。设备测试在 [app/src/androidTest](../../app/src/androidTest)，按 `ui/`、`data/`、`integration/`、`performance/` 组织。运行时用文件里的完整 package 和类名，见[测试指南](../quality/testing.md)。
+
+移动源码时还要检查导航、Manifest、旧数据引用、Worker 名称和 [Baseline Profile](../quality/baseline-profiles.md) 描述符。移动文档时更新相对链接。

@@ -1,15 +1,17 @@
-# 网络与认证
+# 网络与同步
 
-[返回文档总目录](../README.md)
+[文档首页](../README.md)
 
-本分类说明客户端怎样使用原站服务，不是原站 API 的永久契约。接口路径和参数以仓库调用代码及合约测试为准。
+小说原站/镜像、独立论坛和自有 WebDAV 使用不同的会话与同步规则。先选对应服务，再检查请求、缓存和后台任务。
 
-| 文档 | 主要内容 |
+| 文档 | 内容 |
 | --- | --- |
-| [账号与登录](authentication.md) | WebView 认证、完成登录、会话代次、续期、退出和登录续接 |
-| [网络、认证与同步](network-and-sync.md) | API 资源、请求关闭与取消、缓存、离线意图、后台重放 |
-| [WebDAV 多设备同步](webdav-sync.md) | 可选资料范围、首次加入、设备合并、冲突和自动调度 |
-| [ECH 连接测试版](ech-test.md) | ECH 适配范围、测试开关、诊断、构建与已知边界 |
-| [独立论坛 API 预适配](forum-api-preview.md) | 预览分支的论坛接口、独立会话、排序、处罚记录与验证 |
+| [账号与会话](authentication.md) | 三种登录、令牌保存、有限续期和本地退出 |
+| [网络与原站同步](network-and-sync.md) | API 入口、缓存、章节请求和离线待办 |
+| [原站与镜像](../development/book-source-mirrors.md) | 线路配置、请求路由和镜像认证 |
+| [网络诊断与 ECH](network-diagnostics.md) | 直连/ECH 对照、传输入口、日志分析 |
+| [独立论坛接口](forum-api-preview.md) | 分类、帖子、回复、处罚和守则 |
+| [WebDAV 多设备同步](webdav-sync.md) | 同步范围、首次加入、合并、冲突和调度 |
+| [WebDAV 传输与兼容](webdav-transport.md) | ETag、条件提交、坚果云和服务端验证 |
 
-修改云端收藏前阅读[书架专题](../features/library.md)，修改发帖前阅读[社区专题](../features/community.md)。两者对失败重试的要求不同，不能把所有写接口统一塞入离线队列。认证诊断的记录范围见[安全与隐私](../quality/security-and-privacy.md)。
+修改收藏先看[书架](../features/library.md)，修改发帖先看[社区](../features/community.md)。不能将所有写接口都放进离线队列。

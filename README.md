@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="app\launcher-icons\res\drawable-nodpi\launcher_xingchuan_green_01_artwork.png" alt="星川绿~" width="160">
+  <img src="app/launcher-icons/res/drawable-nodpi/launcher_xingchuan_green_01_artwork.png" alt="星川绿~" width="160">
   <h1>Novelia</h1>
   <p>
     面向 <a href="https://n.novelia.cc/">轻小说机翻机器人</a> 的原生 Android 客户端<br>
@@ -15,7 +15,7 @@
     <a href="#屏幕截图">屏幕截图</a> ·
     <a href="#功能一览">功能一览</a> ·
     <a href="#使用">开始使用</a> ·
-    <a href="#常见问题">常见问题</a> ·
+    <a href="docs/maintenance/troubleshooting.md">排障指南</a> ·
     <a href="docs/README.md">项目文档</a>
   </p>
   <a href="https://github.com/nobYoQ/novelia/releases">
@@ -78,7 +78,7 @@
 
 ## 构建
 
-使用 Android Studio 打开仓库根目录。环境基线为 **JDK 17、Android SDK Platform 36、Build Tools 35.0.0**；ECH 本地库还需要 **NDK 28.2.13676358、Go 1.27.1**，固定版本见 [工具链配置](gradle/ech-native.properties)。Windows x64 可自动引导所需 Go；其他系统需预装对应版本，或设置 `NOVELIA_GO_HOME`。
+使用 Android Studio 打开仓库根目录。准备 **JDK 17、Android SDK Platform 36、NDK 28.2.13676358、Go 1.27.1**；Go 和 NDK 用于构建应用依赖的 ECH 原生库，固定版本见 [工具链配置](gradle/ech-native.properties)。Windows x64 可自动引导所需 Go；其他系统需预装对应版本，或设置 `NOVELIA_GO_HOME`。SDK Build Tools 由 AGP 选择，项目没有显式固定其版本。
 
 Windows 推荐使用 PowerShell 7，在仓库根目录执行：
 

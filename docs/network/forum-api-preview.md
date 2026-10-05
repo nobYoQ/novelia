@@ -1,190 +1,69 @@
-# 独立论坛 API 预适配
+# 独立论坛接口
 
-此分支 `codex/forum-api-preview` 的社区入口连接 [测试论坛](https://forum.novelia.cc/c/novel)，小说、阅读、下载与小说评论沿用设置中选择的原站或镜像书源。
+[网络目录](README.md) · [社区功能](../features/community.md) · [文档首页](../README.md)
 
-## 核对依据
+当前社区入口使用独立论坛 `forum.novelia.cc`；小说评论和旧站文章仍使用小说服务。本文描述当前客户端合约。文件名保留早期的 `preview` 以兼容旧链接，分支适配过程和当时的测试结果已移至[历史记录](../maintenance/history/forum-adaptation.md)。
 
-- 核对日期：2026-10-05。
-- 测试站公开前端：`/assets/index-aUfp-71t.js`，内嵌部署提交 `928185a35619ce2e573f5b4dd988ee2d56138f68`，构建时间为 2026-10-05 20:25:17（北京时间）。源码对比基线为已适配的 `36f8894`，共 33 个提交，并以匿名公开 GET 核对实际服务端响应。仓库 main 的后续提交不作为本次部署合约。
-- [该部署版本的前端 API 合约](https://github.com/auto-novel/forum/blob/928185a35619ce2e573f5b4dd988ee2d56138f68/apps/web/src/api.ts)。
-- [服务端帖子路由](https://github.com/auto-novel/forum/blob/928185a35619ce2e573f5b4dd988ee2d56138f68/apps/api/internal/handler/post.go)、[评论用例](https://github.com/auto-novel/forum/blob/928185a35619ce2e573f5b4dd988ee2d56138f68/apps/api/internal/usecase/comment.go)、[错误分类](https://github.com/auto-novel/forum/blob/928185a35619ce2e573f5b4dd988ee2d56138f68/apps/api/internal/handler/error.go)、[认证声明](https://github.com/auto-novel/forum/blob/928185a35619ce2e573f5b4dd988ee2d56138f68/apps/api/internal/httpx/authn.go)。
+核对依据为仓库中的 [ForumApi](../../app/src/main/java/cc/novelia/app/data/network/ForumApi.kt)、[ForumAccountApi](../../app/src/main/java/cc/novelia/app/data/network/ForumAccountApi.kt)、[模型](../../app/src/main/java/cc/novelia/app/data/model/ForumModels.kt) 和合约测试。本轮没有重新探测线上部署。
 
-## 合约变化
+## 基础约定
 
-| 功能 | 新版合约 |
+API 根路径为 `https://forum.novelia.cc/api/v1/`。客户端页码从 0 开始，发请求时转换为从 1 开始的 `page`；页大小字段为 `page_size`，分页响应为 `{ total, items }`。
+
+帖子和评论使用数字 ID，时间为 RFC 3339 字符串。计数和记录 ID 使用 64 位整数；不要经浮点数转换。独立论坛使用 `app=f` 的会话，不接受主站令牌，也不随小说镜像切换。
+
+## 主要接口
+
+| 操作 | 方法与路径 | 请求要点 |
+| --- | --- | --- |
+| 分类 | `GET category/` | 读取当前 ID、slug、标签 |
+| 帖子列表 | `GET post/` | 分类传 slug，搜索 `q`，排序 `active/newest/views/comments`，`tag` 为逗号分隔 ID |
+| 帖子详情 | `GET post/{id}/` | 返回完整帖子 |
+| 发布 / 修改 | `POST post/`、`PATCH post/{id}/` | `categoryId, title, content, tagIds` |
+| 删除帖子 | `DELETE post/{id}/` | 接受无正文的成功响应 |
+| 一级评论 | `GET post/{id}/comment` | total 只统计一级评论 |
+| 回复页 | `GET post/{id}/comment/{rootId}/reply` | 独立分页 |
+| 新评论 / 回复 | `POST post/{id}/comment` | 回复携带根评论 rootId |
+| 修改 / 删除评论 | `PATCH/DELETE comment/{id}` | PATCH 只发 content，不发 rootId，连 null 也不发 |
+| 收藏 | `PUT/DELETE post/{id}/favorite` | 直接请求，不进入原站离线队列 |
+| 我的收藏 / 帖子 | `GET me/favorite`、`GET me/post` | 论坛认证分页 |
+
+`ForumApi` 还保留外部小说讨论的只读方法；当前小说评论 UI 仍沿用主站接口，不能从方法存在推断已经迁移。
+
+## 分类、权限和草稿
+
+分类数字 ID 可被服务端重新分配。**权限按 slug 判断，提交使用本次分类列表返回的 ID。** 不要硬编码“某个数字就是公告”。
+
+论坛允许的标题为 2–100 个 Unicode 码点，正文 1–20,000，评论 1–1,000，标签最多 3 个。规则集中在 [ForumRules.kt](../../app/src/main/java/cc/novelia/app/data/model/ForumRules.kt)，不能用 UTF-16 长度替代码点数。
+
+`member`、`trusted`、`admin` 可发言，公告限管理员。普通作者删除帖子、修改或删除评论有发布后 20 分钟限制，管理员不受此时限影响；最终权限仍由服务端校验。
+
+新草稿保存分类 slug，恢复时重新解析当前 ID、过滤不适用标签。仅有数字 ID 的旧草稿保留正文，但要求用户重新选择分类，避免 ID 重用后发错版块。
+
+## 回复计数与首屏缓存
+
+一级评论可携带 `replyCount` 和 `replies: { total, items }`。有效计数包括零，直接使用；只有旧响应缺失或 null 时才用一项回复查询补计数，失败保持未知。
+
+[ForumReplyPageCache](../../app/src/main/java/cc/novelia/app/data/network/ForumReplyPageCache.kt) 校验附带首屏的完整性、根评论、资源及重复 ID，通过后放入列表级缓存。回复默认折叠，展开命中时无需重复请求；异常或旧响应回退独立接口。
+
+每串保留最近三页。同一页并发等待共享请求，滚出屏幕不丢已读正文。刷新、增删改、帖子或论坛身份变化时重建缓存；离开列表后取消请求，回复正文不落盘。
+
+## 处罚未读与社区守则
+
+处罚由认证服务 `https://auth.novelia.cc/api/v1/` 提供，携带论坛令牌：
+
+| 接口 | 含义 |
 | --- | --- |
-| API 前缀 | `https://forum.novelia.cc/api/v1/` |
-| 分类 | `GET category/`，返回数字 `id`、`slug` 和标签；10.5 重分配为公告 `1`、反馈 `2`、小说 `100`；公告仅管理员可发帖，客户端权限按 `slug` 判断 |
-| 列表 | `GET post/`；`category` 传 slug；搜索用 `q`；排序用 `active/newest/views/comments`；标签为逗号分隔 `tag` |
-| 分页 | 请求 `page` 从 1 开始，`page_size` 取代 `pageSize`；响应 `{ total, items }`。客户端页码仍从 0 开始，在 API 层换算 |
-| 帖子详情 | `GET post/{数字ID}/`；时间为 RFC 3339 字符串；作者改为 `authorId/authorUsername` |
-| 发布／编辑 | `POST post/`、`PATCH post/{id}/`；正文为 `{ categoryId, title, content, tagIds }`，返回完整帖子对象 |
-| 删除帖子 | `DELETE post/{id}/`，成功可返回无正文的 204；普通作者限发布后 20 分钟内，管理员不受时限影响 |
-| 一级评论 | `GET post/{id}/comment`；外层 `total/items` 只统计一级评论。每条评论返回 64 位 `replyCount`，并附带 `replies: { total, items }`，包含该串的前 20 条回复；零回复返回 `0` 和空数组 |
-| 子回复 | `GET post/{id}/comment/{rootId}/reply`；使用独立的 `page/page_size` 分页，响应 `{ total, items }` |
-| 发布评论 | `POST post/{id}/comment`；回复提交 `rootId`，回复子评论时仍使用其根 ID |
-| 修改评论 | `PATCH/DELETE comment/{id}`；编辑只提交 `content`，禁止提交 `rootId`（包括 null）；作者限发布后 20 分钟内修改，管理员不受时限影响 |
-| 云端收藏 | `PUT/DELETE post/{id}/favorite`；`GET me/favorite`、`GET me/post` |
-| 处罚记录 | 认证服务 `https://auth.novelia.cc/api/v1/me/strikes`，携带论坛令牌；分页参数为 `page/page_size`，返回原因、依据、分值及撤销时间 |
-| 处罚未读 | 认证服务 `GET me/attention-status` 返回 `{ strikes: { hasUnread } }`；处罚列表附带 64 位 `latestStrikeId`，展示成功后以该快照 ID 调用 `PUT me/strikes/read-state`，请求 `{ throughId }`，返回 `{ hasUnread }` |
-| 登录 | 统一认证应用标识 `f`，Origin 为 `https://forum.novelia.cc`；刷新路径 `/api/v1/auth/refresh?app=f` |
-| 网页链接 | `https://forum.novelia.cc/p/{id}` |
+| `GET me/attention-status` | 读取 `strikes.hasUnread` |
+| `GET me/strikes` | 分页记录与 `latestStrikeId` |
+| `PUT me/strikes/read-state` | 用已展示快照 ID 发送 `{ throughId }`，返回 hasUnread |
 
-新论坛与主站分别保存加密令牌并使用不同的 Keystore 别名。论坛请求拒绝主站会话；401 最多刷新一次。两边的退出操作只清除各自的本机会话，不调用全局 SSO 退出接口，不删除共享认证 Cookie，也不清除另一边的令牌。已退出的会话不会因匿名请求收到 401 而自动登录；用户明确进入登录页后仍可复用统一认证。
+缺少快照 ID 时不确认已读；确认失败可重试，后来新增的记录不能被旧确认吞掉。读取与确认都绑定原论坛会话，处罚内容和提示状态不持久缓存。
 
-小说的原站与镜像分别保存会话，论坛始终使用 `auth.novelia.cc` 的 `app=f` 认证及独立请求通道。切换小说书源不会清除论坛令牌、使论坛会话绑定失效或将论坛账号请求转到镜像；镜像入口 Cookie 也不会附加到论坛请求。退出镜像只清理镜像的本地令牌和认证 Cookie。
+守则没有独立数据 API。[ForumCommunityRulesRepository](../../app/src/main/java/cc/novelia/app/data/network/ForumCommunityRulesRepository.kt) 从线上入口取得部署 SHA，再读取该提交的公开守则源码；解析已知静态结构，不执行脚本。未知结构或网络失败保留缓存，首次离线使用内置副本。当前内置材料见 [ForumCommunityRules.kt](../../app/src/main/java/cc/novelia/app/data/model/ForumCommunityRules.kt)。
 
-处罚记录字段与认证行为依据当前论坛所依赖的 [认证 SDK 36953dd](https://github.com/auto-novel/auth/blob/36953dd4fd7ce6410f4449076fc97b7d312039f3/packages/auth-api/src/api.ts) 核对。10.4 引入处罚未读状态和已读确认；10.5 的 SDK 更新调整网页启动、销毁及组件上下文，登录、刷新、令牌声明和处罚 HTTP 合约保持兼容。网页由 web-kit 提供认证 API 类型，不要求 Android 引入 TypeScript 依赖。网页处罚记录路径为 `/strikes`，原生入口使用认证服务独立接口。
+## 错误与验证
 
-## 客户端行为
+400/403/404/409 的短纯文本业务原因经校验后展示；HTML、超长内容和内部错误采用通用提示。写操作失败保留草稿，不因模糊失败自动重复发帖或评论。
 
-- 分类及标签使用服务器数据；站务公告排首位并作为首次进入的默认分类，小说讨论和意见反馈随后，未知分类保留。普通用户发帖默认选择小说讨论，分类选项排除站务公告；旧草稿若指向公告分类，保留内容并要求重新选择分类。列表搜索请求服务端。帖子排序提供「最近活跃、最新发布、浏览最多、评论最多」，分别发送 `active/newest/views/comments`；切换排序返回第一页，保留分类和搜索词。
-- 新帖 ID 在本地表示为 `f-{id}`，本地收藏及草稿与旧站 ObjectID 区分。旧帖子链接和收藏继续从主站读取；不猜测新旧帖子 ID 对应关系。
-- 新建论坛草稿使用 `article:forum-new`；旧版 `article:new` 草稿仍保留，不自动发布到测试站。
-- 论坛草稿同时保存分类 `slug` 和 ID。恢复时先取得当前分类，再用 `slug` 解析当前 ID 并过滤失效标签；仅有数字 ID 的旧草稿保留标题和正文，要求明确重新选择分类，避免 10.5 ID 重用后发错版块。缺失的分类同样不自动改为其他分类。
-- 新版编辑保留帖子的标签，最多选择 3 个，切换分类时清除旧分类标签。标题为 2–100 字，正文为 1–20,000 字，评论为 1–1,000 字；按 Unicode 码点计数，emoji 的代理对按一个字计算。正文保留原始空白，评论按网页行为去除首尾空白后提交。旧的超长草稿保留并可继续缩短，超限时禁止提交。最终权限及域名黑名单由服务端决定；论坛返回的文本校验错误会显示具体原因，失败时保留草稿且不自动重发。
-- 新帖编辑页单独显示发帖提示：先读公告中的新人教程、搜索已有反馈，报错附小说链接或截图，求书使用集中帖；公告、反馈、求书搜索和社区守则均可点击。此提示不随首次社区守则提醒一起隐藏，编辑已有帖子保持原有提示方式。
-- 发帖提示同步 10.4 的建政小说处理说明。原生守则展示新版违规条款、处理办法及全部十项用户权限；权限表按操作排列成卡片，分别说明未满月、已满月和受限用户是否允许。论坛普通新用户仍可发言，受限用户不可发言；小说权限继续依照小说站规则。
-- 正文和评论框选中单行文字后，粘贴有效 HTTP(S) 网址会自动生成 Markdown 链接；标签中的反斜杠和方括号转义，网址括号编码。空选区、多行选区、普通文字、非 HTTP(S) 网址以及生成后超限的情况保留普通粘贴行为。系统剪贴板不被改写，保留原有选区替换、光标、撤销／重做及草稿更新；论坛按 Unicode 码点检查生成后的字数。
-- 论坛的 `trusted`、`member`、`admin` 角色可发言，公告限管理员；主站账号权限规则保持原逻辑。帖子删除和评论修改入口在 20 分钟到期后更新，提交时再次检查权限。
-- 一级评论按服务端分页显示，直接使用 `replyCount` 显示「查看 X 条回复」或「暂无回复」，包括 `0` 在内的有效计数均不额外请求回复接口。子回复在展开后显示，缺少缓存时通过独立接口分页读取，回复页的 `total` 更新当前计数。仅兼容旧响应缺失／null 计数时，以 `page_size=1` 读取回复接口的 `total`，最多 4 个并发请求；请求失败保留未知状态并允许展开重试。计数保存在列表层，滚出显示区域后回来仍保留；刷新及账号／角色变化时重新核对。发布子回复后定位该串末页。隐藏／删除评论默认显示占位文本，已有子回复仍可查看，已隐藏／删除的根评论不能继续回复。管理员可展开服务端返回的原文，切换账号或评论状态时收起。
-- 新响应附带的完整首屏回复在讨论串显示前进入内存页缓存，展开、收起重开和滚出后返回均不重复读取该页；仍默认折叠，后续页按需请求。旧响应、残缺首屏及根 ID／帖子不匹配的数据回退到独立接口。缓存与帖子、会话代次、账号角色及刷新结果绑定，旧列表不能覆盖已加载或正在加载的回复页。
-- 新论坛 Markdown 评分按半星四舍五入，接受非负十进制数并限制到 5；主站与旧文章的评分精度保持原行为。共享 TypeScript 包迁移本身不要求 Android 安装对应依赖。
-- 右上角「我的」使用锚定展开面板，集中放置我的帖子、云端收藏、处罚记录、本地收藏和论坛登录／退出。面板支持缩放淡入淡出、返回键／外部点击收起、滚动和大字号，遵循减少动态效果设置。
-- 云端收藏和我的帖子沿用各自接口的排序；四种帖子预设用于「全部帖子」。帖子列表同时显示评论数与查看量。处罚记录显示原因、分值、依据、生效／撤销状态及时间，不持久缓存账号处罚数据。社区守则使用原生 `forum-rules` 页面，可从「我的」及首次提示进入；打开时核对线上部署并更新守则，支持手动更新及离线副本，同步失败明确提示。关闭首次提示后持久隐藏，评论输入辅助条不重复显示。
-- 论坛账号入口和处罚菜单显示未读提醒。在社区前台进入／恢复时、打开账号菜单时及每分钟检查一次；退出社区或转入后台取消读取，读取失败保留已有提示。成功展示处罚列表后，仅确认服务器返回的 `latestStrikeId`，不根据本地条目推测边界；旧响应缺失该字段时不写入。标记失败保留记录并允许重试，返回仍有未读时提示刷新。查询和确认都绑定原论坛会话，退出、重新登录及换号后旧请求不能提交到新账号。
-- 评论用例重整后的 400／403／404／409 纯文本原因用于原生读取和写入错误提示，包括无效根评论、权限不足、根评论不存在、评论锁定和数据冲突。超长、HTML 及服务端内部错误仍使用通用提示；不自动重发这些业务错误对应的写操作。
-- 新域名帖子链接可进入原生页面；带锚点、分类筛选或编辑路径的链接在站内 WebView 中保留完整 URL。
-- 服务端已公开 `external/comment/novel/{subjectKey}` 及 `external/comment/novel/{subjectKey}/{rootId}/reply`。资源键明确为 `web-{providerId}-{novelId}` 或 `wenku-{novelId}`，创建评论时校验资源类型、键和存在性，格式或资源问题返回 400／404；本次部署未分类的资源检查失败按内部错误返回 500。历史评论读取不执行存在性检查。客户端保留显式资源键的只读接口，当前小说评论继续使用仍可正常读取的原接口，本次不迁移写入。
-
-## 验证
-
-- 2026-10-05 匿名公开 GET 核对 10.5 部署：三个分类、七篇帖子、78 条一级评论及 99 条附带回复；12 个独立回复页的总数与 ID 均一致。旧小说评论接口仍返回 200。此次公开响应和部署源码位于本地忽略目录 `outputs/qa/forum-update-20261005/`，不提交用户评论内容。
-- 2026-10-05 匿名公开 GET 核对 10.4 部署：三个分类、六篇帖子、73 条一级评论及 105 条附带回复；12 个独立回复页的总数与 ID 均一致。旧小说评论接口仍返回 200。此次公开响应和部署源码位于本地忽略目录 `outputs/qa/forum-update-20261004/`，不提交用户评论内容。
-- 2026-10-03 匿名公开 GET 抽查三个分类、六篇帖子、73 条一级评论及其中 105 条附带回复；12 个独立回复分页的总数与 ID 均与附带数据一致。现有生产模型解码 30 份公开响应及守则解析通过；当日检查证据在 `outputs/qa/forum-update-20261003/`，功能实现后的验证记录见末尾。
-- 2026-10-02 对帖子 953、1021 的 24 条一级评论核对，全部带有非负 `replyCount`；另抽查四串回复，根评论计数 7、0、2、0 均与回复接口 `total` 一致。全部为匿名公开 GET；未创建帖子、评论或修改收藏。此前三个分类各两个帖子的完整解码记录见历史验收。
-- `ForumApiContractTest` 使用 MockWebServer 覆盖分页／搜索、数字 ID、时区与小数秒、创建／PATCH 请求体、标签、一级评论与子回复独立分页、64 位回复数量、缺失与显式零的区别、仅旧响应补查计数、204、云端列表、会话隔离、401 刷新上限、503 响应不重试、旧收藏及新旧链接。
-- `ForumAccountApiTest` 覆盖四种排序参数、筛选与分页保留，以及使用论坛令牌访问认证服务处罚记录的字段解析和权限边界。
-- 初始预适配验收（历史）：93 项 JVM 测试全部通过；Debug APK、Android 测试 APK 构建成功；`lintDebug` 通过，0 个错误、25 个警告。本次结果见末尾 2026-10-05 记录。
-- 初始设备验收（历史）：`ForumAccountUiTest` 与 `ForumSessionIsolationTest` 共 6 项 Android 回归测试通过，覆盖排序选择、个人面板操作与返回键、处罚记录展示，以及双向退出隔离和退出状态持久化。会话测试使用独立存储与合成凭据。
-- 初始布局验收（历史）：在 375dp 宽模拟器上核对浅色／深色、减少动态效果；另外两次布局测试覆盖横屏和系统双倍字号，均通过并检查截图。
-- 构建与离线验证：`./build.ps1 -Tasks @('assembleDebug', 'assembleDebugAndroidTest', 'testDebugUnitTest', 'lintDebug') -Offline`。
-- 可选 Android 只读联调：安装测试 APK 后使用 `adb shell am instrument -w -r -e live true -e class cc.novelia.app.integration.ForumLiveReadOnlyTest cc.novelia.app.test/androidx.test.runner.AndroidJUnitRunner`。
-
-测试站仍在变化。真实账号登录、处罚记录读取及账号写入尚未进行端到端验收；接口合约已核对部署源码，并用本地模拟服务验证。上线前应重新核对部署版本，并用测试账号验收发帖、编辑、回复、收藏及处罚记录。
-
-## 2026-09-20 变基至 0.1.8
-
-- 基于主分支 `a391c4f` 重新应用两个论坛提交，继承版本号 `0.1.8`、版本码 `11`；论坛 API 仍仅位于预览分支。
-- 合并初始化、会话刷新、登录续接和社区页面冲突，保留主分支的按章存储、可取消请求、登录后继续收藏、草稿保护及账号隔离。
-- 论坛个人面板接入公共动效参数和系统／电子纸减少动效策略，排序菜单复用静态菜单实现；论坛测试适配可挂起的会话刷新接口。
-- `assembleDebug`、`assembleDebugAndroidTest`、`testDebugUnitTest`、`lintDebug` 全部通过；259 项 JVM 测试无失败、错误或跳过。
-- API 35 模拟器上 15 项设备回归通过，覆盖论坛个人面板与排序、双向退出隔离、登录后继续收藏、书架操作、静态弹层、书目同步及本地阅读导航。使用受控测试数据，未进行真实账号写入。
-- 日志：`artifacts/forum-rebase-0.1.8-build.log`、`artifacts/forum-rebase-0.1.8-device.log`。主分支的 0.1.8 ARM64 发布包曾记录于 `release-0.1.8-verification.md`（主分支后续整理文档时已移除）。
-
-## 2026-09-21 变基至目录重构后的 main
-
-- 基于主分支 `3276456` 重新应用两个论坛提交，保留主分支的目录拆分、书籍列表重构和构建入口。
-- 论坛会话、API、数据模型和链接分别迁入 `data/auth`、`data/network`、`data/model` 和 `data/catalog`；论坛页面迁入 `ui/community`，账号入口合并到 `ui/account` 的拆分文件，测试包名同步更新。
-- 保留主分支可取消且串行化的会话刷新，以及登录后继续收藏的导航逻辑；论坛匿名请求仍不能通过共享 Cookie 自动恢复已退出的会话。
-- `:app:assembleDebug`、`:app:assembleDebugAndroidTest`、`:app:testDebugUnitTest`、`:app:lintDebug` 全部通过；298 项 JVM 测试无失败、错误或跳过，lint 为 0 个错误、29 个警告。
-- API 35 模拟器上 16 项设备回归通过，覆盖论坛排序、个人面板、处罚记录展示、双向退出隔离、帖子编辑器、书目同步、静态弹层、书架交互、登录后继续收藏和帖子 Markdown 锚点。使用受控测试数据，未进行真实账号写入。
-- 设备测试类位于 `cc.novelia.app.ui.community`、`cc.novelia.app.data.auth`、`cc.novelia.app.ui.shelf`、`cc.novelia.app.ui.components` 和 `cc.novelia.app.ui.markdown`；可选只读联调类为 `cc.novelia.app.integration.ForumLiveReadOnlyTest`。
-- 日志：`artifacts/forum-rebase-20260921-build.log`、`artifacts/forum-rebase-20260921-device.log`。
-
-## 2026-09-21 适配论坛部署 6c65702
-
-- 对照已部署脚本和对应源码，更新站务公告分类、默认浏览入口、发布权限、字数与标签上限、作者删除帖子时限、管理员评论权限和社区守则链接。帖子／评论 API 的分页、排序和字段结构仍兼容原合约。
-- [ForumRules.kt](../../app/src/main/java/cc/novelia/app/data/model/ForumRules.kt) 集中维护规则；表单即时提示，API 层再次验证请求，域名过滤失败展示服务端原因。未在客户端固化会变化的域名黑名单。
-- 最终 Debug APK、测试 APK、全部 JVM 测试和 `lintDebug` 构建通过；307 项 JVM 测试无失败、错误或跳过，lint 为 0 个错误、29 个警告。
-- API 35 模拟器上 19 项测试通过：论坛账号面板 6 项、双向退出隔离 2 项、论坛编辑器 2 项、主站帖子编辑器布局 1 项、Markdown 工具栏 4 项、草稿生命周期 3 项、论坛公开只读联调 1 项。
-- 新增测试覆盖 Unicode 边界、旧超长内容继续编辑、三个标签上限、公告发帖权限、删除时限、管理员展开隐藏／删除评论，以及正文域名过滤错误和评论 PATCH 不携带 `rootId`。已检查浅色与深色大字号面板截图。
-- 只读联调在设备上读取三个分类的列表、详情和评论，全部正常解码。未使用真实账号执行发布、修改、删除或处罚操作。
-- 日志：`artifacts/forum-update-20260921-final-build.log`、`artifacts/forum-update-20260921-device.log`。
-
-## 2026-10-01 适配论坛 9 月 30 日构建
-
-- 核对部署 `692916b`，与之前部署 `6c65702` 对比 API、认证和 Markdown 源码，并通过匿名公开 GET 抽查三个分类、六篇帖子及对应评论／回复。
-- 跟进一级评论和子回复拆分分页。线上省略 `replyCount` 时仍可展开回复；独立回复接口返回的 `total` 用于数量和分页。新增讨论串加载、重试、屏蔽、角色切换和发布后定位末页的界面测试。
-- 论坛评分与网页同步为半星四舍五入，主站和旧文章保留原有评分精度。分类、排序、发帖、收藏、权限与登录合约无需额外调整；补齐外部小说评论的只读回复接口，主站小说评论仍沿用现有接口。
-- `:app:testDebugUnitTest`、`:app:assembleDebug`、`:app:assembleDebugAndroidTest`、`:app:lintDebug` 全部通过：393 项 JVM 测试无失败、错误或跳过，lint 为 0 个错误、23 个警告。
-- 另用客户端生产序列化器解码本次实际抓取的分类、列表、六篇详情、一级评论和子回复，3 项临时 JVM 验证全部通过，确认缺失 `replyCount` 的根评论仍存在非空回复。验证源码与结果只保存在本地忽略目录。
-- 8 项新增讨论串 Android 界面测试已编译到测试 APK。本次环境未连接设备且没有可用 AVD，未执行设备界面测试或真实账号写入验收。
-- 本次公开响应、源码快照、检查脚本和验证记录保存在本地忽略目录 `outputs/qa/forum-20260930/`；最终构建日志为 `outputs/logs/build-gradle-20261001-143324-292.log`。未将公开抓取的用户评论作为仓库测试资源提交。
-- 实际响应解码验证日志：`outputs/logs/build-gradle-20261001-143943-698.log`；汇总结果：`outputs/qa/forum-20260930/build-verification.json`、`fixture-verification.json`。
-
-## 2026-10-01 社区布局与本地收藏修复
-
-- 修复分类栏右侧空白：空间足够时均分整行，较大字号或更多分类时横向滚动，滚动模式仍至少铺满可用宽度。
-- 搜索默认收起，在列表工具栏展开或收起，保留搜索词并支持清空。
-- 社区守则改为可离线阅读的原生页面，普通 `/rules` 链接和「我的」菜单均进入该页；处罚记录进入原生账号页。守则内容核对自部署 `692916b` 的 `CommunityRulesView.vue`。
-- 守则提示可关闭，关闭状态持久保存，重启及账号切换后仍隐藏。移除评论输入辅助条上方的重复提示；「查看回复」与回复、屏蔽／编辑等按钮共用操作行，空间不足时自动换行。
-- 确认本地收藏此前直接展示收藏时的快照。现改为每页 20 条核对最新详情，最多 4 个并发请求，并可手动刷新；打开详情也更新快照。兼容新论坛 ID 和旧主站 ID；请求失败或帖子不可访问时保留收藏并明确标注，不把旧状态当作当前状态。已取消的收藏不会被慢响应恢复，较早请求不能覆盖新详情。
-- 四项构建检查全部通过：399 项 JVM 测试无失败、错误或跳过，lint 为 0 个错误、23 个警告。新增 6 项界面回归用例并调整原讨论串／编辑器用例，全部编译到测试 APK；本次没有连接设备，未执行设备测试。
-- 构建日志：`outputs/logs/build-gradle-20261001-150953-216.log`；汇总：`outputs/qa/community-ui-20261001/verification.json`。
-
-## 2026-10-01 帖子统计、回复计数与守则同步
-
-- 列表元信息同时显示评论数与查看量，窄屏或大字号时换行；尚未核实的本地收藏不将旧统计标为当前数据。
-- 评论列表提前补齐缺失的回复计数，只请求回复接口第一页的一项，使用 `total`。区分零回复与请求失败；回复正文仍只在展开后分页读取。计数在列表层保存，避免 LazyColumn 回收单项后丢失；刷新和账号／角色变化时失效，慢预读取不覆盖展开后取得的新计数。
-- 社区守则由纯内置内容改为进入页面检查更新、手动更新和本地缓存。匿名读取原站入口及脚本的部署 SHA，从公开仓库取得该部署的 `CommunityRulesView.vue`；相同构建只检查入口。原生展示模板中的文字和列表，未知结构拒绝替换缓存并显示同步失败；首次离线使用内置副本，后续离线使用上次同步内容。没有后台定时任务。
-- 匿名公开 GET 验证 `page=1&page_size=1` 可返回准确回复总数：抽查帖子 953 的根评论 178974 为 7，帖子 1021 的根评论 195306 为 0。当前守则来源仍为部署 `692916b`，测试资源与实际原站源码一致。记录：`outputs/qa/forum-metadata-20261001/public-verification.json`。
-- 最终 `:app:testDebugUnitTest`、`:app:assembleDebug`、`:app:assembleDebugAndroidTest`、`:app:lintDebug` 全部通过：407 项 JVM 测试，无失败、错误或跳过；lint 为 0 个错误、23 个警告。回归覆盖缺失／零／失败计数、64 位计数、并发上限及取消／账号切换，以及守则部署更新、进程重建缓存、断网和未知模板保留旧副本。
-- 新增 2 项 Android 回归，验证提前展示回复计数、零回复以及 LazyColumn 回收后返回的数量保持；本次仅编译测试 APK，当前没有连接设备，未执行界面回归。最终日志：`outputs/logs/build-gradle-20261001-154438-025.log`；汇总：`outputs/qa/forum-metadata-20261001/verification.json`。
-
-## 2026-10-01 展开回复滚动后重复加载修复
-
-- 原因：此前只将计数保存在列表层，回复正文仍由单条评论内的 `AsyncContent` 临时保存。LazyColumn 回收屏幕外的评论后，返回时恢复了展开状态和页码，但正文丢失，因此重新请求。
-- 将已读回复页缓存移到评论列表作用域，每串保留最近三页；返回时以缓存作为首帧内容，收起重开或返回已读页也可复用。单条评论回收不会取消列表拥有的请求，同一页的等待合并，结果完成后仍保存。请求失败可重试，不会取消其他讨论串。
-- 缓存绑定帖子、论坛会话代次、用户 ID、角色及评论刷新版本，列表重新载入或离开时失效；旧请求取消，晚响应不能回填。仅保存内存，不持久化回复正文。恢复缓存时同步计数并校正有效页码，不重复执行已经处理的新回复定位。
-- 7 项新增 JVM 回归覆盖缓存复用、分页与讨论串隔离、并发等待、滚出后的请求继续／合并、失败重试、失效与晚响应，以及容量限制和总数更新。Android 回归增加展开后滚出／返回不再读取、收起重开，以及读取中收起后恢复正文与数量的断言。
-- 最终四项构建检查全部通过：414 项 JVM 测试无失败、错误或跳过；Debug APK 与测试 APK 构建成功，lint 为 0 个错误、23 个警告。当前未连接 Android 设备，界面回归仅完成编译。日志：`outputs/logs/build-gradle-20261001-165449-700.log`；汇总：`outputs/qa/forum-reply-cache-20261001/verification.json`。
-
-## 2026-10-02 适配论坛 10 月 1 日构建
-
-- 核对线上部署 `ae80f73`（北京时间 2026-10-01 20:51:16）与上一版 `692916b` 的差异。服务端移除 `replyCount` 的 `omitempty` 并修正查询结果映射；网页及共享 API 类型改为必填。其余改动是管理站评论操作布局，不改变 Android 使用的接口。
-- 客户端使用可空 64 位计数区分旧响应缺失值与明确的零回复。新版的正数及零均直接显示，不再为计数请求回复接口；旧响应仍保留限流补查和失败重试。回复正文按需加载、页缓存、账号隔离和发布后定位末页继续沿用，已加载回复页的 `total` 可更新根评论快照中的数量。
-- 匿名公开 GET 核对帖子 953、1021 的 24 条一级评论，均带有 `replyCount`；四个抽查讨论串的计数 7、0、2、0 与独立回复接口的 `total` 一致。源码差异及不含评论正文的验证记录保存在本地忽略目录 `outputs/qa/forum-update-20261002/`。
-- JVM 回归增加新版完整计数不发补查请求，以及混合新旧响应只查询缺失计数的 HTTP 断言；序列化覆盖缺失、null、0 和超大 64 位值。界面回归增加新版计数滚动后的缓存复用、零回复直接显示、计数更新后展开及回复页总数覆盖旧值。
-- `:app:testDebugUnitTest`、`:app:assembleDebug`、`:app:assembleDebugAndroidTest`、`:app:lintDebug` 及 `:app:testReleaseUnitTest`、`:app:assembleRelease`、`:app:lintRelease` 均以 `build.ps1 -Offline` 执行通过。Debug／Release 各 466 项 JVM 测试，无失败、错误或跳过；两种变体的 Lint 均为 0 个错误、26 个警告。
-- 当前没有连接 Android 设备，界面回归仅完成测试 APK 编译，未执行设备测试。日志：`outputs/logs/forum-update-20261002-debug.log`、`outputs/logs/forum-update-20261002-release.log`；汇总：`outputs/qa/forum-update-20261002/verification.json`。
-
-## 2026-10-03 变基至 0.2.4
-
-- 基于主分支 `0c12cb0` 重新应用全部七个论坛提交，继承字数筛选、标签分类批选、桌面图标及镜像书源功能；论坛功能继续只在预适配分支维护。
-- 合并会话、登录入口、网络装配和书库模型冲突。论坛会话使用独立来源及请求通道，论坛账号接口与社区守则请求不经过小说镜像路由；保留双方本地退出隔离、镜像独立认证资料及标签库容量设置。
-- 新增设备回归验证镜像选中时的论坛续期、续期过程中切换小说来源、论坛认证 URL 与应用标识、重建会话，以及退出镜像后保留原站和论坛账号。只使用合成凭据和本地模拟响应。
-- `:app:assembleDebug`、`:app:assembleDebugAndroidTest`、`:app:testDebugUnitTest`、`:app:lintDebug` 全部通过；531 项 JVM 测试无失败、错误或跳过。29 项设备回归全部通过，覆盖论坛与镜像会话、论坛个人面板、编辑器、回复计数和缓存，以及登录后继续收藏。
-- 日志：`outputs/logs/forum-rebase-final-verify.log`、`outputs/logs/forum-rebase-device-tests.log`。本次未执行真实账号操作；主分支和变基前论坛分支的 Git 备份为 `outputs/git-backups/pre-forum-rebase-20261003.bundle`。
-
-## 2026-10-03 适配论坛 10 月 3 日构建
-
-- 对照部署 `24db0ee` 实现三项适配：复用一级评论附带的首屏回复、新帖编辑页发帖提示，以及选中单行文字后粘贴 HTTP(S) 网址生成 Markdown 链接。回复仍默认折叠，后续页继续独立加载；小说评论继续沿用当前接口。
-- 首屏缓存校验完整页、根评论 ID、帖子／资源键及重复 ID，异常或旧响应回退到独立接口；不覆盖已缓存或正在请求的数据。缓存绑定列表刷新和论坛会话，切换账号／角色会清除旧正文。新帖提示的四个链接分别保留公告、反馈、求书搜索和原生守则入口。
-- 自动链接仅作用于 Markdown 正文及评论框的原生粘贴操作，不改写系统剪贴板；保留反向选区替换、光标、撤销／重做和草稿更新。普通输入、多行／空选区、非 HTTP(S) 内容及生成链接后超限时保持普通粘贴；按论坛 Unicode 字数限制核对转义及 URL 规范化后的全文。
-- Debug 单元测试、应用 APK、设备测试 APK 和 Lint 均通过：548 项 JVM 测试无失败、错误或跳过，其中 3 项为本地公开响应验证；Lint 为 0 个错误、29 个警告。30 份先前捕获的实际响应使用生产模型解码，73 条根评论、105 条附带回复和 12 个独立回复页一致，首屏缓存命中时不发额外请求。
-- Release 单元测试、未签名 APK（包含 R8 混淆）和 Lint 均通过：同样为 548 项 JVM 测试，无失败、错误或跳过；Lint 为 0 个错误、33 个警告，相比 Debug 多出的 4 项是 `launcher_xingchuan` 桌面图标颜色／边距资源未使用提示。此次适配新增的模型、缓存、提示及粘贴代码没有 Lint 问题。
-- 在专用 `Novelia_Test` 模拟器（Android API 35）执行 43 项设备回归，全部通过。覆盖回复分页、滚出／返回缓存、刷新和账号隔离，发帖提示的真实点击，新帖／旧帖编辑，键盘及语义粘贴、撤销／重做、普通粘贴回退、草稿保存和论坛／镜像会话隔离。检查浅色及深色双倍字号截图，提示文字完整、链接可辨。
-- 最终日志：`outputs/logs/forum-update-20261003-implementation-debug-final.log`、`outputs/logs/forum-update-20261003-implementation-release.log`、`outputs/logs/forum-update-20261003-implementation-device.log`；汇总：`outputs/qa/forum-update-20261003-implementation/verification.json`。公开样本、临时验证类、截图及汇总保存在本地忽略目录 `outputs/qa/forum-update-20261003/` 和 `outputs/qa/forum-update-20261003-implementation/`，不把抓取的用户评论提交为仓库资源。未执行真实账号发帖、回复或收藏写入。
-
-## 2026-10-05 适配论坛 10 月 4 日构建
-
-- 核对部署 `36f8894`（北京时间 2026-10-04 10:16:39），与 `24db0ee` 对比全部 11 个提交，并核对认证 SDK `490e384` 的新增接口。帖子、评论、分页、首屏回复及登录合约保持兼容；跟进新版守则、发帖提示、处罚未读及评论错误分类。
-- 守则解析支持新版标题和权限表，仅读取严格校验的静态权限对象及已知模板绑定，不执行脚本。全部十四个内容块、十项权限及三种账号类型与原站一致；首次离线副本同步为新版，旧缓存可升级并完整保存权限表。未知结构、脚本表达式或数据不完整时保留上次副本，明确显示同步失败。原生权限卡片可在窄屏、深色和双倍字号下纵向阅读。
-- 论坛「我的」及处罚菜单新增未读提示。社区前台、恢复前台、展开菜单及前台每分钟复核；展示处罚列表后按服务器快照的 `latestStrikeId` 确认已读，缺失字段的旧响应不写入。确认失败可重试，仍有新记录时提示刷新；64 位 ID 不经过浮点数转换，查询与确认均绑定原论坛会话，旧账号响应及旧快照不能提交到新账号。状态和处罚正文不持久缓存。
-- 发帖提示补充建政小说处理说明，保留公告、反馈、求书及守则四个入口。论坛读写错误展示 400／403／404／409 的有效纯文本原因，包括无效或不存在的根评论、权限、锁定及冲突；HTML、超长文本和内部错误使用通用提示，业务错误不重发写操作。
-- Debug／Release 各 588 项 JVM 测试通过，无失败、错误或跳过，其中各三项为本地公开响应验证。生产模型解码三十份实际响应，73 条根评论、105 条附带回复和十二个独立回复页一致。Debug 应用与测试 APK、包含 R8 的未签名 Release APK 均生成成功；两个变体 Lint 均为 0 个错误，分别保留 29／33 个既有警告。
-- 专用 `Novelia_Test` 模拟器（Android API 35）上 37 项设备回归全部通过，覆盖新版守则与权限、未读菜单、已读失败重试与晚响应隔离、发帖提示链接、回复分页与缓存，以及论坛／主站／镜像会话隔离。检查浅色、深色双倍字号和未读菜单截图；全部账号操作使用合成数据，没有真实账号写入。
-- 汇总及公开样本、源码、临时验证类和截图保存在本地忽略目录 `outputs/qa/forum-update-20261004/`，不提交用户评论内容。最终日志：`outputs/logs/forum-update-20261004-debug-final.log`、`outputs/logs/forum-update-20261004-release-final.log`、`outputs/logs/forum-update-20261004-androidtest-final.log`、`outputs/logs/forum-update-20261004-device.log`；汇总为 `verification.json`。
-
-## 2026-10-05 检查并补适配论坛 10 月 5 日构建
-
-- 核对线上部署 `928185a`（北京时间 2026-10-05 20:25:17），与已适配的 `36f8894` 对比全部 33 个提交。发现分类 ID 重分配为公告 `1`、反馈 `2`、小说 `100`；旧客户端以 `2` 判断公告会误拦反馈，并向普通用户展示公告选项。
-- 分类选择和提交权限改用服务器返回的 `slug` 判断，普通用户可在反馈和小说分类发帖，公告仍限管理员。新帖子及修改请求继续使用当前分类的数字 ID。
-- 草稿增加保存 `categorySlug`，恢复时在当前分类中解析 ID 并过滤失效标签。只有数字 ID 的旧论坛草稿保留标题、正文，要求用户明确重新选择分类后才允许发布；不依据已被重用的旧 ID 自动迁移，也不自动把缺失分类改成默认分类。
-- 帖子、评论、分页、首屏回复、字数／标签限制、角色与修改时限保持兼容。后端事务、错误映射和浏览量统计重整无需额外客户端改动；取消请求的 499 和超时 504 沿用现有网络异常处理。守则及发帖提示与 10.4 一致。
-- 认证 SDK 更新至 `36953dd`，变化集中在网页 `start`／`dispose`、组件上下文及未读轮询生命周期；认证、处罚读取、未读查询及已读确认的 HTTP 合约未变。网页草稿及 localStorage 调整不改变原生设备草稿的既有保留策略。
-- 匿名 GET 获取 32 份响应，生产模型解码通过；三个分类、七篇帖子、78 条一级评论、99 条附带回复和十二个独立回复页均符合现有合约。另核对五个 400／404 错误的纯文本格式，以及未读和处罚接口匿名访问的 401；旧小说评论接口仍返回 200。
-- Debug 共 600 项 JVM 测试通过，无失败、错误或跳过，其中三项为本地公开响应验证。修正既有守则异常模板测试对 LF 换行的假设，兼容 Windows CRLF，且确认每种变体确实修改了模板。Debug 应用和测试 APK 构建成功，Lint 为 0 个错误、29 个既有警告；本次未重建 Release。
-- 专用 `Novelia_Test` 模拟器（Android API 35）上五项编辑器测试全部通过，覆盖新的分类和权限、标签上限、超长草稿、新帖提示、数字旧草稿重选分类及按 slug 恢复当前分类和有效标签。只操作合成草稿，没有真实账号写入；检查结束后关闭本次启动的测试模拟器。
-- 证据与汇总保存在本地忽略目录 `outputs/qa/forum-update-20261005/`，不提交抓取的用户评论。最终日志为 `outputs/logs/forum-update-20261005-debug-final.log`、`outputs/logs/forum-update-20261005-device.log`，汇总为 `verification.json`。
+合约与缓存回归位于 [data/network 测试目录](../../app/src/test/java/cc/novelia/app/data/network)：`ForumApiContractTest`、`ForumAccountApiTest`、`ForumReplyCountsTest`、`ForumReplyPageCacheTest`、`ForumCommunityRulesTest`。页面回归在 [ui/community](../../app/src/androidTest/java/cc/novelia/app/ui/community)，另有守则解析器的 Android 测试。真实站点只读联调及其开关见[测试指南](../quality/testing.md)。
