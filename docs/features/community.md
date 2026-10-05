@@ -69,7 +69,7 @@ flowchart TD
 
 ## 4. 评论与回复
 
-[ForumCommentsPanel.kt](../../app/src/main/java/cc/novelia/app/ui/community/ForumCommentsPanel.kt) 使用论坛帖子下的平铺分页评论接口，回复传根评论 `rootId`，修改只传 `content`。评论最多 1000 个 Unicode 码点；普通作者发布后 20 分钟内可编辑或删除，管理员不受时限限制，并可展开隐藏／删除评论的原文。帖子和评论表单均提供 `/rules` 社区守则入口。
+[ForumCommentsPanel.kt](../../app/src/main/java/cc/novelia/app/ui/community/ForumCommentsPanel.kt) 分页读取一级评论，[ForumCommentThread.kt](../../app/src/main/java/cc/novelia/app/ui/community/ForumCommentThread.kt) 展开后通过 `post/{postId}/comment/{rootId}/reply` 独立分页加载子回复，每页 20 条。线上可能省略 `replyCount`，因此始终提供查看回复入口，并以回复接口的 `total` 更新数量。发送子回复后展开对应讨论串并定位末页；账号或角色切换后清除已加载回复。回复提交根评论 `rootId`，修改只传 `content`。评论最多 1000 个 Unicode 码点；普通作者发布后 20 分钟内可编辑或删除，管理员不受时限限制，并可展开隐藏／删除评论的原文。帖子和评论表单均提供 `/rules` 社区守则入口。
 
 [CommentsPanel.kt](../../app/src/main/java/cc/novelia/app/ui/community/CommentsPanel.kt) 继续服务于主站作品和旧文章评论。调用方提供 `site` 与父目标，不应只凭显示标题推断评论归属。以下为主站评论行为：
 
@@ -85,6 +85,8 @@ flowchart TD
 ## 5. Markdown 渲染与链接
 
 渲染入口是 [MarkdownText.kt](../../app/src/main/java/cc/novelia/app/ui/markdown/MarkdownText.kt)，站点扩展语法由 [SiteMarkdownParser.kt](../../app/src/main/java/cc/novelia/app/ui/markdown/SiteMarkdownParser.kt) 处理。工具栏、模板插入与预览应使用相同语义，防止“编辑器里看到的”和最终正文不一致。
+
+新论坛的 `::: star` 评分与 2026-09-30 网页构建一致：只接受非负十进制数，上限为 5，按半星四舍五入；正文、编辑预览和评论共用此规则。主站与旧文章沿用原有评分精度。
 
 维护时尤其注意：
 

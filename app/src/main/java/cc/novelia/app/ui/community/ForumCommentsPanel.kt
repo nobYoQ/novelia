@@ -27,13 +27,15 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
-/** The new API paginates all comments together, including replies. No parentId query exists. */
+/** 一级评论分页加载，各讨论串的子回复展开后通过独立接口分页读取。 */
 @Composable internal fun ForumCommentsPanel(c: AppController, postId: Long, locked: Boolean) {
     val profile by c.forumSession.profile.collectAsStateWithLifecycle()
     val state by c.store.state.collectAsStateWithLifecycle()
     var page by rememberSaveable(postId) { mutableIntStateOf(0) }
     var version by remember(postId) { mutableIntStateOf(0) }
     var rootId by rememberSaveable(postId, profile?.userId) { mutableStateOf<Long?>(null) }
+    var replyCount by rememberSaveable(postId, profile?.userId) { mutableLongStateOf(0) }
+    var replyFocus by remember(postId, profile?.userId, profile?.role) { mutableStateOf<ForumReplyFocus?>(null) }
     var editing by remember(postId, profile?.userId) { mutableStateOf<ForumComment?>(null) }
     var deleting by remember { mutableStateOf<ForumComment?>(null) }
     var sending by remember { mutableStateOf(false) }
@@ -46,18 +48,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
             val comments = result.items.filter { it.authorUsername !in state.blockedUsers }
             AppLazyColumn(contentPadding = PaddingValues(20.dp)) {
                 if(comments.isEmpty()) item { EmptyState("还没有讨论", "来分享你的感想吧。", Icons.Outlined.ChatBubbleOutline) }
-                items(comments, key = { it.id }) { comment ->
-                    val now = rememberForumModificationTime(comment.createdEpoch)
-                    Column(Modifier.padding(start = if(comment.rootId == null) 0.dp else 16.dp, top = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("${comment.authorUsername} · ${displayDate(comment.createdEpoch)}", style = MaterialTheme.typography.labelLarge)
-                        comment.rootId?.let { Text("回复 #$it", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                        ForumCommentContent(comment, profile) { MarkdownText(c, it, renderer = renderer, documentUrl = documentUrl) }
-                        Row {
-                            if(!locked && comment.status == 0) TextButton(onClick = { editing = null; rootId = comment.replyRoot }) { Text("回复") }
-                            if(comment.status == 0 && comment.canModify(profile, now)) {
-                                if(ForumRules.canWrite(profile)) TextButton(onClick = { editing = comment; rootId = null }) { Text("编辑") }
-                                TextButton(onClick = { deleting = comment }) { Text("删除") }
-                            } else if(comment.authorId != profile?.userId) TextButton(onClick = { c.store.update { it.copy(blockedUsers = it.blockedUsers + comment.authorUsername) } }) { Text("屏蔽用户") }
+                items(comments, key = { it.id }) { root ->
+                    ForumCommentThread(postId, root, profile, version, replyFocus, state.blockedUsers,
+                        loadReplies = { c.forumApi.replies(postId, root.id, it) }) { comment, rootPublished ->
+                        ForumCommentRow(comment, profile, locked || !rootPublished,
+                            onReply = { editing = null; rootId = comment.replyRoot; replyCount = root.replyCount },
+                            onEdit = { editing = comment; rootId = null }, onDelete = { deleting = comment },
+                            onBlock = { c.store.update { it.copy(blockedUsers = it.blockedUsers + comment.authorUsername) } }) {
+                            MarkdownText(c, it, renderer = renderer, documentUrl = documentUrl)
                         }
                     }
                     HorizontalDivider()
@@ -80,14 +78,18 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
             MarkdownCommentInput(text, { value -> text = value; c.store.update { it.copy(drafts = it.drafts + (draftKey to value)) } }, if(editing != null) "编辑评论" else "写下评论", isError = commentContent.isNotEmpty() && commentError != null, softLimit = true) {
                 FilledIconButton(enabled = commentError == null && canSend && canEditDraft && !sending, modifier = Modifier.testTag("forum-comment-submit"), onClick = {
                     // Login changes the account-specific draft key; retain the text being submitted.
-                    val content = text.trim(); val submittedRoot = rootId; val submittedEdit = editing; val submittedDraft = draftKey
+                    val content = text.trim(); val submittedRoot = rootId; val submittedReplyCount = replyCount; val submittedEdit = editing; val submittedDraft = draftKey
                     c.requireForumLogin { c.action {
                         require(ForumRules.canWrite(c.forumSession.profile.value)) { "当前账号暂不具备评论权限，草稿已保留" }
                         require(submittedEdit == null || submittedEdit.canModify(c.forumSession.profile.value)) { "评论只能在发布后 20 分钟内修改，管理员不受此限制。草稿已保留" }
                         sending = true
                         try {
                             if(submittedEdit != null) c.forumApi.updateComment(submittedEdit.id, content)
-                            else c.forumApi.createComment(postId, ForumCommentInput(content, submittedRoot))
+                            else {
+                                val created = c.forumApi.createComment(postId, ForumCommentInput(content, submittedRoot))
+                                submittedRoot?.let { replyFocus = ForumReplyFocus(it,
+                                    (submittedReplyCount / 20).coerceIn(0, Int.MAX_VALUE - 1L).toInt(), created.id) }
+                            }
                             c.store.update { it.copy(drafts = it.drafts - submittedDraft) }
                             text = ""; rootId = null; editing = null; version++
                         } finally { sending = false }
@@ -107,6 +109,24 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
             c.forumApi.deleteComment(comment.id); deleting = null; version++
         }
     } }
+}
+
+@Composable private fun ForumCommentRow(comment: ForumComment, profile: Profile?, locked: Boolean,
+    onReply: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit, onBlock: () -> Unit,
+    render: @Composable (String) -> Unit) {
+    val now = rememberForumModificationTime(comment.createdEpoch)
+    Column(Modifier.padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("${comment.authorUsername} · ${displayDate(comment.createdEpoch)}", style = MaterialTheme.typography.labelLarge)
+        comment.rootId?.let { Text("回复 #$it", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        ForumCommentContent(comment, profile, render)
+        Row {
+            if(!locked && comment.status == 0) TextButton(onClick = onReply) { Text("回复") }
+            if(comment.status == 0 && comment.canModify(profile, now)) {
+                if(ForumRules.canWrite(profile)) TextButton(onClick = onEdit) { Text("编辑") }
+                TextButton(onClick = onDelete) { Text("删除") }
+            } else if(comment.authorId != profile?.userId) TextButton(onClick = onBlock) { Text("屏蔽用户") }
+        }
+    }
 }
 
 @Composable internal fun ForumCommentContent(comment: ForumComment, profile: Profile?, render: @Composable (String) -> Unit) {

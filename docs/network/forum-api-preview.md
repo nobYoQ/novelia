@@ -4,10 +4,10 @@
 
 ## 核对依据
 
-- 核对日期：2026-09-21。
-- 测试站公开前端：`/assets/index-YZCWd1-v.js`，内嵌部署提交 `6c65702e9fdf6c8a5cf21654a36596a2f508a494`。适配以此部署为准，上游 main 的后续提交未作为已部署行为处理。
-- [该部署版本的前端 API 合约](https://github.com/auto-novel/forum/blob/6c65702e9fdf6c8a5cf21654a36596a2f508a494/apps/web/src/api.ts)。
-- [服务端帖子路由](https://github.com/auto-novel/forum/blob/6c65702e9fdf6c8a5cf21654a36596a2f508a494/apps/api/internal/handler/post.go)、[评论路由](https://github.com/auto-novel/forum/blob/6c65702e9fdf6c8a5cf21654a36596a2f508a494/apps/api/internal/handler/comment.go)、[认证声明](https://github.com/auto-novel/forum/blob/6c65702e9fdf6c8a5cf21654a36596a2f508a494/apps/api/internal/httpx/authn.go)。
+- 核对日期：2026-10-01。
+- 测试站公开前端：`/assets/index-CaYVyU6k.js`，内嵌部署提交 `692916b5ecd76313ee2fcacffc8dc309f342784b`，构建时间为 2026-09-30 20:27:27（北京时间）。源码对比基线为之前的 `6c65702`，并以匿名公开 GET 核对实际服务端响应。
+- [该部署版本的前端 API 合约](https://github.com/auto-novel/forum/blob/692916b5ecd76313ee2fcacffc8dc309f342784b/apps/web/src/api.ts)。
+- [服务端帖子路由](https://github.com/auto-novel/forum/blob/692916b5ecd76313ee2fcacffc8dc309f342784b/apps/api/internal/handler/post.go)、[评论路由](https://github.com/auto-novel/forum/blob/692916b5ecd76313ee2fcacffc8dc309f342784b/apps/api/internal/handler/comment.go)、[认证声明](https://github.com/auto-novel/forum/blob/692916b5ecd76313ee2fcacffc8dc309f342784b/apps/api/internal/httpx/authn.go)。
 
 ## 合约变化
 
@@ -20,7 +20,9 @@
 | 帖子详情 | `GET post/{数字ID}/`；时间为 RFC 3339 字符串；作者改为 `authorId/authorUsername` |
 | 发布／编辑 | `POST post/`、`PATCH post/{id}/`；正文为 `{ categoryId, title, content, tagIds }`，返回完整帖子对象 |
 | 删除帖子 | `DELETE post/{id}/`，成功可返回无正文的 204；普通作者限发布后 20 分钟内，管理员不受时限影响 |
-| 评论 | `GET/POST post/{id}/comment`；返回平铺分页列表；回复提交 `rootId`，回复子评论时仍使用其根 ID |
+| 一级评论 | `GET post/{id}/comment`；`total` 只统计一级评论，`items` 不再包含子回复；源码包含可选 `replyCount`，本次线上响应未返回此字段 |
+| 子回复 | `GET post/{id}/comment/{rootId}/reply`；使用独立的 `page/page_size` 分页，响应 `{ total, items }` |
+| 发布评论 | `POST post/{id}/comment`；回复提交 `rootId`，回复子评论时仍使用其根 ID |
 | 修改评论 | `PATCH/DELETE comment/{id}`；编辑只提交 `content`，禁止提交 `rootId`（包括 null）；作者限发布后 20 分钟内修改，管理员不受时限影响 |
 | 云端收藏 | `PUT/DELETE post/{id}/favorite`；`GET me/favorite`、`GET me/post` |
 | 处罚记录 | 认证服务 `https://auth.novelia.cc/api/v1/me/strikes`，携带论坛令牌；分页参数为 `page/page_size`，返回原因、依据、分值及撤销时间 |
@@ -29,7 +31,7 @@
 
 新论坛与主站分别保存加密令牌并使用不同的 Keystore 别名。论坛请求拒绝主站会话；401 最多刷新一次。两边的退出操作只清除各自的本机会话，不调用全局 SSO 退出接口，不删除共享认证 Cookie，也不清除另一边的令牌。已退出的会话不会因匿名请求收到 401 而自动登录；用户明确进入登录页后仍可复用统一认证。
 
-处罚记录字段与认证行为依据论坛所依赖的 [认证 SDK 7301b75](https://github.com/auto-novel/auth/blob/7301b75bde57f3fabf3e26a41617644d46b36ced/packages/auth-api/src/api.ts) 核对。此接口属于账号记录，不是论坛帖子 API。
+处罚记录字段与认证行为依据当前论坛所依赖的 [认证 SDK 90f6980](https://github.com/auto-novel/auth/blob/90f6980ebcbd1ba8a4690dba0e2abe98957ec100/packages/auth-api/src/api.ts) 核对。与上次论坛部署依赖的 `e6909c2` 比较，认证 SDK 的 `api.ts` 内容相同，论坛服务端认证声明也未变化。此接口属于账号记录，不是论坛帖子 API。
 
 ## 客户端行为
 
@@ -38,20 +40,21 @@
 - 新建论坛草稿使用 `article:forum-new`；旧版 `article:new` 草稿仍保留，不自动发布到测试站。
 - 新版编辑保留帖子的标签，最多选择 3 个，切换分类时清除旧分类标签。标题为 2–100 字，正文为 1–20,000 字，评论为 1–1,000 字；按 Unicode 码点计数，emoji 的代理对按一个字计算。正文保留原始空白，评论按网页行为去除首尾空白后提交。旧的超长草稿保留并可继续缩短，超限时禁止提交。最终权限及域名黑名单由服务端决定；论坛返回的文本校验错误会显示具体原因，失败时保留草稿且不自动重发。
 - 论坛的 `trusted`、`member`、`admin` 角色可发言，公告限管理员；主站账号权限规则保持原逻辑。帖子删除和评论修改入口在 20 分钟到期后更新，提交时再次检查权限。
-- 评论按服务端分页平铺显示，回复显示根评论 ID；根评论可能位于其他页。隐藏／删除评论默认显示占位文本，管理员可展开服务端返回的原文，切换账号或评论状态时收起。
+- 一级评论按服务端分页显示，各讨论串的子回复展开后独立分页加载。缺少 `replyCount` 时保留「查看回复」入口，以回复接口的 `total` 更新数量；发布子回复后定位该串末页。隐藏／删除评论默认显示占位文本，已有子回复仍可查看，已隐藏／删除的根评论不能继续回复。管理员可展开服务端返回的原文，切换账号或评论状态时收起。
+- 新论坛 Markdown 评分按半星四舍五入，接受非负十进制数并限制到 5；主站与旧文章的评分精度保持原行为。共享 TypeScript 包迁移本身不要求 Android 安装对应依赖。
 - 右上角「我的」使用锚定展开面板，集中放置我的帖子、云端收藏、处罚记录、本地收藏和论坛登录／退出。面板支持缩放淡入淡出、返回键／外部点击收起、滚动和大字号，遵循减少动态效果设置。
 - 云端收藏和我的帖子沿用各自接口的排序；四种帖子预设用于「全部帖子」。处罚记录显示原因、分值、依据、生效／撤销状态及时间，不持久缓存账号处罚数据。“我的”和帖子／评论表单提供社区守则入口，在站内打开 `/rules`。
 - 新域名帖子链接可进入原生页面；带锚点、分类筛选或编辑路径的链接在站内 WebView 中保留完整 URL。
-- 服务端还提供 `external/comment/novel/{subjectKey}`。已提供显式 subject key 的只读接口，但测试站尚未给出主站迁移映射，因此当前小说评论保持原接口。
+- 服务端还提供 `external/comment/novel/{subjectKey}` 及 `external/comment/novel/{subjectKey}/{rootId}/reply`。已提供显式 subject key 的只读接口；本次核对未确认主站 subject key 的迁移映射，当前小说评论保持原接口。
 
 ## 验证
 
-- 已对测试站三个分类的列表、帖子详情和评论执行公开 GET，核对字段与部署源码一致；不会在联调时创建帖子、评论或修改收藏。
-- `ForumApiContractTest` 使用 MockWebServer 覆盖分页／搜索、数字 ID、时区与小数秒、创建／PATCH 请求体、标签、平铺回复、204、云端列表、会话隔离、401 刷新上限、503 响应不重试、旧收藏及新旧链接。
+- 本次对测试站三个分类各抽查两个帖子的列表、详情、一级评论和子回复，全部为匿名公开 GET；未创建帖子、评论或修改收藏。实际响应的一级评论没有 `replyCount`，客户端已兼容该部署差异。
+- `ForumApiContractTest` 使用 MockWebServer 覆盖分页／搜索、数字 ID、时区与小数秒、创建／PATCH 请求体、标签、一级评论与子回复独立分页、可选 64 位回复数量、204、云端列表、会话隔离、401 刷新上限、503 响应不重试、旧收藏及新旧链接。
 - `ForumAccountApiTest` 覆盖四种排序参数、筛选与分页保留，以及使用论坛令牌访问认证服务处罚记录的字段解析和权限边界。
-- 变基前验证：93 项 JVM 测试全部通过；Debug APK、Android 测试 APK 构建成功；`lintDebug` 通过，0 个错误、25 个警告。
-- `ForumAccountUiTest` 与 `ForumSessionIsolationTest` 共 6 项 Android 回归测试通过，覆盖排序选择、个人面板操作与返回键、处罚记录展示，以及双向退出隔离和退出状态持久化。会话测试使用独立存储与合成凭据。
-- 在 375dp 宽模拟器上核对浅色／深色、减少动态效果；另外两次布局测试覆盖横屏和系统双倍字号，均通过并检查截图。
+- 初始预适配验收（历史）：93 项 JVM 测试全部通过；Debug APK、Android 测试 APK 构建成功；`lintDebug` 通过，0 个错误、25 个警告。本次结果见末尾 2026-10-01 记录。
+- 初始设备验收（历史）：`ForumAccountUiTest` 与 `ForumSessionIsolationTest` 共 6 项 Android 回归测试通过，覆盖排序选择、个人面板操作与返回键、处罚记录展示，以及双向退出隔离和退出状态持久化。会话测试使用独立存储与合成凭据。
+- 初始布局验收（历史）：在 375dp 宽模拟器上核对浅色／深色、减少动态效果；另外两次布局测试覆盖横屏和系统双倍字号，均通过并检查截图。
 - 构建与离线验证：`./build.ps1 -Tasks @('assembleDebug', 'assembleDebugAndroidTest', 'testDebugUnitTest', 'lintDebug') -Offline`。
 - 可选 Android 只读联调：安装测试 APK 后使用 `adb shell am instrument -w -r -e live true -e class cc.novelia.app.integration.ForumLiveReadOnlyTest cc.novelia.app.test/androidx.test.runner.AndroidJUnitRunner`。
 
@@ -85,3 +88,14 @@
 - 新增测试覆盖 Unicode 边界、旧超长内容继续编辑、三个标签上限、公告发帖权限、删除时限、管理员展开隐藏／删除评论，以及正文域名过滤错误和评论 PATCH 不携带 `rootId`。已检查浅色与深色大字号面板截图。
 - 只读联调在设备上读取三个分类的列表、详情和评论，全部正常解码。未使用真实账号执行发布、修改、删除或处罚操作。
 - 日志：`artifacts/forum-update-20260921-final-build.log`、`artifacts/forum-update-20260921-device.log`。
+
+## 2026-10-01 适配论坛 9 月 30 日构建
+
+- 核对部署 `692916b`，与之前部署 `6c65702` 对比 API、认证和 Markdown 源码，并通过匿名公开 GET 抽查三个分类、六篇帖子及对应评论／回复。
+- 跟进一级评论和子回复拆分分页。线上省略 `replyCount` 时仍可展开回复；独立回复接口返回的 `total` 用于数量和分页。新增讨论串加载、重试、屏蔽、角色切换和发布后定位末页的界面测试。
+- 论坛评分与网页同步为半星四舍五入，主站和旧文章保留原有评分精度。分类、排序、发帖、收藏、权限与登录合约无需额外调整；补齐外部小说评论的只读回复接口，主站小说评论仍沿用现有接口。
+- `:app:testDebugUnitTest`、`:app:assembleDebug`、`:app:assembleDebugAndroidTest`、`:app:lintDebug` 全部通过：393 项 JVM 测试无失败、错误或跳过，lint 为 0 个错误、23 个警告。
+- 另用客户端生产序列化器解码本次实际抓取的分类、列表、六篇详情、一级评论和子回复，3 项临时 JVM 验证全部通过，确认缺失 `replyCount` 的根评论仍存在非空回复。验证源码与结果只保存在本地忽略目录。
+- 8 项新增讨论串 Android 界面测试已编译到测试 APK。本次环境未连接设备且没有可用 AVD，未执行设备界面测试或真实账号写入验收。
+- 本次公开响应、源码快照、检查脚本和验证记录保存在本地忽略目录 `outputs/qa/forum-20260930/`；最终构建日志为 `outputs/logs/build-gradle-20261001-143324-292.log`。未将公开抓取的用户评论作为仓库测试资源提交。
+- 实际响应解码验证日志：`outputs/logs/build-gradle-20261001-143943-698.log`；汇总结果：`outputs/qa/forum-20260930/build-verification.json`、`fixture-verification.json`。

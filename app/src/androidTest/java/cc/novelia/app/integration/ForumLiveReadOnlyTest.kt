@@ -13,7 +13,7 @@ import org.junit.runner.RunWith
 /** Opt in with -e live true. Public GETs only; no account/session is attached. */
 @RunWith(AndroidJUnit4::class)
 class ForumLiveReadOnlyTest {
-    @Test fun previewCategoriesPostsAndFlatCommentsDecode() = runBlocking {
+    @Test fun previewCategoriesPostsAndCommentThreadsDecode() = runBlocking {
         assumeTrue(InstrumentationRegistry.getArguments().getString("live") == "true")
         val api = ForumApi(NoveliaApi(null, ForumApi.BASE_URL))
         val categories = api.categories()
@@ -27,7 +27,15 @@ class ForumLiveReadOnlyTest {
                 assertTrue(post.article(categories).id.startsWith("f-"))
                 val comments = api.comments(post.id, 0)
                 assertTrue(comments.total >= comments.items.size)
-                comments.items.forEach { assertEquals(post.id, it.postId); assertTrue(it.createdEpoch > 0) }
+                comments.items.forEach {
+                    assertEquals(post.id, it.postId); assertTrue(it.createdEpoch > 0)
+                    assertNull(it.rootId); assertTrue(it.replyCount >= 0)
+                    if(it.replyCount > 0 || it.id == comments.items.first().id) {
+                        val replies = api.replies(post.id, it.id, 0)
+                        assertTrue(replies.total >= replies.items.size)
+                        replies.items.forEach { reply -> assertEquals(post.id, reply.postId); assertEquals(it.id, reply.rootId) }
+                    }
+                }
             }
         }
     }

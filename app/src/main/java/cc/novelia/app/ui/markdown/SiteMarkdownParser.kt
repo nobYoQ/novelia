@@ -18,7 +18,9 @@ internal class StrikeNode : CustomNode()
  * 通过解析器节点表达结构，避免用全局字符串替换破坏嵌套内容或代码块中的字面语法。
  * details 的围栏长度随起始标记保存，闭合时由最内层尚未关闭的容器消费。
  */
-internal fun configureSiteMarkdownParser(builder: Parser.Builder) {
+internal fun configureSiteMarkdownParser(builder: Parser.Builder) = configureSiteMarkdownParser(builder, forumRatings = false)
+
+internal fun configureSiteMarkdownParser(builder: Parser.Builder, forumRatings: Boolean) {
     builder.customBlockParserFactory(object : AbstractBlockParserFactory() {
         override fun tryStart(state: ParserState, matchedBlockParser: MatchedBlockParser): BlockStart? {
             if (state.indent >= 4) return BlockStart.none()
@@ -28,7 +30,10 @@ internal fun configureSiteMarkdownParser(builder: Parser.Builder) {
             val parser = if (match.groupValues[2] == "details") {
                 DetailsParser(DetailsNode(info.ifEmpty { "点击展开" }, match.groupValues[1].length))
             } else {
-                val value = info.toDoubleOrNull()?.takeIf { it.isFinite() }?.coerceIn(0.0, 5.0) ?: 0.0
+                val value = if(forumRatings) {
+                    val parsed = info.takeIf { it.matches(Regex("[0-9]+(?:\\.[0-9]+)?")) }?.toDoubleOrNull()?.coerceAtMost(5.0) ?: 0.0
+                    Math.round(parsed * 2) / 2.0
+                } else info.toDoubleOrNull()?.takeIf { it.isFinite() }?.coerceIn(0.0, 5.0) ?: 0.0
                 RatingParser(RatingNode(value))
             }
             return BlockStart.of(parser).atIndex(state.line.length)

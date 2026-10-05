@@ -80,19 +80,27 @@ class ForumApiContractTest {
         }
     }
 
-    @Test fun commentsAreFlatAndReplyUsesRootId() = runBlocking {
+    @Test fun rootCommentsAndRepliesUseIndependentPagingAndReplyUsesRootId() = runBlocking {
         MockWebServer().use { server ->
+            val root = appJson.decodeFromString<ForumComment>(comment).copy(id = 8, rootId = null, replyCount = 21)
+            server.enqueue(MockResponse().setBody("""{"total":1,"items":[${appJson.encodeToString(root)}]}"""))
             server.enqueue(MockResponse().setBody("""{"total":21,"items":[$comment]}"""))
             server.enqueue(MockResponse().setResponseCode(201).setBody(comment))
             server.enqueue(MockResponse().setBody(comment))
             val client = api(server)
             val list = client.comments(5, 1)
-            val reply = list.items.single()
+            assertEquals(1, list.pageCount())
+            assertNull(list.items.single().rootId)
+            assertEquals(21L, list.items.single().replyCount)
+            val replies = client.replies(5, list.items.single().id, 1)
+            assertEquals(2, replies.pageCount())
+            val reply = replies.items.single()
             client.createComment(5, ForumCommentInput("嵌套回复", reply.replyRoot))
             client.updateComment(12, "编辑")
-            val read = server.takeRequest(); val write = server.takeRequest(); val edit = server.takeRequest()
+            val read = server.takeRequest(); val readReplies = server.takeRequest(); val write = server.takeRequest(); val edit = server.takeRequest()
             assertEquals("/api/v1/post/5/comment?page=2&page_size=20", read.path)
             assertNull(read.requestUrl!!.queryParameter("parentId"))
+            assertEquals("/api/v1/post/5/comment/8/reply?page=2&page_size=20", readReplies.path)
             assertEquals("/api/v1/post/5/comment", write.path)
             val body = appJson.parseToJsonElement(write.body.readUtf8()).jsonObject
             assertEquals(JsonPrimitive(8), body["rootId"])
@@ -103,6 +111,23 @@ class ForumApiContractTest {
             assertTrue(reply.canModify(user, reply.createdEpoch + 1199))
             assertFalse(reply.canModify(user, reply.createdEpoch + 1200))
             assertFalse(reply.canModify(user.copy(userId = 43), reply.createdEpoch))
+        }
+    }
+
+    @Test fun replyCountCanBeOmittedAndKeeps64BitCounts() {
+        assertEquals(0L, appJson.decodeFromString<ForumComment>(comment).replyCount)
+        val large = comment.dropLast(1) + """, "replyCount":9007199254740993}"""
+        assertEquals(9007199254740993L, appJson.decodeFromString<ForumComment>(large).replyCount)
+    }
+
+    @Test fun invalidReplyIdsAndPagesFailBeforeSending() = runBlocking {
+        MockWebServer().use { server ->
+            val client = api(server)
+            assertTrue(runCatching { client.replies(0, 8, 0) }.isFailure)
+            assertTrue(runCatching { client.replies(5, 0, 0) }.isFailure)
+            assertTrue(runCatching { client.replies(5, 8, -1) }.isFailure)
+            assertTrue(runCatching { client.externalReplies("novel-key", -1, 0) }.isFailure)
+            assertEquals(0, server.requestCount)
         }
     }
 
@@ -120,14 +145,20 @@ class ForumApiContractTest {
 
     @Test fun accountListsAndExternalCommentSubjectAreEncoded() = runBlocking {
         MockWebServer().use { server ->
-            repeat(3) { server.enqueue(MockResponse().setBody("""{"total":0,"items":[]}""")) }
+            repeat(4) { server.enqueue(MockResponse().setBody("""{"total":0,"items":[]}""")) }
             val client = api(server)
             client.favorites(0); client.myPosts(1); client.externalComments("web-kakuyomu-中文 /id", 0)
+            client.externalReplies("web-kakuyomu-中文 /id", 17, 1)
             assertEquals("/api/v1/me/favorite?page=1&page_size=20", server.takeRequest().path)
             assertEquals("/api/v1/me/post?page=2&page_size=20", server.takeRequest().path)
             val path = server.takeRequest().requestUrl!!
             assertEquals("web-kakuyomu-中文 /id", path.pathSegments.last())
             assertFalse(path.encodedPath.contains("%25E"))
+            val replies = server.takeRequest().requestUrl!!
+            assertEquals("web-kakuyomu-中文 /id", replies.pathSegments.dropLast(2).last())
+            assertTrue(replies.encodedPath.endsWith("/17/reply"))
+            assertEquals("2", replies.queryParameter("page"))
+            assertEquals("20", replies.queryParameter("page_size"))
         }
     }
 

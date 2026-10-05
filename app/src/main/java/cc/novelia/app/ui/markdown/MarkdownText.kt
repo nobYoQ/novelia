@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import cc.novelia.app.data.markdown.MarkdownLinks
+import java.net.URI
 import cc.novelia.app.ui.components.IllustrationViewer
 import cc.novelia.app.ui.navigation.AppController
 import io.noties.markwon.AbstractMarkwonPlugin
@@ -31,8 +32,9 @@ import org.commonmark.node.Heading
 @Composable internal fun rememberMarkdownRenderer(c: AppController, documentUrl: String? = null): Markwon {
     val context = LocalContext.current
     return remember(context, c, documentUrl) {
+        val forumRatings = runCatching { documentUrl != null && URI(documentUrl).host.equals("forum.novelia.cc", true) }.getOrDefault(false)
         Markwon.builder(context).usePlugin(TablePlugin.create(context)).usePlugin(ImagesPlugin.create())
-            .usePlugin(SpoilerPlugin()).usePlugin(SiteMarkdownPlugin(context))
+            .usePlugin(SpoilerPlugin()).usePlugin(SiteMarkdownPlugin(context, forumRatings))
             .usePlugin(object : AbstractMarkwonPlugin() {
                 override fun configureConfiguration(builder: MarkwonConfiguration.Builder) {
                     builder.linkResolver { view, link ->

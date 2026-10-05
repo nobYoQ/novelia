@@ -35,6 +35,8 @@ class ForumApi(private val http: NoveliaApi) {
     suspend fun myPosts(page: Int) = http.get<ForumPage<ForumPost>>("me/post", paging(page, 20))
     suspend fun favorite(id: Long, value: Boolean) { mutate(if(value) "PUT" else "DELETE", "${postPath(id)}favorite") }
     suspend fun comments(id: Long, page: Int) = http.get<ForumPage<ForumComment>>("${postPath(id)}comment", paging(page, 20))
+    suspend fun replies(id: Long, rootId: Long, page: Int) =
+        http.get<ForumPage<ForumComment>>("${postPath(id)}comment/${positive(rootId)}/reply", paging(page, 20))
     suspend fun createComment(id: Long, input: ForumCommentInput): ForumComment {
         requireValidComment(input.content)
         require(input.rootId == null || input.rootId > 0) { "回复根评论 ID 必须为正整数" }
@@ -48,6 +50,8 @@ class ForumApi(private val http: NoveliaApi) {
     suspend fun deleteComment(id: Long) { mutate("DELETE", "comment/${positive(id)}") }
     // External novel comments exist on the preview server. Keep the subject key explicit until the main site migrates.
     suspend fun externalComments(subjectKey: String, page: Int) = http.get<ForumPage<ForumComment>>("external/comment/novel/${encodeSegment(subjectKey)}", paging(page, 20))
+    suspend fun externalReplies(subjectKey: String, rootId: Long, page: Int) =
+        http.get<ForumPage<ForumComment>>("external/comment/novel/${encodeSegment(subjectKey)}/${positive(rootId)}/reply", paging(page, 20))
     private fun postPath(id: Long) = "post/${positive(id)}/"
     private fun positive(id: Long): Long { require(id > 0); return id }
     private fun requireValidPost(input: ForumPostInput) { ForumRules.postError(input)?.let { throw IllegalArgumentException(it) } }

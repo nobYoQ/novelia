@@ -29,12 +29,12 @@ import org.commonmark.node.Node
 import org.commonmark.node.SoftLineBreak
 import org.commonmark.parser.Parser
 
-internal class SiteMarkdownPlugin(context: Context) : AbstractMarkwonPlugin() {
+internal class SiteMarkdownPlugin(context: Context, private val forumRatings: Boolean = false) : AbstractMarkwonPlugin() {
     private val density = context.resources.displayMetrics.density
     // 每处图片在其解析文档生命周期内独享 drawable；
     // 重建折叠块不能把其他位置的图片重置为尚未加载的替代文本。
     private val imageSpans = WeakHashMap<Image, Any>()
-    override fun configureParser(builder: Parser.Builder) = configureSiteMarkdownParser(builder)
+    override fun configureParser(builder: Parser.Builder) = configureSiteMarkdownParser(builder, forumRatings)
     override fun beforeRender(node: Node) = prepareSiteMarkdown(node)
     override fun configureVisitor(builder: MarkwonVisitor.Builder) {
         builder.on(Heading::class.java) { visitor, node ->

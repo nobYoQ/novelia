@@ -38,6 +38,15 @@ class SiteMarkdownTest {
         assertEquals(listOf(0.0, 5.0, 0.0, 0.0), nodes<RatingNode>(parse("::: star -1\n::: star 8\n::: star abc\n::: star NaN")).map { it.value })
     }
 
+    @Test fun forumRatingsRoundToHalfStarsAndMainRatingsKeepTheirExistingPrecision() {
+        val forum = Parser.builder().also { configureSiteMarkdownParser(it, forumRatings = true) }.build()
+        val source = listOf("4.24", "4.25", "4.74", "4.75", "8", "-1", "+1", ".5", "1e0", "NaN")
+            .joinToString("\n") { "::: star $it" }
+        assertEquals(listOf(4.0, 4.5, 4.5, 5.0, 5.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+            nodes<RatingNode>(forum.parse(source)).map { it.value })
+        assertEquals(4.24, nodes<RatingNode>(parse("::: star 4.24")).single().value, 0.0)
+    }
+
     @Test fun detailsSupportTheCopiedWrapperNestedBlocksAndReferences() {
         val root = parse("!!\r\n::: details 点击展开\r\n**正文**与[链接][ref]\r\n\r\n::: details 内层\r\n!!剧透!!\r\n:::\r\n\r\n::: star 4.5\r\n:::\r\n!!\r\n\r\n[ref]: /forum/abc123\r\n\r\n结尾")
         val details = nodes<DetailsNode>(root)
