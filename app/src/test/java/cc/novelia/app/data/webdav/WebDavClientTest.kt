@@ -46,7 +46,7 @@ class WebDavClientTest {
             client(server).testConnection()
             assertTrue(files.isEmpty())
             val deleted = requested.single { it.method == "DELETE" }
-            assertTrue(deleted.path!!.startsWith("/dav/novelia-sync/.novelia-probe-"))
+            assertTrue(deleted.path!!.startsWith("/dav/novelia-sync/novelia-probe-"))
             assertNotNull(deleted.getHeader("If-Match"))
             assertTrue(requested.all { it.getHeader("Cookie") == null })
             assertTrue(requested.any { it.method == "PUT" && it.getHeader("If-None-Match") == "*" })
@@ -66,7 +66,7 @@ class WebDavClientTest {
             catch(error: WebDavException) { assertEquals(WebDavFailure.UNSUPPORTED, error.failure) }
             repeat(server.requestCount) {
                 val request = server.takeRequest()
-                if(request.method != "MKCOL") assertTrue(request.path!!.contains(".novelia-probe-"))
+                if(request.method != "MKCOL") assertTrue(request.path!!.contains("novelia-probe-"))
             }
         }
     }
@@ -192,6 +192,58 @@ class WebDavClientTest {
         }
     }
 
+    @Test fun bareResponseVersionsAreQuotedForConditionalWrites() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("old").setHeader("ETag", "v1"))
+            server.enqueue(MockResponse().setResponseCode(204).setHeader("ETag", "v2"))
+            server.start()
+            val c = client(server)
+            val read = c.get("settings.json")!!
+            assertEquals("\"v1\"", read.etag)
+            assertEquals("\"v2\"", c.put("settings.json", "new".toByteArray(), read.etag))
+            assertEquals("identity", server.takeRequest().getHeader("Accept-Encoding"))
+            assertEquals("\"v1\"", server.takeRequest().getHeader("If-Match"))
+        }
+    }
+
+    private fun propertyResponse(etag: String = "&quot;v2&quot;") = MockResponse().setResponseCode(207).setBody(
+        """<d:multistatus xmlns:d="DAV:"><d:response><d:href>/dav/novelia-sync/settings.json</d:href><d:propstat><d:prop><d:getetag>$etag</d:getetag></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>""")
+
+    @Test fun propertyVersionIsPairedWithFreshConditionalBodyInsteadOfPreviousRead() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("old"))
+            server.enqueue(propertyResponse())
+            server.enqueue(MockResponse().setBody("new"))
+            server.enqueue(MockResponse().setResponseCode(412))
+            server.start()
+            val read = client(server).get("settings.json")!!
+            assertEquals("new", read.data.toString(Charsets.UTF_8))
+            assertEquals("\"v2\"", read.etag)
+            assertEquals("GET", server.takeRequest().method)
+            val property = server.takeRequest()
+            assertEquals("PROPFIND", property.method)
+            assertEquals("0", property.getHeader("Depth"))
+            assertTrue(property.body.readUtf8().contains("getetag"))
+            assertEquals("\"v2\"", server.takeRequest().getHeader("If-Match"))
+            assertTrue(server.takeRequest().getHeader("If-Match")!!.startsWith("\"novelia-absent-"))
+        }
+    }
+
+    @Test fun propertyFallbackRejectsWeakVersionIgnoredReadConditionAndRaces() = runBlocking {
+        for(scenario in listOf("weak", "ignored", "race")) {
+            MockWebServer().use { server ->
+                server.enqueue(MockResponse().setBody("old").setHeader("ETag", "W/\"compressed\""))
+                server.enqueue(propertyResponse(if(scenario == "weak") "W/&quot;v2&quot;" else "&quot;v2&quot;"))
+                if(scenario != "weak") server.enqueue(if(scenario == "race") MockResponse().setResponseCode(412) else MockResponse().setBody("new"))
+                if(scenario == "ignored") server.enqueue(MockResponse().setBody("new"))
+                server.start()
+                try { client(server).get("settings.json"); fail("Expected rejected $scenario read") }
+                catch(error: WebDavException) { assertEquals(if(scenario == "race") WebDavFailure.CONFLICT else WebDavFailure.UNSUPPORTED, error.failure) }
+                repeat(server.requestCount) { assertTrue(server.takeRequest().method in listOf("GET", "PROPFIND")) }
+            }
+        }
+    }
+
     @Test fun missingPutVersionDoesNotConfirmContentChangedByAnotherDevice() = runBlocking {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setResponseCode(204))
@@ -241,6 +293,73 @@ class WebDavClientTest {
             val second = server.takeRequest().requestUrl!!
             assertEquals(listOf("dav", "同步", ""), first.pathSegments)
             assertEquals(listOf("dav", "同步", "小说", ""), second.pathSegments)
+        }
+    }
+
+    private fun collectionResponse(path: String = "/dav/novelia-sync/", status: Int = 200) = MockResponse().setResponseCode(207).setBody(
+        """<d:multistatus xmlns:d="DAV:"><d:response><d:href>$path</d:href><d:propstat><d:prop><d:resourcetype><d:collection/></d:resourcetype></d:prop><d:status>HTTP/1.1 $status Response</d:status></d:propstat></d:response></d:multistatus>""")
+
+    @Test fun existingCollectionIsVerifiedAfterNonstandardCreateResponse() = runBlocking {
+        for(status in listOf(403, 404, 405, 409)) {
+            MockWebServer().use { server ->
+                server.enqueue(MockResponse().setResponseCode(status))
+                server.enqueue(collectionResponse())
+                server.start()
+                client(server).ensureDirectory()
+                assertEquals("MKCOL", server.takeRequest().method)
+                val check = server.takeRequest()
+                assertEquals("PROPFIND", check.method)
+                assertEquals("0", check.getHeader("Depth"))
+                assertEquals("/dav/novelia-sync/", check.path)
+            }
+        }
+    }
+
+    @Test fun unrelatedOrFailedCollectionPropertiesCannotConfirmDirectoryExists() = runBlocking {
+        for(response in listOf(collectionResponse("/dav/other/"), collectionResponse(status = 404))) {
+            MockWebServer().use { server ->
+                server.enqueue(MockResponse().setResponseCode(409))
+                server.enqueue(response)
+                server.start()
+                try { client(server).ensureDirectory(); fail("Expected invalid target collection") }
+                catch(error: WebDavException) { assertEquals(WebDavFailure.UNSUPPORTED, error.failure) }
+                assertEquals(2, server.requestCount)
+            }
+        }
+    }
+
+    @Test fun missingDirectoryAndFileUploadErrorsDescribeTheirOwnOperation() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setResponseCode(409))
+            server.enqueue(MockResponse().setResponseCode(404))
+            server.enqueue(MockResponse().setResponseCode(404))
+            server.start()
+            val c = client(server)
+            try { c.ensureDirectory(); fail("Expected unavailable base directory") }
+            catch(error: WebDavException) {
+                assertEquals(WebDavFailure.NOT_FOUND, error.failure)
+                assertTrue(error.message!!.contains("MKCOL 409"))
+            }
+            try { c.put("settings.json", "{}".toByteArray(), createOnly = true); fail("Expected unavailable upload location") }
+            catch(error: WebDavException) {
+                assertEquals(WebDavFailure.NOT_FOUND, error.failure)
+                assertTrue(error.message!!.contains("PUT 404"))
+                assertFalse(error.message!!.contains("父目录不存在"))
+            }
+        }
+    }
+
+    @Test fun permissionFailureWhenCheckingExistingDirectoryIsNotIgnored() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setResponseCode(403))
+            server.enqueue(MockResponse().setResponseCode(403))
+            server.start()
+            try { client(server).ensureDirectory(); fail("Expected denied collection access") }
+            catch(error: WebDavException) {
+                assertEquals(WebDavFailure.PERMISSION, error.failure)
+                assertTrue(error.message!!.contains("PROPFIND 403"))
+            }
+            assertEquals(2, server.requestCount)
         }
     }
 }
