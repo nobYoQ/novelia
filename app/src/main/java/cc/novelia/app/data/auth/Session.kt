@@ -23,19 +23,26 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
-/** 原站和镜像分别登录、加密保存，来源变化后拒绝旧请求及旧刷新结果。 */
+/** 原站、镜像及论坛分别登录和加密保存；论坛会话不受小说书源切换影响。 */
 class Session(context: Context, private val client: OkHttpClient = OkHttpClient.Builder().followRedirects(false).build(),
-    private val sources: BookSources = BookSources.load(context),
-) : AuthenticationSession {
+    sources: BookSources? = null,
+    override val target: AuthTarget = AuthTarget.NOVEL,
+) : ApiSession {
+    constructor(context: Context, authTarget: AuthTarget,
+        client: OkHttpClient = OkHttpClient.Builder().followRedirects(false).build(),
+    ) : this(context, client, target = authTarget)
+
+    // 论坛始终使用独立认证站，不订阅小说镜像的来源和代次变化。
+    private val sources = if(target == AuthTarget.NOVEL) sources ?: BookSources.load(context) else BookSources()
     private val preferences = BookSource.entries.associateWith {
-        context.getSharedPreferences(if(it == BookSource.ORIGINAL) "session" else "session-${it.id}", Context.MODE_PRIVATE)
+        context.getSharedPreferences(if(it == BookSource.ORIGINAL) target.preferencesName else "${target.preferencesName}-${it.id}", Context.MODE_PRIVATE)
     }
-    private val cipher = DeviceCipher("novelia.session")
+    private val cipher = DeviceCipher(if(target == AuthTarget.NOVEL) "novelia.session" else "novelia.forum.session")
     private fun stored(source: BookSource, key: String): String? = runCatching {
         preferences.getValue(source).getString(key, null)?.let(cipher::decrypt)
     }.getOrNull()
     private val state = SessionState()
-    val token: String? get() = sources.withCurrent { state.token }
+    override val token: String? get() = sources.withCurrent { state.token }
     val profile = state.profile
     private val refreshLock = Mutex()
     init {
@@ -48,21 +55,24 @@ class Session(context: Context, private val client: OkHttpClient = OkHttpClient.
     private fun parse(value: String): Profile {
         val payload = appJson.parseToJsonElement(Base64.decode(value.split('.')[1], Base64.URL_SAFE or Base64.NO_WRAP).toString(Charsets.UTF_8)).jsonObject
         return Profile(payload.getValue("sub").jsonPrimitive.content, payload.getValue("role").jsonPrimitive.content,
-            payload.getValue("crat").jsonPrimitive.long, payload.getValue("exp").jsonPrimitive.long)
+            payload.getValue("crat").jsonPrimitive.long, payload.getValue("exp").jsonPrimitive.long,
+            payload["uid"]?.jsonPrimitive?.longOrNull)
     }
-    override fun capture(): SessionBinding = sources.withCurrent { state.capture().copy(source = it.source.id, sourceRevision = it.revision) }
+    private fun bindingSource(selection: SourceSelection) = if(target == AuthTarget.FORUM) "forum" else selection.source.id
+    override fun capture(): SessionBinding = sources.withCurrent { state.capture().copy(source = bindingSource(it), sourceRevision = it.revision) }
     private fun local(binding: SessionBinding) = binding.copy(source = "original", sourceRevision = 0)
     private fun <T> current(binding: SessionBinding, action: (SourceSelection) -> T): T {
         val selected = sources.capture()
         return sources.withSelection(selected) {
-            if(binding.source != selected.source.id || binding.sourceRevision != selected.revision) throw SessionChangedException()
+            if(binding.source != bindingSource(selected) || binding.sourceRevision != selected.revision) throw SessionChangedException()
             state.tokenFor(local(binding))
             action(selected)
         }
     }
     override fun tokenFor(binding: SessionBinding): String? = current(binding) { state.tokenFor(local(binding)) }
     override fun bindRequest(request: Request, binding: SessionBinding): Request = current(binding) {
-        request.newBuilder().url(sources.route(request.url, it)).tag(SourceSelection::class.java, it).build()
+        if(target == AuthTarget.FORUM) request else
+            request.newBuilder().url(sources.route(request.url, it)).tag(SourceSelection::class.java, it).build()
     }
     override suspend fun refreshIfCurrent(binding: SessionBinding, previousToken: String?): Boolean = refreshLock.withLock {
         val current = tokenFor(binding)
@@ -85,14 +95,16 @@ class Session(context: Context, private val client: OkHttpClient = OkHttpClient.
         val context = currentCoroutineContext()
         context.ensureActive()
         val request = current(binding) { selected ->
-            val url = "${selected.source.authOrigin}/api/v1/auth/refresh?app=n"
+            val url = "${selected.source.authOrigin}/api/v1/auth/refresh?app=${target.appId}"
             val cookie = cookie(selected.source, url) ?: run {
                 if(profile.value?.expiresAt?.let { it < System.currentTimeMillis() / 1000 } == true)
                     state.clear(local(binding)) { preferences.getValue(selected.source).edit().remove("value").apply() }
                 return@current null
             }
-            Request.Builder().url(url).tag(SourceSelection::class.java, selected).header("Cookie", cookie)
-                .header("Origin", selected.source.origin).post(ByteArray(0).toRequestBody()).build()
+            Request.Builder().url(url).header("Cookie", cookie)
+                .apply { if(target == AuthTarget.NOVEL) tag(SourceSelection::class.java, selected) }
+                .header("Origin", if(target == AuthTarget.FORUM) target.origin else selected.source.origin)
+                .post(ByteArray(0).toRequestBody()).build()
         } ?: return false
         return client.newCall(request).awaitBody { response ->
             context.ensureActive()
@@ -147,7 +159,7 @@ class Session(context: Context, private val client: OkHttpClient = OkHttpClient.
     }
     private suspend fun mirrorAuth(binding: SessionBinding, path: String, payload: JsonObject): String {
         val request = current(binding) { selected ->
-            check(selected.source == BookSource.XKVI) { "书源已变化，请重新打开登录页" }
+            check(target == AuthTarget.NOVEL && selected.source == BookSource.XKVI) { "书源已变化，请重新打开登录页" }
             val url = "${selected.source.authOrigin}/api/v1/auth/$path"
             Request.Builder().url(url).tag(SourceSelection::class.java, selected).header("Origin", selected.source.origin)
                 .apply { cookie(selected.source, url)?.let { header("Cookie", it) } }

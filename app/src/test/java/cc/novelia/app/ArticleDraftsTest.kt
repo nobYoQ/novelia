@@ -38,6 +38,29 @@ class ArticleDraftsTest {
         assertEquals("未发送正文", ArticleDrafts.newPosts(stored).single().content)
     }
 
+    @Test fun forumDraftsKeepTheirSiteCategoryAndTagsAcrossReload() {
+        val first = ArticleDrafts.newKey(forum = true)
+        val second = ArticleDrafts.newKey(forum = true)
+        val legacy = ArticleDrafts.newKey()
+        val forumText = appJson.encodeToString(mapOf("title" to "论坛草稿", "content" to "论坛正文",
+            "categoryId" to "3", "tagIds" to "7,9"))
+        val state = LibraryState(drafts = mapOf(first to forumText, second to forumText,
+            "article:forum-new" to forumText, legacy to snapshot("旧站草稿", "旧站正文"),
+            "article:f-10" to forumText, "forum-comment:10:guest:root" to "评论"))
+        val restored = appJson.decodeFromString<LibraryState>(appJson.encodeToString(state))
+        val drafts = ArticleDrafts.newPosts(restored.drafts)
+        assertEquals(setOf(first, second, "article:forum-new", legacy), drafts.map { it.key }.toSet())
+        assertNotEquals(first, second)
+        val recovered = drafts.single { it.key == first }
+        assertEquals(3L, recovered.categoryId)
+        assertEquals(listOf(7L, 9L), recovered.tagIds)
+        assertEquals("论坛正文", recovered.content)
+        assertTrue(ArticleDrafts.isForumNewPostKey(first))
+        assertTrue(ArticleDrafts.isForumNewPostKey("article:forum-new"))
+        assertFalse(ArticleDrafts.isForumNewPostKey(legacy))
+        assertFalse(ArticleDrafts.isNewPostKey("article:forum-new:other-editor"))
+    }
+
     @Test fun malformedLegacyDraftStillExposesOriginalTextForRecovery() {
         val recovered = ArticleDrafts.read("article:new", "保留未能解析的原始正文")
         assertEquals("未命名草稿", recovered.displayTitle)

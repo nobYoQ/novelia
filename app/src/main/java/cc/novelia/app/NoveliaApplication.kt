@@ -1,5 +1,7 @@
 package cc.novelia.app
 
+import cc.novelia.app.data.auth.AuthTarget
+import cc.novelia.app.data.network.ForumApi
 import android.app.Application
 import cc.novelia.app.data.auth.Session
 import cc.novelia.app.data.catalog.KeywordStore
@@ -53,10 +55,12 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
     val store by lazy { LocalStore(this) { webDavConfig.config.value.syncDevicePreferences } }
     val ech by lazy { EchTransport(this) }
     val bookSources by lazy { BookSources.load(this) }
-    private val httpTransport by lazy { ech.client().newBuilder().apply {
+    private val forumTransport by lazy { ech.client() }
+    private val httpTransport by lazy { forumTransport.newBuilder().apply {
         interceptors().add(0, BookSourceInterceptor(bookSources))
     }.echCallTimeout().build() }
     val session by lazy { Session(this, client = httpTransport, sources = bookSources) }
+    val forumSession by lazy { Session(this, AuthTarget.FORUM, client = forumTransport) }
     val keywords by lazy { KeywordStore(this) { store.state.value.keywordLimit } }
     val webDavConfig by lazy { WebDavConfigStore(this) }
     val webDav by lazy { WebDavSyncManager(this) }
@@ -66,6 +70,7 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
     internal val clipboardLinkHistory = ClipboardLinkHistory()
     val metadataCache get() = store.metadataCache
     val api by lazy { NoveliaApi(session, transport = httpTransport, onMutation = { metadataCache.invalidate(it) }, onKeywords = { tags -> applicationScope.launch { keywords.observe(tags) } }) }
+    val forumApi by lazy { ForumApi(NoveliaApi(forumSession, ForumApi.BASE_URL, forumTransport)) }
     val initialization by lazy { applicationScope.async { store; session; Unit } }
     internal val launcherIcons by lazy { LauncherIconManager(this) }
 

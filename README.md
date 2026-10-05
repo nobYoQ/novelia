@@ -4,6 +4,8 @@
 
 当前版本包含实验性 ECH 网络传输，并保留后续独立论坛接入所需的域名支持与匿名 API 诊断。开关位于「我的 → 设置 → ECH 连接测试」；适配范围、构建要求与后续接入说明见 [ECH 连接测试版](docs/network/ech-test.md)。
 
+当前 `codex/forum-api-preview` 分支适配独立论坛测试站，支持新版帖子、评论和独立论坛登录。接口依据与验证方式见 [独立论坛 API 预适配](docs/network/forum-api-preview.md)。
+
 ## 下载与反馈
 
 - [GitHub 发行版](https://github.com/nobYoQ/novelia/releases)：下载 APK，查看版本说明和 SHA-256 校验文件。若没有已发布版本，请按下文自行构建。

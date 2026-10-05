@@ -28,9 +28,9 @@ import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.commonmark.node.Heading
 
-@Composable internal fun rememberMarkdownRenderer(c: AppController): Markwon {
+@Composable internal fun rememberMarkdownRenderer(c: AppController, documentUrl: String? = null): Markwon {
     val context = LocalContext.current
-    return remember(context, c) {
+    return remember(context, c, documentUrl) {
         Markwon.builder(context).usePlugin(TablePlugin.create(context)).usePlugin(ImagesPlugin.create())
             .usePlugin(SpoilerPlugin()).usePlugin(SiteMarkdownPlugin(context))
             .usePlugin(object : AbstractMarkwonPlugin() {
@@ -40,7 +40,7 @@ import org.commonmark.node.Heading
                         if (markdown?.openAnchor?.invoke(link) != true) c.openMarkdownLink(link, markdown?.documentUrl)
                     }
                     builder.imageDestinationProcessor(object : ImageDestinationProcessor() {
-                        override fun process(destination: String) = MarkdownLinks.resolve(destination) ?: destination
+                        override fun process(destination: String) = MarkdownLinks.resolve(destination, documentUrl) ?: destination
                     })
                 }
             }).build()
@@ -51,7 +51,7 @@ import org.commonmark.node.Heading
     documentUrl: String? = null, onAnchorScroll: (suspend (Int) -> Unit)? = null) {
     val color = MaterialTheme.colorScheme.onSurface.toArgb()
     val linkColor = MaterialTheme.colorScheme.primary.toArgb()
-    val markwon = renderer ?: rememberMarkdownRenderer(c)
+    val markwon = renderer ?: rememberMarkdownRenderer(c, documentUrl)
     val document = remember(markwon, text) { try { markwon.parse(text) } catch (_: RuntimeException) { null } }
     val anchors = remember(document) { document?.let(::MarkdownAnchors) }
     var anchorRequest by remember(document) { mutableStateOf<AnchorRequest?>(null) }

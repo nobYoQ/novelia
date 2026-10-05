@@ -54,7 +54,7 @@ import cc.novelia.app.ui.navigation.AppController
         item { SectionTitle("帮助") }
         item { MenuRow("帮助与关于", "使用说明、版本与反馈", Icons.Outlined.Info, { c.go("about") }) }
     } }
-    if(logout) ConfirmDialog("退出当前账号？", "本地小说、下载和笔记仍保留在此设备。云端操作需要重新登录。", { logout = false }, confirmLabel = "退出登录") { c.action("已退出登录") { c.session.logout() } }
+    if(logout) ConfirmDialog("退出当前账号？", "本地小说、下载和笔记仍保留在此设备。云端操作需要重新登录。", { logout = false }, confirmLabel = "退出登录") { c.action("已退出登录") { try { c.session.logout() } finally { c.forumSession.clear() } } }
 }
 
 @Composable internal fun ProfileAccountCard(profile: Profile?, companionVisible: Boolean,

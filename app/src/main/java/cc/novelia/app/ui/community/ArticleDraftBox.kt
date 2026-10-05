@@ -25,14 +25,15 @@ import cc.novelia.app.ui.navigation.AppController
         Text("新帖草稿箱", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
         TextButton(onClick = onClose) { Text("关闭") }
     }
-    Text("草稿保存在此设备，可离线继续写作。", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.bodySmall)
+    Text("草稿保存在此设备，旧站与论坛的草稿分别续写。", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.bodySmall)
     FilledTonalButton(onClick = { onClose(); c.go("compose") }, Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
         Icon(Icons.Outlined.Add, null, Modifier.size(18.dp)); Text(" 新建草稿")
     }
     AppLazyColumn(Modifier.fillMaxWidth().heightIn(max = 520.dp)) {
         if(drafts.isEmpty()) item { EmptyState("还没有新帖草稿", "新建一篇帖子，输入会自动保存。", Icons.Outlined.Drafts) }
         items(drafts, key = { it.key }) { draft ->
-            MenuRow(draft.displayTitle, "${categories[draft.category]} · ${draft.content.length} 字 · 点击续写", Icons.Outlined.Description,
+            val source = if(ArticleDrafts.isForumNewPostKey(draft.key)) "论坛" else "旧站 · ${categories[draft.category]}"
+            MenuRow(draft.displayTitle, "$source · ${draft.content.length} 字 · 点击续写", Icons.Outlined.Description,
                 { onClose(); c.go("compose?draft=${encodeSegment(draft.key)}") },
                 trailing = { IconButton(onClick = { deleting = draft }) { Icon(Icons.Outlined.DeleteOutline, "删除草稿 ${draft.displayTitle}") } })
         }

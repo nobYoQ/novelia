@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.navigation
 
+import cc.novelia.app.data.model.Article
+import cc.novelia.app.data.catalog.ForumLinks
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.material3.SnackbarHostState
@@ -60,6 +62,8 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
     val store get() = app.store
     val api get() = app.api
     val session get() = app.session
+    val forumApi get() = app.forumApi
+    val forumSession get() = app.forumSession
     val metadataCache get() = app.metadataCache
     var afterLogin: (() -> Unit)? = null
     var pendingFavorite by mutableStateOf<BookCard?>(null)
@@ -165,7 +169,10 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
         when(val link = BookLinks.parse(text)) {
             is SiteLink.Book -> if(link.chapterId != null) read(link.ref, link.chapterId) else book(link.ref)
             is SiteLink.Post -> go("article/${link.id}")
-            null -> go("discover?query=${Uri.encode(text)}")
+            null -> {
+                val url = text.trim().takeIf { it.startsWith("https://") || it.startsWith("http://") }?.let { MarkdownLinks.resolve(it) }
+                if(url != null && MarkdownLinks.isInternal(url)) openMarkdownLink(url) else go("discover?query=${Uri.encode(text)}")
+            }
         }
     }
     fun openMarkdownLink(destination: String, documentUrl: String? = null) {
@@ -194,6 +201,9 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
         catch(e: Exception) { snackbar.showSnackbar(e.friendlyMessage()) }
     } }
     fun requireLogin(action: () -> Unit) { if(session.profile.value == null) { afterLogin = action; go("login") } else action() }
+    fun requireForumLogin(action: () -> Unit) { if(forumSession.profile.value == null) { afterLogin = action; go("forum-login") } else action() }
+    suspend fun article(id: String): Article = ForumLinks.postId(id)?.let { forumApi.post(it).article(forumApi.categories()) }
+        ?: api.get<Article>("article/$id")
     fun external(url: String) {
         val uri = Uri.parse(url)
         if(uri.scheme !in listOf("https", "http")) { message("不支持此链接类型"); return }

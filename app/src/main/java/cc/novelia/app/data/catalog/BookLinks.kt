@@ -21,6 +21,7 @@ object BookLinks {
         val path = uri.path.trim('/').split('/').filter { it.isNotEmpty() }
         fun book(provider: String, id: String?, chapter: String? = null): SiteLink? = id?.takeIf { it.matches(Regex("[a-zA-Z0-9_-]+")) }?.let { SiteLink.Book(BookRef(provider, it), chapter?.takeIf { c -> c.matches(Regex("[a-zA-Z0-9_-]+")) }) }
         when (host) {
+            "forum.novelia.cc" -> if(uri.port in setOf(-1, if (uri.scheme.equals("https", true)) 443 else 80) && path.size == 2 && path[0] == "p") path[1].toLongOrNull()?.takeIf { it > 0 }?.let { SiteLink.Post(ForumLinks.localId(it)) } else null
             "n.novelia.cc" -> if (!SiteUrls.isInternal(uri)) null else when(path.firstOrNull()) {
                 "novel" -> if(path.getOrNull(1) in providers) book(path[1], path.getOrNull(2), path.getOrNull(3)) else null
                 "wenku" -> book("wenku", path.getOrNull(1))

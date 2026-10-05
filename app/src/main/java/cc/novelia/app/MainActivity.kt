@@ -186,6 +186,7 @@ class MainActivity : ComponentActivity() {
                                 composable("article/{id}") { ArticleScreen(controller, it.arguments!!.getString("id")!!) }
                                 composable("compose?article={article}&draft={draft}") { ComposeArticleScreen(controller, it.arguments?.getString("article"), it.arguments?.getString("draft")) }
                                 composable("login") { LoginScreen(controller) }
+                                composable("forum-login") { LoginScreen(controller, forum = true) }
                                 composable("settings") { SettingsScreen(controller) }
                                 composable("backup") { LibraryBackupScreen(controller) }
                                 composable("keywords") { KeywordLibraryScreen(controller) }

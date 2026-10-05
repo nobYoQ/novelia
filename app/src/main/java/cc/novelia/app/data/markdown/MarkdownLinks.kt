@@ -1,5 +1,6 @@
 package cc.novelia.app.data.markdown
 
+import cc.novelia.app.data.catalog.ForumLinks
 import cc.novelia.app.data.catalog.BookLinks
 import cc.novelia.app.data.catalog.SiteLink
 import cc.novelia.app.data.catalog.SiteUrls
@@ -18,7 +19,12 @@ object MarkdownLinks {
         normalized.toASCIIString().replaceBefore(':', normalized.scheme.lowercase())
     }.getOrNull()
 
-    fun isInternal(url: String): Boolean = runCatching { SiteUrls.isInternal(URI(url)) }.getOrDefault(false)
+    fun isInternal(url: String): Boolean = runCatching {
+        val uri = URI(url)
+        val scheme = uri.scheme?.lowercase()
+        SiteUrls.isInternal(uri) || (scheme in setOf("http", "https") && uri.host.equals("forum.novelia.cc", true) &&
+            uri.userInfo == null && (uri.port == -1 || uri.port == if (scheme == "https") 443 else 80))
+    }.getOrDefault(false)
 
     /** 返回 null 表示其他文档，空片段表示当前文档顶部。 */
     fun localFragment(destination: String, documentUrl: String?): String? = runCatching {
@@ -33,7 +39,7 @@ object MarkdownLinks {
     }.getOrNull()
 
     fun commentDocumentUrl(site: String): String? = when {
-        site.startsWith("article-") -> "${base}forum/${site.removePrefix("article-")}"
+        site.startsWith("article-") -> ForumLinks.articleUrl(site.removePrefix("article-"))
         site.startsWith("wenku-") -> "${base}wenku/${site.removePrefix("wenku-")}"
         site.startsWith("web-") -> site.removePrefix("web-").split('-', limit = 2).takeIf { it.size == 2 }
             ?.let { "${base}novel/${it[0]}/${it[1]}" }
@@ -54,6 +60,7 @@ object MarkdownLinks {
         }
         if (!isInternal(resolved)) return null
         val uri = URI(resolved)
+        if (uri.host.equals("forum.novelia.cc", true)) return if(uri.path.trimEnd('/').isEmpty() && uri.rawQuery == null) "community" else null
         // 站点列表页使用 WebView，保留 URL 中的筛选和分页参数。
         if (uri.rawQuery != null) return null
         return when (uri.path.trimEnd('/')) {
