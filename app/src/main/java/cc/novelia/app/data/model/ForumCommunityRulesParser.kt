@@ -9,8 +9,9 @@ internal object ForumCommunityRulesParser {
     private val commit = Regex("commitSha\\s*:\\s*[`\"']([a-f0-9]{40})[`\"']")
     private val inlineTags = setOf("span", "strong", "em", "b", "i", "routerlink", "a", "br")
     private val script = Regex("""<script setup lang="ts">([\s\S]*?)</script>""")
-    private val permissionData = Regex("""\A\s*(?:import\s+\{[^;]+}\s+from\s+'[^']+';\s*)*const\s+permissions\s*=\s*\[([\s\S]*?)];\s*\z""")
-    private val permissionRow = Regex("""\{\s*site:\s*'([^'\\\r\n]{1,100})'\s*,\s*name:\s*'([^'\\\r\n]{1,200})'\s*,\s*allowed:\s*\[(true|false)\s*,\s*(true|false)\s*,\s*(true|false)\s*]\s*}""")
+    // Android 使用 ICU 正则，字面量的闭合括号也必须转义，不能依赖 JVM 的宽松语法。
+    private val permissionData = Regex("""\A\s*(?:import\s+\{[^;]+\}\s+from\s+'[^']+';\s*)*const\s+permissions\s*=\s*\[([\s\S]*?)\];\s*\z""")
+    private val permissionRow = Regex("""\{\s*site:\s*'([^'\\\r\n]{1,100})'\s*,\s*name:\s*'([^'\\\r\n]{1,200})'\s*,\s*allowed:\s*\[(true|false)\s*,\s*(true|false)\s*,\s*(true|false)\s*\]\s*\}""")
 
     fun entryPath(html: String): String = Jsoup.parse(html).select("script[type=module][src]")
         .map { it.attr("src") }.single { entry.matches(it) }

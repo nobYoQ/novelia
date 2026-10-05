@@ -269,4 +269,6 @@ extensions.getByType<ApplicationAndroidComponentsExtension>().onVariants { varia
 }
 android.sourceSets.getByName("main").res.srcDir("launcher-icons/res")
 android.sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/openSourceAssets"))
+// JVM 和 Android 解析测试使用同一份公开守则样本。
+android.sourceSets.getByName("androidTest").assets.srcDir("src/test/resources")
 tasks.named("preBuild") { dependsOn("generateOpenSourceNotices") }

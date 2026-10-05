@@ -1,104 +1,139 @@
-# Novelia Android
+<div align="center">
+  <img src="app\launcher-icons\res\drawable-nodpi\launcher_xingchuan_green_01_artwork.png" alt="星川绿~" width="160">
+  <h1>Novelia</h1>
+  <p>
+    面向 <a href="https://n.novelia.cc/">轻小说机翻机器人</a> 的原生 Android 客户端<br>
+    在线阅读 · 本地书库 · 双语对照 · 多设备同步
+  </p>
+  <p>
+    <a href="#下载与反馈"><img src="https://img.shields.io/badge/Android-8.0%2B-006C4C?style=flat-square&amp;logo=android&amp;logoColor=white" alt="Android 8.0 及以上"></a>
+    <img src="https://img.shields.io/badge/Kotlin-7F52FF?style=flat-square&amp;logo=kotlin&amp;logoColor=white" alt="Kotlin">
+    <img src="https://img.shields.io/badge/Jetpack_Compose-4285F4?style=flat-square&amp;logo=jetpackcompose&amp;logoColor=white" alt="Jetpack Compose">
+    <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0--only-365B48?style=flat-square" alt="GPL-3.0-only"></a>
+  </p>
+  <p>
+    <a href="#屏幕截图">屏幕截图</a> ·
+    <a href="#功能一览">功能一览</a> ·
+    <a href="#使用">开始使用</a> ·
+    <a href="#常见问题">常见问题</a> ·
+    <a href="docs/README.md">项目文档</a>
+  </p>
+  <a href="https://github.com/nobYoQ/novelia/releases">
+    <img src="docs/assets/download-apk.svg" alt="前往 GitHub Releases 下载 Android 版" width="240" height="64">
+  </a>
+</div>
 
-面向 [轻小说机翻机器人](https://n.novelia.cc/) 的非官方原生安卓客户端，当前源码配置版本为 [0.2.3-ech.5](version.properties)。使用 Kotlin、Jetpack Compose 与 Material 3，支持 Android 8.0（API 26）及以上。
+## 屏幕截图
 
-当前版本包含实验性 ECH 网络传输，并保留后续独立论坛接入所需的域名支持与匿名 API 诊断。开关位于「我的 → 设置 → ECH 连接测试」；适配范围、构建要求与后续接入说明见 [ECH 连接测试版](docs/network/ech-test.md)。
+<p align="center">从发现下一本书，到在另一台设备上接着读。</p>
 
-当前 `codex/forum-api-preview` 分支适配独立论坛测试站，支持新版帖子、评论和独立论坛登录。接口依据与验证方式见 [独立论坛 API 预适配](docs/network/forum-api-preview.md)。
+<table align="center">
+  <tr>
+    <th align="center">发现好故事</th>
+    <th align="center">带上阅读资料</th>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/assets/screenshots/discover-dark.png" alt="深色模式下的发现页，展示书源、搜索、筛选和作品列表" width="280"></td>
+    <td align="center"><img src="docs/assets/screenshots/webdav-light.png" alt="浅色模式下的 WebDAV 同步页，展示各类阅读资料的独立同步开关" width="280"></td>
+  </tr>
+  <tr>
+    <td align="center">多书源检索 · 标签筛选 · 排行榜</td>
+    <td align="center">自选同步范围 · 连接自己的云盘</td>
+  </tr>
+</table>
+
+<p align="center"><sub>应用界面截图；同步页面使用示例配置，界面可能随版本更新。</sub></p>
+
+## 功能一览
+
+| 功能 | 你可以做什么 |
+| :--- | :--- |
+| 📚 **整理书架** | 管理本地与云端收藏，按收藏夹归类、置顶、批量整理，查看阅读历史和更新。 |
+| 🔎 **发现作品** | 浏览网络书源与文库，使用标签、字数筛选和高级搜索，保存常用搜索，接收书源链接分享。 |
+| 📖 **自在阅读** | 在中文、日文与双语对照间切换，选择已有的 Sakura / GPT / 有道译文，支持译文回退、简繁显示和插图。 |
+| 🎨 **按喜好调整** | 自定义字号、行距与纸张主题，切换深色、电子纸、滚动或分页模式，为单本书保存阅读偏好。 |
+| 🎧 **随读随记** | 使用系统朗读、书签、摘录和笔记，缓存章节后继续阅读。 |
+| 📂 **读本地文件** | 导入 EPUB / TXT / SRT，管理文库分卷，下载符合条件的已有译文，使用文件与文本工具。 |
+| 💬 **参与社区** | 浏览论坛，阅读帖子和楼中楼，收藏文章、保存草稿，按账号权限发布与编辑。 |
+| ☁️ **同步与备份** | 通过 WebDAV 按需同步网络书籍的收藏、进度、书签和笔记等资料；通过阅读资料备份迁移本地书库。 |
 
 ## 下载与反馈
 
-- [GitHub 发行版](https://github.com/nobYoQ/novelia/releases)：下载 APK，查看版本说明和 SHA-256 校验文件。若没有已发布版本，请按下文自行构建。
-- [问题反馈与功能建议](https://github.com/nobYoQ/novelia/issues)：客户端问题请在本项目反馈；原站内容和账号问题请联系原站。
-- [发行说明](https://github.com/nobYoQ/novelia/releases) · [贡献指南](CONTRIBUTING.md) · [安全政策](SECURITY.md) · [手动发布指南](RELEASING.md)
-- [项目文档](docs/README.md)：按开发、架构、业务功能、数据、网络、质量和维护分类；[业务功能索引](docs/features/README.md) 按操作查流程，[源码目录导航](docs/architecture/source-layout.md) 按界面、数据职责和测试类型定位代码。
+**支持 Android 8.0（API 26）及以上。** 前往 [GitHub Releases](https://github.com/nobYoQ/novelia/releases) 下载 APK、查看发行说明与 SHA-256 校验文件。如果尚无可用发行版，可以 [从源码构建](#构建)。
 
-源码与文档采用 GPL-3.0-only，第三方依赖和素材保留各自的许可与权利，详见 [来源与素材声明](NOTICE.md)。公开版本以 GitHub Releases 为准；本地测试包与正式发行包的证书可能不同，升级前请先备份阅读资料并阅读发行说明。
+- **版本与更新**：已发布版本以 Releases 为准，当前源码版本见 [version.properties](version.properties)。
+- **安装与升级**：正式包与本地测试包的签名可能不同；更换安装来源前，请先完成 [阅读资料备份](docs/data/backup-and-recovery.md)。
+- **问题与建议**：在 [Issues](https://github.com/nobYoQ/novelia/issues) 反馈客户端问题；原站内容、账号和权限问题请联系原站。
 
 ## 使用
 
-安装 APK 后，可直接以游客身份发现作品、阅读已有章节、导入本地文件和浏览社区。底部四个入口为「书架、发现、社区、我的」。
+安装后，可以先以游客身份浏览作品、阅读可访问的已有章节、导入本地文件和查看社区。
 
-- **书架**：本地收藏、云端收藏、EPUB/TXT/SRT 文件、收藏夹、阅读历史、置顶、批量整理和更新检查。
-- **发现**：六类书源、文库、组合筛选、高级搜索表达式、保存搜索、排行榜、书源链接识别和系统分享接收。
-- **阅读器**：中/日/中日/日中、Sakura/GPT/有道已有译文及回退、字号行距、纸张/深色主题、简繁显示、插图、书签笔记、缓存和系统朗读。
-- **文库**：分卷、符合条件的已有译文下载；有权限的用户可新建/编辑条目、维护出版卷目、上传 EPUB/TXT 和维护术语。
-- **社区**：三类论坛、Markdown 正文、评论与楼中楼、文章收藏、草稿、发布与编辑、用户屏蔽。
-- **我的**：下载、笔记、普通设置备份、屏蔽、个人术语表、文件工具及帮助。
+1. **发现一本书**：在「发现」中浏览、筛选或搜索，也可以粘贴受支持的书源链接。
+2. **放进书架**：收藏喜欢的作品，或在「书架」导入 EPUB、TXT、SRT 文件。
+3. **调好阅读体验**：打开正文，设置语言、译文、字号和主题；需要时添加书签、记笔记或开启朗读。
+4. **接着读下去**：在「我的 → 设置」配置 WebDAV 同步，或导出阅读资料备份。
 
-本版本不包含翻译中心、译文生成、翻译队列或翻译服务密钥配置。
-
-首次登录使用原站统一认证页面，可登录、注册和找回密码。如果认证完成后未自动返回，点击右上角「完成登录」。账号角色和注册时间要求沿用原站，最终由服务器校验。
-
+原站账号通过统一认证页面登录，支持注册和找回密码；认证后若未自动返回，点击右上角「完成登录」。独立论坛使用单独保存的登录会话，操作权限最终由服务器校验。详见 [账号与登录](docs/network/authentication.md)。
 
 ## 构建
 
-所需环境：JDK 17（推荐协作基线）、Android SDK Platform 36、Build Tools 35.0.0，首次构建需要连接 Google Maven、Maven Central 和 Gradle 分发服务。
+使用 Android Studio 打开仓库根目录。环境基线为 **JDK 17、Android SDK Platform 36、Build Tools 35.0.0**；ECH 本地库还需要 **NDK 28.2.13676358、Go 1.27.1**，固定版本见 [工具链配置](gradle/ech-native.properties)。Windows x64 可自动引导所需 Go；其他系统需预装对应版本，或设置 `NOVELIA_GO_HOME`。
 
-用 Android Studio 打开本目录，或使用 PowerShell 7：
+Windows 推荐使用 PowerShell 7，在仓库根目录执行：
 
 ```powershell
+# 构建 Debug APK
 ./build-debug.ps1
-./build-release.ps1
+
+# 构建本地 Release APK，同时运行单元测试和 Lint
+./build-release.ps1 -Verify
 ```
 
-这两个入口分别生成 Debug 包和使用测试证书签名的本地 Release 包，后者保留 R8 压缩与资源收缩。默认生成通用 APK；可加 `-Abi arm64-v8a` 选择设备架构，已有缓存时加 `-Offline`，需要同时运行对应单元测试和 Lint 时加 `-Verify`。例如：
+本地 Release 使用测试证书签名，保留 R8 压缩与资源收缩。正式发行请遵循 [发布指南](RELEASING.md)。
 
-```powershell
-./build-release.ps1 -Abi arm64-v8a -Verify -Offline
-```
+<details>
+<summary><strong>构建参数、输出位置与其他平台</strong></summary>
 
-APK 与 SHA-256 校验文件输出到 `outputs/packages/debug/` 或 `outputs/packages/release-local/`，Release 同时保留 R8 映射；日志在 `outputs/logs/`。这些入口允许未提交的本地改动，重复构建会覆盖同版本、模式和 ABI 的产物，不会自动安装或上传。完整参数与未签名构建见 [环境搭建与构建](docs/development/getting-started.md)。
+- 默认生成通用 APK；`-Abi arm64-v8a` 可限定设备架构。
+- 已有完整依赖缓存时可加 `-Offline`；首次构建需要连接 Google Maven、Maven Central 和 Gradle 分发服务。
+- `-Verify` 运行对应变体的 JVM 单元测试和 Lint，不运行设备测试。
+- APK 与 SHA-256 校验文件位于 `outputs/packages/debug/` 或 `outputs/packages/release-local/`，日志位于 `outputs/logs/`；本地 Release 同时保留 R8 映射。重复构建会覆盖相同版本、模式和 ABI 的产物，不会自动安装或上传。
+- 脚本自动查找 JDK / SDK；`./build.ps1 -CheckEnvironment` 只检查环境。完整路径优先级、手动配置及缓存目录见 [构建指南](docs/development/getting-started.md#自动检测与手动配置)。
 
-构建入口复用 `build.ps1`，自动从环境变量、PATH、Android Studio 和常见安装目录查找 JDK，从 `local.properties`、环境变量及默认目录查找 Android SDK。换电脑后无须沿用原机器盘符；自动检测失败时，填写 `build.ps1` 顶部带中文注释的“手动环境配置区”。运行 `./build.ps1 -CheckEnvironment` 可只检查路径。构建时自动同步被 Git 忽略的 `local.properties`，保留其中其他配置；缓存默认使用项目 `.gradle-home/`、`.android/`，也可沿用对应环境变量或手动指定。完整优先级见 [环境配置说明](docs/development/getting-started.md#自动检测与手动配置)。
-
-标准 Gradle Wrapper 也已提供；可在配置好 JDK/SDK 的环境中使用 `gradlew`。当前固定 AGP 8.13.2、Gradle 8.13、Kotlin 2.2.21、Compose BOM 2025.12.00。ECH 本地库已接入 Gradle 依赖图，需要 SDK 内的 NDK `28.2.13676358`；Windows x64 可自动引导校验过的 Go `1.27.1`，Linux/macOS 需预装该版本 Go（或设置 `NOVELIA_GO_HOME`）。详见 [ECH 构建说明](docs/network/ech-test.md#构建与测试)。
-
-Linux / macOS（`sh` 调用也适用于没有执行位的源码 ZIP）：
+Linux / macOS 使用 Gradle Wrapper：
 
 ```sh
 sh ./gradlew --no-daemon :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
 ```
 
-仍可用 `./build.ps1 -Tasks @(':app:assembleDebug', ':app:testDebugUnitTest', ':app:lintDebug')` 自选 Gradle 任务；不带参数的 `build.ps1` 保持执行 Debug 构建和单元测试。直接调用 Gradle 或通过 `build.ps1` 执行 `assembleRelease` 时默认未签名。正式 GitHub 发行使用独立的 [发布流程](RELEASING.md)，不要上传本地测试签名包。版本号和版本码统一在 `version.properties` 维护。
+直接调用 Gradle 的 `assembleRelease` 默认生成未签名产物。AGP、Gradle、Kotlin 与 Compose 版本见 [开发环境](docs/development/getting-started.md#开发环境)，ECH 构建逻辑见 [Gradle 配置](gradle/ech-native.gradle.kts)。
 
-修改版本后打包：编辑根目录 `version.properties` 的 `versionName`（例如 `0.2.3`）和递增的 `versionCode`（例如由 `14` 改为 `15`），保存后运行 `./build-release.ps1` 或 `./build-debug.ps1`，APK 内版本和归档文件名会自动更新。具体示例见 [修改版本号并重新编译](docs/development/getting-started.md#修改版本号并重新编译)。
+修改版本时，编辑根目录 [version.properties](version.properties) 中的 `versionName` 并递增 `versionCode`，再重新打包。具体操作见 [修改版本号并重新编译](docs/development/getting-started.md#修改版本号并重新编译)。
 
-仓库根目录的 `outputs/` 是脚本产物的唯一出口，包含安装包、日志、正式附件及 ECH 工具链；Gradle 中间文件仍使用各模块的 `build/`。这些目录、APK/AAB 安装包、签名旁文件及安装包校验文件由 `.gitignore` 排除，不纳入源码提交。正式附件准备脚本写入 `outputs/releases/`，正式安装包上传为 GitHub Release 附件；旧 `artifacts/`、`releases/` 仅保留忽略规则，脚本不再写入。
+</details>
 
 ## 验证
 
-JVM 测试覆盖书源链接、查询参数、序列化、译文对齐与回退、EPUB 阅读顺序/插图/路径防护、文本编码、SRT 时间轴及文本换行整理。
-
-设备测试可使用 Android Studio，或在安装两个 APK 后运行：
-
-```powershell
-adb shell am instrument -w -r -e class cc.novelia.app.ui.reader.AppFlowTest cc.novelia.app.test/androidx.test.runner.AndroidJUnitRunner
-```
-
-外部站点测试默认跳过。明确需要只读联调时添加 `-e live true`，选择 `cc.novelia.app.integration.LiveReadOnlyTest`、`cc.novelia.app.integration.DownloadLiveTest`、`cc.novelia.app.integration.AuthPageTest` 或 `cc.novelia.app.integration.ForumLinksLiveTest`。它们读取公开接口、已有内容文件、认证表单或帖子链接，不填写凭据、发布帖子、评论或修改云端收藏。
+构建时加 `-Verify` 可运行单元测试与 Lint。设备测试、只读站点联调和发行前检查见 [测试与验收](docs/quality/testing.md)；外部站点测试默认跳过，当前检查与发布流程手动执行。
 
 ## 工程结构
 
-| 目录 | 内容 |
-| --- | --- |
-| `data` | 模型、网络、会话、存储、同步等 14 个职责包，根目录保留旧后台任务兼容入口 |
-| `ui` | 按界面及共享职责划分的 17 个子包，详见 [源码目录导航](docs/architecture/source-layout.md) |
-| `reader` | 段落投影、译文回退、前台 TTS 服务 |
-| `files` | EPUB/TXT/SRT、图片压缩、后台下载 |
-| `src/test` | 无账号的 JVM 测试；数据层测试按对应职责分包 |
-| `src/androidTest` | 按界面、导航、备份、站点联调和性能分类的设备测试 |
+| 入口 | 阅读内容 |
+| :--- | :--- |
+| [文档总目录](docs/README.md) | 按开发、架构、功能、数据、网络、质量和维护分类查阅 |
+| [源码目录导航](docs/architecture/source-layout.md) | 按界面、数据职责和测试类型定位代码 |
+| [阅读器](docs/features/reader.md) | 双语、排版、分页、定位、插图与朗读 |
+| [社区与内容编辑](docs/features/community.md) | 帖子、评论、Markdown、草稿及独立论坛适配 |
+| [数据存储](docs/data/data-and-storage.md) | 本地文件、状态持久化和恢复边界 |
+| [安全与隐私](docs/quality/security-and-privacy.md) | 会话加密、备份范围和网络数据处理 |
 
-界面代码位于 `app/src/main/java/cc/novelia/app/ui/`：书架在 `shelf/`，发现在 `discover/`，书籍详情在 `book/`，阅读器在 `reader/`，社区在 `community/`，账号与设置分别在 `account/`、`settings/`。页面专用组件和展示逻辑与所属界面放在一起，跨界面组件、导航、主题、Markdown 与反馈各有独立目录。
+## 参与贡献
 
-数据层位于同级 `data/`：领域模型在 `model/`，API 在 `network/`，本地持久化在 `storage/`，云端写入在 `sync/`，更新检查在 `updates/`。设备测试的 package 与所属目录一致，例如阅读流程测试为 `cc.novelia.app.ui.reader.AppFlowTest`；详见 [测试指南](docs/quality/testing.md)。
-
-轻量状态使用原子 JSON 文件持久化；章节、书籍元数据、原始文件、插图、下载分别存放。账号访问令牌使用 Android Keystore 加密；密码在原站认证页中处理。普通设置导出不包含访问令牌、认证 Cookie 或待同步操作。
-
-云端写入失败时，收藏/阅读历史等幂等操作可以进入账号隔离的待同步列表；帖子和评论不会自动重发。云端和本机章节进度不同会提供选择。退出登录不会删除本地文件。
+欢迎反馈问题、完善文档或提交代码。开始前请阅读 [贡献指南](CONTRIBUTING.md) 与 [行为准则](CODE_OF_CONDUCT.md)；安全问题按 [安全政策](SECURITY.md) 报告。
 
 ## 许可证与范围
 
-原创代码和文档采用 [GPL-3.0-only](LICENSE)。第三方依赖和素材保留各自权利，见 [NOTICE.md](NOTICE.md) 与 [许可证来源](licenses/README.md)。完整许可证随 APK 提供，可在「我的 → 帮助与关于 → 开源许可证」离线查看。
+原创代码和文档采用 [GPL-3.0-only](LICENSE)。第三方依赖、角色素材及网站上的小说、封面、译文和用户内容保留各自权利，不属于本项目的内容再授权范围，详见 [来源与素材声明](NOTICE.md) 与 [许可证来源](licenses/README.md)。完整开源许可证也可在 App 的「我的 → 帮助与关于 → 开源许可证」离线查看。
 
-客户端不提供小说内容的再授权，也不是原站官方客户端。原站 API 可能变化；真实账号写入的生产端到端验收仍需在明确授权下进行。当前未配置 CI，贡献与发行检查按文档手动执行。
+感谢 [轻小说机翻机器人](https://n.novelia.cc/) 与开源社区提供的基础。愿你总能找到下一本想读的书。
