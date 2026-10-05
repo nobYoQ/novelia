@@ -12,16 +12,25 @@ import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.model.ForumComment
 import cc.novelia.app.data.model.ForumPage
 import cc.novelia.app.data.model.Profile
+import cc.novelia.app.data.network.ForumReplyPageCache
 import cc.novelia.app.ui.components.AsyncContent
 import cc.novelia.app.ui.components.PageControls
 
 internal data class ForumReplyFocus(val rootId: Long, val page: Int, val commentId: Long)
+
+@Composable internal fun rememberForumReplyPages(vararg keys: Any?): ForumReplyPageCache {
+    val scope = rememberCoroutineScope()
+    val pages = remember(*keys) { ForumReplyPageCache(scope) }
+    DisposableEffect(pages) { onDispose { pages.close() } }
+    return pages
+}
 
 /** 子回复正文仅展开后加载；计数由列表预读并保留，账号或角色变化后清除旧回复内容。 */
 @Composable internal fun ForumCommentThread(
     postId: Long, root: ForumComment, viewer: Profile?, version: Int,
     focus: ForumReplyFocus? = null, blockedUsers: Set<String> = emptySet(),
     knownReplyCount: Long? = null, countLoading: Boolean = false, onReplyCount: (Long) -> Unit = {},
+    replyPages: ForumReplyPageCache = rememberForumReplyPages(postId, root.id, viewer?.userId, viewer?.role, version),
     loadReplies: suspend (Int) -> ForumPage<ForumComment>,
     render: @Composable (ForumComment, Boolean, (@Composable () -> Unit)?) -> Unit
 ) {
@@ -30,11 +39,24 @@ internal data class ForumReplyFocus(val rootId: Long, val page: Int, val comment
     var replyTotal by remember(postId, root.id, viewer?.userId, viewer?.role, version) { mutableStateOf<Long?>(null) }
     var handledFocus by rememberSaveable(postId, root.id, viewer?.userId, viewer?.role) { mutableStateOf<Long?>(null) }
     LaunchedEffect(focus) {
-        if(focus?.rootId == root.id) { expanded = true; page = focus.page }
+        if(focus?.rootId == root.id && handledFocus != focus.commentId) { expanded = true; page = focus.page }
+    }
+    val onPageLoaded: (ForumPage<ForumComment>) -> Unit = { replies ->
+        replyTotal = replies.total
+        onReplyCount(replies.total)
+        val lastPage = (replies.pageCount() - 1).coerceAtLeast(0)
+        if(focus?.rootId == root.id && handledFocus != focus.commentId) {
+            handledFocus = focus.commentId
+            page = lastPage
+        } else page = page.coerceAtMost(lastPage)
+    }
+    LaunchedEffect(replyPages, page, expanded) {
+        // 使用缓存种子时 AsyncContent 跳过加载，也要恢复计数与有效页码。
+        replyPages.peek(root.id, page)?.let(onPageLoaded)
     }
     Column(Modifier.fillMaxWidth().testTag("forum-thread-${root.id}")) {
         // 当前线上响应可能省略计数；保留入口，不能把缺失字段当作没有回复。
-        val count = knownReplyCount ?: replyTotal ?: root.replyCount.takeIf { it > 0 }
+        val count = knownReplyCount ?: replyPages.peek(root.id, page)?.total ?: replyTotal ?: root.replyCount.takeIf { it > 0 }
         render(root, root.status == 0) {
             TextButton(onClick = { expanded = !expanded }, enabled = expanded || count != 0L,
                 modifier = Modifier.testTag("forum-replies-toggle-${root.id}")) {
@@ -49,15 +71,9 @@ internal data class ForumReplyFocus(val rootId: Long, val page: Int, val comment
         }
         if(expanded) {
             HorizontalDivider()
-            AsyncContent(listOf(postId, root.id, page, viewer?.userId, viewer?.role),
-                refreshKey = version, load = { loadReplies(page) }, onLoaded = { replies ->
-                    replyTotal = replies.total
-                    onReplyCount(replies.total)
-                    if(focus?.rootId == root.id && handledFocus != focus.commentId) {
-                        handledFocus = focus.commentId
-                        page = (replies.pageCount() - 1).coerceAtLeast(0)
-                    }
-                },
+            AsyncContent(listOf(postId, root.id, page, viewer?.userId, viewer?.role, replyPages),
+                initialResult = replyPages.peek(root.id, page),
+                refreshKey = version, load = { replyPages.load(root.id, page) { loadReplies(page) } }, onLoaded = onPageLoaded,
                 modifier = Modifier.padding(start = 16.dp).testTag("forum-replies-${root.id}")) { replies, _ ->
                 Column(Modifier.fillMaxWidth()) {
                     replies.items.filter { it.authorUsername !in blockedUsers }.forEach { reply ->

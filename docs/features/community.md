@@ -81,6 +81,8 @@ flowchart TD
 
 [ForumCommentsPanel.kt](../../app/src/main/java/cc/novelia/app/ui/community/ForumCommentsPanel.kt) 分页读取一级评论，[ForumCommentThread.kt](../../app/src/main/java/cc/novelia/app/ui/community/ForumCommentThread.kt) 展开后通过 `post/{postId}/comment/{rootId}/reply` 独立分页加载子回复正文，每页 20 条。线上省略 `replyCount` 时，列表提前以 `page=1&page_size=1` 读取该接口的 `total`，最多 4 个并发请求，每条完成后即可显示「查看 X 条回复」或「暂无回复」。读取失败保持未知，允许展开重试，不误报零回复。计数保存在列表层，滚出屏幕后回来仍保留；刷新评论、发送／删除、切换账号或角色时重新核对。「查看回复」与回复、屏蔽／编辑等操作在同一行，空间不足时自动换行。发送子回复后展开对应讨论串并定位末页；账号或角色切换后清除已加载回复。回复提交根评论 `rootId`，修改只传 `content`。评论最多 1000 个 Unicode 码点；普通作者发布后 20 分钟内可编辑或删除，管理员不受时限限制，并可展开隐藏／删除评论的原文。
 
+[ForumReplyPageCache.kt](../../app/src/main/java/cc/novelia/app/data/network/ForumReplyPageCache.kt) 在评论列表层保存已读回复，每串保留最近三页。收起再展开、滚出显示区域再回来时，当前页直接从内存恢复；同一页的并发等待共用一次请求。正在读取的请求属于列表作用域，单条评论被回收只取消该行等待，结果仍可保存供返回时使用。读取失败不缓存，可重试且不影响其他讨论串。评论列表重新载入、发送／修改／删除、帖子或论坛会话／角色变化时重建缓存，页面退出取消请求并丢弃数据；回复正文不落盘。返回讨论串保留用户选定的页码，不重播已经处理过的新回复定位事件。
+
 [CommentsPanel.kt](../../app/src/main/java/cc/novelia/app/ui/community/CommentsPanel.kt) 继续服务于主站作品和旧文章评论。调用方提供 `site` 与父目标，不应只凭显示标题推断评论归属。以下为主站评论行为：
 
 - 列表请求为 `GET comment`，查询参数包括 `site`、`page`、`pageSize` 和 `parentId`，每页 20 条。

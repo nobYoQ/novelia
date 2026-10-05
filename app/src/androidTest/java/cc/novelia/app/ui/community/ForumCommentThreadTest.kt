@@ -20,6 +20,7 @@ import cc.novelia.app.data.model.ForumPage
 import cc.novelia.app.data.model.Profile
 import cc.novelia.app.data.network.loadForumReplyCounts
 import cc.novelia.app.ui.theme.NoveliaTheme
+import kotlinx.coroutines.CompletableDeferred
 import java.io.IOException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -58,6 +59,7 @@ class ForumCommentThreadTest {
         compose.onNodeWithText("回复页 1").assertDoesNotExist()
         compose.onNodeWithText("查看 21 条回复").performClick()
         compose.onNodeWithText("回复页 1").assertExists()
+        compose.runOnIdle { assertEquals(listOf(0, 1), pages) }
     }
 
     @Test fun changingViewerRoleClearsPreviouslyLoadedAdminContent() {
@@ -172,12 +174,14 @@ class ForumCommentThreadTest {
         val roots = (8L..27L).map { root.copy(id = it, replyCount = 0, content = "根评论 $it") }
         compose.setContent { NoveliaTheme("light") {
             val counts = remember { mutableStateMapOf<Long, Long?>() }
+            val replyPages = rememberForumReplyPages(5)
             LaunchedEffect(Unit) {
                 loadForumReplyCounts(roots, { id -> countReads++; if(id == 8L) 3L else 0L }) { id, count -> counts[id] = count }
             }
             LazyColumn(Modifier.fillMaxSize().testTag("lazy-forum-comments")) {
                 items(roots, key = { it.id }) { comment ->
                     ForumCommentThread(5, comment, null, 0, knownReplyCount = counts[comment.id],
+                        replyPages = replyPages,
                         countLoading = !counts.containsKey(comment.id), onReplyCount = { counts[comment.id] = it }, loadReplies = {
                             bodyReads++; ForumPage(3, listOf(reply(31, "线程回复")))
                         }) { item, _, actions -> Column { Text(item.content, Modifier.height(180.dp)); actions?.invoke() } }
@@ -194,6 +198,15 @@ class ForumCommentThreadTest {
         compose.onNodeWithTag("lazy-forum-comments").performScrollToIndex(0)
         compose.onNodeWithText("查看 3 条回复").assertExists()
         compose.runOnIdle { assertEquals(20, countReads); assertEquals(1, bodyReads) }
+        compose.onNodeWithText("查看 3 条回复").performClick()
+        compose.onNodeWithText("线程回复").assertExists()
+        compose.onNodeWithTag("lazy-forum-comments").performScrollToIndex(19)
+        compose.onNodeWithText("根评论 8").assertDoesNotExist()
+        compose.onNodeWithTag("lazy-forum-comments").performScrollToIndex(0)
+        compose.onNodeWithText("收起回复").assertExists()
+        compose.onNodeWithText("线程回复").assertExists()
+        compose.onNodeWithText("正在加载…").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(20, countReads); assertEquals(1, bodyReads) }
     }
 
     @Test fun emptyReplyCountIsVisibleWithoutOpeningTheThread() {
@@ -205,5 +218,26 @@ class ForumCommentThreadTest {
         } }
         compose.onNodeWithText("暂无回复").assertIsNotEnabled()
         compose.runOnIdle { assertEquals(0, reads) }
+    }
+
+    @Test fun collapsingDuringLoadingAndReopeningRestoresTheBodyAndItsCount() {
+        val response = CompletableDeferred<ForumPage<ForumComment>>()
+        var reads = 0
+        compose.setContent { NoveliaTheme("light") {
+            val replyPages = rememberForumReplyPages(5)
+            var count by remember { mutableStateOf<Long?>(1) }
+            ForumCommentThread(5, root.copy(replyCount = 0), null, 0, knownReplyCount = count,
+                replyPages = replyPages, onReplyCount = { count = it }, loadReplies = {
+                    reads++; response.await()
+                }) { comment, _, actions -> Column { Text(comment.content); actions?.invoke() } }
+        } }
+        compose.onNodeWithText("查看 1 条回复").performClick()
+        compose.onNodeWithText("收起回复").performClick()
+        compose.runOnIdle { response.complete(ForumPage(3, listOf(reply(31, "后台完成的回复")))) }
+        compose.onNodeWithText("查看 1 条回复").performClick()
+        compose.onNodeWithText("后台完成的回复").assertExists()
+        compose.onNodeWithText("收起回复").performClick()
+        compose.onNodeWithText("查看 3 条回复").assertExists()
+        compose.runOnIdle { assertEquals(1, reads) }
     }
 }

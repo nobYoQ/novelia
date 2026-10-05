@@ -38,6 +38,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
     // 保留在列表层，LazyColumn 回收单条评论时不会丢失计数；刷新、换账号或角色时失效。
     val replyCounts = remember(postId, profile?.userId, profile?.role, version) { mutableStateMapOf<Long, Long?>() }
     var countsRevision by remember(postId, profile?.userId, profile?.role, version) { mutableIntStateOf(0) }
+    val binding = c.forumSession.capture()
+    val replyPages = rememberForumReplyPages(postId, binding, profile?.userId, profile?.role, version, countsRevision)
     var rootId by rememberSaveable(postId, profile?.userId) { mutableStateOf<Long?>(null) }
     var replyCount by rememberSaveable(postId, profile?.userId) { mutableLongStateOf(0) }
     var replyFocus by remember(postId, profile?.userId, profile?.role) { mutableStateOf<ForumReplyFocus?>(null) }
@@ -70,7 +72,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
                     ForumCommentThread(postId, root, profile, version, replyFocus, state.blockedUsers,
                         knownReplyCount = replyCounts[root.id], countLoading = !replyCounts.containsKey(root.id),
                         onReplyCount = { replyCounts[root.id] = it },
-                        loadReplies = { c.forumApi.replies(postId, root.id, it) }) { comment, rootPublished, replyToggle ->
+                        replyPages = replyPages,
+                        loadReplies = {
+                            c.forumSession.ensureCurrent(binding)
+                            c.forumApi.replies(postId, root.id, it).also { c.forumSession.ensureCurrent(binding) }
+                        }) { comment, rootPublished, replyToggle ->
                         ForumCommentRow(comment, profile, locked || !rootPublished,
                             onReply = { editing = null; rootId = comment.replyRoot; replyCount = replyCounts[root.id] ?: root.replyCount },
                             onEdit = { editing = comment; rootId = null }, onDelete = { deleting = comment },
