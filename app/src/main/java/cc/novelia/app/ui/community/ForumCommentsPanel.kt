@@ -78,7 +78,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
                             c.forumApi.replies(postId, root.id, it).also { c.forumSession.ensureCurrent(binding) }
                         }) { comment, rootPublished, replyToggle ->
                         ForumCommentRow(comment, profile, locked || !rootPublished,
-                            onReply = { editing = null; rootId = comment.replyRoot; replyCount = replyCounts[root.id] ?: root.replyCount },
+                            onReply = { editing = null; rootId = comment.replyRoot; replyCount = replyCounts[root.id] ?: root.replyCount ?: 0 },
                             onEdit = { editing = comment; rootId = null }, onDelete = { deleting = comment },
                             onBlock = { c.store.update { it.copy(blockedUsers = it.blockedUsers + comment.authorUsername) } }, extraAction = replyToggle) {
                             MarkdownText(c, it, renderer = renderer, documentUrl = documentUrl)

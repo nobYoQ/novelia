@@ -25,7 +25,7 @@ internal data class ForumReplyFocus(val rootId: Long, val page: Int, val comment
     return pages
 }
 
-/** 子回复正文仅展开后加载；计数由列表预读并保留，账号或角色变化后清除旧回复内容。 */
+/** 子回复正文仅展开后加载；直接使用根评论计数，旧响应的补查结果由列表保留。 */
 @Composable internal fun ForumCommentThread(
     postId: Long, root: ForumComment, viewer: Profile?, version: Int,
     focus: ForumReplyFocus? = null, blockedUsers: Set<String> = emptySet(),
@@ -55,8 +55,8 @@ internal data class ForumReplyFocus(val rootId: Long, val page: Int, val comment
         replyPages.peek(root.id, page)?.let(onPageLoaded)
     }
     Column(Modifier.fillMaxWidth().testTag("forum-thread-${root.id}")) {
-        // 当前线上响应可能省略计数；保留入口，不能把缺失字段当作没有回复。
-        val count = knownReplyCount ?: replyPages.peek(root.id, page)?.total ?: replyTotal ?: root.replyCount.takeIf { it > 0 }
+        // 回复页的更新计数优先；服务端的 0 表示无回复，只有缺失字段才保留未知入口。
+        val count = knownReplyCount ?: replyPages.peek(root.id, page)?.total ?: replyTotal ?: root.replyCount?.takeIf { it >= 0 }
         render(root, root.status == 0) {
             TextButton(onClick = { expanded = !expanded }, enabled = expanded || count != 0L,
                 modifier = Modifier.testTag("forum-replies-toggle-${root.id}")) {

@@ -29,8 +29,11 @@ class ForumLiveReadOnlyTest {
                 assertTrue(comments.total >= comments.items.size)
                 comments.items.forEach {
                     assertEquals(post.id, it.postId); assertTrue(it.createdEpoch > 0)
-                    assertNull(it.rootId); assertTrue(it.replyCount >= 0)
-                    if(it.replyCount > 0 || it.id == comments.items.first().id) {
+                    assertNull(it.rootId)
+                    val count = it.replyCount
+                    assertNotNull("10 月 1 日起一级评论应始终返回 replyCount", count)
+                    assertTrue(count != null && count >= 0)
+                    if(count != null && count > 0 || it.id == comments.items.first().id) {
                         val replies = api.replies(post.id, it.id, 0)
                         assertTrue(replies.total >= replies.items.size)
                         replies.items.forEach { reply -> assertEquals(post.id, reply.postId); assertEquals(it.id, reply.rootId) }

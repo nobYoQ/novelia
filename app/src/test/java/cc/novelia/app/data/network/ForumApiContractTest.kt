@@ -114,10 +114,32 @@ class ForumApiContractTest {
         }
     }
 
-    @Test fun replyCountCanBeOmittedAndKeeps64BitCounts() {
-        assertEquals(0L, appJson.decodeFromString<ForumComment>(comment).replyCount)
+    @Test fun replyCountDistinguishesMissingAndZeroAndKeeps64BitCounts() {
+        assertNull(appJson.decodeFromString<ForumComment>(comment).replyCount)
+        val missing = comment.dropLast(1) + """, "replyCount":null}"""
+        assertNull(appJson.decodeFromString<ForumComment>(missing).replyCount)
+        val empty = comment.dropLast(1) + """, "replyCount":0}"""
+        assertEquals(0L, appJson.decodeFromString<ForumComment>(empty).replyCount)
         val large = comment.dropLast(1) + """, "replyCount":9007199254740993}"""
         assertEquals(9007199254740993L, appJson.decodeFromString<ForumComment>(large).replyCount)
+    }
+
+    @Test fun rootListUsesServerCountsAndOnlyRequestsRepliesForLegacyRoots() = runBlocking {
+        MockWebServer().use { server ->
+            val base = appJson.decodeFromString<ForumComment>(comment).copy(postId = 5, rootId = null)
+            val roots = listOf(base.copy(id = 8, replyCount = 7), base.copy(id = 9, replyCount = 0), base.copy(id = 10))
+            server.enqueue(MockResponse().setBody(appJson.encodeToString(ForumPage(3, roots))))
+            // 若误补查前两条评论，MockWebServer 也及时响应，由请求数和路径断言发现问题。
+            repeat(3) { server.enqueue(MockResponse().setBody("""{"total":2,"items":[$comment]}""")) }
+            val client = api(server)
+            val result = client.comments(5, 0)
+            val counts = mutableMapOf<Long, Long?>()
+            loadForumReplyCounts(result.items, { client.replyCount(5, it) }) { id, count -> counts[id] = count }
+            assertEquals(mapOf(8L to 7L, 9L to 0L, 10L to 2L), counts)
+            assertEquals(2, server.requestCount)
+            assertEquals("/api/v1/post/5/comment?page=1&page_size=20", server.takeRequest().path)
+            assertEquals("/api/v1/post/5/comment/10/reply?page=1&page_size=1", server.takeRequest().path)
+        }
     }
 
     @Test fun missingReplyCountsUseSmallIndependentRequestsIncludingZero() = runBlocking {

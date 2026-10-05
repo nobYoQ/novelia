@@ -4,10 +4,10 @@
 
 ## 核对依据
 
-- 核对日期：2026-10-01。
-- 测试站公开前端：`/assets/index-CaYVyU6k.js`，内嵌部署提交 `692916b5ecd76313ee2fcacffc8dc309f342784b`，构建时间为 2026-09-30 20:27:27（北京时间）。源码对比基线为之前的 `6c65702`，并以匿名公开 GET 核对实际服务端响应。
-- [该部署版本的前端 API 合约](https://github.com/auto-novel/forum/blob/692916b5ecd76313ee2fcacffc8dc309f342784b/apps/web/src/api.ts)。
-- [服务端帖子路由](https://github.com/auto-novel/forum/blob/692916b5ecd76313ee2fcacffc8dc309f342784b/apps/api/internal/handler/post.go)、[评论路由](https://github.com/auto-novel/forum/blob/692916b5ecd76313ee2fcacffc8dc309f342784b/apps/api/internal/handler/comment.go)、[认证声明](https://github.com/auto-novel/forum/blob/692916b5ecd76313ee2fcacffc8dc309f342784b/apps/api/internal/httpx/authn.go)。
+- 核对日期：2026-10-02。
+- 测试站公开前端：`/assets/index-BW1QLPXk.js`，内嵌部署提交 `ae80f7301b2f9b30d907635213884cfa5716d43b`，构建时间为 2026-10-01 20:51:16（北京时间）。源码对比基线为之前的 `692916b`，并以匿名公开 GET 核对实际服务端响应。
+- [该部署版本的前端 API 合约](https://github.com/auto-novel/forum/blob/ae80f7301b2f9b30d907635213884cfa5716d43b/apps/web/src/api.ts)。
+- [服务端帖子路由](https://github.com/auto-novel/forum/blob/ae80f7301b2f9b30d907635213884cfa5716d43b/apps/api/internal/handler/post.go)、[评论路由](https://github.com/auto-novel/forum/blob/ae80f7301b2f9b30d907635213884cfa5716d43b/apps/api/internal/handler/comment.go)、[回复计数查询](https://github.com/auto-novel/forum/blob/ae80f7301b2f9b30d907635213884cfa5716d43b/apps/api/internal/repository/comment.go)、[认证声明](https://github.com/auto-novel/forum/blob/ae80f7301b2f9b30d907635213884cfa5716d43b/apps/api/internal/httpx/authn.go)。
 
 ## 合约变化
 
@@ -20,7 +20,7 @@
 | 帖子详情 | `GET post/{数字ID}/`；时间为 RFC 3339 字符串；作者改为 `authorId/authorUsername` |
 | 发布／编辑 | `POST post/`、`PATCH post/{id}/`；正文为 `{ categoryId, title, content, tagIds }`，返回完整帖子对象 |
 | 删除帖子 | `DELETE post/{id}/`，成功可返回无正文的 204；普通作者限发布后 20 分钟内，管理员不受时限影响 |
-| 一级评论 | `GET post/{id}/comment`；`total` 只统计一级评论，`items` 不再包含子回复；源码包含可选 `replyCount`，本次线上响应未返回此字段 |
+| 一级评论 | `GET post/{id}/comment`；`total` 只统计一级评论，`items` 不再包含子回复；每条评论始终返回 64 位 `replyCount`，零回复显式返回 `0`，服务端已修复数量映射 |
 | 子回复 | `GET post/{id}/comment/{rootId}/reply`；使用独立的 `page/page_size` 分页，响应 `{ total, items }` |
 | 发布评论 | `POST post/{id}/comment`；回复提交 `rootId`，回复子评论时仍使用其根 ID |
 | 修改评论 | `PATCH/DELETE comment/{id}`；编辑只提交 `content`，禁止提交 `rootId`（包括 null）；作者限发布后 20 分钟内修改，管理员不受时限影响 |
@@ -40,7 +40,7 @@
 - 新建论坛草稿使用 `article:forum-new`；旧版 `article:new` 草稿仍保留，不自动发布到测试站。
 - 新版编辑保留帖子的标签，最多选择 3 个，切换分类时清除旧分类标签。标题为 2–100 字，正文为 1–20,000 字，评论为 1–1,000 字；按 Unicode 码点计数，emoji 的代理对按一个字计算。正文保留原始空白，评论按网页行为去除首尾空白后提交。旧的超长草稿保留并可继续缩短，超限时禁止提交。最终权限及域名黑名单由服务端决定；论坛返回的文本校验错误会显示具体原因，失败时保留草稿且不自动重发。
 - 论坛的 `trusted`、`member`、`admin` 角色可发言，公告限管理员；主站账号权限规则保持原逻辑。帖子删除和评论修改入口在 20 分钟到期后更新，提交时再次检查权限。
-- 一级评论按服务端分页显示，各讨论串的子回复正文展开后独立分页加载。缺少 `replyCount` 时，提前以 `page_size=1` 读取回复接口的 `total`，最多 4 个并发请求，显示「查看 X 条回复」或「暂无回复」；请求失败保留未知状态并允许展开重试。计数保存在列表层，滚出显示区域后回来仍保留；刷新及账号／角色变化时重新核对。发布子回复后定位该串末页。隐藏／删除评论默认显示占位文本，已有子回复仍可查看，已隐藏／删除的根评论不能继续回复。管理员可展开服务端返回的原文，切换账号或评论状态时收起。
+- 一级评论按服务端分页显示，直接使用 `replyCount` 显示「查看 X 条回复」或「暂无回复」，包括 `0` 在内的有效计数均不额外请求回复接口。子回复正文展开后独立分页加载，回复页的 `total` 更新当前计数。仅兼容旧响应缺失／null 计数时，以 `page_size=1` 读取回复接口的 `total`，最多 4 个并发请求；请求失败保留未知状态并允许展开重试。计数保存在列表层，滚出显示区域后回来仍保留；刷新及账号／角色变化时重新核对。发布子回复后定位该串末页。隐藏／删除评论默认显示占位文本，已有子回复仍可查看，已隐藏／删除的根评论不能继续回复。管理员可展开服务端返回的原文，切换账号或评论状态时收起。
 - 新论坛 Markdown 评分按半星四舍五入，接受非负十进制数并限制到 5；主站与旧文章的评分精度保持原行为。共享 TypeScript 包迁移本身不要求 Android 安装对应依赖。
 - 右上角「我的」使用锚定展开面板，集中放置我的帖子、云端收藏、处罚记录、本地收藏和论坛登录／退出。面板支持缩放淡入淡出、返回键／外部点击收起、滚动和大字号，遵循减少动态效果设置。
 - 云端收藏和我的帖子沿用各自接口的排序；四种帖子预设用于「全部帖子」。帖子列表同时显示评论数与查看量。处罚记录显示原因、分值、依据、生效／撤销状态及时间，不持久缓存账号处罚数据。社区守则使用原生 `forum-rules` 页面，可从「我的」及首次提示进入；打开时核对线上部署并更新守则，支持手动更新及离线副本，同步失败明确提示。关闭首次提示后持久隐藏，评论输入辅助条不重复显示。
@@ -49,10 +49,10 @@
 
 ## 验证
 
-- 本次对测试站三个分类各抽查两个帖子的列表、详情、一级评论和子回复，全部为匿名公开 GET；未创建帖子、评论或修改收藏。实际响应的一级评论没有 `replyCount`，客户端已兼容该部署差异。
-- `ForumApiContractTest` 使用 MockWebServer 覆盖分页／搜索、数字 ID、时区与小数秒、创建／PATCH 请求体、标签、一级评论与子回复独立分页、可选 64 位回复数量、204、云端列表、会话隔离、401 刷新上限、503 响应不重试、旧收藏及新旧链接。
+- 2026-10-02 对帖子 953、1021 的 24 条一级评论核对，全部带有非负 `replyCount`；另抽查四串回复，根评论计数 7、0、2、0 均与回复接口 `total` 一致。全部为匿名公开 GET；未创建帖子、评论或修改收藏。此前三个分类各两个帖子的完整解码记录见历史验收。
+- `ForumApiContractTest` 使用 MockWebServer 覆盖分页／搜索、数字 ID、时区与小数秒、创建／PATCH 请求体、标签、一级评论与子回复独立分页、64 位回复数量、缺失与显式零的区别、仅旧响应补查计数、204、云端列表、会话隔离、401 刷新上限、503 响应不重试、旧收藏及新旧链接。
 - `ForumAccountApiTest` 覆盖四种排序参数、筛选与分页保留，以及使用论坛令牌访问认证服务处罚记录的字段解析和权限边界。
-- 初始预适配验收（历史）：93 项 JVM 测试全部通过；Debug APK、Android 测试 APK 构建成功；`lintDebug` 通过，0 个错误、25 个警告。本次结果见末尾 2026-10-01 记录。
+- 初始预适配验收（历史）：93 项 JVM 测试全部通过；Debug APK、Android 测试 APK 构建成功；`lintDebug` 通过，0 个错误、25 个警告。本次结果见末尾 2026-10-02 记录。
 - 初始设备验收（历史）：`ForumAccountUiTest` 与 `ForumSessionIsolationTest` 共 6 项 Android 回归测试通过，覆盖排序选择、个人面板操作与返回键、处罚记录展示，以及双向退出隔离和退出状态持久化。会话测试使用独立存储与合成凭据。
 - 初始布局验收（历史）：在 375dp 宽模拟器上核对浅色／深色、减少动态效果；另外两次布局测试覆盖横屏和系统双倍字号，均通过并检查截图。
 - 构建与离线验证：`./build.ps1 -Tasks @('assembleDebug', 'assembleDebugAndroidTest', 'testDebugUnitTest', 'lintDebug') -Offline`。
@@ -126,3 +126,12 @@
 - 缓存绑定帖子、论坛会话代次、用户 ID、角色及评论刷新版本，列表重新载入或离开时失效；旧请求取消，晚响应不能回填。仅保存内存，不持久化回复正文。恢复缓存时同步计数并校正有效页码，不重复执行已经处理的新回复定位。
 - 7 项新增 JVM 回归覆盖缓存复用、分页与讨论串隔离、并发等待、滚出后的请求继续／合并、失败重试、失效与晚响应，以及容量限制和总数更新。Android 回归增加展开后滚出／返回不再读取、收起重开，以及读取中收起后恢复正文与数量的断言。
 - 最终四项构建检查全部通过：414 项 JVM 测试无失败、错误或跳过；Debug APK 与测试 APK 构建成功，lint 为 0 个错误、23 个警告。当前未连接 Android 设备，界面回归仅完成编译。日志：`outputs/logs/build-gradle-20261001-165449-700.log`；汇总：`outputs/qa/forum-reply-cache-20261001/verification.json`。
+
+## 2026-10-02 适配论坛 10 月 1 日构建
+
+- 核对线上部署 `ae80f73`（北京时间 2026-10-01 20:51:16）与上一版 `692916b` 的差异。服务端移除 `replyCount` 的 `omitempty` 并修正查询结果映射；网页及共享 API 类型改为必填。其余改动是管理站评论操作布局，不改变 Android 使用的接口。
+- 客户端使用可空 64 位计数区分旧响应缺失值与明确的零回复。新版的正数及零均直接显示，不再为计数请求回复接口；旧响应仍保留限流补查和失败重试。回复正文按需加载、页缓存、账号隔离和发布后定位末页继续沿用，已加载回复页的 `total` 可更新根评论快照中的数量。
+- 匿名公开 GET 核对帖子 953、1021 的 24 条一级评论，均带有 `replyCount`；四个抽查讨论串的计数 7、0、2、0 与独立回复接口的 `total` 一致。源码差异及不含评论正文的验证记录保存在本地忽略目录 `outputs/qa/forum-update-20261002/`。
+- JVM 回归增加新版完整计数不发补查请求，以及混合新旧响应只查询缺失计数的 HTTP 断言；序列化覆盖缺失、null、0 和超大 64 位值。界面回归增加新版计数滚动后的缓存复用、零回复直接显示、计数更新后展开及回复页总数覆盖旧值。
+- `:app:testDebugUnitTest`、`:app:assembleDebug`、`:app:assembleDebugAndroidTest`、`:app:lintDebug` 及 `:app:testReleaseUnitTest`、`:app:assembleRelease`、`:app:lintRelease` 均以 `build.ps1 -Offline` 执行通过。Debug／Release 各 466 项 JVM 测试，无失败、错误或跳过；两种变体的 Lint 均为 0 个错误、26 个警告。
+- 当前没有连接 Android 设备，界面回归仅完成测试 APK 编译，未执行设备测试。日志：`outputs/logs/forum-update-20261002-debug.log`、`outputs/logs/forum-update-20261002-release.log`；汇总：`outputs/qa/forum-update-20261002/verification.json`。

@@ -143,7 +143,7 @@ class ForumCommentThreadTest {
     @Test fun omittedReplyCountStillAllowsReadingReplies() {
         compose.setContent {
             NoveliaTheme("light") {
-                ForumCommentThread(5, root.copy(replyCount = 0), null, 0, loadReplies = {
+                ForumCommentThread(5, root.copy(replyCount = null), null, 0, loadReplies = {
                     ForumPage(1, listOf(reply(12, "没有计数也能读取")))
                 }) { comment, _, actions -> Column { Text(comment.content); actions?.invoke() } }
             }
@@ -158,7 +158,7 @@ class ForumCommentThreadTest {
         val pages = mutableListOf<Int>()
         compose.setContent {
             NoveliaTheme("light") {
-                ForumCommentThread(5, root.copy(replyCount = 0), null, 0,
+                ForumCommentThread(5, root.copy(replyCount = null), null, 0,
                     focus = ForumReplyFocus(root.id, 0, 77), loadReplies = { page ->
                         pages += page
                         ForumPage(21, listOf(reply(if(page == 0) 12 else 77, if(page == 0) "旧回复" else "新回复末页")))
@@ -169,9 +169,15 @@ class ForumCommentThreadTest {
         compose.runOnIdle { assertEquals(listOf(0, 1), pages) }
     }
 
-    @Test fun countsAppearBeforeOpeningAndSurviveLazyItemDisposal() {
+    @Test fun countsAppearBeforeOpeningAndSurviveLazyItemDisposal() = assertCountsAndCacheSurviveScrolling(serverCounts = false)
+
+    @Test fun serverCountsNeedNoPrefetchAndSurviveLazyItemDisposal() = assertCountsAndCacheSurviveScrolling(serverCounts = true)
+
+    private fun assertCountsAndCacheSurviveScrolling(serverCounts: Boolean) {
         var countReads = 0; var bodyReads = 0
-        val roots = (8L..27L).map { root.copy(id = it, replyCount = 0, content = "根评论 $it") }
+        val roots = (8L..27L).map { root.copy(id = it,
+            replyCount = if(serverCounts) { if(it == 8L) 3 else 0 } else null, content = "根评论 $it") }
+        val expectedCountReads = if(serverCounts) 0 else 20
         compose.setContent { NoveliaTheme("light") {
             val counts = remember { mutableStateMapOf<Long, Long?>() }
             val replyPages = rememberForumReplyPages(5)
@@ -197,7 +203,7 @@ class ForumCommentThreadTest {
         compose.onNodeWithText("根评论 8").assertDoesNotExist()
         compose.onNodeWithTag("lazy-forum-comments").performScrollToIndex(0)
         compose.onNodeWithText("查看 3 条回复").assertExists()
-        compose.runOnIdle { assertEquals(20, countReads); assertEquals(1, bodyReads) }
+        compose.runOnIdle { assertEquals(expectedCountReads, countReads); assertEquals(1, bodyReads) }
         compose.onNodeWithText("查看 3 条回复").performClick()
         compose.onNodeWithText("线程回复").assertExists()
         compose.onNodeWithTag("lazy-forum-comments").performScrollToIndex(19)
@@ -206,18 +212,33 @@ class ForumCommentThreadTest {
         compose.onNodeWithText("收起回复").assertExists()
         compose.onNodeWithText("线程回复").assertExists()
         compose.onNodeWithText("正在加载…").assertDoesNotExist()
-        compose.runOnIdle { assertEquals(20, countReads); assertEquals(1, bodyReads) }
+        compose.runOnIdle { assertEquals(expectedCountReads, countReads); assertEquals(1, bodyReads) }
     }
 
-    @Test fun emptyReplyCountIsVisibleWithoutOpeningTheThread() {
+    @Test fun serverZeroCountIsVisibleWithoutPrefetchingOrOpeningTheThread() {
         var reads = 0
         compose.setContent { NoveliaTheme("light") {
-            ForumCommentThread(5, root.copy(replyCount = 0), null, 0, knownReplyCount = 0, loadReplies = {
+            ForumCommentThread(5, root.copy(replyCount = 0), null, 0, countLoading = true, loadReplies = {
                 reads++; ForumPage(0, emptyList())
             }) { comment, _, actions -> Column { Text(comment.content); actions?.invoke() } }
         } }
         compose.onNodeWithText("暂无回复").assertIsNotEnabled()
         compose.runOnIdle { assertEquals(0, reads) }
+    }
+
+    @Test fun refreshedCountOpensAnEmptyThreadAndReplyPageTotalTakesPrecedence() {
+        val comment = mutableStateOf(root.copy(replyCount = 0))
+        compose.setContent { NoveliaTheme("light") {
+            ForumCommentThread(5, comment.value, null, 0, loadReplies = {
+                ForumPage(1, listOf(reply(31, "最新回复")))
+            }) { item, _, actions -> Column { Text(item.content); actions?.invoke() } }
+        } }
+        compose.onNodeWithText("暂无回复").assertIsNotEnabled()
+        compose.runOnIdle { comment.value = root.copy(replyCount = 2) }
+        compose.onNodeWithText("查看 2 条回复").performClick()
+        compose.onNodeWithText("最新回复").assertExists()
+        compose.onNodeWithText("收起回复").performClick()
+        compose.onNodeWithText("查看 1 条回复").assertExists()
     }
 
     @Test fun collapsingDuringLoadingAndReopeningRestoresTheBodyAndItsCount() {
