@@ -29,7 +29,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
-/** 一级评论分页加载，各讨论串的子回复展开后通过独立接口分页读取。 */
+/** 一级评论分页加载并保留附带的首屏回复；展开时复用，后续页通过独立接口读取。 */
 @Composable internal fun ForumCommentsPanel(c: AppController, postId: Long, locked: Boolean) {
     val profile by c.forumSession.profile.collectAsStateWithLifecycle()
     val state by c.store.state.collectAsStateWithLifecycle()
@@ -39,7 +39,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
     val replyCounts = remember(postId, profile?.userId, profile?.role, version) { mutableStateMapOf<Long, Long?>() }
     var countsRevision by remember(postId, profile?.userId, profile?.role, version) { mutableIntStateOf(0) }
     val binding = c.forumSession.capture()
-    val replyPages = rememberForumReplyPages(postId, binding, profile?.userId, profile?.role, version, countsRevision)
     var rootId by rememberSaveable(postId, profile?.userId) { mutableStateOf<Long?>(null) }
     var replyCount by rememberSaveable(postId, profile?.userId) { mutableLongStateOf(0) }
     var replyFocus by remember(postId, profile?.userId, profile?.role) { mutableStateOf<ForumReplyFocus?>(null) }
@@ -51,8 +50,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
     val documentUrl = ForumLinks.articleUrl(ForumLinks.localId(postId))
     val renderer = rememberMarkdownRenderer(c, documentUrl)
     Column(Modifier.fillMaxSize()) {
-        AsyncContent(listOf(postId, page, profile?.userId, profile?.role), refreshKey = version, load = { c.forumApi.comments(postId, page) },
+        AsyncContent(listOf(postId, page, binding, profile?.userId, profile?.role), refreshKey = version, load = {
+            c.forumSession.ensureCurrent(binding)
+            c.forumApi.comments(postId, page).also { c.forumSession.ensureCurrent(binding) }
+        },
             onLoaded = { replyCounts.clear(); countsRevision++ }, modifier = Modifier.weight(1f)) { result, _ ->
+            // 在讨论串首次组合之前初始化，避免展开时先发请求再填入首屏数据。
+            val replyPages = rememberForumReplyPages(postId, binding, profile?.userId, profile?.role, version, countsRevision,
+                initialRoots = result.items)
             val comments = result.items.filter { it.authorUsername !in state.blockedUsers }
             LaunchedEffect(result.items, version, countsRevision, state.blockedUsers) {
                 try {
@@ -100,7 +105,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
                 Text(if(editing != null) "编辑评论 #${editing?.id}" else "回复 #$rootId", Modifier.weight(1f))
                 TextButton(onClick = { rootId = null; editing = null }) { Text("取消") }
             }
-            MarkdownCommentInput(text, { value -> text = value; c.store.update { it.copy(drafts = it.drafts + (draftKey to value)) } }, if(editing != null) "编辑评论" else "写下评论", isError = commentContent.isNotEmpty() && commentError != null, softLimit = true) {
+            MarkdownCommentInput(text, { value -> text = value; c.store.update { it.copy(drafts = it.drafts + (draftKey to value)) } }, if(editing != null) "编辑评论" else "写下评论", isError = commentContent.isNotEmpty() && commentError != null, softLimit = true, unicodeLimit = ForumRules.COMMENT_LIMIT) {
                 FilledIconButton(enabled = commentError == null && canSend && canEditDraft && !sending, modifier = Modifier.testTag("forum-comment-submit"), onClick = {
                     // Login changes the account-specific draft key; retain the text being submitted.
                     val content = text.trim(); val submittedRoot = rootId; val submittedReplyCount = replyCount; val submittedEdit = editing; val submittedDraft = draftKey

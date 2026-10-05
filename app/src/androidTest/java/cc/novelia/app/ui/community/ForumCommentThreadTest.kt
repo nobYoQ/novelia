@@ -173,14 +173,19 @@ class ForumCommentThreadTest {
 
     @Test fun serverCountsNeedNoPrefetchAndSurviveLazyItemDisposal() = assertCountsAndCacheSurviveScrolling(serverCounts = true)
 
-    private fun assertCountsAndCacheSurviveScrolling(serverCounts: Boolean) {
+    @Test fun embeddedRepliesSurviveScrollingWithoutAnyReplyRequests() = assertCountsAndCacheSurviveScrolling(serverCounts = true, embedded = true)
+
+    private fun assertCountsAndCacheSurviveScrolling(serverCounts: Boolean, embedded: Boolean = false) {
         var countReads = 0; var bodyReads = 0
         val roots = (8L..27L).map { root.copy(id = it,
-            replyCount = if(serverCounts) { if(it == 8L) 3 else 0 } else null, content = "根评论 $it") }
+            replyCount = if(serverCounts) { if(it == 8L) 3 else 0 } else null, content = "根评论 $it",
+            replies = if(!embedded) null else if(it == 8L) ForumPage(3,
+                listOf(reply(31, "线程回复"), reply(32, "附带回复二"), reply(33, "附带回复三"))) else ForumPage(0, emptyList())) }
         val expectedCountReads = if(serverCounts) 0 else 20
+        val expectedBodyReads = if(embedded) 0 else 1
         compose.setContent { NoveliaTheme("light") {
             val counts = remember { mutableStateMapOf<Long, Long?>() }
-            val replyPages = rememberForumReplyPages(5)
+            val replyPages = rememberForumReplyPages(5, initialRoots = roots)
             LaunchedEffect(Unit) {
                 loadForumReplyCounts(roots, { id -> countReads++; if(id == 8L) 3L else 0L }) { id, count -> counts[id] = count }
             }
@@ -203,7 +208,7 @@ class ForumCommentThreadTest {
         compose.onNodeWithText("根评论 8").assertDoesNotExist()
         compose.onNodeWithTag("lazy-forum-comments").performScrollToIndex(0)
         compose.onNodeWithText("查看 3 条回复").assertExists()
-        compose.runOnIdle { assertEquals(expectedCountReads, countReads); assertEquals(1, bodyReads) }
+        compose.runOnIdle { assertEquals(expectedCountReads, countReads); assertEquals(expectedBodyReads, bodyReads) }
         compose.onNodeWithText("查看 3 条回复").performClick()
         compose.onNodeWithText("线程回复").assertExists()
         compose.onNodeWithTag("lazy-forum-comments").performScrollToIndex(19)
@@ -212,7 +217,50 @@ class ForumCommentThreadTest {
         compose.onNodeWithText("收起回复").assertExists()
         compose.onNodeWithText("线程回复").assertExists()
         compose.onNodeWithText("正在加载…").assertDoesNotExist()
-        compose.runOnIdle { assertEquals(expectedCountReads, countReads); assertEquals(1, bodyReads) }
+        compose.runOnIdle { assertEquals(expectedCountReads, countReads); assertEquals(expectedBodyReads, bodyReads) }
+    }
+
+    @Test fun embeddedFirstPageStillLoadsLaterPagesAndNewReplyFocus() {
+        val pages = mutableListOf<Int>()
+        val focus = mutableStateOf<ForumReplyFocus?>(null)
+        val first = ForumPage(21, (12L..31L).map { reply(it, "首屏回复 $it") })
+        compose.setContent { NoveliaTheme("light") {
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                ForumCommentThread(5, root.copy(replies = first), null, 0, focus = focus.value, loadReplies = { page ->
+                    pages += page
+                    ForumPage(21, listOf(reply(77, "末页的新回复")))
+                }) { item, _, actions -> Column { Text(item.content); actions?.invoke() } }
+            }
+        } }
+        compose.onNodeWithText("查看 21 条回复").performClick()
+        compose.onNodeWithText("首屏回复 12").assertExists()
+        compose.runOnIdle { assertTrue(pages.isEmpty()); focus.value = ForumReplyFocus(8, 1, 77) }
+        compose.onNodeWithText("末页的新回复").assertExists()
+        compose.runOnIdle { assertEquals(listOf(1), pages) }
+        compose.onNodeWithContentDescription("上一页").performScrollTo().performClick()
+        compose.onNodeWithText("首屏回复 12").assertExists()
+        compose.runOnIdle { assertEquals(listOf(1), pages) }
+    }
+
+    @Test fun refreshedEmbeddedPagesAndViewerChangesDiscardPreviousBodies() {
+        val viewer = mutableStateOf(Profile("读者", "admin", 0, Long.MAX_VALUE, 42))
+        val version = mutableIntStateOf(0)
+        compose.setContent { NoveliaTheme("light") {
+            val body = if(viewer.value.role == "admin") "管理员原文 ${version.intValue}" else "公开内容"
+            val current = root.copy(replyCount = 1, replies = ForumPage(1, listOf(reply(12, body))))
+            ForumCommentThread(5, current, viewer.value, version.intValue, loadReplies = { error("已有首屏") }) {
+                item, _, actions -> Column { Text(item.content); actions?.invoke() }
+            }
+        } }
+        compose.onNodeWithText("查看 1 条回复").performClick()
+        compose.onNodeWithText("管理员原文 0").assertExists()
+        compose.runOnIdle { version.intValue++ }
+        compose.onNodeWithText("管理员原文 0").assertDoesNotExist()
+        compose.onNodeWithText("管理员原文 1").assertExists()
+        compose.runOnIdle { viewer.value = viewer.value.copy(role = "member") }
+        compose.onNodeWithText("管理员原文 1").assertDoesNotExist()
+        compose.onNodeWithText("查看 1 条回复").performClick()
+        compose.onNodeWithText("公开内容").assertExists()
     }
 
     @Test fun serverZeroCountIsVisibleWithoutPrefetchingOrOpeningTheThread() {

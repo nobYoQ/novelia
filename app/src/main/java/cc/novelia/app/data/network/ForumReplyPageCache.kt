@@ -23,6 +23,19 @@ internal class ForumReplyPageCache(owner: CoroutineScope, private val pagesPerTh
     @Synchronized fun peek(rootId: Long, page: Int): ForumPage<ForumComment>? =
         if(job.isActive) pages[rootId]?.get(page) else null
 
+    /** 只初始化尚未读取的讨论串；重组或晚到的旧列表不能覆盖独立回复请求。 */
+    @Synchronized fun seedFirstPage(root: ForumComment): Boolean {
+        val first = root.replies ?: return false
+        if(!job.isActive || root.id <= 0 || root.rootId != null || pages.containsKey(root.id) ||
+            requests.keys.any { it.rootId == root.id }) return false
+        // 部分预览或不属于此串的数据不能充当完整第一页，仍交给独立接口读取。
+        if(first.total < 0 || first.items.size != minOf(first.total, 20).toInt() ||
+            first.items.any { it.id <= 0 || it.rootId != root.id || it.postId != root.postId || it.subjectKey != root.subjectKey } ||
+            first.items.map { it.id }.distinct().size != first.items.size) return false
+        pages[root.id] = LinkedHashMap<Int, ForumPage<ForumComment>>(4, .75f, true).apply { put(0, first) }
+        return true
+    }
+
     suspend fun load(rootId: Long, page: Int, loader: suspend () -> ForumPage<ForumComment>): ForumPage<ForumComment> {
         require(rootId > 0 && page >= 0)
         peek(rootId, page)?.let { return it }

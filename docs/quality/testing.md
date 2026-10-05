@@ -63,7 +63,7 @@ JVM 报告在 `app/build/reports/tests/testDebugUnitTest/`，XML 结果在 `app/
 | 分卷与更新检查 | `WenkuVolumesTest`、`BookUpdatesTest`、`TranslationFreshnessTest`、`data.updates.BookUpdateStateTest`、`data.updates.UpdateCheckOrderTest` |
 | 列表页码窗口与跳转 | `PageControlsTest` |
 | 旧后台任务升级兼容 | `data.compat.LegacyWorkerCompatibilityTest`：检查两个旧 Worker 类名可反射加载且保留 WorkManager 构造签名 |
-| Markdown 与编辑器 | `MarkdownTest`、`SiteMarkdownTest`、`MarkdownAnchorsTest`、`MarkdownTemplatesTest`、`ForumLinksRegressionTest`、`EditorStateRegressionTest` |
+| Markdown 与编辑器 | `MarkdownTest`、`SiteMarkdownTest`、`MarkdownAnchorsTest`、`MarkdownTemplatesTest`、`MarkdownLinkPasteTest`、`ForumLinksRegressionTest`、`EditorStateRegressionTest`；设备 `ui.markdown.MarkdownLinkPasteTest` 验证系统粘贴、撤销／重做、光标、草稿及普通粘贴回退 |
 
 新测试应表达用户能遇到的错误或关键不变量。例如账号切换时旧响应不得写入当前界面、损坏 ZIP 不得覆盖可用书库、双语投影改变后仍定位同一原文段落。不要只断言实现刚赋给自身的值。
 

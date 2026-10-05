@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.dp
             focus.requestFocus()
             keyboard?.show()
         })
+        MarkdownLinkPaste(current, focused, limit, unicodeLength = unicodeLimit != null) {
         OutlinedTextField(current, {
             if (unicodeLimit != null || it.text.length <= 20000) { source = it; onTextChange(it.text) }
         }, modifier = Modifier.fillMaxWidth().heightIn(max = inputHeight).testTag("article-body")
@@ -67,6 +68,7 @@ import androidx.compose.ui.unit.dp
             },
             placeholder = { Text("写下你的想法…") }, minLines = minOf(6, visibleLines), maxLines = visibleLines,
             isError = length > limit, textStyle = MaterialTheme.typography.bodyLarge)
+        }
         }
         Text("$length / $limit", style = MaterialTheme.typography.bodySmall, color = if(length > limit) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
     }

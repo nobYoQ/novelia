@@ -4,7 +4,7 @@ import cc.novelia.app.data.catalog.ForumLinks
 import kotlinx.serialization.Serializable
 import java.time.Instant
 
-/** 合约核对于 auto-novel/forum 部署 ae80f73（2026-10-01）。 */
+/** 合约核对于 auto-novel/forum 部署 24db0ee（2026-10-03，北京时间）。 */
 @Serializable data class ForumPage<T>(val total: Long, val items: List<T>) {
     fun pageCount(pageSize: Int = 20): Int {
         require(pageSize > 0 && total >= 0)
@@ -36,7 +36,9 @@ import java.time.Instant
     val content: String, val authorId: Long, val authorUsername: String, val status: Int,
     val createdAt: String, val updatedAt: String,
     // 10 月 1 日起服务端始终返回计数；null 仅兼容旧响应，必须与明确的零回复区分。
-    val replyCount: Long? = null
+    val replyCount: Long? = null,
+    // 新版一级评论附带首屏回复；旧响应及独立回复接口可省略。
+    val replies: ForumPage<ForumComment>? = null
 ) {
     val replyRoot get() = rootId ?: id
     val createdEpoch get() = Instant.parse(createdAt).epochSecond

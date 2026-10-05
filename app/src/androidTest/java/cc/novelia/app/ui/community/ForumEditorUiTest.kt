@@ -25,6 +25,16 @@ class ForumEditorUiTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
     private val categories = listOf(ForumCategory(2, "announcements"), ForumCategory(1, "novel", (1L..4).map { ForumTag(it, "标签$it") }), ForumCategory(3, "feedback"))
 
+    @Test fun newPostGuidanceRemainsVisibleAfterDismissingTheGeneralReminder() = withEditor(null, noticeDismissed = true) {
+        compose.onNodeWithTag("forum-publishing-notice").assertExists()
+        compose.onNodeWithText("发帖前请确认").assertIsDisplayed()
+        compose.onNodeWithText("求书集中帖", substring = true).assertExists()
+        compose.onNodeWithTag("forum-rules-notice").assertDoesNotExist()
+        compose.onNodeWithTag("article-title").performScrollTo().performTextReplacement("保留草稿")
+        compose.onNodeWithTag("article-body").performScrollTo().performTextReplacement("提示不会遮挡正文输入")
+        compose.onNodeWithTag("article-submit").performScrollTo().assertIsEnabled()
+    }
+
     @Test fun guestEditorExcludesAnnouncementsAndCapsSelectedTagsAtThree() = withEditor(Article(id = "f-91001", title = "测试标题", content = "测试正文", forumCategoryId = 1)) {
         compose.onNodeWithText("站务公告").assertDoesNotExist()
         compose.onNodeWithText("发言请遵守《社区守则》").assertExists()
@@ -49,19 +59,19 @@ class ForumEditorUiTest {
         compose.onNodeWithTag("article-submit").performScrollTo().assertIsNotEnabled()
     }
 
-    private fun withEditor(article: Article, check: () -> Unit) {
+    private fun withEditor(article: Article?, noticeDismissed: Boolean = false, check: () -> Unit) {
         val app = compose.activity.application as NoveliaApplication
         runBlocking { app.initialization.await() }
-        val key = "article:${article.id}"
+        val key = article?.let { "article:${it.id}" } ?: ArticleDrafts.newKey(true)
         val previous = app.store.state.value.drafts[key]
         val previousNoticeDismissed = app.store.state.value.forumRulesReminderDismissed
         try {
             compose.runOnUiThread {
-                app.store.update { it.copy(drafts = it.drafts - key, forumRulesReminderDismissed = false) }
+                app.store.update { it.copy(drafts = it.drafts - key, forumRulesReminderDismissed = noticeDismissed) }
                 compose.activity.setContent {
                     NoveliaTheme("light") {
                         val c = AppController(app, rememberNavController(), rememberCoroutineScope(), remember { SnackbarHostState() })
-                        ArticleEditor(c, article, categories, forum = true)
+                        ArticleEditor(c, article, categories, forum = true, newPostKey = key)
                     }
                 }
             }

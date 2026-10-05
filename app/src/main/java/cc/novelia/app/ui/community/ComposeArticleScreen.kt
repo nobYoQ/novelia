@@ -75,7 +75,10 @@ import kotlinx.serialization.encodeToString
         MotionContent(preview, Modifier.fillMaxSize(), animateInitial = false) {
             editorState.SaveableStateProvider(preview) {
                 AppScrollColumn(contentModifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    if(forum) ForumRulesReminder(c)
+                    if(forum) {
+                        if(article == null) ForumPublishingNotice { c.openMarkdownLink(it, ForumLinks.ORIGIN) }
+                        else ForumRulesReminder(c)
+                    }
                     if(!canPublish) Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.medium) {
                         Text("当前账号暂不具备社区发布权限。你仍可编辑和预览，草稿会保存在此设备，获得权限后可以继续发布。", Modifier.padding(16.dp), style = MaterialTheme.typography.bodyMedium)
                     }

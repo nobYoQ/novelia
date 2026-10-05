@@ -23,6 +23,25 @@ class ForumApiContractTest {
     private val comment = """{"id":12,"postId":9007199254740993,"rootId":8,"content":"回复","authorId":42,"authorUsername":"读者","status":0,"createdAt":"2026-09-14T18:31:15Z","updatedAt":"2026-09-14T18:31:15Z"}"""
     private fun api(server: MockWebServer, session: ApiSession? = null) = ForumApi(NoveliaApi(session, server.url("/api/v1/").toString()))
 
+    @Test fun embeddedRepliesDecodeAndSeedWithoutAnExtraHttpRequest() = runBlocking {
+        MockWebServer().use { server ->
+            val rootJson = appJson.parseToJsonElement(comment).jsonObject.toMutableMap().apply {
+                put("id", JsonPrimitive(8)); put("rootId", JsonNull); put("replyCount", JsonPrimitive(1))
+                put("replies", appJson.parseToJsonElement("""{"total":1,"items":[$comment]}"""))
+            }
+            server.enqueue(MockResponse().setBody("""{"total":1,"items":[${JsonObject(rootJson)}]}"""))
+            val root = api(server).comments(5, 0).items.single()
+            assertEquals(12L, root.replies!!.items.single().id)
+            val cache = ForumReplyPageCache(this)
+            try {
+                assertTrue(cache.seedFirstPage(root))
+                assertEquals(1L, cache.load(root.id, 0) { api(server).replies(5, root.id, 0) }.total)
+                assertEquals(1, server.requestCount)
+            } finally { cache.close() }
+            assertNull(appJson.decodeFromString<ForumComment>(comment).replies)
+        }
+    }
+
     @Test fun listUsesSlugOneBasedPagingAndServerSearch() = runBlocking {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setBody("""{"total":21,"items":[$post]}"""))

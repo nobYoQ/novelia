@@ -18,19 +18,19 @@ import cc.novelia.app.ui.components.PageControls
 
 internal data class ForumReplyFocus(val rootId: Long, val page: Int, val commentId: Long)
 
-@Composable internal fun rememberForumReplyPages(vararg keys: Any?): ForumReplyPageCache {
+@Composable internal fun rememberForumReplyPages(vararg keys: Any?, initialRoots: List<ForumComment> = emptyList()): ForumReplyPageCache {
     val scope = rememberCoroutineScope()
-    val pages = remember(*keys) { ForumReplyPageCache(scope) }
+    val pages = remember(*keys) { ForumReplyPageCache(scope).apply { initialRoots.forEach { seedFirstPage(it) } } }
     DisposableEffect(pages) { onDispose { pages.close() } }
     return pages
 }
 
-/** 子回复正文仅展开后加载；直接使用根评论计数，旧响应的补查结果由列表保留。 */
+/** 子回复展开时复用随一级评论返回的首屏；其余页及旧响应按需读取。 */
 @Composable internal fun ForumCommentThread(
     postId: Long, root: ForumComment, viewer: Profile?, version: Int,
     focus: ForumReplyFocus? = null, blockedUsers: Set<String> = emptySet(),
     knownReplyCount: Long? = null, countLoading: Boolean = false, onReplyCount: (Long) -> Unit = {},
-    replyPages: ForumReplyPageCache = rememberForumReplyPages(postId, root.id, viewer?.userId, viewer?.role, version),
+    replyPages: ForumReplyPageCache = rememberForumReplyPages(postId, root.id, viewer?.userId, viewer?.role, version, initialRoots = listOf(root)),
     loadReplies: suspend (Int) -> ForumPage<ForumComment>,
     render: @Composable (ForumComment, Boolean, (@Composable () -> Unit)?) -> Unit
 ) {

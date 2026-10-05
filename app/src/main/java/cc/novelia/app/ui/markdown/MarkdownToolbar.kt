@@ -57,7 +57,7 @@ internal fun TextFieldValue.format(template: MarkdownTemplate, limit: Int): Text
     if (help) AppAlertDialog(onDismissRequest = { help = false }, title = { Text("Markdown 格式帮助") },
         text = {
             AppScrollColumn(contentModifier = Modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("选中文字后点击图标套用格式，再次点击可取消。评分数字可改为 0～5，支持半星；折叠内容默认收起。")
+                Text("选中文字后点击图标套用格式，再次点击可取消。选中单行文字后粘贴 HTTP(S) 网址可自动生成链接。评分数字可改为 0～5，支持半星；折叠内容默认收起。")
                 SelectionContainer {
                     Text("**粗体**\n*斜体*\n~~删除线~~\n[文字](https://n.novelia.cc/)\n!!剧透!!\n\n::: star 4.5\n\n::: details 点击展开\n折叠内容\n:::\n\n# 标题\n\n- 无序列表\n1. 有序列表\n\n> 引用\n\n---\n\n![图片说明](图片链接)\n\n| 左对齐 | 居中 | 右对齐 |\n| :- | :-: | -: |\n| 文本 | 文本 | 文本 |", fontFamily = FontFamily.Monospace)
                 }
@@ -65,12 +65,13 @@ internal fun TextFieldValue.format(template: MarkdownTemplate, limit: Int): Text
         }, confirmButton = { TextButton(onClick = { help = false }) { Text("知道了") } })
 }
 
-@Composable internal fun MarkdownCommentInput(text: String, onTextChange: (String) -> Unit, label: String, isError: Boolean = false, softLimit: Boolean = false, sendButton: @Composable () -> Unit) {
+@Composable internal fun MarkdownCommentInput(text: String, onTextChange: (String) -> Unit, label: String, isError: Boolean = false, softLimit: Boolean = false, unicodeLimit: Int? = null, sendButton: @Composable () -> Unit) {
     var source by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue(text)) }
     var toolbarSelection by remember(text) { mutableStateOf<TextFieldValue?>(null) }
     val current = if (source.text == text) source else TextFieldValue(text, TextRange(source.selection.start.coerceAtMost(text.length), source.selection.end.coerceAtMost(text.length)))
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
+    var focused by remember { mutableStateOf(false) }
     fun change(value: TextFieldValue) { if (softLimit || value.text.length <= 10000) { source = value; onTextChange(value.text) } }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         MarkdownToolbar({
@@ -81,13 +82,15 @@ internal fun TextFieldValue.format(template: MarkdownTemplate, limit: Int): Text
             keyboard?.show()
         })
         Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MarkdownLinkPaste(current, focused, unicodeLimit ?: 10000, unicodeLength = unicodeLimit != null) {
             OutlinedTextField(current, ::change, label = { Text(label) }, modifier = Modifier.weight(1f).focusRequester(focus).testTag("comment-body")
-                .onFocusChanged { if(it.isFocused) toolbarSelection = null }
+                .onFocusChanged { focused = it.isFocused; if(it.isFocused) toolbarSelection = null }
                 .onPreviewKeyEvent {
                     // TextField 失焦会收起选区，需在 Tab 转移焦点之前捕获。
                     if(it.type == KeyEventType.KeyDown && it.key == Key.Tab && !it.isCtrlPressed && !it.isAltPressed && !it.isMetaPressed) toolbarSelection = current
                     false
                 }, isError = isError, maxLines = 4)
+            }
             sendButton()
         }
     }

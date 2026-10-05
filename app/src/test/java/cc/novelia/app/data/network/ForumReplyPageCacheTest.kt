@@ -21,6 +21,55 @@ class ForumReplyPageCacheTest {
         12, postId = 5, rootId = 8, content = content, authorId = 42, authorUsername = "回复者", status = 0,
         createdAt = "2026-09-30T00:00:00Z", updatedAt = "2026-09-30T00:00:00Z")))
 
+    private fun root(first: ForumPage<ForumComment>?) = result("根评论").items.single().copy(
+        id = 8, rootId = null, replyCount = first?.total, replies = first)
+
+    @Test fun embeddedFirstPageAvoidsAReadAndDoesNotReplaceNewerPageTotals() = runTest {
+        val first = ForumPage(21, (12L..31L).map { result("首屏 $it").items.single().copy(id = it) })
+        val cache = ForumReplyPageCache(this)
+        try {
+            assertTrue(cache.seedFirstPage(root(first)))
+            assertEquals(first, cache.load(8, 0) { error("首屏不应再请求") })
+            assertEquals("第二页", cache.load(8, 1) { result("第二页", 22) }.items.single().content)
+            assertFalse(cache.seedFirstPage(root(first)))
+            assertEquals(22L, cache.peek(8, 0)?.total)
+        } finally { cache.close() }
+    }
+
+    @Test fun missingPartialAndMismatchedEmbeddedPagesUseTheIndependentEndpoint() = runTest {
+        val cache = ForumReplyPageCache(this)
+        try {
+            val invalid = listOf(root(null), root(result("不完整首屏")), root(result("错误根 ID", 1).let { page ->
+                page.copy(items = page.items.map { it.copy(rootId = 9) })
+            }), root(result("错误帖子", 1).let { page -> page.copy(items = page.items.map { it.copy(postId = 6) }) }),
+                root(ForumPage(2, List(2) { result("重复 ID").items.single() })), root(ForumPage(-1, emptyList())))
+            invalid.forEach { assertFalse(cache.seedFirstPage(it)) }
+            assertNull(cache.peek(8, 0))
+            assertEquals("回退读取", cache.load(8, 0) { result("回退读取", 1) }.items.single().content)
+        } finally { cache.close() }
+    }
+
+    @Test fun emptyEmbeddedPagesAreCachedAndCannotSurviveClosingTheScope() = runTest {
+        val cache = ForumReplyPageCache(this)
+        assertTrue(cache.seedFirstPage(root(ForumPage(0, emptyList()))))
+        assertEquals(0L, cache.load(8, 0) { error("明确零回复不应请求") }.total)
+        cache.close()
+        assertNull(cache.peek(8, 0))
+        assertFalse(cache.seedFirstPage(root(result("已失效的旧身份内容", 1))))
+    }
+
+    @Test fun lateEmbeddedSnapshotsCannotReplaceAnInFlightReplyRequest() = runTest {
+        val cache = ForumReplyPageCache(this)
+        val pending = CompletableDeferred<ForumPage<ForumComment>>()
+        try {
+            val request = async { cache.load(8, 0) { pending.await() } }
+            runCurrent()
+            assertFalse(cache.seedFirstPage(root(result("旧列表内容", 1))))
+            pending.complete(result("最新回复", 1))
+            assertEquals("最新回复", request.await().items.single().content)
+        } finally { cache.close() }
+    }
+
     @Test fun loadedPagesAreReusedAndSeparatedByThreadAndPage() = runTest {
         val cache = ForumReplyPageCache(this); var reads = 0
         try {
