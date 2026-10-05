@@ -24,6 +24,7 @@ import cc.novelia.app.ui.components.Screen
 import cc.novelia.app.ui.components.displayDate
 import cc.novelia.app.ui.markdown.MarkdownText
 import cc.novelia.app.ui.navigation.AppController
+import cc.novelia.app.ui.navigation.ObserveForumLogin
 import cc.novelia.app.ui.navigation.FORUM_FAVORITE_REQUEST
 import cc.novelia.app.ui.navigation.ForumFavoriteRequest
 import cc.novelia.app.ui.navigation.loginForForumFavorite
@@ -31,6 +32,7 @@ import cc.novelia.app.ui.theme.MotionContent
 
 @Composable fun ArticleScreen(c: AppController, id: String, navigationState: SavedStateHandle? = null) {
     val forumId = ForumLinks.postId(id)
+    if(forumId != null) ObserveForumLogin(c.session, c.forumSession)
     val session = if(forumId != null) c.forumSession else c.session
     val profile by session.profile.collectAsStateWithLifecycle()
     val binding = session.capture()

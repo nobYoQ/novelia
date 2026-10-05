@@ -19,6 +19,7 @@ import cc.novelia.app.ui.components.friendlyMessage
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.navigation.finishLoginNavigation
 import cc.novelia.app.ui.theme.appReducedMotion
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 @SuppressLint("SetJavaScriptEnabled")
@@ -27,6 +28,29 @@ import kotlinx.coroutines.launch
         MirrorLoginScreen(c)
         return
     }
+    if(forum) ForumLoginScreen(c) else WebLoginScreen(c)
+}
+
+@Composable private fun ForumLoginScreen(c: AppController) {
+    var checking by remember { mutableStateOf(true) }
+    DisposableEffect(c) { onDispose { c.afterLogin = null } }
+    LaunchedEffect(c.forumSession) {
+        val signedIn = try { c.forumSession.loginFromSharedAuth(c.session, explicit = true) }
+            catch(error: CancellationException) { throw error }
+            catch(_: Exception) { false }
+        // 社区自动登录可能已完成；复用其会话，避免再次显示认证页。
+        if(signedIn || c.forumSession.profile.value != null) finishLoginNavigation(c, forum = true) else checking = false
+    }
+    if(checking) Screen("登录 Novelia 论坛", c::back) { padding ->
+        Column(Modifier.padding(padding).padding(20.dp)) {
+            Text("正在恢复登录状态…")
+            if(!appReducedMotion()) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 12.dp))
+        }
+    } else WebLoginScreen(c, forum = true)
+}
+
+@SuppressLint("SetJavaScriptEnabled")
+@Composable private fun WebLoginScreen(c: AppController, forum: Boolean = false) {
     val loginSession = if(forum) c.forumSession else c.session
     val target = loginSession.target
     var busy by remember { mutableStateOf(false) }; var error by remember { mutableStateOf<String?>(null) }; var loading by remember { mutableStateOf(true) }; val scope = rememberCoroutineScope()

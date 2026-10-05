@@ -2,7 +2,7 @@
 
 [网络目录](README.md) · [文档首页](../README.md)
 
-应用分别保存小说原站、镜像和独立论坛的登录状态。它们可能使用同一套账号体系，但客户端令牌与请求归属不同。主要实现是 [Session.kt](../../app/src/main/java/cc/novelia/app/data/auth/Session.kt) 和 [LoginScreen.kt](../../app/src/main/java/cc/novelia/app/ui/account/LoginScreen.kt)。
+应用分别保存小说原站、镜像和独立论坛的登录状态。原站与论坛共用统一认证，客户端令牌与请求归属不同。主要实现是 [Session.kt](../../app/src/main/java/cc/novelia/app/data/auth/Session.kt) 和 [LoginScreen.kt](../../app/src/main/java/cc/novelia/app/ui/account/LoginScreen.kt)。
 
 ## 三种登录入口
 
@@ -16,6 +16,14 @@
 
 自动回调不可用时，“完成登录”按钮走同一刷新过程。镜像表单成功后可直接接收 JWT，或用镜像认证 Cookie 刷新，具体字段见[书源线路](../development/book-source-mirrors.md)。
 
+## 进入论坛自动登录
+
+原站已登录、论坛尚未登录时，社区、论坛文章、发帖及处罚记录页面进入前台会尝试复用统一认证 Cookie，调用 `app=f` 的刷新接口获取独立论坛令牌，成功后直接显示登录状态。共享 Cookie 返回的账号必须与当前原站账号一致；请求途中退出原站、切换小说来源或退出论坛后，旧结果不能提交。
+
+自动认证失败时仍可匿名浏览；收藏、评论、发帖等需要登录的操作会进入论坛登录入口。该入口先尝试恢复统一认证，成功后返回并继续原操作，失败后才加载 WebView 认证页。主动退出论坛会持久保存暂停自动登录的标记，重启仍有效；用户主动选择论坛登录并成功取得令牌后解除标记。
+
+镜像登录不会自动登录原站论坛。用户主动进入论坛登录入口时，仍可复用原站统一认证 Cookie；镜像凭据不发送给论坛。已有论坛会话继续独立管理，小说书源切换不影响其令牌或续期。
+
 ## 凭据保存与退出
 
 访问令牌经 Android Keystore 的 AES-GCM 密钥加密，保存在对应私有首选项。原站与镜像分开保存，论坛还使用独立密钥别名。镜像刷新 Cookie 同样加密；统一认证 Cookie 由 WebView CookieManager 管理，不能声称它们都使用相同存储方式。
@@ -25,6 +33,7 @@
 - 退出小说服务不会退出论坛，反之亦然。
 - 退出镜像会清除它自己的令牌和已保存认证 Cookie。
 - 已退出的会话不会因普通匿名请求的 401 自动重新登录。
+- 主动退出论坛后，进入论坛页面也不会自动登回，直到用户再次主动登录。
 - 用户主动打开登录页时，仍可能复用已有 SSO 状态。
 
 书架、笔记、草稿、本地文件和章节缓存属于设备资料，退出后继续保留。阅读资料备份和普通设置均不携带凭据。
@@ -68,4 +77,4 @@ JWT 字段用于展示用户名、角色和有效期，客户端解析不等于�
 | “账号或书源已变化” | 请求是否跨越退出、重登或线路切换 |
 | 退出后仍显示本地书籍 | 这是设备资料保留，检查会话状态即可 |
 
-回归入口：JVM `SessionIsolationTest`、`ApiContractTest`，设备 `MirrorSessionTest`、`ForumSessionIsolationTest`。真实认证页面测试默认关闭，命令见[测试指南](../quality/testing.md)。不要在日志或夹具里保存真实 Cookie、密码和令牌。
+回归入口：JVM `SessionIsolationTest`、`ApiContractTest`，设备 `MirrorSessionTest`、`ForumSessionIsolationTest`、`ForumSharedAuthTest`。真实认证页面测试默认关闭，命令见[测试指南](../quality/testing.md)。不要在日志或夹具里保存真实 Cookie、密码和令牌。

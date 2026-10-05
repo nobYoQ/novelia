@@ -23,7 +23,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
-/** 原站、镜像及论坛分别登录和加密保存；论坛会话不受小说书源切换影响。 */
+/** 原站、镜像及论坛分别加密保存令牌；论坛可复用原站统一认证，会话不受小说书源切换影响。 */
 class Session(context: Context, private val client: OkHttpClient = OkHttpClient.Builder().followRedirects(false).build(),
     sources: BookSources? = null,
     override val target: AuthTarget = AuthTarget.NOVEL,
@@ -93,7 +93,9 @@ class Session(context: Context, private val client: OkHttpClient = OkHttpClient.
             preferences.getValue(source).edit().putString("cookies", cipher.encrypt(saved)).apply()
         }
     }
-    private suspend fun refreshRequest(binding: SessionBinding, allowAccountChange: Boolean): Boolean {
+    private suspend fun refreshRequest(binding: SessionBinding, allowAccountChange: Boolean,
+        sharedAuth: Pair<Session, SessionBinding>? = null,
+    ): Boolean {
         val context = currentCoroutineContext()
         context.ensureActive()
         val request = current(binding) { selected ->
@@ -113,20 +115,46 @@ class Session(context: Context, private val client: OkHttpClient = OkHttpClient.
             ensureCurrent(binding)
             if(!response.isSuccessful) {
                 if(response.code == 401) current(binding) { selected ->
-                    state.clear(local(binding)) { preferences.getValue(selected.source).edit().remove("value").apply() }
+                    // 匿名认证失败不改变会话代次，避免同时进行的公开读取被无故作废。
+                    if(state.tokenFor(local(binding)) != null)
+                        state.clear(local(binding)) { preferences.getValue(selected.source).edit().remove("value").apply() }
                 }
                 return@awaitBody false
             }
             val value = response.body?.string()?.trim() ?: return@awaitBody false
             val user = runCatching { parse(value) }.getOrElse { throw ApiException(502, "认证服务未返回有效的登录令牌，请稍后重试") }
             context.ensureActive()
-            current(binding) { selected ->
-                state.commit(local(binding), value, user, allowAccountChange) {
-                    preferences.getValue(selected.source).edit().putString("value", cipher.encrypt(value)).apply()
-                    acceptCookies(selected.source, request.url.toString(), response.headers.values("Set-Cookie"))
+            val commit = {
+                current(binding) { selected ->
+                    state.commit(local(binding), value, user, allowAccountChange) {
+                        preferences.getValue(selected.source).edit().putString("value", cipher.encrypt(value))
+                            .remove(AUTO_LOGIN_DISABLED).apply()
+                        acceptCookies(selected.source, request.url.toString(), response.headers.values("Set-Cookie"))
+                    }
+                }
+            }
+            if(sharedAuth == null) commit() else {
+                val (main, mainBinding) = sharedAuth
+                main.current(mainBinding) {
+                    // 共享 Cookie 可能属于另一账号；不能把它静默绑定到已登录的原站账号。
+                    if(mainBinding.source == BookSource.ORIGINAL.id && mainBinding.account != null && mainBinding.account != user.username) false
+                    else commit()
                 }
             }
         }
+    }
+    /** 自动复用已登录原站的认证；显式论坛登录也可复用 Cookie，并解除主动退出状态。 */
+    suspend fun loginFromSharedAuth(main: Session, explicit: Boolean = false): Boolean {
+        require(target == AuthTarget.FORUM && main.target == AuthTarget.NOVEL)
+        val binding = capture()
+        val mainBinding = main.capture()
+        return withContext(Dispatchers.IO) { refreshLock.withLock {
+            if(tokenFor(binding) != null) return@withLock true
+            if(!explicit && (preferences.getValue(BookSource.ORIGINAL).getBoolean(AUTO_LOGIN_DISABLED, false) ||
+                    mainBinding.source != BookSource.ORIGINAL.id || mainBinding.account == null)) return@withLock false
+            main.ensureCurrent(mainBinding)
+            refreshRequest(binding, allowAccountChange = true, sharedAuth = main to mainBinding)
+        } }
     }
     /** 原站网页或镜像原生表单完成认证后，从当前来源获取应用令牌。 */
     suspend fun refresh(): Boolean {
@@ -192,6 +220,12 @@ class Session(context: Context, private val client: OkHttpClient = OkHttpClient.
     // 服务端只提供全局 SSO 退出；本地退出保留另一应用的访问令牌和刷新 Cookie，
     // 后续显式登录仍可复用 SSO。clear 会立即使当前会话的旧刷新失效。
     suspend fun logout() = withContext(Dispatchers.IO) { clear() }
-    fun clear() { val selected = sources.capture(); sources.withSelection(selected) { state.clear { preferences.getValue(selected.source).edit().clear().apply() } } }
-    companion object { const val AUTH_URL = "https://auth.novelia.cc" }
+    fun clear() { val selected = sources.capture(); sources.withSelection(selected) { state.clear {
+        preferences.getValue(selected.source).edit().clear()
+            .apply { if(target == AuthTarget.FORUM) putBoolean(AUTO_LOGIN_DISABLED, true) }.apply()
+    } } }
+    companion object {
+        const val AUTH_URL = "https://auth.novelia.cc"
+        private const val AUTO_LOGIN_DISABLED = "auto-login-disabled"
+    }
 }

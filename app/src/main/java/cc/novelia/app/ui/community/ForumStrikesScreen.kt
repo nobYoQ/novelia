@@ -6,6 +6,7 @@ import cc.novelia.app.ui.components.EmptyState
 import cc.novelia.app.ui.components.PageControls
 import cc.novelia.app.ui.components.Screen
 import cc.novelia.app.ui.navigation.AppController
+import cc.novelia.app.ui.navigation.ObserveForumLogin
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -25,6 +26,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 @Composable internal fun ForumStrikesScreen(c: AppController) {
+    ObserveForumLogin(c.session, c.forumSession)
     val profile by c.forumSession.profile.collectAsStateWithLifecycle()
     val binding = c.forumSession.capture()
     var page by rememberSaveable(binding) { mutableIntStateOf(0) }

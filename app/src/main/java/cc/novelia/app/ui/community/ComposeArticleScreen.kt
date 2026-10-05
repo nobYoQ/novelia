@@ -29,6 +29,7 @@ import cc.novelia.app.ui.markdown.MarkdownText
 import cc.novelia.app.ui.markdown.rememberDraftPersistence
 import cc.novelia.app.ui.markdown.rememberMarkdownRenderer
 import cc.novelia.app.ui.navigation.AppController
+import cc.novelia.app.ui.navigation.ObserveForumLogin
 import cc.novelia.app.ui.theme.MotionContent
 import kotlinx.serialization.encodeToString
 
@@ -38,7 +39,9 @@ import kotlinx.serialization.encodeToString
         else ForumLinks.postId(articleId) != null
     val newPostKey = rememberSaveable(articleId, requestedKey) { requestedKey ?: ArticleDrafts.newKey(forum) }
     if(forum) {
-        AsyncContent(listOf("forum-editor", articleId), load = { c.forumApi.categories() to articleId?.let { c.article(it) } }) { (available, article), _ ->
+        ObserveForumLogin(c.session, c.forumSession)
+        val profile by c.forumSession.profile.collectAsStateWithLifecycle()
+        AsyncContent(listOf("forum-editor", articleId, c.forumSession.capture(), profile?.role), load = { c.forumApi.categories() to articleId?.let { c.article(it) } }) { (available, article), _ ->
             if(available.isEmpty()) EmptyState("论坛还没有分类", "暂时不能发布帖子。", Icons.Outlined.Forum)
             else ArticleEditor(c, article, available, forum = true, newPostKey = newPostKey)
         }

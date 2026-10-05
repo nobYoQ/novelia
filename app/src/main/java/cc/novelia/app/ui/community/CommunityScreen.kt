@@ -3,6 +3,7 @@ package cc.novelia.app.ui.community
 
 import cc.novelia.app.data.model.ForumSort
 import cc.novelia.app.data.model.ForumCategory
+import cc.novelia.app.data.auth.SessionChangedException
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
@@ -31,13 +32,19 @@ import cc.novelia.app.ui.components.Screen
 import cc.novelia.app.ui.components.displayDate
 import cc.novelia.app.ui.components.rememberDebouncedQuery
 import cc.novelia.app.ui.navigation.AppController
+import cc.novelia.app.ui.navigation.ObserveForumLogin
 import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.MotionContent
 import cc.novelia.app.ui.theme.appReducedMotion
 import cc.novelia.app.ui.theme.motionClickable
 
 @Composable fun CommunityScreen(c: AppController) {
-    AsyncContent("forum-categories", load = { c.forumApi.categories() }) { available, _ ->
+    ObserveForumLogin(c.session, c.forumSession)
+    AsyncContent("forum-categories", load = {
+        // 分类是公开元数据。初次加载碰到自动登录时重取一次，保留已显示的社区导航状态。
+        try { c.forumApi.categories() }
+        catch(_: SessionChangedException) { c.forumApi.categories() }
+    }) { available, _ ->
         if(available.isEmpty()) EmptyState("论坛还没有分类", "测试站正在准备内容。", Icons.Outlined.Forum)
         else ForumCommunity(c, available)
     }
