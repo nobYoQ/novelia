@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.data.model.ForumSort
+import cc.novelia.app.data.model.ForumComment
 import cc.novelia.app.data.model.ForumStrike
 import cc.novelia.app.data.model.Profile
 import cc.novelia.app.ui.theme.*
@@ -94,6 +95,34 @@ class ForumAccountUiTest {
         compose.onNodeWithText("测试处罚依据").assertIsDisplayed()
     }
 
+    @Test fun rulesAreAvailableToGuestsAndCloseThePanel() {
+        var action: ForumAccountAction? = null
+        compose.setContent { NoveliaTheme("light") { PanelScene(null) { action = it } } }
+        compose.onNodeWithTag("forum-account-toggle").performClick()
+        compose.onNodeWithText("社区守则").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(ForumAccountAction.RULES, action) }
+        compose.onNodeWithTag("forum-account-panel").assertDoesNotExist()
+    }
+
+    @Test fun onlyAdminCanExpandModeratedContentAndAccountChangeCollapsesIt() {
+        var viewer by mutableStateOf<Profile?>(profile.copy(role = "admin"))
+        var comment by mutableStateOf(ForumComment(1, content = "管理员可见原文", authorId = 42, authorUsername = "读者", status = 1,
+            createdAt = "2026-09-15T00:00:00Z", updatedAt = "2026-09-15T00:00:00Z"))
+        compose.setContent { NoveliaTheme("light") { Column { ForumCommentContent(comment, viewer) { Text(it) } } } }
+        compose.onNodeWithText("管理员可见原文").assertDoesNotExist()
+        compose.onNodeWithText("该评论已隐藏 · 查看原文").performClick()
+        compose.onNodeWithText("管理员可见原文").assertIsDisplayed()
+        compose.runOnIdle { viewer = profile }
+        compose.onNodeWithText("管理员可见原文").assertDoesNotExist()
+        compose.onNodeWithText("该评论已隐藏").assertIsDisplayed()
+        compose.runOnIdle { viewer = profile.copy(role = "admin"); comment = comment.copy(status = 2) }
+        compose.onNodeWithText("管理员可见原文").assertDoesNotExist()
+        compose.onNodeWithText("该评论已删除 · 查看原文").performClick()
+        compose.onNodeWithText("管理员可见原文").assertIsDisplayed()
+        compose.onNodeWithText("该评论已删除 · 收起原文").performClick()
+        compose.onNodeWithText("管理员可见原文").assertDoesNotExist()
+    }
+
     @Composable private fun PanelScene(user: Profile?, action: (ForumAccountAction) -> Unit) {
         Surface(Modifier.fillMaxSize()) {
             Column(Modifier.statusBarsPadding().navigationBarsPadding()) {
@@ -102,7 +131,7 @@ class ForumAccountUiTest {
                     ForumAccountMenu(user, action)
                 }
                 HorizontalDivider()
-                Text("小说讨论   使用指南   意见反馈", Modifier.padding(20.dp), style = MaterialTheme.typography.titleSmall)
+                Text("站务公告   小说讨论   意见反馈", Modifier.padding(20.dp), style = MaterialTheme.typography.titleSmall)
                 ForumStrikeCard(ForumStrike(2, "测试处罚记录", "测试处罚依据", 1, "2026-09-15T00:00:00Z", "2026-09-15T02:00:00Z"))
             }
         }

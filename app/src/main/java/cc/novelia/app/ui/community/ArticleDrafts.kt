@@ -4,7 +4,7 @@ import cc.novelia.app.data.storage.appJson
 import java.util.UUID
 
 internal data class ArticleDraft(val key: String, val title: String, val content: String, val category: String,
-    val categoryId: Long? = null, val tagIds: List<Long> = emptyList()) {
+    val categoryId: Long? = null, val tagIds: List<Long>? = null) {
     val displayTitle: String get() = title.ifBlank { "未命名草稿" }
 }
 
@@ -21,7 +21,7 @@ internal object ArticleDrafts {
         return ArticleDraft(key, fields?.get("title").orEmpty(), fields?.get("content") ?: snapshot,
             fields?.get("category")?.takeIf { it in categories } ?: "General",
             fields?.get("categoryId")?.toLongOrNull(),
-            fields?.get("tagIds")?.split(',')?.mapNotNull { it.toLongOrNull() }.orEmpty())
+            fields?.get("tagIds")?.split(',')?.mapNotNull { it.toLongOrNull() })
     }
 
     fun newPosts(drafts: Map<String, String>): List<ArticleDraft> = drafts.entries

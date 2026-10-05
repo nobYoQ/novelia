@@ -22,7 +22,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /** 尺寸变化时保留同一输入缓冲区，包括输入法组合文本和选区。 */
-@Composable internal fun MarkdownEditor(text: String, onTextChange: (String) -> Unit, maxEditorHeight: Dp) {
+@Composable internal fun MarkdownEditor(text: String, onTextChange: (String) -> Unit, maxEditorHeight: Dp, unicodeLimit: Int? = null) {
+    // Unicode 软限制允许用户缩短既有超长论坛草稿，避免自动截断内容。
+    val length = if(unicodeLimit != null) text.codePointCount(0, text.length) else text.length
+    val limit = unicodeLimit ?: 20000
     var source by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue(text)) }
     var toolbarSelection by remember(text) { mutableStateOf<TextFieldValue?>(null) }
     val current = if (source.text == text) source else TextFieldValue(text,
@@ -46,14 +49,14 @@ import androidx.compose.ui.unit.dp
         MarkdownToolbar({
             val selected = toolbarSelection?.takeIf { it.text == current.text } ?: current
             toolbarSelection = null
-            val formatted = selected.format(it, 20000)
+            val formatted = selected.format(it, if(unicodeLimit != null) Int.MAX_VALUE else 20000)
             source = formatted
             onTextChange(formatted.text)
             focus.requestFocus()
             keyboard?.show()
         })
         OutlinedTextField(current, {
-            if (it.text.length <= 20000) { source = it; onTextChange(it.text) }
+            if (unicodeLimit != null || it.text.length <= 20000) { source = it; onTextChange(it.text) }
         }, modifier = Modifier.fillMaxWidth().heightIn(max = inputHeight).testTag("article-body")
             .focusRequester(focus)
             .onFocusChanged { focused = it.isFocused; if(it.isFocused) toolbarSelection = null }
@@ -63,8 +66,8 @@ import androidx.compose.ui.unit.dp
                 false
             },
             placeholder = { Text("写下你的想法…") }, minLines = minOf(6, visibleLines), maxLines = visibleLines,
-            textStyle = MaterialTheme.typography.bodyLarge)
+            isError = length > limit, textStyle = MaterialTheme.typography.bodyLarge)
         }
-        Text("${text.length} / 20000", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("$length / $limit", style = MaterialTheme.typography.bodySmall, color = if(length > limit) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

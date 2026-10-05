@@ -65,18 +65,18 @@ internal fun TextFieldValue.format(template: MarkdownTemplate, limit: Int): Text
         }, confirmButton = { TextButton(onClick = { help = false }) { Text("知道了") } })
 }
 
-@Composable internal fun MarkdownCommentInput(text: String, onTextChange: (String) -> Unit, label: String, sendButton: @Composable () -> Unit) {
+@Composable internal fun MarkdownCommentInput(text: String, onTextChange: (String) -> Unit, label: String, isError: Boolean = false, softLimit: Boolean = false, sendButton: @Composable () -> Unit) {
     var source by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue(text)) }
     var toolbarSelection by remember(text) { mutableStateOf<TextFieldValue?>(null) }
     val current = if (source.text == text) source else TextFieldValue(text, TextRange(source.selection.start.coerceAtMost(text.length), source.selection.end.coerceAtMost(text.length)))
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
-    fun change(value: TextFieldValue) { if (value.text.length <= 10000) { source = value; onTextChange(value.text) } }
+    fun change(value: TextFieldValue) { if (softLimit || value.text.length <= 10000) { source = value; onTextChange(value.text) } }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         MarkdownToolbar({
             val selected = toolbarSelection?.takeIf { it.text == current.text } ?: current
             toolbarSelection = null
-            change(selected.format(it, 10000))
+            change(selected.format(it, if(softLimit) Int.MAX_VALUE else 10000))
             focus.requestFocus()
             keyboard?.show()
         })
@@ -87,7 +87,7 @@ internal fun TextFieldValue.format(template: MarkdownTemplate, limit: Int): Text
                     // TextField 失焦会收起选区，需在 Tab 转移焦点之前捕获。
                     if(it.type == KeyEventType.KeyDown && it.key == Key.Tab && !it.isCtrlPressed && !it.isAltPressed && !it.isMetaPressed) toolbarSelection = current
                     false
-                }, maxLines = 4)
+                }, isError = isError, maxLines = 4)
             sendButton()
         }
     }

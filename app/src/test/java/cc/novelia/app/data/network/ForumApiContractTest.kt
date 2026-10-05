@@ -185,6 +185,58 @@ class ForumApiContractTest {
         }
     }
 
+    @Test fun currentCategoriesPutAnnouncementsFirstWithoutDroppingFutureCategories() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""[{"id":1,"slug":"novel"},{"id":2,"slug":"announcements"},{"id":3,"slug":"feedback"},{"id":4,"slug":"future"}]"""))
+            val categories = api(server).categories()
+            assertEquals(listOf(2L, 1L, 3L, 4L), categories.map { it.id })
+            assertEquals("站务公告", categories.first().title)
+            assertEquals("站务公告", appJson.decodeFromString<ForumPost>(post).copy(categoryId = 2).article(categories).category)
+        }
+    }
+
+    @Test fun invalidWritesAreRejectedBeforeSendingAndValidUnicodeStillReachesServer() = runBlocking {
+        MockWebServer().use { server ->
+            val client = api(server)
+            val input = ForumPostInput(1, "标题", "正文")
+            for(invalid in listOf(input.copy(title = "字"), input.copy(content = "字".repeat(20001)), input.copy(tagIds = listOf(1, 2, 3, 4)))) {
+                assertTrue(runCatching { client.createPost(invalid) }.exceptionOrNull() is IllegalArgumentException)
+                assertTrue(runCatching { client.updatePost(1, invalid) }.exceptionOrNull() is IllegalArgumentException)
+            }
+            assertTrue(runCatching { client.createComment(1, ForumCommentInput("字".repeat(1001))) }.exceptionOrNull() is IllegalArgumentException)
+            assertTrue(runCatching { client.updateComment(1, " ") }.exceptionOrNull() is IllegalArgumentException)
+            assertTrue(runCatching { client.createComment(1, ForumCommentInput("评论", 0)) }.exceptionOrNull() is IllegalArgumentException)
+            assertEquals(0, server.requestCount)
+            server.enqueue(MockResponse().setBody(comment))
+            val unicode = "😀".repeat(1000)
+            client.updateComment(1, unicode)
+            val body = appJson.parseToJsonElement(server.takeRequest().body.readUtf8()).jsonObject
+            assertEquals(JsonPrimitive(unicode), body["content"])
+            assertEquals(setOf("content"), body.keys)
+        }
+    }
+
+    @Test fun forumValidationErrorsExplainDomainFilteringAndExpiredDeletionWithoutRetrying() = runBlocking {
+        MockWebServer().use { server ->
+            val client = api(server)
+            server.enqueue(MockResponse().setResponseCode(400).setHeader("Content-Type", "text/plain; charset=utf-8").setBody("content 包含禁止使用的域名"))
+            val blocked = runCatching { client.createPost(ForumPostInput(1, "标题", "正文")) }.exceptionOrNull() as ApiException
+            assertEquals(400, blocked.status)
+            assertEquals("正文包含禁止使用的域名", blocked.message)
+            server.enqueue(MockResponse().setResponseCode(403).setHeader("Content-Type", "text/plain").setBody("帖子只能在发布后 20 分钟内删除"))
+            assertEquals("帖子只能在发布后 20 分钟内删除", runCatching { client.deletePost(1) }.exceptionOrNull()?.message)
+            server.enqueue(MockResponse().setResponseCode(400).setHeader("Content-Type", "text/html").setBody("<html>proxy failure</html>"))
+            assertFalse(runCatching { client.deletePost(1) }.exceptionOrNull()!!.message!!.contains("proxy"))
+            server.enqueue(MockResponse().setResponseCode(500).setHeader("Content-Type", "text/plain").setBody("internal details"))
+            assertFalse(runCatching { client.deletePost(1) }.exceptionOrNull()!!.message!!.contains("internal"))
+            assertEquals(4, server.requestCount)
+            // The shared main-site client retains its own generic error behavior.
+            server.enqueue(MockResponse().setResponseCode(400).setHeader("Content-Type", "text/plain").setBody("forum-only explanation"))
+            val main = NoveliaApi(null, server.url("/api/").toString())
+            assertFalse(runCatching { main.request("POST", "article", "{}") }.exceptionOrNull()!!.message!!.contains("forum-only"))
+        }
+    }
+
     @Test fun oldSavedArticlesAndNewLinksKeepSeparateIdentities() {
         val old = appJson.decodeFromString<Article>("""{"id":"abc123","category":"General","title":"旧收藏"}""")
         assertNull(old.forumCategoryId)

@@ -3,6 +3,7 @@ package cc.novelia.app.ui.community
 
 import cc.novelia.app.data.model.ForumSort
 import cc.novelia.app.data.model.ForumCategory
+import cc.novelia.app.data.catalog.ForumLinks
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
@@ -41,6 +42,9 @@ import cc.novelia.app.ui.theme.motionClickable
     var category by rememberSaveable { mutableStateOf(available.first().slug) }; var page by rememberSaveable { mutableIntStateOf(0) }; var search by rememberSaveable { mutableStateOf("") }; var saved by rememberSaveable { mutableStateOf(false) }
     var source by rememberSaveable { mutableIntStateOf(0) }
     var sort by rememberSaveable { mutableStateOf(ForumSort.ACTIVE) }
+    LaunchedEffect(available) {
+        if(available.none { it.slug == category }) { category = available.first().slug; page = 0 }
+    }
     val profile by c.forumSession.profile.collectAsStateWithLifecycle()
     val state by c.store.state.collectAsStateWithLifecycle()
     var draftBoxOpen by rememberSaveable { mutableStateOf(false) }
@@ -55,6 +59,7 @@ import cc.novelia.app.ui.theme.motionClickable
                 ForumAccountAction.FAVORITES -> c.requireForumLogin { showFeed(1) }
                 ForumAccountAction.LOCAL -> showFeed(0, local = true)
                 ForumAccountAction.STRIKES -> c.requireForumLogin { c.go("forum-strikes") }
+                ForumAccountAction.RULES -> c.openMarkdownLink("${ForumLinks.ORIGIN}/rules")
                 ForumAccountAction.LOGOUT -> c.action("已退出论坛登录") { c.forumSession.logout(); showFeed(0) }
             }
         }

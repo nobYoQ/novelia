@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.model.Article
+import cc.novelia.app.data.model.ForumRules
 import cc.novelia.app.ui.components.AppLazyColumn
 import cc.novelia.app.ui.components.AsyncContent
 import cc.novelia.app.ui.components.ConfirmDialog
@@ -30,11 +31,12 @@ import cc.novelia.app.ui.theme.appReducedMotion
 @Composable fun ArticleScreen(c: AppController, id: String) {
     val forumId = ForumLinks.postId(id)
     val profile by (if(forumId != null) c.forumSession else c.session).profile.collectAsStateWithLifecycle(); val state by c.store.state.collectAsStateWithLifecycle()
-    var tab by rememberSaveable(id) { mutableIntStateOf(0) }; var deletion by remember { mutableStateOf(false) }
+    var tab by rememberSaveable(id) { mutableIntStateOf(0) }; var deletion by remember(id) { mutableStateOf<Article?>(null) }
     val tabState = rememberSaveableStateHolder()
     val reducedMotion = appReducedMotion()
     Screen("文章", c::back, actions = { IconButton(onClick = { c.share(ForumLinks.articleUrl(id)) }) { Icon(Icons.Outlined.Share, "分享文章") } }) { padding ->
-        AsyncContent(listOf(id, profile?.username), load = { c.article(id) }, modifier = Modifier.padding(padding)) { article, _ ->
+        AsyncContent(listOf(id, profile?.username, profile?.userId, profile?.role), load = { c.article(id) }, modifier = Modifier.padding(padding)) { article, _ ->
+            val now = rememberForumModificationTime(article.createAt)
             var cloudSaved by remember(article) { mutableStateOf(article.forumFavorited) }
             var saving by remember { mutableStateOf(false) }
             Column {
@@ -56,7 +58,12 @@ import cc.novelia.app.ui.theme.appReducedMotion
                                     Spacer(Modifier.width(8.dp))
                                     Text(if(saved) "取消收藏" else "收藏文章")
                                 }
-                                if(if(forumId != null) profile?.userId != null && profile?.userId == article.forumAuthorId else profile?.username == article.user.username) { TextButton(onClick = { c.go("compose?article=$id") }) { Text("编辑") }; TextButton(onClick = { deletion = true }) { Text("删除") } }
+                                if(if(forumId != null) ForumRules.canEditPost(article, profile) else profile?.username == article.user.username) {
+                                    TextButton(onClick = { c.go("compose?article=$id") }) { Text("编辑") }
+                                }
+                                if(if(forumId != null) ForumRules.canDeletePost(article, profile, now) else profile?.username == article.user.username) {
+                                    TextButton(onClick = { deletion = article }) { Text("删除") }
+                                }
                             } }
                             if(forumId != null) item { TextButton(enabled = !saving, onClick = { c.requireForumLogin { c.action { saving = true; try { c.forumApi.favorite(forumId, !cloudSaved); cloudSaved = !cloudSaved } finally { saving = false } } } }) { Text(if(cloudSaved) "取消云端收藏" else "收藏到论坛账号") } }
                         }
@@ -66,5 +73,11 @@ import cc.novelia.app.ui.theme.appReducedMotion
             }
         }
     }
-    if(deletion) ConfirmDialog("删除这篇文章？", "删除后将从原站移除，请确认已保存需要的内容。", { deletion = false }, confirmLabel = "删除文章") { c.action("文章已删除") { if(forumId != null) c.forumApi.deletePost(forumId) else c.api.request("DELETE", "article/$id"); c.back() } }
+    deletion?.let { article -> ConfirmDialog("删除这篇文章？", "请确认已保存需要的内容。", { deletion = null }, confirmLabel = "删除文章") { c.action("文章已删除") {
+        if(forumId != null) {
+            require(ForumRules.canDeletePost(article, c.forumSession.profile.value)) { "只有作者在发布后 20 分钟内或管理员可以删除帖子" }
+            c.forumApi.deletePost(forumId)
+        } else c.api.request("DELETE", "article/$id")
+        deletion = null; c.back()
+    } } }
 }

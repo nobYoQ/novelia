@@ -5,10 +5,11 @@ import cc.novelia.app.data.auth.AuthTarget
 import cc.novelia.app.data.model.*
 import cc.novelia.app.data.storage.appJson
 import kotlinx.serialization.encodeToString
+import okhttp3.Response
 
 class ForumApi(private val http: NoveliaApi) {
     init { require(http.session == null || (http.session as? ApiSession)?.target == AuthTarget.FORUM) { "论坛必须使用独立登录会话" } }
-    suspend fun categories() = http.get<List<ForumCategory>>("category/")
+    suspend fun categories() = http.get<List<ForumCategory>>("category/").sortedBy { it.displayOrder }
     private fun paging(page: Int, pageSize: Int): Map<String, String> {
         require(page >= 0 && page < Int.MAX_VALUE && pageSize in 1..100)
         return mapOf("page" to (page + 1).toString(), "page_size" to pageSize.toString())
@@ -21,19 +22,50 @@ class ForumApi(private val http: NoveliaApi) {
         })
     }
     suspend fun post(id: Long) = http.get<ForumPost>(postPath(id))
-    suspend fun createPost(input: ForumPostInput) = appJson.decodeFromString<ForumPost>(http.post("post/", input))
-    suspend fun updatePost(id: Long, input: ForumPostInput) = appJson.decodeFromString<ForumPost>(http.request("PATCH", postPath(id), appJson.encodeToString(input)))
-    suspend fun deletePost(id: Long) { http.request("DELETE", postPath(id)) }
+    suspend fun createPost(input: ForumPostInput): ForumPost {
+        requireValidPost(input)
+        return appJson.decodeFromString(mutate("POST", "post/", appJson.encodeToString(input)))
+    }
+    suspend fun updatePost(id: Long, input: ForumPostInput): ForumPost {
+        requireValidPost(input)
+        return appJson.decodeFromString(mutate("PATCH", postPath(id), appJson.encodeToString(input)))
+    }
+    suspend fun deletePost(id: Long) { mutate("DELETE", postPath(id)) }
     suspend fun favorites(page: Int) = http.get<ForumPage<ForumPost>>("me/favorite", paging(page, 20))
     suspend fun myPosts(page: Int) = http.get<ForumPage<ForumPost>>("me/post", paging(page, 20))
-    suspend fun favorite(id: Long, value: Boolean) { http.request(if(value) "PUT" else "DELETE", "${postPath(id)}favorite") }
+    suspend fun favorite(id: Long, value: Boolean) { mutate(if(value) "PUT" else "DELETE", "${postPath(id)}favorite") }
     suspend fun comments(id: Long, page: Int) = http.get<ForumPage<ForumComment>>("${postPath(id)}comment", paging(page, 20))
-    suspend fun createComment(id: Long, input: ForumCommentInput) = appJson.decodeFromString<ForumComment>(http.post("${postPath(id)}comment", input))
-    suspend fun updateComment(id: Long, content: String) = appJson.decodeFromString<ForumComment>(http.request("PATCH", "comment/${positive(id)}", appJson.encodeToString(mapOf("content" to content))))
-    suspend fun deleteComment(id: Long) { http.request("DELETE", "comment/${positive(id)}") }
+    suspend fun createComment(id: Long, input: ForumCommentInput): ForumComment {
+        requireValidComment(input.content)
+        require(input.rootId == null || input.rootId > 0) { "回复根评论 ID 必须为正整数" }
+        return appJson.decodeFromString(mutate("POST", "${postPath(id)}comment", appJson.encodeToString(input)))
+    }
+    suspend fun updateComment(id: Long, content: String): ForumComment {
+        requireValidComment(content)
+        // PATCH rejects rootId, including an explicit null.
+        return appJson.decodeFromString(mutate("PATCH", "comment/${positive(id)}", appJson.encodeToString(mapOf("content" to content))))
+    }
+    suspend fun deleteComment(id: Long) { mutate("DELETE", "comment/${positive(id)}") }
     // External novel comments exist on the preview server. Keep the subject key explicit until the main site migrates.
     suspend fun externalComments(subjectKey: String, page: Int) = http.get<ForumPage<ForumComment>>("external/comment/novel/${encodeSegment(subjectKey)}", paging(page, 20))
     private fun postPath(id: Long) = "post/${positive(id)}/"
     private fun positive(id: Long): Long { require(id > 0); return id }
+    private fun requireValidPost(input: ForumPostInput) { ForumRules.postError(input)?.let { throw IllegalArgumentException(it) } }
+    private fun requireValidComment(content: String) { ForumRules.contentError(content, comment = true)?.let { throw IllegalArgumentException(it) } }
+    private suspend fun mutate(method: String, path: String, body: String? = null) =
+        http.request(method, path, body, errorMessage = ::forumErrorMessage)
     companion object { const val BASE_URL = "https://forum.novelia.cc/api/v1/" }
+}
+
+/** The forum returns plain-text validation/permission errors, including domain filtering. */
+private fun forumErrorMessage(response: Response): String? {
+    if (response.code !in setOf(400, 403) || response.body?.contentType()?.let { it.type == "text" && it.subtype == "plain" } != true) return null
+    val message = response.peekBody(2048).string().trim()
+    if(message.isBlank() || message.length > 300 || '<' in message || '>' in message) return null
+    val contentLabel = if("comment" in response.request.url.pathSegments) "评论" else "正文"
+    return when {
+        message.startsWith("title ") -> "标题" + message.removePrefix("title ")
+        message.startsWith("content ") -> contentLabel + message.removePrefix("content ")
+        else -> message
+    }
 }

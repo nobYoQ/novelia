@@ -41,11 +41,11 @@ class NoveliaApi(val session: AuthenticationSession?, val baseUrl: String = "htt
     @Volatile var lastMutationAt: Long = 0L
         private set
     fun url(path: String, params: List<Pair<String, String>> = emptyList()): String = baseUrl.toHttpUrl().newBuilder().addEncodedPathSegments(path.trimStart('/')).apply { params.forEach { (k, v) -> addQueryParameter(k, v) } }.build().toString()
-    suspend fun request(method: String, path: String, body: String? = null, params: Map<String, String> = emptyMap(), contentType: String = "application/json", binding: SessionBinding? = session?.capture()): String = withContext(Dispatchers.IO) {
+    suspend fun request(method: String, path: String, body: String? = null, params: Map<String, String> = emptyMap(), contentType: String = "application/json", binding: SessionBinding? = session?.capture(), errorMessage: ((Response) -> String?)? = null): String = withContext(Dispatchers.IO) {
         val request = Request.Builder().url(url(path, params.toList())).header("Accept", "application/json")
             .method(method, if (method in listOf("GET", "HEAD")) null else (body ?: "").toRequestBody(contentType.toMediaType())).build()
         val text = withAuthenticatedResponse(request, binding) { response ->
-            if (!response.isSuccessful) throw apiError(response.code)
+            if (!response.isSuccessful) throw errorMessage?.invoke(response)?.let { ApiException(response.code, it) } ?: apiError(response.code)
             response.body?.string().orEmpty()
         }
         if (method !in listOf("GET", "HEAD")) recordMutation()

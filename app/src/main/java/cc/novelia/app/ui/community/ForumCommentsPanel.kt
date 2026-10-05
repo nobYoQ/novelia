@@ -3,6 +3,8 @@ package cc.novelia.app.ui.community
 import cc.novelia.app.data.catalog.ForumLinks
 import cc.novelia.app.data.model.ForumComment
 import cc.novelia.app.data.model.ForumCommentInput
+import cc.novelia.app.data.model.ForumRules
+import cc.novelia.app.data.model.Profile
 import cc.novelia.app.ui.components.AppLazyColumn
 import cc.novelia.app.ui.components.AsyncContent
 import cc.novelia.app.ui.components.EmptyState
@@ -21,6 +23,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
@@ -39,20 +42,20 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
     val documentUrl = ForumLinks.articleUrl(ForumLinks.localId(postId))
     val renderer = rememberMarkdownRenderer(c, documentUrl)
     Column(Modifier.fillMaxSize()) {
-        AsyncContent(listOf(postId, page, profile?.userId), refreshKey = version, load = { c.forumApi.comments(postId, page) }, modifier = Modifier.weight(1f)) { result, _ ->
+        AsyncContent(listOf(postId, page, profile?.userId, profile?.role), refreshKey = version, load = { c.forumApi.comments(postId, page) }, modifier = Modifier.weight(1f)) { result, _ ->
             val comments = result.items.filter { it.authorUsername !in state.blockedUsers }
             AppLazyColumn(contentPadding = PaddingValues(20.dp)) {
                 if(comments.isEmpty()) item { EmptyState("还没有讨论", "来分享你的感想吧。", Icons.Outlined.ChatBubbleOutline) }
                 items(comments, key = { it.id }) { comment ->
+                    val now = rememberForumModificationTime(comment.createdEpoch)
                     Column(Modifier.padding(start = if(comment.rootId == null) 0.dp else 16.dp, top = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("${comment.authorUsername} · ${displayDate(comment.createdEpoch)}", style = MaterialTheme.typography.labelLarge)
                         comment.rootId?.let { Text("回复 #$it", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                        if(comment.status != 0) Text(if(comment.status == 2) "该评论已删除" else "该评论已隐藏")
-                        else MarkdownText(c, comment.content, renderer = renderer, documentUrl = documentUrl)
+                        ForumCommentContent(comment, profile) { MarkdownText(c, it, renderer = renderer, documentUrl = documentUrl) }
                         Row {
                             if(!locked && comment.status == 0) TextButton(onClick = { editing = null; rootId = comment.replyRoot }) { Text("回复") }
-                            if(comment.canModify(profile)) {
-                                if(comment.status == 0) TextButton(onClick = { editing = comment; rootId = null }) { Text("编辑") }
+                            if(comment.status == 0 && comment.canModify(profile, now)) {
+                                if(ForumRules.canWrite(profile)) TextButton(onClick = { editing = comment; rootId = null }) { Text("编辑") }
                                 TextButton(onClick = { deleting = comment }) { Text("删除") }
                             } else if(comment.authorId != profile?.userId) TextButton(onClick = { c.store.update { it.copy(blockedUsers = it.blockedUsers + comment.authorUsername) } }) { Text("屏蔽用户") }
                         }
@@ -64,15 +67,23 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
         }
         if(locked && editing == null) Text("此讨论已锁定，暂时不能回复。", Modifier.padding(20.dp))
         else Column(Modifier.fillMaxWidth().imePadding().padding(12.dp)) {
+            ForumRulesReminder(c)
+            val commentContent = text.trim()
+            val commentError = ForumRules.contentError(commentContent, comment = true)
+            val canSend = profile == null || ForumRules.canWrite(profile)
+            val editNow = rememberForumModificationTime(editing?.createdEpoch ?: 0)
+            val canEditDraft = editing?.canModify(profile, editNow) != false
             if(rootId != null || editing != null) Row {
                 Text(if(editing != null) "编辑评论 #${editing?.id}" else "回复 #$rootId", Modifier.weight(1f))
                 TextButton(onClick = { rootId = null; editing = null }) { Text("取消") }
             }
-            MarkdownCommentInput(text, { value -> text = value; c.store.update { it.copy(drafts = it.drafts + (draftKey to value)) } }, if(editing != null) "编辑评论" else "写下评论") {
-                FilledIconButton(enabled = text.isNotBlank() && text.length <= 100000 && !sending, onClick = {
+            MarkdownCommentInput(text, { value -> text = value; c.store.update { it.copy(drafts = it.drafts + (draftKey to value)) } }, if(editing != null) "编辑评论" else "写下评论", isError = commentContent.isNotEmpty() && commentError != null, softLimit = true) {
+                FilledIconButton(enabled = commentError == null && canSend && canEditDraft && !sending, modifier = Modifier.testTag("forum-comment-submit"), onClick = {
                     // Login changes the account-specific draft key; retain the text being submitted.
                     val content = text.trim(); val submittedRoot = rootId; val submittedEdit = editing; val submittedDraft = draftKey
                     c.requireForumLogin { c.action {
+                        require(ForumRules.canWrite(c.forumSession.profile.value)) { "当前账号暂不具备评论权限，草稿已保留" }
+                        require(submittedEdit == null || submittedEdit.canModify(c.forumSession.profile.value)) { "评论只能在发布后 20 分钟内修改，管理员不受此限制。草稿已保留" }
                         sending = true
                         try {
                             if(submittedEdit != null) c.forumApi.updateComment(submittedEdit.id, content)
@@ -83,9 +94,29 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
                     } }
                 }) { Icon(Icons.Outlined.Send, if(editing != null) "保存评论" else "发送评论") }
             }
+            Text("${ForumRules.length(commentContent)} / ${ForumRules.COMMENT_LIMIT}", style = MaterialTheme.typography.bodySmall,
+                color = if(commentError != null && commentContent.isNotEmpty()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+            if(commentError != null && commentContent.isNotEmpty()) Text(commentError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            if(!canSend) Text("当前账号暂不具备评论权限，草稿会保存在此设备。", style = MaterialTheme.typography.bodySmall)
+            if(!canEditDraft) Text("评论修改时限已过，草稿已保留。", style = MaterialTheme.typography.bodySmall)
         }
     }
-    deleting?.let { comment -> ConfirmDialog("删除评论？", "评论只能在发布后 20 分钟内编辑或删除。", { deleting = null }) {
-        c.action { c.forumApi.deleteComment(comment.id); deleting = null; version++ }
+    deleting?.let { comment -> ConfirmDialog("删除评论？", "确定删除这条评论吗？", { deleting = null }, confirmLabel = "删除评论") {
+        c.action {
+            require(comment.canModify(c.forumSession.profile.value)) { "评论只能在发布后 20 分钟内删除，管理员不受此限制" }
+            c.forumApi.deleteComment(comment.id); deleting = null; version++
+        }
     } }
+}
+
+@Composable internal fun ForumCommentContent(comment: ForumComment, profile: Profile?, render: @Composable (String) -> Unit) {
+    var expanded by remember(comment.id, comment.status, profile?.userId, profile?.role) { mutableStateOf(false) }
+    if(comment.status == 0) render(comment.content)
+    else {
+        val label = if(comment.status == 2) "该评论已删除" else "该评论已隐藏"
+        if(profile?.role == "admin" && comment.content.isNotEmpty()) {
+            TextButton(onClick = { expanded = !expanded }) { Text("$label · ${if(expanded) "收起原文" else "查看原文"}") }
+            if(expanded) render(comment.content)
+        } else Text(label)
+    }
 }

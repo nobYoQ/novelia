@@ -4,6 +4,7 @@ package cc.novelia.app.ui.community
 import cc.novelia.app.data.catalog.ForumLinks
 import cc.novelia.app.data.model.ForumCategory
 import cc.novelia.app.data.model.ForumPostInput
+import cc.novelia.app.data.model.ForumRules
 import cc.novelia.app.ui.components.EmptyState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Forum
@@ -14,6 +15,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.model.Article
@@ -45,7 +47,8 @@ import kotlinx.serialization.encodeToString
 }
 @Composable internal fun ArticleEditor(c: AppController, article: Article?, forumCategories: List<ForumCategory> = emptyList(), forum: Boolean = false, newPostKey: String? = null) {
     val profile by (if(forum) c.forumSession else c.session).profile.collectAsStateWithLifecycle()
-    val canPublish = forum || profile == null || profile?.canPost == true
+    val canPublish = profile == null || if(forum) ForumRules.canWrite(profile) else profile?.canPost == true
+    val writableCategories = forumCategories.filter { ForumRules.canSelectCategory(it.id, profile) }
     val generatedKey = rememberSaveable(forum) { ArticleDrafts.newKey(forum) }
     val key = article?.id?.let { "article:$it" } ?: newPostKey ?: generatedKey
     val draft = remember(key) { c.store.state.value.drafts[key] }
@@ -53,10 +56,12 @@ import kotlinx.serialization.encodeToString
     var title by rememberSaveable(key) { mutableStateOf(saved?.title ?: article?.title.orEmpty()) }; var content by rememberSaveable(key) { mutableStateOf(saved?.content ?: article?.content.orEmpty()) }; var category by rememberSaveable(key) { mutableStateOf(saved?.category ?: article?.category ?: "General") }; var preview by rememberSaveable(key) { mutableStateOf(false) }; var sending by remember { mutableStateOf(false) }
     val persistenceError by c.store.persistenceError.collectAsStateWithLifecycle()
     val editorState = rememberSaveableStateHolder()
-    var categoryId by rememberSaveable(key) { mutableStateOf(saved?.categoryId ?: article?.forumCategoryId ?: forumCategories.firstOrNull()?.id) }
+    var categoryId by rememberSaveable(key) { mutableStateOf(saved?.categoryId ?: article?.forumCategoryId ?: writableCategories.firstOrNull { it.slug == "novel" }?.id ?: writableCategories.firstOrNull()?.id) }
     var tagIds by rememberSaveable(key) { mutableStateOf(saved?.tagIds ?: article?.forumTags?.map { it.id }.orEmpty()) }
-    val titleLimit = if(forum) 500 else 80
-    val contentLimit = if(forum) 1000000 else 20000
+    val titleLimit = if(forum) ForumRules.TITLE_LIMIT else 80
+    val titleLength = if(forum) ForumRules.length(title.trim()) else title.length
+    val forumError = if(forum) ForumRules.postError(ForumPostInput(categoryId ?: 0, title, content, tagIds)) else null
+    val categoryAllowed = !forum || writableCategories.any { it.id == categoryId }
 
     val renderer = rememberMarkdownRenderer(c, article?.id?.let(ForumLinks::articleUrl) ?: if(forum) ForumLinks.ORIGIN else null)
     val focusManager = LocalFocusManager.current
@@ -70,20 +75,24 @@ import kotlinx.serialization.encodeToString
         MotionContent(preview, Modifier.fillMaxSize(), animateInitial = false) {
             editorState.SaveableStateProvider(preview) {
                 AppScrollColumn(contentModifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    if(forum) ForumRulesReminder(c)
                     if(!canPublish) Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.medium) {
                         Text("当前账号暂不具备社区发布权限。你仍可编辑和预览，草稿会保存在此设备，获得权限后可以继续发布。", Modifier.padding(16.dp), style = MaterialTheme.typography.bodyMedium)
                     }
                     if(preview) { Text(title, style = MaterialTheme.typography.headlineMedium); MarkdownText(c, content, renderer = renderer, documentUrl = article?.id?.let(ForumLinks::articleUrl) ?: if(forum) ForumLinks.ORIGIN else null) }
                     else {
-                        OutlinedTextField(title, { if(it.length <= titleLimit) title = it }, label = { Text("标题") }, supportingText = { Text("${title.length} / $titleLimit") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                        OutlinedTextField(title, { if(forum || it.length <= titleLimit) title = it }, label = { Text("标题") }, supportingText = { Text("$titleLength / $titleLimit") }, isError = forum && title.isNotEmpty() && ForumRules.titleError(title) != null, modifier = Modifier.fillMaxWidth().testTag("article-title"), singleLine = true)
                         if(forum) {
-                            ChoiceRow("分类", forumCategories.map { it.title }, forumCategories.indexOfFirst { it.id == categoryId }) { categoryId = forumCategories[it].id; tagIds = emptyList() }
+                            ChoiceRow("分类", writableCategories.map { it.title }, writableCategories.indexOfFirst { it.id == categoryId }) { categoryId = writableCategories[it].id; tagIds = emptyList() }
+                            if(!categoryAllowed) Text(if(categoryId == ForumRules.ANNOUNCEMENTS_ID) "站务公告仅管理员可以发帖，请选择其他分类。" else "请选择可发布的分类。", color = MaterialTheme.colorScheme.error)
+                            Text("标签 ${tagIds.size} / ${ForumRules.TAG_LIMIT}", style = MaterialTheme.typography.labelMedium)
                             forumCategories.firstOrNull { it.id == categoryId }?.tags?.forEach { tag ->
-                                FilterChip(selected = tag.id in tagIds, onClick = { tagIds = if(tag.id in tagIds) tagIds - tag.id else tagIds + tag.id }, label = { Text(tag.name) })
+                                FilterChip(selected = tag.id in tagIds, enabled = tag.id in tagIds || tagIds.size < ForumRules.TAG_LIMIT, onClick = { tagIds = if(tag.id in tagIds) tagIds - tag.id else tagIds + tag.id }, label = { Text(tag.name) })
                             }
                         } else ChoiceRow("分类", categories.values.toList(), categories.keys.indexOf(category)) { category = categories.keys.elementAt(it) }
-                        MarkdownEditor(content, { content = it }, editorHeight)
+                        MarkdownEditor(content, { content = it }, editorHeight, unicodeLimit = if(forum) ForumRules.POST_LIMIT else null)
                     }
+                    if(forumError != null) Text(forumError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                     Text(persistenceError ?: if(article == null) "草稿自动保存在此设备，可从社区草稿箱继续写作。" else "草稿自动保存在此设备，重新编辑此帖时恢复。", style = MaterialTheme.typography.bodySmall, color = if(persistenceError == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error)
                     OutlinedButton(onClick = { c.action {
                         check(c.store.recoveryIssue.value == null) { "本地资料处于恢复保护状态，暂时无法保存草稿" }
@@ -92,11 +101,12 @@ import kotlinx.serialization.encodeToString
                     Button(onClick = {
                         draftPersistence.save()
                         val submit = { c.action {
-                            if(!forum) check(c.session.profile.value?.canPost == true) { "当前账号暂不具备社区发布权限，草稿已保留" }
+                            if(forum) require(ForumRules.canPublish(categoryId, c.forumSession.profile.value)) { "当前账号不能在此分类发帖，草稿已保留" }
+                            else check(c.session.profile.value?.canPost == true) { "当前账号暂不具备社区发布权限，草稿已保留" }
                             sending = true; try {
                             val submittedDraft = draftSnapshot()
                             val resultId = if(forum) {
-                                val input = ForumPostInput(requireNotNull(categoryId), title.trim(), content.trim(), tagIds)
+                                val input = ForumPostInput(requireNotNull(categoryId), title.trim(), content, tagIds)
                                 val result = if(article == null) c.forumApi.createPost(input) else c.forumApi.updatePost(requireNotNull(ForumLinks.postId(article.id)), input)
                                 ForumLinks.localId(result.id)
                             } else {
@@ -108,7 +118,7 @@ import kotlinx.serialization.encodeToString
                             c.go("article/$resultId", replaceTop = article != null && c.nav.currentDestination?.route == "article/{id}" && c.nav.currentBackStackEntry?.arguments?.getString("id") == article.id)
                         } finally { sending = false } } }
                         if(forum) c.requireForumLogin(submit) else c.requireLogin(submit)
-                    }, enabled = !sending && canPublish && title.trim().length in (if(forum) 1 else 2)..titleLimit && content.trim().length in (if(forum) 1 else 2)..contentLimit && (!forum || forumCategories.any { it.id == categoryId }), modifier = Modifier.fillMaxWidth()) { Text(if(sending) "正在提交…" else if(!canPublish) "暂不可发布 · 草稿已保留" else if(article == null) "发布到社区" else "保存修改") }
+                    }, enabled = !sending && canPublish && categoryAllowed && (if(forum) forumError == null else title.trim().length in 2..titleLimit && content.trim().length in 2..20000), modifier = Modifier.fillMaxWidth().testTag("article-submit")) { Text(if(sending) "正在提交…" else if(!canPublish) "暂不可发布 · 草稿已保留" else if(article == null) "发布到社区" else "保存修改") }
                 }
             }
         }
