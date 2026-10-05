@@ -4,7 +4,7 @@ import cc.novelia.app.data.catalog.ForumLinks
 import kotlinx.serialization.Serializable
 import java.time.Instant
 
-/** 合约核对于 auto-novel/forum 部署 36f8894（2026-10-04，北京时间）。 */
+/** 合约核对于 auto-novel/forum 部署 928185a（2026-10-05，北京时间）。 */
 @Serializable data class ForumPage<T>(val total: Long, val items: List<T>) {
     fun pageCount(pageSize: Int = 20): Int {
         require(pageSize > 0 && total >= 0)

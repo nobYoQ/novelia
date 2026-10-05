@@ -1,6 +1,8 @@
 package cc.novelia.app
 
 import cc.novelia.app.data.model.LibraryState
+import cc.novelia.app.data.model.ForumCategory
+import cc.novelia.app.data.model.ForumTag
 import cc.novelia.app.data.storage.appJson
 import cc.novelia.app.ui.community.ArticleDrafts
 import cc.novelia.app.ui.markdown.DraftPersistence
@@ -67,5 +69,30 @@ class ArticleDraftsTest {
         assertEquals("保留未能解析的原始正文", recovered.content)
         assertEquals("General", recovered.category)
         assertFalse(ArticleDrafts.isNewPostKey("article:new:other-editor"))
+    }
+
+    @Test fun numericOnlyForumDraftsKeepTextAndRequireCategoryConfirmation() {
+        val categories = listOf(ForumCategory(1, "announcements"), ForumCategory(2, "feedback"), ForumCategory(100, "novel"))
+        for(oldId in listOf(1, 2, 3, 100)) {
+            val text = appJson.encodeToString(mapOf("title" to "保留标题", "content" to "保留正文", "categoryId" to oldId.toString(), "tagIds" to "7,9"))
+            val draft = ArticleDrafts.read("article:forum-new", text)
+            assertEquals("保留标题", draft.title)
+            assertEquals("保留正文", draft.content)
+            assertNull(draft.forumCategory(categories))
+            assertTrue(draft.forumTags(categories).isEmpty())
+        }
+    }
+
+    @Test fun forumDraftsRestoreBySlugAndValidateTagsAgainstCurrentCategories() {
+        val categories = listOf(ForumCategory(1, "announcements"), ForumCategory(2, "feedback"),
+            ForumCategory(100, "novel", listOf(ForumTag(7, "有效标签"))))
+        val text = appJson.encodeToString(mapOf("title" to "保留标题", "content" to "保留正文",
+            "categoryId" to "1", "categorySlug" to "novel", "tagIds" to "7,9,7"))
+        val draft = ArticleDrafts.read("article:forum-new", text)
+        assertEquals(100L, draft.forumCategory(categories)?.id)
+        assertEquals(listOf(7L), draft.forumTags(categories))
+        assertNull(draft.forumCategory(categories.filter { it.slug != "novel" }))
+        assertTrue(draft.forumTags(categories.filter { it.slug != "novel" }).isEmpty())
+        assertEquals("保留正文", draft.content)
     }
 }

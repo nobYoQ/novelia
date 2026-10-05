@@ -13,9 +13,11 @@ import cc.novelia.app.NoveliaApplication
 import cc.novelia.app.data.model.Article
 import cc.novelia.app.data.model.ForumCategory
 import cc.novelia.app.data.model.ForumTag
+import cc.novelia.app.data.storage.appJson
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.theme.NoveliaTheme
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.encodeToString
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -23,7 +25,7 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class ForumEditorUiTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
-    private val categories = listOf(ForumCategory(2, "announcements"), ForumCategory(1, "novel", (1L..4).map { ForumTag(it, "标签$it") }), ForumCategory(3, "feedback"))
+    private val categories = listOf(ForumCategory(1, "announcements"), ForumCategory(100, "novel", (1L..4).map { ForumTag(it, "标签$it") }), ForumCategory(2, "feedback"))
 
     @Test fun newPostGuidanceRemainsVisibleAfterDismissingTheGeneralReminder() = withEditor(null, noticeDismissed = true) {
         compose.onNodeWithTag("forum-publishing-notice").assertExists()
@@ -35,7 +37,7 @@ class ForumEditorUiTest {
         compose.onNodeWithTag("article-submit").performScrollTo().assertIsEnabled()
     }
 
-    @Test fun guestEditorExcludesAnnouncementsAndCapsSelectedTagsAtThree() = withEditor(Article(id = "f-91001", title = "测试标题", content = "测试正文", forumCategoryId = 1)) {
+    @Test fun guestEditorExcludesAnnouncementsAndCapsSelectedTagsAtThree() = withEditor(Article(id = "f-91001", title = "测试标题", content = "测试正文", forumCategoryId = 100)) {
         compose.onNodeWithText("站务公告").assertDoesNotExist()
         compose.onNodeWithText("发言请遵守《社区守则》").assertExists()
         for(id in 1..3) compose.onNodeWithText("标签$id").performScrollTo().performClick()
@@ -45,9 +47,10 @@ class ForumEditorUiTest {
         compose.onNodeWithTag("article-submit").performScrollTo().assertIsEnabled()
         compose.onNodeWithText("意见反馈").performScrollTo().performClick()
         compose.onNodeWithText("标签 0 / 3").assertExists()
+        compose.onNodeWithTag("article-submit").performScrollTo().assertIsEnabled()
     }
 
-    @Test fun oversizedExistingDraftRemainsEditableAndUsesUnicodeTitleLength() = withEditor(Article(id = "f-91002", title = "旧".repeat(101), content = "文".repeat(20001), forumCategoryId = 1)) {
+    @Test fun oversizedExistingDraftRemainsEditableAndUsesUnicodeTitleLength() = withEditor(Article(id = "f-91002", title = "旧".repeat(101), content = "文".repeat(20001), forumCategoryId = 100)) {
         compose.onNodeWithTag("article-submit").performScrollTo().assertIsNotEnabled()
         compose.onNodeWithTag("article-title").performScrollTo().assertTextContains("旧".repeat(101)).performTextReplacement("😀".repeat(100))
         compose.onNodeWithTag("article-body").performScrollTo().assertTextContains("文".repeat(20001)).performTextReplacement("😀正文")
@@ -59,7 +62,28 @@ class ForumEditorUiTest {
         compose.onNodeWithTag("article-submit").performScrollTo().assertIsNotEnabled()
     }
 
-    private fun withEditor(article: Article?, noticeDismissed: Boolean = false, check: () -> Unit) {
+    @Test fun numericOnlyDraftCannotSilentlyBecomeFeedbackAfterIdRemap() = withEditor(null,
+        savedDraft = appJson.encodeToString(mapOf("title" to "旧公告草稿", "content" to "保留旧正文", "categoryId" to "2", "tagIds" to "1"))) {
+        compose.onNodeWithTag("article-title").performScrollTo().assertTextContains("旧公告草稿")
+        compose.onNodeWithTag("article-body").performScrollTo().assertTextContains("保留旧正文")
+        compose.onNodeWithText("草稿分类需要重新确认，请选择可发布的分类。").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("article-submit").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithText("意见反馈").performScrollTo().performClick()
+        compose.onNodeWithTag("article-submit").performScrollTo().assertIsEnabled()
+        compose.onNodeWithTag("article-body").performScrollTo().assertTextContains("保留旧正文")
+    }
+
+    @Test fun slugDraftRestoresCurrentNovelCategoryAndOnlyAvailableTags() = withEditor(null,
+        savedDraft = appJson.encodeToString(mapOf("title" to "小说草稿", "content" to "恢复正文", "categoryId" to "1", "categorySlug" to "novel", "tagIds" to "1,99"))) {
+        compose.onNodeWithText("站务公告").assertDoesNotExist()
+        compose.onNodeWithText("标签 1 / 3").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("标签1").performScrollTo().assertIsSelected()
+        compose.onNodeWithTag("article-submit").performScrollTo().assertIsEnabled()
+        compose.onNodeWithTag("article-title").performScrollTo().assertTextContains("小说草稿")
+        compose.onNodeWithTag("article-body").performScrollTo().assertTextContains("恢复正文")
+    }
+
+    private fun withEditor(article: Article?, noticeDismissed: Boolean = false, savedDraft: String? = null, check: () -> Unit) {
         val app = compose.activity.application as NoveliaApplication
         runBlocking { app.initialization.await() }
         val key = article?.let { "article:${it.id}" } ?: ArticleDrafts.newKey(true)
@@ -67,7 +91,7 @@ class ForumEditorUiTest {
         val previousNoticeDismissed = app.store.state.value.forumRulesReminderDismissed
         try {
             compose.runOnUiThread {
-                app.store.update { it.copy(drafts = it.drafts - key, forumRulesReminderDismissed = noticeDismissed) }
+                app.store.update { it.copy(drafts = if(savedDraft == null) it.drafts - key else it.drafts + (key to savedDraft), forumRulesReminderDismissed = noticeDismissed) }
                 compose.activity.setContent {
                     NoveliaTheme("light") {
                         val c = AppController(app, rememberNavController(), rememberCoroutineScope(), remember { SnackbarHostState() })

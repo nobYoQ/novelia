@@ -5,16 +5,16 @@
 ## 核对依据
 
 - 核对日期：2026-10-05。
-- 测试站公开前端：`/assets/index-DakyTaCy.js`，内嵌部署提交 `36f88944a5a514cd314f618ccaa924f711a8f33b`，构建时间为 2026-10-04 10:16:39（北京时间）。源码对比基线为之前的 `24db0ee`，并以匿名公开 GET 核对实际服务端响应。仓库 main 的后续提交不作为本次部署合约。
-- [该部署版本的前端 API 合约](https://github.com/auto-novel/forum/blob/36f88944a5a514cd314f618ccaa924f711a8f33b/apps/web/src/api.ts)。
-- [服务端帖子路由](https://github.com/auto-novel/forum/blob/36f88944a5a514cd314f618ccaa924f711a8f33b/apps/api/internal/handler/post.go)、[评论用例](https://github.com/auto-novel/forum/blob/36f88944a5a514cd314f618ccaa924f711a8f33b/apps/api/internal/usecase/comment.go)、[错误分类](https://github.com/auto-novel/forum/blob/36f88944a5a514cd314f618ccaa924f711a8f33b/apps/api/internal/handler/error.go)、[认证声明](https://github.com/auto-novel/forum/blob/36f88944a5a514cd314f618ccaa924f711a8f33b/apps/api/internal/httpx/authn.go)。
+- 测试站公开前端：`/assets/index-aUfp-71t.js`，内嵌部署提交 `928185a35619ce2e573f5b4dd988ee2d56138f68`，构建时间为 2026-10-05 20:25:17（北京时间）。源码对比基线为已适配的 `36f8894`，共 33 个提交，并以匿名公开 GET 核对实际服务端响应。仓库 main 的后续提交不作为本次部署合约。
+- [该部署版本的前端 API 合约](https://github.com/auto-novel/forum/blob/928185a35619ce2e573f5b4dd988ee2d56138f68/apps/web/src/api.ts)。
+- [服务端帖子路由](https://github.com/auto-novel/forum/blob/928185a35619ce2e573f5b4dd988ee2d56138f68/apps/api/internal/handler/post.go)、[评论用例](https://github.com/auto-novel/forum/blob/928185a35619ce2e573f5b4dd988ee2d56138f68/apps/api/internal/usecase/comment.go)、[错误分类](https://github.com/auto-novel/forum/blob/928185a35619ce2e573f5b4dd988ee2d56138f68/apps/api/internal/handler/error.go)、[认证声明](https://github.com/auto-novel/forum/blob/928185a35619ce2e573f5b4dd988ee2d56138f68/apps/api/internal/httpx/authn.go)。
 
 ## 合约变化
 
 | 功能 | 新版合约 |
 | --- | --- |
 | API 前缀 | `https://forum.novelia.cc/api/v1/` |
-| 分类 | `GET category/`，返回数字 `id`、`slug` 和标签；分类 2 的 slug 从 `guide` 改为 `announcements`（站务公告），仅管理员可在此发帖 |
+| 分类 | `GET category/`，返回数字 `id`、`slug` 和标签；10.5 重分配为公告 `1`、反馈 `2`、小说 `100`；公告仅管理员可发帖，客户端权限按 `slug` 判断 |
 | 列表 | `GET post/`；`category` 传 slug；搜索用 `q`；排序用 `active/newest/views/comments`；标签为逗号分隔 `tag` |
 | 分页 | 请求 `page` 从 1 开始，`page_size` 取代 `pageSize`；响应 `{ total, items }`。客户端页码仍从 0 开始，在 API 层换算 |
 | 帖子详情 | `GET post/{数字ID}/`；时间为 RFC 3339 字符串；作者改为 `authorId/authorUsername` |
@@ -34,13 +34,14 @@
 
 小说的原站与镜像分别保存会话，论坛始终使用 `auth.novelia.cc` 的 `app=f` 认证及独立请求通道。切换小说书源不会清除论坛令牌、使论坛会话绑定失效或将论坛账号请求转到镜像；镜像入口 Cookie 也不会附加到论坛请求。退出镜像只清理镜像的本地令牌和认证 Cookie。
 
-处罚记录字段与认证行为依据当前论坛所依赖的 [认证 SDK 490e384](https://github.com/auto-novel/auth/blob/490e384368f018e670aa9cf8a30c8bb1d8512865/packages/auth-api/src/api.ts) 核对。此次新增处罚未读状态和已读确认，登录、刷新、令牌声明及原有处罚字段保持兼容；网页由 web-kit 提供认证 API 类型，不要求 Android 引入 TypeScript 依赖。网页处罚记录路径为 `/strikes`，原生入口使用认证服务独立接口。
+处罚记录字段与认证行为依据当前论坛所依赖的 [认证 SDK 36953dd](https://github.com/auto-novel/auth/blob/36953dd4fd7ce6410f4449076fc97b7d312039f3/packages/auth-api/src/api.ts) 核对。10.4 引入处罚未读状态和已读确认；10.5 的 SDK 更新调整网页启动、销毁及组件上下文，登录、刷新、令牌声明和处罚 HTTP 合约保持兼容。网页由 web-kit 提供认证 API 类型，不要求 Android 引入 TypeScript 依赖。网页处罚记录路径为 `/strikes`，原生入口使用认证服务独立接口。
 
 ## 客户端行为
 
 - 分类及标签使用服务器数据；站务公告排首位并作为首次进入的默认分类，小说讨论和意见反馈随后，未知分类保留。普通用户发帖默认选择小说讨论，分类选项排除站务公告；旧草稿若指向公告分类，保留内容并要求重新选择分类。列表搜索请求服务端。帖子排序提供「最近活跃、最新发布、浏览最多、评论最多」，分别发送 `active/newest/views/comments`；切换排序返回第一页，保留分类和搜索词。
 - 新帖 ID 在本地表示为 `f-{id}`，本地收藏及草稿与旧站 ObjectID 区分。旧帖子链接和收藏继续从主站读取；不猜测新旧帖子 ID 对应关系。
 - 新建论坛草稿使用 `article:forum-new`；旧版 `article:new` 草稿仍保留，不自动发布到测试站。
+- 论坛草稿同时保存分类 `slug` 和 ID。恢复时先取得当前分类，再用 `slug` 解析当前 ID 并过滤失效标签；仅有数字 ID 的旧草稿保留标题和正文，要求明确重新选择分类，避免 10.5 ID 重用后发错版块。缺失的分类同样不自动改为其他分类。
 - 新版编辑保留帖子的标签，最多选择 3 个，切换分类时清除旧分类标签。标题为 2–100 字，正文为 1–20,000 字，评论为 1–1,000 字；按 Unicode 码点计数，emoji 的代理对按一个字计算。正文保留原始空白，评论按网页行为去除首尾空白后提交。旧的超长草稿保留并可继续缩短，超限时禁止提交。最终权限及域名黑名单由服务端决定；论坛返回的文本校验错误会显示具体原因，失败时保留草稿且不自动重发。
 - 新帖编辑页单独显示发帖提示：先读公告中的新人教程、搜索已有反馈，报错附小说链接或截图，求书使用集中帖；公告、反馈、求书搜索和社区守则均可点击。此提示不随首次社区守则提醒一起隐藏，编辑已有帖子保持原有提示方式。
 - 发帖提示同步 10.4 的建政小说处理说明。原生守则展示新版违规条款、处理办法及全部十项用户权限；权限表按操作排列成卡片，分别说明未满月、已满月和受限用户是否允许。论坛普通新用户仍可发言，受限用户不可发言；小说权限继续依照小说站规则。
@@ -58,6 +59,7 @@
 
 ## 验证
 
+- 2026-10-05 匿名公开 GET 核对 10.5 部署：三个分类、七篇帖子、78 条一级评论及 99 条附带回复；12 个独立回复页的总数与 ID 均一致。旧小说评论接口仍返回 200。此次公开响应和部署源码位于本地忽略目录 `outputs/qa/forum-update-20261005/`，不提交用户评论内容。
 - 2026-10-05 匿名公开 GET 核对 10.4 部署：三个分类、六篇帖子、73 条一级评论及 105 条附带回复；12 个独立回复页的总数与 ID 均一致。旧小说评论接口仍返回 200。此次公开响应和部署源码位于本地忽略目录 `outputs/qa/forum-update-20261004/`，不提交用户评论内容。
 - 2026-10-03 匿名公开 GET 抽查三个分类、六篇帖子、73 条一级评论及其中 105 条附带回复；12 个独立回复分页的总数与 ID 均与附带数据一致。现有生产模型解码 30 份公开响应及守则解析通过；当日检查证据在 `outputs/qa/forum-update-20261003/`，功能实现后的验证记录见末尾。
 - 2026-10-02 对帖子 953、1021 的 24 条一级评论核对，全部带有非负 `replyCount`；另抽查四串回复，根评论计数 7、0、2、0 均与回复接口 `total` 一致。全部为匿名公开 GET；未创建帖子、评论或修改收藏。此前三个分类各两个帖子的完整解码记录见历史验收。
@@ -174,3 +176,15 @@
 - Debug／Release 各 588 项 JVM 测试通过，无失败、错误或跳过，其中各三项为本地公开响应验证。生产模型解码三十份实际响应，73 条根评论、105 条附带回复和十二个独立回复页一致。Debug 应用与测试 APK、包含 R8 的未签名 Release APK 均生成成功；两个变体 Lint 均为 0 个错误，分别保留 29／33 个既有警告。
 - 专用 `Novelia_Test` 模拟器（Android API 35）上 37 项设备回归全部通过，覆盖新版守则与权限、未读菜单、已读失败重试与晚响应隔离、发帖提示链接、回复分页与缓存，以及论坛／主站／镜像会话隔离。检查浅色、深色双倍字号和未读菜单截图；全部账号操作使用合成数据，没有真实账号写入。
 - 汇总及公开样本、源码、临时验证类和截图保存在本地忽略目录 `outputs/qa/forum-update-20261004/`，不提交用户评论内容。最终日志：`outputs/logs/forum-update-20261004-debug-final.log`、`outputs/logs/forum-update-20261004-release-final.log`、`outputs/logs/forum-update-20261004-androidtest-final.log`、`outputs/logs/forum-update-20261004-device.log`；汇总为 `verification.json`。
+
+## 2026-10-05 检查并补适配论坛 10 月 5 日构建
+
+- 核对线上部署 `928185a`（北京时间 2026-10-05 20:25:17），与已适配的 `36f8894` 对比全部 33 个提交。发现分类 ID 重分配为公告 `1`、反馈 `2`、小说 `100`；旧客户端以 `2` 判断公告会误拦反馈，并向普通用户展示公告选项。
+- 分类选择和提交权限改用服务器返回的 `slug` 判断，普通用户可在反馈和小说分类发帖，公告仍限管理员。新帖子及修改请求继续使用当前分类的数字 ID。
+- 草稿增加保存 `categorySlug`，恢复时在当前分类中解析 ID 并过滤失效标签。只有数字 ID 的旧论坛草稿保留标题、正文，要求用户明确重新选择分类后才允许发布；不依据已被重用的旧 ID 自动迁移，也不自动把缺失分类改成默认分类。
+- 帖子、评论、分页、首屏回复、字数／标签限制、角色与修改时限保持兼容。后端事务、错误映射和浏览量统计重整无需额外客户端改动；取消请求的 499 和超时 504 沿用现有网络异常处理。守则及发帖提示与 10.4 一致。
+- 认证 SDK 更新至 `36953dd`，变化集中在网页 `start`／`dispose`、组件上下文及未读轮询生命周期；认证、处罚读取、未读查询及已读确认的 HTTP 合约未变。网页草稿及 localStorage 调整不改变原生设备草稿的既有保留策略。
+- 匿名 GET 获取 32 份响应，生产模型解码通过；三个分类、七篇帖子、78 条一级评论、99 条附带回复和十二个独立回复页均符合现有合约。另核对五个 400／404 错误的纯文本格式，以及未读和处罚接口匿名访问的 401；旧小说评论接口仍返回 200。
+- Debug 共 600 项 JVM 测试通过，无失败、错误或跳过，其中三项为本地公开响应验证。修正既有守则异常模板测试对 LF 换行的假设，兼容 Windows CRLF，且确认每种变体确实修改了模板。Debug 应用和测试 APK 构建成功，Lint 为 0 个错误、29 个既有警告；本次未重建 Release。
+- 专用 `Novelia_Test` 模拟器（Android API 35）上五项编辑器测试全部通过，覆盖新的分类和权限、标签上限、超长草稿、新帖提示、数字旧草稿重选分类及按 slug 恢复当前分类和有效标签。只操作合成草稿，没有真实账号写入；检查结束后关闭本次启动的测试模拟器。
+- 证据与汇总保存在本地忽略目录 `outputs/qa/forum-update-20261005/`，不提交抓取的用户评论。最终日志为 `outputs/logs/forum-update-20261005-debug-final.log`、`outputs/logs/forum-update-20261005-device.log`，汇总为 `verification.json`。

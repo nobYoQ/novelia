@@ -48,7 +48,7 @@ import kotlinx.serialization.encodeToString
 @Composable internal fun ArticleEditor(c: AppController, article: Article?, forumCategories: List<ForumCategory> = emptyList(), forum: Boolean = false, newPostKey: String? = null) {
     val profile by (if(forum) c.forumSession else c.session).profile.collectAsStateWithLifecycle()
     val canPublish = profile == null || if(forum) ForumRules.canWrite(profile) else profile?.canPost == true
-    val writableCategories = forumCategories.filter { ForumRules.canSelectCategory(it.id, profile) }
+    val writableCategories = forumCategories.filter { ForumRules.canSelectCategory(it, profile) }
     val generatedKey = rememberSaveable(forum) { ArticleDrafts.newKey(forum) }
     val key = article?.id?.let { "article:$it" } ?: newPostKey ?: generatedKey
     val draft = remember(key) { c.store.state.value.drafts[key] }
@@ -56,8 +56,11 @@ import kotlinx.serialization.encodeToString
     var title by rememberSaveable(key) { mutableStateOf(saved?.title ?: article?.title.orEmpty()) }; var content by rememberSaveable(key) { mutableStateOf(saved?.content ?: article?.content.orEmpty()) }; var category by rememberSaveable(key) { mutableStateOf(saved?.category ?: article?.category ?: "General") }; var preview by rememberSaveable(key) { mutableStateOf(false) }; var sending by remember { mutableStateOf(false) }
     val persistenceError by c.store.persistenceError.collectAsStateWithLifecycle()
     val editorState = rememberSaveableStateHolder()
-    var categoryId by rememberSaveable(key) { mutableStateOf(saved?.categoryId ?: article?.forumCategoryId ?: writableCategories.firstOrNull { it.slug == "novel" }?.id ?: writableCategories.firstOrNull()?.id) }
-    var tagIds by rememberSaveable(key) { mutableStateOf(saved?.tagIds ?: article?.forumTags?.map { it.id }.orEmpty()) }
+    var categoryId by rememberSaveable(key) { mutableStateOf(if(forum && saved != null) saved.forumCategory(forumCategories)?.id
+        else article?.forumCategoryId ?: writableCategories.firstOrNull { it.slug == "novel" }?.id ?: writableCategories.firstOrNull()?.id) }
+    var tagIds by rememberSaveable(key) { mutableStateOf(if(forum && saved != null) saved.forumTags(forumCategories)
+        else saved?.tagIds ?: article?.forumTags?.map { it.id }.orEmpty()) }
+    val selectedForumCategory = forumCategories.firstOrNull { it.id == categoryId }
     val titleLimit = if(forum) ForumRules.TITLE_LIMIT else 80
     val titleLength = if(forum) ForumRules.length(title.trim()) else title.length
     val forumError = if(forum) ForumRules.postError(ForumPostInput(categoryId ?: 0, title, content, tagIds)) else null
@@ -65,7 +68,8 @@ import kotlinx.serialization.encodeToString
 
     val renderer = rememberMarkdownRenderer(c, article?.id?.let(ForumLinks::articleUrl) ?: if(forum) ForumLinks.ORIGIN else null)
     val focusManager = LocalFocusManager.current
-    fun draftSnapshot() = appJson.encodeToString(mapOf("title" to title, "content" to content, "category" to category, "categoryId" to categoryId.toString(), "tagIds" to tagIds.joinToString(",")))
+    fun draftSnapshot() = appJson.encodeToString(mapOf("title" to title, "content" to content, "category" to category,
+        "categoryId" to categoryId.toString(), "categorySlug" to selectedForumCategory?.slug.orEmpty(), "tagIds" to tagIds.joinToString(",")))
     val draftPersistence = rememberDraftPersistence(c.store, key, ::draftSnapshot)
     LaunchedEffect(title, content, category, categoryId, tagIds) { kotlinx.coroutines.delay(700); draftPersistence.save() }
     Screen(if(article == null) "写一篇帖子" else "编辑帖子", c::back, actions = { TextButton(onClick = { focusManager.clearFocus(); preview = !preview }) { Text(if(preview) "编辑" else "预览") } }) { padding ->
@@ -87,7 +91,8 @@ import kotlinx.serialization.encodeToString
                         OutlinedTextField(title, { if(forum || it.length <= titleLimit) title = it }, label = { Text("标题") }, supportingText = { Text("$titleLength / $titleLimit") }, isError = forum && title.isNotEmpty() && ForumRules.titleError(title) != null, modifier = Modifier.fillMaxWidth().testTag("article-title"), singleLine = true)
                         if(forum) {
                             ChoiceRow("分类", writableCategories.map { it.title }, writableCategories.indexOfFirst { it.id == categoryId }) { categoryId = writableCategories[it].id; tagIds = emptyList() }
-                            if(!categoryAllowed) Text(if(categoryId == ForumRules.ANNOUNCEMENTS_ID) "站务公告仅管理员可以发帖，请选择其他分类。" else "请选择可发布的分类。", color = MaterialTheme.colorScheme.error)
+                            if(!categoryAllowed) Text(if(selectedForumCategory?.slug == "announcements") "站务公告仅管理员可以发帖，请选择其他分类。"
+                                else if(saved != null) "草稿分类需要重新确认，请选择可发布的分类。" else "请选择可发布的分类。", color = MaterialTheme.colorScheme.error)
                             Text("标签 ${tagIds.size} / ${ForumRules.TAG_LIMIT}", style = MaterialTheme.typography.labelMedium)
                             forumCategories.firstOrNull { it.id == categoryId }?.tags?.forEach { tag ->
                                 FilterChip(selected = tag.id in tagIds, enabled = tag.id in tagIds || tagIds.size < ForumRules.TAG_LIMIT, onClick = { tagIds = if(tag.id in tagIds) tagIds - tag.id else tagIds + tag.id }, label = { Text(tag.name) })
@@ -104,7 +109,7 @@ import kotlinx.serialization.encodeToString
                     Button(onClick = {
                         draftPersistence.save()
                         val submit = { c.action {
-                            if(forum) require(ForumRules.canPublish(categoryId, c.forumSession.profile.value)) { "当前账号不能在此分类发帖，草稿已保留" }
+                            if(forum) require(ForumRules.canPublish(selectedForumCategory, c.forumSession.profile.value)) { "当前账号不能在此分类发帖，草稿已保留" }
                             else check(c.session.profile.value?.canPost == true) { "当前账号暂不具备社区发布权限，草稿已保留" }
                             sending = true; try {
                             val submittedDraft = draftSnapshot()

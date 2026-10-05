@@ -33,14 +33,26 @@ class ForumRulesTest {
     }
 
     @Test fun announcementPublishingRequiresAdminAndTrustedCanWriteOtherCategories() {
-        assertTrue(ForumRules.canPublish(2, admin))
+        val announcements = ForumCategory(1, "announcements")
+        val feedback = ForumCategory(2, "feedback")
+        val novel = ForumCategory(100, "novel")
+        assertTrue(ForumRules.canPublish(announcements, admin))
         for(profile in listOf(member, member.copy(role = "trusted"), null)) {
-            assertFalse(ForumRules.canSelectCategory(2, profile))
+            assertFalse(ForumRules.canSelectCategory(announcements, profile))
         }
-        assertTrue(ForumRules.canPublish(1, member))
-        assertTrue(ForumRules.canPublish(1, member.copy(role = "trusted")))
-        for(role in listOf("restricted", "banned", "unknown")) assertFalse(ForumRules.canPublish(1, member.copy(role = role)))
-        assertFalse(ForumRules.canPublish(1, null))
+        for(category in listOf(feedback, novel)) {
+            assertTrue(ForumRules.canPublish(category, member))
+            assertTrue(ForumRules.canPublish(category, member.copy(role = "trusted")))
+            for(role in listOf("restricted", "banned", "unknown")) assertFalse(ForumRules.canPublish(category, member.copy(role = role)))
+            assertFalse(ForumRules.canPublish(category, null))
+        }
+        assertFalse(ForumRules.canPublish(null, admin))
+    }
+
+    @Test fun categoryPermissionsFollowServerSlugsWhenIdsAreReassigned() {
+        assertFalse(ForumRules.canPublish(ForumCategory(999, "announcements"), member))
+        assertTrue(ForumRules.canPublish(ForumCategory(1, "novel"), member))
+        assertTrue(ForumRules.canPublish(ForumCategory(2, "feedback"), member))
     }
 
     @Test fun authorDeletionExpiresButEditingAndAdminDeletionRemainAvailable() {

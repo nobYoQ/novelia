@@ -2,13 +2,12 @@ package cc.novelia.app.data.model
 
 import java.time.Instant
 
-/** Rules of the deployed forum (6c65702), shared by forms and API validation. */
+/** Rules of the deployed forum (928185a), shared by forms and API validation. */
 object ForumRules {
     const val TITLE_LIMIT = 100
     const val POST_LIMIT = 20000
     const val COMMENT_LIMIT = 1000
     const val TAG_LIMIT = 3
-    const val ANNOUNCEMENTS_ID = 2L
     const val MODIFICATION_SECONDS = 20 * 60L
 
     // Go counts Unicode code points, not UTF-16 units (an emoji can use two units).
@@ -35,13 +34,13 @@ object ForumRules {
         input.tagIds.any { it <= 0 } || input.tagIds.distinct().size != input.tagIds.size -> "请选择有效且不重复的标签"
         else -> null
     }
-    fun canSelectCategory(categoryId: Long?, profile: Profile?) =
-        categoryId != null && (categoryId != ANNOUNCEMENTS_ID || profile?.role == "admin")
+    fun canSelectCategory(category: ForumCategory?, profile: Profile?) =
+        category != null && (category.slug != "announcements" || profile?.role == "admin")
 
     fun canWrite(profile: Profile?) = profile?.role in setOf("admin", "trusted", "member")
 
-    fun canPublish(categoryId: Long?, profile: Profile?) =
-        canWrite(profile) && canSelectCategory(categoryId, profile)
+    fun canPublish(category: ForumCategory?, profile: Profile?) =
+        canWrite(profile) && canSelectCategory(category, profile)
 
     fun canEditPost(article: Article, profile: Profile?) =
         profile != null && canWrite(profile) && (profile.role == "admin" || profile.userId != null && profile.userId == article.forumAuthorId)

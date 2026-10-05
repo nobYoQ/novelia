@@ -68,10 +68,11 @@ class ForumCommunityRulesTest {
             updatedTemplate.replace("</script>", "permissions.reverse();</script>"),
             updatedTemplate.replace("{{ permission.site }}", "{{ permission.name }}"),
             updatedTemplate.replace("<table class=", "新增权限说明<table class="),
-            updatedTemplate.replace("<span\n                  class=", "<span v-if=\"false\"\n                  class="),
+            updatedTemplate.replace(Regex("<span(\\s+class=)")) { "<span v-if=\"false\"${it.groupValues[1]}" },
             updatedTemplate.replace("true, true, true", "true, true, true, false")
         )
         unsupported.forEachIndexed { index, source ->
+            assertNotEquals("Variant $index must change the template", updatedTemplate, source)
             assertTrue("Unsupported variant $index must fail", runCatching { ForumCommunityRulesParser.parse(source) }.isFailure)
         }
     }
