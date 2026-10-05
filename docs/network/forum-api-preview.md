@@ -1,6 +1,6 @@
 # 独立论坛 API 预适配
 
-此分支 `codex/forum-api-preview` 的社区入口连接 [测试论坛](https://forum.novelia.cc/c/novel)，主站小说、阅读、下载与小说评论继续连接 `n.novelia.cc`。
+此分支 `codex/forum-api-preview` 的社区入口连接 [测试论坛](https://forum.novelia.cc/c/novel)，小说、阅读、下载与小说评论沿用设置中选择的原站或镜像书源。
 
 ## 核对依据
 
@@ -30,6 +30,8 @@
 | 网页链接 | `https://forum.novelia.cc/p/{id}` |
 
 新论坛与主站分别保存加密令牌并使用不同的 Keystore 别名。论坛请求拒绝主站会话；401 最多刷新一次。两边的退出操作只清除各自的本机会话，不调用全局 SSO 退出接口，不删除共享认证 Cookie，也不清除另一边的令牌。已退出的会话不会因匿名请求收到 401 而自动登录；用户明确进入登录页后仍可复用统一认证。
+
+小说的原站与镜像分别保存会话，论坛始终使用 `auth.novelia.cc` 的 `app=f` 认证及独立请求通道。切换小说书源不会清除论坛令牌、使论坛会话绑定失效或将论坛账号请求转到镜像；镜像入口 Cookie 也不会附加到论坛请求。退出镜像只清理镜像的本地令牌和认证 Cookie。
 
 处罚记录字段与认证行为依据当前论坛所依赖的 [认证 SDK 90f6980](https://github.com/auto-novel/auth/blob/90f6980ebcbd1ba8a4690dba0e2abe98957ec100/packages/auth-api/src/api.ts) 核对。与上次论坛部署依赖的 `e6909c2` 比较，认证 SDK 的 `api.ts` 内容相同，论坛服务端认证声明也未变化。此接口属于账号记录，不是论坛帖子 API。
 
@@ -135,3 +137,11 @@
 - JVM 回归增加新版完整计数不发补查请求，以及混合新旧响应只查询缺失计数的 HTTP 断言；序列化覆盖缺失、null、0 和超大 64 位值。界面回归增加新版计数滚动后的缓存复用、零回复直接显示、计数更新后展开及回复页总数覆盖旧值。
 - `:app:testDebugUnitTest`、`:app:assembleDebug`、`:app:assembleDebugAndroidTest`、`:app:lintDebug` 及 `:app:testReleaseUnitTest`、`:app:assembleRelease`、`:app:lintRelease` 均以 `build.ps1 -Offline` 执行通过。Debug／Release 各 466 项 JVM 测试，无失败、错误或跳过；两种变体的 Lint 均为 0 个错误、26 个警告。
 - 当前没有连接 Android 设备，界面回归仅完成测试 APK 编译，未执行设备测试。日志：`outputs/logs/forum-update-20261002-debug.log`、`outputs/logs/forum-update-20261002-release.log`；汇总：`outputs/qa/forum-update-20261002/verification.json`。
+
+## 2026-10-03 变基至 0.2.4
+
+- 基于主分支 `0c12cb0` 重新应用全部七个论坛提交，继承字数筛选、标签分类批选、桌面图标及镜像书源功能；论坛功能继续只在预适配分支维护。
+- 合并会话、登录入口、网络装配和书库模型冲突。论坛会话使用独立来源及请求通道，论坛账号接口与社区守则请求不经过小说镜像路由；保留双方本地退出隔离、镜像独立认证资料及标签库容量设置。
+- 新增设备回归验证镜像选中时的论坛续期、续期过程中切换小说来源、论坛认证 URL 与应用标识、重建会话，以及退出镜像后保留原站和论坛账号。只使用合成凭据和本地模拟响应。
+- `:app:assembleDebug`、`:app:assembleDebugAndroidTest`、`:app:testDebugUnitTest`、`:app:lintDebug` 全部通过；531 项 JVM 测试无失败、错误或跳过。29 项设备回归全部通过，覆盖论坛与镜像会话、论坛个人面板、编辑器、回复计数和缓存，以及登录后继续收藏。
+- 日志：`outputs/logs/forum-rebase-final-verify.log`、`outputs/logs/forum-rebase-device-tests.log`。本次未执行真实账号操作；主分支和变基前论坛分支的 Git 备份为 `outputs/git-backups/pre-forum-rebase-20261003.bundle`。

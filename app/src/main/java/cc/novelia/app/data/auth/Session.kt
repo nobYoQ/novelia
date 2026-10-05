@@ -46,7 +46,7 @@ class Session(context: Context, private val client: OkHttpClient = OkHttpClient.
     val profile = state.profile
     private val refreshLock = Mutex()
     init {
-        sources.observe { selected ->
+        this.sources.observe { selected ->
             val value = stored(selected.source, "value")
             state.replace(value, value?.let { runCatching { parse(it) }.getOrNull() })
         }
