@@ -120,6 +120,21 @@ class ForumApiContractTest {
         assertEquals(9007199254740993L, appJson.decodeFromString<ForumComment>(large).replyCount)
     }
 
+    @Test fun missingReplyCountsUseSmallIndependentRequestsIncludingZero() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""{"total":9007199254740993,"items":[$comment]}"""))
+            server.enqueue(MockResponse().setBody("""{"total":0,"items":[]}"""))
+            val client = api(server)
+            assertEquals(9007199254740993L, client.replyCount(5, 8))
+            assertEquals(0L, client.replyCount(5, 9))
+            for(rootId in listOf(8, 9)) {
+                val request = server.takeRequest()
+                assertEquals("/api/v1/post/5/comment/$rootId/reply?page=1&page_size=1", request.path)
+                assertNull(request.getHeader("Authorization"))
+            }
+        }
+    }
+
     @Test fun invalidReplyIdsAndPagesFailBeforeSending() = runBlocking {
         MockWebServer().use { server ->
             val client = api(server)

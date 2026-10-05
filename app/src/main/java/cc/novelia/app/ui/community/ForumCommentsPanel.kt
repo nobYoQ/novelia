@@ -5,6 +5,8 @@ import cc.novelia.app.data.model.ForumComment
 import cc.novelia.app.data.model.ForumCommentInput
 import cc.novelia.app.data.model.ForumRules
 import cc.novelia.app.data.model.Profile
+import cc.novelia.app.data.network.loadForumReplyCounts
+import cc.novelia.app.data.auth.SessionChangedException
 import cc.novelia.app.ui.components.AppLazyColumn
 import cc.novelia.app.ui.components.AsyncContent
 import cc.novelia.app.ui.components.EmptyState
@@ -33,6 +35,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
     val state by c.store.state.collectAsStateWithLifecycle()
     var page by rememberSaveable(postId) { mutableIntStateOf(0) }
     var version by remember(postId) { mutableIntStateOf(0) }
+    // 保留在列表层，LazyColumn 回收单条评论时不会丢失计数；刷新、换账号或角色时失效。
+    val replyCounts = remember(postId, profile?.userId, profile?.role, version) { mutableStateMapOf<Long, Long?>() }
+    var countsRevision by remember(postId, profile?.userId, profile?.role, version) { mutableIntStateOf(0) }
     var rootId by rememberSaveable(postId, profile?.userId) { mutableStateOf<Long?>(null) }
     var replyCount by rememberSaveable(postId, profile?.userId) { mutableLongStateOf(0) }
     var replyFocus by remember(postId, profile?.userId, profile?.role) { mutableStateOf<ForumReplyFocus?>(null) }
@@ -44,17 +49,32 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
     val documentUrl = ForumLinks.articleUrl(ForumLinks.localId(postId))
     val renderer = rememberMarkdownRenderer(c, documentUrl)
     Column(Modifier.fillMaxSize()) {
-        AsyncContent(listOf(postId, page, profile?.userId, profile?.role), refreshKey = version, load = { c.forumApi.comments(postId, page) }, modifier = Modifier.weight(1f)) { result, _ ->
+        AsyncContent(listOf(postId, page, profile?.userId, profile?.role), refreshKey = version, load = { c.forumApi.comments(postId, page) },
+            onLoaded = { replyCounts.clear(); countsRevision++ }, modifier = Modifier.weight(1f)) { result, _ ->
             val comments = result.items.filter { it.authorUsername !in state.blockedUsers }
+            LaunchedEffect(result.items, version, countsRevision, state.blockedUsers) {
+                try {
+                    loadForumReplyCounts(comments.filterNot { replyCounts.containsKey(it.id) },
+                        load = { c.forumApi.replyCount(postId, it) }) { id, count ->
+                        // 展开回复得到的更新计数优先于尚未完成的预读取。
+                        if(!replyCounts.containsKey(id)) replyCounts[id] = count
+                    }
+                } catch(_: SessionChangedException) {
+                    // 会话变化不是页面崩溃；新身份重新加载，旧批次不再继续请求。
+                    comments.filterNot { replyCounts.containsKey(it.id) }.forEach { replyCounts[it.id] = null }
+                }
+            }
             AppLazyColumn(contentPadding = PaddingValues(20.dp)) {
                 if(comments.isEmpty()) item { EmptyState("还没有讨论", "来分享你的感想吧。", Icons.Outlined.ChatBubbleOutline) }
-                items(comments, key = { it.id }) { root ->
+                items(comments, key = { "${profile?.userId}:${profile?.role}:${it.id}" }) { root ->
                     ForumCommentThread(postId, root, profile, version, replyFocus, state.blockedUsers,
-                        loadReplies = { c.forumApi.replies(postId, root.id, it) }) { comment, rootPublished ->
+                        knownReplyCount = replyCounts[root.id], countLoading = !replyCounts.containsKey(root.id),
+                        onReplyCount = { replyCounts[root.id] = it },
+                        loadReplies = { c.forumApi.replies(postId, root.id, it) }) { comment, rootPublished, replyToggle ->
                         ForumCommentRow(comment, profile, locked || !rootPublished,
-                            onReply = { editing = null; rootId = comment.replyRoot; replyCount = root.replyCount },
+                            onReply = { editing = null; rootId = comment.replyRoot; replyCount = replyCounts[root.id] ?: root.replyCount },
                             onEdit = { editing = comment; rootId = null }, onDelete = { deleting = comment },
-                            onBlock = { c.store.update { it.copy(blockedUsers = it.blockedUsers + comment.authorUsername) } }) {
+                            onBlock = { c.store.update { it.copy(blockedUsers = it.blockedUsers + comment.authorUsername) } }, extraAction = replyToggle) {
                             MarkdownText(c, it, renderer = renderer, documentUrl = documentUrl)
                         }
                     }
@@ -65,7 +85,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
         }
         if(locked && editing == null) Text("此讨论已锁定，暂时不能回复。", Modifier.padding(20.dp))
         else Column(Modifier.fillMaxWidth().imePadding().padding(12.dp)) {
-            ForumRulesReminder(c)
             val commentContent = text.trim()
             val commentError = ForumRules.contentError(commentContent, comment = true)
             val canSend = profile == null || ForumRules.canWrite(profile)
@@ -111,20 +130,22 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
     } }
 }
 
-@Composable private fun ForumCommentRow(comment: ForumComment, profile: Profile?, locked: Boolean,
+@Composable internal fun ForumCommentRow(comment: ForumComment, profile: Profile?, locked: Boolean,
     onReply: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit, onBlock: () -> Unit,
+    extraAction: (@Composable () -> Unit)? = null,
     render: @Composable (String) -> Unit) {
     val now = rememberForumModificationTime(comment.createdEpoch)
     Column(Modifier.padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("${comment.authorUsername} · ${displayDate(comment.createdEpoch)}", style = MaterialTheme.typography.labelLarge)
         comment.rootId?.let { Text("回复 #$it", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         ForumCommentContent(comment, profile, render)
-        Row {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             if(!locked && comment.status == 0) TextButton(onClick = onReply) { Text("回复") }
             if(comment.status == 0 && comment.canModify(profile, now)) {
                 if(ForumRules.canWrite(profile)) TextButton(onClick = onEdit) { Text("编辑") }
                 TextButton(onClick = onDelete) { Text("删除") }
             } else if(comment.authorId != profile?.userId) TextButton(onClick = onBlock) { Text("屏蔽用户") }
+            extraAction?.invoke()
         }
     }
 }

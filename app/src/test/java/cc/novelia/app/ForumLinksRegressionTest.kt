@@ -15,6 +15,13 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ForumLinksRegressionTest {
+    @Test fun forumRulesUseNativePageAndPreserveOtherWebRoutes() {
+        assertEquals("forum-rules", MarkdownLinks.nativeRoute("https://forum.novelia.cc/rules"))
+        assertEquals("forum-rules", MarkdownLinks.nativeRoute("https://FORUM.NOVELIA.CC:443/rules/"))
+        assertNull(MarkdownLinks.nativeRoute("https://forum.novelia.cc/rules#section"))
+        assertNull(MarkdownLinks.nativeRoute("https://forum.novelia.cc/rules?preview=true"))
+        assertNull(MarkdownLinks.nativeRoute("https://forum.novelia.cc:444/rules"))
+    }
     private val parser = Parser.builder().extensions(listOf(TablesExtension.create()))
         .also(::configureSiteMarkdownParser).build()
 

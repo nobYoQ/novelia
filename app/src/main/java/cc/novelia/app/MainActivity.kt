@@ -1,6 +1,7 @@
 package cc.novelia.app
 
 import cc.novelia.app.ui.community.ForumStrikesScreen
+import cc.novelia.app.ui.community.ForumRulesScreen
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -189,6 +190,7 @@ class MainActivity : ComponentActivity() {
                                 composable("login") { LoginScreen(controller) }
                                 composable("forum-login") { LoginScreen(controller, forum = true) }
                                 composable("forum-strikes") { ForumStrikesScreen(controller) }
+                                composable("forum-rules") { ForumRulesScreen(controller) }
                                 composable("settings") { SettingsScreen(controller) }
                                 composable("backup") { LibraryBackupScreen(controller) }
                                 composable("keywords") { KeywordLibraryScreen(controller) }

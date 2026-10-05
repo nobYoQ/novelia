@@ -40,6 +40,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
             var cloudSaved by remember(article) { mutableStateOf(article.forumFavorited) }
             var saving by remember { mutableStateOf(false) }
             Column {
+                if(forumId != null) ForumRulesReminder(c)
                 PrimaryTabRow(tab) { listOf("文章内容", "讨论 ${article.numComments}").forEachIndexed { i, label -> Tab(tab == i, { tab = i }, text = { Text(label) }) } }
                 MotionContent(tab, Modifier.weight(1f), animateInitial = false) {
                     tabState.SaveableStateProvider(tab) {

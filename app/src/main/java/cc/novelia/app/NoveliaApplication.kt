@@ -3,6 +3,8 @@ package cc.novelia.app
 import cc.novelia.app.data.network.ForumAccountApi
 import cc.novelia.app.data.auth.AuthTarget
 import cc.novelia.app.data.network.ForumApi
+import cc.novelia.app.data.network.ForumCommunityRulesRepository
+import cc.novelia.app.data.cache.MetadataCache
 import android.app.Application
 import cc.novelia.app.data.auth.Session
 import cc.novelia.app.data.catalog.KeywordStore
@@ -73,6 +75,11 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
     val api by lazy { NoveliaApi(session, transport = httpTransport, onMutation = { metadataCache.invalidate(it) }, onKeywords = { tags -> applicationScope.launch { keywords.observe(tags) } }) }
     val forumApi by lazy { ForumApi(NoveliaApi(forumSession, ForumApi.BASE_URL, forumTransport)) }
     val forumAccountApi by lazy { ForumAccountApi(NoveliaApi(forumSession, ForumAccountApi.BASE_URL, forumTransport)) }
+    val forumCommunityRules by lazy { ForumCommunityRulesRepository(
+        MetadataCache(File(filesDir, "forum-community-rules"), 512 * 1024L),
+        NoveliaApi(null, "https://forum.novelia.cc/", forumTransport),
+        NoveliaApi(null, ForumCommunityRulesRepository.SOURCE_BASE, forumTransport)
+    ) }
     val initialization by lazy { applicationScope.async { store; session; Unit } }
     internal val launcherIcons by lazy { LauncherIconManager(this) }
 

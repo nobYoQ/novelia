@@ -2,17 +2,23 @@ package cc.novelia.app.ui.community
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import cc.novelia.app.data.model.ForumComment
 import cc.novelia.app.data.model.ForumPage
 import cc.novelia.app.data.model.Profile
+import cc.novelia.app.data.network.loadForumReplyCounts
 import cc.novelia.app.ui.theme.NoveliaTheme
 import java.io.IOException
 import org.junit.Assert.assertEquals
@@ -38,7 +44,7 @@ class ForumCommentThreadTest {
                     ForumCommentThread(5, root, null, 0, loadReplies = { page ->
                         pages += page
                         ForumPage(21, listOf(reply(12 + page.toLong(), "回复页 $page")))
-                    }) { comment, _ -> Text(comment.content) }
+                    }) { comment, _, actions -> Column { Text(comment.content); actions?.invoke() } }
                 }
             }
         }
@@ -60,7 +66,7 @@ class ForumCommentThreadTest {
             NoveliaTheme("light") {
                 ForumCommentThread(5, root, viewer.value, 0, loadReplies = {
                     ForumPage(1, listOf(reply(12, if(viewer.value.role == "admin") "管理员可见原文" else "公开回复")))
-                }) { comment, _ -> Text(comment.content) }
+                }) { comment, _, actions -> Column { Text(comment.content); actions?.invoke() } }
             }
         }
         compose.onNodeWithText("查看 21 条回复").performClick()
@@ -76,7 +82,7 @@ class ForumCommentThreadTest {
             NoveliaTheme("light") {
                 ForumCommentThread(5, root.copy(status = 1), null, 0, loadReplies = {
                     ForumPage(1, listOf(reply(12, "已有回复")))
-                }) { comment, rootPublished -> Text("${comment.content}:$rootPublished") }
+                }) { comment, rootPublished, actions -> Column { Text("${comment.content}:$rootPublished"); actions?.invoke() } }
             }
         }
         compose.onNodeWithText("一级评论:false").assertExists()
@@ -90,7 +96,7 @@ class ForumCommentThreadTest {
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                     ForumCommentThread(5, root, null, 0, blockedUsers = setOf("屏蔽者"), loadReplies = {
                         ForumPage(21, listOf(reply(12, "应隐藏", "屏蔽者"), reply(13, "应保留")))
-                    }) { comment, _ -> Text(comment.content) }
+                    }) { comment, _, actions -> Column { Text(comment.content); actions?.invoke() } }
                 }
             }
         }
@@ -107,7 +113,7 @@ class ForumCommentThreadTest {
                 ForumCommentThread(5, root, null, 0, loadReplies = {
                     if(attempts++ == 0) throw IOException("测试连接中断")
                     ForumPage(1, listOf(reply(12, "重试成功")))
-                }) { comment, _ -> Text(comment.content) }
+                }) { comment, _, actions -> Column { Text(comment.content); actions?.invoke() } }
             }
         }
         compose.onNodeWithText("查看 21 条回复").performClick()
@@ -124,7 +130,7 @@ class ForumCommentThreadTest {
                 ForumCommentThread(5, root, null, 0, focus = ForumReplyFocus(root.id, 1, 77), loadReplies = { page ->
                     pages += page
                     ForumPage(21, listOf(reply(77, "刚发布的回复")))
-                }) { comment, _ -> Text(comment.content) }
+                }) { comment, _, actions -> Column { Text(comment.content); actions?.invoke() } }
             }
         }
         compose.onNodeWithText("收起回复").assertExists()
@@ -137,10 +143,10 @@ class ForumCommentThreadTest {
             NoveliaTheme("light") {
                 ForumCommentThread(5, root.copy(replyCount = 0), null, 0, loadReplies = {
                     ForumPage(1, listOf(reply(12, "没有计数也能读取")))
-                }) { comment, _ -> Text(comment.content) }
+                }) { comment, _, actions -> Column { Text(comment.content); actions?.invoke() } }
             }
         }
-        compose.onNodeWithText("查看回复").performClick()
+        compose.onNodeWithText("查看回复（数量暂不可用）").performClick()
         compose.onNodeWithText("没有计数也能读取").assertExists()
         compose.onNodeWithText("收起回复").performClick()
         compose.onNodeWithText("查看 1 条回复").assertExists()
@@ -154,10 +160,50 @@ class ForumCommentThreadTest {
                     focus = ForumReplyFocus(root.id, 0, 77), loadReplies = { page ->
                         pages += page
                         ForumPage(21, listOf(reply(if(page == 0) 12 else 77, if(page == 0) "旧回复" else "新回复末页")))
-                    }) { comment, _ -> Text(comment.content) }
+                    }) { comment, _, actions -> Column { Text(comment.content); actions?.invoke() } }
             }
         }
         compose.onNodeWithText("新回复末页").assertExists()
         compose.runOnIdle { assertEquals(listOf(0, 1), pages) }
+    }
+
+    @Test fun countsAppearBeforeOpeningAndSurviveLazyItemDisposal() {
+        var countReads = 0; var bodyReads = 0
+        val roots = (8L..27L).map { root.copy(id = it, replyCount = 0, content = "根评论 $it") }
+        compose.setContent { NoveliaTheme("light") {
+            val counts = remember { mutableStateMapOf<Long, Long?>() }
+            LaunchedEffect(Unit) {
+                loadForumReplyCounts(roots, { id -> countReads++; if(id == 8L) 3L else 0L }) { id, count -> counts[id] = count }
+            }
+            LazyColumn(Modifier.fillMaxSize().testTag("lazy-forum-comments")) {
+                items(roots, key = { it.id }) { comment ->
+                    ForumCommentThread(5, comment, null, 0, knownReplyCount = counts[comment.id],
+                        countLoading = !counts.containsKey(comment.id), onReplyCount = { counts[comment.id] = it }, loadReplies = {
+                            bodyReads++; ForumPage(3, listOf(reply(31, "线程回复")))
+                        }) { item, _, actions -> Column { Text(item.content, Modifier.height(180.dp)); actions?.invoke() } }
+                }
+            }
+        } }
+        compose.onNodeWithText("查看 3 条回复").assertExists()
+        compose.runOnIdle { assertEquals(0, bodyReads) }
+        compose.onNodeWithText("查看 3 条回复").performClick()
+        compose.onNodeWithText("线程回复").assertExists()
+        compose.onNodeWithText("收起回复").performClick()
+        compose.onNodeWithTag("lazy-forum-comments").performScrollToIndex(19)
+        compose.onNodeWithText("根评论 8").assertDoesNotExist()
+        compose.onNodeWithTag("lazy-forum-comments").performScrollToIndex(0)
+        compose.onNodeWithText("查看 3 条回复").assertExists()
+        compose.runOnIdle { assertEquals(20, countReads); assertEquals(1, bodyReads) }
+    }
+
+    @Test fun emptyReplyCountIsVisibleWithoutOpeningTheThread() {
+        var reads = 0
+        compose.setContent { NoveliaTheme("light") {
+            ForumCommentThread(5, root.copy(replyCount = 0), null, 0, knownReplyCount = 0, loadReplies = {
+                reads++; ForumPage(0, emptyList())
+            }) { comment, _, actions -> Column { Text(comment.content); actions?.invoke() } }
+        } }
+        compose.onNodeWithText("暂无回复").assertIsNotEnabled()
+        compose.runOnIdle { assertEquals(0, reads) }
     }
 }

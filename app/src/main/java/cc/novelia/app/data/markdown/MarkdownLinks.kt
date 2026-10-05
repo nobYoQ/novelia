@@ -60,7 +60,11 @@ object MarkdownLinks {
         }
         if (!isInternal(resolved)) return null
         val uri = URI(resolved)
-        if (uri.host.equals("forum.novelia.cc", true)) return if(uri.path.trimEnd('/').isEmpty() && uri.rawQuery == null) "community" else null
+        if (uri.host.equals("forum.novelia.cc", true)) return if(uri.rawQuery != null) null else when(uri.path.trimEnd('/')) {
+            "" -> "community"
+            "/rules" -> "forum-rules"
+            else -> null
+        }
         // 站点列表页使用 WebView，保留 URL 中的筛选和分页参数。
         if (uri.rawQuery != null) return null
         return when (uri.path.trimEnd('/')) {

@@ -4,6 +4,8 @@ package cc.novelia.app.ui.community
 import cc.novelia.app.data.model.ForumSort
 import cc.novelia.app.data.model.ForumCategory
 import cc.novelia.app.data.catalog.ForumLinks
+import cc.novelia.app.data.library.SavedArticleFreshness
+import cc.novelia.app.data.model.ForumPage
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
@@ -42,10 +44,13 @@ import cc.novelia.app.ui.theme.motionClickable
     var category by rememberSaveable { mutableStateOf(available.first().slug) }; var page by rememberSaveable { mutableIntStateOf(0) }; var search by rememberSaveable { mutableStateOf("") }; var saved by rememberSaveable { mutableStateOf(false) }
     var source by rememberSaveable { mutableIntStateOf(0) }
     var sort by rememberSaveable { mutableStateOf(ForumSort.ACTIVE) }
+    var searchExpanded by rememberSaveable { mutableStateOf(false) }
+    var localRefresh by remember { mutableIntStateOf(0) }
     LaunchedEffect(available) {
         if(available.none { it.slug == category }) { category = available.first().slug; page = 0 }
     }
     val profile by c.forumSession.profile.collectAsStateWithLifecycle()
+    val mainProfile by c.session.profile.collectAsStateWithLifecycle()
     val state by c.store.state.collectAsStateWithLifecycle()
     var draftBoxOpen by rememberSaveable { mutableStateOf(false) }
     fun showFeed(value: Int, local: Boolean = false) { source = value; saved = local; page = 0 }
@@ -59,24 +64,40 @@ import cc.novelia.app.ui.theme.motionClickable
                 ForumAccountAction.FAVORITES -> c.requireForumLogin { showFeed(1) }
                 ForumAccountAction.LOCAL -> showFeed(0, local = true)
                 ForumAccountAction.STRIKES -> c.requireForumLogin { c.go("forum-strikes") }
-                ForumAccountAction.RULES -> c.openMarkdownLink("${ForumLinks.ORIGIN}/rules")
+                ForumAccountAction.RULES -> c.go("forum-rules")
                 ForumAccountAction.LOGOUT -> c.action("已退出论坛登录") { c.forumSession.logout(); showFeed(0) }
             }
         }
     }) { padding ->
-        Column(Modifier.padding(padding)) {
-            ScrollableTabRow(available.indexOfFirst { it.slug == category }.coerceAtLeast(0), edgePadding = 12.dp) { available.forEach { item -> Tab(category == item.slug, { category = item.slug; page = 0; saved = false; source = 0 }, text = { Text(item.title) }) } }
-            Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(if(saved) "本地收藏" else when(source) { 1 -> "云端收藏"; 2 -> "我的帖子"; else -> "全部帖子" }, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+        Column(Modifier.padding(padding).fillMaxSize()) {
+            ForumRulesReminder(c)
+            ForumCategoryTabs(available, category) { category = it; page = 0; saved = false; source = 0 }
+            ForumFeedControls(if(saved) "本地收藏" else when(source) { 1 -> "云端收藏"; 2 -> "我的帖子"; else -> "全部帖子" },
+                search, searchExpanded,
+                if(saved) "搜索本地收藏" else if(source == 0) "搜索论坛帖子" else "在本页文章中查找",
+                onExpanded = { searchExpanded = it }, onSearch = { search = it; page = 0 }) {
                 if(source == 0 && !saved) ForumSortPicker(sort) { sort = it; page = 0 }
-                else TextButton(onClick = { showFeed(0) }) { Text("返回全部帖子") }
+                else {
+                    TextButton(onClick = { showFeed(0) }) { Text("返回全部帖子") }
+                    if(saved) IconButton(onClick = { localRefresh++ }) { Icon(Icons.Outlined.Refresh, "刷新本地收藏状态") }
+                }
             }
-            OutlinedTextField(search, { search = it; page = 0 }, label = { Text(if(saved) "搜索本地收藏" else if(source == 0) "搜索论坛帖子" else "在本页文章中查找") }, singleLine = true, leadingIcon = { Icon(Icons.Outlined.Search, null) }, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), shape = MaterialTheme.shapes.extraLarge)
             val settledSearch = rememberDebouncedQuery(search)
             MotionContent(listOf(category, saved, source), Modifier.weight(1f), animateInitial = false) {
                 if(saved) {
                     val articles = remember(state.savedArticles, settledSearch) { state.savedArticles.filter { it.title.contains(settledSearch, true) } }
-                    ArticleList(c, Page(1, articles), 0, {})
+                    val pageCount = ForumPage<Article>(articles.size.toLong(), emptyList()).pageCount().coerceAtLeast(1)
+                    val localPage = page.coerceIn(0, pageCount - 1)
+                    val snapshots = articles.drop(localPage * 20).take(20)
+                    AsyncContent(listOf("local-articles", snapshots.map { it.id }, mainProfile?.userId, mainProfile?.role,
+                        profile?.userId, profile?.role), refreshKey = localRefresh,
+                        load = { c.refreshSavedArticles(snapshots, available) }) { refreshed, _ ->
+                        val current = state.savedArticles.associateBy { it.id }
+                        val visible = refreshed.mapNotNull { current[it.article.id] }
+                        val freshness = refreshed.associate { item -> item.article.id to
+                            if(current[item.article.id] != item.article) SavedArticleFreshness.CURRENT else item.freshness }
+                        ArticleList(c, Page(pageCount, visible), localPage, { page = it }, freshness)
+                    }
                 } else AsyncContent(listOf(category, page, settledSearch, source, sort, profile?.userId), load = {
                     when(source) { 1 -> c.forumApi.favorites(page); 2 -> c.forumApi.myPosts(page); else -> c.forumApi.posts(page, category, settledSearch, sort.apiValue) }
                 }) { result, _ ->
@@ -88,16 +109,23 @@ import cc.novelia.app.ui.theme.motionClickable
     }
     if(draftBoxOpen) AppSheet(onDismissRequest = { draftBoxOpen = false }) { ArticleDraftBox(c) { draftBoxOpen = false } }
 }
-@Composable private fun ArticleList(c: AppController, result: Page<Article>, page: Int, changePage: (Int) -> Unit) {
+@Composable private fun ArticleList(c: AppController, result: Page<Article>, page: Int, changePage: (Int) -> Unit,
+    freshness: Map<String, SavedArticleFreshness> = emptyMap()) {
     val reducedMotion = appReducedMotion()
     AppLazyColumn {
         if(result.items.isEmpty()) item { EmptyState("这里暂时没有文章", "试试其他分类，或调整搜索词。", Icons.Outlined.Forum) }
         items(result.items, key = { it.id }, contentType = { "article" }) { article ->
+            val verified = freshness[article.id]?.let { it == SavedArticleFreshness.CURRENT } ?: true
             Column(if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(AppMotion.Quick), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit))) {
                 Column(Modifier.fillMaxWidth().motionClickable { c.go("article/${article.id}") }.padding(horizontal = 20.dp, vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) { if(article.pinned) Icon(Icons.Outlined.PushPin, "置顶", Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary); Text(categories[article.category] ?: article.category, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium); if(article.locked) Icon(Icons.Outlined.Lock, "已锁定", Modifier.size(14.dp)) }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) { if(verified && article.pinned) Icon(Icons.Outlined.PushPin, "置顶", Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary); Text(categories[article.category] ?: article.category, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium); if(verified && article.locked) Icon(Icons.Outlined.Lock, "已锁定", Modifier.size(14.dp)); if(verified && article.hidden) Text("已隐藏", style = MaterialTheme.typography.labelMedium) }
                     Text(article.title, style = MaterialTheme.typography.titleMedium)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("${article.user.username} · ${displayDate(article.createAt)}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant); Text("${article.numComments} 回复", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("${article.user.username} · ${displayDate(article.createAt)}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if(verified) Text("${article.numComments} 评论 · ${article.numViews} 查看", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    if(!verified) Text(if(freshness[article.id] == SavedArticleFreshness.UNAVAILABLE) "已删除或不可访问" else "状态未核实 · 显示本地缓存", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if(article.id in freshness) TextButton(onClick = { c.store.update { it.copy(savedArticles = it.savedArticles.filterNot { saved -> saved.id == article.id }) } }) { Text("取消本地收藏") }
                 }
                 HorizontalDivider(Modifier.padding(horizontal = 20.dp), color = MaterialTheme.colorScheme.outlineVariant)
             }

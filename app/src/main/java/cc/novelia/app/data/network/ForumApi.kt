@@ -37,6 +37,9 @@ class ForumApi(private val http: NoveliaApi) {
     suspend fun comments(id: Long, page: Int) = http.get<ForumPage<ForumComment>>("${postPath(id)}comment", paging(page, 20))
     suspend fun replies(id: Long, rootId: Long, page: Int) =
         http.get<ForumPage<ForumComment>>("${postPath(id)}comment/${positive(rootId)}/reply", paging(page, 20))
+    // 线上一级评论经常省略 replyCount；只取一项，使用独立回复接口的 total 补齐计数。
+    suspend fun replyCount(id: Long, rootId: Long): Long =
+        http.get<ForumPage<ForumComment>>("${postPath(id)}comment/${positive(rootId)}/reply", paging(0, 1)).total.also { require(it >= 0) }
     suspend fun createComment(id: Long, input: ForumCommentInput): ForumComment {
         requireValidComment(input.content)
         require(input.rootId == null || input.rootId > 0) { "回复根评论 ID 必须为正整数" }

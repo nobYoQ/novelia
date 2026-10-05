@@ -35,7 +35,7 @@ class LibraryStateCodecTest {
         try {
             var writes = 0
             val codec = LibraryStateCodec(directory, { it.readText() }, { file, text -> writes++; file.writeText(text) })
-            val state = LibraryState(savedArticles = listOf(Article(id = "post", content = "正文".repeat(100_000))), drafts = mapOf("article:new" to "草稿全文"))
+            val state = LibraryState(savedArticles = listOf(Article(id = "post", content = "正文".repeat(100_000))), drafts = mapOf("article:new" to "草稿全文"), forumRulesReminderDismissed = true)
             assertEquals(state, codec.decode(appJson.encodeToString(state)))
             val first = codec.encode(state)
             assertTrue(first.length < 5_000)

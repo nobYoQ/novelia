@@ -10,16 +10,26 @@
 
 [CommunityScreen.kt](../../app/src/main/java/cc/novelia/app/ui/community/CommunityScreen.kt) 从服务器加载分类，按站务公告、小说讨论、意见反馈的顺序展示，首次进入默认打开站务公告。在线列表按服务端分页加载，每页 20 条，并支持最近活跃、最新发布、浏览最多、评论最多四种排序。
 
+[ForumFeedControls.kt](../../app/src/main/java/cc/novelia/app/ui/community/ForumFeedControls.kt) 在空间足够时均分分类栏，分类较多或字体较大时允许横向滚动。搜索框默认收起，可从列表工具栏展开、收起；收起保留查询条件，清空按钮解除筛选。
+
+帖子列表同时展示「评论数 · 查看量」，使用服务端 `commentsCount/viewsCount`，大字号或窄屏时元信息自动换行。当前状态尚未核实的本地收藏不会把旧统计当作最新数据。
+
 | 操作 | 实际数据范围 |
 | --- | --- |
 | 切换社区分类/页码 | 请求所选分类与页码的帖子列表 |
 | 在全部帖子中输入搜索词 | 将 `q` 发送给服务器，在所选分类内搜索 |
 | 在我的帖子／云端收藏中输入搜索词 | 筛选当前页的帖子标题 |
-| 切换本地收藏列表 | 读取本设备 `savedArticles` |
+| 切换本地收藏列表／页码 | 每页读取 20 条本地收藏，并核对各帖子当前远端详情；可手动刷新 |
 | 切换云端收藏／我的帖子 | 使用独立论坛会话读取对应分页接口 |
 | 屏蔽用户 | 在客户端隐藏相应列表或评论内容，不修改服务端账号关系 |
 
 收藏文章会保存文章资料与正文到本地状态，长正文由持久化层单独存储。当前文章详情页仍会加载远端详情，因此不能由“收藏里保存了正文”推导出所有文章入口都支持离线打开。换机需要保留收藏时，应使用[完整阅读资料备份](../data/backup-and-recovery.md)。
+
+[SavedArticles.kt](../../app/src/main/java/cc/novelia/app/data/library/SavedArticles.kt) 以最多 4 个并发请求核对当前页，成功更新收藏中的标题、锁定、置顶、隐藏、回复数量及正文。打开帖子详情也更新同一收藏快照。网络或登录失败保留收藏并显示「状态未核实 · 显示本地缓存」，不把旧锁定／置顶状态和回复数量当作当前状态；403、404、410 显示「已删除或不可访问」。列表可直接取消本地收藏。提交前核对账号和原快照，已取消的收藏不会恢复，较早响应不能覆盖新详情。
+
+[ForumRulesScreen.kt](../../app/src/main/java/cc/novelia/app/ui/community/ForumRulesScreen.kt) 提供原生社区守则页面，进入时检查原站更新，也支持手动更新。先显示上次保存的守则；首次离线打开时显示随 App 打包的 2026-09-30 副本。更新失败或原站结构无法识别时保留旧内容并明确提示，处罚记录按钮进入原生账号记录页。首次使用论坛时提供可关闭的守则提示；关闭状态通过 `forumRulesReminderDismissed` 持久保存，后续列表、文章和编辑器不再显示。评论输入辅助条上方不重复放置提示，守则始终可从「我的」菜单打开。
+
+[ForumCommunityRulesRepository.kt](../../app/src/main/java/cc/novelia/app/data/network/ForumCommunityRulesRepository.kt) 匿名读取线上 `/rules` 的应用入口；构建变化时读取入口脚本的 `commitSha`，再从原站公开仓库下载**该部署提交**的 `CommunityRulesView.vue`。相同构建只检查入口，不重复下载源码；不读取仓库尚未部署的 main。只将模板文字和列表转成原生控件，不执行脚本，全部校验成功后原子替换缓存。原站暂无独立守则 API，若构建元信息、源码路径或模板结构发生变化，将提示同步未完成并保留可用副本。
 
 [ArticleScreen.kt](../../app/src/main/java/cc/novelia/app/ui/community/ArticleScreen.kt) 负责文章正文、讨论入口、收藏以及编辑/删除入口。论坛按用户 ID 和角色判断权限，普通作者仅能在发帖后 20 分钟内删除，管理员不受时限影响；旧站文章仍按用户名显示作者操作。服务端负责最终权限校验。删除文章会发送远端请求，与移除本地收藏不同。
 
@@ -69,7 +79,7 @@ flowchart TD
 
 ## 4. 评论与回复
 
-[ForumCommentsPanel.kt](../../app/src/main/java/cc/novelia/app/ui/community/ForumCommentsPanel.kt) 分页读取一级评论，[ForumCommentThread.kt](../../app/src/main/java/cc/novelia/app/ui/community/ForumCommentThread.kt) 展开后通过 `post/{postId}/comment/{rootId}/reply` 独立分页加载子回复，每页 20 条。线上可能省略 `replyCount`，因此始终提供查看回复入口，并以回复接口的 `total` 更新数量。发送子回复后展开对应讨论串并定位末页；账号或角色切换后清除已加载回复。回复提交根评论 `rootId`，修改只传 `content`。评论最多 1000 个 Unicode 码点；普通作者发布后 20 分钟内可编辑或删除，管理员不受时限限制，并可展开隐藏／删除评论的原文。帖子和评论表单均提供 `/rules` 社区守则入口。
+[ForumCommentsPanel.kt](../../app/src/main/java/cc/novelia/app/ui/community/ForumCommentsPanel.kt) 分页读取一级评论，[ForumCommentThread.kt](../../app/src/main/java/cc/novelia/app/ui/community/ForumCommentThread.kt) 展开后通过 `post/{postId}/comment/{rootId}/reply` 独立分页加载子回复正文，每页 20 条。线上省略 `replyCount` 时，列表提前以 `page=1&page_size=1` 读取该接口的 `total`，最多 4 个并发请求，每条完成后即可显示「查看 X 条回复」或「暂无回复」。读取失败保持未知，允许展开重试，不误报零回复。计数保存在列表层，滚出屏幕后回来仍保留；刷新评论、发送／删除、切换账号或角色时重新核对。「查看回复」与回复、屏蔽／编辑等操作在同一行，空间不足时自动换行。发送子回复后展开对应讨论串并定位末页；账号或角色切换后清除已加载回复。回复提交根评论 `rootId`，修改只传 `content`。评论最多 1000 个 Unicode 码点；普通作者发布后 20 分钟内可编辑或删除，管理员不受时限限制，并可展开隐藏／删除评论的原文。
 
 [CommentsPanel.kt](../../app/src/main/java/cc/novelia/app/ui/community/CommentsPanel.kt) 继续服务于主站作品和旧文章评论。调用方提供 `site` 与父目标，不应只凭显示标题推断评论归属。以下为主站评论行为：
 

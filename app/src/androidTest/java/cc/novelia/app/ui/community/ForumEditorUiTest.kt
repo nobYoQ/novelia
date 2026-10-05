@@ -54,9 +54,10 @@ class ForumEditorUiTest {
         runBlocking { app.initialization.await() }
         val key = "article:${article.id}"
         val previous = app.store.state.value.drafts[key]
+        val previousNoticeDismissed = app.store.state.value.forumRulesReminderDismissed
         try {
             compose.runOnUiThread {
-                app.store.update { it.copy(drafts = it.drafts - key) }
+                app.store.update { it.copy(drafts = it.drafts - key, forumRulesReminderDismissed = false) }
                 compose.activity.setContent {
                     NoveliaTheme("light") {
                         val c = AppController(app, rememberNavController(), rememberCoroutineScope(), remember { SnackbarHostState() })
@@ -67,7 +68,7 @@ class ForumEditorUiTest {
             check()
         } finally {
             compose.runOnUiThread { compose.activity.setContent {} }
-            compose.runOnIdle { app.store.update { it.copy(drafts = if(previous == null) it.drafts - key else it.drafts + (key to previous)) } }
+            compose.runOnIdle { app.store.update { it.copy(drafts = if(previous == null) it.drafts - key else it.drafts + (key to previous), forumRulesReminderDismissed = previousNoticeDismissed) } }
         }
     }
 }
