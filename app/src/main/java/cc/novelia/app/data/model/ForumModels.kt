@@ -4,7 +4,7 @@ import cc.novelia.app.data.catalog.ForumLinks
 import kotlinx.serialization.Serializable
 import java.time.Instant
 
-/** 合约核对于 auto-novel/forum 部署 24db0ee（2026-10-03，北京时间）。 */
+/** 合约核对于 auto-novel/forum 部署 36f8894（2026-10-04，北京时间）。 */
 @Serializable data class ForumPage<T>(val total: Long, val items: List<T>) {
     fun pageCount(pageSize: Int = 20): Int {
         require(pageSize > 0 && total >= 0)
@@ -60,3 +60,9 @@ enum class ForumSort(val apiValue: String, val label: String) {
     val createdEpoch get() = Instant.parse(createdAt).epochSecond
     val revokedEpoch get() = revokedAt?.let { Instant.parse(it).epochSecond }
 }
+
+@Serializable data class ForumStrikePage(val total: Long, val items: List<ForumStrike>, val latestStrikeId: Long? = null) {
+    fun pageCount() = ForumPage(total, items).pageCount()
+}
+@Serializable data class ForumStrikeReadState(val hasUnread: Boolean)
+@Serializable data class ForumAttentionStatus(val strikes: ForumStrikeReadState)

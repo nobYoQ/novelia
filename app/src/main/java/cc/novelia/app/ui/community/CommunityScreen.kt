@@ -18,6 +18,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import cc.novelia.app.data.model.Article
 import cc.novelia.app.data.model.Page
 import cc.novelia.app.ui.components.AppLazyColumn
@@ -50,6 +55,21 @@ import cc.novelia.app.ui.theme.motionClickable
         if(available.none { it.slug == category }) { category = available.first().slug; page = 0 }
     }
     val profile by c.forumSession.profile.collectAsStateWithLifecycle()
+    val forumBinding = c.forumSession.capture()
+    var hasUnreadStrikes by remember(forumBinding) { mutableStateOf(false) }
+    var attentionRefresh by remember { mutableIntStateOf(0) }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    // 仅在社区前台检查；菜单展开立即复核。失败保留当前提醒，退出或换号清除。
+    LaunchedEffect(forumBinding, profile != null, attentionRefresh, lifecycle) {
+        if(profile != null) lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while(true) {
+                try { hasUnreadStrikes = c.forumAccountApi.attentionStatus(forumBinding).strikes.hasUnread }
+                catch(error: CancellationException) { throw error }
+                catch(_: Exception) { }
+                delay(60_000)
+            }
+        }
+    }
     val mainProfile by c.session.profile.collectAsStateWithLifecycle()
     val state by c.store.state.collectAsStateWithLifecycle()
     var draftBoxOpen by rememberSaveable { mutableStateOf(false) }
@@ -57,7 +77,7 @@ import cc.novelia.app.ui.theme.motionClickable
     Screen("社区", actions = {
         IconButton(onClick = { draftBoxOpen = true }) { Icon(Icons.Outlined.Drafts, "新帖草稿箱") }
         IconButton(onClick = { c.go("compose") }) { Icon(Icons.Outlined.Edit, "新建帖子草稿") }
-        ForumAccountMenu(profile) { action ->
+        ForumAccountMenu(profile, hasUnreadStrikes, onOpen = { attentionRefresh++ }) { action ->
             when(action) {
                 ForumAccountAction.LOGIN -> c.go("forum-login")
                 ForumAccountAction.POSTS -> c.requireForumLogin { showFeed(2) }

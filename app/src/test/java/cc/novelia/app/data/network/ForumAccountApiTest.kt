@@ -2,6 +2,13 @@ package cc.novelia.app.data.network
 
 import cc.novelia.app.data.auth.*
 import cc.novelia.app.data.model.ForumSort
+import cc.novelia.app.data.model.Profile
+import kotlinx.coroutines.async
+import kotlinx.coroutines.Dispatchers
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import okhttp3.mockwebserver.Dispatcher
+import okhttp3.mockwebserver.RecordedRequest
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -9,6 +16,15 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ForumAccountApiTest {
+    private class ForumTestSession : ApiSession {
+        private val state = SessionState("synthetic-forum-session", Profile("测试账号", "member", 0, Long.MAX_VALUE, 42))
+        override val target = AuthTarget.FORUM
+        override val token get() = state.token
+        override fun capture() = state.capture()
+        override fun tokenFor(binding: SessionBinding) = state.tokenFor(binding)
+        override suspend fun refreshIfCurrent(binding: SessionBinding, previousToken: String?) = false
+        fun changeAccount() = state.replace("synthetic-next-session", Profile("另一账号", "member", 0, Long.MAX_VALUE, 43))
+    }
     @Test fun allFourPresetsSendTheServerSortValueAndPreserveFilters() = runBlocking {
         MockWebServer().use { server ->
             val api = ForumApi(NoveliaApi(null, server.url("/api/v1/").toString()))
@@ -63,6 +79,74 @@ class ForumAccountApiTest {
             server.enqueue(MockResponse().setResponseCode(401))
             val api = ForumAccountApi(NoveliaApi(null, server.url("/").toString()))
             assertEquals(401, (runCatching { api.strikes(0) }.exceptionOrNull() as ApiException).status)
+            assertEquals(1, server.requestCount)
+        }
+    }
+
+    @Test fun unreadStatusAndAcknowledgementUseTheForumSessionAndExact64BitSnapshot() = runBlocking {
+        MockWebServer().use { server ->
+            val session = ForumTestSession()
+            val client = ForumAccountApi(NoveliaApi(session, server.url("/api/v1/").toString()))
+            val binding = session.capture()
+            server.enqueue(MockResponse().setBody("""{"strikes":{"hasUnread":true}}"""))
+            assertTrue(client.attentionStatus(binding).strikes.hasUnread)
+            server.enqueue(MockResponse().setBody("""{"total":0,"items":[],"latestStrikeId":9007199254740993}"""))
+            val page = client.strikes(0, binding)
+            assertEquals(9007199254740993L, page.latestStrikeId)
+            server.enqueue(MockResponse().setBody("""{"hasUnread":true}"""))
+            assertTrue(client.markStrikesRead(page.latestStrikeId!!, binding).hasUnread)
+            val requests = List(3) { server.takeRequest() }
+            assertEquals("/api/v1/me/attention-status", requests[0].path)
+            assertEquals("/api/v1/me/strikes?page=1&page_size=20", requests[1].path)
+            assertEquals("/api/v1/me/strikes/read-state", requests[2].path)
+            assertEquals("PUT", requests[2].method)
+            assertEquals("""{"throughId":9007199254740993}""", requests[2].body.readUtf8())
+            requests.forEach { assertEquals("Bearer synthetic-forum-session", it.getHeader("Authorization")); assertNull(it.getHeader("Cookie")) }
+            assertTrue(runCatching { client.markStrikesRead(-1, binding) }.isFailure)
+            assertEquals(3, server.requestCount)
+        }
+    }
+
+    @Test fun legacyStrikePagesDoNotInventAnAcknowledgementBoundary() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""{"total":0,"items":[]}"""))
+            val client = ForumAccountApi(NoveliaApi(null, server.url("/").toString()))
+            assertNull(client.strikes(0).latestStrikeId)
+            assertEquals(1, server.requestCount)
+        }
+    }
+
+    @Test fun viewingAnOldSnapshotCannotMarkTheNextAccountsStrikesRead() = runBlocking {
+        MockWebServer().use { server ->
+            val session = ForumTestSession()
+            val client = ForumAccountApi(NoveliaApi(session, server.url("/").toString()))
+            val binding = session.capture()
+            server.enqueue(MockResponse().setBody("""{"total":0,"items":[],"latestStrikeId":12}"""))
+            val page = client.strikes(0, binding)
+            session.changeAccount()
+            assertTrue(runCatching { client.markStrikesRead(page.latestStrikeId!!, binding) }.exceptionOrNull() is SessionChangedException)
+            assertEquals(1, server.requestCount)
+        }
+    }
+
+    @Test fun lateUnreadResponsesAreDiscardedAfterAccountChanges() = runBlocking {
+        MockWebServer().use { server ->
+            val received = CountDownLatch(1); val release = CountDownLatch(1)
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse {
+                    received.countDown()
+                    check(release.await(5, TimeUnit.SECONDS))
+                    return MockResponse().setBody("""{"strikes":{"hasUnread":true}}""")
+                }
+            }
+            val session = ForumTestSession()
+            val client = ForumAccountApi(NoveliaApi(session, server.url("/").toString()))
+            val pending = async(Dispatchers.Default) { runCatching { client.attentionStatus() } }
+            try {
+                assertTrue(received.await(5, TimeUnit.SECONDS))
+                session.changeAccount()
+            } finally { release.countDown() }
+            assertTrue(pending.await().exceptionOrNull() is SessionChangedException)
             assertEquals(1, server.requestCount)
         }
     }

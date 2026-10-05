@@ -37,8 +37,11 @@ import cc.novelia.app.data.model.Profile
 
 internal enum class ForumAccountAction { LOGIN, POSTS, FAVORITES, LOCAL, STRIKES, RULES, LOGOUT }
 
-@Composable internal fun ForumAccountMenu(profile: Profile?, onAction: (ForumAccountAction) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
+@Composable internal fun ForumAccountMenu(profile: Profile?, onAction: (ForumAccountAction) -> Unit) =
+    ForumAccountMenu(profile, false, {}, onAction)
+
+@Composable internal fun ForumAccountMenu(profile: Profile?, hasUnreadStrikes: Boolean, onOpen: () -> Unit = {}, onAction: (ForumAccountAction) -> Unit) {
+    var expanded by remember(profile?.userId, profile?.username) { mutableStateOf(false) }
     val reduced = appReducedMotion()
     val visibility = remember { MutableTransitionState(false) }
     visibility.targetState = expanded
@@ -47,12 +50,13 @@ internal enum class ForumAccountAction { LOGIN, POSTS, FAVORITES, LOCAL, STRIKES
     val density = LocalDensity.current
     val position = remember(density) { ForumPanelPosition(with(density) { 12.dp.roundToPx() }, with(density) { 8.dp.roundToPx() }) }
     Box {
-        TextButton(onClick = { expanded = !expanded }, modifier = Modifier.testTag("forum-account-toggle").semantics {
+        TextButton(onClick = { expanded = !expanded; if(expanded) onOpen() }, modifier = Modifier.testTag("forum-account-toggle").semantics {
             contentDescription = "论坛我的"
-            stateDescription = if(expanded) "已展开" else "已收起"
+            stateDescription = (if(expanded) "已展开" else "已收起") + if(profile != null && hasUnreadStrikes) "，有新的处罚记录" else ""
         }) {
             Icon(Icons.Outlined.PersonOutline, null, Modifier.size(20.dp))
             Spacer(Modifier.width(4.dp)); Text("我的")
+            if(profile != null && hasUnreadStrikes) Badge(Modifier.padding(start = 4.dp).testTag("forum-account-unread"))
             Icon(Icons.Outlined.KeyboardArrowDown, null, Modifier.size(18.dp).graphicsLayer { rotationZ = angle })
         }
         if(visibility.currentState || visibility.targetState) {
@@ -79,7 +83,7 @@ internal enum class ForumAccountAction { LOGIN, POSTS, FAVORITES, LOCAL, STRIKES
                             if(profile == null) FilledTonalButton(onClick = { select(ForumAccountAction.LOGIN) }, enabled = expanded, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) { Text("登录论坛") }
                             ForumPanelItem("我的帖子", Icons.Outlined.Description, expanded) { select(ForumAccountAction.POSTS) }
                             ForumPanelItem("云端收藏", Icons.Outlined.BookmarkBorder, expanded) { select(ForumAccountAction.FAVORITES) }
-                            ForumPanelItem("处罚记录", Icons.Outlined.Gavel, expanded) { select(ForumAccountAction.STRIKES) }
+                            ForumPanelItem("处罚记录", Icons.Outlined.Gavel, expanded, unread = profile != null && hasUnreadStrikes) { select(ForumAccountAction.STRIKES) }
                             HorizontalDivider(Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
                             ForumPanelItem("本地收藏", Icons.Outlined.Bookmarks, expanded) { select(ForumAccountAction.LOCAL) }
                             ForumPanelItem("社区守则", Icons.AutoMirrored.Outlined.Rule, expanded) { select(ForumAccountAction.RULES) }
@@ -92,12 +96,13 @@ internal enum class ForumAccountAction { LOGIN, POSTS, FAVORITES, LOCAL, STRIKES
     }
 }
 
-@Composable private fun ForumPanelItem(label: String, icon: ImageVector, enabled: Boolean, destructive: Boolean = false, onClick: () -> Unit) {
+@Composable private fun ForumPanelItem(label: String, icon: ImageVector, enabled: Boolean, destructive: Boolean = false, unread: Boolean = false, onClick: () -> Unit) {
     TextButton(onClick = onClick, enabled = enabled, shape = RoundedCornerShape(12.dp),
         colors = ButtonDefaults.textButtonColors(contentColor = if(destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface),
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp).heightIn(min = 52.dp), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)) {
         Icon(icon, null, Modifier.size(22.dp)); Spacer(Modifier.width(16.dp))
         Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+        if(unread) Text("新", Modifier.padding(horizontal = 8.dp).semantics { contentDescription = "有新的处罚记录" }, color = MaterialTheme.colorScheme.error)
         Icon(Icons.Outlined.ChevronRight, null, Modifier.size(18.dp))
     }
 }

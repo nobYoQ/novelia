@@ -12,6 +12,7 @@ import cc.novelia.app.ui.components.AppScrollColumn
 import cc.novelia.app.ui.components.Screen
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.data.model.ForumCommunityRules
+import cc.novelia.app.data.model.ForumRuleTable
 import cc.novelia.app.data.model.bundledForumCommunityRules
 import kotlinx.coroutines.CancellationException
 
@@ -47,8 +48,26 @@ import kotlinx.coroutines.CancellationException
     AppScrollColumn(modifier = modifier.fillMaxSize().testTag("forum-rules-page"),
         contentModifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         TextButton(onClick = onStrikes) { Text("查看处罚记录") }
-        document.blocks.forEach { block ->
-            Text(block.text, style = if(block.heading) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyMedium)
+        document.blocks.forEachIndexed { index, block ->
+            if(block.table != null) ForumPermissionsContent(block.table)
+            else if(index != 0 || !block.heading || block.text != "社区守则") {
+                Text(block.text, style = if(block.heading) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyMedium)
+            }
+        }
+    }
+}
+
+/** 将网页权限表按操作展示，窄屏及大字号无需横向滚动即可读完每种账号权限。 */
+@Composable private fun ForumPermissionsContent(table: ForumRuleTable) {
+    table.rows.forEachIndexed { index, permission ->
+        OutlinedCard(Modifier.fillMaxWidth().testTag("forum-rule-permission-$index")) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("${permission.site} · ${permission.operation}", style = MaterialTheme.typography.titleSmall)
+                permission.allowed.forEachIndexed { column, allowed ->
+                    Text("${table.headers[column + 2]}：${if(allowed) "允许" else "不允许"}",
+                        style = MaterialTheme.typography.bodyMedium)
+                }
+            }
         }
     }
 }

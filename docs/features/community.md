@@ -27,9 +27,11 @@
 
 [SavedArticles.kt](../../app/src/main/java/cc/novelia/app/data/library/SavedArticles.kt) 以最多 4 个并发请求核对当前页，成功更新收藏中的标题、锁定、置顶、隐藏、回复数量及正文。打开帖子详情也更新同一收藏快照。网络或登录失败保留收藏并显示「状态未核实 · 显示本地缓存」，不把旧锁定／置顶状态和回复数量当作当前状态；403、404、410 显示「已删除或不可访问」。列表可直接取消本地收藏。提交前核对账号和原快照，已取消的收藏不会恢复，较早响应不能覆盖新详情。
 
-[ForumRulesScreen.kt](../../app/src/main/java/cc/novelia/app/ui/community/ForumRulesScreen.kt) 提供原生社区守则页面，进入时检查原站更新，也支持手动更新。先显示上次保存的守则；首次离线打开时显示随 App 打包的 2026-09-30 副本。更新失败或原站结构无法识别时保留旧内容并明确提示，处罚记录按钮进入原生账号记录页。首次使用论坛时提供可关闭的守则提示；关闭状态通过 `forumRulesReminderDismissed` 持久保存，后续列表、文章和编辑器不再显示。评论输入辅助条上方不重复放置提示，守则始终可从「我的」菜单打开。
+[ForumRulesScreen.kt](../../app/src/main/java/cc/novelia/app/ui/community/ForumRulesScreen.kt) 提供原生社区守则页面，进入时检查原站更新，也支持手动更新。先显示上次保存的守则；首次离线打开时显示随 App 打包的 2026-10-04 副本，包括新增违规条款、处理办法和全部用户权限。权限按操作展示为卡片，分别说明普通未满月、普通已满月及受限用户是否允许，窄屏和大字号可纵向阅读。更新失败或原站结构无法识别时保留旧内容并明确提示，处罚记录按钮进入原生账号记录页。首次使用论坛时提供可关闭的守则提示；关闭状态通过 `forumRulesReminderDismissed` 持久保存，后续列表、文章和编辑器不再显示。评论输入辅助条上方不重复放置提示，守则始终可从「我的」菜单打开。
 
-[ForumCommunityRulesRepository.kt](../../app/src/main/java/cc/novelia/app/data/network/ForumCommunityRulesRepository.kt) 匿名读取线上 `/rules` 的应用入口；构建变化时读取入口脚本的 `commitSha`，再从原站公开仓库下载**该部署提交**的 `CommunityRulesView.vue`。相同构建只检查入口，不重复下载源码；不读取仓库尚未部署的 main。只将模板文字和列表转成原生控件，不执行脚本，全部校验成功后原子替换缓存。原站暂无独立守则 API，若构建元信息、源码路径或模板结构发生变化，将提示同步未完成并保留可用副本。
+[ForumCommunityRulesRepository.kt](../../app/src/main/java/cc/novelia/app/data/network/ForumCommunityRulesRepository.kt) 匿名读取线上 `/rules` 的应用入口；构建变化时读取入口脚本的 `commitSha`，再从原站公开仓库下载**该部署提交**的 `CommunityRulesView.vue`。相同构建只检查入口，不重复下载源码；不读取仓库尚未部署的 main。[ForumCommunityRulesParser.kt](../../app/src/main/java/cc/novelia/app/data/model/ForumCommunityRulesParser.kt) 将已知模板文字、列表及静态权限数据转成原生控件，不执行脚本；权限对象、列、循环和允许／不允许图标均通过完整校验后才替换缓存。原站暂无独立守则 API，若构建元信息、源码路径或模板结构发生变化，将提示同步未完成并保留可用副本。
+
+论坛「我的」入口和处罚菜单展示未读提示，仅在社区前台、恢复前台或展开菜单时检查认证服务。成功展示处罚列表后按响应的 `latestStrikeId` 确认已读；缺少字段的旧响应不写入。确认失败不会丢失已经展示的记录，可重试确认；确认后仍有新处罚时提示刷新。所有读取和确认都绑定当时的论坛会话，退出或换号后旧请求不能更新新账号，状态和处罚正文不持久保存。
 
 [ArticleScreen.kt](../../app/src/main/java/cc/novelia/app/ui/community/ArticleScreen.kt) 负责文章正文、讨论入口、收藏以及编辑/删除入口。论坛按用户 ID 和角色判断权限，普通作者仅能在发帖后 20 分钟内删除，管理员不受时限影响；旧站文章仍按用户名显示作者操作。服务端负责最终权限校验。删除文章会发送远端请求，与移除本地收藏不同。
 

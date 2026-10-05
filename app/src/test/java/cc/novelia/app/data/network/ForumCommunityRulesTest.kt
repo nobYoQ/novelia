@@ -17,6 +17,7 @@ class ForumCommunityRulesTest {
     private val nextSha = "0123456789abcdef0123456789abcdef01234567"
     // 原站部署 692916b 的静态守则；不包含用户评论或账号资料。
     private val template get() = javaClass.getResource("/forum-community-rules.vue")!!.readText(Charsets.UTF_8)
+    private val updatedTemplate get() = javaClass.getResource("/forum-community-rules-20261004.vue")!!.readText(Charsets.UTF_8)
     private fun html(name: String) = """<html><script type="module" src="/assets/index-$name.js"></script><script type="module" src="https://example.test/analytics.js"></script></html>"""
     private fun bundle(commit: String) = """const config={repository:{url:`https://github.com/auto-novel/forum`,commitSha:`$commit`}};"""
     private fun repository(server: MockWebServer, cache: MetadataCache) = ForumCommunityRulesRepository(cache,
@@ -43,6 +44,62 @@ class ForumCommunityRulesTest {
         assertTrue(runCatching { ForumCommunityRulesParser.entryPath(html("old") + html("new")) }.isFailure)
         assertTrue(runCatching { ForumCommunityRulesParser.commitSha("commitSha:`main`") }.isFailure)
         assertTrue(runCatching { ForumCommunityRulesParser.commitSha(bundle(sha) + bundle(nextSha)) }.isFailure)
+    }
+
+    @Test fun octoberFourthRulesPreserveEveryPermissionAndMatchTheOfflineCopy() {
+        val blocks = ForumCommunityRulesParser.parse(updatedTemplate)
+        assertEquals(bundledForumCommunityRules.blocks, blocks)
+        assertEquals(14, blocks.size)
+        assertEquals(10, blocks.filter { it.list }.sumOf { it.text.lines().size })
+        val table = blocks.single { it.table != null }.table!!
+        assertEquals(listOf("站点", "操作", "普通用户 未满月", "普通用户 已满月", "受限用户"), table.headers)
+        assertEquals(10, table.rows.size)
+        assertEquals(listOf(true, true, false), table.rows.first { it.site == "论坛" && it.operation == "发表、编辑评论" }.allowed)
+        assertEquals(listOf(false, true, false), table.rows.first { it.site == "小说" && it.operation == "发表、编辑评论" }.allowed)
+        assertEquals(listOf(true, true, true), table.rows.first { it.operation == "上传文库小说" }.allowed)
+        val changed = ForumCommunityRulesParser.parse(updatedTemplate.replace("allowed: [true, true, false]", "allowed: [false, true, false]"))
+        assertEquals(listOf(false, true, false), changed.last().table!!.rows[1].allowed)
+    }
+
+    @Test fun unsupportedPermissionExpressionsAndTableChangesAreRejected() {
+        val unsupported = listOf(
+            updatedTemplate.replace("allowed: [true, true, true]", "allowed: [true, true, isAllowed()]"),
+            updatedTemplate.replace("v-if=\"allowed\"", "v-if=\"!allowed\""),
+            updatedTemplate.replace("</script>", "permissions.reverse();</script>"),
+            updatedTemplate.replace("{{ permission.site }}", "{{ permission.name }}"),
+            updatedTemplate.replace("<table class=", "新增权限说明<table class="),
+            updatedTemplate.replace("<span\n                  class=", "<span v-if=\"false\"\n                  class="),
+            updatedTemplate.replace("true, true, true", "true, true, true, false")
+        )
+        unsupported.forEachIndexed { index, source ->
+            assertTrue("Unsupported variant $index must fail", runCatching { ForumCommunityRulesParser.parse(source) }.isFailure)
+        }
+    }
+
+    @Test fun oldCachedRulesUpgradeToPermissionsAndKeepTheCompleteCopyOffline() = runBlocking {
+        MockWebServer().use { server ->
+            val directory = folder.newFolder()
+            val repo = repository(server, MetadataCache(directory))
+            server.enqueue(MockResponse().setBody(html("old")))
+            server.enqueue(MockResponse().setBody(bundle(sha)))
+            server.enqueue(MockResponse().setBody(template))
+            assertNull(repo.refresh().blocks.last().table)
+            server.enqueue(MockResponse().setBody(html("new")))
+            server.enqueue(MockResponse().setBody(bundle(nextSha)))
+            server.enqueue(MockResponse().setBody(updatedTemplate))
+            val updated = repo.refresh()
+            assertEquals(10, updated.blocks.last().table!!.rows.size)
+            val restarted = repository(server, MetadataCache(directory))
+            assertEquals(updated, restarted.cached())
+            server.enqueue(MockResponse().setResponseCode(503))
+            assertTrue(runCatching { restarted.refresh() }.isFailure)
+            assertEquals(updated, restarted.cached())
+            server.enqueue(MockResponse().setBody(html("unknown")))
+            server.enqueue(MockResponse().setBody(bundle(sha)))
+            server.enqueue(MockResponse().setBody(updatedTemplate.replace("v-if=\"allowed\"", "v-if=\"!allowed\"")))
+            assertTrue(runCatching { restarted.refresh() }.isFailure)
+            assertEquals(updated, restarted.cached())
+        }
     }
 
     @Test fun checksDeploymentOnEntryAndCachesUntilTheDeployedBuildChanges() = runBlocking {

@@ -17,25 +17,54 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.model.ForumStrike
+import cc.novelia.app.data.model.ForumStrikeReadState
+import cc.novelia.app.ui.components.friendlyMessage
+import kotlinx.coroutines.CancellationException
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 @Composable internal fun ForumStrikesScreen(c: AppController) {
     val profile by c.forumSession.profile.collectAsStateWithLifecycle()
-    var page by rememberSaveable(profile?.userId) { mutableIntStateOf(0) }
+    val binding = c.forumSession.capture()
+    var page by rememberSaveable(binding) { mutableIntStateOf(0) }
     Screen("处罚记录", c::back) { padding ->
         if(profile == null) Box(Modifier.padding(padding)) {
             EmptyState("登录后查看处罚记录", "使用论坛账号查看处罚依据和撤销状态。", Icons.Outlined.Gavel, "登录论坛", { c.go("forum-login") })
-        } else AsyncContent(listOf(profile?.userId, profile?.username, page), load = { c.forumAccountApi.strikes(page) }, modifier = Modifier.padding(padding)) { result, _ ->
-            AppLazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                item { Text("查看账号处罚及其撤销状态", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                if(result.items.isEmpty()) item { EmptyState("暂无处罚记录", "你的账号目前没有处罚记录。", Icons.Outlined.Gavel) }
-                items(result.items, key = { it.id }) { ForumStrikeCard(it) }
-                item { PageControls(page, result.pageCount()) { page = it } }
+        } else AsyncContent(listOf(binding, page), load = { c.forumAccountApi.strikes(page, binding) }, modifier = Modifier.padding(padding)) { result, reload ->
+            Column {
+                ForumStrikeReadConfirmation(result.latestStrikeId, binding, { c.forumAccountApi.markStrikesRead(it, binding) }, reload)
+                AppLazyColumn(modifier = Modifier.weight(1f), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    item { Text("查看账号处罚及其撤销状态", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    if(result.items.isEmpty()) item { EmptyState("暂无处罚记录", "你的账号目前没有处罚记录。", Icons.Outlined.Gavel) }
+                    items(result.items, key = { it.id }) { ForumStrikeCard(it) }
+                    item { PageControls(page, result.pageCount()) { page = it } }
+                }
             }
         }
     }
+}
+
+@Composable internal fun ForumStrikeReadConfirmation(latestStrikeId: Long?, sessionKey: Any?,
+    acknowledge: suspend (Long) -> ForumStrikeReadState, onReload: () -> Unit) {
+    var message by remember(latestStrikeId, sessionKey) { mutableStateOf<String?>(null) }
+    var failed by remember(latestStrikeId, sessionKey) { mutableStateOf(false) }
+    var attempt by remember(latestStrikeId, sessionKey) { mutableIntStateOf(0) }
+    val currentAcknowledge by rememberUpdatedState(acknowledge)
+    LaunchedEffect(latestStrikeId, sessionKey, attempt) {
+        latestStrikeId?.let { latest ->
+            try {
+                val state = currentAcknowledge(latest)
+                failed = false
+                message = if(state.hasUnread) "还有新处罚记录，请刷新查看。" else null
+            } catch(error: CancellationException) { throw error }
+            catch(error: Exception) { failed = true; message = "记录已展示，标记已读未完成：${error.friendlyMessage()}" }
+        }
+    }
+    message?.let { text -> Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+        Text(text, style = MaterialTheme.typography.bodySmall)
+        TextButton(onClick = { if(failed) attempt++ else onReload() }) { Text(if(failed) "重试标记已读" else "刷新记录") }
+    } }
 }
 
 @OptIn(ExperimentalLayoutApi::class)

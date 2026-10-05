@@ -32,6 +32,7 @@ import cc.novelia.app.data.catalog.ForumLinks
         append("• 求书请前往")
         link("求书集中帖", "/c/novel?q=%E6%B1%82%E4%B9%A6%E9%9B%86%E4%B8%AD%E8%B4%B4")
         append("，请勿单独发帖。\n\n")
+        append("• 碰到此类建政小说时，不要在论坛发帖或群里讨论，请通过 QQ 或 Telegram 私信管理员处理。\n\n")
         append("• 发言请遵守")
         link("社区守则", "/rules")
         append("，累计三次违规即出局。")

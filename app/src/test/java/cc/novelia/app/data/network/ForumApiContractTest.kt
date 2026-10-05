@@ -324,6 +324,25 @@ class ForumApiContractTest {
         }
     }
 
+    @Test fun categorizedCommentFailuresKeepTheirSpecificReasonWithoutRetrying() = runBlocking {
+        MockWebServer().use { server ->
+            val client = api(server)
+            for((status, reason) in listOf(400 to "根评论无效", 403 to "只能修改自己的评论", 404 to "根评论不存在", 409 to "评论区已锁定", 409 to "评论数据冲突")) {
+                server.enqueue(MockResponse().setResponseCode(status).setHeader("Content-Type", "text/plain; charset=utf-8").setBody(reason))
+                val error = runCatching { client.createComment(5, ForumCommentInput("测试回复", 8)) }.exceptionOrNull() as ApiException
+                assertEquals(status, error.status)
+                assertEquals(reason, error.message)
+            }
+            assertEquals(5, server.requestCount)
+            server.enqueue(MockResponse().setResponseCode(404).setHeader("Content-Type", "text/plain").setBody("根评论不存在"))
+            assertEquals("根评论不存在", runCatching { client.replies(5, 8, 0) }.exceptionOrNull()?.message)
+            server.enqueue(MockResponse().setResponseCode(409).setHeader("Content-Type", "text/html").setBody("<html>proxy failure</html>"))
+            assertFalse(runCatching { client.deleteComment(8) }.exceptionOrNull()!!.message!!.contains("proxy"))
+            server.enqueue(MockResponse().setResponseCode(404).setHeader("Content-Type", "text/plain").setBody("x".repeat(301)))
+            assertFalse(runCatching { client.deleteComment(8) }.exceptionOrNull()!!.message!!.contains("xxx"))
+        }
+    }
+
     @Test fun oldSavedArticlesAndNewLinksKeepSeparateIdentities() {
         val old = appJson.decodeFromString<Article>("""{"id":"abc123","category":"General","title":"旧收藏"}""")
         assertNull(old.forumCategoryId)
