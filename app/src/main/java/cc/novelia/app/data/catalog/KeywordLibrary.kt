@@ -1,8 +1,10 @@
 package cc.novelia.app.data.catalog
 
 import cc.novelia.app.data.storage.appJson
+import cc.novelia.app.data.webdav.SyncReplica
 import java.io.InputStream
 import java.io.OutputStream
+import java.util.UUID
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.JsonArray
@@ -20,7 +22,16 @@ import kotlinx.serialization.json.JsonPrimitive
     val format: String = "novelia-keywords",
     val version: Int = 1,
     val categorySeedsVersion: Int = 0,
+    val categoryIds: Map<String, String> = categories.associateWith { legacyCategoryId(it) },
+    val syncReplica: SyncReplica = SyncReplica(),
+    // 损坏后临时默认词库不得自动上传；只有显式恢复或成功应用远端词库才能解除。
+    val syncReadRecoveryRequired: Boolean = false,
 ) {
+    /** 旧分类按名称确定身份；分类改名仍保留原 ID，空分类也参与同步。 */
+    fun withStableCategoryIds(): KeywordLibrary = copy(categoryIds = categories.associateWith {
+        if(it == OTHER) legacyCategoryId(OTHER) else categoryIds[it] ?: legacyCategoryId(it)
+    })
+
     /** 分类只补建一次；之后用户重命名、删除或移动标签均不被启动迁移撤销。 */
     fun upgradeDefaults(limit: Int? = null): KeywordLibrary {
         val seedCategories = if(categorySeedsVersion < 1) keywordCategorySeeds.map { it.name }.filterNot { it in categories }
@@ -31,14 +42,15 @@ import kotlinx.serialization.json.JsonPrimitive
             KeywordCatalog.seededCategory(entry)?.takeIf { it in updatedCategories }?.let { entry.copy(category = it) } ?: entry
         } else translated
         return copy(categories = updatedCategories, categorySeedsVersion = maxOf(1, categorySeedsVersion)).withEntries(
-            KeywordCatalog.observe(categorized, KeywordCatalog.common.map { it.original }, limit))
+            KeywordCatalog.observe(categorized, KeywordCatalog.common.map { it.original }, limit)).withStableCategoryIds()
     }
 
     fun createCategory(name: String): KeywordLibrary {
         requireCategoryName(name)
         require(name !in categories) { "分类名称已存在" }
         require(categories.size < MAX_CATEGORIES) { "分类最多 $MAX_CATEGORIES 个" }
-        return copy(categories = categories + name)
+        val state = withStableCategoryIds()
+        return state.copy(categories = categories + name, categoryIds = state.categoryIds + (name to UUID.randomUUID().toString()))
     }
 
     fun renameCategory(old: String, name: String): KeywordLibrary {
@@ -46,13 +58,16 @@ import kotlinx.serialization.json.JsonPrimitive
         requireCategoryName(name)
         if(name == old) return this
         require(name !in categories) { "分类名称已存在" }
-        return copy(categories = categories.map { if(it == old) name else it },
+        val state = withStableCategoryIds()
+        return state.copy(categories = categories.map { if(it == old) name else it },
+            categoryIds = (state.categoryIds - old) + (name to state.categoryIds.getValue(old)),
             entries = entries.map { if(it.category == old) it.copy(category = name, categoryEdited = true) else it })
     }
 
     fun deleteCategory(name: String): KeywordLibrary {
         require(name in categories && name != OTHER) { "不能删除默认的其他分类" }
-        return copy(categories = categories - name,
+        val state = withStableCategoryIds()
+        return state.copy(categories = categories - name, categoryIds = state.categoryIds - name,
             entries = entries.map { if(it.category == name) it.copy(category = OTHER, categoryEdited = true) else it })
     }
 
@@ -85,17 +100,18 @@ import kotlinx.serialization.json.JsonPrimitive
         KeywordCatalog.requireCapacity(entries.size, (entries.map { it.original } + incoming.entries.map { it.original }).distinct().size, limit)
         // 用户编辑优先；未修改的内置翻译和分类可由默认词表补回。
         val merged = KeywordCatalog.merge(entries, incoming.entries, addDefaults = false)
-        return copy(categories = combinedCategories).withEntries(merged)
+        return copy(categories = combinedCategories, categoryIds = incoming.categoryIds + categoryIds).withEntries(merged).withStableCategoryIds()
     }
 
     companion object {
         const val OTHER = "其他"
         const val MAX_CATEGORIES = 100
         const val MAX_CATEGORY_LENGTH = 40
-        fun defaults() = KeywordLibrary(KeywordCatalog.common, categorySeedsVersion = 1)
+        fun legacyCategoryId(name: String): String = UUID.nameUUIDFromBytes("novelia:category:$name".toByteArray(Charsets.UTF_8)).toString()
+        fun defaults() = KeywordLibrary(KeywordCatalog.common, categorySeedsVersion = 1).withStableCategoryIds()
         fun fromLegacy(entries: List<KeywordEntry>, addDefaults: Boolean = true): KeywordLibrary {
             val vocabulary = if(addDefaults) KeywordCatalog.withDefaults(entries) else entries
-            return KeywordLibrary(vocabulary, (KeywordCatalog.defaultCategories + vocabulary.map { it.category }).distinct())
+            return KeywordLibrary(vocabulary, (KeywordCatalog.defaultCategories + vocabulary.map { it.category }).distinct()).withStableCategoryIds()
         }
         fun requireCategoryName(name: String) {
             require(name.isNotBlank() && name == name.trim() && name.length <= MAX_CATEGORY_LENGTH && name != "全部" && name.none(Char::isISOControl)) {
@@ -115,6 +131,8 @@ object KeywordLibraryFormat {
         require(library.format == "novelia-keywords" && library.version == 1) { "不是支持的 Novelia 标签库文件" }
         require(library.categories.size in 1..KeywordLibrary.MAX_CATEGORIES && library.categories.distinct().size == library.categories.size && KeywordLibrary.OTHER in library.categories) { "标签分类索引无效" }
         library.categories.forEach(KeywordLibrary::requireCategoryName)
+        require(library.categoryIds.keys.all { it in library.categories } && library.categoryIds.values.all { it.isNotBlank() } &&
+            library.categoryIds.values.distinct().size == library.categoryIds.size) { "标签分类身份无效" }
         require(library.entries.map { it.original }.distinct().size == library.entries.size) { "标签原文重复" }
         require(library.entries.all { it.original.isNotBlank() && it.original == it.original.trim() && it.original.length <= KeywordCatalog.MAX_TEXT_LENGTH &&
             it.translation.length <= KeywordCatalog.MAX_TEXT_LENGTH && it.category in library.categories && it.lastUsedAt >= 0 }) { "标签原文、翻译或分类无效" }
@@ -123,8 +141,12 @@ object KeywordLibraryFormat {
     /** 兼容旧版词条和第三方 src/dst/info 数组；原生格式继续严格校验，不自动去重。 */
     fun decode(text: String): KeywordLibrary = decodeImport(text).library
 
-    private fun decodeImport(text: String): KeywordLibraryImport {
-        val tree = appJson.parseToJsonElement(text.removePrefix("\uFEFF"))
+    /** 本地原子快照拥有本安装的同步身份，外部导入则不能继承该身份。 */
+    fun decodeLocal(text: String): KeywordLibrary = decodeImport(text, preserveReplica = true).library
+
+    private fun decodeImport(text: String, preserveReplica: Boolean = false): KeywordLibraryImport {
+        val parsed = appJson.parseToJsonElement(text.removePrefix("\uFEFF"))
+        val tree = if(!preserveReplica && parsed is JsonObject) JsonObject(parsed - "syncReplica" - "syncReadRecoveryRequired") else parsed
         val result = when {
             tree is JsonArray && tree.any { it is JsonObject && "src" in it && "original" !in it } -> decodeExternalEntries(tree)
             tree is JsonArray -> {
@@ -171,7 +193,8 @@ object KeywordLibraryFormat {
 
     fun write(output: OutputStream, library: KeywordLibrary) {
         validate(library)
-        val bytes = appJson.encodeToString(library).toByteArray(Charsets.UTF_8)
+        val exported = appJson.encodeToJsonElement(KeywordLibrary.serializer(), library) as JsonObject
+        val bytes = JsonObject(exported - "syncReplica" - "syncReadRecoveryRequired").toString().toByteArray(Charsets.UTF_8)
         require(bytes.size <= MAX_BYTES) { "标签库超过 32 MB，无法导出" }
         output.write(bytes)
     }

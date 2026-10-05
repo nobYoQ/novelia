@@ -10,9 +10,12 @@ import cc.novelia.app.data.model.Note
 import cc.novelia.app.data.model.PendingAction
 import cc.novelia.app.data.model.Position
 import cc.novelia.app.data.model.ReaderSettings
+import cc.novelia.app.data.model.ReadingHistoryEntry
 import cc.novelia.app.data.model.SavedBook
 import cc.novelia.app.data.storage.appJson
 import cc.novelia.app.data.storage.loadLibraryState
+import cc.novelia.app.data.webdav.SyncReplica
+import cc.novelia.app.data.webdav.WebDavProjection
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -113,6 +116,7 @@ class LibraryBackupTest {
             val state = LibraryState(
                 books = listOf(SavedBook(BookCard(parent, "系列"), volumeOrder = listOf(local.key)), SavedBook(BookCard(local, "卷一"), parentWenkuKey = parent.key)),
                 positions = mapOf(local.key to Position("chapter-1", index = 1, textOffset = 2)),
+                readingHistory = mapOf(local.key to ReadingHistoryEntry(local.key, "卷一", "chapter-1", "第一章", 123)),
                 notes = listOf(Note("n1", local.key, "chapter-1", 0, "正文", "笔记")),
                 bookSettings = mapOf(local.key to ReaderSettings(fontSize = 24f)),
                 personalGlossaries = mapOf(local.key to mapOf("word" to "译文"))
@@ -131,6 +135,8 @@ class LibraryBackupTest {
             assertEquals("wenku/series", mapped.books.last().parentWenkuKey)
             assertEquals("/new/new-volume/cover", mapped.books.last().book.cover)
             assertTrue("local/new-volume" in mapped.positions)
+            assertFalse("local/volume" in mapped.readingHistory)
+            assertEquals(ReadingHistoryEntry("local/new-volume", "卷一", "chapter-1", "第一章", 123), mapped.readingHistory["local/new-volume"])
             assertEquals("local/new-volume", mapped.notes.single().key)
             assertEquals(24f, mapped.bookSettings["local/new-volume"]!!.fontSize, 0f)
             assertEquals("译文", mapped.personalGlossaries["local/new-volume"]!!["word"])
@@ -167,6 +173,23 @@ class LibraryBackupTest {
         assertFalse(text.contains("private queued content"))
         assertTrue(state.forBackup().pending.isEmpty())
         assertTrue(state.forBackup().downloads.isEmpty())
+    }
+
+    @Test fun backupExcludesInstalledSyncIdentityLogicalClockAndDocuments() {
+        val data = LibraryState(notes = listOf(Note("sync-note", "syosetu/book", "chapter", 0, "摘录", "正文")),
+            readingHistory = mapOf("syosetu/book" to ReadingHistoryEntry("syosetu/book", "小说", "chapter", "章节", 100)))
+        val replica = SyncReplica(deviceId = "device-to-omit").track(emptyMap(), WebDavProjection.library(data)).bind("dataset-to-omit")
+        assertTrue(replica.clock > 0)
+        assertTrue(replica.documents.isNotEmpty())
+        val exported = data.copy(syncReplica = replica).forBackup()
+        assertEquals("", exported.syncReplica.deviceId)
+        assertEquals(0L, exported.syncReplica.clock)
+        assertTrue(exported.syncReplica.documents.isEmpty())
+        assertEquals(data.notes, exported.notes)
+        assertEquals(data.readingHistory, exported.readingHistory)
+        val encoded = appJson.encodeToString(exported)
+        assertFalse(encoded.contains("device-to-omit"))
+        assertFalse(encoded.contains("dataset-to-omit"))
     }
 
     @Test fun missingIllustrationAndDanglingVolumeIndexAreRejected() {

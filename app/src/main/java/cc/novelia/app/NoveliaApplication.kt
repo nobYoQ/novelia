@@ -13,6 +13,15 @@ import cc.novelia.app.data.network.echRedirects
 import cc.novelia.app.data.network.echCallTimeout
 import cc.novelia.app.data.storage.LocalStore
 import cc.novelia.app.data.sync.CloudSyncWorker
+import cc.novelia.app.data.webdav.WebDavConfigStore
+import cc.novelia.app.data.webdav.WebDavSyncManager
+import cc.novelia.app.data.webdav.WebDavSyncWorker
+import cc.novelia.app.data.webdav.automaticallySyncable
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ProcessLifecycleOwner
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import cc.novelia.app.data.updates.UpdateWorker
 import cc.novelia.app.launcher.LauncherIconManager
 import coil.ImageLoader
@@ -31,6 +40,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
 
 /**
  * 应用级服务的装配入口，书库、会话、API 和图片加载器在各页面之间复用。
@@ -40,7 +50,7 @@ import kotlinx.coroutines.launch
  */
 class NoveliaApplication : Application(), ImageLoaderFactory {
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    val store by lazy { LocalStore(this) }
+    val store by lazy { LocalStore(this) { webDavConfig.config.value.syncDevicePreferences } }
     val ech by lazy { EchTransport(this) }
     val bookSources by lazy { BookSources.load(this) }
     private val httpTransport by lazy { ech.client().newBuilder().apply {
@@ -48,6 +58,11 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
     }.echCallTimeout().build() }
     val session by lazy { Session(this, client = httpTransport, sources = bookSources) }
     val keywords by lazy { KeywordStore(this) { store.state.value.keywordLimit } }
+    val webDavConfig by lazy { WebDavConfigStore(this) }
+    val webDav by lazy { WebDavSyncManager(this) }
+    @Volatile private var webDavForeground = false
+    private var webDavPoll: Job? = null
+    private var webDavEdit: Job? = null
     internal val clipboardLinkHistory = ClipboardLinkHistory()
     val metadataCache get() = store.metadataCache
     val api by lazy { NoveliaApi(session, transport = httpTransport, onMutation = { metadataCache.invalidate(it) }, onKeywords = { tags -> applicationScope.launch { keywords.observe(tags) } }) }
@@ -58,6 +73,56 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
         super.onCreate()
         launcherIcons
         initialization
+        ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
+            override fun onStart(owner: LifecycleOwner) {
+                webDavForeground = true
+                webDavPoll?.cancel()
+                webDavPoll = applicationScope.launch {
+                    initialization.await()
+                    while(webDavForeground) {
+                        syncWebDavIfAllowed()
+                        delay(180_000)
+                    }
+                }
+            }
+            override fun onStop(owner: LifecycleOwner) {
+                webDavForeground = false
+                webDavPoll?.cancel()
+                webDavEdit?.cancel()
+                persistState()
+            }
+        })
+        applicationScope.launch {
+            initialization.await()
+            webDavConfig.config.collectLatest { configuration ->
+                WebDavSyncWorker.configure(this@NoveliaApplication, configuration)
+                if(configuration.automaticallySyncable()) {
+                    syncWebDavIfAllowed()
+                }
+            }
+        }
+        applicationScope.launch {
+            initialization.await()
+            delay(750)
+            combine(store.state.map { it.syncReplica.clock }.distinctUntilChanged(),
+                keywords.state.map { it.syncReplica.clock }.distinctUntilChanged(), webDavConfig.config) { _, _, configuration -> configuration }
+                .collect { configuration ->
+                    webDav.refreshPendingStatus()
+                    if(configuration.automaticallySyncable() && webDav.hasPending()) {
+                        // 队列任务只保留一个，连续翻页不会无限推迟首次提交。
+                        try {
+                            store.flush()
+                            if(cc.novelia.app.data.webdav.SyncDomain.KEYWORDS in configuration.selected) keywords.flush()
+                            WebDavSyncWorker.enqueue(this@NoveliaApplication, configuration)
+                            if(webDavForeground && webDavEdit?.isActive != true) webDavEdit = applicationScope.launch {
+                                delay(10_000)
+                                syncWebDavIfAllowed()
+                            }
+                        } catch(cancelled: CancellationException) { throw cancelled }
+                        catch(_: Exception) { /* 存储错误已由各存储公开；后台周期任务会再检查。 */ }
+                    }
+                }
+        }
         applicationScope.launch {
             initialization.await()
             // 首帧无需加载和合并标签翻译目录，延后处理以减轻启动负担。
@@ -116,6 +181,18 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
             runCatching { store.flush() }
             runCatching { keywords.flush() }
         }
+    }
+
+    private suspend fun syncWebDavIfAllowed() {
+        val configuration = webDavConfig.config.value
+        if(!configuration.automaticallySyncable()) return
+        val manager = getSystemService(ConnectivityManager::class.java)
+        val capabilities = manager?.getNetworkCapabilities(manager.activeNetwork) ?: return
+        if(!capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) ||
+            configuration.wifiOnly && !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)) return
+        try { webDav.synchronize(manual = false, expectedGeneration = configuration.generation) }
+        catch(cancelled: CancellationException) { throw cancelled }
+        catch(_: Exception) { /* 同步界面提供错误，Worker 负责可恢复失败的退避。 */ }
     }
 
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)

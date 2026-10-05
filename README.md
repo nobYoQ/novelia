@@ -80,7 +80,7 @@ adb shell am instrument -w -r -e class cc.novelia.app.ui.reader.AppFlowTest cc.n
 
 | 目录 | 内容 |
 | --- | --- |
-| `data` | 模型、网络、会话、存储、同步等 13 个职责包，根目录保留旧后台任务兼容入口 |
+| `data` | 模型、网络、会话、存储、同步等 14 个职责包，根目录保留旧后台任务兼容入口 |
 | `ui` | 按界面及共享职责划分的 17 个子包，详见 [源码目录导航](docs/architecture/source-layout.md) |
 | `reader` | 段落投影、译文回退、前台 TTS 服务 |
 | `files` | EPUB/TXT/SRT、图片压缩、后台下载 |

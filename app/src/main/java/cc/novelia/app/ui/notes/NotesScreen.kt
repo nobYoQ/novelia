@@ -47,7 +47,7 @@ import cc.novelia.app.ui.navigation.AppController
                 Text("${notes.size} 条", Modifier.padding(vertical = 12.dp), style = MaterialTheme.typography.labelMedium)
             }
         }
-        if(state.notes.isEmpty()) item { EmptyState("记下喜欢的句子", "在阅读器长按段落，或点击书签按钮保存。", Icons.Outlined.EditNote) }
+        if(allNotes.isEmpty()) item { EmptyState("记下喜欢的句子", "在阅读器长按段落，或点击书签按钮保存。", Icons.Outlined.EditNote) }
         else if(notes.isEmpty()) item { EmptyState("没有匹配的笔记", "调整关键词，或查看全部书籍的笔记。", Icons.Outlined.SearchOff, "清空筛选", { query = ""; bookKey = null }) }
         items(notes, key = { it.note.id }) { item -> val note = item.note; Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(item.bookTitle, style = MaterialTheme.typography.titleSmall)
@@ -79,5 +79,5 @@ import cc.novelia.app.ui.navigation.AppController
             items(bookChoices, key = { it.note.key }) { item -> MenuRow(item.bookTitle, "${bookCounts[item.note.key] ?: 0} 条笔记", Icons.Outlined.MenuBook, { bookKey = item.note.key; choosingBook = false }) }
         }
     }
-    editing?.let { note -> NoteEditorDialog(note, { editing = null }) { value -> c.store.update { it.copy(notes = it.notes.map { n -> if(n.id == note.id) n.copy(text = value) else n }) } } }
+    editing?.let { note -> NoteEditorDialog(note, { editing = null }) { value -> c.store.update { it.copy(notes = it.notes.map { n -> if(n.id == note.id) n.copy(text = value) else n }.filter { it.bookmarked || it.text.isNotBlank() }) } } }
 }

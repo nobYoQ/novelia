@@ -29,16 +29,16 @@ import cc.novelia.app.ui.navigation.AppController
 
 @Composable fun HistoryScreen(c: AppController) {
     val state by c.store.state.collectAsStateWithLifecycle(); val profile by c.session.profile.collectAsStateWithLifecycle()
-    val history = remember(state.positions) { state.positions.entries.sortedByDescending { it.value.updatedAt } }
+    val history = remember(state.readingHistory) { state.readingHistory.entries.sortedByDescending { it.value.lastReadAt } }
     val booksByKey = remember(state.books) { state.books.associateBy { it.book.ref.key } }
     var tab by remember { mutableIntStateOf(0) }; var page by remember { mutableIntStateOf(0) }; var version by remember { mutableIntStateOf(0) }; var clear by remember { mutableStateOf(false) }
     fun pauseHistory(value: Boolean) { c.store.update { it.copy(historyPaused = value) }; if(profile != null) c.action { c.api.request(if(value) "PUT" else "DELETE", "user/read-history/paused") } }
     Screen("阅读历史", c::back, actions = { IconButton(onClick = { clear = true }) { Icon(Icons.Outlined.DeleteSweep, "清空历史") } }) { padding -> Column(Modifier.padding(padding)) {
-        ChoiceRow("记录位置", listOf("此设备", "原站云端"), tab) { tab = it }
-        MenuRow("暂停阅读历史", "暂停后不记录新的阅读位置", Icons.Outlined.HistoryToggleOff, { pauseHistory(!state.historyPaused) }, trailing = { Switch(state.historyPaused, ::pauseHistory) })
+        ChoiceRow("历史来源", listOf("此设备", "原站云端"), tab) { tab = it }
+        MenuRow("暂停阅读历史", "暂停后不添加历史，续读位置仍会保存", Icons.Outlined.HistoryToggleOff, { pauseHistory(!state.historyPaused) }, trailing = { Switch(state.historyPaused, ::pauseHistory) })
         if(tab == 0) AppLazyColumn {
-            if(history.isEmpty()) item { EmptyState("还没有阅读记录", "打开一本小说，阅读进度就会出现在这里。") }
-            items(history, key = { it.key }, contentType = { "book" }) { (key, position) -> val book = booksByKey[key]?.book ?: BookCard(BookRef.fromKey(key), position.title); BookRow(book.copy(subtitle = position.title), { c.read(book.ref, position.chapterId) }) }
+            if(history.isEmpty()) item { EmptyState("还没有阅读记录", "打开一本小说，最近阅读记录就会出现在这里。") }
+            items(history, key = { it.key }, contentType = { "book" }) { (key, entry) -> val book = booksByKey[key]?.book ?: BookCard(BookRef.fromKey(key), entry.bookTitle.ifBlank { "未命名作品" }); BookRow(book.copy(subtitle = entry.chapterTitle), { c.read(book.ref, entry.chapterId) }) }
         } else if(profile == null) EmptyState("登录以查看云端历史", "原站同步到章节，本设备还会保存段落位置。", action = "登录", onAction = { c.go("login") })
         else AsyncContent(listOf(page, profile?.username), refreshKey = version, load = {
             val binding = c.session.capture()
@@ -59,5 +59,5 @@ import cc.novelia.app.ui.navigation.AppController
             }
         }
     } }
-    if(clear) ConfirmDialog("清空阅读历史？", if(tab == 0) "此设备保存的阅读位置将被清除。" else "原站账号下的全部阅读历史将被清除。", { clear = false }, confirmLabel = "清空阅读历史") { if(tab == 0) c.store.update { it.copy(positions = emptyMap()) } else c.action { c.api.request("DELETE", "user/read-history"); version++ } }
+    if(clear) ConfirmDialog("清空阅读历史？", if(tab == 0) "此设备的阅读历史将被清除，续读位置会保留。" else "原站账号下的全部阅读历史将被清除。", { clear = false }, confirmLabel = "清空阅读历史") { if(tab == 0) c.store.update { it.copy(readingHistory = emptyMap(), historyMigrated = true) } else c.action { c.api.request("DELETE", "user/read-history"); version++ } }
 }

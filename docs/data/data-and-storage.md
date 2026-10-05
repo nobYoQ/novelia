@@ -2,7 +2,7 @@
 
 [返回数据与存储索引](README.md) · [文档总目录](../README.md)
 
-本文说明当前 Android 客户端的数据组织方式、落盘顺序和恢复边界。阅读入口是 [LibraryModels.kt](../../app/src/main/java/cc/novelia/app/data/model/LibraryModels.kt)、[LocalStore.kt](../../app/src/main/java/cc/novelia/app/data/storage/LocalStore.kt) 和 [NoveliaApplication.kt](../../app/src/main/java/cc/novelia/app/NoveliaApplication.kt)。数据源码的 13 个职责目录见 [源码目录导航](../architecture/source-layout.md)，网络会话与待同步操作另见 [网络、认证与同步](../network/network-and-sync.md)。
+本文说明当前 Android 客户端的数据组织方式、落盘顺序和恢复边界。阅读入口是 [LibraryModels.kt](../../app/src/main/java/cc/novelia/app/data/model/LibraryModels.kt)、[LocalStore.kt](../../app/src/main/java/cc/novelia/app/data/storage/LocalStore.kt) 和 [NoveliaApplication.kt](../../app/src/main/java/cc/novelia/app/NoveliaApplication.kt)。数据源码的 14 个职责目录见 [源码目录导航](../architecture/source-layout.md)，网络会话与待同步操作另见 [网络、认证与同步](../network/network-and-sync.md)。
 
 ## 1. 数据归属与核心类型
 
@@ -51,6 +51,9 @@
 | `exports/` | 导出时使用的临时文件 | 不等于用户在系统选择器中选定的最终文件 |
 | `backup-staging/<UUID>/` | 待确认恢复的解包目录 | 先验证、预览，再显式合并 |
 | `keyword-catalog.json` | 已观察的标签、用户翻译及分类（含空分类） | 独立 `KeywordStore` 原子保存版本化 `KeywordLibrary`，兼容旧标签数组 |
+| `webdav-state.json` | WebDAV 已确认的版本缓存、加入范围和 ETag | 独立原子状态；业务操作版本与业务快照共同保存 |
+
+WebDAV 配置与加密密码存于本机独立 SharedPreferences，不包含在设置/资料导出中。七类可选数据、墓碑、并发合并和损坏保护见 [WebDAV 多设备同步](../network/webdav-sync.md)。
 
 `AtomicFile` 还可能产生 `.bak`、`.new` 等伴随文件，不应绕过该 API 随意处理它们。网络图片由 Coil 保存在 `Context.cacheDir/images`，磁盘预算 128 MiB；这与用户本地文档中的图片不是一类数据。
 

@@ -10,7 +10,7 @@
 app/src/main/java/cc/novelia/app/
 ├── MainActivity.kt          # 导航图、Intent、主题装配和全局界面
 ├── NoveliaApplication.kt    # 应用服务和初始化
-├── data/                   # 13 个职责子包，以及旧 Worker 类名兼容入口
+├── data/                   # 14 个职责子包，以及旧 Worker 类名兼容入口
 ├── files/                  # 文件解析、转换、下载和导出
 ├── reader/                 # 阅读投影、锚点、搜索、分页算法和 TTS
 └── ui/                     # 下表中的 17 个功能与共享子包
@@ -57,6 +57,7 @@ app/src/main/java/cc/novelia/app/
 | `documents/` | 本地文档分块存储与导入哈希索引 | [DocumentStorage.kt](../../app/src/main/java/cc/novelia/app/data/documents/DocumentStorage.kt)、[DocumentHashIndex.kt](../../app/src/main/java/cc/novelia/app/data/documents/DocumentHashIndex.kt) |
 | `backup/` | 阅读资料备份、归档校验与恢复合并 | [LibraryBackupService.kt](../../app/src/main/java/cc/novelia/app/data/backup/LibraryBackupService.kt)、[LibraryBackupArchive.kt](../../app/src/main/java/cc/novelia/app/data/backup/LibraryBackupArchive.kt) |
 | `sync/` | 云端变更队列、同步策略、会话隔离与后台重放 | [CloudMutationQueue.kt](../../app/src/main/java/cc/novelia/app/data/sync/CloudMutationQueue.kt)、[CloudSyncWorker.kt](../../app/src/main/java/cc/novelia/app/data/sync/CloudSyncWorker.kt) |
+| `webdav/` | 自有服务配置、可选资料投影、因果合并、冲突选择与自动同步 | [WebDavSyncManager.kt](../../app/src/main/java/cc/novelia/app/data/webdav/WebDavSyncManager.kt)、[WebDavProjection.kt](../../app/src/main/java/cc/novelia/app/data/webdav/WebDavProjection.kt)、[WebDavMerge.kt](../../app/src/main/java/cc/novelia/app/data/webdav/WebDavMerge.kt) |
 | `catalog/` | 书源、链接解析、查询表达式与关键词目录 | [Providers.kt](../../app/src/main/java/cc/novelia/app/data/catalog/Providers.kt)、[BookLinks.kt](../../app/src/main/java/cc/novelia/app/data/catalog/BookLinks.kt)、[KeywordCatalog.kt](../../app/src/main/java/cc/novelia/app/data/catalog/KeywordCatalog.kt) |
 | `chapters/` | 章节请求、离线批次与译文新鲜度 | [ChapterRequests.kt](../../app/src/main/java/cc/novelia/app/data/chapters/ChapterRequests.kt)、[ChapterOffline.kt](../../app/src/main/java/cc/novelia/app/data/chapters/ChapterOffline.kt)、[ChapterFreshness.kt](../../app/src/main/java/cc/novelia/app/data/chapters/ChapterFreshness.kt) |
 | `updates/` | 书架更新检查、检查顺序与系统通知 | [UpdateWorker.kt](../../app/src/main/java/cc/novelia/app/data/updates/UpdateWorker.kt)、[BookUpdates.kt](../../app/src/main/java/cc/novelia/app/data/updates/BookUpdates.kt)、[AppNotifications.kt](../../app/src/main/java/cc/novelia/app/data/updates/AppNotifications.kt) |

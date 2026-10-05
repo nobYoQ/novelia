@@ -11,6 +11,9 @@ import cc.novelia.app.data.documents.DocumentHashIndex
 import cc.novelia.app.data.documents.DocumentStorage
 import cc.novelia.app.data.library.withoutBook
 import cc.novelia.app.data.library.withReadingPosition
+import cc.novelia.app.data.library.withMigratedReadingHistory
+import cc.novelia.app.data.model.withStableFolderIds
+import cc.novelia.app.data.webdav.WebDavProjection
 import cc.novelia.app.data.updates.withSavedBook
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
@@ -41,7 +44,7 @@ import kotlinx.serialization.encodeToString
  * 修改状态应调用 [update]，需要等待保存完成的边界调用 [flush]。同步文件方法可能执行
  * 磁盘 IO，调用方应安排在后台线程。主状态损坏时进入保护模式，只有显式恢复可以解除。
  */
-class LocalStore(val context: Context) {
+class LocalStore(val context: Context, private val syncDevicePreferences: () -> Boolean = { false }) {
     private val stateFile = AtomicFile(File(context.filesDir, "library.json"))
     private val lastGoodFile = File(context.filesDir, "library-last-good.json")
     private val stateCodec = LibraryStateCodec(File(context.filesDir, "library-text"),
@@ -53,7 +56,7 @@ class LocalStore(val context: Context) {
         readLastGood = { AtomicFile(lastGoodFile).openRead().bufferedReader(Charsets.UTF_8).use { it.readText() } },
         decode = stateCodec::decode
     )
-    private val mutable = MutableStateFlow(initial.state)
+    private val mutable = MutableStateFlow(initial.state.withMigratedReadingHistory().withStableFolderIds())
     private val mutableRecoveryIssue = MutableStateFlow(initial.issue)
     // 损坏快照仍可能包含可恢复的引用，应保留其历史正文载荷。
     private val preserveTextHistory = initial.issue != null || context.filesDir.listFiles().orEmpty().any { it.name.startsWith("library-damaged-") }
@@ -104,8 +107,22 @@ class LocalStore(val context: Context) {
         // 调用方包括界面回调和阅读器销毁流程；恢复保护期间保持状态只读，
         // 避免在这些回调中抛异常，由持续显示的恢复提示说明原因。
         if (mutableRecoveryIssue.value != null) return
-        val next = transform(mutable.value)
+        val before = mutable.value
+        val raw = transform(before).withMigratedReadingHistory().withStableFolderIds()
+        val domains = WebDavProjection.affectedLibraryDomains(before, raw)
+        val includeDevices = syncDevicePreferences()
+        val next = if(domains.isEmpty()) raw.copy(syncReplica = before.syncReplica) else raw.copy(syncReplica = before.syncReplica.track(
+            WebDavProjection.library(before, domains, includeDevices), WebDavProjection.library(raw, domains, includeDevices), domains))
         if (next == mutable.value) return
+        persistence.submit(Revision(++revision, next))
+        mutable.value = next
+    }
+
+    /** 同步落地保留远端版本，不将它识别为新的用户编辑；变换仍须在最新本机状态上合并。 */
+    @Synchronized internal fun updateFromWebDav(transform: (LibraryState) -> LibraryState) {
+        check(mutableRecoveryIssue.value == null) { "请先恢复受保护的本地资料" }
+        val next = transform(mutable.value).withStableFolderIds()
+        if(next == mutable.value) return
         persistence.submit(Revision(++revision, next))
         mutable.value = next
     }
@@ -128,7 +145,12 @@ class LocalStore(val context: Context) {
         persistence.flush()
         synchronized(diskLock) {
             synchronized(this@LocalStore) {
-                val next = transform(mutable.value)
+                val before = mutable.value
+                val restored = transform(before).withMigratedReadingHistory().withStableFolderIds()
+                val domains = WebDavProjection.affectedLibraryDomains(before, restored)
+                val includeDevices = syncDevicePreferences()
+                val next = restored.copy(syncReplica = before.syncReplica.track(WebDavProjection.library(before, domains, includeDevices),
+                    WebDavProjection.library(restored, domains, includeDevices), domains))
                 if (mutableRecoveryIssue.value != null) {
                     val damaged = File(context.filesDir, "library.json")
                     if (damaged.exists()) damaged.copyTo(File(context.filesDir, "library-damaged-${java.util.UUID.randomUUID()}.json"))
@@ -153,7 +175,7 @@ class LocalStore(val context: Context) {
     fun saveBook(book: BookCard, folder: String = "默认收藏") = update { it.withSavedBook(book, folder) }
     fun removeBook(ref: BookRef) = update { it.withoutBook(ref) }
     fun rememberSearch(query: String) { if (query.isNotBlank()) update { it.copy(recentSearches = (listOf(query) + it.recentSearches.filterNot { old -> old == query }).take(20)) } }
-    fun savePosition(ref: BookRef, position: Position) = update { it.withReadingPosition(ref, position) }
+    fun savePosition(ref: BookRef, position: Position, bookTitle: String = "") = update { it.withReadingPosition(ref, position, bookTitle) }
     fun chapterFile(ref: BookRef, chapter: String) = File(cacheDir, hashName("${ref.key}/$chapter") + ".json")
     /** 优先复用已解码章节；缺失或损坏的磁盘缓存按未命中处理，交由上层决定联网或提示。 */
     fun cachedChapter(ref: BookRef, chapter: String): Chapter? = synchronized(chapterLock) {

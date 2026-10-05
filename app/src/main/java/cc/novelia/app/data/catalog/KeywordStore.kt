@@ -3,6 +3,7 @@ package cc.novelia.app.data.catalog
 import android.content.Context
 import android.util.AtomicFile
 import cc.novelia.app.data.storage.appJson
+import cc.novelia.app.data.webdav.WebDavProjection
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -32,6 +33,9 @@ class KeywordStore(context: Context, private val entryLimit: () -> Int? = { null
     private var needsMigrationSave = false
     private val mutable = MutableStateFlow(read())
     val state: StateFlow<KeywordLibrary> = mutable.asStateFlow()
+    private val mutableSyncReadError = MutableStateFlow(if(mutable.value.syncReadRecoveryRequired)
+        "标签库读取失败，请先导入备份恢复标签库后再同步。" else null)
+    val syncReadError: StateFlow<String?> = mutableSyncReadError.asStateFlow()
     private val mutableError = MutableStateFlow<String?>(null)
     val persistenceError: StateFlow<String?> = mutableError.asStateFlow()
     private val writes = Channel<Unit>(Channel.CONFLATED)
@@ -69,8 +73,22 @@ class KeywordStore(context: Context, private val entryLimit: () -> Int? = { null
     fun editEntry(original: String, translation: String, category: String) = change { it.editEntry(original.trim(), translation.trim(), category, entryLimit()) }
     fun exportLibrary(): KeywordLibrary = state.value
     fun exportSnapshot(): List<KeywordEntry> = state.value.entries
-    fun mergeLibrary(library: KeywordLibrary) = change { it.merge(library, entryLimit()) }
+    fun mergeLibrary(library: KeywordLibrary) {
+        change { it.merge(library, entryLimit()).copy(syncReadRecoveryRequired = false) }
+        mutableSyncReadError.value = null
+    }
     fun mergeSnapshot(entries: List<KeywordEntry>) = mergeLibrary(KeywordLibrary.fromLegacy(entries, addDefaults = false))
+
+    /** 应用远端记录保留它的版本，不制造一轮本地编辑和回传。 */
+    fun applyRemote(transform: (KeywordLibrary) -> KeywordLibrary) {
+        change(trackLocalChanges = false) { current ->
+            val updated = transform(current).withStableCategoryIds().copy(syncReadRecoveryRequired = false)
+            KeywordLibraryFormat.validate(updated)
+            KeywordCatalog.requireCapacity(current.entries.size, updated.entries.size, entryLimit())
+            updated
+        }
+        mutableSyncReadError.value = null
+    }
     /**
      * 写锁保护重载与落盘顺序，磁盘读取期间仍允许内存编辑；仅保留此期间发生的并发修改。
      * 读取失败继续发布原内存状态，并保留损坏文件供下次保存前备份。
@@ -79,6 +97,8 @@ class KeywordStore(context: Context, private val entryLimit: () -> Int? = { null
         val before = synchronized(lock) { mutable.value }
         val loaded = read()
         if(failedRead) {
+            change { it.copy(syncReadRecoveryRequired = true) }
+            mutableSyncReadError.value = "标签库读取失败，请先导入备份恢复标签库后再同步。"
             mutableError.value = "标签词库读取失败，已保留当前标签；再次保存时会保留损坏原文件。"
             return@synchronized
         }
@@ -121,11 +141,13 @@ class KeywordStore(context: Context, private val entryLimit: () -> Int? = { null
 
     // 乐观变换：锁外计算后比较版本，若其间有编辑则基于新快照重算，避免覆盖并发修改。
     // transform 可能执行多次，必须保持为无外部副作用的列表变换。
-    private fun change(transform: (KeywordLibrary) -> KeywordLibrary) {
+    private fun change(trackLocalChanges: Boolean = true, transform: (KeywordLibrary) -> KeywordLibrary) {
         while(true) {
             val snapshot = synchronized(lock) { Snapshot(revision, mutable.value) }
             // 词条排序和合并也放在界面及 flush 使用的状态锁之外。
-            val next = transform(snapshot.library)
+            val raw = transform(snapshot.library)
+            val next = if(trackLocalChanges && raw != snapshot.library) raw.copy(syncReplica = snapshot.library.syncReplica.track(
+                WebDavProjection.keywords(snapshot.library), WebDavProjection.keywords(raw))) else raw
             val changed = next != snapshot.library
             val committed = synchronized(lock) {
                 if(revision != snapshot.revision) false
@@ -136,6 +158,7 @@ class KeywordStore(context: Context, private val entryLimit: () -> Int? = { null
             }
             if(committed) {
                 if(changed) writes.trySend(Unit)
+                mutableSyncReadError.value = if(next.syncReadRecoveryRequired) "标签库读取失败，请先导入备份恢复标签库后再同步。" else null
                 return
             }
         }
@@ -146,9 +169,10 @@ class KeywordStore(context: Context, private val entryLimit: () -> Int? = { null
         if(!file.exists() && !File(file.path + ".bak").exists()) return KeywordLibrary.defaults()
         return try {
             val text = atomic.openRead().bufferedReader(Charsets.UTF_8).use { it.readText() }
-            val loaded = KeywordLibraryFormat.decode(text)
+            val loaded = KeywordLibraryFormat.decodeLocal(text)
+            loaded.syncReplica.validate()
             val library = if(text.trimStart().startsWith("[")) KeywordLibrary.fromLegacy(loaded.entries) else loaded
             library.upgradeDefaults(entryLimit()).also { needsMigrationSave = it != loaded }
-        } catch(_: Exception) { failedRead = true; KeywordLibrary.defaults() }
+        } catch(_: Exception) { failedRead = true; KeywordLibrary.defaults().copy(syncReadRecoveryRequired = true) }
     }
 }

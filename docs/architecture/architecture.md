@@ -11,7 +11,7 @@
 | 目录 | 责任 | 主要入口 |
 | --- | --- | --- |
 | `app/src/main/java/cc/novelia/app` | Application、Activity、生命周期与导航装配 | [NoveliaApplication.kt](../../app/src/main/java/cc/novelia/app/NoveliaApplication.kt)、[MainActivity.kt](../../app/src/main/java/cc/novelia/app/MainActivity.kt) |
-| `data/` | 按 13 个职责包组织 DTO、持久状态、会话、HTTP、同步与缓存 | [model/](../../app/src/main/java/cc/novelia/app/data/model)、[LocalStore.kt](../../app/src/main/java/cc/novelia/app/data/storage/LocalStore.kt)、[NoveliaApi.kt](../../app/src/main/java/cc/novelia/app/data/network/NoveliaApi.kt) |
+| `data/` | 按 14 个职责包组织 DTO、持久状态、会话、HTTP、同步与缓存 | [model/](../../app/src/main/java/cc/novelia/app/data/model)、[LocalStore.kt](../../app/src/main/java/cc/novelia/app/data/storage/LocalStore.kt)、[NoveliaApi.kt](../../app/src/main/java/cc/novelia/app/data/network/NoveliaApi.kt) |
 | `ui/` | 按功能划分的 Compose 页面，以及导航、共享组件、主题、Markdown/WebView 桥接 | [源码目录导航](source-layout.md)、[AppController.kt](../../app/src/main/java/cc/novelia/app/ui/navigation/AppController.kt)、[Screen.kt](../../app/src/main/java/cc/novelia/app/ui/components/Screen.kt) |
 | `reader/` | 阅读投影、锚点、静态分页、搜索、系统 TTS | [Paragraphs.kt](../../app/src/main/java/cc/novelia/app/reader/Paragraphs.kt)、[ReadAloudService.kt](../../app/src/main/java/cc/novelia/app/reader/ReadAloudService.kt) |
 | `files/` | 文件解析、转换、下载、导出和清理 | [EpubReader.kt](../../app/src/main/java/cc/novelia/app/files/EpubReader.kt)、[DownloadWorker.kt](../../app/src/main/java/cc/novelia/app/files/DownloadWorker.kt) |

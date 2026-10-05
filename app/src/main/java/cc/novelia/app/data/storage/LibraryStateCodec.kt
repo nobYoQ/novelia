@@ -48,7 +48,7 @@ internal class LibraryStateCodec(
     /** 兼容正文直接存于旧 JSON 的格式；存在外置索引时必须通过哈希校验才能恢复正文。 */
     fun decode(text: String): LibraryState {
         val json = appJson.parseToJsonElement(text).jsonObject
-        val state = appJson.decodeFromJsonElement(LibraryState.serializer(), json)
+        val state = appJson.decodeFromJsonElement(LibraryState.serializer(), json).also { it.syncReplica.validate() }
         val hash = json[PAYLOAD]?.jsonPrimitive?.content ?: return state // 仍兼容读取已有的 library.json。
         val payloadText = read(file(hash))
         require(hashName(payloadText) == hash) { "文章或草稿文件校验失败" }

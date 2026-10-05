@@ -3,14 +3,24 @@ package cc.novelia.app.data.library
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.Position
+import cc.novelia.app.data.model.ReadingHistoryEntry
+
+/** 只从旧位置迁移一次，之后清空历史或暂停记录都不会重新生成旧历史。 */
+fun LibraryState.withMigratedReadingHistory(): LibraryState {
+    if(historyMigrated) return this
+    val booksByKey = books.associateBy { it.book.ref.key }
+    val migrated = positions.mapValues { (key, position) -> ReadingHistoryEntry(key,
+        booksByKey[key]?.book?.title.orEmpty(), position.chapterId, position.title, position.updatedAt) }
+    return copy(readingHistory = migrated + readingHistory, historyMigrated = true)
+}
 
 /**
  * 保存真实阅读锚点；同一章的完成标记只增不减，回看或笔记跳转仍能更新位置。
- * historyPaused 时不写历史，也不确认更新已读；缺少的目录计数沿用该章已知值。
+ * historyPaused 只暂停历史，续读位置始终保存；缺少的目录计数沿用该章已知值。
  */
-fun LibraryState.withReadingPosition(ref: BookRef, position: Position): LibraryState {
-    if(historyPaused) return this
-    val previous = positions[ref.key]?.takeIf { it.chapterId == position.chapterId }
+fun LibraryState.withReadingPosition(ref: BookRef, position: Position, bookTitle: String = ""): LibraryState {
+    val state = withMigratedReadingHistory()
+    val previous = state.positions[ref.key]?.takeIf { it.chapterId == position.chapterId }
     // 从笔记跳转只提供锚点，不应抹去同一章已有的读完状态。
     val next = position.copy(
         chapterIndex = position.chapterIndex ?: previous?.chapterIndex,
@@ -18,7 +28,12 @@ fun LibraryState.withReadingPosition(ref: BookRef, position: Position): LibraryS
         paragraphCount = position.paragraphCount ?: previous?.paragraphCount,
         chapterCompleted = position.chapterCompleted || previous?.chapterCompleted == true
     )
-    return copy(positions = positions + (ref.key to next)).acknowledgeReadChapterUpdates(ref)
+    val saved = state.copy(positions = state.positions + (ref.key to next))
+    if(state.historyPaused) return saved.acknowledgeReadChapterUpdates(ref)
+    val history = ReadingHistoryEntry(ref.key, bookTitle.takeIf { it.isNotBlank() }
+        ?: state.books.firstOrNull { it.book.ref == ref }?.book?.title
+        ?: state.readingHistory[ref.key]?.bookTitle.orEmpty(), next.chapterId, next.title, next.updatedAt)
+    return saved.copy(readingHistory = state.readingHistory + (ref.key to history)).acknowledgeReadChapterUpdates(ref)
 }
 
 /**

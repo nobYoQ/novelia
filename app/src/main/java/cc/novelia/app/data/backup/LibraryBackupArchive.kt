@@ -7,6 +7,8 @@ import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.LocalDocument
 import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.data.storage.appJson
+import cc.novelia.app.data.webdav.SyncReplica
+import cc.novelia.app.data.library.withMigratedReadingHistory
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
@@ -123,7 +125,7 @@ internal object LibraryBackupArchive {
         require(documentIds.size == manifest.documents.size && missing.size == manifest.missingDocuments.size && documentIds.intersect(missing).isEmpty()) { "备份文档索引重复" }
         require((documentIds + missing).all { id.matches(it) }) { "备份文档标识无效" }
         val state = manifest.library
-        require(state.pending.isEmpty() && state.downloads.isEmpty() && state.syncStatus.isEmpty()) { "备份不应包含账号队列或运行中的任务" }
+        require(state.pending.isEmpty() && state.downloads.isEmpty() && state.syncStatus.isEmpty() && state.syncReplica.documents.isEmpty()) { "备份不应包含账号队列、同步版本或运行中的任务" }
         require(state.books.map { it.book.ref.key }.distinct().size == state.books.size && state.notes.map { it.id }.distinct().size == state.notes.size) { "备份含重复的书籍或笔记标识" }
         require(state.theme in setOf("system", "light", "dark")) { "备份主题设置无效" }
         require(state.keywordLimit == null || state.keywordLimit > 0) { "备份标签数量上限无效" }
@@ -180,17 +182,18 @@ internal fun LibraryBackupManifest.keywordLibrary(): KeywordLibrary = keywordCat
     ?: KeywordLibrary.fromLegacy(keywords, addDefaults = false)
 
 internal fun localDocumentIds(state: LibraryState): Set<String> = (
-    state.books.map { it.book.ref.key } + state.positions.keys + state.notes.map { it.key } + state.bookSettings.keys + state.personalGlossaries.keys
+    state.books.map { it.book.ref.key } + state.positions.keys + state.readingHistory.keys + state.notes.map { it.key } + state.bookSettings.keys + state.personalGlossaries.keys
 ).filter { it.startsWith("local/") }.map { it.removePrefix("local/") }.toSet()
 
-internal fun LibraryState.forBackup(): LibraryState = copy(pending = emptyList(), downloads = emptyList(), syncStatus = emptyMap())
+internal fun LibraryState.forBackup(): LibraryState = copy(pending = emptyList(), downloads = emptyList(), syncStatus = emptyMap(), syncReplica = SyncReplica(deviceId = ""))
 
 /**
  * 合并而非覆盖：已有书目、偏好和草稿优先，阅读进度按 updatedAt 取较新值，笔记按 ID 去重。
  * 没有书目、进度和笔记的空书库还会继承备份全局偏好；运行中的下载、同步队列及状态
  * 始终沿用当前安装的数据，备份不能重新发起另一设备的后台操作。
  */
-internal fun mergeLibraryBackup(current: LibraryState, imported: LibraryState): LibraryState {
+internal fun mergeLibraryBackup(current: LibraryState, incoming: LibraryState): LibraryState {
+    val imported = incoming.withMigratedReadingHistory()
     val base = if (current.books.isEmpty() && current.positions.isEmpty() && current.notes.isEmpty()) imported.forBackup() else current
     val books = current.books + imported.books.filter { item -> current.books.none { it.book.ref == item.book.ref } }
     val booksByKey = books.associateBy { it.book.ref.key }
@@ -198,6 +201,10 @@ internal fun mergeLibraryBackup(current: LibraryState, imported: LibraryState): 
         books = books.map { book -> book.copy(volumeOrder = (book.volumeOrder + imported.books.firstOrNull { it.book.ref == book.book.ref }?.volumeOrder.orEmpty()).distinct().filter { booksByKey[it]?.parentWenkuKey == book.book.ref.key }) },
         folders = (current.folders + imported.folders).distinct(),
         positions = (current.positions.keys + imported.positions.keys).associateWith { key -> listOfNotNull(current.positions[key], imported.positions[key]).maxBy { it.updatedAt } },
+        readingHistory = (current.readingHistory.keys + imported.readingHistory.keys).associateWith { key ->
+            listOfNotNull(current.readingHistory[key], imported.readingHistory[key]).maxBy { it.lastReadAt } },
+        historyMigrated = current.historyMigrated || imported.historyMigrated,
+        folderIds = imported.folderIds + current.folderIds,
         notes = current.notes + imported.notes.filter { note -> current.notes.none { it.id == note.id } },
         bookSettings = imported.bookSettings + current.bookSettings,
         personalGlossaries = (current.personalGlossaries.keys + imported.personalGlossaries.keys).associateWith { key -> imported.personalGlossaries[key].orEmpty() + current.personalGlossaries[key].orEmpty() },
@@ -212,7 +219,7 @@ internal fun mergeLibraryBackup(current: LibraryState, imported: LibraryState): 
         updateSnapshots = (imported.updateSnapshots + current.updateSnapshots).filterKeys { it in booksByKey },
         bookUpdates = (imported.bookUpdates + current.bookUpdates).filterKeys { it in booksByKey },
         // 运行中的任务属于当前安装实例，不从备份归档恢复。
-        pending = current.pending, downloads = current.downloads, syncStatus = current.syncStatus
+        pending = current.pending, downloads = current.downloads, syncStatus = current.syncStatus, syncReplica = current.syncReplica
     )
     return merged
 }

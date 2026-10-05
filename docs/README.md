@@ -40,6 +40,7 @@ Novelia 是 [轻小说机翻机器人](https://n.novelia.cc/) 的非官方 Andro
 | 外观、电子纸、屏蔽、缓存和笔记 | [设置、笔记与个人数据](features/settings-and-notes.md) | [数据范围](data/data-and-storage.md) |
 | 登录、退出、401 或切换账号 | [账号与登录](network/authentication.md) | [网络与同步](network/network-and-sync.md) |
 | 换机、备份预览、恢复冲突或损坏书库 | [备份与恢复流程](data/backup-and-recovery.md) | [文件存储](data/data-and-storage.md) |
+| WebDAV 服务配置与多设备资料合并 | [WebDAV 多设备同步](network/webdav-sync.md) | [设置](features/settings-and-notes.md)、[存储](data/data-and-storage.md) |
 | 编译、安装、回归或性能问题 | [排障](maintenance/troubleshooting.md)、[测试](quality/testing.md) | [性能测量](quality/performance.md) |
 
 ## 经常需要区分的概念

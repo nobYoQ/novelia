@@ -14,6 +14,10 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class KeywordLibraryTest {
+    private fun assertLibraryEquals(expected: KeywordLibrary, actual: KeywordLibrary) {
+        // 导出文件不携带安装身份，恢复时生成本设备的新 replica；业务内容必须保持。
+        assertEquals(expected.copy(syncReplica = actual.syncReplica), actual)
+    }
     @Test fun reorderingCategoriesSurvivesRoundTripAndDefaultUpgradeWithoutChangingTags() {
         val original = KeywordLibrary.defaults().createCategory("我的分类").editEntry("ヤンデレ", "自定译名", "我的分类")
         val order = original.categories.reversed()
@@ -22,7 +26,7 @@ class KeywordLibraryTest {
         assertEquals(original.entries, reordered.entries)
         val bytes = ByteArrayOutputStream().also { KeywordLibraryFormat.write(it, reordered) }.toByteArray()
         val restored = KeywordLibraryFormat.read(ByteArrayInputStream(bytes)).upgradeDefaults()
-        assertEquals(reordered, restored)
+        assertLibraryEquals(reordered, restored)
         assertEquals(reordered, reordered.reorderCategories(order))
     }
 
@@ -47,7 +51,7 @@ class KeywordLibraryTest {
         val arranged = upgraded.renameCategory("BL／男性恋爱", "我的 BL").deleteCategory("TS／性转")
         assertEquals(arranged, arranged.upgradeDefaults(limit = 1))
         val restored = KeywordLibraryFormat.decode(appJson.encodeToString(arranged))
-        assertEquals(arranged, restored.upgradeDefaults(limit = 1))
+        assertLibraryEquals(arranged, restored.upgradeDefaults(limit = 1))
     }
 
     @Test fun seedingRespectsCategoryLimitAndExplicitlyClearingAnAutomaticTranslationPersists() {
@@ -95,7 +99,7 @@ class KeywordLibraryTest {
         val library = KeywordLibrary.defaults().deleteCategory("题材").createCategory("待整理")
         val bytes = ByteArrayOutputStream().also { KeywordLibraryFormat.write(it, library) }.toByteArray()
         val restored = KeywordLibraryFormat.read(ByteArrayInputStream(bytes))
-        assertEquals(library, restored)
+        assertLibraryEquals(library, restored)
         assertTrue("待整理" in restored.categories)
         assertFalse("题材" in restored.categories)
     }
@@ -178,12 +182,12 @@ class KeywordLibraryTest {
         assertEquals("其他", library.entries.single { it.original == "a" }.category)
         val bytes = ByteArrayOutputStream().also { KeywordLibraryFormat.write(it, library) }.toByteArray()
         val native = appJson.parseToJsonElement(bytes.toString(Charsets.UTF_8)).jsonObject
-        assertEquals(setOf("entries", "categories", "format", "version", "categorySeedsVersion"), native.keys)
+        assertEquals(setOf("entries", "categories", "format", "version", "categorySeedsVersion", "categoryIds"), native.keys)
         assertEquals("novelia-keywords", native.getValue("format").jsonPrimitive.content)
         assertEquals("1", native.getValue("version").jsonPrimitive.content)
         assertEquals("首条译名", native.getValue("entries").jsonArray.first().jsonObject.getValue("translation").jsonPrimitive.content)
         assertFalse(native.getValue("entries").jsonArray.first().jsonObject.keys.any { it in setOf("src", "dst", "info") })
-        assertEquals(library, KeywordLibraryFormat.read(ByteArrayInputStream(bytes)))
+        assertLibraryEquals(library, KeywordLibraryFormat.read(ByteArrayInputStream(bytes)))
         assertEquals(0, KeywordLibraryFormat.readImport(ByteArrayInputStream(bytes)).duplicateCount)
     }
 
@@ -217,7 +221,7 @@ class KeywordLibraryTest {
         assertEquals(20_681 + KeywordCatalog.common.size, merged.entries.size)
         assertEquals("译名 20680", merged.entries.last().translation)
         val bytes = ByteArrayOutputStream().also { KeywordLibraryFormat.write(it, merged) }.toByteArray()
-        assertEquals(merged, KeywordLibraryFormat.read(ByteArrayInputStream(bytes)))
+        assertLibraryEquals(merged, KeywordLibraryFormat.read(ByteArrayInputStream(bytes)))
         assertTrue(runCatching { KeywordLibrary.defaults().merge(library, limit = 20_000) }.isFailure)
     }
 

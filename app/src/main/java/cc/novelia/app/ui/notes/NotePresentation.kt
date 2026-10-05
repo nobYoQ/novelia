@@ -8,7 +8,7 @@ internal data class NotePresentation(val note: Note, val bookTitle: String, val 
 internal fun presentNotes(state: LibraryState, query: String = "", bookKey: String? = null): List<NotePresentation> {
     val books = state.books.associateBy { it.book.ref.key }
     val text = query.trim()
-    return state.notes.asSequence().filter { bookKey == null || it.key == bookKey }.map { note ->
+    return state.notes.asSequence().filter { (it.bookmarked || it.text.isNotBlank()) && (bookKey == null || it.key == bookKey) }.map { note ->
         val book = note.bookTitle.ifBlank { books[note.key]?.book?.title ?: "未命名作品" }
         val chapter = note.chapterTitle.ifBlank {
             state.positions[note.key]?.takeIf { it.chapterId == note.chapterId }?.title?.ifBlank { null }

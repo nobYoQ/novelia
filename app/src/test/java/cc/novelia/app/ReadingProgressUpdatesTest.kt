@@ -3,6 +3,7 @@ package cc.novelia.app
 import cc.novelia.app.data.library.acknowledgeReadChapterUpdates
 import cc.novelia.app.data.library.acknowledgeCompletedBookUpdates
 import cc.novelia.app.data.library.withReadingPosition
+import cc.novelia.app.data.library.withMigratedReadingHistory
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.CloudReadingProgress
@@ -130,9 +131,13 @@ class ReadingProgressUpdatesTest {
         assertEquals(50L, newUpdate.latestTranslationAt(listOf("gpt")))
     }
 
-    @Test fun pausedHistoryDoesNotWriteOrAcknowledgeReading() {
-        val paused = library.copy(historyPaused = true)
-        assertEquals(paused, paused.withReadingPosition(ref, lastPage))
+    @Test fun pausedHistorySavesResumePositionAndAcknowledgesReadingWithoutAddingHistory() {
+        val paused = library.withMigratedReadingHistory().copy(historyPaused = true)
+        val saved = paused.withReadingPosition(ref, lastPage)
+        assertEquals(lastPage, saved.positions[ref.key])
+        assertEquals(paused.readingHistory, saved.readingHistory)
+        assertFalse(saved.books.first { it.book.ref == ref }.hasUpdates)
+        assertTrue(saved.bookUpdates[ref.key]?.hasChanges != true)
     }
 
     @Test fun returningFromANoteKeepsSameChapterCompletionAndMetadataWithTheNewAnchor() {

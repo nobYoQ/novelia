@@ -61,6 +61,7 @@ import kotlinx.serialization.encodeToString
         item { TogglePreference("减少动态效果", "", state.reducedMotion) { value -> c.store.update { it.copy(reducedMotion = value) } } }
         item { TogglePreference("剪贴板链接提示", "返回应用时识别原站链接，点击提示后打开", state.clipboardLinkHints) { value -> c.store.update { it.copy(clipboardLinkHints = value) } } }
         item { SectionTitle("下载与同步") }
+        item { MenuRow("WebDAV 多设备同步", "自主配置服务，选择设置、标签、收藏、进度、书签、笔记和历史", Icons.Outlined.Sync, { c.go("webdav") }) }
         item { BookSourcePreference(c) }
         item { MenuRow("网络诊断与日志", "ECH 开关、连接检测与日志导出", Icons.Outlined.Wifi, { echSettings = true }) }
         item { TogglePreference("仅在 Wi-Fi 下载", "新建下载任务等待非计费网络", state.wifiOnly) { value -> c.store.update { it.copy(wifiOnly = value) } } }

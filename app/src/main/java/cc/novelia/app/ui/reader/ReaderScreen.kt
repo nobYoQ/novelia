@@ -80,6 +80,7 @@ import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.data.model.WebDetail
 import cc.novelia.app.data.storage.appJson
 import cc.novelia.app.data.storage.hashName
+import cc.novelia.app.data.webdav.WebDavProjection
 import cc.novelia.app.reader.*
 import cc.novelia.app.ui.components.AppAlertDialog
 import cc.novelia.app.ui.components.AppScrollColumn
@@ -229,6 +230,10 @@ import kotlinx.serialization.encodeToString
             }
             return@AsyncContent
         }
+        val paragraphTextHashes = remember(paragraphs) { mutableMapOf<Int, String>() }
+        fun paragraphHash(paragraph: ReadingParagraph?): String? = paragraph?.let {
+            paragraphTextHashes.getOrPut(it.index) { it.readingTextHash() }
+        }
         LaunchedEffect(ref, chapterId, chapter.nextId, settings.prefetchChapters, settings.prefetchWifiOnly, cacheGeneration, readingLifecycle) {
             if(!ref.isLocal && settings.prefetchChapters > 0 && cacheGeneration == enteredCacheGeneration) readingLifecycle.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 delay(600)
@@ -264,16 +269,18 @@ import kotlinx.serialization.encodeToString
             val noteSource = readerEntry?.savedStateHandle?.remove<Int>("readerNoteSourceIndex")
             val noteAnchor = noteSource?.let { readingSourceAnchor(chapter, it) }
             val returned = readerEntry?.savedStateHandle?.remove<String>("readerRestorePosition")
-                ?.let { runCatching { appJson.decodeFromString<ReadingReturnPoint>(it).resolvedPosition(paragraphs) }.getOrNull() }
+                ?.let { runCatching { appJson.decodeFromString<ReadingReturnPoint>(it).resolvedPosition(paragraphs, settings) }.getOrNull() }
             if(noteAnchor != null) Position(chapterId,
                 paragraphs.indexOfFirst { it.index >= noteAnchor }
                     .takeIf { it >= 0 }?.plus(1) ?: paragraphs.size)
             else if(returned != null) returned
             else if(searchArrival != null) Position(chapterId, searchArrival.coerceIn(0, paragraphs.lastIndex.coerceAtLeast(0)) + 1,
                 textOffset = paragraphs.getOrNull(searchArrival)?.let { arrivalMatch?.textOffset(it, settings) } ?: 0)
-            else if(anchor != null) Position(chapterId, (anchor.sourceIndex?.let { source -> paragraphs.indexOfFirst { it.index >= source }.takeIf { it >= 0 } } ?: anchor.paragraph).coerceIn(0, paragraphs.lastIndex.coerceAtLeast(0)) + 1, textOffset = anchor.textOffset)
+            else if(anchor != null) Position(chapterId, (anchor.sourceIndex?.let { source -> paragraphs.indexOfFirst { it.index >= source }.takeIf { it >= 0 } } ?: anchor.paragraph).coerceIn(0, paragraphs.lastIndex.coerceAtLeast(0)) + 1,
+                textOffset = anchor.textOffset, sourceParagraph = anchor.sourceIndex, anchorSource = anchor.anchorSource,
+                anchorTextHash = anchor.anchorTextHash).resolvedReadingPosition(paragraphs, settings)
             else if(readerEntry?.savedStateHandle?.remove<Boolean>("readerStartAtEnd") == true) Position(chapterId, Int.MAX_VALUE)
-            else local.positions[ref.key]?.takeIf { it.chapterId == chapterId }
+            else local.positions[ref.key]?.takeIf { it.chapterId == chapterId }?.resolvedReadingPosition(paragraphs, settings)
         }
         val scroll = rememberLazyListState(position?.index ?: 0, position?.offset ?: 0); val scope = rememberCoroutineScope(); val focus = remember { FocusRequester() }
         val eInkInteraction = LocalEInkMode.current
@@ -332,9 +339,11 @@ import kotlinx.serialization.encodeToString
         fun saveBookmark(paragraph: ReadingParagraph, edit: Boolean = false) {
             val candidate = Note(UUID.randomUUID().toString(), ref.key, chapterId, paragraph.index,
                 paragraph.parts.firstOrNull()?.text.orEmpty(), "",
-                bookTitle = c.store.state.value.books.firstOrNull { it.book.ref == ref }?.book?.title.orEmpty(), chapterTitle = chapter.title)
+                bookTitle = c.store.state.value.books.firstOrNull { it.book.ref == ref }?.book?.title
+                    ?: chapter.novelTitleZh?.takeIf(String::isNotBlank) ?: chapter.novelTitleJp.orEmpty(), chapterTitle = chapter.title)
             c.store.update { state ->
-                if(state.notes.any { it.key == ref.key && it.chapterId == chapterId && it.paragraph == paragraph.index }) state
+                if(state.notes.any { it.key == ref.key && it.chapterId == chapterId && it.paragraph == paragraph.index })
+                    if(edit) state else state.copy(notes = state.notes.map { if(it.key == ref.key && it.chapterId == chapterId && it.paragraph == paragraph.index) it.copy(bookmarked = true) else it })
                 else state.copy(notes = state.notes + candidate)
             }
             val saved = c.store.state.value.notes.firstOrNull { it.key == ref.key && it.chapterId == chapterId && it.paragraph == paragraph.index } ?: return
@@ -374,8 +383,7 @@ import kotlinx.serialization.encodeToString
         // 因为滚动列表的第 0 项是章标题；字符偏移支持重排，像素偏移用于恢复原滚动布局。
         fun savePosition() {
             if(leaving || seekTarget != null || !initialAnchorRestored || restoringAnchor || previousPagination != settings.staticPagination ||
-                (if(settings.staticPagination) !eInk.ready || eInk.pages.isEmpty() else scroll.layoutInfo.totalItemsCount == 0 || scroll.layoutInfo.visibleItemsInfo.isEmpty()) ||
-                c.store.state.value.historyPaused) return
+                (if(settings.staticPagination) !eInk.ready || eInk.pages.isEmpty() else scroll.layoutInfo.totalItemsCount == 0 || scroll.layoutInfo.visibleItemsInfo.isEmpty())) return
             val visible = if(settings.staticPagination) Position(chapterId, eInk.paragraph + 1, 0, chapter.title, textOffset = eInk.textOffset)
                 else {
                     val paragraph = paragraphs.getOrNull(scroll.firstVisibleItemIndex - 1)
@@ -389,11 +397,15 @@ import kotlinx.serialization.encodeToString
                 if(settings.staticPagination) !eInk.canGoForward else !scroll.canScrollForward
             val next = visible.copy(chapterIndex = chapterProgress?.first ?: saved?.chapterIndex,
                 chapterCount = chapterProgress?.second ?: saved?.chapterCount,
-                paragraphCount = paragraphs.size, chapterCompleted = chapterCompleted)
+                paragraphCount = paragraphs.size, chapterCompleted = chapterCompleted,
+                sourceParagraph = paragraphs.getOrNull(visible.index - 1)?.index,
+                anchorSource = WebDavProjection.anchorSource(settings),
+                anchorTextHash = paragraphHash(paragraphs.getOrNull(visible.index - 1)))
             val previous = lastSavedPosition
             if(previous == null || previous.chapterId != next.chapterId || previous.index != next.index || previous.offset != next.offset || previous.textOffset != next.textOffset || previous.title != next.title ||
-                previous.chapterIndex != next.chapterIndex || previous.chapterCount != next.chapterCount || previous.paragraphCount != next.paragraphCount || previous.chapterCompleted != next.chapterCompleted) {
-                c.store.savePosition(ref, next)
+                previous.chapterIndex != next.chapterIndex || previous.chapterCount != next.chapterCount || previous.paragraphCount != next.paragraphCount || previous.chapterCompleted != next.chapterCompleted ||
+                previous.sourceParagraph != next.sourceParagraph || previous.anchorSource != next.anchorSource || previous.anchorTextHash != next.anchorTextHash) {
+                c.store.savePosition(ref, next, bookTitle = chapter.novelTitleZh?.takeIf(String::isNotBlank) ?: chapter.novelTitleJp.orEmpty())
                 lastSavedPosition = next
             }
         }
@@ -404,7 +416,9 @@ import kotlinx.serialization.encodeToString
             val current = ReadingReturnPoint(Position(chapterId,
                 index = if(settings.staticPagination) paragraph + 1 else scroll.firstVisibleItemIndex,
                 offset = if(settings.staticPagination) 0 else scroll.firstVisibleItemScrollOffset,
-                title = chapter.title, textOffset = if(settings.staticPagination) eInk.textOffset else scrollTextOffset(source)), source)
+                title = chapter.title, textOffset = if(settings.staticPagination) eInk.textOffset else scrollTextOffset(source),
+                sourceParagraph = source, anchorSource = WebDavProjection.anchorSource(settings),
+                anchorTextHash = if(source == null) null else paragraphHash(paragraphs.getOrNull(paragraph))), source)
             returnPointJson = appJson.encodeToString(retainReadingReturnPoint(returnPoint, current))
         }
         val onChapterLoaded by rememberUpdatedState<(ReaderChapterTarget, AppController.ReaderHandoff) -> Unit>({ target, loaded ->
@@ -463,7 +477,7 @@ import kotlinx.serialization.encodeToString
             searchJob = scope.launch {
                 restoringAnchor = true
                 try {
-                    val resolved = target.resolvedPosition(paragraphs)
+                    val resolved = target.resolvedPosition(paragraphs, settings)
                     val paragraphIndex = (resolved.index - 1).coerceAtLeast(0)
                     if(settings.staticPagination) eInk.find(paragraphIndex, resolved.textOffset, target.sourceIndex)
                     else {
@@ -483,8 +497,11 @@ import kotlinx.serialization.encodeToString
         fun refreshChapter() {
             seekGeneration++; seekJob?.cancel(); seekTarget = null
             chapterLoad.cancel()
-            refreshAnchor = if(settings.staticPagination) ReadingRestoreAnchor(eInk.paragraph, eInk.sourceIndex, eInk.textOffset)
-                else ReadingRestoreAnchor(firstParagraph, paragraphs.getOrNull(firstParagraph)?.index, scrollTextOffset(paragraphs.getOrNull(firstParagraph)?.index))
+            refreshAnchor = if(settings.staticPagination) ReadingRestoreAnchor(eInk.paragraph, eInk.sourceIndex, eInk.textOffset,
+                WebDavProjection.anchorSource(settings), paragraphHash(paragraphs.getOrNull(eInk.paragraph)))
+                else ReadingRestoreAnchor(firstParagraph, paragraphs.getOrNull(firstParagraph)?.index,
+                    scrollTextOffset(paragraphs.getOrNull(firstParagraph)?.index), WebDavProjection.anchorSource(settings),
+                    paragraphHash(paragraphs.getOrNull(firstParagraph)))
             savePosition()
             version++
         }
@@ -597,8 +614,8 @@ import kotlinx.serialization.encodeToString
             lifecycleOwner.lifecycle.addObserver(observer)
             onDispose { lifecycleOwner.lifecycle.removeObserver(observer); latestSavePosition() }
         }
-        LaunchedEffect(scroll, chapterId, local.historyPaused, settings.staticPagination) {
-            if(!local.historyPaused && !settings.staticPagination) snapshotFlow {
+        LaunchedEffect(scroll, chapterId, settings.staticPagination) {
+            if(!settings.staticPagination) snapshotFlow {
                 if(scroll.isScrollInProgress || !initialAnchorRestored || restoringAnchor) null else SettledReadingScroll(
                     scroll.firstVisibleItemIndex, scroll.firstVisibleItemScrollOffset, scroll.canScrollForward,
                     scroll.layoutInfo.totalItemsCount, scroll.layoutInfo.visibleItemsInfo.lastOrNull()?.index)
@@ -618,16 +635,20 @@ import kotlinx.serialization.encodeToString
         }
         // 模式切换使用字符锚点衔接，语言过滤变化时先按原始段落编号重新找投影下标。
         // LazyColumn 需要先挂载目标项、等待文字测量，再转换字符位置为可滚动的像素位置。
+        var previousAnchorSource by remember { mutableStateOf(WebDavProjection.anchorSource(settings)) }
         LaunchedEffect(settings.staticPagination, layoutGeneration) {
             val changed = previousPagination != settings.staticPagination
+            val sourceChanged = previousAnchorSource != WebDavProjection.anchorSource(settings)
             restoringAnchor = true
             try {
-                if(settings.staticPagination && changed) {
-                    eInk.find(scrollAnchor.first, scrollAnchor.second, scrollAnchor.third)
+                if(settings.staticPagination && (changed || sourceChanged)) {
+                    val anchor = if(previousPagination) Triple(eInk.paragraph, eInk.textOffset, eInk.sourceIndex) else scrollAnchor
+                    eInk.find(anchor.first, if(sourceChanged) 0 else anchor.second, anchor.third)
                     pendingScrollRestore = null
                 } else if(!settings.staticPagination) {
-                    if(pendingScrollRestore == null) pendingScrollRestore = if(changed && eInk.pages.isNotEmpty()) ReadingRestoreAnchor(eInk.paragraph, eInk.sourceIndex, eInk.textOffset)
-                        else position?.takeIf { !initialAnchorRestored && it.textOffset > 0 && it.offset == 0 }?.let { ReadingRestoreAnchor((it.index - 1).coerceAtLeast(0), null, it.textOffset) }
+                    if(pendingScrollRestore == null) pendingScrollRestore = if(changed && eInk.pages.isNotEmpty()) ReadingRestoreAnchor(eInk.paragraph, eInk.sourceIndex, if(sourceChanged) 0 else eInk.textOffset)
+                        else if(sourceChanged) ReadingRestoreAnchor(scrollAnchor.first, scrollAnchor.third, 0)
+                        else position?.takeIf { !initialAnchorRestored && it.textOffset > 0 && it.offset == 0 }?.let { ReadingRestoreAnchor((it.index - 1).coerceAtLeast(0), it.sourceParagraph, it.textOffset) }
                     val target = pendingScrollRestore
                     if(target != null) {
                         val index = (target.sourceIndex?.let { source -> paragraphs.indexOfFirst { it.index >= source }.takeIf { it >= 0 } }
@@ -646,6 +667,7 @@ import kotlinx.serialization.encodeToString
                     }
                 }
                 previousPagination = settings.staticPagination
+                previousAnchorSource = WebDavProjection.anchorSource(settings)
                 initialAnchorRestored = true
             } finally { restoringAnchor = false }
             latestSavePosition()
@@ -806,7 +828,7 @@ import kotlinx.serialization.encodeToString
                             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                 IconButton(onClick = { chapter.prevId?.let { openChapter(it) } }, enabled = chapter.prevId != null && !leaving && !chapterLoad.loading) { Icon(Icons.Outlined.SkipPrevious, "上一章") }
                                 TextButton(onClick = { if(wide) { tocQuery = ""; tocLocateRequest++ } else toc = true }, colors = ButtonDefaults.textButtonColors(contentColor = foreground)) { Icon(Icons.Outlined.FormatListBulleted, null, Modifier.size(18.dp)); Text(if(wide) " 定位目录" else " 目录") }
-                                val bookmarked = local.notes.any { it.key == ref.key && it.chapterId == chapterId && it.paragraph == paragraphs.getOrNull(firstParagraph)?.index }
+                                val bookmarked = local.notes.any { it.bookmarked && it.key == ref.key && it.chapterId == chapterId && it.paragraph == paragraphs.getOrNull(firstParagraph)?.index }
                                 IconButton(onClick = { paragraphs.getOrNull(firstParagraph)?.let { saveBookmark(it) } }, enabled = paragraphs.isNotEmpty(), modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp)) {
                                     Icon(if(bookmarked) Icons.Outlined.BookmarkAdded else Icons.Outlined.BookmarkAdd, if(bookmarked) "已保存书签" else "保存书签")
                                 }
@@ -918,7 +940,7 @@ import kotlinx.serialization.encodeToString
             }
         } }
         note?.let { bookmark -> NoteEditorDialog(bookmark, { note = null }) { text ->
-            c.store.update { it.copy(notes = it.notes.map { existing -> if(existing.id == bookmark.id) existing.copy(text = text) else existing }) }
+            c.store.update { it.copy(notes = it.notes.map { existing -> if(existing.id == bookmark.id) existing.copy(text = text) else existing }.filter { it.bookmarked || it.text.isNotBlank() }) }
             bookmarkFeedback?.cancel()
             bookmarkFeedback = scope.launch { c.snackbar.showSnackbar("笔记已保存") }
         } }
@@ -994,5 +1016,6 @@ private class ScrollPartMeasurement {
 }
 
 private data class RestoredScrollAnchor(val layoutGeneration: Any, val itemIndex: Int, val pixelOffset: Int, val textOffset: Int)
-private data class ReadingRestoreAnchor(val paragraph: Int, val sourceIndex: Int?, val textOffset: Int)
+private data class ReadingRestoreAnchor(val paragraph: Int, val sourceIndex: Int?, val textOffset: Int,
+    val anchorSource: String? = null, val anchorTextHash: String? = null)
 private data class SettledReadingScroll(val index: Int, val offset: Int, val canScrollForward: Boolean, val itemCount: Int, val lastVisibleIndex: Int?)
