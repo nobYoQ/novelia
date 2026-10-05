@@ -138,7 +138,7 @@ class ForumApiContractTest {
         var refreshes = 0
         override fun capture() = state.capture()
         override fun tokenFor(binding: SessionBinding) = state.tokenFor(binding)
-        override fun refreshIfCurrent(binding: SessionBinding, previousToken: String?): Boolean {
+        override suspend fun refreshIfCurrent(binding: SessionBinding, previousToken: String?): Boolean {
             tokenFor(binding)
             refreshes++
             return state.commit(binding, "refreshed-test-session", profile, false)

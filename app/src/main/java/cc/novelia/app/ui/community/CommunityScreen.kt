@@ -1,9 +1,8 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.community
 
+import cc.novelia.app.data.model.ForumSort
 import cc.novelia.app.data.model.ForumCategory
-import cc.novelia.app.ui.components.ChoiceRow
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
@@ -19,7 +18,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.model.Article
 import cc.novelia.app.data.model.Page
 import cc.novelia.app.ui.components.AppLazyColumn
-import cc.novelia.app.ui.components.AppAlertDialog
 import cc.novelia.app.ui.components.AppSheet
 import cc.novelia.app.ui.components.AsyncContent
 import cc.novelia.app.ui.components.EmptyState
@@ -42,26 +40,31 @@ import cc.novelia.app.ui.theme.motionClickable
 @Composable private fun ForumCommunity(c: AppController, available: List<ForumCategory>) {
     var category by rememberSaveable { mutableStateOf(available.first().slug) }; var page by rememberSaveable { mutableIntStateOf(0) }; var search by rememberSaveable { mutableStateOf("") }; var saved by rememberSaveable { mutableStateOf(false) }
     var source by rememberSaveable { mutableIntStateOf(0) }
-    var accountDialog by remember { mutableStateOf(false) }
+    var sort by rememberSaveable { mutableStateOf(ForumSort.ACTIVE) }
     val profile by c.forumSession.profile.collectAsStateWithLifecycle()
-    val reducedMotion = appReducedMotion()
     val state by c.store.state.collectAsStateWithLifecycle()
     var draftBoxOpen by rememberSaveable { mutableStateOf(false) }
+    fun showFeed(value: Int, local: Boolean = false) { source = value; saved = local; page = 0 }
     Screen("社区", actions = {
         IconButton(onClick = { draftBoxOpen = true }) { Icon(Icons.Outlined.Drafts, "新帖草稿箱") }
-        IconToggleButton(checked = saved, onCheckedChange = { saved = it; page = 0 }) {
-            Crossfade(saved, animationSpec = tween(if(reducedMotion) 0 else AppMotion.Quick), label = "savedArticles") { showingSaved ->
-                Icon(if(showingSaved) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder, "已收藏的文章")
+        IconButton(onClick = { c.go("compose") }) { Icon(Icons.Outlined.Edit, "新建帖子草稿") }
+        ForumAccountMenu(profile) { action ->
+            when(action) {
+                ForumAccountAction.LOGIN -> c.go("forum-login")
+                ForumAccountAction.POSTS -> c.requireForumLogin { showFeed(2) }
+                ForumAccountAction.FAVORITES -> c.requireForumLogin { showFeed(1) }
+                ForumAccountAction.LOCAL -> showFeed(0, local = true)
+                ForumAccountAction.STRIKES -> c.requireForumLogin { c.go("forum-strikes") }
+                ForumAccountAction.LOGOUT -> c.action("已退出论坛登录") { c.forumSession.logout(); showFeed(0) }
             }
         }
-        IconButton(onClick = { c.go("compose") }) { Icon(Icons.Outlined.Edit, "新建帖子草稿") }
-        IconButton(onClick = { if(profile == null) c.go("forum-login") else accountDialog = true }) { Icon(Icons.Outlined.PersonOutline, "论坛账号") }
     }) { padding ->
         Column(Modifier.padding(padding)) {
             ScrollableTabRow(available.indexOfFirst { it.slug == category }.coerceAtLeast(0), edgePadding = 12.dp) { available.forEach { item -> Tab(category == item.slug, { category = item.slug; page = 0; saved = false; source = 0 }, text = { Text(item.title) }) } }
-            ChoiceRow("帖子", listOf("全部", "云端收藏", "我的帖子"), source) { selected ->
-                fun select() { source = selected; page = 0; saved = false }
-                if(selected == 0) select() else c.requireForumLogin { select() }
+            Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(if(saved) "本地收藏" else when(source) { 1 -> "云端收藏"; 2 -> "我的帖子"; else -> "全部帖子" }, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+                if(source == 0 && !saved) ForumSortPicker(sort) { sort = it; page = 0 }
+                else TextButton(onClick = { showFeed(0) }) { Text("返回全部帖子") }
             }
             OutlinedTextField(search, { search = it; page = 0 }, label = { Text(if(saved) "搜索本地收藏" else if(source == 0) "搜索论坛帖子" else "在本页文章中查找") }, singleLine = true, leadingIcon = { Icon(Icons.Outlined.Search, null) }, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), shape = MaterialTheme.shapes.extraLarge)
             val settledSearch = rememberDebouncedQuery(search)
@@ -69,8 +72,8 @@ import cc.novelia.app.ui.theme.motionClickable
                 if(saved) {
                     val articles = remember(state.savedArticles, settledSearch) { state.savedArticles.filter { it.title.contains(settledSearch, true) } }
                     ArticleList(c, Page(1, articles), 0, {})
-                } else AsyncContent(listOf(category, page, settledSearch, source, profile?.userId), load = {
-                    when(source) { 1 -> c.forumApi.favorites(page); 2 -> c.forumApi.myPosts(page); else -> c.forumApi.posts(page, category, settledSearch) }
+                } else AsyncContent(listOf(category, page, settledSearch, source, sort, profile?.userId), load = {
+                    when(source) { 1 -> c.forumApi.favorites(page); 2 -> c.forumApi.myPosts(page); else -> c.forumApi.posts(page, category, settledSearch, sort.apiValue) }
                 }) { result, _ ->
                     val articles = remember(result.items, settledSearch, state.blockedUsers, available) { result.items.filter { (source == 0 || it.title.contains(settledSearch, true)) && it.authorUsername !in state.blockedUsers }.map { it.article(available) } }
                     ArticleList(c, Page(result.pageCount(), articles), page, { page = it })
@@ -79,10 +82,6 @@ import cc.novelia.app.ui.theme.motionClickable
         }
     }
     if(draftBoxOpen) AppSheet(onDismissRequest = { draftBoxOpen = false }) { ArticleDraftBox(c) { draftBoxOpen = false } }
-    if(accountDialog) AppAlertDialog(onDismissRequest = { accountDialog = false }, title = { Text("论坛账号") },
-        text = { Text("当前登录：${profile?.username.orEmpty()}\n退出登录会同时清除本机主站与论坛会话。") },
-        confirmButton = { TextButton(onClick = { accountDialog = false; c.action("已退出登录") { try { c.forumSession.logout() } finally { c.session.clear(); source = 0 } } }) { Text("退出登录") } },
-        dismissButton = { TextButton(onClick = { accountDialog = false }) { Text("关闭") } })
 }
 @Composable private fun ArticleList(c: AppController, result: Page<Article>, page: Int, changePage: (Int) -> Unit) {
     val reducedMotion = appReducedMotion()

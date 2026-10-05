@@ -77,6 +77,8 @@ class Session(context: Context, private val client: OkHttpClient = OkHttpClient.
     override suspend fun refreshIfCurrent(binding: SessionBinding, previousToken: String?): Boolean = refreshLock.withLock {
         val current = tokenFor(binding)
         if(current != previousToken) return@withLock current != null
+        // 已退出的会话不能通过共享 SSO Cookie 自动重新登录。
+        if(current == null) return@withLock false
         refreshRequest(binding, allowAccountChange = false)
     }
     private fun cookie(source: BookSource, url: String): String? = if(source == BookSource.ORIGINAL)
@@ -187,25 +189,9 @@ class Session(context: Context, private val client: OkHttpClient = OkHttpClient.
             }
         }
     }
-    suspend fun logout() = withContext(Dispatchers.IO) {
-        val selected = sources.capture()
-        val url = "${selected.source.authOrigin}/api/v1/auth/logout"
-        val oldCookie = sources.withSelection(selected) {
-            val captured = cookie(selected.source, url)
-            state.clear { preferences.getValue(selected.source).edit().clear().apply() }
-            if(selected.source == BookSource.ORIGINAL) {
-                // 沿用原站退出行为，完整清理 WebView 中不同 Domain/Path 的认证 Cookie。
-                // 镜像认证 Cookie 保存在独立的加密首选项，不受 WebView 清理影响。
-                CookieManager.getInstance().removeAllCookies(null)
-                CookieManager.getInstance().flush()
-            }
-            captured
-        }
-        oldCookie?.let {
-            client.newCall(Request.Builder().url(url).tag(SourceSelection::class.java, selected).header("Cookie", it)
-                .header("Origin", selected.source.origin).post(ByteArray(0).toRequestBody()).build()).awaitBody { }
-        }
-    }
+    // 服务端只提供全局 SSO 退出；本地退出保留另一应用的访问令牌和刷新 Cookie，
+    // 后续显式登录仍可复用 SSO。clear 会立即使当前会话的旧刷新失效。
+    suspend fun logout() = withContext(Dispatchers.IO) { clear() }
     fun clear() { val selected = sources.capture(); sources.withSelection(selected) { state.clear { preferences.getValue(selected.source).edit().clear().apply() } } }
     companion object { const val AUTH_URL = "https://auth.novelia.cc" }
 }

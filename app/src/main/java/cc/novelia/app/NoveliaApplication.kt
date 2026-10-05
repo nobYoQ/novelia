@@ -1,5 +1,6 @@
 package cc.novelia.app
 
+import cc.novelia.app.data.network.ForumAccountApi
 import cc.novelia.app.data.auth.AuthTarget
 import cc.novelia.app.data.network.ForumApi
 import android.app.Application
@@ -71,6 +72,7 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
     val metadataCache get() = store.metadataCache
     val api by lazy { NoveliaApi(session, transport = httpTransport, onMutation = { metadataCache.invalidate(it) }, onKeywords = { tags -> applicationScope.launch { keywords.observe(tags) } }) }
     val forumApi by lazy { ForumApi(NoveliaApi(forumSession, ForumApi.BASE_URL, forumTransport)) }
+    val forumAccountApi by lazy { ForumAccountApi(NoveliaApi(forumSession, ForumAccountApi.BASE_URL, forumTransport)) }
     val initialization by lazy { applicationScope.async { store; session; Unit } }
     internal val launcherIcons by lazy { LauncherIconManager(this) }
 

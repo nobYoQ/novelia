@@ -42,3 +42,16 @@ import java.time.Instant
 }
 @Serializable data class ForumPostInput(val categoryId: Long, val title: String, val content: String, val tagIds: List<Long> = emptyList())
 @Serializable data class ForumCommentInput(val content: String, val rootId: Long? = null)
+
+enum class ForumSort(val apiValue: String, val label: String) {
+    ACTIVE("active", "最近活跃"), NEWEST("newest", "最新发布"),
+    VIEWS("views", "浏览最多"), COMMENTS("comments", "评论最多")
+}
+
+@Serializable data class ForumStrike(
+    val id: Long, val reason: String, val evidence: String, val point: Int,
+    val createdAt: String, val revokedAt: String? = null
+) {
+    val createdEpoch get() = Instant.parse(createdAt).epochSecond
+    val revokedEpoch get() = revokedAt?.let { Instant.parse(it).epochSecond }
+}

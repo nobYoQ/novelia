@@ -63,6 +63,7 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
     val api get() = app.api
     val session get() = app.session
     val forumApi get() = app.forumApi
+    val forumAccountApi get() = app.forumAccountApi
     val forumSession get() = app.forumSession
     val metadataCache get() = app.metadataCache
     var afterLogin: (() -> Unit)? = null
