@@ -1,11 +1,6 @@
 package cc.novelia.app.ui.navigation
 
 import cc.novelia.app.data.model.Article
-import cc.novelia.app.data.model.ForumCategory
-import cc.novelia.app.data.library.SavedArticleFreshness
-import cc.novelia.app.data.library.SavedArticleRefresh
-import cc.novelia.app.data.library.refreshSavedArticleSnapshots
-import cc.novelia.app.data.library.withRefreshedSavedArticles
 import cc.novelia.app.data.catalog.ForumLinks
 import android.content.Intent
 import android.net.Uri
@@ -211,21 +206,10 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
     suspend fun article(id: String): Article {
         val auth = if(ForumLinks.postId(id) != null) forumSession else session
         val binding = auth.capture()
-        val previous = store.state.value.savedArticles.filter { it.id == id }
         val article = (ForumLinks.postId(id)?.let { forumApi.post(it).article(forumApi.categories()) }
             ?: api.get<Article>("article/$id")).copy(id = id)
         auth.ensureCurrent(binding)
-        store.update { it.withRefreshedSavedArticles(previous, listOf(SavedArticleRefresh(article, SavedArticleFreshness.CURRENT))) }
         return article
-    }
-    suspend fun refreshSavedArticles(snapshots: List<Article>, categories: List<ForumCategory>): List<SavedArticleRefresh> {
-        val mainBinding = session.capture(); val forumBinding = forumSession.capture()
-        val refreshed = refreshSavedArticleSnapshots(snapshots) { id ->
-            ForumLinks.postId(id)?.let { forumApi.post(it).article(categories) } ?: api.get<Article>("article/$id")
-        }
-        session.ensureCurrent(mainBinding); forumSession.ensureCurrent(forumBinding)
-        store.update { it.withRefreshedSavedArticles(snapshots, refreshed) }
-        return refreshed
     }
     fun external(url: String) {
         val uri = Uri.parse(url)

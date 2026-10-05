@@ -2,8 +2,6 @@
 package cc.novelia.app.ui.community
 
 import cc.novelia.app.data.catalog.ForumLinks
-import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
@@ -15,8 +13,10 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.SavedStateHandle
 import cc.novelia.app.data.model.Article
 import cc.novelia.app.data.model.ForumRules
+import cc.novelia.app.data.storage.appJson
 import cc.novelia.app.ui.components.AppLazyColumn
 import cc.novelia.app.ui.components.AsyncContent
 import cc.novelia.app.ui.components.ConfirmDialog
@@ -24,21 +24,39 @@ import cc.novelia.app.ui.components.Screen
 import cc.novelia.app.ui.components.displayDate
 import cc.novelia.app.ui.markdown.MarkdownText
 import cc.novelia.app.ui.navigation.AppController
-import cc.novelia.app.ui.theme.AppMotion
+import cc.novelia.app.ui.navigation.FORUM_FAVORITE_REQUEST
+import cc.novelia.app.ui.navigation.ForumFavoriteRequest
+import cc.novelia.app.ui.navigation.loginForForumFavorite
 import cc.novelia.app.ui.theme.MotionContent
-import cc.novelia.app.ui.theme.appReducedMotion
 
-@Composable fun ArticleScreen(c: AppController, id: String) {
+@Composable fun ArticleScreen(c: AppController, id: String, navigationState: SavedStateHandle? = null) {
     val forumId = ForumLinks.postId(id)
-    val profile by (if(forumId != null) c.forumSession else c.session).profile.collectAsStateWithLifecycle(); val state by c.store.state.collectAsStateWithLifecycle()
+    val session = if(forumId != null) c.forumSession else c.session
+    val profile by session.profile.collectAsStateWithLifecycle()
+    val binding = session.capture()
+    val pendingFavoriteText = navigationState?.getStateFlow<String?>(FORUM_FAVORITE_REQUEST, null)?.collectAsStateWithLifecycle()?.value
+    val pendingFavorite = remember(pendingFavoriteText) {
+        pendingFavoriteText?.let { runCatching { appJson.decodeFromString<ForumFavoriteRequest>(it) }.getOrNull() }
+    }
     var tab by rememberSaveable(id) { mutableIntStateOf(0) }; var deletion by remember(id) { mutableStateOf<Article?>(null) }
     val tabState = rememberSaveableStateHolder()
-    val reducedMotion = appReducedMotion()
     Screen("文章", c::back, actions = { IconButton(onClick = { c.share(ForumLinks.articleUrl(id)) }) { Icon(Icons.Outlined.Share, "分享文章") } }) { padding ->
-        AsyncContent(listOf(id, profile?.username, profile?.userId, profile?.role), load = { c.article(id) }, modifier = Modifier.padding(padding)) { article, _ ->
+        AsyncContent(listOf(id, binding, profile?.userId, profile?.role), load = { c.article(id) }, modifier = Modifier.padding(padding)) { article, _ ->
             val now = rememberForumModificationTime(article.createAt)
-            var cloudSaved by remember(article) { mutableStateOf(article.forumFavorited) }
-            var saving by remember { mutableStateOf(false) }
+            val favorite = remember(article, binding) { ForumFavoriteState(article.forumFavorited) }
+            fun saveFavorite(value: Boolean) {
+                if(forumId == null || favorite.saving || favorite.saved == value) return
+                c.action(if(value) "已收藏到云端" else "已取消收藏") {
+                    c.forumSession.ensureCurrent(binding)
+                    favorite.setSaved(value) { c.forumApi.favorite(forumId, it) }
+                }
+            }
+            LaunchedEffect(pendingFavoriteText, binding) {
+                if(pendingFavoriteText != null) {
+                    navigationState?.set<String?>(FORUM_FAVORITE_REQUEST, null)
+                    if(pendingFavorite?.matches(forumId, binding) == true) saveFavorite(true)
+                }
+            }
             Column {
                 if(forumId != null) ForumRulesReminder(c)
                 PrimaryTabRow(tab) { listOf("文章内容", "讨论 ${article.numComments}").forEachIndexed { i, label -> Tab(tab == i, { tab = i }, text = { Text(label) }) } }
@@ -50,14 +68,9 @@ import cc.novelia.app.ui.theme.appReducedMotion
                             item { Text(categories[article.category] ?: article.category, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary); Spacer(Modifier.height(12.dp)); Text(article.title, style = MaterialTheme.typography.headlineMedium); Spacer(Modifier.height(12.dp)); Text("${article.user.username} · ${displayDate(article.createAt)} · ${article.numViews} 次浏览", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant); if(article.forumTags.isNotEmpty()) Text(article.forumTags.joinToString(" · ") { it.name }); Spacer(Modifier.height(24.dp)) }
                             item { MarkdownText(c, article.content, documentUrl = ForumLinks.articleUrl(id),
                                 onAnchorScroll = { top -> articleScroll.scrollToItem(1, top) }) }
-                            item { Row(Modifier.padding(top = 24.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                val saved = state.savedArticles.any { it.id == id }
-                                OutlinedButton(onClick = { c.store.update { it.copy(savedArticles = if(saved) it.savedArticles.filterNot { a -> a.id == id } else it.savedArticles + article.copy(id = id)) } }) {
-                                    Crossfade(saved, animationSpec = tween(if(reducedMotion) 0 else AppMotion.Quick), label = "articleBookmark") { isSaved ->
-                                        Icon(if(isSaved) Icons.Outlined.BookmarkAdded else Icons.Outlined.BookmarkAdd, null, Modifier.size(18.dp))
-                                    }
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(if(saved) "取消收藏" else "收藏文章")
+                            item { FlowRow(Modifier.padding(top = 24.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                if(forumId != null) ForumFavoriteButton(favorite) {
+                                    if(profile == null) loginForForumFavorite(c, forumId) else saveFavorite(!favorite.saved)
                                 }
                                 if(if(forumId != null) ForumRules.canEditPost(article, profile) else profile?.username == article.user.username) {
                                     TextButton(onClick = { c.go("compose?article=$id") }) { Text("编辑") }
@@ -66,7 +79,6 @@ import cc.novelia.app.ui.theme.appReducedMotion
                                     TextButton(onClick = { deletion = article }) { Text("删除") }
                                 }
                             } }
-                            if(forumId != null) item { TextButton(enabled = !saving, onClick = { c.requireForumLogin { c.action { saving = true; try { c.forumApi.favorite(forumId, !cloudSaved); cloudSaved = !cloudSaved } finally { saving = false } } } }) { Text(if(cloudSaved) "取消云端收藏" else "收藏到论坛账号") } }
                         }
                         } else if(forumId != null) ForumCommentsPanel(c, forumId, article.locked) else CommentsPanel(c, "article-$id", article.locked)
                     }

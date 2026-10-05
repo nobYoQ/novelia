@@ -30,7 +30,7 @@
 | `library.json` | 主状态，使用 `AtomicFile` 提交 |
 | `library-last-good.json` | 最近一次良好副本，供恢复使用 |
 | `library-damaged-<UUID>.json` | 恢复前保留的损坏状态 |
-| `library-text/<SHA-256>.json` | 收藏文章正文和草稿等长文本 |
+| `library-text/<SHA-256>.json` | 草稿长文本；兼容旧版混合载荷中的草稿 |
 | `documents/<id>.json` | 本地文档目录 |
 | `documents/<id>-chapters/`、`<id>-images/` | 章节正文和插图；文件名使用内容哈希 |
 | `documents/<id>.epub / .txt / .srt` | 可用时保留的导入原件 |

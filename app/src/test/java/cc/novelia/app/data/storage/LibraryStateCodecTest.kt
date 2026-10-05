@@ -1,10 +1,13 @@
 package cc.novelia.app.data.storage
 
-import cc.novelia.app.data.model.Article
 import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.Position
 import java.nio.file.Files
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -15,7 +18,7 @@ class LibraryStateCodecTest {
             try {
                 var writes = 0
                 fun codec() = LibraryStateCodec(directory, { it.readText() }, { file, text -> writes++; file.writeText(text) })
-                val state = LibraryState(drafts = mapOf("draft" to "必须保留的草稿"), savedArticles = listOf(Article(content = "文章正文")))
+                val state = LibraryState(drafts = mapOf("draft" to "必须保留的草稿"))
                 val first = codec().encode(state)
                 val running = codec()
                 assertEquals(state, running.decode(first))
@@ -35,7 +38,7 @@ class LibraryStateCodecTest {
         try {
             var writes = 0
             val codec = LibraryStateCodec(directory, { it.readText() }, { file, text -> writes++; file.writeText(text) })
-            val state = LibraryState(savedArticles = listOf(Article(id = "post", content = "正文".repeat(100_000))), drafts = mapOf("article:new" to "草稿全文"), forumRulesReminderDismissed = true)
+            val state = LibraryState(drafts = mapOf("article:new" to "草稿全文".repeat(100_000)), forumRulesReminderDismissed = true)
             assertEquals(state, codec.decode(appJson.encodeToString(state)))
             val first = codec.encode(state)
             assertTrue(first.length < 5_000)
@@ -47,6 +50,34 @@ class LibraryStateCodecTest {
             assertEquals(progress, restarted.decode(second))
             restarted.encode(progress.copy(recentSearches = listOf("新搜索")))
             assertEquals(1, writes)
+        } finally { directory.deleteRecursively() }
+    }
+
+    @Test fun legacyFavoritesAreDroppedWhileInlineAndExternalDraftsRemainReadable() {
+        val directory = Files.createTempDirectory("library-favorite-removal").toFile()
+        try {
+            fun codec() = LibraryStateCodec(directory, { it.readText() }, { file, text -> file.writeText(text) })
+            val state = LibraryState(drafts = mapOf("article:new" to "必须保留的草稿"), positions = mapOf("local/book" to Position("c", 12)))
+            val oldArticles = appJson.parseToJsonElement("""[{"id":"f-5","content":"旧收藏正文"}]""")
+            val inline = JsonObject(appJson.encodeToJsonElement(LibraryState.serializer(), state).jsonObject + ("savedArticles" to oldArticles))
+            assertEquals(state, codec().decode(inline.toString()))
+
+            val payload = """{"articles":[{"id":"f-5","content":"旧收藏正文"}],"drafts":{"article:new":"必须保留的草稿"}}"""
+            val oldHash = hashName(payload)
+            directory.resolve("$oldHash.json").writeText(payload)
+            val external = JsonObject(appJson.encodeToJsonElement(LibraryState.serializer(), state.copy(drafts = emptyMap())).jsonObject +
+                mapOf("savedArticles" to oldArticles, "localLongTextPayload" to JsonPrimitive(oldHash)))
+            val running = codec()
+            assertEquals(state, running.decode(external.toString()))
+            val migrated = running.encode(state)
+            val json = appJson.parseToJsonElement(migrated).jsonObject
+            assertFalse("savedArticles" in json)
+            val newHash = json.getValue("localLongTextPayload").jsonPrimitive.content
+            assertNotEquals(oldHash, newHash)
+            assertFalse("articles" in appJson.parseToJsonElement(directory.resolve("$newHash.json").readText()).jsonObject)
+            assertEquals(state, codec().decode(migrated))
+            running.compact()
+            assertEquals("上一份状态仍可用于恢复草稿", state, codec().decode(external.toString()))
         } finally { directory.deleteRecursively() }
     }
 

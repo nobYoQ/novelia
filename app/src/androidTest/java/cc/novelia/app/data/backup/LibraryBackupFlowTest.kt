@@ -5,7 +5,6 @@ import android.content.ContextWrapper
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.data.catalog.KeywordStore
-import cc.novelia.app.data.model.Article
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.DownloadEntry
@@ -113,7 +112,7 @@ class LibraryBackupFlowTest {
     @Test fun restoreRepairsLongTextDeletedAfterTheSameProcessLoadedIt() = runBlocking {
         withContext(Dispatchers.IO) { fixtures { sourceContext, targetContext ->
             val source = LocalStore(sourceContext); val sourceTags = KeywordStore(sourceContext)
-            source.update { it.copy(drafts = mapOf("article:new" to "草稿原文"), savedArticles = listOf(Article(id = "article", content = "收藏文章原文"))) }
+            source.update { it.copy(drafts = mapOf("article:new" to "草稿原文")) }
             val bytes = ByteArrayOutputStream().also { LibraryBackupService(source, sourceTags).export(it, false) }.toByteArray()
             val target = LocalStore(targetContext)
             val service = LibraryBackupService(target, KeywordStore(targetContext))
@@ -123,7 +122,6 @@ class LibraryBackupFlowTest {
             val reopened = LocalStore(targetContext)
             assertNull(reopened.recoveryIssue.value)
             assertEquals("草稿原文", reopened.state.value.drafts["article:new"])
-            assertEquals("收藏文章原文", reopened.state.value.savedArticles.single().content)
         } }
     }
 

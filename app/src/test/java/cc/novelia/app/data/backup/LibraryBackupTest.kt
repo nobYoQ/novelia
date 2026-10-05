@@ -23,6 +23,8 @@ import java.nio.file.Files
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -38,6 +40,22 @@ class LibraryBackupTest {
     private fun fails(block: () -> Unit) {
         try { block(); fail("expected backup validation failure") }
         catch (expected: IllegalArgumentException) { /* 拒绝恢复时不改动当前书库。 */ }
+    }
+
+    @Test fun oldForumFavoritesAreIgnoredWhenRestoringABackupButDraftsAndBooksRemain() {
+        val root = temp()
+        try {
+            val state = LibraryState(books = listOf(SavedBook(BookCard(BookRef("syosetu", "n1"), "保留的书架"))),
+                drafts = mapOf("article:new" to "保留的草稿"))
+            val json = appJson.encodeToJsonElement(LibraryBackupManifest.serializer(), manifest(state)).jsonObject
+            val library = JsonObject(json.getValue("library").jsonObject +
+                ("savedArticles" to appJson.parseToJsonElement("""[{"id":"f-5","content":"旧文章收藏正文"}]""")))
+            val oldManifest = JsonObject(json + ("library" to library)).toString()
+            val bytes = archive(mapOf("manifest.json" to oldManifest.toByteArray(Charsets.UTF_8)))
+            val restored = LibraryBackupArchive.extract(ByteArrayInputStream(bytes), root).library
+            assertEquals(state, restored)
+            assertFalse("savedArticles" in appJson.encodeToJsonElement(LibraryState.serializer(), restored).jsonObject)
+        } finally { root.deleteRecursively() }
     }
 
     @Test fun lineHeightBelowOneRestoresForGlobalAndPerBookSettingsButInvalidValuesAreRejected() {

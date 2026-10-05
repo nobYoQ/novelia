@@ -56,7 +56,7 @@ fun legacyFolderId(name: String): String = if(name == DEFAULT_FOLDER) DEFAULT_FO
     val readingHistory: Map<String, ReadingHistoryEntry> = emptyMap(), val historyMigrated: Boolean = false,
     val downloads: List<DownloadEntry> = emptyList(), val blockedBooks: Set<String> = emptySet(), val blockedTags: Set<String> = emptySet(),
     val blockedAuthors: Set<String> = emptySet(),
-    val recentSearches: List<String> = emptyList(), val savedSearches: List<String> = emptyList(), val savedArticles: List<Article> = emptyList(),
+    val recentSearches: List<String> = emptyList(), val savedSearches: List<String> = emptyList(),
     val savedSearchPresets: List<SavedSearchPreset> = emptyList(),
     val drafts: Map<String, String> = emptyMap(), val reader: ReaderSettings = ReaderSettings(), val bookSettings: Map<String, ReaderSettings> = emptyMap(),
     val theme: String = "system", val reducedMotion: Boolean = false, val historyPaused: Boolean = false, val autoCollapseCloudFilters: Boolean = true,

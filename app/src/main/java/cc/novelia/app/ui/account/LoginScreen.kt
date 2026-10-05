@@ -36,12 +36,7 @@ import kotlinx.coroutines.launch
         busy = true; scope.launch {
             try { if(loginSession.refresh()) {
                 if(!forum && c.store.state.value.autoSync) loginSession.profile.value?.username?.let { CloudSyncWorker.enqueue(c.app, it) }
-                if(forum) {
-                    val continuation = c.afterLogin
-                    c.afterLogin = null
-                    c.back()
-                    continuation?.invoke()
-                } else finishLoginNavigation(c)
+                finishLoginNavigation(c, forum)
                 c.message("已登录")
             } else error = "尚未取得登录会话。请在下方完成登录，再点「完成登录」。" }
             catch(e: Exception) { error = e.friendlyMessage() } finally { busy = false }

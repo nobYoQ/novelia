@@ -343,8 +343,8 @@ class ForumApiContractTest {
         }
     }
 
-    @Test fun oldSavedArticlesAndNewLinksKeepSeparateIdentities() {
-        val old = appJson.decodeFromString<Article>("""{"id":"abc123","category":"General","title":"旧收藏"}""")
+    @Test fun legacyArticlesAndNewLinksKeepSeparateIdentities() {
+        val old = appJson.decodeFromString<Article>("""{"id":"abc123","category":"General","title":"旧文章"}""")
         assertNull(old.forumCategoryId)
         assertEquals(old, appJson.decodeFromString<Article>(appJson.encodeToString(old)))
         assertEquals(SiteLink.Post("f-123"), BookLinks.parse("https://forum.novelia.cc/p/123"))

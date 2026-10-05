@@ -35,7 +35,7 @@ import androidx.compose.ui.window.PopupProperties
 import cc.novelia.app.data.model.ForumSort
 import cc.novelia.app.data.model.Profile
 
-internal enum class ForumAccountAction { LOGIN, POSTS, FAVORITES, LOCAL, STRIKES, RULES, LOGOUT }
+internal enum class ForumAccountAction { LOGIN, POSTS, FAVORITES, STRIKES, RULES, LOGOUT }
 
 @Composable internal fun ForumAccountMenu(profile: Profile?, onAction: (ForumAccountAction) -> Unit) =
     ForumAccountMenu(profile, false, {}, onAction)
@@ -85,7 +85,6 @@ internal enum class ForumAccountAction { LOGIN, POSTS, FAVORITES, LOCAL, STRIKES
                             ForumPanelItem("云端收藏", Icons.Outlined.BookmarkBorder, expanded) { select(ForumAccountAction.FAVORITES) }
                             ForumPanelItem("处罚记录", Icons.Outlined.Gavel, expanded, unread = profile != null && hasUnreadStrikes) { select(ForumAccountAction.STRIKES) }
                             HorizontalDivider(Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
-                            ForumPanelItem("本地收藏", Icons.Outlined.Bookmarks, expanded) { select(ForumAccountAction.LOCAL) }
                             ForumPanelItem("社区守则", Icons.AutoMirrored.Outlined.Rule, expanded) { select(ForumAccountAction.RULES) }
                             if(profile != null) ForumPanelItem("退出论坛登录", Icons.Outlined.Logout, expanded, destructive = true) { select(ForumAccountAction.LOGOUT) }
                         }

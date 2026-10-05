@@ -185,7 +185,7 @@ class MainActivity : ComponentActivity() {
                                 composable("profile") { ProfileScreen(controller) }
                                 composable("book/{provider}/{id}") { BookScreen(controller, BookRef(it.arguments!!.getString("provider")!!, it.arguments!!.getString("id")!!)) }
                                 composable("reader/{provider}/{id}/{chapter}") { ReaderScreen(controller, BookRef(it.arguments!!.getString("provider")!!, it.arguments!!.getString("id")!!), it.arguments!!.getString("chapter")!!) }
-                                composable("article/{id}") { ArticleScreen(controller, it.arguments!!.getString("id")!!) }
+                                composable("article/{id}") { ArticleScreen(controller, it.arguments!!.getString("id")!!, it.savedStateHandle) }
                                 composable("compose?article={article}&draft={draft}") { ComposeArticleScreen(controller, it.arguments?.getString("article"), it.arguments?.getString("draft")) }
                                 composable("login") { LoginScreen(controller) }
                                 composable("forum-login") { LoginScreen(controller, forum = true) }

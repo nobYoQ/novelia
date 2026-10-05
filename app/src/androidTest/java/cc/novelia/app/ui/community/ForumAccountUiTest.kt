@@ -40,7 +40,8 @@ class ForumAccountUiTest {
         compose.onNodeWithText("我的帖子").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(ForumAccountAction.POSTS, actions.last()) }
         compose.onNodeWithTag("forum-account-toggle").performClick()
-        compose.onNodeWithText("本地收藏").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("本地收藏").assertDoesNotExist()
+        compose.onNodeWithText("云端收藏").performScrollTo().assertIsDisplayed()
         pressBack()
         compose.onNodeWithTag("forum-account-panel").assertDoesNotExist()
         compose.runOnIdle { assertEquals(2, actions.size) }

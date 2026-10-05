@@ -54,9 +54,9 @@ JWT 字段用于展示用户名、角色和有效期，客户端解析不等于�
 
 ## 登录后继续
 
-收藏的续接意图由 [LoginContinuation.kt](../../app/src/main/java/cc/novelia/app/ui/navigation/LoginContinuation.kt) 放入登录导航项的 `SavedStateHandle`，页面重建后仍可恢复。其他 `afterLogin` 回调只存在内存中，消费或取消后需要清理。
+书籍及论坛收藏的续接意图由 [LoginContinuation.kt](../../app/src/main/java/cc/novelia/app/ui/navigation/LoginContinuation.kt) 放入各自登录导航项的 `SavedStateHandle`，页面重建后仍可恢复。论坛认证成功将帖子 ID、账号及登录代次交回原文章导航项，详情加载后在同一会话内执行一次收藏；取消登录不交回意图，换号或重新登录后丢弃旧意图。其他 `afterLogin` 回调只存在内存中，消费或取消后需要清理。
 
-登录完成不等于收藏已提交；它只是返回原流程，后续仍要选择收藏夹和处理同步结果。
+登录完成不等于收藏已提交；书籍返回原流程后仍要选择收藏夹和处理同步结果，论坛收藏也要等待服务端确认。
 
 ## 排查和回归
 
