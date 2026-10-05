@@ -24,16 +24,130 @@ class BookSourceTest {
             assertEquals(request.url.encodedPath, prepared.url.encodedPath)
             assertEquals(request.url.encodedQuery, prepared.url.encodedQuery)
             assertSame(request.body, prepared.body)
-            assertEquals("accessToken=test-gateway-only", prepared.header("Cookie"))
+            assertEquals(if(path == "/api/novel") "accessToken=test-gateway-only" else null, prepared.header("Cookie"))
         }
         val request = Request.Builder().url("https://auth.novelia.cc/api/v1/auth/refresh?app=n")
-            .header("Cookie", "refresh=example; accessToken=outdated").header("Origin", "https://n.novelia.cc").build()
+            .header("Cookie", "refresh=example; accessToken=outdated").header("Origin", "https://n.novelia.cc")
+            .post(ByteArray(0).toRequestBody()).build()
         val prepared = router.prepare(request, sources.capture())
-        assertEquals("refresh=example; accessToken=test-gateway-only", prepared.header("Cookie"))
+        assertEquals("refresh=example", prepared.header("Cookie"))
         assertEquals("https://book.xkvi.top", prepared.header("Origin"))
         val url = Request.Builder().url("https://n.novelia.cc/api/wenku/test/file/a%20b%2Fc?translations=sakura&translations=gpt&filename=%E4%B9%A6").build()
         assertEquals(url.url.encodedPath, router.prepare(url, sources.capture()).url.encodedPath)
         assertEquals(url.url.encodedQuery, router.prepare(url, sources.capture()).url.encodedQuery)
+    }
+
+    @Test fun everyForumRouteUsesMirrorAndReturnsToForumUpstream() {
+        val sources = sources().apply { select(BookSource.XKVI) }
+        val router = BookSourceInterceptor(sources)
+        val paths = listOf(
+            "/api/v1/category", "/api/v1/category/", "/api/v1/post", "/api/v1/post/5/",
+            "/api/v1/post/5/favorite", "/api/v1/post/5/comment/8/reply",
+            "/api/v1/comment/12", "/api/v1/external/comment/novel/web-test-book",
+            "/api/v1/me/post", "/api/v1/me/favorite",
+        )
+        val mirrored = paths.map { path ->
+            val request = Request.Builder().url("https://forum.novelia.cc$path?tag=1&tag=2&q=%E4%B9%A6%2F%E5%90%8D")
+                .header("Origin", BookSource.ORIGINAL.forumOrigin).header("Authorization", "Bearer test-forum").build()
+            router.prepare(request, sources.capture()).also {
+                assertEquals("book.xkvi.top", it.url.host)
+                assertEquals(request.url.encodedPath, it.url.encodedPath)
+                assertEquals(request.url.encodedQuery, it.url.encodedQuery)
+                assertEquals("Bearer test-forum", it.header("Authorization"))
+                assertEquals("accessToken=test-gateway-only", it.header("Cookie"))
+                assertEquals(BookSource.XKVI.forumOrigin, it.header("Origin"))
+            }
+        }
+        sources.select(BookSource.ORIGINAL)
+        mirrored.forEach { request ->
+            // 新请求引用镜像 URL；旧请求的来源绑定本身不能跨越切换。
+            val restored = router.prepare(Request.Builder().url(request.url).header("Cookie", request.header("Cookie")!!).build(), sources.capture())
+            assertEquals("forum.novelia.cc", restored.url.host)
+            assertEquals(request.url.encodedPath, restored.url.encodedPath)
+            assertEquals(request.url.encodedQuery, restored.url.encodedQuery)
+            assertNull(restored.header("Cookie"))
+        }
+        val original = Request.Builder().url("https://forum.novelia.cc/api/v1/post/")
+            .header("Origin", BookSource.ORIGINAL.forumOrigin).build()
+        assertEquals(original.header("Origin"), router.prepare(original, sources.capture()).header("Origin"))
+    }
+
+    @Test fun forumWritesKeepMethodBodyAndForumBearerOnMirror() {
+        val sources = sources().apply { select(BookSource.XKVI) }
+        val router = BookSourceInterceptor(sources)
+        for((method, path) in listOf(
+            "POST" to "/api/v1/post/", "PATCH" to "/api/v1/post/5/", "DELETE" to "/api/v1/post/5/",
+            "POST" to "/api/v1/post/5/comment", "PATCH" to "/api/v1/comment/12",
+            "DELETE" to "/api/v1/comment/12", "PUT" to "/api/v1/post/5/favorite",
+        )) {
+            val request = Request.Builder().url("https://forum.novelia.cc$path")
+                .method(method, "test-json".toRequestBody()).header("Authorization", "Bearer test-forum").build()
+            val prepared = router.prepare(request, sources.capture())
+            assertEquals("book.xkvi.top", prepared.url.host)
+            assertEquals(method, prepared.method)
+            assertSame(request.body, prepared.body)
+            assertEquals("Bearer test-forum", prepared.header("Authorization"))
+            assertEquals("accessToken=test-gateway-only", prepared.header("Cookie"))
+        }
+    }
+
+    @Test fun onlyAuthPostsAreExemptFromGatewayCookie() {
+        val sources = sources().apply { select(BookSource.XKVI) }
+        val router = BookSourceInterceptor(sources)
+        for(method in listOf("POST", "GET", "HEAD", "OPTIONS")) {
+            val request = Request.Builder().url("https://auth.novelia.cc/api/v1/auth/refresh?app=f")
+                .header("Cookie", "refresh=test-refresh; accessToken=outdated").header("Origin", BookSource.ORIGINAL.forumOrigin)
+                .method(method, if(method == "POST") ByteArray(0).toRequestBody() else null).build()
+            val prepared = router.prepare(request, sources.capture())
+            assertEquals("book.xkvi.top", prepared.url.host)
+            assertEquals("f", prepared.url.queryParameter("app"))
+            assertEquals(if(method == "POST") "refresh=test-refresh" else "refresh=test-refresh; accessToken=test-gateway-only", prepared.header("Cookie"))
+            assertEquals(BookSource.XKVI.origin, prepared.header("Origin"))
+        }
+    }
+
+    @Test fun unsupportedAuthAndForumPathsKeepOriginalUpstreams() {
+        val sources = sources().apply { select(BookSource.XKVI) }
+        val router = BookSourceInterceptor(sources)
+        for(url in listOf(
+            "https://auth.novelia.cc/api/v1/me/strikes", "https://auth.novelia.cc/api/v1/me/attention-status",
+            "https://auth.novelia.cc/api/v1/me/strikes/read-state", "https://auth.novelia.cc/",
+            "https://forum.novelia.cc/", "https://forum.novelia.cc/api/v1/other", "https://forum.novelia.cc/cdn-cgi/trace",
+        )) {
+            val request = Request.Builder().url(url).build()
+            val prepared = router.prepare(request, sources.capture())
+            assertEquals(request.url, prepared.url)
+            assertNull(prepared.header("Cookie"))
+        }
+    }
+
+    @Test fun remainingApiAndDownloadPathsReturnToBookUpstreamWithSegmentBoundaries() {
+        val sources = sources()
+        val router = BookSourceInterceptor(sources)
+        for(path in listOf(
+            "/api/novel", "/api/comment", "/api/v1/posts", "/api/v1/category-other", "/api/v1/commentary",
+            "/api/v1/me/posts", "/api/v1/me/favorite-extra", "/api/v1/external/comments", "/api/v1/auth-extra",
+            "/files-temp", "/files-temp/sample.txt", "/files-temp/sample.epub",
+        )) {
+            val request = Request.Builder().url("https://book.xkvi.top$path?filename=%E4%B9%A6").build()
+            val prepared = router.prepare(request, sources.capture())
+            assertEquals("n.novelia.cc", prepared.url.host)
+            assertEquals(request.url.encodedPath, prepared.url.encodedPath)
+            assertEquals(request.url.encodedQuery, prepared.url.encodedQuery)
+        }
+    }
+
+    @Test fun mirroredAuthPathsReturnToAuthUpstream() {
+        val sources = sources()
+        val router = BookSourceInterceptor(sources)
+        for(path in listOf("/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/otp/request", "/api/v1/auth/refresh?app=f")) {
+            val request = Request.Builder().url("https://book.xkvi.top$path").post(ByteArray(0).toRequestBody()).build()
+            val prepared = router.prepare(request, sources.capture())
+            assertEquals("auth.novelia.cc", prepared.url.host)
+            assertEquals(request.url.encodedPath, prepared.url.encodedPath)
+            assertEquals(request.url.encodedQuery, prepared.url.encodedQuery)
+            assertNull(prepared.header("Cookie"))
+        }
     }
 
     @Test fun gatewayCookieNeverGoesToOriginalForeignHostsHttpOrUntrustedPorts() {

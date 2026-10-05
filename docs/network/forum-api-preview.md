@@ -10,7 +10,7 @@
 
 API 根路径为 `https://forum.novelia.cc/api/v1/`。客户端页码从 0 开始，发请求时转换为从 1 开始的 `page`；页大小字段为 `page_size`，分页响应为 `{ total, items }`。
 
-帖子和评论使用数字 ID，时间为 RFC 3339 字符串。计数和记录 ID 使用 64 位整数；不要经浮点数转换。独立论坛使用 `app=f` 的会话，不接受主站令牌，也不随小说镜像切换。
+帖子和评论使用数字 ID，时间为 RFC 3339 字符串。计数和记录 ID 使用 64 位整数；不要经浮点数转换。独立论坛使用 `app=f` 的会话，不接受主站令牌。论坛 API 随书源线路切换，XKVI 的根路径为 `https://book.xkvi.top/api/v1/`；原站和镜像论坛会话分别保存，切换使旧绑定失效。具体路径分流见[书源线路](../development/book-source-mirrors.md)。
 
 ## 主要接口
 
@@ -50,7 +50,7 @@ API 根路径为 `https://forum.novelia.cc/api/v1/`。客户端页码从 0 开�
 
 ## 处罚未读与社区守则
 
-处罚由认证服务 `https://auth.novelia.cc/api/v1/` 提供，携带论坛令牌：
+处罚由认证服务 `https://auth.novelia.cc/api/v1/` 提供，携带所选线路的论坛令牌。这些路径未列入镜像路由，保留认证站地址：
 
 | 接口 | 含义 |
 | --- | --- |

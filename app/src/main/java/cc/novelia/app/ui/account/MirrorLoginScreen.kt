@@ -19,7 +19,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-@Composable internal fun MirrorLoginScreen(c: AppController) {
+@Composable internal fun MirrorLoginScreen(c: AppController, forum: Boolean = false) {
+    val session = if(forum) c.forumSession else c.session
     // 密码和验证码不使用 rememberSaveable，也不写入磁盘或日志。
     var register by remember { mutableStateOf(false) }
     var username by remember { mutableStateOf("") }
@@ -34,11 +35,11 @@ import kotlinx.coroutines.launch
     val scope = rememberCoroutineScope()
     DisposableEffect(c) { onDispose { c.afterLogin = null } }
     LaunchedEffect(cooldown) { if(cooldown > 0) { delay(1000); cooldown-- } }
-    Screen(if(register) "通过镜像注册" else "通过镜像登录", c::back) { padding ->
+    Screen(if(register) "通过镜像注册" else if(forum) "通过镜像登录论坛" else "通过镜像登录", c::back) { padding ->
         Column(Modifier.padding(padding).fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("XKVI 反代镜像 · book.xkvi.top", style = MaterialTheme.typography.titleMedium)
-            Text("使用原站 Novelia 账号，登录请求通过镜像转发。入口口令由应用自动携带。",
+            Text("使用 Novelia 账号，登录请求通过镜像转发。" + (if(forum) "论坛登录状态单独保存。" else "登录后可访问小说服务。"),
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             OutlinedTextField(username, { username = it }, Modifier.fillMaxWidth(), enabled = !busy,
                 label = { Text(if(register) "用户名" else "用户名或邮箱") }, singleLine = true)
@@ -54,7 +55,7 @@ import kotlinx.coroutines.launch
                     if(!android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) { error = "请填写有效的邮箱"; return@TextButton }
                     sending = true; error = null; notice = null
                     scope.launch {
-                        try { c.session.requestMirrorOtp(email); notice = "验证码已发送，请检查邮箱及垃圾箱"; cooldown = 60 }
+                        try { session.requestMirrorOtp(email); notice = "验证码已发送，请检查邮箱及垃圾箱"; cooldown = 60 }
                         catch(cancelled: CancellationException) { throw cancelled }
                         catch(e: Exception) { error = e.friendlyMessage(); cooldown = 60 }
                         finally { sending = false }
@@ -71,10 +72,10 @@ import kotlinx.coroutines.launch
                 busy = true; error = null; notice = null
                 scope.launch {
                     try {
-                        if(c.session.loginMirror(username, password, email.takeIf { register }, otp.takeIf { register })) {
+                        if(session.loginMirror(username, password, email.takeIf { register }, otp.takeIf { register })) {
                             password = ""; otp = ""
-                            if(c.store.state.value.autoSync) c.session.profile.value?.username?.let { CloudSyncWorker.enqueue(c.app, it) }
-                            finishLoginNavigation(c); c.message("已登录")
+                            if(!forum && c.store.state.value.autoSync) session.profile.value?.username?.let { CloudSyncWorker.enqueue(c.app, it) }
+                            finishLoginNavigation(c, forum); c.message("已登录")
                         } else error = "认证成功，但未取得登录会话，请稍后重试"
                     } catch(cancelled: CancellationException) { throw cancelled }
                     catch(e: Exception) { error = e.friendlyMessage() }

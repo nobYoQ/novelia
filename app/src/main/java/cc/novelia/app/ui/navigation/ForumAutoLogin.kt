@@ -10,7 +10,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import cc.novelia.app.data.auth.Session
 import kotlinx.coroutines.CancellationException
 
-/** 论坛页面进入前台时尝试复用原站认证；失败仍可匿名浏览，主动登录入口会显示认证页。 */
+/** 论坛页面进入前台时尝试复用同线路认证；失败仍可匿名浏览，主动登录入口会显示认证页。 */
 @Composable internal fun ObserveForumLogin(main: Session, forum: Session) {
     val mainProfile by main.profile.collectAsStateWithLifecycle()
     val forumProfile by forum.profile.collectAsStateWithLifecycle()

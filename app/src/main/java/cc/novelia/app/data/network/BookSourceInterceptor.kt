@@ -38,13 +38,16 @@ internal class BookSourceInterceptor(private val sources: BookSources, private v
         val target = sources.route(request.url, selection)
         val builder = request.newBuilder().url(target).tag(SourceSelection::class.java, selection)
         if(target != request.url) builder.removeHeader("Host")
-        if(request.header("Origin") in setOf(BookSource.ORIGINAL.origin, BookSource.ORIGINAL.authOrigin))
+        if(target.host == "book.xkvi.top" && request.header("Origin") in
+            setOf(BookSource.ORIGINAL.origin, BookSource.ORIGINAL.authOrigin, BookSource.ORIGINAL.forumOrigin))
             builder.header("Origin", selection.source.origin)
         val mirror = target.isHttps && target.host == "book.xkvi.top" && target.port == 443 && target.username.isEmpty() && target.password.isEmpty()
         val originalAuth = selection.source == BookSource.ORIGINAL && target.isHttps && target.host == "auth.novelia.cc" && target.port == 443
         val cookies = request.headers.values("Cookie").flatMap { it.split(';') }
             .map(String::trim).filter { it.isNotEmpty() && (originalAuth || it.substringBefore('=').trim() != "accessToken") }.toMutableList()
-        if(mirror) sources.cookie(selection)?.let(cookies::add)
+        // 统一认证只有 POST 免入口门禁；仍保留该会话自己的刷新 Cookie。
+        val authPost = request.method == "POST" && isAuthApiPath(target.encodedPath)
+        if(mirror && !authPost) sources.cookie(selection)?.let(cookies::add)
         builder.removeHeader("Cookie")
         if(cookies.isNotEmpty()) builder.header("Cookie", cookies.joinToString("; "))
         builder.build()

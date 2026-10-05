@@ -46,7 +46,9 @@ import kotlinx.coroutines.launch
             Text("正在恢复登录状态…")
             if(!appReducedMotion()) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 12.dp))
         }
-    } else WebLoginScreen(c, forum = true)
+    } else if(c.app.bookSources.capture().source == cc.novelia.app.data.network.BookSource.XKVI)
+        MirrorLoginScreen(c, forum = true)
+    else WebLoginScreen(c, forum = true)
 }
 
 @SuppressLint("SetJavaScriptEnabled")

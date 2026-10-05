@@ -37,7 +37,7 @@ class ForumSessionIsolationTest {
     @Test fun signingOutForumPreservesMainAndSharedCookies() = verifyIsolation(AuthTarget.FORUM)
     @Test fun signingOutMainPreservesForumAndSharedCookies() = verifyIsolation(AuthTarget.NOVEL)
 
-    @Test fun forumRefreshAndPersistenceIgnoreBookSourceChanges() = runBlocking {
+    @Test fun standaloneForumSessionIgnoresUnrelatedBookSourceChanges() = runBlocking {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val prefix = "test-forum-mirror-${UUID.randomUUID()}-"
         val context = object : ContextWrapper(instrumentation.targetContext) {
@@ -70,7 +70,7 @@ class ForumSessionIsolationTest {
                 Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("test")
                     .body(synthetic.toResponseBody()).build()
             }.build()
-            val forum = Session(context, client = client, sources = sources, target = AuthTarget.FORUM)
+            val forum = Session(context, client = client, target = AuthTarget.FORUM)
             val binding = forum.capture()
             assertEquals("forum-test", forum.profile.value?.username)
             assertEquals(42L, forum.profile.value?.userId)

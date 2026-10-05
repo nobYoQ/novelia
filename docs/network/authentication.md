@@ -2,15 +2,16 @@
 
 [网络目录](README.md) · [文档首页](../README.md)
 
-应用分别保存小说原站、镜像和独立论坛的登录状态。原站与论坛共用统一认证，客户端令牌与请求归属不同。主要实现是 [Session.kt](../../app/src/main/java/cc/novelia/app/data/auth/Session.kt) 和 [LoginScreen.kt](../../app/src/main/java/cc/novelia/app/ui/account/LoginScreen.kt)。
+应用分别保存小说和论坛在原站、镜像线路上的登录状态。小说与论坛共用统一认证，客户端令牌与请求归属不同。主要实现是 [Session.kt](../../app/src/main/java/cc/novelia/app/data/auth/Session.kt) 和 [LoginScreen.kt](../../app/src/main/java/cc/novelia/app/ui/account/LoginScreen.kt)。
 
-## 三种登录入口
+## 登录入口
 
 | 入口 | 方式 | 认证标识 |
 | --- | --- | --- |
 | 小说原站 | WebView 中的统一认证页 | `app=n`，Origin 为 `https://n.novelia.cc` |
-| 独立论坛 | WebView 中的统一认证页 | `app=f`，Origin 为 `https://forum.novelia.cc` |
-| XKVI 镜像 | 原生登录、注册和验证码表单 | 镜像同源认证 API，`app=n` |
+| 原站论坛 | WebView 中的统一认证页 | `app=f`，Origin 为 `https://forum.novelia.cc` |
+| XKVI 小说镜像 | 原生登录、注册和验证码表单 | 镜像同源认证 API，`app=n` |
+| XKVI 论坛镜像 | 先恢复同线路 SSO，失败显示原生表单 | 镜像同源认证 API，`app=f` |
 
 原站与论坛的 WebView 包装页嵌入 `auth.novelia.cc`。网页发来 `login_success` 后，客户端检查消息来源，再携带认证 Cookie 请求刷新；**只有拿到有效访问令牌才完成登录**。网页消息本身不含令牌。
 
@@ -18,11 +19,11 @@
 
 ## 进入论坛自动登录
 
-原站已登录、论坛尚未登录时，社区、论坛文章、发帖及处罚记录页面进入前台会尝试复用统一认证 Cookie，调用 `app=f` 的刷新接口获取独立论坛令牌，成功后直接显示登录状态。共享 Cookie 返回的账号必须与当前原站账号一致；请求途中退出原站、切换小说来源或退出论坛后，旧结果不能提交。
+同线路小说账号已登录、论坛尚未登录时，社区、论坛文章、发帖及处罚记录页面进入前台会尝试复用统一认证 Cookie，调用 `app=f` 的刷新接口获取独立论坛令牌，成功后直接显示登录状态。共享 Cookie 返回的账号必须与当前小说账号一致；请求途中退出小说、切换线路或退出论坛后，旧结果不能提交。
 
-自动认证失败时仍可匿名浏览；收藏、评论、发帖等需要登录的操作会进入论坛登录入口。该入口先尝试恢复统一认证，成功后返回并继续原操作，失败后才加载 WebView 认证页。主动退出论坛会持久保存暂停自动登录的标记，重启仍有效；用户主动选择论坛登录并成功取得令牌后解除标记。
+自动认证失败时仍可匿名浏览；收藏、评论、发帖等需要登录的操作会进入论坛登录入口。该入口先尝试恢复统一认证，成功后返回并继续原操作，失败后按线路显示原站 WebView 认证页或镜像原生表单。主动退出论坛会在该线路持久保存暂停自动登录的标记，重启仍有效；用户主动选择论坛登录并成功取得令牌后解除标记。
 
-镜像登录不会自动登录原站论坛。用户主动进入论坛登录入口时，仍可复用原站统一认证 Cookie；镜像凭据不发送给论坛。已有论坛会话继续独立管理，小说书源切换不影响其令牌或续期。
+镜像小说登录可用同源认证 Cookie 换取镜像论坛的独立令牌；镜像 Cookie 不发送给原站论坛或原站认证服务。成功获取论坛令牌后，把用于刷新和轮换的镜像 Cookie 加密保存到论坛私有会话，使退出小说不影响已有论坛续期。切换书源线路会同时恢复该线路的小说和论坛会话，并使两者的旧请求绑定失效。
 
 ## 凭据保存与退出
 
@@ -48,10 +49,10 @@
 | --- | --- |
 | `account` | 发起账号 |
 | `generation` | 登录代次；退出再登录同名账号也会变化 |
-| `source` | 原站、镜像或论坛 |
+| `source` | 小说原站／镜像、论坛原站／镜像 |
 | `sourceRevision` | 来源切换代次；切走再切回也使旧请求失效 |
 
-取令牌、刷新和应用结果时都核对原绑定。普通 401 最多刷新一次，刷新锁合并并发续期；不能把原请求改绑到另一个账号后重发。论坛会话不订阅小说线路变化，切换小说镜像不会使论坛会话失效。
+取令牌、刷新和应用结果时都核对原绑定。普通 401 最多刷新一次，刷新锁合并并发续期；不能把原请求改绑到另一个账号或线路后重发。应用中的论坛会话与小说共用线路选择，令牌、刷新 Cookie 和主动退出标记分别保存。
 
 ## WebView 与界面权限
 
@@ -63,7 +64,7 @@ JWT 字段用于展示用户名、角色和有效期，客户端解析不等于�
 
 ## 登录后继续
 
-书籍及论坛收藏的续接意图由 [LoginContinuation.kt](../../app/src/main/java/cc/novelia/app/ui/navigation/LoginContinuation.kt) 放入各自登录导航项的 `SavedStateHandle`，页面重建后仍可恢复。论坛认证成功将帖子 ID、账号及登录代次交回原文章导航项，详情加载后在同一会话内执行一次收藏；取消登录不交回意图，换号或重新登录后丢弃旧意图。其他 `afterLogin` 回调只存在内存中，消费或取消后需要清理。
+书籍及论坛收藏的续接意图由 [LoginContinuation.kt](../../app/src/main/java/cc/novelia/app/ui/navigation/LoginContinuation.kt) 放入各自登录导航项的 `SavedStateHandle`，页面重建后仍可恢复。论坛认证成功将帖子 ID、账号、登录代次及来源代次交回原文章导航项，详情加载后在同一会话内执行一次收藏；取消登录不交回意图，换号、重新登录或切换线路后丢弃旧意图。其他 `afterLogin` 回调只存在内存中，消费或取消后需要清理。
 
 登录完成不等于收藏已提交；书籍返回原流程后仍要选择收藏夹和处理同步结果，论坛收藏也要等待服务端确认。
 
@@ -77,4 +78,4 @@ JWT 字段用于展示用户名、角色和有效期，客户端解析不等于�
 | “账号或书源已变化” | 请求是否跨越退出、重登或线路切换 |
 | 退出后仍显示本地书籍 | 这是设备资料保留，检查会话状态即可 |
 
-回归入口：JVM `SessionIsolationTest`、`ApiContractTest`，设备 `MirrorSessionTest`、`ForumSessionIsolationTest`、`ForumSharedAuthTest`。真实认证页面测试默认关闭，命令见[测试指南](../quality/testing.md)。不要在日志或夹具里保存真实 Cookie、密码和令牌。
+回归入口：JVM `SessionIsolationTest`、`ApiContractTest`，设备 `MirrorSessionTest`、`ForumMirrorSessionTest`、`ForumSessionIsolationTest`、`ForumSharedAuthTest`。真实认证页面测试默认关闭，命令见[测试指南](../quality/testing.md)。不要在日志或夹具里保存真实 Cookie、密码和令牌。

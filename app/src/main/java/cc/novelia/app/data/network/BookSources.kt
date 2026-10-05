@@ -8,10 +8,18 @@ import kotlinx.coroutines.flow.asStateFlow
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
-enum class BookSource(val id: String, val title: String, val origin: String, val authOrigin: String) {
-    ORIGINAL("original", "原站", "https://n.novelia.cc", "https://auth.novelia.cc"),
-    XKVI("xkvi", "XKVI 反代镜像", "https://book.xkvi.top", "https://book.xkvi.top"),
+enum class BookSource(val id: String, val title: String, val origin: String, val authOrigin: String, val forumOrigin: String) {
+    ORIGINAL("original", "原站", "https://n.novelia.cc", "https://auth.novelia.cc", "https://forum.novelia.cc"),
+    XKVI("xkvi", "XKVI 反代镜像", "https://book.xkvi.top", "https://book.xkvi.top", "https://book.xkvi.top"),
 }
+
+/** 镜像按路径分流；匹配完整路径段，避免把 postscript 等书站接口送到论坛。 */
+internal fun isForumApiPath(path: String): Boolean = listOf(
+    "/api/v1/category", "/api/v1/post", "/api/v1/comment", "/api/v1/external/comment",
+    "/api/v1/me/post", "/api/v1/me/favorite",
+).any { path == it || path.startsWith("$it/") }
+
+internal fun isAuthApiPath(path: String): Boolean = path == "/api/v1/auth" || path.startsWith("/api/v1/auth/")
 
 /** 可公开的选择状态，不含 Cookie 或任何令牌。revision 使切走再切回的旧请求也失效。 */
 data class SourceSelection(val source: BookSource, val revision: Long = 0, val hasAccessToken: Boolean = false)
@@ -53,8 +61,14 @@ class BookSources internal constructor(
         if(!url.isHttps || url.port != 443 || url.username.isNotEmpty() || url.password.isNotEmpty()) return url
         val origin = when(url.host) {
             "n.novelia.cc", "books.fishhawk.top" -> selection.source.origin
-            "book.xkvi.top" -> if(url.encodedPath.startsWith("/api/v1/auth/")) selection.source.authOrigin else selection.source.origin
-            "auth.novelia.cc" -> selection.source.authOrigin
+            "book.xkvi.top" -> when {
+                isAuthApiPath(url.encodedPath) -> selection.source.authOrigin
+                isForumApiPath(url.encodedPath) -> selection.source.forumOrigin
+                else -> selection.source.origin
+            }
+            "forum.novelia.cc" -> if(isForumApiPath(url.encodedPath)) selection.source.forumOrigin else return url
+            // 处罚等认证站接口未列入镜像路由，不能落入镜像的书站 API 兜底。
+            "auth.novelia.cc" -> if(isAuthApiPath(url.encodedPath)) selection.source.authOrigin else return url
             else -> return url
         }.toHttpUrl()
         return url.newBuilder().scheme(origin.scheme).host(origin.host).port(origin.port).build()

@@ -46,7 +46,7 @@ import kotlinx.coroutines.withContext
     AppSheet(onDismissRequest = onDismiss) {
         Column(Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) {
             Text("书源线路", style = MaterialTheme.typography.titleLarge)
-            Text("小说内容相同，可按连接情况切换。首次使用另一条线路需要重新登录。", Modifier.padding(vertical = 12.dp),
+            Text("小说和论坛都会使用所选线路，内容相同。首次使用另一条线路需要重新登录。", Modifier.padding(vertical = 12.dp),
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             BookSource.entries.forEach { source ->
                 val enabled = !busy && (source == BookSource.ORIGINAL || mirrorAvailable)

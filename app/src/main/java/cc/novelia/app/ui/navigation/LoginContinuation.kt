@@ -10,9 +10,12 @@ private const val FAVORITE_AFTER_LOGIN = "novelia.favoriteAfterLogin"
 private const val FORUM_FAVORITE_AFTER_LOGIN = "novelia.forumFavoriteAfterLogin"
 internal const val FORUM_FAVORITE_REQUEST = "novelia.forumFavoriteRequest"
 
-@Serializable internal data class ForumFavoriteRequest(val postId: Long, val account: String?, val generation: Long) {
+@Serializable internal data class ForumFavoriteRequest(val postId: Long, val account: String?, val generation: Long,
+    val source: String = "forum", val sourceRevision: Long = 0,
+) {
     fun matches(postId: Long?, binding: SessionBinding) =
-        account != null && this.postId == postId && account == binding.account && generation == binding.generation
+        account != null && this.postId == postId && account == binding.account && generation == binding.generation &&
+            source == binding.source && sourceRevision == binding.sourceRevision
 }
 
 /**
@@ -46,7 +49,7 @@ internal fun finishLoginNavigation(c: AppController, forum: Boolean = false) {
     val forumFavorite = if(forum) entry.savedStateHandle.remove<Long>(FORUM_FAVORITE_AFTER_LOGIN) else null
     val forumRequest = forumFavorite?.let {
         val binding = c.forumSession.capture()
-        appJson.encodeToString(ForumFavoriteRequest(it, binding.account, binding.generation))
+        appJson.encodeToString(ForumFavoriteRequest(it, binding.account, binding.generation, binding.source, binding.sourceRevision))
     }
     val returnEntry = c.nav.previousBackStackEntry
     val continuation = c.afterLogin

@@ -25,6 +25,14 @@ import org.junit.rules.TemporaryFolder
 class NetworkLoggingTest {
     @get:Rule val temporary = TemporaryFolder()
 
+    @Test fun mirrorForumRoutesAreClassifiedWithoutLoggingResourceIds() {
+        for(path in listOf("category/", "post/123/comment", "comment/456", "external/comment/novel/private-book", "me/post", "me/favorite")) {
+            assertEquals("forum_api", networkTarget(Request.Builder().url("https://book.xkvi.top/api/v1/$path?q=private").build()))
+        }
+        assertEquals("authentication", networkTarget(Request.Builder().url("https://book.xkvi.top/api/v1/auth/refresh?app=f").build()))
+        assertEquals("download_file", networkTarget(Request.Builder().url("https://book.xkvi.top/files-temp/private.epub").build()))
+    }
+
     @Test fun certificateFailuresAreRecognizedThroughNestedCauses() {
         listOf(CertificateException(), CertPathValidatorException(), SSLPeerUnverifiedException("private-detail")).forEach { certificate ->
             val handshake = SSLHandshakeException("private-handshake-detail").apply {

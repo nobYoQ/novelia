@@ -171,7 +171,7 @@ internal fun networkTarget(request: Request): String {
     return when {
         path == listOf("cdn-cgi", "trace") -> "connectivity_trace"
         request.url.host == "auth.novelia.cc" || path.take(3) == listOf("api", "v1", "auth") -> "authentication"
-        request.url.host == "forum.novelia.cc" -> "forum_api"
+        request.url.host == "forum.novelia.cc" || isForumApiPath(request.url.encodedPath) -> "forum_api"
         path.firstOrNull() == "files-temp" -> "download_file"
         path.getOrNull(1) == "novel" -> when { "file" in path -> "novel_download"; "chapter" in path -> "chapter"; path.size == 2 -> "novel_list"; else -> "novel_api" }
         path.getOrNull(1) == "wenku" -> if ("file" in path) "wenku_download" else "wenku_api"

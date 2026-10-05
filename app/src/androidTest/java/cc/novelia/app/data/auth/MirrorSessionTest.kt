@@ -44,7 +44,7 @@ class MirrorSessionTest {
         val client = OkHttpClient.Builder().addInterceptor(BookSourceInterceptor(sources)).addInterceptor { chain ->
             val request = chain.request()
             assertEquals("book.xkvi.top", request.url.host)
-            assertTrue(request.header("Cookie").orEmpty().contains("accessToken=test-gateway-only"))
+            assertEquals(!isAuthApiPath(request.url.encodedPath), request.header("Cookie").orEmpty().contains("accessToken=test-gateway-only"))
             assertFalse(request.header("Authorization").orEmpty().contains(originalJwt))
             when(request.url.encodedPath) {
                 "/api/v1/auth/login" -> {

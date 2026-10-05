@@ -63,7 +63,7 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
         interceptors().add(0, BookSourceInterceptor(bookSources))
     }.echCallTimeout().build() }
     val session by lazy { Session(this, client = httpTransport, sources = bookSources) }
-    val forumSession by lazy { Session(this, AuthTarget.FORUM, client = forumTransport) }
+    val forumSession by lazy { Session(this, client = httpTransport, sources = bookSources, target = AuthTarget.FORUM) }
     val keywords by lazy { KeywordStore(this) { store.state.value.keywordLimit } }
     val webDavConfig by lazy { WebDavConfigStore(this) }
     val webDav by lazy { WebDavSyncManager(this) }
@@ -73,8 +73,8 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
     internal val clipboardLinkHistory = ClipboardLinkHistory()
     val metadataCache get() = store.metadataCache
     val api by lazy { NoveliaApi(session, transport = httpTransport, onMutation = { metadataCache.invalidate(it) }, onKeywords = { tags -> applicationScope.launch { keywords.observe(tags) } }) }
-    val forumApi by lazy { ForumApi(NoveliaApi(forumSession, ForumApi.BASE_URL, forumTransport)) }
-    val forumAccountApi by lazy { ForumAccountApi(NoveliaApi(forumSession, ForumAccountApi.BASE_URL, forumTransport)) }
+    val forumApi by lazy { ForumApi(NoveliaApi(forumSession, ForumApi.BASE_URL, httpTransport)) }
+    val forumAccountApi by lazy { ForumAccountApi(NoveliaApi(forumSession, ForumAccountApi.BASE_URL, httpTransport)) }
     val forumCommunityRules by lazy { ForumCommunityRulesRepository(
         MetadataCache(File(filesDir, "forum-community-rules"), 512 * 1024L),
         NoveliaApi(null, "https://forum.novelia.cc/", forumTransport),

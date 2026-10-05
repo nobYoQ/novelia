@@ -71,7 +71,7 @@ $env:ANDROID_SERIAL = '<专用测试设备序列号>'
 - 导航和双栏：`RootNavigationTest`、`AdaptiveLibraryTest`。
 - 正文和手势：`ReaderAdaptiveUiTest`、`ReaderToolbarOverlayTest`、`ReaderTapNavigationTest`。
 - 论坛与编辑：`ForumEditorUiTest`、`ForumCommentThreadTest`、`EditorDraftLifecycleTest`。
-- 会话：`MirrorSessionTest`、`ForumSessionIsolationTest`、`ForumSharedAuthTest`。
+- 会话：`MirrorSessionTest`、`ForumMirrorSessionTest`、`ForumSessionIsolationTest`、`ForumSharedAuthTest`；镜像论坛登录界面另见 `ui.account.ForumMirrorLoginTest`。
 - Android 平台解析：`ForumCommunityRulesParserAndroidTest`。
 - 文件/恢复：`BookExportUiTest`、`LibraryBackupFlowTest`。
 - 静态交互：`EInkReaderFlowTest`、`ReducedMotionSheetTest`、`PanelSessionTest`。
