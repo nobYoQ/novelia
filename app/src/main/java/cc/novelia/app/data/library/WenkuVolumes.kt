@@ -19,7 +19,11 @@ fun LibraryState.withWenkuVolumes(parentKey: String, volumeKeys: Set<String>): L
             saved.parentWenkuKey == parentKey -> saved.copy(parentWenkuKey = null, folder = parent.folder)
             else -> saved
         }
-    }).pruneVolumeOrders()
+    }).pruneVolumeOrders().let { mounted ->
+        val added = volumeKeys.any { key -> books.first { it.book.ref.key == key }.parentWenkuKey != parentKey }
+        if(added && parent.book.volumeIds.isNotEmpty()) mounted.withWenkuSiteOrder(parentKey,
+            siteVolumeIds(parent.book.volumeIds), parent.siteVolumeOrderDescending) else mounted
+    }
 }
 
 fun LibraryState.withVolumeParent(volumeKey: String, parentKey: String?): LibraryState {

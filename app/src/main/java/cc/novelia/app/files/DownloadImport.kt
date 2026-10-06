@@ -4,6 +4,8 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import cc.novelia.app.NoveliaApplication
 import cc.novelia.app.data.library.withDownloadedVolume
+import cc.novelia.app.data.library.withWenkuSiteOrder
+import cc.novelia.app.data.library.siteVolumeIds
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.DownloadEntry
@@ -78,6 +80,12 @@ suspend fun importLocalDocument(store: LocalStore, file: File, name: String = fi
         val hash = file.inputStream().use { DocumentTools.digest(it) { workContext.ensureActive() } }
         store.findDocumentByHash(hash) { workContext.ensureActive() }?.let {
             if (downloadMode != null) store.recordDocumentDownloadMode(it.id, downloadMode)
+            if(store.state.value.books.none { saved -> saved.book.ref == it }) {
+                val document = store.documentIndex(it.id)
+                store.saveBook(BookCard(it, document.name,
+                    cover = document.coverImage?.let { image -> store.documentImage(document.id, image).absolutePath },
+                    subtitle = "${document.format.uppercase()} · ${document.chapters.size} 章"))
+            }
             return@withLock DocumentImportResult(it, false)
         }
         val images = java.nio.file.Files.createTempDirectory(store.context.cacheDir.toPath(), "document-images-").toFile()
@@ -128,7 +136,13 @@ suspend fun importDownloadedDocument(app: NoveliaApplication, entry: DownloadEnt
         } catch(e: CancellationException) { throw e }
         catch(_: Exception) { null }
     }
-    return importDownloadedDocumentResult(app.store, entry, sourceCard, onProgress)
+    val result = importDownloadedDocumentResult(app.store, entry, sourceCard, onProgress)
+    if(app.store.state.value.deleteDownloadAfterImport) {
+        // 必须先持久化可独立阅读的书架副本，才删除下载管理中的源文件。
+        app.store.flush()
+        DownloadWorker.remove(app, entry.id)
+    }
+    return result
 }
 
 /** 每次导入均补齐父文库并挂载，重复文件复用已有副本和阅读位置。 */
@@ -142,7 +156,14 @@ private suspend fun importDownloadedDocumentResult(store: LocalStore, entry: Dow
         val parent = state.books.firstOrNull { it.book.ref == source }?.book
             ?: sourceCard?.takeIf { it.ref == source }
             ?: BookCard(source, "文库小说 ${source.id}", subtitle = "文库小说")
-        state.withDownloadedVolume(result.ref, parent)
+        val mounted = state.withDownloadedVolume(result.ref, parent).let { library ->
+            library.copy(books = library.books.map { saved ->
+                if(saved.book.ref == result.ref) saved.copy(sourceVolumeId = entry.title) else saved
+            })
+        }
+        val ids = siteVolumeIds(sourceCard?.volumeIds?.takeIf { it.isNotEmpty() } ?: parent.volumeIds)
+        if(ids.isEmpty()) mounted else mounted.withWenkuSiteOrder(source.key, ids,
+            mounted.books.first { it.book.ref == source }.siteVolumeOrderDescending)
     }
     }
     return result

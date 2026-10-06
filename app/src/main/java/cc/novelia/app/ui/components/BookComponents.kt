@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Block
+import androidx.compose.material.icons.automirrored.outlined.Undo
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -36,19 +38,32 @@ import coil.decode.DataSource
 
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable fun TagList(tags: List<String>, c: AppController) {
+    val library by c.store.state.collectAsStateWithLifecycle()
     val entries by c.app.keywords.state.collectAsStateWithLifecycle()
     val persistenceError by c.app.keywords.persistenceError.collectAsStateWithLifecycle()
     val lookup = remember(entries) { entries.entries.associateBy { it.original } }
     var editing by remember { mutableStateOf<KeywordEntry?>(null) }
     AppChipFlowRow(Modifier.padding(horizontal = 20.dp, vertical = 10.dp)) {
-        tags.distinct().forEach { tag ->
+        tags.filter(String::isNotBlank).distinct().forEach { tag ->
             val entry = lookup[tag] ?: KeywordEntry(tag)
             AppSelectionChip(false, onClick = {
                 c.app.keywords.markUsed(listOf(tag))
                 val expression = if(KeywordCatalog.canSearch(tag)) "$tag$" else tag
                 c.go("discover?query=${android.net.Uri.encode(expression)}")
             }, label = { Text(entry.label) }, trailingIcon = {
-                IconButton(onClick = { editing = entry }, modifier = Modifier.size(48.dp)) { Icon(Icons.Outlined.Edit, "编辑标签翻译 $tag", Modifier.size(16.dp)) }
+                Row {
+                    IconButton(onClick = { editing = entry }, modifier = Modifier.size(48.dp)) { Icon(Icons.Outlined.Edit, "编辑标签翻译 $tag", Modifier.size(16.dp)) }
+                    val blocked = tag in library.blockedTags
+                    IconButton(onClick = {
+                        val original = tag
+                        c.store.update { it.copy(blockedTags = if(blocked) it.blockedTags - original else it.blockedTags + original) }
+                        c.message(if(blocked) "已取消屏蔽标签 ${entry.label}" else "已屏蔽标签 ${entry.label}")
+                    }, modifier = Modifier.size(48.dp)) {
+                        Icon(if(blocked) Icons.AutoMirrored.Outlined.Undo else Icons.Outlined.Block,
+                            if(blocked) "取消屏蔽标签 $tag" else "屏蔽标签 $tag", Modifier.size(16.dp),
+                            tint = if(blocked) MaterialTheme.colorScheme.primary else LocalContentColor.current)
+                    }
+                }
             })
         }
     }

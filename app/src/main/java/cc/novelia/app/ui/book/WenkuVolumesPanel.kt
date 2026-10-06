@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.WenkuDetail
+import cc.novelia.app.data.library.siteVolumeIds
 import cc.novelia.app.data.network.encodeSegment
 import cc.novelia.app.ui.components.AppLazyColumn
 import cc.novelia.app.ui.components.BookRow
@@ -44,6 +45,10 @@ import cc.novelia.app.ui.theme.appReducedMotion
     }
     val selected = available.filter { it in selection }
     val reducedMotion = appReducedMotion()
+    val orderedVolumes = remember(detail.volumeJp) {
+        val ranks = siteVolumeIds(detail.volumeJp.map { "jp:${it.volumeId}" }).withIndex().associate { it.value to it.index }
+        detail.volumeJp.sortedBy { ranks["jp:${it.volumeId}"] }
+    }
     LaunchedEffect(available) { selection = selection.filter { it in available } }
     BackHandler(selecting) { selecting = false; selection = emptyList() }
     Column {
@@ -74,7 +79,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
         }
         AppLazyColumn(Modifier.weight(1f).testTag("wenku-volume-list"), contentPadding = PaddingValues(bottom = 24.dp)) {
             if(profile == null) item { EmptyState("登录后查看文库文件", "文库的资源目录与下载遵循原站权限。", action = "登录", onAction = { c.go("login") }) }
-            items(detail.volumeJp, key = { "jp-${it.volumeId}" }, contentType = { "translated-volume" }) { volume ->
+            items(orderedVolumes, key = { "jp-${it.volumeId}" }, contentType = { "translated-volume" }) { volume ->
                 val complete = volume.volumeId in available
                 val checked = volume.volumeId in selected
                 val motion = if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(AppMotion.Release), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit))

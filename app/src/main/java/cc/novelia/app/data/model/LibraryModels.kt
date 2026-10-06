@@ -27,7 +27,8 @@ import kotlinx.serialization.Serializable
  */
 @Serializable data class SavedBook(val book: BookCard, val folder: String = "默认收藏", val pinned: Boolean = false, val status: String = "在读", val addedAt: Long = System.currentTimeMillis(), val hasUpdates: Boolean = false,
     val parentWenkuKey: String? = null, val volumesExpanded: Boolean = false, val volumeOrder: List<String> = emptyList(),
-    val folderId: String? = null)
+    val folderId: String? = null,
+    val sourceVolumeId: String? = null, val siteVolumeOrderDescending: Boolean = false)
 
 /** key 为 BookRef.key；text 可为空，此时仍是一条保留章节和段落位置的书签。 */
 @Serializable data class Note(val id: String, val key: String, val chapterId: String, val paragraph: Int, val quote: String, val text: String, val createdAt: Long = System.currentTimeMillis(), val bookTitle: String = "", val chapterTitle: String = "", val bookmarked: Boolean = true)
@@ -61,6 +62,8 @@ fun legacyFolderId(name: String): String = if(name == DEFAULT_FOLDER) DEFAULT_FO
     val drafts: Map<String, String> = emptyMap(), val reader: ReaderSettings = ReaderSettings(), val bookSettings: Map<String, ReaderSettings> = emptyMap(),
     val theme: String = "system", val reducedMotion: Boolean = false, val historyPaused: Boolean = false, val autoCollapseCloudFilters: Boolean = true,
     val autoSaveCloudFavoritesLocally: Boolean = true,
+    // 文件清理仅为本机偏好，默认关闭，普通设置备份会保留这两个选项。
+    val deleteDownloadAfterImport: Boolean = false, val deleteLocalCopyOnShelfRemoval: Boolean = false,
     val pending: List<PendingAction> = emptyList(), val updateNotifications: Boolean = false,
     val blockedUsers: Set<String> = emptySet(), val hideNovelComments: Boolean = false, val wifiOnly: Boolean = false,
     val personalGlossaries: Map<String, Map<String, String>> = emptyMap(),

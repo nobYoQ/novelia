@@ -178,6 +178,16 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
 
     fun saveBook(book: BookCard, folder: String = "默认收藏") = update { it.withSavedBook(book, folder) }
     fun removeBook(ref: BookRef) = update { it.withoutBook(ref) }
+    /** 仅书架主动移除入口遵循清理偏好，导入回滚和普通关系调整不触发它。 */
+    suspend fun removeShelfBook(ref: BookRef): Boolean = withContext(Dispatchers.IO) {
+        val deleteCopy = ref.isLocal && state.value.deleteLocalCopyOnShelfRemoval
+        removeBook(ref)
+        if(deleteCopy) {
+            flush()
+            removeDocument(ref.id)
+        }
+        deleteCopy
+    }
     fun rememberSearch(query: String) { if (query.isNotBlank()) update { it.copy(recentSearches = (listOf(query) + it.recentSearches.filterNot { old -> old == query }).take(20)) } }
     fun savePosition(ref: BookRef, position: Position, bookTitle: String = "") = update { it.withReadingPosition(ref, position, bookTitle) }
     fun chapterFile(ref: BookRef, chapter: String) = File(cacheDir, hashName("${ref.key}/$chapter") + ".json")

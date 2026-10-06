@@ -7,6 +7,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -53,15 +55,17 @@ import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.reader.ChapterCacheDialog
 import cc.novelia.app.ui.shelf.FavoriteSheet
 import cc.novelia.app.ui.shelf.bookFavoriteState
+import cc.novelia.app.ui.shelf.WenkuSiteOrderActions
 import cc.novelia.app.data.library.withCloudReadingMetadata
 import cc.novelia.app.ui.theme.AppMotion
-import cc.novelia.app.ui.theme.MotionContent
 import cc.novelia.app.ui.theme.appReducedMotion
 import cc.novelia.app.ui.theme.motionClickable
 import java.io.File
 import kotlin.math.abs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.withContext
 
 @Composable fun BookScreen(c: AppController, ref: BookRef, onBack: () -> Unit = c::back) {
@@ -103,6 +107,7 @@ import kotlinx.coroutines.withContext
                             detail.latestPublishAt?.takeIf { it > 0 }?.let { item { MetaParagraph("最近出版", displayDate(it)) } }
                             item { MetaParagraph("简介", detail.introduction) }
                             item { TagList(detail.keywords, c) }
+                            if(state.books.any { it.parentWenkuKey == ref.key }) item { WenkuSiteOrderActions(c, ref.key) }
                             item { MetaParagraph("出版信息", listOfNotNull(detail.authors.takeIf { it.isNotEmpty() }?.joinToString(prefix = "作者："), detail.artists.takeIf { it.isNotEmpty() }?.joinToString(prefix = "插画："), detail.publisher, detail.imprint).joinToString("\n")) }
                             detail.authors.filter(String::isNotBlank).forEach { author -> item {
                                 MenuRow("屏蔽作者：$author", "在发现列表中隐藏这位作者的作品", Icons.Outlined.PersonOff, {
@@ -229,19 +234,33 @@ import kotlinx.coroutines.withContext
             VerticalDivider()
             Column(Modifier.weight(.56f).fillMaxHeight()) {
                 val rightPanel = selected.coerceIn(1, titles.lastIndex)
-                PrimaryTabRow(rightPanel - 1) { titles.drop(1).forEachIndexed { index, title ->
-                    Tab(rightPanel == index + 1, { onSelect(index + 1) }, text = { Text(title) })
-                } }
-                MotionContent(rightPanel, Modifier.weight(1f).fillMaxWidth(), animateInitial = false) {
-                    panels[rightPanel]()
-                }
+                BookDetailPager(rightPanel, onSelect, titles.drop(1), firstPanel = 1) { panels[it]() }
             }
         } else Column(Modifier.fillMaxSize().testTag("book-detail-single-pane")) {
-            PrimaryTabRow(selected) { titles.forEachIndexed { index, title -> Tab(selected == index, { onSelect(index) }, text = { Text(title) }) } }
-            MotionContent(selected, Modifier.weight(1f).fillMaxWidth(), animateInitial = false) {
-                panels[selected]()
-            }
+            BookDetailPager(selected, onSelect, titles) { panels[it]() }
         }
+    }
+}
+
+@Composable private fun BookDetailPager(
+    selected: Int, onSelect: (Int) -> Unit, titles: List<String>, firstPanel: Int = 0,
+    panel: @Composable (Int) -> Unit,
+) {
+    val pager = rememberPagerState(initialPage = (selected - firstPanel).coerceIn(titles.indices)) { titles.size }
+    val scope = rememberCoroutineScope()
+    val reducedMotion = appReducedMotion()
+    val select by rememberUpdatedState(onSelect)
+    LaunchedEffect(pager, firstPanel) {
+        snapshotFlow { pager.settledPage }.distinctUntilChanged().drop(1).collect { select(it + firstPanel) }
+    }
+    Column(Modifier.fillMaxSize()) {
+        PrimaryTabRow(pager.currentPage) { titles.forEachIndexed { index, title ->
+            Tab(pager.currentPage == index, onClick = { select(index + firstPanel); scope.launch {
+                if(reducedMotion) pager.scrollToPage(index) else pager.animateScrollToPage(index)
+            } }, text = { Text(title) })
+        } }
+        HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth().testTag("book-detail-pager"),
+            key = { it + firstPanel }) { panel(it + firstPanel) }
     }
 }
 @Composable private fun Stat(label: String, value: String) { Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(value, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary); Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) } }

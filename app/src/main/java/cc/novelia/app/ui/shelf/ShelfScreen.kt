@@ -333,6 +333,7 @@ import kotlinx.coroutines.withContext
         if(parent == null) ChoiceRow("收藏夹", state.folders, state.folders.indexOf(saved.folder)) { index -> c.store.saveBook(saved.book, state.folders[index]); selected = null }
         else Text("所属收藏夹：${parent.folder}", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = MaterialTheme.typography.bodyMedium)
         if(saved.book.ref.isWenku) MenuRow("管理挂载分卷", "选择已导入的分卷，在本书下方展开阅读", Icons.Outlined.LibraryAdd, { selected = null; volumeManager = saved })
+        if(saved.book.ref.isWenku && state.books.any { it.parentWenkuKey == saved.book.ref.key }) WenkuSiteOrderActions(c, saved.book.ref.key)
         if(saved.book.ref.isLocal) MenuRow(if(parent == null) "挂载到文库小说" else "更换或取消挂载", parent?.let { "当前挂载：${it.book.title}" } ?: "归入指定的文库收藏", Icons.Outlined.DriveFileMove, { selected = null; volumeParentPicker = saved })
         if(saved.book.ref.isLocal) MenuRow("重命名", "修改本地小说或分卷名称", Icons.Outlined.Edit, { selected = null; renamingDocument = saved })
         if(saved.book.ref.isLocal) MenuRow("本地术语表", "维护此文件的专有名词", Icons.Outlined.Translate, { selected = null; c.go("glossary/${saved.book.ref.key}") })
@@ -343,10 +344,12 @@ import kotlinx.coroutines.withContext
             selected = null
             sourceExporter.launch(export.fileName)
         } })
-        MenuRow("移出书架", "保留文件和阅读记录，移除后可撤销", Icons.Outlined.RemoveCircleOutline, {
+        MenuRow("移出书架", if(saved.book.ref.isLocal && state.deleteLocalCopyOnShelfRemoval) "同时删除导入副本，无法撤销；原文件不受影响" else "保留文件和阅读记录，移除后可撤销", Icons.Outlined.RemoveCircleOutline, {
             val previous = c.store.state.value.books
-            c.store.removeBook(saved.book.ref); selected = null
+            selected = null
             c.action {
+                val deleted = c.store.removeShelfBook(saved.book.ref)
+                if(deleted) { c.message("已移出书架并删除「${saved.book.title}」的导入副本"); return@action }
                 if(c.snackbar.showSnackbar("已将「${saved.book.title}」移出书架", actionLabel = "撤销", withDismissAction = true, duration = SnackbarDuration.Long) == SnackbarResult.ActionPerformed) {
                     c.store.update { current ->
                         restoreRemovedShelfBook(current, previous, saved.book.ref)

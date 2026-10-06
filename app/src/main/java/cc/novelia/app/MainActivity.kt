@@ -143,6 +143,7 @@ class MainActivity : ComponentActivity() {
                 cc.novelia.app.ui.reader.ReadingStatusBar(route?.startsWith("reader/") == true &&
                     (appearance.bookStatusBars[readingKey] ?: appearance.hideStatusBar))
                 ObserveDownloadCelebrations(controller, route)
+                cc.novelia.app.ui.feedback.ObserveAppUpdates(controller, show = route?.startsWith("reader/") != true)
                 ObserveClipboardLinks(controller, externalLinkPending = link != null)
                 val roots = listOf("shelf", "discover?query={query}", "community", "profile")
                 val tabs = listOf(Triple("shelf", "书架", Icons.Outlined.CollectionsBookmark), Triple("discover", "发现", Icons.Outlined.Explore), Triple("community", "社区", Icons.Outlined.Forum), Triple("profile", "我的", Icons.Outlined.PersonOutline))
