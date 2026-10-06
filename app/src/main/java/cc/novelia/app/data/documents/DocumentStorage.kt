@@ -19,6 +19,13 @@ internal class DocumentStorage(
     private val read: (File) -> String,
     private val write: (File, String) -> Unit
 ) {
+    /** 仅列出已提交目录，不读取正文；保留副本即使已移出书架也参加重复导入检测。 */
+    fun ids(): List<String> = directory.listFiles().orEmpty().asSequence()
+        .filter { it.isFile && (it.name.endsWith(".json") || it.name.endsWith(".json.bak")) }
+        .map { it.name.removeSuffix(".bak").removeSuffix(".json") }
+        .filter { it != "source-index" && it.matches(Regex("[a-zA-Z0-9-]+")) }
+        .distinct().sorted().toList()
+
     /** 读取目录并惰性迁移旧的整本格式；迁移遇到 IO 错误时仍返回可读旧文档。 */
     fun index(id: String): LocalDocument {
         val document = appJson.decodeFromString<LocalDocument>(read(manifest(id)))

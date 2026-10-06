@@ -97,6 +97,9 @@ import kotlinx.coroutines.withContext
     var volumeManager by remember { mutableStateOf<SavedBook?>(null) }
     var volumeParentPicker by remember { mutableStateOf<SavedBook?>(null) }
     var deletingDocument by remember { mutableStateOf<SavedBook?>(null) }
+    var batchRemoval by remember { mutableStateOf<Set<BookRef>?>(null) }
+    var batchDeletion by remember { mutableStateOf<Set<BookRef>?>(null) }
+    var batchWorking by remember { mutableStateOf(false) }
     var renamingDocument by remember { mutableStateOf<SavedBook?>(null) }
     var importedKeys by rememberSaveable { mutableStateOf(emptyList<String>()) }
     val sourceExporter = rememberLauncherForActivityResult(CreateBookDocument()) { uri ->
@@ -138,6 +141,7 @@ import kotlinx.coroutines.withContext
     val books = remember(groups) { groups.flatMap { (if(it.matchesFilters) listOf(it.saved) else emptyList()) + it.volumes } }
     val selectableKeys = remember(books) { books.map { it.book.ref.key }.toSet() }
     LaunchedEffect(selectableKeys) { selection = selection.intersect(selectableKeys) }
+    LaunchedEffect(tab) { managing = false; selection = emptySet() }
     val rows = remember(groups, collapsedSearchGroups, filteringVolumes) {
         buildList {
             groups.forEach { group ->
@@ -155,7 +159,7 @@ import kotlinx.coroutines.withContext
         IconButton(onClick = { importer.launch(arrayOf("*/*")) }, enabled = !importing) { Icon(Icons.Outlined.FileOpen, "导入本地文件") }
     }) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
-            PrimaryTabRow(tab) { listOf("我的收藏", "本地文件", "云端收藏").forEachIndexed { i, label -> Tab(tab == i, { tab = i }, text = { Text(label) }) } }
+            PrimaryTabRow(tab) { listOf("我的书架", "本地文件", "云端收藏").forEachIndexed { i, label -> Tab(tab == i, { tab = i }, enabled = !batchWorking, text = { Text(label) }) } }
             DocumentImportPanel(importModel, c::book)
             MotionContent(tab, Modifier.weight(1f).fillMaxWidth(), animateInitial = false) {
                 tabState.SaveableStateProvider(tab) {
@@ -190,11 +194,17 @@ import kotlinx.coroutines.withContext
                                 val volumeCount = groups.sumOf { it.volumes.size }
                                 ShelfBatchHeader(if(managing) "已选 ${selection.size} 本" else "${groups.size} 本" + if(volumeCount > 0) " · $volumeCount 分卷" else "",
                                     managing, { managing = !managing; selection = emptySet(); filtersExpanded = false; focus.clearFocus() }, "local",
-                                    manageEnabled = managing || books.isNotEmpty())
+                                    manageEnabled = !batchWorking && (managing || books.isNotEmpty()))
                                 ShelfControlReveal(managing) { FlowRow(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    TextButton(onClick = { selection = books.map { it.book.ref.key }.toSet() }, enabled = managing) { Text("全选") }
-                                    FilledTonalButton(onClick = { bulkMove = true }, enabled = managing && selection.isNotEmpty()) { Text("移动 ${selection.size} 本") }
-                                    FilledTonalButton(onClick = { bulkStatus = true }, enabled = managing && selection.isNotEmpty()) { Text("修改阅读状态") }
+                                    TextButton(onClick = { selection = books.map { it.book.ref.key }.toSet() }, enabled = managing && !batchWorking) { Text("全选") }
+                                    FilledTonalButton(onClick = { bulkMove = true }, enabled = managing && !batchWorking && selection.isNotEmpty()) { Text("移动 ${selection.size} 本") }
+                                    FilledTonalButton(onClick = { bulkStatus = true }, enabled = managing && !batchWorking && selection.isNotEmpty()) { Text("修改阅读状态") }
+                                    TextButton(onClick = {
+                                        val refs = books.filter { it.book.ref.key in selection }.map { it.book.ref }.toSet()
+                                        if(tab == 1) batchDeletion = refs.filter { it.isLocal }.toSet() else batchRemoval = refs
+                                    }, enabled = managing && !batchWorking && selection.isNotEmpty()) {
+                                        Text(if(batchWorking) "正在处理…" else if(tab == 1) "批量删除" else "批量移出书架")
+                                    }
                                     TextButton(onClick = {
                                         val chosen = downloadableSelection
                                         queueingDownloads = true
@@ -213,7 +223,7 @@ import kotlinx.coroutines.withContext
                                                 selection = emptySet()
                                             } finally { queueingDownloads = false }
                                         }
-                                    }, enabled = managing && !queueingDownloads && downloadableSelection.isNotEmpty()) { Text(if(queueingDownloads) "正在加入…" else "下载") }
+                                    }, enabled = managing && !batchWorking && !queueingDownloads && downloadableSelection.isNotEmpty()) { Text(if(queueingDownloads) "正在加入…" else "下载") }
                                 } }
                                 AppLazyColumn(modifier = Modifier.weight(1f), listModifier = Modifier.testTag("shelf-books"), state = listState) {
                                     val importedBooks = importedKeys.mapNotNull { key -> state.books.firstOrNull { it.book.ref.key == key } }
@@ -311,6 +321,35 @@ import kotlinx.coroutines.withContext
     if(createFolder) TextPrompt("新建收藏夹", "名称", onDismiss = { createFolder = false }) { name -> c.action { c.store.update { it.createShelfFolder(name.trim()) } } }
     if(renameFolder) TextPrompt("重命名收藏夹", "名称", folder, { renameFolder = false }) { name -> val previous = folder; c.action { c.store.update { it.renameShelfFolder(previous, name.trim()) }; folder = name.trim() } }
     if(deleteFolder) ConfirmDialog("删除收藏夹？", "其中的书籍会移入默认收藏，文件不会删除。", { deleteFolder = false }, confirmLabel = "删除收藏夹") { val previous = folder; c.action { c.store.update { it.deleteShelfFolder(previous) }; folder = "全部" } }
+    batchRemoval?.let { refs ->
+        val deletesCopies = state.deleteLocalCopyOnShelfRemoval && refs.any { it.isLocal }
+        ConfirmDialog("移出 ${refs.size} 本书？", if(deletesCopies) "已开启移出书架时删除本地副本：所选本地小说的导入副本会同时删除，无法撤销。原文件、下载文件和阅读记录保留。未选中的分卷会解除挂载。"
+            else "移出所选书籍，保留本地文件和阅读记录；完成后可撤销。未选中的分卷会解除挂载。", { batchRemoval = null }, confirmLabel = "移出书架") {
+            batchWorking = true
+            c.action {
+                try {
+                    val previous = c.store.state.value.books
+                    val deleted = c.store.removeShelfBooks(refs)
+                    managing = false; selection = emptySet(); batchWorking = false
+                    if(deleted.isNotEmpty()) c.message("已移出 ${refs.size} 本书，并删除 ${deleted.size} 份本地副本")
+                    else if(c.snackbar.showSnackbar("已移出 ${refs.size} 本书", actionLabel = "撤销", withDismissAction = true, duration = SnackbarDuration.Long) == SnackbarResult.ActionPerformed)
+                        c.store.update { restoreRemovedShelfBooks(it, previous, refs) }
+                } finally { batchWorking = false }
+            }
+        }
+    }
+    batchDeletion?.let { refs ->
+        ConfirmDialog("删除 ${refs.size} 本本地小说？", "删除所选小说在此设备中的导入副本，并移出书架。导入前的原文件、下载列表中的文件和阅读记录保留。此操作无法撤销。", { batchDeletion = null }, confirmLabel = "删除本地副本") {
+            batchWorking = true
+            c.action {
+                try {
+                    withContext(Dispatchers.IO) { refs.forEach { c.store.removeDocument(it.id) } }
+                    managing = false; selection = emptySet()
+                    c.message("已删除 ${refs.size} 本本地小说")
+                } finally { batchWorking = false }
+            }
+        }
+    }
     if(bulkMove) AppAlertDialog(onDismissRequest = { bulkMove = false }, title = { Text("移入收藏夹") }, text = { Column {
         if(state.books.any { it.book.ref.key in selection && it.parentWenkuKey != null && it.parentWenkuKey !in selection }) Text("单独移动分卷会取消其挂载；同时移动所属文库可保留挂载。", style = MaterialTheme.typography.bodySmall)
         state.folders.forEach { target -> TextButton(onClick = { c.store.update { it.moveShelfBooks(selection, target) }; bulkMove = false; managing = false; selection = emptySet() }) { Text(target) } }

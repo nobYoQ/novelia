@@ -176,7 +176,7 @@ import kotlinx.serialization.encodeToString
     val readingLifecycle = LocalLifecycleOwner.current
     val speechStatus by ReadAloudService.status.collectAsStateWithLifecycle()
     val context = LocalContext.current; val activity = context.activityOrNull()
-    val colors = readerColors(settings.resolvedTheme, MaterialTheme.colorScheme)
+    val colors = readerColors(settings, MaterialTheme.colorScheme)
     val reducedMotion = appReducedMotion()
     val focusManager = LocalFocusManager.current
     val background = colors.background

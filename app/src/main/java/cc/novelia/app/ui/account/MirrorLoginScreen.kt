@@ -85,7 +85,7 @@ import kotlinx.coroutines.launch
             TextButton(enabled = !busy && !sending, onClick = { register = !register; error = null; notice = null; password = ""; otp = "" }) {
                 Text(if(register) "已有账号，去登录" else "没有账号，注册")
             }
-            TextButton(enabled = !busy, onClick = { c.go("settings") }) { Text("切换书源线路") }
+            TextButton(enabled = !busy, onClick = { c.go("settings?section=NETWORK") }) { Text("切换书源线路") }
         }
     }
 }

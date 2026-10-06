@@ -93,7 +93,7 @@ internal data class ShelfRowItem(val saved: SavedBook, val parent: SavedBook? = 
                 if(volume.parentWenkuKey != null) item {
                     ListItem(headlineContent = { Text("取消挂载") }, supportingContent = { Text("保留分卷文件和阅读进度") }, modifier = Modifier.motionClickable { onSelect(null) })
                 }
-                if(parents.isEmpty()) item { Text(if(query.isBlank()) "请先把目标文库小说加入「我的收藏」。" else "没有匹配的文库收藏", Modifier.padding(20.dp)) }
+                if(parents.isEmpty()) item { Text(if(query.isBlank()) "请先把目标文库小说加入「我的书架」。" else "没有匹配的文库收藏", Modifier.padding(20.dp)) }
                 items(parents, key = { it.book.ref.key }) { parent ->
                     ListItem(headlineContent = { Text(parent.book.title) }, supportingContent = { Text(if(parent.book.ref.key == volume.parentWenkuKey) "当前所属文库" else parent.folder) },
                         modifier = Modifier.testTag("volume-parent-${parent.book.ref.key}").motionClickable { onSelect(parent.book.ref.key) })

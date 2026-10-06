@@ -10,6 +10,7 @@ import cc.novelia.app.data.chapters.clearChapterFreshness
 import cc.novelia.app.data.documents.DocumentHashIndex
 import cc.novelia.app.data.documents.DocumentStorage
 import cc.novelia.app.data.library.withoutBook
+import cc.novelia.app.data.library.withoutBooks
 import cc.novelia.app.data.library.withReadingPosition
 import cc.novelia.app.data.library.withMigratedReadingHistory
 import cc.novelia.app.data.model.withStableFolderIds
@@ -188,6 +189,18 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
         }
         deleteCopy
     }
+    /** 批量书架操作只提交一次关系变更，返回因清理偏好而删除副本的书目。 */
+    suspend fun removeShelfBooks(refs: Set<BookRef>): Set<BookRef> = withContext(Dispatchers.IO) {
+        check(recoveryIssue.value == null) { "本地资料已保护，请先前往资料备份与恢复" }
+        val selected = state.value.books.filter { it.book.ref in refs }.map { it.book.ref }.toSet()
+        val copies = if(state.value.deleteLocalCopyOnShelfRemoval) selected.filter { it.isLocal }.toSet() else emptySet()
+        update { it.withoutBooks(selected) }
+        if(copies.isNotEmpty()) {
+            flush()
+            copies.forEach { removeDocument(it.id) }
+        }
+        copies
+    }
     fun rememberSearch(query: String) { if (query.isNotBlank()) update { it.copy(recentSearches = (listOf(query) + it.recentSearches.filterNot { old -> old == query }).take(20)) } }
     fun savePosition(ref: BookRef, position: Position, bookTitle: String = "") = update { it.withReadingPosition(ref, position, bookTitle) }
     fun chapterFile(ref: BookRef, chapter: String) = File(cacheDir, hashName("${ref.key}/$chapter") + ".json")
@@ -223,7 +236,10 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
         sourceIndex.record(id, stored.sourceHash)
     }
     fun findDocumentByHash(hash: String, checkCancelled: () -> Unit = {}): BookRef? = synchronized(documentLock) {
-        sourceIndex.find(hash, state.value.books.mapNotNull { it.book.ref.takeIf(BookRef::isLocal)?.id }, checkCancelled)?.let { BookRef("local", it) }
+        val retained = documentStorage.ids()
+        val available = retained.toSet()
+        val shelf = state.value.books.mapNotNull { it.book.ref.takeIf(BookRef::isLocal)?.id }.filter { it in available }
+        sourceIndex.find(hash, (shelf + retained).distinct(), checkCancelled)?.let { BookRef("local", it) }
     }
     fun documentImage(id: String, hash: String): File { require(hash.matches(Regex("[a-f0-9]{64}"))); return File(documentsDir, "${safeId(id)}-images/$hash") }
     fun documentSource(id: String, format: String): File { require(format in listOf("epub", "txt", "srt")); return File(documentsDir, "${safeId(id)}.$format") }

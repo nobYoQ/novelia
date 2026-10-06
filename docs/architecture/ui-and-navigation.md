@@ -14,7 +14,7 @@
 | `article/{id}`、`compose?article={article}&draft={draft}` | 文章详情、新建/编辑/续写草稿 |
 | `login`、`forum-login` | 小说服务登录、独立论坛登录 |
 | `forum-rules`、`forum-strikes` | 社区守则、处罚记录 |
-| `settings`、`backup`、`sync` | 设置、资料备份、原站待同步状态 |
+| `settings?section={section}`、`backup`、`sync` | 设置分类（section 可省略）、资料备份、原站待同步状态 |
 | `webdav`、`webdav-server` | WebDAV 同步、服务器配置 |
 | `updates`、`downloads`、`tools` | 更新中心、下载、文件工具 |
 | `notes`、`blocked`、`history` | 笔记、屏蔽、阅读历史 |
@@ -37,6 +37,8 @@ c.openMarkdownLink(url, baseUrl)
 根标签走 [RootNavigation.kt](../../app/src/main/java/cc/novelia/app/ui/navigation/RootNavigation.kt)：保存切走页面的状态，切回书架时显示书架列表而不恢复旧详情子栈。普通书籍、帖子跳转仍保留自己的返回历史。
 
 ## 状态和异步加载
+
+应用启动先显示 [StartupScreen](../../app/src/main/java/cc/novelia/app/startup/StartupScreen.kt)，按书库、连接配置和会话、标签、界面缓存的实际准备步骤更新状态。`NoveliaApplication.initialization` 在 IO 作用域完成这些准备，`MainActivity` 观察 `startup.progress`，完成后才装配主导航。初始化失败保留加载界面，点击重试继续；协程取消不会转成可重试错误。加载页不添加最短等待，已有进程恢复时可直接进入主界面。网络更新检查、同步和清理仍按后台任务运行。
 
 | 状态 | 放置方式 |
 | --- | --- |

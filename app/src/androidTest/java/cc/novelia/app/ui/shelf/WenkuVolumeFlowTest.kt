@@ -58,7 +58,7 @@ class WenkuVolumeFlowTest {
         assertEquals(document, app.store.document(volumeRef.id))
 
         compose.onNodeWithText("本地文件").performClick()
-        compose.onNodeWithText("我的收藏").performClick()
+        compose.onNodeWithText("我的书架").performClick()
         scrollTo(hasTestTag("shelf-volume-${volumeRef.key}"))
         compose.onNodeWithText("已读 100% · 第二章 重逢").assertIsDisplayed()
         runBlocking { app.store.flush() }

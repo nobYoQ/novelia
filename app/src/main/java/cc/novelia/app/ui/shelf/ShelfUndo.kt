@@ -1,6 +1,6 @@
 package cc.novelia.app.ui.shelf
 
-import cc.novelia.app.data.library.withoutBook
+import cc.novelia.app.data.library.withoutBooks
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.SavedBook
@@ -10,10 +10,15 @@ import cc.novelia.app.data.model.SavedBook
  * 不恢复整份书库快照；若父书目已被另行移除，恢复分卷时解绑，并清除失效的顺序引用。
  */
 internal fun restoreRemovedShelfBook(current: LibraryState, before: List<SavedBook>, ref: BookRef): LibraryState {
-    if(current.books.any { it.book.ref == ref }) return current
-    val removed = before.firstOrNull { it.book.ref == ref } ?: return current
+    return restoreRemovedShelfBooks(current, before, setOf(ref))
+}
+
+internal fun restoreRemovedShelfBooks(current: LibraryState, before: List<SavedBook>, refs: Set<BookRef>): LibraryState {
+    val existing = current.books.map { it.book.ref }.toSet()
+    val removed = before.filter { it.book.ref in refs && it.book.ref !in existing }
+    if(removed.isEmpty()) return current
     val oldByKey = before.associateBy { it.book.ref.key }
-    val afterByKey = LibraryState(books = before).withoutBook(ref).books.associateBy { it.book.ref.key }
+    val afterByKey = LibraryState(books = before).withoutBooks(refs).books.associateBy { it.book.ref.key }
     val books = current.books.map { saved ->
         val old = oldByKey[saved.book.ref.key]
         val after = afterByKey[saved.book.ref.key]

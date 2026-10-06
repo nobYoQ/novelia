@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Block
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.automirrored.outlined.Undo
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -46,22 +47,23 @@ import coil.decode.DataSource
     AppChipFlowRow(Modifier.padding(horizontal = 20.dp, vertical = 10.dp)) {
         tags.filter(String::isNotBlank).distinct().forEach { tag ->
             val entry = lookup[tag] ?: KeywordEntry(tag)
+            var menu by remember(tag) { mutableStateOf(false) }
             AppSelectionChip(false, onClick = {
                 c.app.keywords.markUsed(listOf(tag))
                 val expression = if(KeywordCatalog.canSearch(tag)) "$tag$" else tag
                 c.go("discover?query=${android.net.Uri.encode(expression)}")
             }, label = { Text(entry.label) }, trailingIcon = {
-                Row {
-                    IconButton(onClick = { editing = entry }, modifier = Modifier.size(48.dp)) { Icon(Icons.Outlined.Edit, "编辑标签翻译 $tag", Modifier.size(16.dp)) }
+                Box {
+                    IconButton(onClick = { menu = true }, modifier = Modifier.size(48.dp)) { Icon(Icons.Outlined.MoreVert, "更多标签操作 $tag", Modifier.size(18.dp)) }
                     val blocked = tag in library.blockedTags
-                    IconButton(onClick = {
-                        val original = tag
-                        c.store.update { it.copy(blockedTags = if(blocked) it.blockedTags - original else it.blockedTags + original) }
-                        c.message(if(blocked) "已取消屏蔽标签 ${entry.label}" else "已屏蔽标签 ${entry.label}")
-                    }, modifier = Modifier.size(48.dp)) {
-                        Icon(if(blocked) Icons.AutoMirrored.Outlined.Undo else Icons.Outlined.Block,
-                            if(blocked) "取消屏蔽标签 $tag" else "屏蔽标签 $tag", Modifier.size(16.dp),
-                            tint = if(blocked) MaterialTheme.colorScheme.primary else LocalContentColor.current)
+                    DropdownMenu(menu, onDismissRequest = { menu = false }) {
+                        DropdownMenuItem(text = { Text("编辑标签翻译") }, onClick = { menu = false; editing = entry },
+                            leadingIcon = { Icon(Icons.Outlined.Edit, null) })
+                        DropdownMenuItem(text = { Text(if(blocked) "取消屏蔽标签" else "屏蔽标签") }, onClick = {
+                            c.store.update { current -> current.copy(blockedTags = if(tag in current.blockedTags) current.blockedTags - tag else current.blockedTags + tag) }
+                            menu = false
+                            c.message(if(blocked) "已取消屏蔽标签 ${entry.label}" else "已屏蔽标签 ${entry.label}")
+                        }, leadingIcon = { Icon(if(blocked) Icons.AutoMirrored.Outlined.Undo else Icons.Outlined.Block, null) })
                     }
                 }
             })

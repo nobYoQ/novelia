@@ -47,7 +47,7 @@ class ShelfFilterLayoutTest {
                             Column {
                                 Text("书架", Modifier.padding(20.dp), style = MaterialTheme.typography.headlineLarge)
                                 PrimaryTabRow(if(files) 1 else 0) {
-                                    listOf("我的收藏", "本地文件", "云端收藏").forEachIndexed { index, title ->
+                                    listOf("我的书架", "本地文件", "云端收藏").forEachIndexed { index, title ->
                                         Tab((if(files) 1 else 0) == index, { files = index == 1; type = ShelfBookType.All; expanded = false }, text = { Text(title) })
                                     }
                                 }

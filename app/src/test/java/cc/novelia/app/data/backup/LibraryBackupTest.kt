@@ -10,6 +10,7 @@ import cc.novelia.app.data.model.Note
 import cc.novelia.app.data.model.PendingAction
 import cc.novelia.app.data.model.Position
 import cc.novelia.app.data.model.ReaderSettings
+import cc.novelia.app.data.model.ReaderCustomColors
 import cc.novelia.app.data.model.ReadingHistoryEntry
 import cc.novelia.app.data.model.SavedBook
 import cc.novelia.app.data.storage.appJson
@@ -40,6 +41,20 @@ class LibraryBackupTest {
     private fun fails(block: () -> Unit) {
         try { block(); fail("expected backup validation failure") }
         catch (expected: IllegalArgumentException) { /* 拒绝恢复时不改动当前书库。 */ }
+    }
+
+    @Test fun customPaletteRestoresForGlobalAndPerBookButOutOfRangeRgbIsRejected() {
+        val root = temp()
+        try {
+            for(color in listOf(0L, 0xFFFFFFL, -1L, 0x1000000L)) for(perBook in listOf(false, true)) {
+                val settings = ReaderSettings(theme = "custom", customColors = ReaderCustomColors(text = color))
+                val state = if(perBook) LibraryState(bookSettings = mapOf("syosetu/n1" to settings)) else LibraryState(reader = settings)
+                val bytes = archive(mapOf("manifest.json" to appJson.encodeToString(manifest(state)).toByteArray(Charsets.UTF_8)))
+                val stage = File(root, "color-$color-$perBook").apply { mkdirs() }
+                if(color in 0L..0xFFFFFFL) assertEquals(state, LibraryBackupArchive.extract(ByteArrayInputStream(bytes), stage).library)
+                else fails { LibraryBackupArchive.extract(ByteArrayInputStream(bytes), stage) }
+            }
+        } finally { root.deleteRecursively() }
     }
 
     @Test fun oldForumFavoritesAreIgnoredWhenRestoringABackupButDraftsAndBooksRemain() {

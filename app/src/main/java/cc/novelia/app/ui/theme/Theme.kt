@@ -14,6 +14,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
+import cc.novelia.app.data.model.ReaderSettings
 
 internal fun android.content.Context.activityOrNull(): android.app.Activity? {
     var current = this
@@ -45,6 +46,11 @@ private val DarkColors = darkColorScheme(
 
 /** 正文阅读配色独立于偏好设置和其他弹层使用的应用主题。 */
 internal data class ReaderColors(val background: Color, val foreground: Color, val toolbar: Color)
+
+internal fun readerColors(settings: ReaderSettings, appColors: ColorScheme): ReaderColors =
+    if(settings.resolvedTheme == "custom") settings.resolvedCustomColors.let {
+        ReaderColors(Color(0xFF000000L or it.background), Color(0xFF000000L or it.text), Color(0xFF000000L or it.toolbar))
+    } else readerColors(settings.resolvedTheme, appColors)
 
 internal fun readerColors(theme: String, appColors: ColorScheme): ReaderColors = when(theme) {
     "paper" -> ReaderColors(Color(0xFFF4ECD8), Color(0xFF282E27), Color(0xFFDED2B8))

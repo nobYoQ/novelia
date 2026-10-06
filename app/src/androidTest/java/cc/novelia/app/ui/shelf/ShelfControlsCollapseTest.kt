@@ -78,7 +78,7 @@ class ShelfControlsCollapseTest {
             compose.onNodeWithText("全部文件").assertIsSelected()
             compose.onNodeWithTag("shelf-books").performTouchInput { swipeUp() }
             compose.onNodeWithTag("local-novel-kind").assertIsDisplayed()
-            compose.onNodeWithText("我的收藏").performClick()
+            compose.onNodeWithText("我的书架").performClick()
             compose.onNodeWithTag("local-controls-expand").assertIsDisplayed()
             compose.onNodeWithText("本地文件").performClick()
             compose.onNodeWithTag("local-controls-collapse").assertIsDisplayed()
@@ -137,7 +137,7 @@ class ShelfControlsCollapseTest {
                             Column {
                                 Text("书架", Modifier.padding(20.dp), style = MaterialTheme.typography.headlineLarge)
                                 PrimaryTabRow(2) {
-                                    listOf("我的收藏", "本地文件", "云端收藏").forEachIndexed { index, title ->
+                                    listOf("我的书架", "本地文件", "云端收藏").forEachIndexed { index, title ->
                                         Tab(index == 2, {}, text = { Text(title) })
                                     }
                                 }

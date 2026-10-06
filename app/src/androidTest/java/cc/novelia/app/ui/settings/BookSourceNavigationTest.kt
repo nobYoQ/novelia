@@ -22,6 +22,7 @@ class BookSourceNavigationTest {
             compose.waitUntil(15_000) { compose.onAllNodesWithText("我的").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithText("我的").performClick()
             compose.onNodeWithText("设置", useUnmergedTree = true).performScrollTo().performClick()
+            compose.onNodeWithText("网络与同步").performScrollTo().performClick()
             compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText("书源线路"))
             compose.onNodeWithText("书源线路").performClick()
             compose.waitForIdle()

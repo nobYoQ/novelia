@@ -45,7 +45,7 @@ class AppFlowTest {
         screenshot("shelf-selection")
         compose.onNodeWithTag("local-batch-manage").performClick()
         compose.onNodeWithText("全选").assertDoesNotExist()
-        compose.onNodeWithText("我的收藏").performClick()
+        compose.onNodeWithText("我的书架").performClick()
         compose.onNodeWithText("本地文件").performClick()
         compose.onNodeWithText("风与书页").performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithText("第一章 出发").fetchSemanticsNodes().isNotEmpty() }

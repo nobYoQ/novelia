@@ -1,6 +1,10 @@
 package cc.novelia.app.ui.book
 
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.material3.Surface
+import androidx.compose.ui.Modifier
 import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -10,6 +14,7 @@ import cc.novelia.app.NoveliaApplication
 import cc.novelia.app.ui.components.TagList
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.theme.NoveliaTheme
+import cc.novelia.app.ui.saveTestScreenshot
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Rule
@@ -30,12 +35,17 @@ class BookTagBlockTest {
                     val nav = rememberNavController()
                     val scope = rememberCoroutineScope()
                     val c = remember { AppController(app, nav, scope, SnackbarHostState()) }
-                    TagList(listOf(tag), c)
+                    Surface(Modifier.fillMaxSize().safeDrawingPadding()) { TagList(listOf(tag), c) }
                 }
             }
-            compose.onNodeWithContentDescription("屏蔽标签 $tag").performClick()
+            compose.onNodeWithText("屏蔽标签").assertDoesNotExist()
+            compose.onNodeWithContentDescription("更多标签操作 $tag").performClick()
+            compose.onNodeWithText("编辑标签翻译").assertIsDisplayed()
+            saveTestScreenshot("problem-tag-options.png")
+            compose.onNodeWithText("屏蔽标签").performClick()
             compose.runOnIdle { assertEquals(setOf("已有屏蔽", tag), app.store.state.value.blockedTags) }
-            compose.onNodeWithContentDescription("取消屏蔽标签 $tag").assertIsDisplayed().performClick()
+            compose.onNodeWithContentDescription("更多标签操作 $tag").performClick()
+            compose.onNodeWithText("取消屏蔽标签").assertIsDisplayed().performClick()
             compose.runOnIdle { assertEquals(setOf("已有屏蔽"), app.store.state.value.blockedTags) }
         } finally { app.store.update { before }; runBlocking { app.store.flush() } }
     }

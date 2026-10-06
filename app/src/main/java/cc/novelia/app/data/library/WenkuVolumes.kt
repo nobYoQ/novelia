@@ -35,9 +35,15 @@ fun LibraryState.withVolumeParent(volumeKey: String, parentKey: String?): Librar
     return withWenkuVolumes(parentKey, siblings + volumeKey)
 }
 
-fun LibraryState.withoutBook(ref: BookRef): LibraryState = copy(books = books.filterNot { it.book.ref == ref }.map {
-    if(it.parentWenkuKey == ref.key) it.copy(parentWenkuKey = null, folder = books.firstOrNull { saved -> saved.book.ref == ref }?.folder ?: it.folder) else it
-}).pruneVolumeOrders()
+fun LibraryState.withoutBook(ref: BookRef): LibraryState = withoutBooks(setOf(ref))
+
+/** 一次移出所选书目，未选中的分卷解除挂载，阅读资料仍保留。 */
+fun LibraryState.withoutBooks(refs: Set<BookRef>): LibraryState {
+    val removed = books.filter { it.book.ref in refs }.associateBy { it.book.ref.key }
+    return copy(books = books.filterNot { it.book.ref in refs }.map { saved ->
+        removed[saved.parentWenkuKey]?.let { parent -> saved.copy(parentWenkuKey = null, folder = parent.folder) } ?: saved
+    }).pruneVolumeOrders()
+}
 
 fun LibraryState.moveShelfBooks(keys: Set<String>, folder: String): LibraryState = copy(books = books.map { saved ->
     if(saved.book.ref.key in keys) saved.copy(folder = folder, parentWenkuKey = saved.parentWenkuKey?.takeIf { it in keys }) else saved

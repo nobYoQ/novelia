@@ -42,7 +42,7 @@ object WebDavProjection {
     private const val BLOCKED = "@blocked/"
     private val portableReaderFields = setOf("mode", "engines", "parallel", "fontSize", "lineHeight", "weight", "width",
         "indent", "theme", "secondaryAlpha", "underline", "speechRate", "speechMinutes", "traditional", "speechLanguage",
-        "toolbarTransparency", "paragraphSpacing", "showScrollPageButtons", "showProgressBar", "speechContinueChapters")
+        "toolbarTransparency", "paragraphSpacing", "showScrollPageButtons", "showProgressBar", "speechContinueChapters", "customColors")
     private val deviceReaderFields = setOf("keepScreenOn", "volumeKeys", "paged", "eInkMode", "monochrome", "scrollPageTurn",
         "horizontalPageTurn", "brightness", "paginationMode", "showPageButtons", "beforeEInk", "eInkPreferences", "prefetchChapters",
         "prefetchWifiOnly", "speechNetworkContinuation", "showEInkScreenButtons", "hideStatusBar", "tapPageTurn")
@@ -460,7 +460,7 @@ object WebDavProjection {
         } }
         WebDavMerge.materialize(document).forEach { (key, value) ->
             val required = when (document.domain) {
-                SyncDomain.SETTINGS -> if (key == GLOBAL) portableGlobalFields else if (key.startsWith(BLOCKED)) setOf("kind", "value") else portableReaderFields
+                SyncDomain.SETTINGS -> if (key == GLOBAL) portableGlobalFields else if (key.startsWith(BLOCKED)) setOf("kind", "value") else portableReaderFields - "customColors"
                 SyncDomain.FAVORITES -> if (key == ORDER) setOf("ids") else if (key.startsWith(FOLDER)) setOf("name") else setOf("book", "folderId", "pinned", "status", "addedAt")
                 SyncDomain.KEYWORDS -> if (key == ORDER) setOf("ids") else if (key.startsWith(CATEGORY)) setOf("name") else setOf("original", "translation", "categoryId", "common", "translationEdited", "categoryEdited")
                 SyncDomain.PROGRESS -> setOf("position")
@@ -468,7 +468,8 @@ object WebDavProjection {
                 SyncDomain.NOTES -> annotationFields + "text"
                 SyncDomain.HISTORY -> historyFields
             }
-            val optional = if (document.domain == SyncDomain.SETTINGS && (key == READER || key.startsWith(BOOK_SETTING))) setOf("devicePreferences") else emptySet()
+            // 老版同步快照没有配色组，保留本机配色；新快照的配色组仍作为原子字段校验。
+            val optional = if (document.domain == SyncDomain.SETTINGS && (key == READER || key.startsWith(BOOK_SETTING))) setOf("devicePreferences", "customColors") else emptySet()
             require(value.keys.containsAll(required) && value.keys.all { it in required || it in optional }) { "同步记录字段不完整，请恢复有效的远端数据" }
         }
     }
@@ -483,7 +484,11 @@ object WebDavProjection {
         when (field) {
             "mode" -> enumText(value, setOf("zh", "jp", "zh-jp", "jp-zh"))
             "engines" -> arrayStrings(value).also { require(it.size == 3 && it.toSet() == setOf("sakura", "gpt", "youdao")) { "译源列表无效" } }
-            "theme" -> enumText(value, setOf("system", "paper", "light", "dark", "monochrome"))
+            "theme" -> enumText(value, ReaderSettings.THEMES.toSet())
+            "customColors" -> {
+                require(value is JsonObject && value.keys == setOf("text", "background", "toolbar")) { "阅读配色组不完整" }
+                value.values.forEach { color -> require(color is JsonPrimitive && !color.isString && color.longOrNull in 0L..0xFFFFFFL) { "阅读颜色必须是有效 RGB 值" } }
+            }
             "fontSize" -> number(value, 14.0, 32.0)
             "lineHeight" -> number(value, ReaderSettings.MIN_LINE_HEIGHT.toDouble(), 2.6)
             "width" -> number(value, 300.0, 900.0)

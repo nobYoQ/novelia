@@ -2,6 +2,13 @@ package cc.novelia.app.data.model
 
 import kotlinx.serialization.Serializable
 
+/** 不透明 RGB 配色作为一组保存和同步，避免混用不同设备的文字与背景颜色。 */
+@Serializable data class ReaderCustomColors(
+    val text: Long = 0x282E27, val background: Long = 0xF4ECD8, val toolbar: Long = 0xDED2B8
+) {
+    val valid get() = listOf(text, background, toolbar).all { it in 0L..0xFFFFFFL }
+}
+
 /** 保存墨水屏预设会改变的设置，分别记住开关两侧的选择。 */
 @Serializable data class ReaderPagingState(
     val paginationMode: String = "scroll", val scrollPageTurn: Boolean = false,
@@ -37,17 +44,20 @@ import kotlinx.serialization.Serializable
     val showEInkScreenButtons: Boolean = true,
     val hideStatusBar: Boolean = false,
     // 点击区域独立于滑动手势和电子纸预设，旧设置保持整页点击工具栏的行为。
-    val tapPageTurn: Boolean = false
+    val tapPageTurn: Boolean = false,
+    val customColors: ReaderCustomColors = ReaderCustomColors()
 ) {
     companion object {
         const val MIN_LINE_HEIGHT = .5f
         val LINE_HEIGHT_RANGE = MIN_LINE_HEIGHT..2.6f
+        val THEMES = listOf("system", "paper", "light", "dark", "monochrome", "custom")
     }
 
     val resolvedParagraphSpacing get() = if(paragraphSpacing.isFinite()) paragraphSpacing.coerceIn(0f, 32f) else 8f
     val resolvedToolbarTransparency get() = if(toolbarTransparency.isFinite()) toolbarTransparency.coerceIn(0f, 1f) else .25f
     // 兼容黑白模式尚未成为主题选项之前保存的设置。
     val resolvedTheme get() = if(monochrome) "monochrome" else theme
+    val resolvedCustomColors get() = customColors.takeIf { it.valid } ?: ReaderCustomColors()
     fun withTheme(selected: String) = copy(theme = selected, monochrome = false)
     val staticPagination get() = paginationMode == "auto"
     fun withPaginationMode(selected: String): ReaderSettings {

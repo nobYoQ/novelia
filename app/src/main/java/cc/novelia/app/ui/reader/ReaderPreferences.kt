@@ -80,8 +80,9 @@ import kotlin.math.roundToInt
                             modifier = Modifier.testTag("reader-line-height"), defaultValue = defaults?.lineHeight, livePreviewStep = if(livePreview) .05f else null) { onChange(value.copy(lineHeight = it)) }
                         ReaderSlider("段距 ${value.resolvedParagraphSpacing.roundToInt()} dp", value.resolvedParagraphSpacing, 0f..32f,
                             modifier = Modifier.testTag("reader-paragraph-spacing"), defaultValue = defaults?.resolvedParagraphSpacing, livePreviewStep = if(livePreview) 1f else null) { onChange(value.copy(paragraphSpacing = it)) }
-                        ChoiceRow("阅读主题", listOf("跟随应用", "纸张", "浅色", "深色", "黑白"), listOf("system", "paper", "light", "dark", "monochrome").indexOf(value.resolvedTheme),
-                            defaultSelected = defaults?.let { listOf("system", "paper", "light", "dark", "monochrome").indexOf(it.resolvedTheme) }) { onChange(value.withTheme(listOf("system", "paper", "light", "dark", "monochrome")[it])) }
+                        ChoiceRow("阅读主题", listOf("跟随应用", "纸张", "浅色", "深色", "黑白", "自定义"), ReaderSettings.THEMES.indexOf(value.resolvedTheme),
+                            defaultSelected = defaults?.let { ReaderSettings.THEMES.indexOf(it.resolvedTheme) }) { onChange(value.withTheme(ReaderSettings.THEMES[it])) }
+                        if(value.resolvedTheme == "custom") ReaderThemeEditor(value, defaults, onChange)
                         TogglePreference("跟随系统亮度", "关闭后可单独调整", value.brightness < 0, defaultValue = defaults?.let { it.brightness < 0 }) { onChange(value.copy(brightness = if(it) -1f else defaults?.brightness?.takeIf { brightness -> brightness >= 0 } ?: .5f)) }
                         AnimatedVisibility(value.brightness >= 0,
                             enter = if(reducedMotion) EnterTransition.None else fadeIn(tween(AppMotion.Quick)) + expandVertically(tween(AppMotion.Standard), expandFrom = Alignment.Top),

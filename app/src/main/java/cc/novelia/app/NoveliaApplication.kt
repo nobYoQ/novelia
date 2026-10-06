@@ -32,6 +32,7 @@ import cc.novelia.app.data.updates.UpdateWorker
 import cc.novelia.app.launcher.LauncherIconManager
 import coil.ImageLoader
 import coil.ImageLoaderFactory
+import coil.imageLoader
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import java.io.File
@@ -48,6 +49,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
+import cc.novelia.app.startup.StartupLoader
+import cc.novelia.app.startup.StartupStep
 
 /**
  * 应用级服务的装配入口，书库、会话、API 和图片加载器在各页面之间复用。
@@ -84,7 +87,15 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
         NoveliaApi(null, "https://forum.novelia.cc/", forumTransport),
         NoveliaApi(null, ForumCommunityRulesRepository.SOURCE_BASE, forumTransport)
     ) }
-    val initialization by lazy { applicationScope.async { store; session; Unit } }
+    internal val startup = StartupLoader()
+    val initialization by lazy { applicationScope.async {
+        startup.load(listOf(
+            StartupStep.LIBRARY to { store; Unit },
+            StartupStep.CONNECTION to { webDavConfig; bookSources; session; forumSession; Unit },
+            StartupStep.KEYWORDS to { keywords.observe(store.state.value.books.flatMap { it.book.tags }); Unit },
+            StartupStep.INTERFACE to { api; forumApi; novelCommentApi; imageLoader.diskCache; Unit }
+        ))
+    } }
     internal val launcherIcons by lazy { LauncherIconManager(this) }
 
     override fun onCreate() {
@@ -152,12 +163,6 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
                         }
                     }
             }
-        }
-        applicationScope.launch {
-            initialization.await()
-            // 首帧无需加载和合并标签翻译目录，延后处理以减轻启动负担。
-            delay(500)
-            keywords.observe(store.state.value.books.flatMap { it.book.tags })
         }
         applicationScope.launch {
             initialization.await()

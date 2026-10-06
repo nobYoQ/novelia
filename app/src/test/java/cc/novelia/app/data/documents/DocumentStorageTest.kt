@@ -16,6 +16,18 @@ class DocumentStorageTest {
         LocalChapter("chapter/1", "第一章", listOf("正文甲")),
         LocalChapter("chapter/2", "第二章", listOf("正文乙"))), sourceHash = "source")
 
+    @Test fun retainedDocumentIdsExcludeIndexesAndUncommittedFilesWithoutReadingBodies() {
+        val directory = Files.createTempDirectory("retained-documents").toFile()
+        try {
+            listOf("book.json", "book.json.bak", "retained.json.bak", "source-index.json", "source-index.json.bak",
+                "unfinished.json.new", "bad_id.json", "source.txt").forEach { File(directory, it).writeText("{}", Charsets.UTF_8) }
+            File(directory, "nested-chapters").mkdirs()
+            File(directory, "nested-chapters/chapter.json").writeText("{}", Charsets.UTF_8)
+            val storage = DocumentStorage(directory, { error("Enumeration must not read document contents") }, { _, _ -> error("Must not write") })
+            assertEquals(listOf("book", "retained"), storage.ids())
+        } finally { directory.deleteRecursively() }
+    }
+
     @Test fun bilingualMetadataStaysInChapterFilesAndAnInterruptedUpgradeKeepsTheOldChapter() {
         val directory = Files.createTempDirectory("bilingual-documents").toFile()
         try {

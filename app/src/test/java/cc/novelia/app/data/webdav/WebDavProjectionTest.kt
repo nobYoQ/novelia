@@ -13,6 +13,29 @@ class WebDavProjectionTest {
     private val local = BookRef("local", "file1")
     private fun documents(state: LibraryState) = SyncReplica(deviceId = "a").track(emptyMap(), WebDavProjection.library(state)).bind("dataset").documents
 
+    @Test fun customColorsSyncAsOneGroupAndLegacyRecordsRemainValid() {
+        val colors = ReaderCustomColors(0xFFFFFF, 0x141A16, 0x050A07)
+        val remote = LibraryState(reader = ReaderSettings(theme = "custom", customColors = colors),
+            bookSettings = mapOf(web.key to ReaderSettings(theme = "custom", customColors = colors.copy(text = 0xDDE5DC))))
+        val docs = documents(remote)
+        WebDavProjection.validateRecords(docs.getValue(SyncDomain.SETTINGS))
+        val result = WebDavProjection.applyLibrary(LibraryState(), docs, setOf(SyncDomain.SETTINGS))
+        assertEquals(colors, result.reader.customColors)
+        assertEquals("custom", result.reader.theme)
+        assertEquals(remote.bookSettings[web.key]?.customColors, result.bookSettings[web.key]?.customColors)
+        val legacy = docs.getValue(SyncDomain.SETTINGS).let { document -> document.copy(records = document.records.mapValues { (_, record) ->
+            record.copy(fields = record.fields - "customColors")
+        }) }
+        WebDavProjection.validateRecords(legacy)
+        val local = LibraryState(reader = ReaderSettings(customColors = colors))
+        assertEquals(colors, WebDavProjection.applyLibrary(local, mapOf(SyncDomain.SETTINGS to legacy), setOf(SyncDomain.SETTINGS)).reader.customColors)
+        val group = WebDavProjection.library(remote).getValue(SyncDomain.SETTINGS).getValue("@reader").getValue("customColors") as JsonObject
+        WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "customColors", group)
+        assertThrows(IllegalArgumentException::class.java) { WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "customColors", JsonObject(group - "text")) }
+        assertThrows(IllegalArgumentException::class.java) { WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "customColors", JsonObject(group + ("text" to JsonPrimitive(-1)))) }
+        assertThrows(IllegalArgumentException::class.java) { WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "customColors", JsonObject(group + ("text" to JsonPrimitive("112233")))) }
+    }
+
     @Test fun everyLocalFileAssociationIsExcludedAndPreservedOnImport() {
         val localBook = SavedBook(BookCard(local, "导入书", cover = "file:///cover"), parentWenkuKey = "wenku/parent", volumeOrder = listOf(local.key))
         val state = LibraryState(books = listOf(localBook, SavedBook(BookCard(web, "网络书", favored = "account-folder", cloudReading = CloudReadingProgress("账号")),

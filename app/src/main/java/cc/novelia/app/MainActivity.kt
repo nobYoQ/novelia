@@ -74,6 +74,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.delay
+import cc.novelia.app.startup.StartupScreen
 
 private data class AppAppearance(val theme: String, val reducedMotion: Boolean, val eInk: Boolean, val eInkBooks: Set<String>,
     val screenButtons: Boolean, val hideStatusBar: Boolean, val bookStatusBars: Map<String, Boolean>)
@@ -96,10 +97,11 @@ class MainActivity : ComponentActivity() {
         else incoming.value = savedInstanceState.getString("novelia.pendingLink")
         setContent {
             val app = application as NoveliaApplication
-            val initialized by produceState(false, app) { app.initialization.await(); value = true }
+            val startup by app.startup.progress.collectAsStateWithLifecycle()
+            val initialized = startup.ready
             ReportDrawnWhen { initialized }
             if (!initialized) {
-                NoveliaTheme("system") { Surface(Modifier.fillMaxSize()) { Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) { Text("正在打开书库…") } } }
+                NoveliaTheme("system") { StartupScreen(startup, app.startup::retry) }
                 return@setContent
             }
             // 将完整书库投影成外观状态，阅读进度等频繁更新不会使整个导航容器随之刷新。
@@ -201,7 +203,7 @@ class MainActivity : ComponentActivity() {
                                 composable("forum-login") { LoginScreen(controller, forum = true) }
                                 composable("forum-strikes") { ForumStrikesScreen(controller) }
                                 composable("forum-rules") { ForumRulesScreen(controller) }
-                                composable("settings") { SettingsScreen(controller) }
+                                composable("settings?section={section}") { entry -> SettingsScreen(controller, entry.arguments?.getString("section")) }
                                 composable("backup") { LibraryBackupScreen(controller) }
                                 composable("keywords") { KeywordLibraryScreen(controller) }
                                 composable("sync") { CloudSyncScreen(controller) }
