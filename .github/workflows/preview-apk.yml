@@ -42,7 +42,7 @@ jobs:
       - name: Set up Android SDK and NDK
         uses: android-actions/setup-android@v4
         with:
-          packages: platform-tools platforms;36 build-tools;35.0.0 ndk;${{ steps.toolchain.outputs.ndk-version }}
+          packages: platform-tools platforms;android-36 build-tools;35.0.0 ndk;${{ steps.toolchain.outputs.ndk-version }}
 
       - name: Set up pinned Go
         uses: actions/setup-go@v7
