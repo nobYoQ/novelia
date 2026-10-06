@@ -31,6 +31,16 @@ benchmark 模块最低 API 28。`ReadingBenchmark` 使用 `CompilationMode.Parti
 
 任务由当前插件和变体配置产生；变更构建配置后用 `:benchmark:tasks --all` 确认。保留报告和 trace，不根据一次模拟器运行宣称真机加速。
 
+## 大标签库回归
+
+[KeywordPerformanceRegressionTest](../../app/src/test/java/cc/novelia/app/KeywordPerformanceRegressionTest.kt) 使用 1,000、20,000 和 50,000 条合成标签验证增量同步与整库参考算法一致、未变记录复用、仅使用时间变化不产生同步版本，以及流式读写保留用户编辑和同步身份。它也验证收集合并、失败重试和显式保存排空队列；不使用机器相关的耗时阈值作为正确性断言。
+
+```powershell
+./build.ps1 -Offline -Tasks @(':app:testDebugUnitTest', '--tests', 'cc.novelia.app.Keyword*Test', '--tests', 'cc.novelia.app.data.webdav.*')
+```
+
+性能复测还应分别记录启动解码/校验、整页新增标签、重复访问已知标签、译名索引和磁盘保存，并覆盖开启与关闭 WebDAV 的连续搜索翻页。累计分配量不等于峰值或常驻堆内存，JVM 算法数据也不能代替目标手机 Release 包的启动和帧时间。
+
 ## 正确解读数字
 
 前后对比使用同一设备、API、ABI、字体缩放、视口、供电/温度、数据、构建类型和编译模式，记录提交及是否带 Profile。比较多次分布，不只选最快结果。

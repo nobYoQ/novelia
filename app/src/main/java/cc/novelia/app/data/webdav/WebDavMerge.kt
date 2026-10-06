@@ -167,7 +167,7 @@ object WebDavMerge {
                     require(candidate.version.all { (device, tick) -> (document.context[device] ?: 0) >= tick }) { "同步因果上下文缺失" }
                     require(!candidate.deleted || candidate.value == JsonNull) { "删除标记不能附带数据" }
                     if (existence) require(candidate.deleted || candidate.value == JsonPrimitive(true)) { "同步记录存在性无效" }
-                    else if (!candidate.deleted) WebDavProjection.validateField(document.domain, key, field, candidate.value)
+                    else if (!candidate.deleted) WebDavProjection.validateFieldValue(document.domain, key, field, candidate.value)
                 }
             }
             cell(record.existence, true, EXISTENCE)

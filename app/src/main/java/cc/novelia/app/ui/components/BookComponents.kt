@@ -42,14 +42,15 @@ import coil.decode.DataSource
     val library by c.store.state.collectAsStateWithLifecycle()
     val entries by c.app.keywords.state.collectAsStateWithLifecycle()
     val persistenceError by c.app.keywords.persistenceError.collectAsStateWithLifecycle()
-    val lookup = remember(entries) { entries.entries.associateBy { it.original } }
+    val keywordIndex by c.app.keywords.displayIndex.collectAsStateWithLifecycle()
+    val lookup = keywordIndex.entries
     var editing by remember { mutableStateOf<KeywordEntry?>(null) }
     AppChipFlowRow(Modifier.padding(horizontal = 20.dp, vertical = 10.dp)) {
         tags.filter(String::isNotBlank).distinct().forEach { tag ->
             val entry = lookup[tag] ?: KeywordEntry(tag)
             var menu by remember(tag) { mutableStateOf(false) }
             AppSelectionChip(false, onClick = {
-                c.app.keywords.markUsed(listOf(tag))
+                c.app.keywords.enqueueUsed(listOf(tag))
                 val expression = if(KeywordCatalog.canSearch(tag)) "$tag$" else tag
                 c.go("discover?query=${android.net.Uri.encode(expression)}")
             }, label = { Text(entry.label) }, trailingIcon = {

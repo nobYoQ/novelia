@@ -12,6 +12,17 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class KeywordObservationTest {
+    @Test fun aResultPageSubmitsOneDeduplicatedBatch() {
+        val batches = mutableListOf<List<String>>()
+        val api = NoveliaApi(null, onKeywords = { batches += it.toList() })
+        api.observeKeywords(Page(1, (0 until 20).map {
+            WebOutline(providerId = "syosetu", novelId = "n$it", keywords = listOf("共通", "标签$it"))
+        }))
+        assertEquals(1, batches.size)
+        assertEquals(21, batches.single().size)
+        assertEquals("共通", batches.single().first())
+    }
+
     @Test fun normalAndCloudListsLearnKeywordsWithoutAnyAdditionalRequest() = runBlocking {
         MockWebServer().use { server ->
             val observed = mutableListOf<String>()

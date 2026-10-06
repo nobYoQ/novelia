@@ -40,6 +40,9 @@ object WebDavProjection {
     private const val GLOBAL = "@global"
     private const val READER = "@reader"
     private const val BLOCKED = "@blocked/"
+    private val keywordEntryFields = setOf("original", "translation", "categoryId", "common", "translationEdited", "categoryEdited")
+    private val categoryFields = setOf("name")
+    private val orderFields = setOf("ids")
     private val portableReaderFields = setOf("mode", "engines", "parallel", "fontSize", "lineHeight", "weight", "width",
         "indent", "theme", "secondaryAlpha", "underline", "speechRate", "speechMinutes", "traditional", "speechLanguage",
         "toolbarTransparency", "paragraphSpacing", "showScrollPageButtons", "showProgressBar", "speechContinueChapters", "customColors")
@@ -148,6 +151,56 @@ object WebDavProjection {
                 "categoryEdited" to JsonPrimitive(entry.categoryEdited)).asObject()) }
         }
         return mapOf(SyncDomain.KEYWORDS to records)
+    }
+
+    /** 仅投影新增、删除或同步字段改变的标签；使用时间变化不产生同步工作。 */
+    fun trackKeywords(previous: KeywordLibrary, current: KeywordLibrary): SyncReplica {
+        val before = linkedMapOf<String, JsonObject>()
+        val after = linkedMapOf<String, JsonObject>()
+        fun ids(library: KeywordLibrary) = library.categories.associateWith {
+            library.categoryIds[it] ?: KeywordLibrary.legacyCategoryId(it)
+        }
+        val oldIds = ids(previous)
+        val newIds = ids(current)
+        fun categories(index: Map<String, String>) = buildMap {
+            index.forEach { (name, id) -> put(CATEGORY + id, mapOf("name" to JsonPrimitive(name)).asObject()) }
+            put(ORDER, mapOf("ids" to strings(index.values.toList())).asObject())
+        }
+        val oldCategories = categories(oldIds)
+        val newCategories = categories(newIds)
+        (oldCategories.keys + newCategories.keys).forEach { key ->
+            if(oldCategories[key] != newCategories[key]) {
+                oldCategories[key]?.let { before[key] = it }
+                newCategories[key]?.let { after[key] = it }
+            }
+        }
+        fun categoryId(entry: KeywordEntry, index: Map<String, String>) = index[entry.category]
+            ?: KeywordLibrary.legacyCategoryId(KeywordLibrary.OTHER)
+        fun fields(entry: KeywordEntry, index: Map<String, String>) = mapOf(
+            "original" to JsonPrimitive(entry.original), "translation" to JsonPrimitive(entry.translation),
+            "categoryId" to JsonPrimitive(categoryId(entry, index)), "common" to JsonPrimitive(entry.common),
+            "translationEdited" to JsonPrimitive(entry.translationEdited), "categoryEdited" to JsonPrimitive(entry.categoryEdited),
+        ).asObject()
+        if(previous.entries !== current.entries || oldIds != newIds) {
+            val remaining = previous.entries.associateByTo(LinkedHashMap()) { it.original }
+            current.entries.forEach { entry ->
+                val old = remaining.remove(entry.original)
+                val same = old != null && old.translation == entry.translation && old.common == entry.common &&
+                    old.translationEdited == entry.translationEdited && old.categoryEdited == entry.categoryEdited &&
+                    categoryId(old, oldIds) == categoryId(entry, newIds)
+                if(!same) {
+                    val key = ENTRY + entry.original
+                    if(old != null) before[key] = fields(old, oldIds)
+                    after[key] = fields(entry, newIds)
+                }
+            }
+            remaining.forEach { (original, entry) -> before[ENTRY + original] = fields(entry, oldIds) }
+        }
+        if(before.isEmpty() && after.isEmpty()) return previous.syncReplica
+        // 首次真正修改时仍登记已有资料，保留离线编辑、删除和多设备因果合并语义。
+        val replica = if(SyncDomain.KEYWORDS in previous.syncReplica.documents) previous.syncReplica
+            else previous.syncReplica.track(emptyMap(), keywords(previous))
+        return replica.track(mapOf(SyncDomain.KEYWORDS to before), mapOf(SyncDomain.KEYWORDS to after))
     }
 
     fun applyLibrary(state: LibraryState, documents: Map<SyncDomain, SyncDocument>, selected: Set<SyncDomain>, includeDevicePreferences: Boolean = false): LibraryState {
@@ -339,6 +392,11 @@ object WebDavProjection {
     fun validateField(domain: SyncDomain, key: String, field: String, value: JsonElement) {
         validateKey(domain, key)
         validateFieldName(domain, key, field)
+        validateFieldValue(domain, key, field, value)
+    }
+
+    /** 整份文档验证已检查记录身份和字段名，候选值不再重复分配同一份白名单。 */
+    internal fun validateFieldValue(domain: SyncDomain, key: String, field: String, value: JsonElement) {
         when (domain) {
             SyncDomain.SETTINGS -> when {
                 key == GLOBAL -> {
@@ -437,7 +495,7 @@ object WebDavProjection {
         val allowed = when (domain) {
             SyncDomain.SETTINGS -> if (key == GLOBAL) portableGlobalFields else if (key.startsWith(BLOCKED)) setOf("kind", "value") else portableReaderFields + "devicePreferences"
             SyncDomain.FAVORITES -> if (key == ORDER) setOf("ids") else if (key.startsWith(FOLDER)) setOf("name") else setOf("book", "folderId", "pinned", "status", "addedAt")
-            SyncDomain.KEYWORDS -> if (key == ORDER) setOf("ids") else if (key.startsWith(CATEGORY)) setOf("name") else setOf("original", "translation", "categoryId", "common", "translationEdited", "categoryEdited")
+            SyncDomain.KEYWORDS -> if (key == ORDER) orderFields else if (key.startsWith(CATEGORY)) categoryFields else keywordEntryFields
             SyncDomain.PROGRESS -> setOf("position")
             SyncDomain.BOOKMARKS -> annotationFields
             SyncDomain.NOTES -> annotationFields + "text"
@@ -458,11 +516,13 @@ object WebDavProjection {
             val defaultName = if (document.domain == SyncDomain.FAVORITES) DEFAULT_FOLDER else KeywordLibrary.OTHER
             require(record.fields["name"]?.candidates?.all { !it.deleted && it.value == JsonPrimitive(defaultName) } == true) { "不能修改系统默认分类或收藏夹" }
         } }
-        WebDavMerge.materialize(document).forEach { (key, value) ->
+        // 逐条检查有效字段即可；不排序、复制并物化整个标签库的 JSON 投影。
+        document.records.forEach { (key, record) ->
+            if(WebDavMerge.winner(record.existence, existence = true)?.deleted != false) return@forEach
             val required = when (document.domain) {
                 SyncDomain.SETTINGS -> if (key == GLOBAL) portableGlobalFields else if (key.startsWith(BLOCKED)) setOf("kind", "value") else portableReaderFields - "customColors"
                 SyncDomain.FAVORITES -> if (key == ORDER) setOf("ids") else if (key.startsWith(FOLDER)) setOf("name") else setOf("book", "folderId", "pinned", "status", "addedAt")
-                SyncDomain.KEYWORDS -> if (key == ORDER) setOf("ids") else if (key.startsWith(CATEGORY)) setOf("name") else setOf("original", "translation", "categoryId", "common", "translationEdited", "categoryEdited")
+                SyncDomain.KEYWORDS -> if (key == ORDER) orderFields else if (key.startsWith(CATEGORY)) categoryFields else keywordEntryFields
                 SyncDomain.PROGRESS -> setOf("position")
                 SyncDomain.BOOKMARKS -> annotationFields
                 SyncDomain.NOTES -> annotationFields + "text"
@@ -470,7 +530,10 @@ object WebDavProjection {
             }
             // 老版同步快照没有配色组，保留本机配色；新快照的配色组仍作为原子字段校验。
             val optional = if (document.domain == SyncDomain.SETTINGS && (key == READER || key.startsWith(BOOK_SETTING))) setOf("devicePreferences", "customColors") else emptySet()
-            require(value.keys.containsAll(required) && value.keys.all { it in required || it in optional }) { "同步记录字段不完整，请恢复有效的远端数据" }
+            require(required.all { field -> record.fields[field]?.let { WebDavMerge.winner(it)?.deleted == false } == true } &&
+                record.fields.all { (field, cell) -> WebDavMerge.winner(cell)?.deleted != false || field in required || field in optional }) {
+                "同步记录字段不完整，请恢复有效的远端数据"
+            }
         }
     }
 

@@ -4,9 +4,13 @@ import cc.novelia.app.data.storage.appJson
 import cc.novelia.app.data.webdav.SyncReplica
 import java.io.InputStream
 import java.io.OutputStream
+import java.io.PushbackInputStream
 import java.util.UUID
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.json.decodeFromStream
+import kotlinx.serialization.json.encodeToStream
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -88,9 +92,12 @@ import kotlinx.serialization.json.JsonPrimitive
     }
 
     /** 再次观察到内置标签时，不恢复用户已删除的分类。 */
-    fun withEntries(updated: List<KeywordEntry>): KeywordLibrary = copy(entries = updated.map {
-        if(it.category in categories) it else it.copy(category = OTHER)
-    })
+    fun withEntries(updated: List<KeywordEntry>): KeywordLibrary {
+        if(updated === entries) return this
+        return copy(entries = if(updated.all { it.category in categories }) updated else updated.map {
+            if(it.category in categories) it else it.copy(category = OTHER)
+        })
+    }
 
     /** 先检查合并后的分类和词条总量，超限则整体拒绝；已有用户编辑按字段分别优先。 */
     fun merge(incoming: KeywordLibrary, limit: Int? = null): KeywordLibrary {
@@ -142,7 +149,33 @@ object KeywordLibraryFormat {
     fun decode(text: String): KeywordLibrary = decodeImport(text).library
 
     /** 本地原子快照拥有本安装的同步身份，外部导入则不能继承该身份。 */
-    fun decodeLocal(text: String): KeywordLibrary = decodeImport(text, preserveReplica = true).library
+    fun decodeLocal(text: String): KeywordLibrary {
+        val normalized = text.removePrefix("\uFEFF")
+        return if(normalized.trimStart().startsWith("{")) appJson.decodeFromString<KeywordLibrary>(normalized).also(::validate)
+        else decodeImport(normalized, preserveReplica = true).library
+    }
+
+    /** 原生快照直接流式解码，不同时保留几十 MB 的字符串、JSON 树和业务对象。 */
+    @OptIn(ExperimentalSerializationApi::class)
+    fun readLocal(input: InputStream): KeywordLibrary {
+        val stream = PushbackInputStream(input.buffered(), 3)
+        val prefix = ByteArray(3)
+        var count = 0
+        while(count < prefix.size) {
+            val next = stream.read()
+            if(next < 0) break
+            prefix[count++] = next.toByte()
+        }
+        if(count != 3 || !prefix.contentEquals(byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte()))) stream.unread(prefix, 0, count)
+        var first = stream.read()
+        while(first == 32 || first == 9 || first == 10 || first == 13) first = stream.read()
+        if(first >= 0) stream.unread(first)
+        return if(first == '{'.code) appJson.decodeFromStream<KeywordLibrary>(stream).also(::validate)
+        else decodeLocal(stream.readBytes().toString(Charsets.UTF_8))
+    }
+
+    @OptIn(ExperimentalSerializationApi::class)
+    fun writeLocal(output: OutputStream, library: KeywordLibrary) = appJson.encodeToStream(library, output)
 
     private fun decodeImport(text: String, preserveReplica: Boolean = false): KeywordLibraryImport {
         val parsed = appJson.parseToJsonElement(text.removePrefix("\uFEFF"))
@@ -193,7 +226,8 @@ object KeywordLibraryFormat {
 
     fun write(output: OutputStream, library: KeywordLibrary) {
         validate(library)
-        val exported = appJson.encodeToJsonElement(KeywordLibrary.serializer(), library) as JsonObject
+        // 导出不携带同步身份；在编码前移除，避免先为整个同步库构建一棵无用的 JSON 树。
+        val exported = appJson.encodeToJsonElement(KeywordLibrary.serializer(), library.copy(syncReplica = SyncReplica(), syncReadRecoveryRequired = false)) as JsonObject
         val bytes = JsonObject(exported - "syncReplica" - "syncReadRecoveryRequired").toString().toByteArray(Charsets.UTF_8)
         require(bytes.size <= MAX_BYTES) { "标签库超过 32 MB，无法导出" }
         output.write(bytes)

@@ -78,7 +78,7 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
     internal val clipboardLinkHistory = ClipboardLinkHistory()
     val metadataCache get() = store.metadataCache
     val appUpdates by lazy { cc.novelia.app.data.updates.AppUpdateChecker(this) }
-    val api by lazy { NoveliaApi(session, transport = httpTransport, onMutation = { metadataCache.invalidate(it) }, onKeywords = { tags -> applicationScope.launch { keywords.observe(tags) } }) }
+    val api by lazy { NoveliaApi(session, transport = httpTransport, onMutation = { metadataCache.invalidate(it) }, onKeywords = { tags -> keywords.enqueueObservation(tags) }) }
     val forumApi by lazy { ForumApi(NoveliaApi(forumSession, ForumApi.BASE_URL, httpTransport)) }
     val novelCommentApi by lazy { NovelCommentApi(NoveliaApi(session, ForumApi.BASE_URL, httpTransport)) }
     val forumAccountApi by lazy { ForumAccountApi(NoveliaApi(forumSession, ForumAccountApi.BASE_URL, httpTransport)) }

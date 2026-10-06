@@ -61,6 +61,14 @@ LocalStore.update
 
 `flush()` 提交取得锁时的最新快照，不阻止之后继续修改。需要状态与文档一起完成的恢复操作应使用专门提交入口。长文本先写、主索引后写的顺序由 [LibraryStateCodec](../../app/src/main/java/cc/novelia/app/data/storage/LibraryStateCodec.kt) 保证；损坏状态存在时会保留载荷供抢救。
 
+## 大标签库的收集与保存
+
+[KeywordStore](../../app/src/main/java/cc/novelia/app/data/catalog/KeywordStore.kt) 使用独立的 `keyword-catalog.json`，继续兼容原生 JSON、旧词条数组和已有同步身份。原生快照流式读写，避免同时持有完整文件字符串、JSON 对象树和编码字节数组；校验仍检查全部同步候选和必需字段。
+
+网络列表把一页标签去重后提交给后台收集队列。队列短暂合并相邻请求，跳过已有原文，用单个消费者更新，避免每本书启动一次整库计算。标签译名索引在后台构建并共享，发现页和详情页按原文查询。已有标签仅更新使用时间时仍在本机保存，但不会创建同步版本；真正的同步字段变化只投影受影响的条目，首次修改仍登记原有资料，保留离线编辑与删除语义。
+
+标签磁盘写入合并一秒内的请求，并跳过已经保存的 revision。`flush()` 会先处理已排队的标签和使用记录，再原子保存当前快照，因此备份和退出流程仍应显式调用它。此优化没有拆分本地文件或改变 WebDAV 协议，磁盘提交仍是整份快照。
+
 ## 读取失败为什么进入保护状态
 
 [LibraryRecovery.kt](../../app/src/main/java/cc/novelia/app/data/storage/LibraryRecovery.kt) 区分“首次安装没有文件”和“已有文件读不出来”。后者即使能回退到良好副本，也设置 `recoveryIssue`，阻止普通更新及文档修改。

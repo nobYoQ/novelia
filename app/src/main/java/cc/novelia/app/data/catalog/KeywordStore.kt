@@ -2,7 +2,6 @@ package cc.novelia.app.data.catalog
 
 import android.content.Context
 import android.util.AtomicFile
-import cc.novelia.app.data.storage.appJson
 import cc.novelia.app.data.webdav.WebDavProjection
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
@@ -13,8 +12,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.serialization.encodeToString
 
 /**
  * 保存用户已浏览内容中的标签及其本地翻译，不主动请求全站标签库。
@@ -32,6 +35,8 @@ class KeywordStore(context: Context, private val entryLimit: () -> Int? = { null
     private var failedRead = false
     private var needsMigrationSave = false
     private val mutable = MutableStateFlow(read())
+    @Volatile private var knownEntries = mutable.value.entries.mapTo(hashSetOf()) { it.original }
+    private var persistedRevision = if(needsMigrationSave || failedRead || !file.exists()) -1L else 0L
     val state: StateFlow<KeywordLibrary> = mutable.asStateFlow()
     private val mutableSyncReadError = MutableStateFlow(if(mutable.value.syncReadRecoveryRequired)
         "标签库读取失败，请先导入备份恢复标签库后再同步。" else null)
@@ -40,11 +45,21 @@ class KeywordStore(context: Context, private val entryLimit: () -> Int? = { null
     val persistenceError: StateFlow<String?> = mutableError.asStateFlow()
     private val writes = Channel<Unit>(Channel.CONFLATED)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    val displayIndex: StateFlow<KeywordDisplayIndex> = state.map { it.entries }.distinctUntilChanged()
+        .map(KeywordDisplayIndex::build).flowOn(Dispatchers.Default)
+        .stateIn(scope, SharingStarted.Eagerly, KeywordDisplayIndex())
+    private val observations = KeywordObservationQueue(scope, { it in knownEntries }, ::observe) {
+        mutableError.value = "标签暂未收集，正在重试。"
+    }
+    private val uses = KeywordObservationQueue(scope, { false }, ::markUsed) {
+        mutableError.value = "标签使用记录暂未保存，正在重试。"
+    }
 
     init {
         scope.launch {
             for(ignored in writes) {
-                delay(200)
+                delay(1_000)
+                while(writes.tryReceive().isSuccess) { /* 合并等待期间的写请求。 */ }
                 try { flush() }
                 catch(error: kotlinx.coroutines.CancellationException) { throw error }
                 catch(_: Exception) {
@@ -56,6 +71,8 @@ class KeywordStore(context: Context, private val entryLimit: () -> Int? = { null
         if(needsMigrationSave) writes.trySend(Unit)
     }
 
+    fun enqueueObservation(originals: Collection<String>) = observations.enqueue(originals)
+    fun enqueueUsed(originals: Collection<String>) = uses.enqueue(originals)
     fun observe(originals: Collection<String>) = change { it.withEntries(KeywordCatalog.observe(it.entries, originals, entryLimit())) }
     fun markUsed(originals: Collection<String>) {
         val now = System.currentTimeMillis()
@@ -96,6 +113,7 @@ class KeywordStore(context: Context, private val entryLimit: () -> Int? = { null
     fun reload() = synchronized(writeLock) {
         val before = synchronized(lock) { mutable.value }
         val loaded = read()
+        persistedRevision = -1L
         if(failedRead) {
             change { it.copy(syncReadRecoveryRequired = true) }
             mutableSyncReadError.value = "标签库读取失败，请先导入备份恢复标签库后再同步。"
@@ -113,15 +131,18 @@ class KeywordStore(context: Context, private val entryLimit: () -> Int? = { null
             }
         }
         mutableError.value = null
+        writes.trySend(Unit)
     }
 
     /** 备份或生命周期事件需要可靠落盘时，应从 IO 调度器调用。 */
     fun flush() = synchronized(writeLock) {
+        observations.flush()
+        uses.flush()
         // 获得写锁后再获取快照，避免较早等待的 flush 覆盖较新的写入。
         // 列表和条目均不可变；后续修改会各自提交持久化请求。
-        val snapshot = synchronized(lock) { mutable.value }
+        val snapshot = synchronized(lock) { Snapshot(revision, mutable.value) }
+        if(snapshot.revision == persistedRevision) return@synchronized
         try {
-            val encoded = appJson.encodeToString(snapshot).toByteArray(Charsets.UTF_8)
             if(failedRead && file.exists()) {
                 // 先保留无法读取的原始文件，避免后续浏览触发写入将其覆盖。
                 file.copyTo(File(file.parentFile, "$FILE_NAME.corrupt-${System.currentTimeMillis()}"))
@@ -129,9 +150,10 @@ class KeywordStore(context: Context, private val entryLimit: () -> Int? = { null
             }
             val stream = atomic.startWrite()
             try {
-                stream.write(encoded)
+                KeywordLibraryFormat.writeLocal(stream, snapshot.library)
                 atomic.finishWrite(stream)
             } catch(error: Exception) { atomic.failWrite(stream); throw error }
+            persistedRevision = snapshot.revision
             mutableError.value = null
         } catch(error: Exception) {
             mutableError.value = "标签词库和翻译暂未保存，正在重试，请稍后再退出应用。"
@@ -146,13 +168,16 @@ class KeywordStore(context: Context, private val entryLimit: () -> Int? = { null
             val snapshot = synchronized(lock) { Snapshot(revision, mutable.value) }
             // 词条排序和合并也放在界面及 flush 使用的状态锁之外。
             val raw = transform(snapshot.library)
-            val next = if(trackLocalChanges && raw != snapshot.library) raw.copy(syncReplica = snapshot.library.syncReplica.track(
-                WebDavProjection.keywords(snapshot.library), WebDavProjection.keywords(raw))) else raw
+            val next = if(trackLocalChanges && raw != snapshot.library) raw.copy(syncReplica = WebDavProjection.trackKeywords(snapshot.library, raw)) else raw
             val changed = next != snapshot.library
+            val names = if(changed && next.entries !== snapshot.library.entries) next.entries.mapTo(hashSetOf()) { it.original } else null
             val committed = synchronized(lock) {
                 if(revision != snapshot.revision) false
                 else {
-                    if(changed) { mutable.value = next; revision++ }
+                    if(changed) {
+                        if(names != null) knownEntries = names
+                        mutable.value = next; revision++
+                    }
                     true
                 }
             }
@@ -168,11 +193,9 @@ class KeywordStore(context: Context, private val entryLimit: () -> Int? = { null
         needsMigrationSave = false
         if(!file.exists() && !File(file.path + ".bak").exists()) return KeywordLibrary.defaults()
         return try {
-            val text = atomic.openRead().bufferedReader(Charsets.UTF_8).use { it.readText() }
-            val loaded = KeywordLibraryFormat.decodeLocal(text)
+            val loaded = atomic.openRead().use(KeywordLibraryFormat::readLocal)
             loaded.syncReplica.validate()
-            val library = if(text.trimStart().startsWith("[")) KeywordLibrary.fromLegacy(loaded.entries) else loaded
-            library.upgradeDefaults(entryLimit()).also { needsMigrationSave = it != loaded }
+            loaded.upgradeDefaults(entryLimit()).also { needsMigrationSave = it != loaded }
         } catch(_: Exception) { failedRead = true; KeywordLibrary.defaults().copy(syncReadRecoveryRequired = true) }
     }
 }

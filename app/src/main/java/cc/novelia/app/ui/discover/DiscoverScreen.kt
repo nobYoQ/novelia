@@ -75,9 +75,8 @@ import kotlinx.coroutines.sync.withPermit
     val local by c.store.state.collectAsStateWithLifecycle(); val profile by c.session.profile.collectAsStateWithLifecycle()
     val cacheGeneration by c.store.cacheGeneration.collectAsStateWithLifecycle()
     val keywords by c.app.keywords.state.collectAsStateWithLifecycle()
-    val keywordLabels = remember(keywords.entries) {
-        keywords.entries.associate { it.original to it.displayTranslation.ifBlank { it.original } }
-    }
+    val keywordIndex by c.app.keywords.displayIndex.collectAsStateWithLifecycle()
+    val keywordLabels = keywordIndex.labels
     val keywordPersistenceError by c.app.keywords.persistenceError.collectAsStateWithLifecycle()
     LaunchedEffect(local.savedSearches) { c.store.update { it.withMigratedSearchPresets() } }
     fun currentPreset() = SavedSearchPreset(name = submitted.ifBlank { if(category == 2) "文库小说筛选" else "网络小说筛选" }.take(80),
@@ -91,12 +90,12 @@ import kotlinx.coroutines.sync.withPermit
         webLevel = value.webLevel; wenkuLevel = value.wenkuLevel; page = 0; searchRevision++
         localFilter = value.localFilter
         c.store.rememberSearch(value.query)
-        if(value.category == 1) c.app.keywords.markUsed(SearchExpression.tagsIn(value.query))
+        if(value.category == 1) c.app.keywords.enqueueUsed(SearchExpression.tagsIn(value.query))
     }
     fun search() {
         searchEditing = false
         c.store.rememberSearch(query)
-        if(category != 2) c.app.keywords.markUsed(SearchExpression.tagsIn(query))
+        if(category != 2) c.app.keywords.enqueueUsed(SearchExpression.tagsIn(query))
         if(BookLinks.parse(query) != null) c.openLink(query) else {
             page = 0; searchRevision++; submitted = query.trim(); if(category == 0) category = 1
         }

@@ -96,14 +96,17 @@ class NoveliaApi(val session: AuthenticationSession?, val baseUrl: String = "htt
     }
     /** 只从用户已请求的内容中观察标签，不额外拉取全站标签列表。 */
     fun observeKeywords(value: Any?) {
-        val keywords = when(value) {
-            is Page<*> -> { value.items.forEach(::observeKeywords); return }
-            is WebOutline -> value.keywords
-            is WebDetail -> value.keywords
-            is WenkuDetail -> value.keywords
-            is BookCard -> value.tags
-            else -> return
+        val keywords = linkedSetOf<String>()
+        fun collect(item: Any?) {
+            when(item) {
+                is Page<*> -> item.items.forEach(::collect)
+                is WebOutline -> keywords.addAll(item.keywords)
+                is WebDetail -> keywords.addAll(item.keywords)
+                is WenkuDetail -> keywords.addAll(item.keywords)
+                is BookCard -> keywords.addAll(item.tags)
+            }
         }
+        collect(value)
         if(keywords.isNotEmpty()) runCatching { onKeywords(keywords) }
     }
     suspend inline fun <reified T> put(path: String, value: T): String = request("PUT", path, appJson.encodeToString(value))
