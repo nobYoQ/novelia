@@ -45,7 +45,7 @@ APK 归档到 `outputs/packages/debug/`，日志在 `outputs/logs/`。脚本不�
 | 命令 | 结果 |
 | --- | --- |
 | `./build-debug.ps1` | Debug APK |
-| `./build-release.ps1 -Verify` | 启用 R8 和资源收缩的本地 Release；使用 Debug 测试证书，并运行 Release 单元测试、Lint |
+| `./build-release.ps1 -Verify` | 启用 R8 和资源收缩的本地 Release；使用与 Actions 共用的固定测试证书，并运行 Release 单元测试、Lint |
 | `./build-release.ps1 -Unsigned` | 未签名 Release，不能直接安装 |
 | `./build.ps1 -Tasks @(...)` | 执行指定 Gradle 任务，不整理 APK 归档 |
 | `./scripts/prepare-release.ps1 ...` | 正式签名与发行附件，前提和现存限制见[发布指南](../../RELEASING.md) |
@@ -65,7 +65,24 @@ Debug 和本地 Release 都支持 `-Abi`、`-Offline` 和 `-Verify`。默认 ABI
 
 [Preview APK 工作流](../../.github/workflows/preview-apk.yml) 在每次推送到任意分支时，构建该次推送末端提交的通用 Release APK。仅本地 `commit` 不会触发，一次推送包含多个提交时只构建末端提交。默认分支包含工作流后，也可在 Actions 页面选择 **Run workflow** 手动构建。
 
-工作流准备 JDK 17、Platform 36、Build Tools 35.0.0，并从项目配置读取固定的 Go 和 NDK 版本。Gradle 自动构建 ECH AAR 及运行依赖的 Go 单元测试；预览构建启用 R8 与资源收缩，使用 `-PreleaseSigning=false -PlocalReleaseSigning=true` 测试签名。不需要配置正式发布证书。
+工作流准备 JDK 17、Platform 36、Build Tools 35.0.0，并从项目配置读取固定的 Go 和 NDK 版本。Gradle 自动构建 ECH AAR 及运行依赖的 Go 单元测试；预览构建实际执行 `assembleRelease`，启用 R8 与资源收缩，使用 `-PreleaseSigning=false -PlocalReleaseSigning=true` 固定测试签名。不需要配置正式发布证书，但必须先设置下面的预览密钥 Secret。
+
+### 配置共用签名（维护者首次设置）
+
+沿用原签名机器的 `.android/debug.keystore`，不会生成新密钥。本地 Debug 和测试签名 Release 固定使用此文件，与 `ANDROID_USER_HOME` 无关；Actions 从 **`NOVELIA_PREVIEW_KEYSTORE_BASE64`** 仓库 Secret 恢复同一份密钥到运行器临时目录。测试密钥使用 Android 标准别名和口令，私密材料是密钥库文件本身；不要提交、公开或重新生成它。
+
+安装 [GitHub CLI](https://cli.github.com/)，在自己的终端登录有该仓库写入权限的账号，然后在原签名机器执行：
+
+```powershell
+gh auth login
+./scripts/configure-preview-signing.ps1
+```
+
+[配置脚本](../../scripts/configure-preview-signing.ps1) 先核对 [公开证书 SHA-256](../../gradle/preview-signing.sha256)，再只通过 stdin 将内存中的 Base64 写入加密的 GitHub Actions Secret；不会打印编码、生成编码文件或改动原密钥。可先用 `-CheckOnly` 仅检查签名。另一个仓库可加 `-Repository '<owner>/<repo>'`。仅 Base64 编码并非加密，保密依赖 GitHub Secret 的存储与权限，见 [GitHub 官方说明](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets#storing-base64-binary-blobs-as-secrets)。
+
+缺少 Secret、密钥无效或证书指纹不匹配时，CI 停止构建，不会临时生成替代签名。上传前还会独立检查 APK 的证书指纹；临时密钥在任务结束时清理。更换电脑或恢复项目时，维护者应从私密备份恢复原密钥，本地测试签名 Release 也会拒绝使用其他证书。贡献者可以用自行生成的 Debug 测试证书开发，但该证书无法覆盖维护者的预览包。
+
+### 下载与自动发布
 
 默认分支的成功构建还会自动创建或更新标签为 `preview` 的 [Pre-release](https://github.com/nobYoQ/novelia/releases/tag/preview)，下载入口保持不变：
 
@@ -76,21 +93,25 @@ Debug 和本地 Release 都支持 `-Abi`、`-Offline` 和 `-Verify`。默认 ABI
 | `Novelia-preview-build-info.txt` | 精确源码提交、应用版本和构建信息 |
 | `Novelia-preview-mapping.zip` | 压缩的 R8 映射 |
 
-后续构建会替换这四个同名附件，并更新预发布说明和预览标签指向的提交。发布任务串行执行，在上传前后核对默认分支最新提交，旧构建晚完成时跳过更新。新附件全部上传并检查大小/摘要后才替换旧附件；上传失败时上一版下载保留。手动附加的其他文件会保留。正式版的 `Latest` 标记和版本标签不参与自动选择。
+后续构建会替换这四个同名附件，并更新预发布说明和预览标签指向的提交。首次创建草稿时从 Release 列表读取；失败运行留下的同标签草稿会复用，避免按标签读取未发布草稿时的 404。发布任务串行执行，在上传前后核对默认分支最新提交，旧构建晚完成时跳过更新。新附件全部上传并检查大小/摘要后才替换旧附件；上传失败时上一版下载保留。手动附加的其他文件会保留。正式版的 `Latest` 标记和版本标签不参与自动选择。
 
 每次构建的独立下载仍在 **Actions → Preview APK → 对应运行 → Artifacts**：直接下载 `.apk`，`build-info` 附件包含校验、提交信息和原始 R8 映射。Actions 产物保留 14 天，下载需要登录 GitHub；文件名包含源码版本、短提交号、运行编号和重试次数。Pre-release 附件持续保留至下一次更新，不受 Actions 的 14 天期限影响。其他分支只生成 Actions 产物。
+
+`Build Release preview` 成功表示 APK 已完成构建；Pre-release 还需后续 `Update preview Pre-release` 任务成功。非默认分支的发布任务显示 `Skipped` 属于预期，合并或推送到默认分支后才会发布。默认分支发布失败时，查看发布任务日志；无需再执行另一种“正式构建”。
 
 已有预发布使用其他标签时，在 **Settings → Secrets and variables → Actions → Variables** 设置 `NOVELIA_PREVIEW_TAG` 为对应标签；脚本拒绝覆盖普通正式 Release 或不可变 Release。该变量接受字母、数字、点、下划线和连字符。更改标签后，README 中的固定下载链接也应同步修改。
 
 发布任务通过内置 `GITHUB_TOKEN` 的 `contents: write` 权限操作同仓库，不需要另建 PAT。仓库规则必须允许工作流创建或更新预览标签。滚动预览要求 **Settings → General → Releases → Enable release immutability** 未启用；不可变 Release 的标签和附件不能替换，详见 [GitHub 官方说明](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases)。
 
-包名仍为 `cc.novelia.app`，应用内部版本仍来自 `version.properties`。GitHub 临时运行环境生成的测试证书可能在不同运行间变化，与本地测试包及正式包也可能不同；出现签名不兼容时需先[备份阅读资料](../data/backup-and-recovery.md)，再卸载旧包安装。
+包名仍为 `cc.novelia.app`，应用内部版本仍来自 `version.properties`。配置共用密钥后，本地包和各次 Actions 预览包签名一致，新包 `versionCode` 不低于设备已安装版本即可覆盖安装并保留数据。证书指纹记录在 `build-info` 中。此前使用临时运行器证书的旧 CI 包以及其他证书签名的包不在兼容范围内，迁移前先[备份阅读资料](../data/backup-and-recovery.md)。
 
 镜像线路是可选功能。维护者可在 **Settings → Secrets and variables → Actions** 设置 `NOVELIA_MIRROR_ACCESS_TOKEN` 仓库 Secret，工作流仅通过构建步骤环境变量注入。未设置时仍能构建和使用原站，镜像线路禁用。该入口口令会包含在 APK 中，说明见[镜像配置](book-source-mirrors.md)。
 
 本工作流负责预览构建与 Pre-release 更新，`assembleRelease` 包含 AGP 内置的致命问题 Lint 检查，不代替 JVM 单元测试、完整 Lint、设备测试和正式发行验收。仓库后台需允许 GitHub Actions，首次设置见[仓库设置清单](../../.github/REPOSITORY_SETUP.md)。
 
-发布脚本的本地模拟检查可运行 `./scripts/test-publish-preview.ps1`，覆盖创建、替换、过期构建、上传失败、校验失败和权限/不可变限制；不会连接 GitHub。真正发布由工作流中的 [publish-preview.ps1](../../scripts/publish-preview.ps1) 执行。
+发布脚本的本地模拟检查可运行 `./scripts/test-publish-preview.ps1`，覆盖首次草稿创建、草稿重试、分页读取、替换、过期构建、上传失败、校验失败和权限/不可变限制；不会连接 GitHub。真正发布由工作流中的 [publish-preview.ps1](../../scripts/publish-preview.ps1) 执行。
+
+在原签名机器可运行 `./scripts/test-preview-signing.ps1` 检查原证书、错误密钥、Secret 编码、认证失败和 stdin 上传；上传使用本地替身，不连接 GitHub 或生成私钥文件。
 
 ## 自动检测与手动配置
 
@@ -113,7 +134,7 @@ $env:ANDROID_HOME = 'C:/Tools/Android/Sdk'
 
 如果已有 `local.properties`，它的 SDK 路径优先于环境变量。也可在 `build.ps1` 顶部填写 `$ManualJavaHome`、`$ManualAndroidSdk` 等变量；路径指向安装根目录，留空表示自动选择。无效的手动配置会直接报错。
 
-构建前脚本同步 `sdk.dir`，保留文件其他内容；不要提交个人路径。更换 `ANDROID_USER_HOME` 可能改变 Debug 证书位置，进而影响覆盖安装。脚本和 IDE 使用不同 Gradle 缓存时，IDE 构建成功也不表示脚本可以离线构建。
+构建前脚本同步 `sdk.dir`，保留文件其他内容；不要提交个人路径。测试证书位置固定为项目 `.android/debug.keystore`，可通过 `NOVELIA_PREVIEW_KEYSTORE_PATH` 指向已恢复的同一密钥；改变缓存或 `ANDROID_USER_HOME` 不会改变签名。脚本和 IDE 使用不同 Gradle 缓存时，IDE 构建成功也不表示脚本可以离线构建。
 
 ## 直接运行 Gradle
 

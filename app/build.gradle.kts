@@ -10,6 +10,8 @@ import javax.xml.transform.stream.StreamResult
 import org.w3c.dom.Element
 
 import java.io.File
+import java.security.KeyStore
+import java.security.MessageDigest
 import java.util.Properties
 
 plugins {
@@ -40,6 +42,24 @@ require(!(releaseSigning && localReleaseSigning)) { "Choose releaseSigning or lo
 fun signingEnvironment(name: String): String = providers.environmentVariable(name).orNull
     ?.takeIf { it.isNotBlank() } ?: error("Missing signing environment variable: $name")
 
+// 本机沿用已有测试密钥；CI 从 Secret 恢复同一密钥，不随 Android 用户目录变化。
+val previewKeystore = rootProject.file(
+    providers.environmentVariable("NOVELIA_PREVIEW_KEYSTORE_PATH").orNull ?: ".android/debug.keystore"
+)
+if (localReleaseSigning) {
+    require(previewKeystore.isFile) {
+        "Missing shared preview keystore. Restore the existing key; do not generate a replacement."
+    }
+    val expected = rootProject.file("gradle/preview-signing.sha256").readText().trim()
+    require(expected.matches(Regex("[0-9a-f]{64}"))) { "Invalid preview certificate fingerprint." }
+    val keystore = KeyStore.getInstance(previewKeystore, "android".toCharArray())
+    require(keystore.isKeyEntry("androiddebugkey")) { "Preview signing key is missing." }
+    val certificate = keystore.getCertificate("androiddebugkey")
+    val actual = MessageDigest.getInstance("SHA-256").digest(certificate.encoded)
+        .joinToString("") { "%02x".format(it.toInt() and 0xff) }
+    require(actual == expected) { "Preview certificate mismatch. Restore the original shared key." }
+}
+
 android {
     namespace = "cc.novelia.app"
     compileSdk = 36
@@ -60,6 +80,9 @@ android {
                 ndk { abiFilters += requestedAbi }
             }
         }
+    }
+    signingConfigs.getByName("debug") {
+        storeFile = previewKeystore
     }
     if (releaseSigning) {
         signingConfigs.create("distribution") {

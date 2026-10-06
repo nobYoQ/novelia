@@ -33,6 +33,31 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Restore shared preview signing key
+        env:
+          NOVELIA_PREVIEW_KEYSTORE_BASE64: ${{ secrets.NOVELIA_PREVIEW_KEYSTORE_BASE64 }}
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:NOVELIA_PREVIEW_KEYSTORE_BASE64)) {
+            throw 'Missing NOVELIA_PREVIEW_KEYSTORE_BASE64. Run scripts/configure-preview-signing.ps1 on the original signing machine.'
+          }
+          if ($env:NOVELIA_PREVIEW_KEYSTORE_BASE64.Length -gt 48 * 1024) { throw 'Preview keystore Secret is too large.' }
+          $keystorePath = Join-Path $env:RUNNER_TEMP 'novelia-preview.keystore'
+          if (Test-Path -LiteralPath $keystorePath) { throw 'Refusing to overwrite an existing preview keystore.' }
+          $bytes = $null
+          try {
+            try { $bytes = [Convert]::FromBase64String($env:NOVELIA_PREVIEW_KEYSTORE_BASE64) }
+            catch { throw 'Preview keystore Secret is not valid Base64.' }
+            if ($bytes.Length -eq 0) { throw 'Preview keystore Secret is empty.' }
+            [IO.File]::WriteAllBytes($keystorePath, $bytes)
+            ./scripts/configure-preview-signing.ps1 -KeystorePath $keystorePath -CheckOnly
+            "NOVELIA_PREVIEW_KEYSTORE_PATH=$keystorePath" | Out-File -LiteralPath $env:GITHUB_ENV -Append -Encoding utf8
+          } finally {
+            if ($null -ne $bytes) { [Array]::Clear($bytes, 0, $bytes.Length) }
+            $env:NOVELIA_PREVIEW_KEYSTORE_BASE64 = $null
+          }
+
       - name: Read pinned native toolchain
         id: toolchain
         run: |
@@ -70,7 +95,7 @@ jobs:
           NOVELIA_MIRROR_ACCESS_TOKEN: ${{ secrets.NOVELIA_MIRROR_ACCESS_TOKEN }}
         run: |
           $PSNativeCommandUseErrorActionPreference = $false
-          # Release optimizations with Android's test certificate; no distribution key required.
+          # The same pinned test key as the local Release build; missing keys never fall back.
           & ./gradlew --no-daemon --console=plain :app:assembleRelease '-PreleaseSigning=false' '-PlocalReleaseSigning=true' '-PtargetAbi=universal'
           if ($LASTEXITCODE -ne 0) { throw "Release build failed with exit code $LASTEXITCODE." }
 
@@ -94,8 +119,13 @@ jobs:
           $mapping = 'app/build/outputs/mapping/release/mapping.txt'
           if (-not (Test-Path -LiteralPath $mapping -PathType Leaf)) { throw 'Release R8 mapping is missing.' }
           $apksigner = Join-Path $env:ANDROID_HOME 'build-tools/35.0.0/apksigner'
-          & $apksigner verify $apk
+          $signature = (& $apksigner verify --print-certs $apk 2>&1) -join "`n"
           if ($LASTEXITCODE -ne 0) { throw 'Release APK signature verification failed.' }
+          $expectedCertificate = (Get-Content -LiteralPath 'gradle/preview-signing.sha256' -Raw -Encoding utf8).Trim()
+          $certificates = [regex]::Matches($signature, '(?m)^Signer #\d+ certificate SHA-256 digest: ([0-9a-fA-F]{64})\s*$')
+          if ($certificates.Count -ne 1 -or $certificates[0].Groups[1].Value.ToLowerInvariant() -ne $expectedCertificate) {
+            throw 'Release APK was not signed with the shared preview certificate.'
+          }
 
           $outputDirectory = 'outputs/preview'
           [IO.Directory]::CreateDirectory($outputDirectory) | Out-Null
@@ -115,7 +145,8 @@ jobs:
             "versionCode=$($element.versionCode)"
             'variant=release'
             'abi=universal'
-            'signing=android-debug-test-certificate'
+            'signing=shared-preview-test-certificate'
+            "certificateSha256=$expectedCertificate"
           ) | Set-Content -LiteralPath (Join-Path $outputDirectory "$stem-build-info.txt") -Encoding utf8NoBOM
           "apk-path=$outputApk" | Out-File -LiteralPath $env:GITHUB_OUTPUT -Append -Encoding utf8
           "artifact-name=$stem" | Out-File -LiteralPath $env:GITHUB_OUTPUT -Append -Encoding utf8
@@ -145,14 +176,28 @@ jobs:
         env:
           APK_URL: ${{ steps.apk.outputs.artifact-url }}
           BUILD_INFO_URL: ${{ steps.build-info.outputs.artifact-url }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           @(
-            'Release 预览包已构建，包含 R8 压缩与资源收缩，使用 Android 测试证书签名。'
+            'Release 预览包已构建，包含 R8 压缩与资源收缩，与本地构建共用固定预览测试证书。'
             ''
             "[下载 APK]($env:APK_URL) · [下载校验文件、构建信息和 R8 映射]($env:BUILD_INFO_URL)"
             ''
-            '产物保留 14 天，下载需要登录 GitHub。包名与正式版相同，更换签名来源前请备份阅读资料。'
+            '产物保留 14 天，下载需要登录 GitHub。同签名本地包可覆盖安装，新包版本码须不低于已安装版本。'
+            $(if ($env:GITHUB_REF -eq "refs/heads/$env:DEFAULT_BRANCH") {
+              '默认分支构建：接下来由 Update preview Pre-release 任务发布，结果请查看该任务。'
+            } else {
+              '当前为非默认分支：仅保留 Actions 下载产物，不更新 Pre-release。'
+            })
           ) | Out-File -LiteralPath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
+      - name: Remove temporary signing key
+        if: always()
+        run: |
+          $keystorePath = Join-Path $env:RUNNER_TEMP 'novelia-preview.keystore'
+          if (Test-Path -LiteralPath $keystorePath -PathType Leaf) {
+            Remove-Item -LiteralPath $keystorePath -Force
+          }
 
   publish:
     name: Update preview Pre-release

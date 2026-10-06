@@ -17,7 +17,8 @@ function Invoke-PreviewGh {
     if ($exitCode -ne 0) {
         if ($AllowNotFound -and $response -match '\bHTTP 404\b') { return $null }
         $status = if ($response -match '\bHTTP [0-9]{3}\b') { $Matches[0] } else { 'no HTTP status' }
-        throw "GitHub CLI failed ($status, exit $exitCode) during $($Arguments[0])."
+        $operation = if ($Arguments[0] -eq 'api') { "$($Arguments[2]) $($Arguments[3])" } else { $Arguments[0] }
+        throw "GitHub CLI failed ($status, exit $exitCode) during $operation."
     }
     return $response
 }
@@ -29,6 +30,18 @@ function Get-PreviewJson {
     $response = Invoke-PreviewGh -Arguments $arguments -AllowNotFound:$AllowNotFound
     if ($null -eq $response) { return $null }
     return ($response | ConvertFrom-Json -NoEnumerate)
+}
+
+function Get-PreviewRelease {
+    param([string]$Repository, [string]$EncodedTag, [string]$Tag)
+    # The tag endpoint only resolves published releases. Drafts need the list endpoint.
+    $published = Get-PreviewJson -Endpoint "repos/$Repository/releases/tags/$EncodedTag" -AllowNotFound
+    if ($null -ne $published) { return $published }
+    $pages = Get-PreviewJson -Endpoint "repos/$Repository/releases?per_page=100" -Paginate
+    $matchingReleases = @($pages | ForEach-Object { $_ } | Where-Object { $_.tag_name -eq $Tag })
+    if ($matchingReleases.Count -gt 1) { throw 'Multiple releases use the preview tag; refusing an ambiguous update.' }
+    if ($matchingReleases.Count -eq 1) { return $matchingReleases[0] }
+    return $null
 }
 
 function Test-PreviewHead {
@@ -81,8 +94,7 @@ if (-not (Test-PreviewHead)) {
 
 $repository = $env:GITHUB_REPOSITORY
 $encodedTag = [Uri]::EscapeDataString($Tag)
-$releaseEndpoint = "repos/$repository/releases/tags/$encodedTag"
-$release = Get-PreviewJson -Endpoint $releaseEndpoint -AllowNotFound
+$release = Get-PreviewRelease -Repository $repository -EncodedTag $encodedTag -Tag $Tag
 if ($null -ne $release) {
     if (-not $release.prerelease) { throw 'The selected tag belongs to a regular release; refusing to replace it.' }
     if ($release.PSObject.Properties['immutable'] -and $release.immutable) {
@@ -113,12 +125,13 @@ $notesPath = Join-Path $stageDirectory 'release-notes.md'
     "- 构建记录：[GitHub Actions]($env:GITHUB_SERVER_URL/$repository/actions/runs/$env:GITHUB_RUN_ID)"
     "- [下载 Release 通用 APK]($apkUrl)"
     ''
-    '启用 R8 压缩和资源收缩，使用 Android 测试证书签名。包名与正式版相同，签名不兼容时请先备份阅读资料再更换安装包。'
+    '启用 R8 压缩和资源收缩，与本地构建共用固定预览测试证书。同签名本地包可覆盖安装，新包版本码须不低于已安装版本；其他签名来源迁移前请先备份阅读资料。'
 ) | Set-Content -LiteralPath $notesPath -Encoding utf8NoBOM
 $title = "Novelia $($info['versionName']) 预览版"
 if ($null -eq $release) {
     Invoke-PreviewGh -Arguments @('release', 'create', $Tag, '--repo', $repository, '--draft', '--prerelease', '--latest=false', '--target', $env:GITHUB_SHA, '--title', $title, '--notes-file', $notesPath) | Out-Null
-    $release = Get-PreviewJson -Endpoint $releaseEndpoint
+    $release = Get-PreviewRelease -Repository $repository -EncodedTag $encodedTag -Tag $Tag
+    if ($null -eq $release) { throw 'The newly created preview draft could not be located.' }
 }
 Invoke-PreviewGh -Arguments (@('release', 'upload', $Tag, '--repo', $repository, '--clobber') + @($staged.Path)) | Out-Null
 $assetPages = Get-PreviewJson -Endpoint "repos/$repository/releases/$($release.id)/assets?per_page=100" -Paginate

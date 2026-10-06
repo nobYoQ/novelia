@@ -6,6 +6,7 @@
 - [ ] 开启 Issues；确认默认分支为 `main`，贡献指南、安全政策和模板在默认分支可见。
 - [ ] 限制 `main` 的强制推送和删除；外部贡献通过 PR 合并。多人维护后启用至少一位审批者和必要的 CODEOWNERS 审查；只有一位维护者时不要配置无人可满足的审批规则。
 - [ ] 允许 GitHub Actions 运行 [Preview APK](workflows/preview-apk.yml) 及其依赖的 Actions；允许发布任务使用 `contents: write`。确认默认分支推送后会创建或更新 `preview` Pre-release，其他分支仍有 Actions 下载产物；合并前按照 CONTRIBUTING.md 手动复验。
+- [ ] 在原签名机器运行 `scripts/configure-preview-signing.ps1`，设置加密的 `NOVELIA_PREVIEW_KEYSTORE_BASE64` 仓库 Secret。核对公开指纹、私密备份原 `.android/debug.keystore`；没有该 Secret 时预览构建会停止，不会生成替代密钥。具体操作见[共用签名配置](../docs/development/getting-started.md#配置共用签名维护者首次设置)。
 - [ ] 保护 `v*` 正式发布标签，限制其创建、更新和删除权限。允许工作流更新预览专用 `preview` 标签（或 `NOVELIA_PREVIEW_TAG` 指定标签）；正式版本禁止覆盖。
 - [ ] 开启可用的 Dependency graph、Dependabot alerts、Secret scanning 和 Push protection。当前没有自动依赖更新配置。
 - [ ] 开启 Private vulnerability reporting，确认 SECURITY.md 的私密入口可用。

@@ -8,7 +8,7 @@
 
 确认长期发布证书及备份、公开 SHA-256 指纹、素材授权和 GitHub 仓库设置。相关入口：[NOTICE](NOTICE.md)、[仓库设置清单](.github/REPOSITORY_SETUP.md)、[测试指南](docs/quality/testing.md)。
 
-本地 Release 默认使用 Debug 证书。它可以检查 R8 后的行为，但不能作为正式发行包。更换签名时，同包名通常无法覆盖安装；先验证[阅读资料备份](docs/data/backup-and-recovery.md)，再制定用户迁移说明。
+本地 Release 默认使用原 `.android/debug.keystore` 的固定测试证书，Actions 预览从仓库 Secret 恢复同一密钥，两者可在版本码满足要求时覆盖安装。共用配置见[构建指南](docs/development/getting-started.md#配置共用签名维护者首次设置)。它可以检查 R8 后的行为，但不能作为正式发行包。更换签名时，同包名通常无法覆盖安装；先验证[阅读资料备份](docs/data/backup-and-recovery.md)，再制定用户迁移说明。
 
 检查准备公开的 Git 历史。`.gitignore` 不移除已提交内容；若涉及凭据或未授权素材，另行处理范围与历史，不直接强推。
 

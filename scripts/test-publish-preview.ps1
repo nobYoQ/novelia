@@ -15,8 +15,7 @@ function gh {
         switch ($arguments[1]) {
             'create' {
                 $fixture.Created = $true
-                $fixture.TagSha = $env:GITHUB_SHA
-                return 'https://github.com/example/novelia/releases/tag/preview'
+                return 'https://github.com/example/novelia/releases/untagged/draft-fixture'
             }
             'upload' {
                 if ($fixture.Mode -eq 'upload-failure') {
@@ -46,6 +45,10 @@ function gh {
         $endpoint = $arguments[3]
         if ($method -eq 'GET') {
             if ($endpoint.EndsWith('/git/ref/heads/main')) {
+                if ($fixture.Mode -eq 'head-not-found') {
+                    $global:LASTEXITCODE = 1
+                    return 'gh: Not Found (HTTP 404)'
+                }
                 $fixture.HeadReads++
                 $sha = if ($fixture.Mode -eq 'stale' -or ($fixture.Mode -eq 'race' -and $fixture.HeadReads -gt 1)) { '2' * 40 } else { $env:GITHUB_SHA }
                 return (@{ object = @{ sha = $sha } } | ConvertTo-Json -Compress)
@@ -55,11 +58,23 @@ function gh {
                     $global:LASTEXITCODE = 1
                     return 'gh: Resource not accessible by integration (HTTP 403)'
                 }
-                if ($fixture.Mode -eq 'create' -and -not $fixture.Created) {
+                if ($fixture.Mode -in @('create', 'resume-draft', 'duplicate-drafts') -and -not $fixture.Published) {
                     $global:LASTEXITCODE = 1
                     return 'gh: Not Found (HTTP 404)'
                 }
                 return (@{ id = 7; prerelease = ($fixture.Mode -ne 'regular'); immutable = ($fixture.Mode -eq 'immutable') } | ConvertTo-Json -Compress)
+            }
+            if ($endpoint.EndsWith('/releases?per_page=100')) {
+                $pages = [object[]]::new(2)
+                $pages[0] = @(@{ id = 8; tag_name = 'v0.0.1'; draft = $false; prerelease = $false; immutable = $true })
+                $pages[1] = @()
+                if ($fixture.Created -or $fixture.Mode -in @('resume-draft', 'duplicate-drafts')) {
+                    $pages[1] = @(@{ id = 7; tag_name = 'preview'; draft = $true; prerelease = $true; immutable = $false })
+                }
+                if ($fixture.Mode -eq 'duplicate-drafts') {
+                    $pages[1] += @{ id = 9; tag_name = 'preview'; draft = $true; prerelease = $true; immutable = $false }
+                }
+                return (ConvertTo-Json -InputObject $pages -Depth 5 -Compress)
             }
             if ($endpoint.EndsWith('/assets?per_page=100')) {
                 if ($fixture.Mode -eq 'digest-mismatch') { $fixture.Assets[$fixture.Assets.Count - 1].digest = 'sha256:bad' }
@@ -71,8 +86,16 @@ function gh {
                 return (ConvertTo-Json -InputObject $pages -Depth 5 -Compress)
             }
             if ($endpoint.EndsWith('/git/ref/tags/preview')) {
+                if ($null -eq $fixture.TagSha) {
+                    $global:LASTEXITCODE = 1
+                    return 'gh: Not Found (HTTP 404)'
+                }
                 return (@{ object = @{ sha = $fixture.TagSha } } | ConvertTo-Json -Compress)
             }
+        }
+        if ($method -eq 'POST' -and $endpoint.EndsWith('/git/refs')) {
+            $fixture.TagSha = $env:GITHUB_SHA
+            return '{}'
         }
         if ($method -eq 'PATCH' -and $endpoint.EndsWith('/git/refs/tags/preview')) {
             if ($fixture.Mode -eq 'tag-protected') {
@@ -122,7 +145,7 @@ foreach ($name in $environment.Keys) {
     [Environment]::SetEnvironmentVariable($name, $environment[$name], 'Process')
 }
 try {
-    $modes = @('create', 'update', 'stale', 'race', 'upload-failure', 'digest-mismatch', 'tag-protected', 'immutable', 'regular', 'forbidden', 'checksum-mismatch', 'non-default')
+    $modes = @('create', 'resume-draft', 'update', 'duplicate-drafts', 'head-not-found', 'stale', 'race', 'upload-failure', 'digest-mismatch', 'tag-protected', 'immutable', 'regular', 'forbidden', 'checksum-mismatch', 'non-default')
     foreach ($mode in $modes) {
         $fixtureDirectory = Join-Path $rootPath ('outputs/ci-checks/publish-tests/' + $mode + '-' + [Guid]::NewGuid().ToString('N'))
         [IO.Directory]::CreateDirectory($fixtureDirectory) | Out-Null
@@ -145,7 +168,7 @@ try {
             Created = $false
             Published = $false
             HeadReads = 0
-            TagSha = '0' * 40
+            TagSha = $(if ($mode -in @('create', 'resume-draft')) { $null } else { '0' * 40 })
         }
         $fixture = $global:NoveliaPreviewFixture
         $stableNames = @('Novelia-preview-universal.apk', 'Novelia-preview-universal.apk.sha256', 'Novelia-preview-build-info.txt', 'Novelia-preview-mapping.zip')
@@ -159,7 +182,7 @@ try {
         $failure = $null
         try { & $publicationPath -ArtifactsDirectory $fixtureDirectory -Tag 'preview' *> $null }
         catch { $failure = $_.Exception.Message }
-        if ($mode -in @('create', 'update')) {
+        if ($mode -in @('create', 'resume-draft', 'update')) {
             Assert-PreviewTest ($null -eq $failure) "$mode failed: $failure"
             Assert-PreviewTest ($fixture.Published -and $fixture.TagSha -eq $env:GITHUB_SHA) "$mode did not publish the expected commit."
             foreach ($name in $stableNames) {
@@ -167,6 +190,9 @@ try {
             }
             Assert-PreviewTest (@($fixture.Assets | Where-Object { $_.name.StartsWith('Novelia-preview-staging-') }).Count -eq 0) "$mode left staged assets after success."
             Assert-PreviewTest ($fixture.Calls.Exists([Predicate[string]]{ param($call) $call.Contains('--latest=false') })) "$mode could change the stable Latest release."
+            if ($mode -eq 'resume-draft') {
+                Assert-PreviewTest (-not $fixture.Created) 'An existing draft was not reused.'
+            }
             if ($mode -eq 'update') {
                 Assert-PreviewTest (-not $fixture.Deleted.Contains(5)) 'A manually attached release asset was removed.'
                 $uploadIndex = $fixture.Calls.FindIndex([Predicate[string]]{ param($call) $call.StartsWith('release upload ') })
@@ -182,6 +208,9 @@ try {
             }
             Assert-PreviewTest ($fixture.TagSha -eq ('0' * 40)) "$mode moved the preview tag unexpectedly."
             Assert-PreviewTest (-not $fixture.Created) "$mode created a release unexpectedly."
+            if ($mode -eq 'head-not-found') {
+                Assert-PreviewTest ($failure.Contains('GET repos/example/novelia/git/ref/heads/main')) 'API diagnostics omitted the failing endpoint.'
+            }
         }
         Write-Output "PASS: $mode"
     }

@@ -18,7 +18,7 @@ $ManualJavaHome = ''
 # Android SDK 根目录，包含 platforms、build-tools 等。例如：'C:/Tools/Android/Sdk'
 $ManualAndroidSdk = ''
 # 可选缓存目录；留空时优先沿用同名环境变量，否则使用项目 .gradle-home 和 .android。
-# 更换 ANDROID_USER_HOME 会改变默认 Debug 测试证书的存放位置。
+# 测试签名固定使用项目 .android/debug.keystore，与 ANDROID_USER_HOME 无关。
 $ManualGradleUserHome = ''
 $ManualAndroidUserHome = ''
 # ===== 手动环境配置区结束；版本号请修改根目录 version.properties =====

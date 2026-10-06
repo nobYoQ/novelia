@@ -38,7 +38,7 @@ $tasks += if ($mode -eq 'release-local') { '-PlocalReleaseSigning=true' } else {
 $tasks += "-PtargetAbi=$Abi"
 
 Write-Host "构建：$mode / $Abi / $versionName ($versionCode)"
-if ($mode -eq 'release-local') { Write-Host '签名：本地 Android Debug 测试证书；已启用 Release 压缩优化。' }
+if ($mode -eq 'release-local') { Write-Host '签名：与 Actions 共用的固定预览测试证书；已启用 Release 压缩优化。' }
 if ($Unsigned) { Write-Host '签名：未签名；此 APK 不能直接安装。' }
 Write-Host "日志：$logPath"
 try {
