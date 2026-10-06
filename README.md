@@ -55,6 +55,7 @@
 **支持 Android 8.0（API 26）及以上。** 前往 [GitHub Releases](https://github.com/nobYoQ/novelia/releases) 下载 APK、查看发行说明与 SHA-256 校验文件。如果尚无可用发行版，可以 [从源码构建](#构建)。
 
 - **版本与更新**：已发布版本以 Releases 为准，当前源码版本见 [version.properties](version.properties)。
+- **预览版**：默认分支的成功构建自动更新 [Preview Pre-release](https://github.com/nobYoQ/novelia/releases/tag/preview)，可通过 [固定 APK 地址](https://github.com/nobYoQ/novelia/releases/download/preview/Novelia-preview-universal.apk) 下载。任意分支的逐次构建产物仍在 [Actions → Preview APK](https://github.com/nobYoQ/novelia/actions/workflows/preview-apk.yml) 保留 14 天。构建、签名与发布说明见 [自动预览包](docs/development/getting-started.md#github-actions-自动预览包)。
 - **安装与升级**：正式包与本地测试包的签名可能不同；更换安装来源前，请先完成 [阅读资料备份](docs/data/backup-and-recovery.md)。
 - **问题与建议**：在 [Issues](https://github.com/nobYoQ/novelia/issues) 反馈客户端问题；原站内容、账号和权限问题请联系原站。
 
@@ -108,7 +109,7 @@ sh ./gradlew --no-daemon :app:assembleDebug :app:testDebugUnitTest :app:lintDebu
 
 ## 验证
 
-构建时加 `-Verify` 可运行单元测试与 Lint。设备测试、只读站点联调和发行前检查见 [测试与验收](docs/quality/testing.md)；外部站点测试默认跳过，当前检查与发布流程手动执行。
+构建时加 `-Verify` 可运行单元测试与 Lint。[Preview APK](.github/workflows/preview-apk.yml) 自动构建 Release 预览包及其依赖的 Go 单元测试。JVM 单元测试、完整 Lint、设备测试、只读站点联调和发行前检查仍按 [测试与验收](docs/quality/testing.md) 手动执行；外部站点测试默认跳过，正式发布仍手动执行。
 
 ## 工程结构
 

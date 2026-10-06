@@ -10,7 +10,7 @@
 ./build-debug.ps1 -Verify
 ```
 
-这会构建 Debug、运行 JVM 单元测试和 Lint。Release、设备、论坛/ECH 联调及性能检查按[测试指南](docs/quality/testing.md)选择。仓库没有 CI，提交者记录实际执行结果，维护者按改动复验。
+这会构建 Debug、运行 JVM 单元测试和 Lint。Release、设备、论坛/ECH 联调及性能检查按[测试指南](docs/quality/testing.md)选择。[Preview APK](.github/workflows/preview-apk.yml) 在分支推送时自动构建 Release 预览包，默认分支还会更新滚动 Pre-release，但不代替上述检查；提交者记录实际执行结果，维护者按改动复验。
 
 ## 实现约定
 

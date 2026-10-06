@@ -1,6 +1,8 @@
 # 手动发布
 
-本项目通过 [GitHub Releases](https://github.com/nobYoQ/novelia/releases) 分发 APK，没有 CI 或自动发布流程。普通测试使用 `build-debug.ps1` / `build-release.ps1`；本页只处理正式证书、对应源码和发行附件。
+本项目通过 [GitHub Releases](https://github.com/nobYoQ/novelia/releases) 手动分发正式 APK。[Preview APK](.github/workflows/preview-apk.yml) 在默认分支构建成功后自动更新测试签名的 `preview` Pre-release，下载和配置见 [Actions 构建指南](docs/development/getting-started.md#github-actions-自动预览包)。普通本地测试使用 `build-debug.ps1` / `build-release.ps1`；以下正式证书、版本标签和发行附件流程仍手动执行。
+
+`preview` 是滚动预览专用标签，允许随成功构建移动并替换同名预览附件。已有其他标签的 Pre-release 可通过 `NOVELIA_PREVIEW_TAG` 仓库变量指定；目标必须是可修改的预发布，自动发布脚本拒绝替换普通正式 Release 和不可变 Release。
 
 ## 发布前准备
 
@@ -17,7 +19,7 @@
 3. 完成检查、审查并提交，确认工作区干净。
 4. 为该提交创建与版本名一致的 `v<versionName>` 标签，从同一提交构建。
 
-APK、源码、元数据和标签必须对应同一个提交。发布后不移动标签，不静默覆盖旧附件。
+APK、源码、元数据和标签必须对应同一个提交。正式版本发布后不移动标签，不静默覆盖旧附件。
 
 ## 签名配置
 

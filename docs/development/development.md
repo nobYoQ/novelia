@@ -57,6 +57,6 @@
 
 文件使用 UTF-8 无 BOM，遵循 [.editorconfig](../../.editorconfig)。用书籍键、章节 ID、操作 ID 表达身份，不用书名和列表下标。保留协程取消，I/O 和计算使用相应调度器。
 
-调整依赖后检查 Debug、Release、R8、原生 ABI 和最低 Android 版本，并重新生成、复核[开源许可证](../../licenses/README.md)。当前仓库没有 ktlint、detekt 或 CI 门禁，不能把未配置的检查写成通过。
+调整依赖后检查 Debug、Release、R8、原生 ABI 和最低 Android 版本，并重新生成、复核[开源许可证](../../licenses/README.md)。[Preview APK](../../.github/workflows/preview-apk.yml) 自动构建 Release 预览包并在默认分支更新 Pre-release；仓库没有 ktlint、detekt 或完整测试门禁，不能把未配置的检查写成通过。
 
 移动 Worker 要保留旧任务类名兼容；移动 Kotlin 包和文件要检查 [Profile 描述符](../quality/baseline-profiles.md)。新文件的放置规则见[源码导航](../architecture/source-layout.md)。

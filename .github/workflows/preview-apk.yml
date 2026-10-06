@@ -1,0 +1,189 @@
+name: Preview APK
+run-name: Release preview · ${{ github.ref_name }} · ${{ github.sha }}
+
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Release preview
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    outputs:
+      apk-artifact-id: ${{ steps.apk.outputs.artifact-id }}
+      info-artifact-id: ${{ steps.build-info.outputs.artifact-id }}
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Read pinned native toolchain
+        id: toolchain
+        run: |
+          $toolchain = ConvertFrom-StringData (Get-Content -LiteralPath 'gradle/ech-native.properties' -Raw -Encoding utf8)
+          "ndk-version=$($toolchain.ndkVersion)" | Out-File -LiteralPath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Set up Android SDK and NDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools platforms;36 build-tools;35.0.0 ndk;${{ steps.toolchain.outputs.ndk-version }}
+
+      - name: Set up pinned Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: native/ech/go.mod
+          # Gradle uses outputs/ech-tools instead of Go's default cache locations.
+          cache: false
+
+      - name: Set up Gradle and dependency cache
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Cache native build dependencies
+        uses: actions/cache@v6
+        with:
+          path: |
+            outputs/ech-tools/modules
+            outputs/ech-tools/cache
+            outputs/ech-tools/gopath/bin
+          key: ${{ runner.os }}-${{ runner.arch }}-ech-${{ hashFiles('gradle/ech-native.properties', 'native/ech/**/go.mod', 'native/ech/**/go.sum') }}-${{ hashFiles('native/ech/**/*.go') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-ech-${{ hashFiles('gradle/ech-native.properties', 'native/ech/**/go.mod', 'native/ech/**/go.sum') }}-
+
+      - name: Build signed Release preview
+        env:
+          NOVELIA_MIRROR_ACCESS_TOKEN: ${{ secrets.NOVELIA_MIRROR_ACCESS_TOKEN }}
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          # Release optimizations with Android's test certificate; no distribution key required.
+          & ./gradlew --no-daemon --console=plain :app:assembleRelease '-PreleaseSigning=false' '-PlocalReleaseSigning=true' '-PtargetAbi=universal'
+          if ($LASTEXITCODE -ne 0) { throw "Release build failed with exit code $LASTEXITCODE." }
+
+      - name: Verify and prepare preview artifacts
+        id: package
+        run: |
+          Set-StrictMode -Version Latest
+          $PSNativeCommandUseErrorActionPreference = $false
+          $apkDirectory = [IO.Path]::GetFullPath('app/build/outputs/apk/release')
+          $metadata = Get-Content -LiteralPath (Join-Path $apkDirectory 'output-metadata.json') -Raw -Encoding utf8 | ConvertFrom-Json
+          if ($metadata.applicationId -ne 'cc.novelia.app' -or @($metadata.elements).Count -ne 1) {
+            throw 'Unexpected Release APK metadata.'
+          }
+          $element = $metadata.elements[0]
+          $apk = [IO.Path]::GetFullPath((Join-Path $apkDirectory $element.outputFile))
+          $apkPrefix = $apkDirectory + [IO.Path]::DirectorySeparatorChar
+          if (-not $apk.StartsWith($apkPrefix, [StringComparison]::Ordinal) -or
+              [IO.Path]::GetExtension($apk) -ne '.apk' -or -not (Test-Path -LiteralPath $apk -PathType Leaf)) {
+            throw 'Release APK is missing or outside its output directory.'
+          }
+          $mapping = 'app/build/outputs/mapping/release/mapping.txt'
+          if (-not (Test-Path -LiteralPath $mapping -PathType Leaf)) { throw 'Release R8 mapping is missing.' }
+          $apksigner = Join-Path $env:ANDROID_HOME 'build-tools/35.0.0/apksigner'
+          & $apksigner verify $apk
+          if ($LASTEXITCODE -ne 0) { throw 'Release APK signature verification failed.' }
+
+          $outputDirectory = 'outputs/preview'
+          [IO.Directory]::CreateDirectory($outputDirectory) | Out-Null
+          $shortCommit = $env:GITHUB_SHA.Substring(0, 7)
+          $stem = "Novelia-$($element.versionName)-preview-$shortCommit-$env:GITHUB_RUN_NUMBER.$env:GITHUB_RUN_ATTEMPT"
+          $outputApk = Join-Path $outputDirectory "$stem.apk"
+          Copy-Item -LiteralPath $apk -Destination $outputApk
+          Copy-Item -LiteralPath $mapping -Destination (Join-Path $outputDirectory "$stem-mapping.txt")
+          $hash = (Get-FileHash -LiteralPath $outputApk -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $stem.apk" | Set-Content -LiteralPath "$outputApk.sha256" -Encoding utf8NoBOM
+          @(
+            "commit=$env:GITHUB_SHA"
+            "ref=$env:GITHUB_REF"
+            "run=$env:GITHUB_RUN_NUMBER"
+            "attempt=$env:GITHUB_RUN_ATTEMPT"
+            "versionName=$($element.versionName)"
+            "versionCode=$($element.versionCode)"
+            'variant=release'
+            'abi=universal'
+            'signing=android-debug-test-certificate'
+          ) | Set-Content -LiteralPath (Join-Path $outputDirectory "$stem-build-info.txt") -Encoding utf8NoBOM
+          "apk-path=$outputApk" | Out-File -LiteralPath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "artifact-name=$stem" | Out-File -LiteralPath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Upload preview APK
+        id: apk
+        uses: actions/upload-artifact@v7
+        with:
+          path: ${{ steps.package.outputs.apk-path }}
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload checksum, build info and R8 mapping
+        id: build-info
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.package.outputs.artifact-name }}-build-info
+          path: |
+            outputs/preview/*.sha256
+            outputs/preview/*-build-info.txt
+            outputs/preview/*-mapping.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Add download links to build summary
+        env:
+          APK_URL: ${{ steps.apk.outputs.artifact-url }}
+          BUILD_INFO_URL: ${{ steps.build-info.outputs.artifact-url }}
+        run: |
+          @(
+            'Release 预览包已构建，包含 R8 压缩与资源收缩，使用 Android 测试证书签名。'
+            ''
+            "[下载 APK]($env:APK_URL) · [下载校验文件、构建信息和 R8 映射]($env:BUILD_INFO_URL)"
+            ''
+            '产物保留 14 天，下载需要登录 GitHub。包名与正式版相同，更换签名来源前请备份阅读资料。'
+          ) | Out-File -LiteralPath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
+  publish:
+    name: Update preview Pre-release
+    needs: build
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    concurrency:
+      group: preview-prerelease
+      cancel-in-progress: false
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout publication script
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Download this build's verified artifacts
+        uses: actions/download-artifact@v8
+        with:
+          artifact-ids: ${{ needs.build.outputs.apk-artifact-id }},${{ needs.build.outputs.info-artifact-id }}
+          path: outputs/publish-preview
+          merge-multiple: true
+
+      - name: Create or update rolling Pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREVIEW_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          PREVIEW_RELEASE_TAG: ${{ vars.NOVELIA_PREVIEW_TAG || 'preview' }}
+        run: ./scripts/publish-preview.ps1 -ArtifactsDirectory 'outputs/publish-preview' -Tag $env:PREVIEW_RELEASE_TAG

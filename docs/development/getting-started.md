@@ -61,6 +61,37 @@ Debug 和本地 Release 都支持 `-Abi`、`-Offline` 和 `-Verify`。默认 ABI
 
 应用包名统一为 `cc.novelia.app`，Debug 没有独立后缀。安装到已有同包名应用的设备时，需要签名兼容且版本满足升级要求。不同签名之间迁移前先[备份阅读资料](../data/backup-and-recovery.md)。
 
+## GitHub Actions 自动预览包
+
+[Preview APK 工作流](../../.github/workflows/preview-apk.yml) 在每次推送到任意分支时，构建该次推送末端提交的通用 Release APK。仅本地 `commit` 不会触发，一次推送包含多个提交时只构建末端提交。默认分支包含工作流后，也可在 Actions 页面选择 **Run workflow** 手动构建。
+
+工作流准备 JDK 17、Platform 36、Build Tools 35.0.0，并从项目配置读取固定的 Go 和 NDK 版本。Gradle 自动构建 ECH AAR 及运行依赖的 Go 单元测试；预览构建启用 R8 与资源收缩，使用 `-PreleaseSigning=false -PlocalReleaseSigning=true` 测试签名。不需要配置正式发布证书。
+
+默认分支的成功构建还会自动创建或更新标签为 `preview` 的 [Pre-release](https://github.com/nobYoQ/novelia/releases/tag/preview)，下载入口保持不变：
+
+| 附件 | 用途 |
+| --- | --- |
+| [Novelia-preview-universal.apk](https://github.com/nobYoQ/novelia/releases/download/preview/Novelia-preview-universal.apk) | 最新 Release 通用预览包 |
+| `Novelia-preview-universal.apk.sha256` | APK 的 SHA-256 校验 |
+| `Novelia-preview-build-info.txt` | 精确源码提交、应用版本和构建信息 |
+| `Novelia-preview-mapping.zip` | 压缩的 R8 映射 |
+
+后续构建会替换这四个同名附件，并更新预发布说明和预览标签指向的提交。发布任务串行执行，在上传前后核对默认分支最新提交，旧构建晚完成时跳过更新。新附件全部上传并检查大小/摘要后才替换旧附件；上传失败时上一版下载保留。手动附加的其他文件会保留。正式版的 `Latest` 标记和版本标签不参与自动选择。
+
+每次构建的独立下载仍在 **Actions → Preview APK → 对应运行 → Artifacts**：直接下载 `.apk`，`build-info` 附件包含校验、提交信息和原始 R8 映射。Actions 产物保留 14 天，下载需要登录 GitHub；文件名包含源码版本、短提交号、运行编号和重试次数。Pre-release 附件持续保留至下一次更新，不受 Actions 的 14 天期限影响。其他分支只生成 Actions 产物。
+
+已有预发布使用其他标签时，在 **Settings → Secrets and variables → Actions → Variables** 设置 `NOVELIA_PREVIEW_TAG` 为对应标签；脚本拒绝覆盖普通正式 Release 或不可变 Release。该变量接受字母、数字、点、下划线和连字符。更改标签后，README 中的固定下载链接也应同步修改。
+
+发布任务通过内置 `GITHUB_TOKEN` 的 `contents: write` 权限操作同仓库，不需要另建 PAT。仓库规则必须允许工作流创建或更新预览标签。滚动预览要求 **Settings → General → Releases → Enable release immutability** 未启用；不可变 Release 的标签和附件不能替换，详见 [GitHub 官方说明](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases)。
+
+包名仍为 `cc.novelia.app`，应用内部版本仍来自 `version.properties`。GitHub 临时运行环境生成的测试证书可能在不同运行间变化，与本地测试包及正式包也可能不同；出现签名不兼容时需先[备份阅读资料](../data/backup-and-recovery.md)，再卸载旧包安装。
+
+镜像线路是可选功能。维护者可在 **Settings → Secrets and variables → Actions** 设置 `NOVELIA_MIRROR_ACCESS_TOKEN` 仓库 Secret，工作流仅通过构建步骤环境变量注入。未设置时仍能构建和使用原站，镜像线路禁用。该入口口令会包含在 APK 中，说明见[镜像配置](book-source-mirrors.md)。
+
+本工作流负责预览构建与 Pre-release 更新，`assembleRelease` 包含 AGP 内置的致命问题 Lint 检查，不代替 JVM 单元测试、完整 Lint、设备测试和正式发行验收。仓库后台需允许 GitHub Actions，首次设置见[仓库设置清单](../../.github/REPOSITORY_SETUP.md)。
+
+发布脚本的本地模拟检查可运行 `./scripts/test-publish-preview.ps1`，覆盖创建、替换、过期构建、上传失败、校验失败和权限/不可变限制；不会连接 GitHub。真正发布由工作流中的 [publish-preview.ps1](../../scripts/publish-preview.ps1) 执行。
+
 ## 自动检测与手动配置
 
 [build-environment.ps1](../../scripts/build-environment.ps1) 的选择顺序如下：
