@@ -63,7 +63,7 @@ Debug 和本地 Release 都支持 `-Abi`、`-Offline` 和 `-Verify`。默认 ABI
 
 ## GitHub Actions 自动预览包
 
-[Preview APK 工作流](../../.github/workflows/preview-apk.yml) 在每次推送到任意分支时，构建该次推送末端提交的通用 Release APK。仅本地 `commit` 不会触发，一次推送包含多个提交时只构建末端提交。默认分支包含工作流后，也可在 Actions 页面选择 **Run workflow** 手动构建。
+[Preview APK 工作流](../../.github/workflows/preview-apk.yml) 在每次推送到任意分支时，仅构建该次推送末端提交的 ARM64（`arm64-v8a`）Release APK，适用于 ARM64 Android 设备。仅本地 `commit` 不会触发，一次推送包含多个提交时只构建末端提交。默认分支包含工作流后，也可在 Actions 页面选择 **Run workflow** 手动构建。
 
 工作流准备 JDK 17、Platform 36、Build Tools 35.0.0，并从项目配置读取固定的 Go 和 NDK 版本。Gradle 自动构建 ECH AAR 及运行依赖的 Go 单元测试；预览构建实际执行 `assembleRelease`，启用 R8 与资源收缩，使用 `-PreleaseSigning=false -PlocalReleaseSigning=true` 固定测试签名。不需要配置正式发布证书，但必须先设置下面的预览密钥 Secret。
 
@@ -88,16 +88,29 @@ gh auth login
 
 | 附件 | 用途 |
 | --- | --- |
-| [Novelia-preview-universal.apk](https://github.com/nobYoQ/novelia/releases/download/preview/Novelia-preview-universal.apk) | 最新 Release 通用预览包 |
-| `Novelia-preview-universal.apk.sha256` | APK 的 SHA-256 校验 |
+| [Novelia-preview-arm64-v8a.apk](https://github.com/nobYoQ/novelia/releases/download/preview/Novelia-preview-arm64-v8a.apk) | 最新 ARM64 Release 预览包 |
+| `Novelia-preview-arm64-v8a.apk.sha256` | APK 的 SHA-256 校验 |
 | `Novelia-preview-build-info.txt` | 精确源码提交、应用版本和构建信息 |
 | `Novelia-preview-mapping.zip` | 压缩的 R8 映射 |
 
 后续构建会替换这四个同名附件，并更新预发布说明和预览标签指向的提交。首次创建草稿时从 Release 列表读取；失败运行留下的同标签草稿会复用，避免按标签读取未发布草稿时的 404。发布任务串行执行，在上传前后核对默认分支最新提交，旧构建晚完成时跳过更新。新附件全部上传并检查大小/摘要后才替换旧附件；上传失败时上一版下载保留。手动附加的其他文件会保留。正式版的 `Latest` 标记和版本标签不参与自动选择。
 
+从通用预览迁移后的首次成功发布，会清理原先由 CI 管理的 `Novelia-preview-universal.apk` 及其校验文件；上传或发布失败时保留旧附件。固定下载链接改用上表中的 ARM64 地址。
+
+预发布描述只更新 **“自动构建信息”** 区块，其他人工填写的 Markdown、链接和空行保持原样。已有正文没有区块时，首次发布会保留全文并在末尾追加；后续替换这个区块，不重复追加。写入前会重新读取最新正文，保留附件上传期间的人工编辑。
+
+你可以直接在 GitHub 编辑区块以外的描述。区块边界使用下面的隐藏 HTML 注释，编辑时保留这对标记；标记之间的内容由 CI 管理，部分缺失、重复或顺序错误时发布会停止，保留原描述：
+
+```markdown
+<!-- novelia-preview-build:start -->
+### 自动构建信息
+（CI 更新这里的版本、提交和下载信息）
+<!-- novelia-preview-build:end -->
+```
+
 每次构建的独立下载仍在 **Actions → Preview APK → 对应运行 → Artifacts**：直接下载 `.apk`，`build-info` 附件包含校验、提交信息和原始 R8 映射。Actions 产物保留 14 天，下载需要登录 GitHub；文件名包含源码版本、短提交号、运行编号和重试次数。Pre-release 附件持续保留至下一次更新，不受 Actions 的 14 天期限影响。其他分支只生成 Actions 产物。
 
-`Build Release preview` 成功表示 APK 已完成构建；Pre-release 还需后续 `Update preview Pre-release` 任务成功。非默认分支的发布任务显示 `Skipped` 属于预期，合并或推送到默认分支后才会发布。默认分支发布失败时，查看发布任务日志；无需再执行另一种“正式构建”。
+`Build ARM64 Release preview` 成功表示 APK 已完成构建；Pre-release 还需后续 `Update preview Pre-release` 任务成功。非默认分支的发布任务显示 `Skipped` 属于预期，合并或推送到默认分支后才会发布。默认分支发布失败时，查看发布任务日志；无需再执行另一种“正式构建”。
 
 已有预发布使用其他标签时，在 **Settings → Secrets and variables → Actions → Variables** 设置 `NOVELIA_PREVIEW_TAG` 为对应标签；脚本拒绝覆盖普通正式 Release 或不可变 Release。该变量接受字母、数字、点、下划线和连字符。更改标签后，README 中的固定下载链接也应同步修改。
 
@@ -109,7 +122,7 @@ gh auth login
 
 本工作流负责预览构建与 Pre-release 更新，`assembleRelease` 包含 AGP 内置的致命问题 Lint 检查，不代替 JVM 单元测试、完整 Lint、设备测试和正式发行验收。仓库后台需允许 GitHub Actions，首次设置见[仓库设置清单](../../.github/REPOSITORY_SETUP.md)。
 
-发布脚本的本地模拟检查可运行 `./scripts/test-publish-preview.ps1`，覆盖首次草稿创建、草稿重试、分页读取、替换、过期构建、上传失败、校验失败和权限/不可变限制；不会连接 GitHub。真正发布由工作流中的 [publish-preview.ps1](../../scripts/publish-preview.ps1) 执行。
+发布脚本的本地模拟检查可运行 `./scripts/test-publish-preview.ps1`，覆盖首次草稿创建、草稿重试、人工描述保留、自动区块替换、上传期间编辑、标记损坏、分页读取、附件替换、过期构建、上传失败、校验失败和权限/不可变限制；不会连接 GitHub。真正发布由工作流中的 [publish-preview.ps1](../../scripts/publish-preview.ps1) 执行。
 
 在原签名机器可运行 `./scripts/test-preview-signing.ps1` 检查原证书、错误密钥、Secret 编码、认证失败和 stdin 上传；上传使用本地替身，不连接 GitHub 或生成私钥文件。
 

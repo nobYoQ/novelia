@@ -15,6 +15,8 @@ function gh {
         switch ($arguments[1]) {
             'create' {
                 $fixture.Created = $true
+                $notesIndex = [Array]::IndexOf($arguments, '--notes-file')
+                $fixture.Body = [IO.File]::ReadAllText($arguments[$notesIndex + 1], [Text.Encoding]::UTF8)
                 return 'https://github.com/example/novelia/releases/untagged/draft-fixture'
             }
             'upload' {
@@ -32,9 +34,12 @@ function gh {
                         digest = 'sha256:' + (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
                     })
                 }
+                if ($fixture.Mode -eq 'notes-edited-during-upload') { $fixture.Body = $fixture.EditedBody }
                 return ''
             }
             'edit' {
+                $notesIndex = [Array]::IndexOf($arguments, '--notes-file')
+                $fixture.Body = [IO.File]::ReadAllText($arguments[$notesIndex + 1], [Text.Encoding]::UTF8)
                 $fixture.Published = $true
                 return ''
             }
@@ -62,19 +67,22 @@ function gh {
                     $global:LASTEXITCODE = 1
                     return 'gh: Not Found (HTTP 404)'
                 }
-                return (@{ id = 7; prerelease = ($fixture.Mode -ne 'regular'); immutable = ($fixture.Mode -eq 'immutable') } | ConvertTo-Json -Compress)
+                return (@{ id = 7; body = $fixture.Body; prerelease = ($fixture.Mode -ne 'regular'); immutable = ($fixture.Mode -eq 'immutable') } | ConvertTo-Json -Compress)
             }
             if ($endpoint.EndsWith('/releases?per_page=100')) {
                 $pages = [object[]]::new(2)
                 $pages[0] = @(@{ id = 8; tag_name = 'v0.0.1'; draft = $false; prerelease = $false; immutable = $true })
                 $pages[1] = @()
                 if ($fixture.Created -or $fixture.Mode -in @('resume-draft', 'duplicate-drafts')) {
-                    $pages[1] = @(@{ id = 7; tag_name = 'preview'; draft = $true; prerelease = $true; immutable = $false })
+                    $pages[1] = @(@{ id = 7; tag_name = 'preview'; body = $fixture.Body; draft = $true; prerelease = $true; immutable = $false })
                 }
                 if ($fixture.Mode -eq 'duplicate-drafts') {
                     $pages[1] += @{ id = 9; tag_name = 'preview'; draft = $true; prerelease = $true; immutable = $false }
                 }
                 return (ConvertTo-Json -InputObject $pages -Depth 5 -Compress)
+            }
+            if ($endpoint.EndsWith('/releases/7')) {
+                return (@{ id = 7; body = $fixture.Body } | ConvertTo-Json -Compress)
             }
             if ($endpoint.EndsWith('/assets?per_page=100')) {
                 if ($fixture.Mode -eq 'digest-mismatch') { $fixture.Assets[$fixture.Assets.Count - 1].digest = 'sha256:bad' }
@@ -145,7 +153,13 @@ foreach ($name in $environment.Keys) {
     [Environment]::SetEnvironmentVariable($name, $environment[$name], 'Process')
 }
 try {
-    $modes = @('create', 'resume-draft', 'update', 'duplicate-drafts', 'head-not-found', 'stale', 'race', 'upload-failure', 'digest-mismatch', 'tag-protected', 'immutable', 'regular', 'forbidden', 'checksum-mismatch', 'non-default')
+    $successModes = @('create', 'resume-draft', 'update', 'legacy-universal', 'notes-manual-only', 'notes-managed-block', 'notes-empty', 'notes-null', 'notes-edited-during-upload')
+    $modes = $successModes + @('wrong-abi', 'notes-unclosed-start', 'notes-unclosed-end', 'notes-duplicate-block', 'notes-reversed-markers', 'duplicate-drafts', 'head-not-found', 'stale', 'race', 'upload-failure', 'digest-mismatch', 'tag-protected', 'immutable', 'regular', 'forbidden', 'checksum-mismatch', 'non-default')
+    $startMarker = '<!-- novelia-preview-build:start -->'
+    $endMarker = '<!-- novelia-preview-build:end -->'
+    $manualPrefix = "# 维护者说明`r`n中文说明与 [手动链接](https://example.invalid/docs)。`r`n`r`n"
+    $manualSuffix = "`r`n`r`n## 手写升级提示`n保留末尾空行。`n`n"
+    $oldBlock = "$startMarker`n旧版自动信息，应该替换。`n$endMarker"
     foreach ($mode in $modes) {
         $fixtureDirectory = Join-Path $rootPath ('outputs/ci-checks/publish-tests/' + $mode + '-' + [Guid]::NewGuid().ToString('N'))
         [IO.Directory]::CreateDirectory($fixtureDirectory) | Out-Null
@@ -155,10 +169,21 @@ try {
         if ($mode -eq 'checksum-mismatch') { $hash = '0' * 64 }
         "$hash  Novelia-fixture.apk" | Set-Content -LiteralPath "$apkPath.sha256" -Encoding utf8NoBOM
         'synthetic R8 mapping' | Set-Content -LiteralPath (Join-Path $fixtureDirectory 'Novelia-fixture-mapping.txt') -Encoding utf8NoBOM
-        @("commit=$env:GITHUB_SHA", 'versionName=0.0.1', 'versionCode=1', 'variant=release', 'abi=universal') |
+        $fixtureAbi = if ($mode -eq 'wrong-abi') { 'universal' } else { 'arm64-v8a' }
+        @("commit=$env:GITHUB_SHA", 'versionName=0.0.1', 'versionCode=1', 'variant=release', "abi=$fixtureAbi") |
             Set-Content -LiteralPath (Join-Path $fixtureDirectory 'Novelia-fixture-build-info.txt') -Encoding utf8NoBOM
         $env:GITHUB_STEP_SUMMARY = Join-Path $fixtureDirectory 'summary.md'
         $env:GITHUB_REF = if ($mode -eq 'non-default') { 'refs/heads/feature' } else { 'refs/heads/main' }
+        $initialBody = switch ($mode) {
+            'notes-managed-block' { $manualPrefix + $oldBlock + $manualSuffix }
+            'notes-empty' { '' }
+            'notes-null' { $null }
+            'notes-unclosed-start' { $manualPrefix + $startMarker + $manualSuffix }
+            'notes-unclosed-end' { $manualPrefix + $endMarker + $manualSuffix }
+            'notes-duplicate-block' { $manualPrefix + $oldBlock + "`n" + $oldBlock + $manualSuffix }
+            'notes-reversed-markers' { $manualPrefix + $endMarker + "`n" + $startMarker + $manualSuffix }
+            default { $manualPrefix }
+        }
         $global:NoveliaPreviewFixture = @{
             Mode = $mode
             Calls = [Collections.Generic.List[string]]::new()
@@ -169,20 +194,26 @@ try {
             Published = $false
             HeadReads = 0
             TagSha = $(if ($mode -in @('create', 'resume-draft')) { $null } else { '0' * 40 })
+            Body = $initialBody
+            EditedBody = "# 上传期间更新的人工描述`r`n保留这次修改。`r`n"
         }
         $fixture = $global:NoveliaPreviewFixture
-        $stableNames = @('Novelia-preview-universal.apk', 'Novelia-preview-universal.apk.sha256', 'Novelia-preview-build-info.txt', 'Novelia-preview-mapping.zip')
+        $stableNames = @('Novelia-preview-arm64-v8a.apk', 'Novelia-preview-arm64-v8a.apk.sha256', 'Novelia-preview-build-info.txt', 'Novelia-preview-mapping.zip')
+        $legacyNames = @('Novelia-preview-universal.apk', 'Novelia-preview-universal.apk.sha256')
         if ($mode -ne 'create') {
             for ($index = 0; $index -lt $stableNames.Count; $index++) {
+                if ($mode -eq 'legacy-universal' -and $index -lt 2) { continue }
                 $fixture.Assets.Add([pscustomobject]@{ id = $index + 1; name = $stableNames[$index]; state = 'uploaded'; size = 1; digest = 'sha256:old' })
             }
             $fixture.Assets.Add([pscustomobject]@{ id = 5; name = 'manual-notes.txt'; state = 'uploaded'; size = 1; digest = 'sha256:manual' })
             $fixture.Assets.Add([pscustomobject]@{ id = 6; name = 'Novelia-preview-staging-999-1-leftover.apk'; state = 'uploaded'; size = 1; digest = 'sha256:leftover' })
+            $fixture.Assets.Add([pscustomobject]@{ id = 7; name = $legacyNames[0]; state = 'uploaded'; size = 1; digest = 'sha256:universal' })
+            $fixture.Assets.Add([pscustomobject]@{ id = 8; name = $legacyNames[1]; state = 'uploaded'; size = 1; digest = 'sha256:universal' })
         }
         $failure = $null
         try { & $publicationPath -ArtifactsDirectory $fixtureDirectory -Tag 'preview' *> $null }
         catch { $failure = $_.Exception.Message }
-        if ($mode -in @('create', 'resume-draft', 'update')) {
+        if ($mode -in $successModes) {
             Assert-PreviewTest ($null -eq $failure) "$mode failed: $failure"
             Assert-PreviewTest ($fixture.Published -and $fixture.TagSha -eq $env:GITHUB_SHA) "$mode did not publish the expected commit."
             foreach ($name in $stableNames) {
@@ -190,6 +221,26 @@ try {
             }
             Assert-PreviewTest (@($fixture.Assets | Where-Object { $_.name.StartsWith('Novelia-preview-staging-') }).Count -eq 0) "$mode left staged assets after success."
             Assert-PreviewTest ($fixture.Calls.Exists([Predicate[string]]{ param($call) $call.Contains('--latest=false') })) "$mode could change the stable Latest release."
+            Assert-PreviewTest (@($fixture.Assets | Where-Object { $_.name -in $legacyNames }).Count -eq 0) "$mode retained an obsolete universal package."
+            Assert-PreviewTest ($fixture.Body.Contains('/Novelia-preview-arm64-v8a.apk')) "$mode published the wrong APK link."
+            if ($mode -eq 'legacy-universal') {
+                Assert-PreviewTest (-not $fixture.Deleted.Contains(5)) 'Migration removed a manual attachment.'
+                $publishIndex = $fixture.Calls.FindIndex([Predicate[string]]{ param($call) $call.StartsWith('release edit ') })
+                $legacyDeleteIndex = $fixture.Calls.FindIndex([Predicate[string]]{ param($call) $call.StartsWith('api --method DELETE ') -and $call.Contains('/assets/7') })
+                Assert-PreviewTest ($legacyDeleteIndex -gt $publishIndex) 'The universal package was removed before ARM64 publication succeeded.'
+            }
+            Assert-PreviewTest ([regex]::Matches($fixture.Body, [regex]::Escape($startMarker)).Count -eq 1) "$mode duplicated or omitted the automatic block."
+            Assert-PreviewTest ([regex]::Matches($fixture.Body, [regex]::Escape($endMarker)).Count -eq 1) "$mode omitted the end marker."
+            Assert-PreviewTest ($fixture.Body.Contains("[GitHub Actions]($env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID)")) "$mode did not update build information."
+            if ($mode -eq 'notes-managed-block') {
+                Assert-PreviewTest ($fixture.Body.StartsWith($manualPrefix, [StringComparison]::Ordinal) -and $fixture.Body.EndsWith($manualSuffix, [StringComparison]::Ordinal)) 'Manual text or its whitespace was changed.'
+                Assert-PreviewTest (-not $fixture.Body.Contains('旧版自动信息')) 'The previous automatic block was retained.'
+            } elseif ($mode -eq 'notes-edited-during-upload') {
+                Assert-PreviewTest ($fixture.Body.StartsWith($fixture.EditedBody, [StringComparison]::Ordinal)) 'A manual edit made during upload was lost.'
+                Assert-PreviewTest (-not $fixture.Body.Contains($manualPrefix)) 'Stale manual notes overwrote the newer edit.'
+            } elseif ($mode -ne 'create') {
+                Assert-PreviewTest ($fixture.Body.StartsWith([string]$initialBody, [StringComparison]::Ordinal)) "$mode did not retain the original notes."
+            }
             if ($mode -eq 'resume-draft') {
                 Assert-PreviewTest (-not $fixture.Created) 'An existing draft was not reused.'
             }
@@ -203,13 +254,20 @@ try {
             $shouldFail = $mode -notin @('stale', 'race')
             Assert-PreviewTest (($null -ne $failure) -eq $shouldFail) "$mode returned an unexpected result: $failure"
             Assert-PreviewTest (-not $fixture.Published) "$mode published unexpectedly."
-            foreach ($id in @(1, 2, 3, 4, 5)) {
+            foreach ($id in @(1, 2, 3, 4, 5, 7, 8)) {
                 Assert-PreviewTest (-not $fixture.Deleted.Contains($id)) "$mode removed the previous preview or a manual attachment."
             }
             Assert-PreviewTest ($fixture.TagSha -eq ('0' * 40)) "$mode moved the preview tag unexpectedly."
             Assert-PreviewTest (-not $fixture.Created) "$mode created a release unexpectedly."
             if ($mode -eq 'head-not-found') {
                 Assert-PreviewTest ($failure.Contains('GET repos/example/novelia/git/ref/heads/main')) 'API diagnostics omitted the failing endpoint.'
+            }
+            if ($mode -eq 'wrong-abi') {
+                Assert-PreviewTest ($fixture.Calls.Count -eq 0) 'A non-ARM64 package reached GitHub.'
+            }
+            if ($mode.StartsWith('notes-')) {
+                Assert-PreviewTest ($fixture.Body -ceq $initialBody) "$mode changed malformed notes."
+                Assert-PreviewTest (-not $fixture.Calls.Exists([Predicate[string]]{ param($call) $call.StartsWith('release upload ') })) "$mode uploaded assets despite malformed note markers."
             }
         }
         Write-Output "PASS: $mode"

@@ -1,5 +1,5 @@
 name: Preview APK
-run-name: Release preview · ${{ github.ref_name }} · ${{ github.sha }}
+run-name: ARM64 Release preview · ${{ github.ref_name }} · ${{ github.sha }}
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build:
-    name: Build Release preview
+    name: Build ARM64 Release preview
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     outputs:
@@ -96,7 +96,7 @@ jobs:
         run: |
           $PSNativeCommandUseErrorActionPreference = $false
           # The same pinned test key as the local Release build; missing keys never fall back.
-          & ./gradlew --no-daemon --console=plain :app:assembleRelease '-PreleaseSigning=false' '-PlocalReleaseSigning=true' '-PtargetAbi=universal'
+          & ./gradlew --no-daemon --console=plain :app:assembleRelease '-PreleaseSigning=false' '-PlocalReleaseSigning=true' '-PtargetAbi=arm64-v8a'
           if ($LASTEXITCODE -ne 0) { throw "Release build failed with exit code $LASTEXITCODE." }
 
       - name: Verify and prepare preview artifacts
@@ -126,11 +126,19 @@ jobs:
           if ($certificates.Count -ne 1 -or $certificates[0].Groups[1].Value.ToLowerInvariant() -ne $expectedCertificate) {
             throw 'Release APK was not signed with the shared preview certificate.'
           }
+          $archive = [IO.Compression.ZipFile]::OpenRead($apk)
+          try {
+            $nativeAbis = @($archive.Entries | Where-Object { $_.FullName -match '^lib/[^/]+/[^/]+\.so$' } |
+              ForEach-Object { $_.FullName.Split('/')[1] } | Sort-Object -Unique)
+            if ($nativeAbis.Count -ne 1 -or $nativeAbis[0] -ne 'arm64-v8a') {
+              throw 'Preview APK must contain only ARM64 native libraries.'
+            }
+          } finally { $archive.Dispose() }
 
           $outputDirectory = 'outputs/preview'
           [IO.Directory]::CreateDirectory($outputDirectory) | Out-Null
           $shortCommit = $env:GITHUB_SHA.Substring(0, 7)
-          $stem = "Novelia-$($element.versionName)-preview-$shortCommit-$env:GITHUB_RUN_NUMBER.$env:GITHUB_RUN_ATTEMPT"
+          $stem = "Novelia-$($element.versionName)-preview-arm64-v8a-$shortCommit-$env:GITHUB_RUN_NUMBER.$env:GITHUB_RUN_ATTEMPT"
           $outputApk = Join-Path $outputDirectory "$stem.apk"
           Copy-Item -LiteralPath $apk -Destination $outputApk
           Copy-Item -LiteralPath $mapping -Destination (Join-Path $outputDirectory "$stem-mapping.txt")
@@ -144,7 +152,7 @@ jobs:
             "versionName=$($element.versionName)"
             "versionCode=$($element.versionCode)"
             'variant=release'
-            'abi=universal'
+            'abi=arm64-v8a'
             'signing=shared-preview-test-certificate'
             "certificateSha256=$expectedCertificate"
           ) | Set-Content -LiteralPath (Join-Path $outputDirectory "$stem-build-info.txt") -Encoding utf8NoBOM
@@ -179,7 +187,7 @@ jobs:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           @(
-            'Release 预览包已构建，包含 R8 压缩与资源收缩，与本地构建共用固定预览测试证书。'
+            'ARM64 Release 预览包已构建，包含 R8 压缩与资源收缩，与本地构建共用固定预览测试证书。'
             ''
             "[下载 APK]($env:APK_URL) · [下载校验文件、构建信息和 R8 映射]($env:BUILD_INFO_URL)"
             ''

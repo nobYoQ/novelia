@@ -44,6 +44,28 @@ function Get-PreviewRelease {
     return $null
 }
 
+function Merge-PreviewReleaseNotes {
+    param([AllowEmptyString()][string]$ExistingBody, [string]$BuildInfo)
+    $startMarker = '<!-- novelia-preview-build:start -->'
+    $endMarker = '<!-- novelia-preview-build:end -->'
+    $block = "$startMarker`n$BuildInfo`n$endMarker"
+    $startCount = [regex]::Matches($ExistingBody, [regex]::Escape($startMarker)).Count
+    $endCount = [regex]::Matches($ExistingBody, [regex]::Escape($endMarker)).Count
+    if ($startCount -eq 0 -and $endCount -eq 0) {
+        if ($ExistingBody.Length -eq 0) { return $block }
+        return "$ExistingBody`n`n$block"
+    }
+    if ($startCount -ne 1 -or $endCount -ne 1) {
+        throw 'Invalid preview build markers in release notes; repair the marker pair before publishing. Manual notes were preserved.'
+    }
+    $start = $ExistingBody.IndexOf($startMarker, [StringComparison]::Ordinal)
+    $end = $ExistingBody.IndexOf($endMarker, [StringComparison]::Ordinal)
+    if ($end -lt $start) {
+        throw 'Preview build markers are in the wrong order. Manual notes were preserved.'
+    }
+    return $ExistingBody.Substring(0, $start) + $block + $ExistingBody.Substring($end + $endMarker.Length)
+}
+
 function Test-PreviewHead {
     $branch = [Uri]::EscapeDataString($env:PREVIEW_DEFAULT_BRANCH)
     $head = Get-PreviewJson -Endpoint "repos/$env:GITHUB_REPOSITORY/git/ref/heads/$branch"
@@ -84,8 +106,8 @@ foreach ($line in (Get-Content -LiteralPath $infoPath -Encoding utf8)) {
     $pair = $line.Split('=', 2)
     if ($pair.Count -eq 2) { $info[$pair[0]] = $pair[1] }
 }
-if ($info['commit'] -ne $env:GITHUB_SHA -or $info['variant'] -ne 'release' -or $info['abi'] -ne 'universal') {
-    throw 'Preview build info does not match this Release build.'
+if ($info['commit'] -ne $env:GITHUB_SHA -or $info['variant'] -ne 'release' -or $info['abi'] -ne 'arm64-v8a') {
+    throw 'Preview build info does not match this ARM64 Release build.'
 }
 if (-not (Test-PreviewHead)) {
     Write-PreviewSummary '跳过预发布更新：默认分支已有更新的提交，本次 APK 仍可从 Actions 下载。'
@@ -106,7 +128,7 @@ if ($null -ne $release) {
 $generation = "$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
 $stageDirectory = Join-Path $rootPath "outputs/preview-release/$generation"
 [IO.Directory]::CreateDirectory($stageDirectory) | Out-Null
-$names = @('Novelia-preview-universal.apk', 'Novelia-preview-universal.apk.sha256', 'Novelia-preview-build-info.txt', 'Novelia-preview-mapping.zip')
+$names = @('Novelia-preview-arm64-v8a.apk', 'Novelia-preview-arm64-v8a.apk.sha256', 'Novelia-preview-build-info.txt', 'Novelia-preview-mapping.zip')
 $staged = @($names | ForEach-Object {
     [pscustomobject]@{ Name = $_; StagedName = "Novelia-preview-staging-$generation-$_"; Path = (Join-Path $stageDirectory "Novelia-preview-staging-$generation-$_") }
 })
@@ -117,16 +139,23 @@ Compress-Archive -LiteralPath $mappingPath -DestinationPath $staged[3].Path -Com
 $releaseUrl = "$env:GITHUB_SERVER_URL/$repository/releases/tag/$encodedTag"
 $apkUrl = "$env:GITHUB_SERVER_URL/$repository/releases/download/$encodedTag/$($names[0])"
 $notesPath = Join-Path $stageDirectory 'release-notes.md'
-@(
+$buildInfo = @(
+    '### 自动构建信息'
+    ''
     '此 Pre-release 随默认分支的成功构建自动更新，附件会被后续预览替换。'
     ''
     "- 应用版本：$($info['versionName']) ($($info['versionCode']))"
     "- 源码提交：[$env:GITHUB_SHA]($env:GITHUB_SERVER_URL/$repository/commit/$env:GITHUB_SHA)"
     "- 构建记录：[GitHub Actions]($env:GITHUB_SERVER_URL/$repository/actions/runs/$env:GITHUB_RUN_ID)"
-    "- [下载 Release 通用 APK]($apkUrl)"
+    '- 设备架构：ARM64 (`arm64-v8a`)'
+    "- [下载 ARM64 Release APK]($apkUrl)"
     ''
     '启用 R8 压缩和资源收缩，与本地构建共用固定预览测试证书。同签名本地包可覆盖安装，新包版本码须不低于已安装版本；其他签名来源迁移前请先备份阅读资料。'
-) | Set-Content -LiteralPath $notesPath -Encoding utf8NoBOM
+) -join "`n"
+$existingBody = if ($null -eq $release) { '' } else { [string]$release.body }
+$notes = Merge-PreviewReleaseNotes -ExistingBody $existingBody -BuildInfo $buildInfo
+# Write exactly the merged text, without adding a newline to the manual portion on every run.
+[IO.File]::WriteAllText($notesPath, $notes, [Text.UTF8Encoding]::new($false))
 $title = "Novelia $($info['versionName']) 预览版"
 if ($null -eq $release) {
     Invoke-PreviewGh -Arguments @('release', 'create', $Tag, '--repo', $repository, '--draft', '--prerelease', '--latest=false', '--target', $env:GITHUB_SHA, '--title', $title, '--notes-file', $notesPath) | Out-Null
@@ -171,9 +200,18 @@ foreach ($file in $staged) {
     }
     Invoke-PreviewGh -Arguments @('api', '--method', 'PATCH', "repos/$repository/releases/assets/$($newAssets[$file.Name].id)", '-f', "name=$($file.Name)") | Out-Null
 }
+# Refresh immediately before editing so manual changes made during upload are retained.
+$latestRelease = Get-PreviewJson -Endpoint "repos/$repository/releases/$($release.id)"
+$notes = Merge-PreviewReleaseNotes -ExistingBody ([string]$latestRelease.body) -BuildInfo $buildInfo
+[IO.File]::WriteAllText($notesPath, $notes, [Text.UTF8Encoding]::new($false))
 Invoke-PreviewGh -Arguments @('release', 'edit', $Tag, '--repo', $repository, '--draft=false', '--prerelease', '--latest=false', '--target', $env:GITHUB_SHA, '--title', $title, '--notes-file', $notesPath) | Out-Null
 $newIds = @($newAssets.Values.id)
 foreach ($oldStage in @($assets | Where-Object { $_.name.StartsWith('Novelia-preview-staging-', [StringComparison]::Ordinal) -and $_.id -notin $newIds })) {
     Invoke-PreviewGh -Arguments @('api', '--method', 'DELETE', "repos/$repository/releases/assets/$($oldStage.id)") | Out-Null
+}
+# Remove only the former managed universal APK after the ARM64 release is published.
+$legacyNames = @('Novelia-preview-universal.apk', 'Novelia-preview-universal.apk.sha256')
+foreach ($oldUniversal in @($assets | Where-Object { $_.name -in $legacyNames })) {
+    Invoke-PreviewGh -Arguments @('api', '--method', 'DELETE', "repos/$repository/releases/assets/$($oldUniversal.id)") | Out-Null
 }
 Write-PreviewSummary "[Preview Pre-release]($releaseUrl) 已更新，固定下载地址：[Release APK]($apkUrl)。"
