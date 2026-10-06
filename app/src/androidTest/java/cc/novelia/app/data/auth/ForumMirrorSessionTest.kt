@@ -91,10 +91,28 @@ class ForumMirrorSessionTest {
                     else reply(request, code = 204)
                 }
                 "/api/v1/me/attention-status" -> {
-                    assertEquals("auth.novelia.cc", request.url.host)
-                    assertNull(request.header("Cookie"))
-                    assertEquals("Bearer $refreshedForum", request.header("Authorization"))
+                    val mirror = sources.capture().source == BookSource.XKVI
+                    assertEquals(if(mirror) "book.xkvi.top" else "auth.novelia.cc", request.url.host)
+                    assertEquals(if(mirror) "accessToken=test-gateway-only" else null, request.header("Cookie"))
+                    assertEquals("Bearer ${if(mirror) refreshedForum else originalForum}", request.header("Authorization"))
                     reply(request, """{"strikes":{"hasUnread":false}}""")
+                }
+                "/api/v1/me/strikes" -> {
+                    assertEquals("book.xkvi.top", request.url.host)
+                    assertEquals("GET", request.method)
+                    assertEquals("1", request.url.queryParameter("page"))
+                    assertEquals("20", request.url.queryParameter("page_size"))
+                    assertEquals("accessToken=test-gateway-only", request.header("Cookie"))
+                    assertEquals("Bearer $refreshedForum", request.header("Authorization"))
+                    reply(request, """{"total":0,"items":[],"latestStrikeId":9007199254740993}""")
+                }
+                "/api/v1/me/strikes/read-state" -> {
+                    assertEquals("book.xkvi.top", request.url.host)
+                    assertEquals("PUT", request.method)
+                    assertEquals("9007199254740993", payload(request).getValue("throughId").jsonPrimitive.content)
+                    assertEquals("accessToken=test-gateway-only", request.header("Cookie"))
+                    assertEquals("Bearer $refreshedForum", request.header("Authorization"))
+                    reply(request, """{"hasUnread":false}""")
                 }
                 else -> error("Unexpected synthetic endpoint")
             }
@@ -107,7 +125,9 @@ class ForumMirrorSessionTest {
         assertEquals("forum-xkvi", binding.source)
         ForumApi(NoveliaApi(forum, ForumApi.BASE_URL, client)).favorite(5, true)
         assertEquals(1, refreshes); assertEquals(2, writes)
-        assertFalse(ForumAccountApi(NoveliaApi(forum, ForumAccountApi.BASE_URL, client)).attentionStatus().strikes.hasUnread)
+        val account = ForumAccountApi(NoveliaApi(forum, ForumAccountApi.BASE_URL, client))
+        assertFalse(account.attentionStatus().strikes.hasUnread)
+        assertFalse(account.markStrikesRead(account.strikes(0).latestStrikeId!!).hasUnread)
         assertEquals(novelToken, main.token)
         assertEquals(refreshedForum, Session(context, client, sources, AuthTarget.FORUM).token)
         val tagged = forum.bindRequest(Request.Builder().url("https://forum.novelia.cc/api/v1/post/").build(), binding)
@@ -115,6 +135,8 @@ class ForumMirrorSessionTest {
         sources.select(BookSource.ORIGINAL)
         assertEquals(originalNovel, main.token); assertEquals(originalForum, forum.token)
         assertEquals("forum", forum.capture().source)
+        assertTrue(runCatching { account.markStrikesRead(9007199254740993L, binding) }.exceptionOrNull() is SessionChangedException)
+        assertFalse(account.attentionStatus().strikes.hasUnread)
         assertThrows(SessionChangedException::class.java) { forum.tokenFor(binding) }
         sources.select(BookSource.XKVI)
         assertEquals(refreshedForum, forum.token)

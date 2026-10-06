@@ -15,7 +15,7 @@
 
 这些地址是当前客户端配置，不是本轮在线可用性验证。登录与退出见[认证](authentication.md)，镜像配置见[书源线路](../development/book-source-mirrors.md)，论坛请求见[论坛接口](forum-api-preview.md)。
 
-[NoveliaApplication](../../app/src/main/java/cc/novelia/app/NoveliaApplication.kt) 创建应用级 API 和传输。小说和论坛 API 请求先经 `BookSourceInterceptor` 绑定线路，再按目标与设置选择传输；论坛保留独立的 `app=f` 令牌，认证站处罚接口仍请求原地址。WebDAV 不共享原站 Cookie、Bearer 或 ECH。ECH 的诊断和原生入口见[网络诊断](network-diagnostics.md)。
+[NoveliaApplication](../../app/src/main/java/cc/novelia/app/NoveliaApplication.kt) 创建应用级 API 和传输。小说和论坛 API 请求先经 `BookSourceInterceptor` 绑定线路，再按目标与设置选择传输；论坛保留独立的 `app=f` 令牌，认证站的处罚记录、未读提醒与已读确认也随所选线路切换。WebDAV 不共享原站 Cookie、Bearer 或 ECH。ECH 的诊断和原生入口见[网络诊断](network-diagnostics.md)。
 
 ## 选用哪个调用入口
 

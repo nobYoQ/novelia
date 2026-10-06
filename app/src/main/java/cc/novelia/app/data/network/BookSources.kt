@@ -21,6 +21,11 @@ internal fun isForumApiPath(path: String): Boolean = listOf(
 
 internal fun isAuthApiPath(path: String): Boolean = path == "/api/v1/auth" || path.startsWith("/api/v1/auth/")
 
+/** 认证服务的普通账号接口需要镜像门禁；不能和免门禁的认证 POST 混为一类。 */
+internal fun isAuthAccountApiPath(path: String): Boolean = listOf(
+    "/api/v1/me/strikes", "/api/v1/me/attention-status",
+).any { path == it || path.startsWith("$it/") }
+
 /** 可公开的选择状态，不含 Cookie 或任何令牌。revision 使切走再切回的旧请求也失效。 */
 data class SourceSelection(val source: BookSource, val revision: Long = 0, val hasAccessToken: Boolean = false)
 
@@ -62,13 +67,12 @@ class BookSources internal constructor(
         val origin = when(url.host) {
             "n.novelia.cc", "books.fishhawk.top" -> selection.source.origin
             "book.xkvi.top" -> when {
-                isAuthApiPath(url.encodedPath) -> selection.source.authOrigin
+                isAuthApiPath(url.encodedPath) || isAuthAccountApiPath(url.encodedPath) -> selection.source.authOrigin
                 isForumApiPath(url.encodedPath) -> selection.source.forumOrigin
                 else -> selection.source.origin
             }
             "forum.novelia.cc" -> if(isForumApiPath(url.encodedPath)) selection.source.forumOrigin else return url
-            // 处罚等认证站接口未列入镜像路由，不能落入镜像的书站 API 兜底。
-            "auth.novelia.cc" -> if(isAuthApiPath(url.encodedPath)) selection.source.authOrigin else return url
+            "auth.novelia.cc" -> if(isAuthApiPath(url.encodedPath) || isAuthAccountApiPath(url.encodedPath)) selection.source.authOrigin else return url
             else -> return url
         }.toHttpUrl()
         return url.newBuilder().scheme(origin.scheme).host(origin.host).port(origin.port).build()

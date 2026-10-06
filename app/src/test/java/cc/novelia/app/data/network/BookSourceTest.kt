@@ -106,12 +106,50 @@ class BookSourceTest {
         }
     }
 
+    @Test fun authAccountRoutesUseMirrorGatewayAndReturnToAuthUpstream() {
+        val sources = sources().apply { select(BookSource.XKVI) }
+        val router = BookSourceInterceptor(sources)
+        val mirrored = listOf(
+            "GET" to "/api/v1/me/strikes?page=2&page_size=20",
+            "GET" to "/api/v1/me/attention-status",
+            "PUT" to "/api/v1/me/strikes/read-state",
+            "POST" to "/api/v1/me/strikes",
+        ).map { (method, path) ->
+            val request = Request.Builder().url("https://auth.novelia.cc$path")
+                .method(method, if(method == "GET") null else "test-json".toRequestBody())
+                .header("Authorization", "Bearer test-forum")
+                .header("Origin", BookSource.ORIGINAL.authOrigin).build()
+            router.prepare(request, sources.capture()).also {
+                assertEquals("book.xkvi.top", it.url.host)
+                assertEquals(request.url.encodedPath, it.url.encodedPath)
+                assertEquals(request.url.encodedQuery, it.url.encodedQuery)
+                assertEquals(method, it.method)
+                assertSame(request.body, it.body)
+                assertEquals("Bearer test-forum", it.header("Authorization"))
+                assertEquals("accessToken=test-gateway-only", it.header("Cookie"))
+                assertEquals(BookSource.XKVI.origin, it.header("Origin"))
+            }
+        }
+        sources.select(BookSource.ORIGINAL)
+        mirrored.forEach { request ->
+            val restored = router.prepare(Request.Builder().url(request.url).build(), sources.capture())
+            assertEquals("auth.novelia.cc", restored.url.host)
+            assertEquals(request.url.encodedPath, restored.url.encodedPath)
+            assertEquals(request.url.encodedQuery, restored.url.encodedQuery)
+            assertNull(restored.header("Cookie"))
+        }
+    }
+
     @Test fun unsupportedAuthAndForumPathsKeepOriginalUpstreams() {
         val sources = sources().apply { select(BookSource.XKVI) }
         val router = BookSourceInterceptor(sources)
         for(url in listOf(
-            "https://auth.novelia.cc/api/v1/me/strikes", "https://auth.novelia.cc/api/v1/me/attention-status",
-            "https://auth.novelia.cc/api/v1/me/strikes/read-state", "https://auth.novelia.cc/",
+            "https://auth.novelia.cc/api/v1/me/strikes-other", "https://auth.novelia.cc/api/v1/me/attention-status-extra",
+            "https://auth.novelia.cc/api/v1/admin/overview", "https://auth.novelia.cc/api/v1/admin/user",
+            "https://auth.novelia.cc/api/v1/admin/event", "https://auth.novelia.cc/api/v1/admin/setting",
+            "https://auth.novelia.cc/api/v1/admin/strikes", "https://auth.novelia.cc/",
+            "https://forum.novelia.cc/api/v1/admin/category", "https://forum.novelia.cc/api/v1/admin/post",
+            "https://forum.novelia.cc/api/v1/admin/comment",
             "https://forum.novelia.cc/", "https://forum.novelia.cc/api/v1/other", "https://forum.novelia.cc/cdn-cgi/trace",
         )) {
             val request = Request.Builder().url(url).build()
@@ -127,6 +165,7 @@ class BookSourceTest {
         for(path in listOf(
             "/api/novel", "/api/comment", "/api/v1/posts", "/api/v1/category-other", "/api/v1/commentary",
             "/api/v1/me/posts", "/api/v1/me/favorite-extra", "/api/v1/external/comments", "/api/v1/auth-extra",
+            "/api/v1/me/strikes-other", "/api/v1/me/attention-status-extra",
             "/files-temp", "/files-temp/sample.txt", "/files-temp/sample.epub",
         )) {
             val request = Request.Builder().url("https://book.xkvi.top$path?filename=%E4%B9%A6").build()

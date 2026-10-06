@@ -6,6 +6,8 @@
 
 核对依据为仓库中的 [ForumApi](../../app/src/main/java/cc/novelia/app/data/network/ForumApi.kt)、[NovelCommentApi](../../app/src/main/java/cc/novelia/app/data/network/NovelCommentApi.kt)、[ForumAccountApi](../../app/src/main/java/cc/novelia/app/data/network/ForumAccountApi.kt)、[模型](../../app/src/main/java/cc/novelia/app/data/model/ForumModels.kt) 和合约测试。2026-10-06 已只读核对线上教程、网络小说评论及回复、文库评论分页。
 
+2026-10-06 进一步核对上游当前主分支：[主站 `176190fd`](https://github.com/auto-novel/auto-novel/blob/176190fd2b57fb89c4ac147832863f3e26bdfe8a/web/src/api/novel/CommentApi.ts)、[论坛 `c322dda3`](https://github.com/auto-novel/forum/blob/c322dda3d388b4914fbdbcf92fd443106ea4ac29/packages/forum-api/src/api.ts)、[认证 `632ea746`](https://github.com/auto-novel/auth/blob/632ea746d409e0115eb02f48e0b9ddd08ce54071/packages/auth-api/src/api.ts)。主站合并后的小说评论路径、资源标识、`app=n` 会话及回复首屏结构已由当前客户端支持；本次新增处罚与未读接口的镜像路由，不接入管理接口。
+
 ## 基础约定
 
 API 根路径为 `https://forum.novelia.cc/api/v1/`。客户端页码从 0 开始，发请求时转换为从 1 开始的 `page`；页大小字段为 `page_size`，分页响应为 `{ total, items }`。
@@ -61,7 +63,7 @@ API 根路径为 `https://forum.novelia.cc/api/v1/`。客户端页码从 0 开�
 
 ## 处罚未读与社区守则
 
-处罚由认证服务 `https://auth.novelia.cc/api/v1/` 提供，携带所选线路的论坛令牌。这些路径未列入镜像路由，保留认证站地址：
+处罚由认证服务提供，携带所选线路的论坛令牌。原站请求 `https://auth.novelia.cc/api/v1/`，选择 XKVI 后请求 `https://book.xkvi.top/api/v1/` 并附加镜像入口 Cookie：
 
 | 接口 | 含义 |
 | --- | --- |
@@ -69,7 +71,7 @@ API 根路径为 `https://forum.novelia.cc/api/v1/`。客户端页码从 0 开�
 | `GET me/strikes` | 分页记录与 `latestStrikeId` |
 | `PUT me/strikes/read-state` | 用已展示快照 ID 发送 `{ throughId }`，返回 hasUnread |
 
-缺少快照 ID 时不确认已读；确认失败可重试，后来新增的记录不能被旧确认吞掉。读取与确认都绑定原论坛会话，处罚内容和提示状态不持久缓存。
+缺少快照 ID 时不确认已读；确认失败可重试，后来新增的记录不能被旧确认吞掉。读取与确认都绑定所选线路的论坛会话，切换线路后丢弃旧响应，处罚内容和提示状态不持久缓存。
 
 守则没有独立数据 API。[ForumCommunityRulesRepository](../../app/src/main/java/cc/novelia/app/data/network/ForumCommunityRulesRepository.kt) 从线上入口取得部署 SHA，再读取该提交的公开守则源码；解析已知静态结构，不执行脚本。未知结构或网络失败保留缓存，首次离线使用内置副本。当前内置材料见 [ForumCommunityRules.kt](../../app/src/main/java/cc/novelia/app/data/model/ForumCommunityRules.kt)。
 

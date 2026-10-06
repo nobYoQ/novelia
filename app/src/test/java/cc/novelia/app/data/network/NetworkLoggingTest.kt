@@ -30,6 +30,10 @@ class NetworkLoggingTest {
             assertEquals("forum_api", networkTarget(Request.Builder().url("https://book.xkvi.top/api/v1/$path?q=private").build()))
         }
         assertEquals("authentication", networkTarget(Request.Builder().url("https://book.xkvi.top/api/v1/auth/refresh?app=f").build()))
+        for(path in listOf("me/strikes?page=1", "me/strikes/read-state", "me/attention-status")) {
+            assertEquals("authentication", networkTarget(Request.Builder().url("https://book.xkvi.top/api/v1/$path").build()))
+        }
+        assertEquals("other", networkTarget(Request.Builder().url("https://book.xkvi.top/api/v1/me/strikes-extra").build()))
         assertEquals("download_file", networkTarget(Request.Builder().url("https://book.xkvi.top/files-temp/private.epub").build()))
     }
 

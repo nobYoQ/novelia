@@ -22,10 +22,12 @@
 | `/api/v1/external/comment` | `forum.novelia.cc` | 内嵌评论 API |
 | `/api/v1/me/post` | `forum.novelia.cc` | 我的帖子 |
 | `/api/v1/me/favorite` | `forum.novelia.cc` | 我的收藏 |
+| `/api/v1/me/strikes` 及其子路径 | `auth.novelia.cc` | 处罚记录、已读确认 |
+| `/api/v1/me/attention-status` | `auth.novelia.cc` | 未读提醒 |
 | 其余 `/api/**` | `n.novelia.cc` | 书站后端 |
 | `/files-temp` 及其子路径 | `n.novelia.cc` | TXT / EPUB 下载静态文件 |
 
-认证站的处罚记录、处罚未读及已读确认路径不在此表中，保持请求 `auth.novelia.cc`，携带独立论坛 Bearer 令牌。不能把这些路径送入镜像的书站 API 兜底。论坛 HTML、守则部署信息和诊断探针也保留原站地址；表中 API 支持不代表镜像支持论坛网页。
+2026-10-06 路由表新增的处罚记录、处罚未读及已读确认也随所选线路切换，携带独立论坛 Bearer 令牌。镜像上的这些 GET / PUT 请求需要入口 Cookie；免门禁规则仅适用于 `POST /api/v1/auth/**`。`/api/v1/admin/**` 不属于客户端功能，本轮不适配。论坛 HTML、守则部署信息和诊断探针保留原站地址；表中 API 支持不代表镜像支持论坛网页。
 
 ## 打包配置
 
@@ -58,6 +60,6 @@ Debug、本地 Release 和正式发行均使用相同注入逻辑。入口口令
 
 ## 回归
 
-JVM：`BookSourceTest` 覆盖全部论坛路由、书站兜底、下载、认证 POST 免门禁、来源映射、失效绑定、Cookie 范围、流式读取及跨域重定向；`MirrorAuthCookiesTest` 覆盖域和路径匹配、刷新轮换与删除。
+JVM：`BookSourceTest` 覆盖全部论坛路由、处罚与未读路由、书站兜底、下载、认证 POST 免门禁、来源映射、失效绑定、Cookie 范围、流式读取及跨域重定向；`ForumAccountApiTest` 覆盖镜像处罚列表、未读提醒及精确的 64 位已读快照请求；`MirrorAuthCookiesTest` 覆盖域和路径匹配、刷新轮换与删除。
 
 设备：`MirrorSessionTest` 与 `ForumMirrorSessionTest` 用虚构账号和本地响应验证小说／论坛的登录、注册、验证码、401 续期、加密存储兼容、SSO 复用及来源和会话隔离；`ForumMirrorLoginTest` 覆盖论坛镜像原生登录入口及页面恢复，`BookSourcePickerTest` 和 `BookSourceNavigationTest` 覆盖设置切换、无需手工输入入口口令、进入登录及 Activity 重建。真实账号登录与邮件发送不属于这些自动测试。

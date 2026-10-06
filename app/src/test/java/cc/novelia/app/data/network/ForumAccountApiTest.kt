@@ -10,6 +10,11 @@ import java.util.concurrent.TimeUnit
 import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.RecordedRequest
 import kotlinx.coroutines.runBlocking
+import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.*
@@ -104,6 +109,38 @@ class ForumAccountApiTest {
             requests.forEach { assertEquals("Bearer synthetic-forum-session", it.getHeader("Authorization")); assertNull(it.getHeader("Cookie")) }
             assertTrue(runCatching { client.markStrikesRead(-1, binding) }.isFailure)
             assertEquals(3, server.requestCount)
+        }
+    }
+
+    @Test fun mirrorAccountApisKeepForumBearerGatewayAndExactReadSnapshot() = runBlocking {
+        val sources = BookSources(BookSource.XKVI, "test-gateway-only")
+        val requests = mutableListOf<Request>()
+        val transport = OkHttpClient.Builder().addInterceptor(BookSourceInterceptor(sources)).addInterceptor { chain ->
+            val request = chain.request()
+            requests += request
+            val body = when(request.url.encodedPath) {
+                "/api/v1/me/attention-status" -> """{"strikes":{"hasUnread":true}}"""
+                "/api/v1/me/strikes" -> """{"total":0,"items":[],"latestStrikeId":9007199254740993}"""
+                "/api/v1/me/strikes/read-state" -> """{"hasUnread":false}"""
+                else -> error("Unexpected synthetic endpoint")
+            }
+            Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("test")
+                .body(body.toResponseBody()).build()
+        }.build()
+        val api = ForumAccountApi(NoveliaApi(ForumTestSession(), ForumAccountApi.BASE_URL, transport))
+        assertTrue(api.attentionStatus().strikes.hasUnread)
+        val page = api.strikes(1)
+        assertFalse(api.markStrikesRead(page.latestStrikeId!!).hasUnread)
+        assertEquals(listOf("GET", "GET", "PUT"), requests.map { it.method })
+        assertEquals(listOf("/api/v1/me/attention-status", "/api/v1/me/strikes", "/api/v1/me/strikes/read-state"),
+            requests.map { it.url.encodedPath })
+        assertEquals("page=2&page_size=20", requests[1].url.encodedQuery)
+        val body = okio.Buffer().also { requests[2].body!!.writeTo(it) }.readUtf8()
+        assertEquals("""{"throughId":9007199254740993}""", body)
+        requests.forEach {
+            assertEquals("book.xkvi.top", it.url.host)
+            assertEquals("Bearer synthetic-forum-session", it.header("Authorization"))
+            assertEquals("accessToken=test-gateway-only", it.header("Cookie"))
         }
     }
 
