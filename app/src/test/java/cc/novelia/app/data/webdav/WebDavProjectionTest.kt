@@ -3,6 +3,7 @@ package cc.novelia.app.data.webdav
 import cc.novelia.app.data.catalog.KeywordEntry
 import cc.novelia.app.data.catalog.KeywordLibrary
 import cc.novelia.app.data.model.*
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.*
@@ -12,6 +13,40 @@ class WebDavProjectionTest {
     private val web = BookRef("syosetu", "n1")
     private val local = BookRef("local", "file1")
     private fun documents(state: LibraryState) = SyncReplica(deviceId = "a").track(emptyMap(), WebDavProjection.library(state)).bind("dataset").documents
+
+    @Test fun exactColorEditsAreTrackedAndRoundTripWithoutEnablingDevicePreferences() {
+        val before = LibraryState(reader = ReaderSettings(theme = "custom"),
+            bookSettings = mapOf(web.key to ReaderSettings(theme = "custom")))
+        val colors = ReaderCustomColors(0x123ABC, 0x37BC91, 0xF12345)
+        val bookColors = ReaderCustomColors(0xABCDEF, 0x2468AC, 0x0F1234)
+        val defaultEdit = before.copy(reader = before.reader.copy(customColors = colors))
+        val bookEdit = before.copy(bookSettings = mapOf(web.key to before.bookSettings.getValue(web.key).copy(customColors = bookColors)))
+        assertEquals(setOf(SyncDomain.SETTINGS), WebDavProjection.affectedLibraryDomains(before, defaultEdit))
+        assertEquals(setOf(SyncDomain.SETTINGS), WebDavProjection.affectedLibraryDomains(before, bookEdit))
+        val after = defaultEdit.copy(bookSettings = bookEdit.bookSettings)
+        fun projection(state: LibraryState) = WebDavProjection.library(state, setOf(SyncDomain.SETTINGS), includeDevicePreferences = false)
+        val original = projection(before)
+        val updated = projection(after)
+        val document = SyncReplica(deviceId = "a").track(emptyMap(), original).bind("dataset")
+            .track(original, updated).documents.getValue(SyncDomain.SETTINGS)
+        val wireJson = Json { encodeDefaults = true; explicitNulls = false }
+        val received = wireJson.decodeFromString(SyncDocument.serializer(), wireJson.encodeToString(SyncDocument.serializer(), document))
+        WebDavMerge.validate(received, "dataset")
+        WebDavProjection.validateRecords(received)
+        val fields = WebDavMerge.materialize(received)
+        listOf("@reader", "@book/${web.key}").forEach { key ->
+            assertTrue(fields.getValue(key).getValue("customColors") is JsonObject)
+            assertFalse("devicePreferences" in fields.getValue(key))
+            assertEquals(1, received.records.getValue(key).fields.getValue("customColors").candidates.size)
+        }
+        val target = LibraryState(reader = ReaderSettings(brightness = .2f))
+        val restored = WebDavProjection.applyLibrary(target, mapOf(SyncDomain.SETTINGS to received), setOf(SyncDomain.SETTINGS))
+        assertEquals(colors, restored.reader.customColors)
+        assertEquals(bookColors, restored.bookSettings.getValue(web.key).customColors)
+        assertEquals("custom", restored.reader.theme)
+        assertEquals("custom", restored.bookSettings.getValue(web.key).theme)
+        assertEquals(.2f, restored.reader.brightness)
+    }
 
     @Test fun customColorsSyncAsOneGroupAndLegacyRecordsRemainValid() {
         val colors = ReaderCustomColors(0xFFFFFF, 0x141A16, 0x050A07)
