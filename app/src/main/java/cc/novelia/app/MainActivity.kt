@@ -73,6 +73,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.delay
 
 private data class AppAppearance(val theme: String, val reducedMotion: Boolean, val eInk: Boolean, val eInkBooks: Set<String>,
     val screenButtons: Boolean, val hideStatusBar: Boolean, val bookStatusBars: Map<String, Boolean>)
@@ -128,7 +129,15 @@ class MainActivity : ComponentActivity() {
                     return@CompositionLocalProvider
                 }
                 LaunchedEffect(link) { link?.let { controller.openLink(it); incoming.value = null } }
-                LaunchedEffect(Unit) { runCatching { app.session.refresh() } }
+                LaunchedEffect(app) {
+                    val binding = app.session.capture()
+                    val token = app.session.tokenFor(binding)
+                    // 游客启动不初始化 WebView Cookie；已有账号的续期让首屏先完成绘制。
+                    if(token != null) {
+                        delay(2_000)
+                        runCatching { app.session.refreshIfCurrent(binding, token) }
+                    }
+                }
                 val entry by nav.currentBackStackEntryAsState(); val route = entry?.destination?.route
                 val readingKey = "${entry?.arguments?.getString("provider")}/${entry?.arguments?.getString("id")}"
                 cc.novelia.app.ui.reader.ReadingStatusBar(route?.startsWith("reader/") == true &&

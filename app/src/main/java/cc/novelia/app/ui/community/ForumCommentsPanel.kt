@@ -5,6 +5,10 @@ import cc.novelia.app.data.model.ForumComment
 import cc.novelia.app.data.model.ForumCommentInput
 import cc.novelia.app.data.model.ForumRules
 import cc.novelia.app.data.model.Profile
+import cc.novelia.app.data.auth.Session
+import cc.novelia.app.data.markdown.MarkdownLinks
+import cc.novelia.app.data.network.CommentDiscussion
+import cc.novelia.app.data.network.discussion
 import cc.novelia.app.data.network.loadForumReplyCounts
 import cc.novelia.app.data.auth.SessionChangedException
 import cc.novelia.app.ui.components.AppLazyColumn
@@ -31,38 +35,59 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 /** 一级评论分页加载并保留附带的首屏回复；展开时复用，后续页通过独立接口读取。 */
 @Composable internal fun ForumCommentsPanel(c: AppController, postId: Long, locked: Boolean) {
-    val profile by c.forumSession.profile.collectAsStateWithLifecycle()
+    val api = c.forumApi
+    val discussion = remember(api, postId) { api.discussion(postId) }
+    DiscussionCommentsPanel(c, discussion, c.forumSession, locked,
+        ForumLinks.articleUrl(ForumLinks.localId(postId)), c::requireForumLogin)
+}
+
+@Composable internal fun NovelCommentsPanel(c: AppController, site: String, locked: Boolean = false) {
     val state by c.store.state.collectAsStateWithLifecycle()
-    var page by rememberSaveable(postId) { mutableIntStateOf(0) }
-    var version by remember(postId) { mutableIntStateOf(0) }
+    if(state.hideNovelComments) {
+        EmptyState("小说评论已隐藏", "可以在设置的阅读体验中重新开启。", Icons.Outlined.CommentsDisabled)
+        return
+    }
+    val api = c.app.novelCommentApi
+    val discussion = remember(api, site) { api.discussion(site) }
+    DiscussionCommentsPanel(c, discussion, c.session, locked, MarkdownLinks.commentDocumentUrl(site), c::requireLogin)
+}
+
+@Composable private fun DiscussionCommentsPanel(c: AppController, discussion: CommentDiscussion, session: Session,
+    locked: Boolean, documentUrl: String?, requireLogin: (() -> Unit) -> Unit) {
+    val discussionKey = discussion.key
+    val profile by session.profile.collectAsStateWithLifecycle()
+    val state by c.store.state.collectAsStateWithLifecycle()
+    val viewerKey = profile?.userId?.toString() ?: profile?.username
+    var page by rememberSaveable(discussionKey) { mutableIntStateOf(0) }
+    var version by remember(discussionKey) { mutableIntStateOf(0) }
     // 保留在列表层，LazyColumn 回收单条评论时不会丢失计数；刷新、换账号或角色时失效。
-    val replyCounts = remember(postId, profile?.userId, profile?.role, version) { mutableStateMapOf<Long, Long?>() }
-    var countsRevision by remember(postId, profile?.userId, profile?.role, version) { mutableIntStateOf(0) }
-    val binding = c.forumSession.capture()
-    var rootId by rememberSaveable(postId, profile?.userId) { mutableStateOf<Long?>(null) }
-    var replyCount by rememberSaveable(postId, profile?.userId) { mutableLongStateOf(0) }
-    var replyFocus by remember(postId, profile?.userId, profile?.role) { mutableStateOf<ForumReplyFocus?>(null) }
-    var editing by remember(postId, profile?.userId) { mutableStateOf<ForumComment?>(null) }
-    var deleting by remember { mutableStateOf<ForumComment?>(null) }
-    var sending by remember { mutableStateOf(false) }
-    val draftKey = "forum-comment:$postId:${profile?.userId ?: "guest"}:${editing?.id?.let { "edit-$it" } ?: rootId ?: "root"}"
+    val binding = session.capture()
+    val replyCounts = remember(discussionKey, binding, profile?.role, version) { mutableStateMapOf<Long, Long?>() }
+    var countsRevision by remember(discussionKey, binding, profile?.role, version) { mutableIntStateOf(0) }
+    var rootId by rememberSaveable(discussionKey, viewerKey) { mutableStateOf<Long?>(null) }
+    var replyCount by rememberSaveable(discussionKey, viewerKey) { mutableLongStateOf(0) }
+    var replyFocus by remember(discussionKey, binding, profile?.role) { mutableStateOf<ForumReplyFocus?>(null) }
+    var editing by remember(discussionKey, viewerKey) { mutableStateOf<ForumComment?>(null) }
+    var deleting by remember(discussionKey, binding) { mutableStateOf<ForumComment?>(null) }
+    var sending by remember(discussionKey) { mutableStateOf(false) }
+    val draftKey = "$discussionKey:${viewerKey ?: "guest"}:${editing?.id?.let { "edit-$it" } ?: rootId ?: "root"}"
     var text by rememberSaveable(draftKey) { mutableStateOf(state.drafts[draftKey] ?: editing?.content.orEmpty()) }
-    val documentUrl = ForumLinks.articleUrl(ForumLinks.localId(postId))
+    val latestDraft by rememberUpdatedState(draftKey to text)
     val renderer = rememberMarkdownRenderer(c, documentUrl)
     Column(Modifier.fillMaxSize()) {
-        AsyncContent(listOf(postId, page, binding, profile?.userId, profile?.role), refreshKey = version, load = {
-            c.forumSession.ensureCurrent(binding)
-            c.forumApi.comments(postId, page).also { c.forumSession.ensureCurrent(binding) }
+        AsyncContent(listOf(discussionKey, page, binding, profile?.role), refreshKey = version, load = {
+            session.ensureCurrent(binding)
+            discussion.comments(page).also { session.ensureCurrent(binding) }
         },
             onLoaded = { replyCounts.clear(); countsRevision++ }, modifier = Modifier.weight(1f)) { result, _ ->
             // 在讨论串首次组合之前初始化，避免展开时先发请求再填入首屏数据。
-            val replyPages = rememberForumReplyPages(postId, binding, profile?.userId, profile?.role, version, countsRevision,
+            val replyPages = rememberForumReplyPages(discussionKey, binding, profile?.role, version, countsRevision,
                 initialRoots = result.items)
             val comments = result.items.filter { it.authorUsername !in state.blockedUsers }
             LaunchedEffect(result.items, version, countsRevision, state.blockedUsers) {
                 try {
                     loadForumReplyCounts(comments.filterNot { replyCounts.containsKey(it.id) },
-                        load = { c.forumApi.replyCount(postId, it) }) { id, count ->
+                        load = { session.ensureCurrent(binding); discussion.replyCount(it).also { session.ensureCurrent(binding) } }) { id, count ->
                         // 展开回复得到的更新计数优先于尚未完成的预读取。
                         if(!replyCounts.containsKey(id)) replyCounts[id] = count
                     }
@@ -74,13 +99,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
             AppLazyColumn(contentPadding = PaddingValues(20.dp)) {
                 if(comments.isEmpty()) item { EmptyState("还没有讨论", "来分享你的感想吧。", Icons.Outlined.ChatBubbleOutline) }
                 items(comments, key = { "${profile?.userId}:${profile?.role}:${it.id}" }) { root ->
-                    ForumCommentThread(postId, root, profile, version, replyFocus, state.blockedUsers,
+                    ForumCommentThread(discussionKey, root, profile, version, replyFocus, state.blockedUsers,
                         knownReplyCount = replyCounts[root.id], countLoading = !replyCounts.containsKey(root.id),
                         onReplyCount = { replyCounts[root.id] = it },
                         replyPages = replyPages,
                         loadReplies = {
-                            c.forumSession.ensureCurrent(binding)
-                            c.forumApi.replies(postId, root.id, it).also { c.forumSession.ensureCurrent(binding) }
+                            session.ensureCurrent(binding)
+                            discussion.replies(root.id, it).also { session.ensureCurrent(binding) }
                         }) { comment, rootPublished, replyToggle ->
                         ForumCommentRow(comment, profile, locked || !rootPublished,
                             onReply = { editing = null; rootId = comment.replyRoot; replyCount = replyCounts[root.id] ?: root.replyCount ?: 0 },
@@ -108,20 +133,21 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
             MarkdownCommentInput(text, { value -> text = value; c.store.update { it.copy(drafts = it.drafts + (draftKey to value)) } }, if(editing != null) "编辑评论" else "写下评论", isError = commentContent.isNotEmpty() && commentError != null, softLimit = true, unicodeLimit = ForumRules.COMMENT_LIMIT) {
                 FilledIconButton(enabled = commentError == null && canSend && canEditDraft && !sending, modifier = Modifier.testTag("forum-comment-submit"), onClick = {
                     // Login changes the account-specific draft key; retain the text being submitted.
-                    val content = text.trim(); val submittedRoot = rootId; val submittedReplyCount = replyCount; val submittedEdit = editing; val submittedDraft = draftKey
-                    c.requireForumLogin { c.action {
-                        require(ForumRules.canWrite(c.forumSession.profile.value)) { "当前账号暂不具备评论权限，草稿已保留" }
-                        require(submittedEdit == null || submittedEdit.canModify(c.forumSession.profile.value)) { "评论只能在发布后 20 分钟内修改，管理员不受此限制。草稿已保留" }
+                    val submittedText = text; val content = submittedText.trim(); val submittedRoot = rootId; val submittedReplyCount = replyCount; val submittedEdit = editing; val submittedDraft = draftKey
+                    requireLogin { c.action {
+                        require(ForumRules.canWrite(session.profile.value)) { "当前账号暂不具备评论权限，草稿已保留" }
+                        require(submittedEdit == null || submittedEdit.canModify(session.profile.value)) { "评论只能在发布后 20 分钟内修改，管理员不受此限制。草稿已保留" }
                         sending = true
                         try {
-                            if(submittedEdit != null) c.forumApi.updateComment(submittedEdit.id, content)
+                            if(submittedEdit != null) discussion.update(submittedEdit.id, content)
                             else {
-                                val created = c.forumApi.createComment(postId, ForumCommentInput(content, submittedRoot))
+                                val created = discussion.create(ForumCommentInput(content, submittedRoot))
                                 submittedRoot?.let { replyFocus = ForumReplyFocus(it,
                                     (submittedReplyCount / 20).coerceIn(0, Int.MAX_VALUE - 1L).toInt(), created.id) }
                             }
-                            c.store.update { it.copy(drafts = it.drafts - submittedDraft) }
-                            text = ""; rootId = null; editing = null; version++
+                            c.store.update { if(it.drafts[submittedDraft] == submittedText) it.copy(drafts = it.drafts - submittedDraft) else it }
+                            if(latestDraft == (submittedDraft to submittedText)) { text = ""; rootId = null; editing = null }
+                            version++
                         } finally { sending = false }
                     } }
                 }) { Icon(Icons.Outlined.Send, if(editing != null) "保存评论" else "发送评论") }
@@ -135,8 +161,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
     }
     deleting?.let { comment -> ConfirmDialog("删除评论？", "确定删除这条评论吗？", { deleting = null }, confirmLabel = "删除评论") {
         c.action {
-            require(comment.canModify(c.forumSession.profile.value)) { "评论只能在发布后 20 分钟内删除，管理员不受此限制" }
-            c.forumApi.deleteComment(comment.id); deleting = null; version++
+            require(comment.canModify(session.profile.value)) { "评论只能在发布后 20 分钟内删除，管理员不受此限制" }
+            discussion.delete(comment.id); deleting = null; version++
         }
     } }
 }

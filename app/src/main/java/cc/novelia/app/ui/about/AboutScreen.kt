@@ -5,6 +5,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import cc.novelia.app.data.catalog.ForumLinks
 import cc.novelia.app.ui.components.AppLazyColumn
 import cc.novelia.app.ui.components.MenuRow
 import cc.novelia.app.ui.components.MetaParagraph
@@ -15,7 +16,7 @@ import cc.novelia.app.ui.navigation.AppController
 @Composable fun AboutScreen(c: AppController) {
     Screen("帮助与关于", c::back) { padding -> AppLazyColumn(Modifier.padding(padding)) {
         item { AboutIdentity() }
-        item { MenuRow("Novelia使用教程", "账号规则、检索语法与资源说明", Icons.Outlined.HelpOutline, { c.go("article/64f3d63f794cbb1321145c07") }) }
+        item { MenuRow("Novelia使用教程", "账号规则、检索语法与资源说明", Icons.Outlined.HelpOutline, { c.go("article/${ForumLinks.TUTORIAL_ID}") }) }
         item { MenuRow("反馈与建议", "在 GitHub 报告客户端问题", Icons.Outlined.Forum, { c.external("https://github.com/nobYoQ/novelia/issues") }) }
         item { MenuRow("下载新版本", "查看 GitHub 发行版与更新说明", Icons.Outlined.Download, { c.external("https://github.com/nobYoQ/novelia/releases") }) }
         item { MenuRow("项目源码", "查看源码与贡献指南", Icons.Outlined.Code, { c.external("https://github.com/nobYoQ/novelia") }) }

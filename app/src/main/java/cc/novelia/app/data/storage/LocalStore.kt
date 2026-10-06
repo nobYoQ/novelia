@@ -109,10 +109,14 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
         if (mutableRecoveryIssue.value != null) return
         val before = mutable.value
         val raw = transform(before).withMigratedReadingHistory().withStableFolderIds()
+        // 启动恢复等调用经常没有实际修改，不为这些调用初始化同步配置或投影整份书库。
+        if(raw == before) return
         val domains = WebDavProjection.affectedLibraryDomains(before, raw)
-        val includeDevices = syncDevicePreferences()
-        val next = if(domains.isEmpty()) raw.copy(syncReplica = before.syncReplica) else raw.copy(syncReplica = before.syncReplica.track(
-            WebDavProjection.library(before, domains, includeDevices), WebDavProjection.library(raw, domains, includeDevices), domains))
+        val next = if(domains.isEmpty()) raw.copy(syncReplica = before.syncReplica) else {
+            val includeDevices = syncDevicePreferences()
+            raw.copy(syncReplica = before.syncReplica.track(
+                WebDavProjection.library(before, domains, includeDevices), WebDavProjection.library(raw, domains, includeDevices), domains))
+        }
         if (next == mutable.value) return
         persistence.submit(Revision(++revision, next))
         mutable.value = next

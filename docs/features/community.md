@@ -2,7 +2,7 @@
 
 [功能目录](README.md) · [文档首页](../README.md)
 
-社区根入口连接独立论坛；旧站文章与小说评论保留主站接口。两边使用不同会话。页面在 [ui/community](../../app/src/main/java/cc/novelia/app/ui/community)，协议和权限规则见[论坛接口](../network/forum-api-preview.md)。
+社区根入口连接独立论坛；小说评论使用论坛的外部资源接口，旧站文章保留主站接口。帖子使用论坛会话，小说评论使用小说会话。页面在 [ui/community](../../app/src/main/java/cc/novelia/app/ui/community)，协议和权限规则见[论坛接口](../network/forum-api-preview.md)。
 
 ## 列表与文章收藏
 
@@ -42,6 +42,7 @@
 | 已有文章 | `article:<id>` |
 | 主站评论 | `comment:<site>:<parent>` |
 | 论坛评论 | `forum-comment:<postId>:<userId或guest>:<目标>` |
+| 小说评论 | `novel-comment:<site>:<userId、username或guest>:<目标>` |
 
 草稿保存在设备共享的 `LibraryState.drafts`。论坛评论键包含账号，其他草稿不能因此被推断为账号隔离；退出不会自动清除它们。
 
@@ -55,7 +56,9 @@
 
 回复任何子评论都提交根评论 ID。修改评论只发正文。普通作者修改/删除评论和删除帖子有时间限制，管理员条件另行处理，最终由服务端授权。
 
-主站评论仍由 `CommentsPanel.kt` 处理：读取参数是 `parentId`，发布正文的字段是 `parent`。屏蔽、隐藏和锁定需同时作用于一级评论、摘要和回复面板。
+网络小说和文库小说由 `NovelCommentsPanel` 调用论坛的外部小说评论接口，使用小说账号会话，与帖子评论共用分页和回复缓存。小说讨论标识分别为 `web-{provider}-{id}`、`wenku-{id}`，详见[小说评论接口](../network/forum-api-preview.md#小说评论)。隐藏和屏蔽同时作用于一级评论与回复。
+
+旧站文章仍由 `CommentsPanel.kt` 处理：读取参数是 `parentId`，发布正文的字段是 `parent`。屏蔽和锁定需同时作用于一级评论、摘要和回复面板。
 
 ## Markdown 编辑与链接
 

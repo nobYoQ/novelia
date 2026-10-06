@@ -2,15 +2,15 @@
 
 [网络目录](README.md) · [社区功能](../features/community.md) · [文档首页](../README.md)
 
-当前社区入口使用独立论坛 `forum.novelia.cc`；小说评论和旧站文章仍使用小说服务。本文描述当前客户端合约。文件名保留早期的 `preview` 以兼容旧链接，分支适配过程和当时的测试结果已移至[历史记录](../maintenance/history/forum-adaptation.md)。
+当前社区入口使用独立论坛 `forum.novelia.cc`；网络小说和文库小说的评论也已迁至论坛的外部资源接口，旧站文章仍使用小说服务。本文描述当前客户端合约。文件名保留早期的 `preview` 以兼容旧链接，分支适配过程和当时的测试结果已移至[历史记录](../maintenance/history/forum-adaptation.md)。
 
-核对依据为仓库中的 [ForumApi](../../app/src/main/java/cc/novelia/app/data/network/ForumApi.kt)、[ForumAccountApi](../../app/src/main/java/cc/novelia/app/data/network/ForumAccountApi.kt)、[模型](../../app/src/main/java/cc/novelia/app/data/model/ForumModels.kt) 和合约测试。本轮没有重新探测线上部署。
+核对依据为仓库中的 [ForumApi](../../app/src/main/java/cc/novelia/app/data/network/ForumApi.kt)、[NovelCommentApi](../../app/src/main/java/cc/novelia/app/data/network/NovelCommentApi.kt)、[ForumAccountApi](../../app/src/main/java/cc/novelia/app/data/network/ForumAccountApi.kt)、[模型](../../app/src/main/java/cc/novelia/app/data/model/ForumModels.kt) 和合约测试。2026-10-06 已只读核对线上教程、网络小说评论及回复、文库评论分页。
 
 ## 基础约定
 
 API 根路径为 `https://forum.novelia.cc/api/v1/`。客户端页码从 0 开始，发请求时转换为从 1 开始的 `page`；页大小字段为 `page_size`，分页响应为 `{ total, items }`。
 
-帖子和评论使用数字 ID，时间为 RFC 3339 字符串。计数和记录 ID 使用 64 位整数；不要经浮点数转换。独立论坛使用 `app=f` 的会话，不接受主站令牌。论坛 API 随书源线路切换，XKVI 的根路径为 `https://book.xkvi.top/api/v1/`；原站和镜像论坛会话分别保存，切换使旧绑定失效。具体路径分流见[书源线路](../development/book-source-mirrors.md)。
+帖子和评论使用数字 ID，时间为 RFC 3339 字符串。计数和记录 ID 使用 64 位整数；不要经浮点数转换。帖子、帖子评论与论坛账号操作使用 `app=f` 的会话，不接受主站令牌；外部小说评论使用 `app=n` 的小说会话。论坛 API 随书源线路切换，XKVI 的根路径为 `https://book.xkvi.top/api/v1/`；原站和镜像会话分别保存，切换使旧绑定失效。具体路径分流见[书源线路](../development/book-source-mirrors.md)。
 
 ## 主要接口
 
@@ -28,7 +28,18 @@ API 根路径为 `https://forum.novelia.cc/api/v1/`。客户端页码从 0 开�
 | 收藏 | `PUT/DELETE post/{id}/favorite` | 直接请求，不进入原站离线队列 |
 | 我的收藏 / 帖子 | `GET me/favorite`、`GET me/post` | 论坛认证分页 |
 
-`ForumApi` 还保留外部小说讨论的只读方法；当前小说评论 UI 仍沿用主站接口，不能从方法存在推断已经迁移。
+## 小说评论
+
+[NovelCommentApi](../../app/src/main/java/cc/novelia/app/data/network/NovelCommentApi.kt) 使用相同的 API 根路径，但携带小说账号 `app=n` 的令牌；帖子评论继续使用论坛账号 `app=f`。两者的路径和登录入口分别绑定，共用分页、回复缓存和 Markdown 展示。
+
+| 操作 | 方法与路径 | 请求要点 |
+| --- | --- | --- |
+| 一级评论 | `GET external/comment/novel/{subjectKey}` | 网络小说为 `web-{provider}-{id}`，文库为 `wenku-{id}`；整个 subjectKey 作为单个路径段编码 |
+| 回复页 | `GET external/comment/novel/{subjectKey}/{rootId}/reply` | 一级评论与回复独立分页，page 从 1 开始，page_size 为 20 |
+| 新评论 / 回复 | `POST external/comment/novel/{subjectKey}` | content，回复携带根评论 rootId |
+| 修改 / 删除 | `PATCH/DELETE external/comment/novel/{commentId}` | PATCH 只发送 content |
+
+一级响应可带 replyCount 和 replies 首屏，优先复用。隐藏小说评论和屏蔽用户同时作用于一级评论与回复；草稿按小说资源、账号和回复目标隔离。旧站文章的 `CommentsPanel` 保留原接口。帮助与关于、搜索语法入口均打开新论坛教程 `f-1`。
 
 ## 分类、权限和草稿
 

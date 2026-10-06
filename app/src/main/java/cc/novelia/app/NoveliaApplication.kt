@@ -11,6 +11,7 @@ import cc.novelia.app.data.catalog.KeywordStore
 import cc.novelia.app.data.catalog.ClipboardLinkHistory
 import cc.novelia.app.data.model.User
 import cc.novelia.app.data.network.NoveliaApi
+import cc.novelia.app.data.network.NovelCommentApi
 import cc.novelia.app.data.network.EchTransport
 import cc.novelia.app.data.network.BookSources
 import cc.novelia.app.data.network.BookSourceInterceptor
@@ -44,6 +45,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 
@@ -74,6 +76,7 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
     val metadataCache get() = store.metadataCache
     val api by lazy { NoveliaApi(session, transport = httpTransport, onMutation = { metadataCache.invalidate(it) }, onKeywords = { tags -> applicationScope.launch { keywords.observe(tags) } }) }
     val forumApi by lazy { ForumApi(NoveliaApi(forumSession, ForumApi.BASE_URL, httpTransport)) }
+    val novelCommentApi by lazy { NovelCommentApi(NoveliaApi(session, ForumApi.BASE_URL, httpTransport)) }
     val forumAccountApi by lazy { ForumAccountApi(NoveliaApi(forumSession, ForumAccountApi.BASE_URL, httpTransport)) }
     val forumCommunityRules by lazy { ForumCommunityRulesRepository(
         MetadataCache(File(filesDir, "forum-community-rules"), 512 * 1024L),
@@ -93,6 +96,7 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
                 webDavPoll?.cancel()
                 webDavPoll = applicationScope.launch {
                     initialization.await()
+                    delay(2_000)
                     while(webDavForeground) {
                         syncWebDavIfAllowed()
                         delay(180_000)
@@ -111,31 +115,37 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
             webDavConfig.config.collectLatest { configuration ->
                 WebDavSyncWorker.configure(this@NoveliaApplication, configuration)
                 if(configuration.automaticallySyncable()) {
+                    delay(2_000)
                     syncWebDavIfAllowed()
                 }
             }
         }
         applicationScope.launch {
             initialization.await()
-            delay(750)
-            combine(store.state.map { it.syncReplica.clock }.distinctUntilChanged(),
-                keywords.state.map { it.syncReplica.clock }.distinctUntilChanged(), webDavConfig.config) { _, _, configuration -> configuration }
-                .collect { configuration ->
-                    webDav.refreshPendingStatus()
-                    if(configuration.automaticallySyncable() && webDav.hasPending()) {
-                        // 队列任务只保留一个，连续翻页不会无限推迟首次提交。
-                        try {
-                            store.flush()
-                            if(cc.novelia.app.data.webdav.SyncDomain.KEYWORDS in configuration.selected) keywords.flush()
-                            WebDavSyncWorker.enqueue(this@NoveliaApplication, configuration)
-                            if(webDavForeground && webDavEdit?.isActive != true) webDavEdit = applicationScope.launch {
-                                delay(10_000)
-                                syncWebDavIfAllowed()
-                            }
-                        } catch(cancelled: CancellationException) { throw cancelled }
-                        catch(_: Exception) { /* 存储错误已由各存储公开；后台周期任务会再检查。 */ }
+            webDavConfig.config.collectLatest { configuration ->
+                // 未启用 WebDAV 时，不读取同步缓存、加载标签库或投影所有同步域。
+                if(!configuration.enabled) return@collectLatest
+                delay(2_000)
+                val keywordClock = if(cc.novelia.app.data.webdav.SyncDomain.KEYWORDS in configuration.selected)
+                    keywords.state.map { it.syncReplica.clock }.distinctUntilChanged() else flowOf(0L)
+                combine(store.state.map { it.syncReplica.clock }.distinctUntilChanged(), keywordClock) { _, _ -> Unit }
+                    .collect {
+                        webDav.refreshPendingStatus()
+                        if(configuration.automaticallySyncable() && webDav.hasPending()) {
+                            // 队列任务只保留一个，连续翻页不会无限推迟首次提交。
+                            try {
+                                store.flush()
+                                if(cc.novelia.app.data.webdav.SyncDomain.KEYWORDS in configuration.selected) keywords.flush()
+                                WebDavSyncWorker.enqueue(this@NoveliaApplication, configuration)
+                                if(webDavForeground && webDavEdit?.isActive != true) webDavEdit = applicationScope.launch {
+                                    delay(10_000)
+                                    syncWebDavIfAllowed()
+                                }
+                            } catch(cancelled: CancellationException) { throw cancelled }
+                            catch(_: Exception) { /* 存储错误已由各存储公开；后台周期任务会再检查。 */ }
+                        }
                     }
-                }
+            }
         }
         applicationScope.launch {
             initialization.await()

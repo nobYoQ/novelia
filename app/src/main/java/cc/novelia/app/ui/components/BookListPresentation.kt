@@ -12,6 +12,8 @@ import cc.novelia.app.data.updates.BookUpdateInfo
 import cc.novelia.app.ui.navigation.AppController
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -107,7 +109,9 @@ internal val LocalBookListPresentation = compositionLocalOf { BookListPresentati
         c.store.restoreLocalReadingProgress(legacyLocalPositions)
     }
     LaunchedEffect(c.store, presentation.books, presentation.positions, presentation.updates, profile?.username) {
-        c.store.update { it.acknowledgeCompletedBookUpdates(profile?.username) }
+        withContext(Dispatchers.IO) {
+            c.store.update { it.acknowledgeCompletedBookUpdates(profile?.username) }
+        }
     }
     return remember(presentation, profile?.username) { presentation.copy(account = profile?.username) }
 }

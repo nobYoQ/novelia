@@ -25,19 +25,19 @@ internal data class ForumReplyFocus(val rootId: Long, val page: Int, val comment
     return pages
 }
 
-/** 子回复展开时复用随一级评论返回的首屏；其余页及旧响应按需读取。 */
+/** 子回复展开时复用首屏；discussionKey 区分帖子与小说，防止相同评论 ID 串用状态。 */
 @Composable internal fun ForumCommentThread(
-    postId: Long, root: ForumComment, viewer: Profile?, version: Int,
+    discussionKey: Any, root: ForumComment, viewer: Profile?, version: Int,
     focus: ForumReplyFocus? = null, blockedUsers: Set<String> = emptySet(),
     knownReplyCount: Long? = null, countLoading: Boolean = false, onReplyCount: (Long) -> Unit = {},
-    replyPages: ForumReplyPageCache = rememberForumReplyPages(postId, root.id, viewer?.userId, viewer?.role, version, initialRoots = listOf(root)),
+    replyPages: ForumReplyPageCache = rememberForumReplyPages(discussionKey, root.id, viewer?.userId, viewer?.role, version, initialRoots = listOf(root)),
     loadReplies: suspend (Int) -> ForumPage<ForumComment>,
     render: @Composable (ForumComment, Boolean, (@Composable () -> Unit)?) -> Unit
 ) {
-    var expanded by rememberSaveable(postId, root.id, viewer?.userId, viewer?.role) { mutableStateOf(false) }
-    var page by rememberSaveable(postId, root.id, viewer?.userId, viewer?.role) { mutableIntStateOf(0) }
-    var replyTotal by remember(postId, root.id, viewer?.userId, viewer?.role, version) { mutableStateOf<Long?>(null) }
-    var handledFocus by rememberSaveable(postId, root.id, viewer?.userId, viewer?.role) { mutableStateOf<Long?>(null) }
+    var expanded by rememberSaveable(discussionKey, root.id, viewer?.userId, viewer?.role) { mutableStateOf(false) }
+    var page by rememberSaveable(discussionKey, root.id, viewer?.userId, viewer?.role) { mutableIntStateOf(0) }
+    var replyTotal by remember(discussionKey, root.id, viewer?.userId, viewer?.role, version) { mutableStateOf<Long?>(null) }
+    var handledFocus by rememberSaveable(discussionKey, root.id, viewer?.userId, viewer?.role) { mutableStateOf<Long?>(null) }
     LaunchedEffect(focus) {
         if(focus?.rootId == root.id && handledFocus != focus.commentId) { expanded = true; page = focus.page }
     }
@@ -71,7 +71,7 @@ internal data class ForumReplyFocus(val rootId: Long, val page: Int, val comment
         }
         if(expanded) {
             HorizontalDivider()
-            AsyncContent(listOf(postId, root.id, page, viewer?.userId, viewer?.role, replyPages),
+            AsyncContent(listOf(discussionKey, root.id, page, viewer?.userId, viewer?.role, replyPages),
                 initialResult = replyPages.peek(root.id, page),
                 refreshKey = version, load = { replyPages.load(root.id, page) { loadReplies(page) } }, onLoaded = onPageLoaded,
                 modifier = Modifier.padding(start = 16.dp).testTag("forum-replies-${root.id}")) { replies, _ ->

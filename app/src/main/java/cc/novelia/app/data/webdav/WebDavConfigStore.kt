@@ -53,7 +53,9 @@ class WebDavConfigStore(context: Context) {
         )
         mutableConfig = MutableStateFlow(initial)
         config = mutableConfig.asStateFlow()
-        check(preferences.edit().putString("configuration", appJson.encodeToString(initial)).commit()) { "无法保存同步配置" }
+        if(initial != loaded) {
+            check(preferences.edit().putString("configuration", appJson.encodeToString(initial)).commit()) { "无法保存同步配置" }
+        }
     }
 
     /** null 表示保留密码；空字符串表示明确清空。保存成功才向调度器发布配置。 */

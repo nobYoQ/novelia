@@ -32,7 +32,7 @@ import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.TocItem
 import cc.novelia.app.data.model.WebDetail
 import cc.novelia.app.data.model.WenkuDetail
-import cc.novelia.app.ui.community.CommentsPanel
+import cc.novelia.app.ui.community.NovelCommentsPanel
 import cc.novelia.app.ui.components.AppAlertDialog
 import cc.novelia.app.ui.components.AppDropdownMenu
 import cc.novelia.app.ui.components.AppLazyColumn
@@ -114,7 +114,7 @@ import kotlinx.coroutines.withContext
                         }
                         1 -> WenkuVolumesPanel(c, book, detail, uploadBusy,
                             onUpload = { uploader.launch(arrayOf("*/*")) }, onRefresh = refresh)
-                        2 -> CommentsPanel(c, "wenku-${ref.id}")
+                        2 -> NovelCommentsPanel(c, "wenku-${ref.id}")
                     }
             }
         } else AsyncContent(listOf(ref, profile?.username), refreshKey = refreshKey, load = { c.detail<WebDetail>("novel/${ref.key}", forceNetwork = version > 0) }, modifier = Modifier.padding(padding)) { detail, _ ->
@@ -163,7 +163,7 @@ import kotlinx.coroutines.withContext
                             item { TextButton(onClick = refresh, Modifier.fillMaxWidth()) { Text("刷新书籍资料") } }
                         }
                         1 -> TocPanel(c, ref, detail.toc, start) { id -> c.read(ref, id) }
-                        2 -> CommentsPanel(c, "web-${ref.provider}-${ref.id}")
+                        2 -> NovelCommentsPanel(c, "web-${ref.provider}-${ref.id}")
                     }
             }
         }

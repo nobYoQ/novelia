@@ -19,6 +19,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.catalog.BookLinks
+import cc.novelia.app.data.catalog.ForumLinks
 import cc.novelia.app.data.catalog.SearchExpression
 import cc.novelia.app.data.catalog.SavedSearchPreset
 import cc.novelia.app.data.catalog.NovelLocalFilter
@@ -207,7 +208,7 @@ import kotlinx.coroutines.sync.withPermit
             } else ChoiceRow("文库分类", if(profile?.canEdit == true) listOf("全部小说", "轻小说", "轻文学", "文学", "非小说", "R18男性向", "R18女性向") else listOf("全部小说", "轻小说", "轻文学", "文学", "非小说"), wenkuLevel.coerceIn(0, if(profile?.canEdit == true) 6 else 4)) { wenkuLevel = it; page = 0 }
             if(category == 1) FilledTonalButton(onClick = { filterOpen = false; assistantOpen = true }, Modifier.padding(horizontal = 20.dp)) { Text("打开辅助搜索") }
             Text("搜索框支持原站查询表达式。规则与示例可在站内使用教程中查看。", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.bodyMedium)
-            TextButton(onClick = { c.go("article/64f3d63f794cbb1321145c07"); filterOpen = false }, Modifier.padding(horizontal = 12.dp)) { Text("查看搜索语法") }
+            TextButton(onClick = { c.go("article/${ForumLinks.TUTORIAL_ID}"); filterOpen = false }, Modifier.padding(horizontal = 12.dp)) { Text("查看搜索语法") }
             Button(onClick = { filterOpen = false }, Modifier.fillMaxWidth().padding(horizontal = 20.dp)) { Text("查看结果") }
         }
     }
@@ -216,7 +217,7 @@ import kotlinx.coroutines.sync.withPermit
             SearchAssistantPanel(query, keywords.entries, true, { assistantOpen = it },
                 onApply = { expression -> query = expression; search() },
                 onSaveTranslation = c.app.keywords::setTranslation,
-                onHelp = { assistantOpen = false; c.go("article/64f3d63f794cbb1321145c07") },
+                onHelp = { assistantOpen = false; c.go("article/${ForumLinks.TUTORIAL_ID}") },
                 persistenceError = keywordPersistenceError, categoryNames = keywords.categories,
                 libraryActions = rememberKeywordLibraryActions(c.app.keywords), sheetMode = true)
         }

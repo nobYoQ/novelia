@@ -53,10 +53,6 @@ class ForumApi(private val http: NoveliaApi) {
         return appJson.decodeFromString(mutate("PATCH", "comment/${positive(id)}", appJson.encodeToString(mapOf("content" to content))))
     }
     suspend fun deleteComment(id: Long) { mutate("DELETE", "comment/${positive(id)}") }
-    // External novel comments exist on the preview server. Keep the subject key explicit until the main site migrates.
-    suspend fun externalComments(subjectKey: String, page: Int) = get<ForumPage<ForumComment>>("external/comment/novel/${encodeSegment(subjectKey)}", paging(page, 20))
-    suspend fun externalReplies(subjectKey: String, rootId: Long, page: Int) =
-        get<ForumPage<ForumComment>>("external/comment/novel/${encodeSegment(subjectKey)}/${positive(rootId)}/reply", paging(page, 20))
     private suspend inline fun <reified T> get(path: String, params: Map<String, String> = emptyMap()): T {
         val raw = http.request("GET", path, params = params, errorMessage = ::forumErrorMessage)
         return withContext(Dispatchers.Default) { appJson.decodeFromString(raw) }
@@ -71,7 +67,7 @@ class ForumApi(private val http: NoveliaApi) {
 }
 
 /** 10.4 用例层仍返回纯文本，区分校验、权限、资源缺失与评论锁定／冲突。 */
-private fun forumErrorMessage(response: Response): String? {
+internal fun forumErrorMessage(response: Response): String? {
     if (response.code !in setOf(400, 403, 404, 409) || response.body?.contentType()?.let { it.type == "text" && it.subtype == "plain" } != true) return null
     val message = response.peekBody(2048).string().trim()
     if(message.isBlank() || message.length > 300 || '<' in message || '>' in message) return null
