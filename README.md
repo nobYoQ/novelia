@@ -24,14 +24,7 @@
 </div>
 
 ## 屏幕截图
-
-<p align="center">从发现下一本书，到在另一台设备上接着读。</p>
-
 <table align="center">
-  <tr>
-    <th align="center">发现好故事</th>
-    <th align="center">带上阅读资料</th>
-  </tr>
   <tr>
     <td align="center"><img src="docs/assets/screenshots/discover-dark.png" alt="深色模式下的发现页，展示书源、搜索、筛选和作品列表" width="280"></td>
     <td align="center"><img src="docs/assets/screenshots/webdav-light.png" alt="浅色模式下的 WebDAV 同步页，展示各类阅读资料的独立同步开关" width="280"></td>
