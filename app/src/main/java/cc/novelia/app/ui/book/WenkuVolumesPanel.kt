@@ -6,7 +6,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -20,6 +22,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.WenkuDetail
 import cc.novelia.app.data.library.siteVolumeIds
+import cc.novelia.app.data.library.downloadedVolume
+import cc.novelia.app.data.library.originBook
+import cc.novelia.app.data.library.originVolumeId
+import cc.novelia.app.files.downloadedVolumeForReading
 import cc.novelia.app.data.network.encodeSegment
 import cc.novelia.app.ui.components.AppLazyColumn
 import cc.novelia.app.ui.components.BookRow
@@ -36,10 +42,20 @@ import cc.novelia.app.ui.theme.appReducedMotion
     onUpload: () -> Unit, onRefresh: () -> Unit,
 ) {
     val profile by c.session.profile.collectAsStateWithLifecycle()
+    val library by c.store.state.collectAsStateWithLifecycle()
     val account = profile?.username
     var selecting by rememberSaveable(book.ref.key, account) { mutableStateOf(false) }
     var selection by rememberSaveable(book.ref.key, account) { mutableStateOf(emptyList<String>()) }
     var download by remember(book.ref.key, account) { mutableStateOf(emptyList<String>()) }
+    var opening by remember(book.ref.key) { mutableStateOf<String?>(null) }
+    fun openVolume(volumeId: String) {
+        if(opening != null) return
+        opening = volumeId
+        c.action {
+            try { c.book(downloadedVolumeForReading(c.app, book.ref, volumeId)) }
+            finally { opening = null }
+        }
+    }
     val available = remember(detail.volumeJp) {
         detail.volumeJp.filter { it.total > 0 && maxOf(it.sakura, it.gpt, it.youdao) >= it.total }.map { it.volumeId }.distinct()
     }
@@ -82,17 +98,27 @@ import cc.novelia.app.ui.theme.appReducedMotion
             items(orderedVolumes, key = { "jp-${it.volumeId}" }, contentType = { "translated-volume" }) { volume ->
                 val complete = volume.volumeId in available
                 val checked = volume.volumeId in selected
+                val readable = library.downloadedVolume(book.ref, volume.volumeId) != null || library.downloads.any {
+                    it.status == "已完成" && it.originBook() == book.ref && it.originVolumeId() == volume.volumeId
+                }
                 val motion = if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(AppMotion.Release), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit))
                 ListItem(
                     headlineContent = { Text(volume.volumeId) },
-                    supportingContent = { Text("Sakura ${volume.sakura} · GPT ${volume.gpt} · 有道 ${volume.youdao} / ${volume.total}${if(!complete) " · 译文尚未完成" else ""}") },
+                    supportingContent = { Text("Sakura ${volume.sakura} · GPT ${volume.gpt} · 有道 ${volume.youdao} / ${volume.total}${if(readable) " · 已下载，点击阅读" else if(!complete) " · 译文尚未完成" else ""}") },
                     trailingContent = {
                         if(selecting) Checkbox(checked, onCheckedChange = null, enabled = complete)
-                        else IconButton(onClick = { download = listOf(volume.volumeId) }, enabled = complete) { Icon(Icons.Outlined.Download, if(complete) "下载分卷" else "译文尚未完成") }
+                        else Row {
+                            if(readable) IconButton(onClick = { openVolume(volume.volumeId) }, enabled = opening == null) {
+                                Icon(Icons.AutoMirrored.Outlined.MenuBook, if(opening == volume.volumeId) "正在准备阅读" else "阅读分卷")
+                            }
+                            IconButton(onClick = { download = listOf(volume.volumeId) }, enabled = complete && opening == null) { Icon(Icons.Outlined.Download, if(complete) "下载分卷" else "译文尚未完成") }
+                        }
                     },
                     modifier = motion.testTag("wenku-volume-${volume.volumeId}").then(if(selecting) Modifier.toggleable(checked, enabled = complete, role = Role.Checkbox) { chosen ->
                         selection = if(chosen) selection + volume.volumeId else selection - volume.volumeId
-                    } else Modifier),
+                    } else Modifier.clickable(enabled = opening == null && (readable || complete), onClickLabel = if(readable) "阅读分卷" else "下载分卷") {
+                        if(readable) openVolume(volume.volumeId) else download = listOf(volume.volumeId)
+                    }),
                 )
             }
             if(detail.volumeZh.isNotEmpty()) item { SectionTitle("中文文件") }

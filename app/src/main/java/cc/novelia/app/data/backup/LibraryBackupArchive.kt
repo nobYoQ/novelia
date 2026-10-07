@@ -143,6 +143,8 @@ internal object LibraryBackupArchive {
             book.parentWenkuKey?.let { parent -> require(book.book.ref.isLocal && books[parent]?.book?.ref?.isWenku == true) { "分卷挂载关系无效" } }
             require(book.volumeOrder.distinct().size == book.volumeOrder.size && book.volumeOrder.all { books[it]?.parentWenkuKey == book.book.ref.key }) { "分卷排序索引无效" }
         }
+        require(state.downloadLinks.all { it.localBook.isLocal && id.matches(it.localBook.id) &&
+            (it.sourceBook == null || (!it.sourceBook.isLocal && it.sourceBook.provider.isNotBlank() && it.sourceBook.id.isNotBlank())) }) { "下载副本关联无效" }
         val expected = mutableSetOf<String>()
         documentIds.forEach { documentId ->
             checkCancelled()
@@ -183,7 +185,7 @@ internal fun LibraryBackupManifest.keywordLibrary(): KeywordLibrary = keywordCat
     ?: KeywordLibrary.fromLegacy(keywords, addDefaults = false)
 
 internal fun localDocumentIds(state: LibraryState): Set<String> = (
-    state.books.map { it.book.ref.key } + state.positions.keys + state.readingHistory.keys + state.notes.map { it.key } + state.bookSettings.keys + state.personalGlossaries.keys
+    state.books.map { it.book.ref.key } + state.positions.keys + state.readingHistory.keys + state.notes.map { it.key } + state.bookSettings.keys + state.personalGlossaries.keys + state.downloadLinks.map { it.localBook.key }
 ).filter { it.startsWith("local/") }.map { it.removePrefix("local/") }.toSet()
 
 internal fun LibraryState.forBackup(): LibraryState = copy(pending = emptyList(), downloads = emptyList(), syncStatus = emptyMap(), syncReplica = SyncReplica(deviceId = ""))
@@ -207,6 +209,7 @@ internal fun mergeLibraryBackup(current: LibraryState, incoming: LibraryState): 
         historyMigrated = current.historyMigrated || imported.historyMigrated,
         folderIds = imported.folderIds + current.folderIds,
         notes = current.notes + imported.notes.filter { note -> current.notes.none { it.id == note.id } },
+        downloadLinks = (current.downloadLinks + imported.downloadLinks).distinct(),
         bookSettings = imported.bookSettings + current.bookSettings,
         personalGlossaries = (current.personalGlossaries.keys + imported.personalGlossaries.keys).associateWith { key -> imported.personalGlossaries[key].orEmpty() + current.personalGlossaries[key].orEmpty() },
         blockedBooks = current.blockedBooks + imported.blockedBooks, blockedTags = current.blockedTags + imported.blockedTags,

@@ -65,6 +65,7 @@ import cc.novelia.app.ui.components.ConfirmDialog
 import cc.novelia.app.ui.components.CreateBookDocument
 import cc.novelia.app.files.prepareLocalBookExport
 import cc.novelia.app.files.exportLocalBook
+import cc.novelia.app.files.deleteBookFiles
 import cc.novelia.app.ui.components.EmptyState
 import cc.novelia.app.ui.components.MenuRow
 import cc.novelia.app.ui.components.Screen
@@ -99,6 +100,7 @@ import kotlinx.coroutines.withContext
     var deletingDocument by remember { mutableStateOf<SavedBook?>(null) }
     var batchRemoval by remember { mutableStateOf<Set<BookRef>?>(null) }
     var batchDeletion by remember { mutableStateOf<Set<BookRef>?>(null) }
+    var permanentDeletion by remember { mutableStateOf<Set<BookRef>?>(null) }
     var batchWorking by remember { mutableStateOf(false) }
     var renamingDocument by remember { mutableStateOf<SavedBook?>(null) }
     var importedKeys by rememberSaveable { mutableStateOf(emptyList<String>()) }
@@ -206,6 +208,9 @@ import kotlinx.coroutines.withContext
                                         Text(if(batchWorking) "正在处理…" else if(tab == 1) "批量删除" else "批量移出书架")
                                     }
                                     TextButton(onClick = {
+                                        permanentDeletion = books.filter { it.book.ref.key in selection }.map { it.book.ref }.toSet()
+                                    }, enabled = managing && !batchWorking && selection.isNotEmpty()) { Text("彻底删除") }
+                                    TextButton(onClick = {
                                         val chosen = downloadableSelection
                                         queueingDownloads = true
                                         c.action {
@@ -216,7 +221,7 @@ import kotlinx.coroutines.withContext
                                                     val id = java.util.UUID.randomUUID().toString()
                                                     val filename = saved.book.title.replace(invalidFilenameChars, "_").take(120) + ".epub"
                                                     val url = c.api.downloadUrl(saved.book.ref, null, reader.mode, reader.engines, reader.parallel, "epub", filename)
-                                                    cc.novelia.app.files.DownloadWorker.enqueue(c.app, DownloadEntry(id, saved.book.title, "$id-$filename", url))
+                                                    cc.novelia.app.files.DownloadWorker.enqueue(c.app, DownloadEntry(id, saved.book.title, "$id-$filename", url, sourceBook = saved.book.ref, sourceCard = saved.book))
                                                 }
                                                 c.message("已开始下载 ${chosen.size} 本网络小说", actionLabel = "查看下载") { c.go("downloads", replaceTop = true) }
                                                 managing = false
@@ -339,14 +344,24 @@ import kotlinx.coroutines.withContext
         }
     }
     batchDeletion?.let { refs ->
-        ConfirmDialog("删除 ${refs.size} 本本地小说？", "删除所选小说在此设备中的导入副本，并移出书架。导入前的原文件、下载列表中的文件和阅读记录保留。此操作无法撤销。", { batchDeletion = null }, confirmLabel = "删除本地副本") {
+        ConfirmDialog("删除 ${refs.size} 本本地小说？", "删除所选小说的导入副本及对应下载任务和文件，并移出书架。导入前的原文件和阅读记录保留。此操作无法撤销。", { batchDeletion = null }, confirmLabel = "删除本地副本") {
             batchWorking = true
             c.action {
                 try {
-                    withContext(Dispatchers.IO) { refs.forEach { c.store.removeDocument(it.id) } }
+                    deleteBookFiles(c.app, refs, eraseReadingData = false)
                     managing = false; selection = emptySet()
                     c.message("已删除 ${refs.size} 本本地小说")
                 } finally { batchWorking = false }
+            }
+        }
+    }
+    permanentDeletion?.let { refs ->
+        ConfirmDialog("彻底删除 ${refs.size} 本书？", "移出所选书籍，删除其全部本地分卷、导入副本、对应下载任务和文件，以及本机阅读记录、笔记和单书设置。正在下载的任务会取消。导入前的原文件和原站收藏不受影响，此操作无法撤销。",
+            { permanentDeletion = null }, confirmLabel = "彻底删除") {
+            batchWorking = true
+            c.action("书籍及关联文件已彻底删除") {
+                try { deleteBookFiles(c.app, refs); managing = false; selection = emptySet() }
+                finally { batchWorking = false }
             }
         }
     }
@@ -396,7 +411,10 @@ import kotlinx.coroutines.withContext
                 }
             }
         })
-        if(saved.book.ref.isLocal) MenuRow("删除本地小说", "删除此文件的导入副本", Icons.Outlined.DeleteOutline, { selected = null; deletingDocument = saved })
+        if(saved.book.ref.isLocal) MenuRow("删除本地小说", "删除导入副本及对应下载，保留阅读记录", Icons.Outlined.DeleteOutline, { selected = null; deletingDocument = saved })
+        MenuRow("彻底删除", if(saved.book.ref.isWenku) "移出书架并删除全部分卷、对应下载和阅读资料" else "移出书架并删除副本、对应下载和阅读资料", Icons.Outlined.DeleteForever, {
+            selected = null; permanentDeletion = setOf(saved.book.ref)
+        })
     } } }
     volumeManager?.let { parent -> WenkuVolumeManager(parent, state.books, { volumeManager = null }) { keys ->
         c.store.update { it.withWenkuVolumes(parent.book.ref.key, keys) }
@@ -406,8 +424,8 @@ import kotlinx.coroutines.withContext
         c.store.update { it.withVolumeParent(volume.book.ref.key, parentKey) }
         volumeParentPicker = null
     } }
-    deletingDocument?.let { saved -> ConfirmDialog("删除「${saved.book.title}」？", "将删除此设备中的导入副本，并移出书架。导入前的原文件和下载列表中的文件不受影响。此操作无法撤销。", { deletingDocument = null }, confirmLabel = "删除本地小说") {
-        c.action("本地小说已删除") { withContext(Dispatchers.IO) { c.store.removeDocument(saved.book.ref.id) } }
+    deletingDocument?.let { saved -> ConfirmDialog("删除「${saved.book.title}」？", "将删除导入副本及对应下载任务和文件，并移出书架。导入前的原文件和阅读记录保留。此操作无法撤销。", { deletingDocument = null }, confirmLabel = "删除本地小说") {
+        c.action("本地小说及对应下载已删除") { deleteBookFiles(c.app, setOf(saved.book.ref), eraseReadingData = false) }
     } }
 }
 

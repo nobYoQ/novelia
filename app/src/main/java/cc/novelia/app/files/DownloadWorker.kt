@@ -101,14 +101,18 @@ class DownloadWorker(context: Context, parameters: WorkerParameters) : Coroutine
     }
     companion object {
         suspend fun remove(app: NoveliaApplication, id: String) = withContext(Dispatchers.IO) {
+            check(app.store.recoveryIssue.value == null) { "本地资料已保护，请先前往资料备份与恢复" }
             DownloadFiles.withTaskLock(app.store.downloadsDir, id) {
                 withContext(NonCancellable) {
                     // Operation 等待的是取消命令完成，旧 Worker 此时可能尚未退出。
                     WorkManager.getInstance(app).cancelUniqueWork("download-$id").result.get()
                     val entry = app.store.state.value.downloads.find { it.id == id }
+                    entry?.let {
+                        val file = app.store.downloadFile(it)
+                        check(!file.exists() || file.delete()) { "下载文件删除失败，请重试" }
+                    }
                     app.store.update { it.copy(downloads = it.downloads.filterNot { task -> task.id == id }) }
                     app.store.flush()
-                    entry?.let { File(app.store.downloadsDir, it.fileName).delete() }
                     DownloadFiles.cleanup(app.store.downloadsDir, id)
                 }
             }

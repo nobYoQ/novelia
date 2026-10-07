@@ -226,6 +226,7 @@ internal fun remapBackupLibrary(source: LibraryState, localIds: Map<String, Stri
         positions = source.positions.mapKeys { key(it.key) }, notes = source.notes.map { it.copy(key = key(it.key)) },
         readingHistory = source.readingHistory.mapKeys { key(it.key) }.mapValues { (_, entry) -> entry.copy(bookKey = key(entry.bookKey)) },
         bookSettings = source.bookSettings.mapKeys { key(it.key) }, personalGlossaries = source.personalGlossaries.mapKeys { key(it.key) },
-        blockedBooks = source.blockedBooks.map(::key).toSet()
+        blockedBooks = source.blockedBooks.map(::key).toSet(),
+        downloadLinks = source.downloadLinks.map { it.copy(localBook = BookRef.fromKey(key(it.localBook.key))) }
     )
 }

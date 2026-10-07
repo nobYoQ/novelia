@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.model.DownloadEntry
+import cc.novelia.app.data.library.originBook
 import cc.novelia.app.files.*
 import cc.novelia.app.ui.components.AppDropdownMenu
 import cc.novelia.app.ui.components.AppLazyColumn
@@ -54,6 +55,7 @@ import kotlinx.coroutines.withContext
     var selection by rememberSaveable { mutableStateOf(emptyList<String>()) }
     var removeBatch by remember { mutableStateOf<List<String>?>(null) }
     var deleting by remember { mutableStateOf(false) }
+    var permanentDeletion by remember { mutableStateOf<DownloadEntry?>(null) }
     var preparingArchive by remember { mutableStateOf(false) }
     var pendingArchiveId by rememberSaveable { mutableStateOf<String?>(null) }
     val archives = remember(c.store) { DownloadArchiveFiles(c.store.exportsDir) }
@@ -282,12 +284,27 @@ import kotlinx.coroutines.withContext
                             })
                         }
                         DropdownMenuItem(text = { Text("删除") }, onClick = { more = false; remove = entry }, leadingIcon = { Icon(Icons.Outlined.DeleteOutline, null) })
+                        DropdownMenuItem(text = { Text(if(entry.originBook()?.isWenku == true) "彻底删除此分卷" else "彻底删除小说") },
+                            onClick = { more = false; permanentDeletion = entry }, leadingIcon = { Icon(Icons.Outlined.DeleteForever, null) })
                     }
                 }
             }
         } } }
     } } }
     remove?.let { entry -> ConfirmDialog("删除下载？", "移除该任务及其下载文件，已导入书架的副本不受影响。", { remove = null }, confirmLabel = "删除下载") { c.action { DownloadWorker.remove(c.app, entry.id) } } }
+    permanentDeletion?.let { entry ->
+        ConfirmDialog(if(entry.originBook()?.isWenku == true) "彻底删除此分卷？" else "彻底删除小说？",
+            "同时删除对应书架条目、导入副本、下载任务和文件，以及本机阅读记录和笔记。文库的其他分卷保留。导入前的原文件和原站收藏不受影响，此操作无法撤销。",
+            { permanentDeletion = null }, confirmLabel = "彻底删除") {
+            deleting = true
+            c.action("小说及关联文件已彻底删除") {
+                try {
+                    val source = entry.originBook()?.takeUnless { it.isWenku }
+                    deleteBookFiles(c.app, refs = setOfNotNull(source), downloadIds = setOf(entry.id))
+                } finally { deleting = false }
+            }
+        }
+    }
     removeBatch?.let { ids -> ConfirmDialog("删除 ${ids.size} 个下载？", "移除选中任务及其下载文件，正在下载的任务会取消，已导入书架的副本不受影响。",
         { removeBatch = null }, confirmLabel = "删除下载") {
         c.action("已删除 ${ids.size} 个下载") {

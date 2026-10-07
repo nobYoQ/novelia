@@ -11,6 +11,8 @@ import cc.novelia.app.data.documents.DocumentHashIndex
 import cc.novelia.app.data.documents.DocumentStorage
 import cc.novelia.app.data.library.withoutBook
 import cc.novelia.app.data.library.withoutBooks
+import cc.novelia.app.data.library.withDeletedBookRecords
+import cc.novelia.app.data.library.withMigratedDownloadLinks
 import cc.novelia.app.data.library.withReadingPosition
 import cc.novelia.app.data.library.withMigratedReadingHistory
 import cc.novelia.app.data.model.withStableFolderIds
@@ -25,6 +27,8 @@ import cc.novelia.app.data.model.LocalDocument
 import cc.novelia.app.data.model.LocalReadingContent
 import cc.novelia.app.data.model.Position
 import cc.novelia.app.files.DocumentTools
+import cc.novelia.app.files.downloadedBookLock
+import cc.novelia.app.files.documentImportLock
 import cc.novelia.app.files.EPUB_CONTENT_VERSION
 import cc.novelia.app.files.contentMode
 import cc.novelia.app.files.recoverEpubChapter
@@ -36,6 +40,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.encodeToString
 
 /**
@@ -57,7 +62,7 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
         readLastGood = { AtomicFile(lastGoodFile).openRead().bufferedReader(Charsets.UTF_8).use { it.readText() } },
         decode = stateCodec::decode
     )
-    private val mutable = MutableStateFlow(initial.state.withMigratedReadingHistory().withStableFolderIds())
+    private val mutable = MutableStateFlow(initial.state.withMigratedReadingHistory().withStableFolderIds().withMigratedDownloadLinks())
     private val mutableRecoveryIssue = MutableStateFlow(initial.issue)
     // 损坏快照仍可能包含可恢复的引用，应保留其历史正文载荷。
     private val preserveTextHistory = initial.issue != null || context.filesDir.listFiles().orEmpty().any { it.name.startsWith("library-damaged-") }
@@ -151,7 +156,7 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
         synchronized(diskLock) {
             synchronized(this@LocalStore) {
                 val before = mutable.value
-                val restored = transform(before).withMigratedReadingHistory().withStableFolderIds()
+                val restored = transform(before).withMigratedReadingHistory().withStableFolderIds().withMigratedDownloadLinks()
                 val domains = WebDavProjection.affectedLibraryDomains(before, restored)
                 val includeDevices = syncDevicePreferences()
                 val next = restored.copy(syncReplica = before.syncReplica.track(WebDavProjection.library(before, domains, includeDevices),
@@ -181,25 +186,34 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
     fun removeBook(ref: BookRef) = update { it.withoutBook(ref) }
     /** 仅书架主动移除入口遵循清理偏好，导入回滚和普通关系调整不触发它。 */
     suspend fun removeShelfBook(ref: BookRef): Boolean = withContext(Dispatchers.IO) {
-        val deleteCopy = ref.isLocal && state.value.deleteLocalCopyOnShelfRemoval
-        removeBook(ref)
-        if(deleteCopy) {
-            flush()
-            removeDocument(ref.id)
+        downloadedBookLock.withLock {
+            documentImportLock.withLock {
+                check(recoveryIssue.value == null) { "本地资料已保护，请先前往资料备份与恢复" }
+                val deleteCopy = ref.isLocal && state.value.deleteLocalCopyOnShelfRemoval
+                removeBook(ref)
+                if(deleteCopy) {
+                    flush()
+                    removeDocument(ref.id)
+                }
+                deleteCopy
+            }
         }
-        deleteCopy
     }
     /** 批量书架操作只提交一次关系变更，返回因清理偏好而删除副本的书目。 */
     suspend fun removeShelfBooks(refs: Set<BookRef>): Set<BookRef> = withContext(Dispatchers.IO) {
-        check(recoveryIssue.value == null) { "本地资料已保护，请先前往资料备份与恢复" }
-        val selected = state.value.books.filter { it.book.ref in refs }.map { it.book.ref }.toSet()
-        val copies = if(state.value.deleteLocalCopyOnShelfRemoval) selected.filter { it.isLocal }.toSet() else emptySet()
-        update { it.withoutBooks(selected) }
-        if(copies.isNotEmpty()) {
-            flush()
-            copies.forEach { removeDocument(it.id) }
+        downloadedBookLock.withLock {
+            documentImportLock.withLock {
+                check(recoveryIssue.value == null) { "本地资料已保护，请先前往资料备份与恢复" }
+                val selected = state.value.books.filter { it.book.ref in refs }.map { it.book.ref }.toSet()
+                val copies = if(state.value.deleteLocalCopyOnShelfRemoval) selected.filter { it.isLocal }.toSet() else emptySet()
+                update { it.withoutBooks(selected) }
+                if(copies.isNotEmpty()) {
+                    flush()
+                    copies.forEach { removeDocument(it.id) }
+                }
+                copies
+            }
         }
-        copies
     }
     fun rememberSearch(query: String) { if (query.isNotBlank()) update { it.copy(recentSearches = (listOf(query) + it.recentSearches.filterNot { old -> old == query }).take(20)) } }
     fun savePosition(ref: BookRef, position: Position, bookTitle: String = "") = update { it.withReadingPosition(ref, position, bookTitle) }
@@ -321,7 +335,7 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
         File(documentsDir, "$key-images").listFiles()?.forEach { it.delete() }
         File(documentsDir, "$key-images").delete()
         listOf("epub", "txt", "srt").forEach { documentSource(key, it).delete() }
-        removeBook(BookRef("local", key))
+        update { it.withDeletedBookRecords(setOf(BookRef("local", key)), eraseReadingData = false) }
     }
 
     fun cacheSize(): Long = synchronized(chapterLock) {

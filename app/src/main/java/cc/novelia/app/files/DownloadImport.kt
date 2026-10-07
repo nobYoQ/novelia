@@ -6,6 +6,9 @@ import cc.novelia.app.NoveliaApplication
 import cc.novelia.app.data.library.withDownloadedVolume
 import cc.novelia.app.data.library.withWenkuSiteOrder
 import cc.novelia.app.data.library.siteVolumeIds
+import cc.novelia.app.data.library.originBook
+import cc.novelia.app.data.library.originVolumeId
+import cc.novelia.app.data.library.withDownloadLink
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.DownloadEntry
@@ -25,7 +28,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 /** imported 仅在本次创建新文档时为 true；命中源文件哈希会返回现有引用。 */
 data class DocumentImportResult(val ref: BookRef, val imported: Boolean)
-private val importLock = Mutex()
+internal val documentImportLock = Mutex()
 
 private fun copyImport(input: InputStream, target: File, checkCancelled: () -> Unit) {
     target.outputStream().use { output ->
@@ -73,7 +76,7 @@ suspend fun importDocumentUri(store: LocalStore, uri: Uri, onProgress: (String) 
  */
 suspend fun importLocalDocument(store: LocalStore, file: File, name: String = file.name, title: String? = null,
     downloadMode: String? = null, onProgress: (String) -> Unit = {}): DocumentImportResult = withContext(Dispatchers.IO) {
-    importLock.withLock {
+    documentImportLock.withLock {
         onProgress("正在检查重复文件")
         DocumentTools.requireImportSize(file.length())
         val workContext = coroutineContext
@@ -119,9 +122,9 @@ suspend fun importLocalDocument(store: LocalStore, file: File, name: String = fi
 }
 
 /** 开始阅读和批量导入共用来源解析、文件去重和文库挂载。 */
-suspend fun importDownloadedDocument(app: NoveliaApplication, entry: DownloadEntry, onProgress: (String) -> Unit = {}): DocumentImportResult {
+suspend fun importDownloadedDocument(app: NoveliaApplication, entry: DownloadEntry, onProgress: (String) -> Unit = {}): DocumentImportResult = downloadedBookLock.withLock {
     require(entry.status == "已完成") { "文件尚未下载完成" }
-    val parent = entry.sourceBook?.takeIf { it.isWenku }
+    val parent = entry.originBook()?.takeIf { it.isWenku }
     val sourceCard = entry.sourceCard ?: parent?.let { source ->
         app.store.state.value.books.firstOrNull { it.book.ref == source }?.book ?: try {
             val binding = app.session.capture()
@@ -142,23 +145,25 @@ suspend fun importDownloadedDocument(app: NoveliaApplication, entry: DownloadEnt
         app.store.flush()
         DownloadWorker.remove(app, entry.id)
     }
-    return result
+    result
 }
 
 /** 每次导入均补齐父文库并挂载，重复文件复用已有副本和阅读位置。 */
 suspend fun importDownloadedDocument(store: LocalStore, entry: DownloadEntry, sourceCard: BookCard? = entry.sourceCard): BookRef =
-    importDownloadedDocumentResult(store, entry, sourceCard).ref
+    downloadedBookLock.withLock { importDownloadedDocumentResult(store, entry, sourceCard).ref }
 
 private suspend fun importDownloadedDocumentResult(store: LocalStore, entry: DownloadEntry, sourceCard: BookCard?,
     onProgress: (String) -> Unit = {}): DocumentImportResult {
-    val result = importLocalDocument(store, File(store.downloadsDir, entry.fileName), entry.fileName, entry.title, entry.contentMode(), onProgress)
-    entry.sourceBook?.takeIf { it.isWenku }?.let { source -> store.update { state ->
+    require(entry.status == "已完成") { "文件尚未下载完成" }
+    val result = importLocalDocument(store, store.downloadFile(entry), entry.fileName, entry.title, entry.contentMode(), onProgress)
+    store.update { it.withDownloadLink(entry, result.ref) }
+    entry.originBook()?.takeIf { it.isWenku }?.let { source -> store.update { state ->
         val parent = state.books.firstOrNull { it.book.ref == source }?.book
             ?: sourceCard?.takeIf { it.ref == source }
             ?: BookCard(source, "文库小说 ${source.id}", subtitle = "文库小说")
         val mounted = state.withDownloadedVolume(result.ref, parent).let { library ->
             library.copy(books = library.books.map { saved ->
-                if(saved.book.ref == result.ref) saved.copy(sourceVolumeId = entry.title) else saved
+                if(saved.book.ref == result.ref) saved.copy(sourceVolumeId = entry.originVolumeId()) else saved
             })
         }
         val ids = siteVolumeIds(sourceCard?.volumeIds?.takeIf { it.isNotEmpty() } ?: parent.volumeIds)

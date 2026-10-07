@@ -152,7 +152,8 @@ class LibraryBackupTest {
                 readingHistory = mapOf(local.key to ReadingHistoryEntry(local.key, "卷一", "chapter-1", "第一章", 123)),
                 notes = listOf(Note("n1", local.key, "chapter-1", 0, "正文", "笔记")),
                 bookSettings = mapOf(local.key to ReaderSettings(fontSize = 24f)),
-                personalGlossaries = mapOf(local.key to mapOf("word" to "译文"))
+                personalGlossaries = mapOf(local.key to mapOf("word" to "译文")),
+                downloadLinks = listOf(cc.novelia.app.data.model.DownloadedBookLink("download", local, parent, "卷一.epub"))
             )
             val backup = manifest(state, assets = files.mapValues { LibraryBackupArchive.digest(it.value) }, documents = listOf("volume"))
             val output = ByteArrayOutputStream()
@@ -173,6 +174,8 @@ class LibraryBackupTest {
             assertEquals("local/new-volume", mapped.notes.single().key)
             assertEquals(24f, mapped.bookSettings["local/new-volume"]!!.fontSize, 0f)
             assertEquals("译文", mapped.personalGlossaries["local/new-volume"]!!["word"])
+            assertEquals(BookRef("local", "new-volume"), mapped.downloadLinks.single().localBook)
+            assertEquals(parent, mapped.downloadLinks.single().sourceBook)
         } finally { root.deleteRecursively() }
     }
 
