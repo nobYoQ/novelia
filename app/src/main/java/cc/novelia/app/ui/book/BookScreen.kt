@@ -59,7 +59,6 @@ import cc.novelia.app.ui.shelf.bookFavoriteState
 import cc.novelia.app.ui.shelf.WenkuSiteOrderActions
 import cc.novelia.app.data.library.withCloudReadingMetadata
 import cc.novelia.app.ui.theme.AppMotion
-import cc.novelia.app.ui.theme.MotionContent
 import cc.novelia.app.ui.theme.appReducedMotion
 import cc.novelia.app.ui.theme.motionClickable
 import java.io.File
@@ -263,10 +262,9 @@ import kotlinx.coroutines.withContext
         } }
         HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth().testTag("book-detail-pager"),
             key = { it + firstPanel }) { index ->
-            // 以可见页为触发点，预组合的目录也能在切入时播放，所有入口行为一致。
-            MotionContent(pager.currentPage == index, Modifier.fillMaxSize()) {
-                panel(index + firstPanel)
-            }
+            // 分页已负责横向过渡；currentPage 在拖动中点变化，不能再触发淡入。
+            // 首次加载详情的浮现效果由外层 AsyncContent 统一处理。
+            Box(Modifier.fillMaxSize()) { panel(index + firstPanel) }
         }
     }
 }
