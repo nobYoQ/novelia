@@ -83,6 +83,20 @@ class ForumEditorUiTest {
         compose.onNodeWithTag("article-body").performScrollTo().assertTextContains("恢复正文")
     }
 
+    @Test fun editingFiltersRemovedTagsAndPreviewKeepsCurrentSelection() = withEditor(
+        Article(id = "f-91003", title = "带标签的帖子", content = "测试正文", forumCategoryId = 100,
+            forumTags = listOf(ForumTag(2, "标签2"), ForumTag(99, "已移除标签")))) {
+        compose.onNodeWithText("标签 1 / 3").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("标签2").assertIsSelected()
+        compose.onNodeWithText("小说讨论").performScrollTo().performClick()
+        compose.onNodeWithText("标签2").assertIsSelected()
+        compose.onNodeWithText("预览").performClick()
+        compose.onNodeWithText("标签2").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("已移除标签").assertDoesNotExist()
+        compose.onNodeWithText("编辑").performClick()
+        compose.onNodeWithText("标签2").performScrollTo().assertIsSelected()
+    }
+
     private fun withEditor(article: Article?, noticeDismissed: Boolean = false, savedDraft: String? = null, check: () -> Unit) {
         val app = compose.activity.application as NoveliaApplication
         runBlocking { app.initialization.await() }

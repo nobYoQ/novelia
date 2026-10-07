@@ -22,13 +22,16 @@ import java.time.Instant
     val pinOrder: Int? = null, val favorited: Boolean = false, val createdAt: String, val updatedAt: String,
     val activeAt: String, val tags: List<ForumTag> = emptyList(), val content: String = ""
 ) {
-    fun article(categories: List<ForumCategory>) = Article(
+    fun article(categories: List<ForumCategory>, filterTagId: Long? = null) = Article(
         id = ForumLinks.localId(id), title = title, content = content,
         category = categories.firstOrNull { it.id == categoryId }?.title ?: "分类 $categoryId",
         locked = commentsLocked, pinned = pinOrder != null, hidden = status != 0,
         numViews = viewsCount, numComments = commentsCount, user = User(authorUsername),
         createAt = Instant.parse(createdAt).epochSecond, updateAt = Instant.parse(updatedAt).epochSecond,
-        forumCategoryId = categoryId, forumTags = tags, forumAuthorId = authorId, forumFavorited = favorited
+        // 列表批量标签可能遗漏；筛选结果必含查询标签，可由该分类元数据补齐。
+        forumCategoryId = categoryId, forumTags = (tags + listOfNotNull(filterTagId?.let { tagId ->
+            categories.firstOrNull { it.id == categoryId }?.tags?.firstOrNull { it.id == tagId }
+        })).distinctBy { it.id }, forumAuthorId = authorId, forumFavorited = favorited
     )
 }
 @Serializable data class ForumComment(

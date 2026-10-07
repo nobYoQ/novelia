@@ -67,7 +67,15 @@ import cc.novelia.app.ui.theme.MotionContent
                         if(tab == 0) {
                         val articleScroll = rememberLazyListState()
                         AppLazyColumn(state = articleScroll, contentPadding = PaddingValues(20.dp)) {
-                            item { Text(categories[article.category] ?: article.category, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary); Spacer(Modifier.height(12.dp)); Text(article.title, style = MaterialTheme.typography.headlineMedium); Spacer(Modifier.height(12.dp)); Text("${article.user.username} · ${displayDate(article.createAt)} · ${article.numViews} 次浏览", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant); if(article.forumTags.isNotEmpty()) Text(article.forumTags.joinToString(" · ") { it.name }); Spacer(Modifier.height(24.dp)) }
+                            item {
+                                Text(categories[article.category] ?: article.category, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                                Spacer(Modifier.height(12.dp))
+                                Text(article.title, style = MaterialTheme.typography.headlineMedium)
+                                Spacer(Modifier.height(12.dp))
+                                Text("${article.user.username} · ${displayDate(article.createAt)} · ${article.numViews} 次浏览", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                if(article.forumTags.isNotEmpty()) { Spacer(Modifier.height(12.dp)); ForumTagBadges(article.forumTags) }
+                                Spacer(Modifier.height(24.dp))
+                            }
                             item { MarkdownText(c, article.content, documentUrl = ForumLinks.articleUrl(id),
                                 onAnchorScroll = { top -> articleScroll.scrollToItem(1, top) }) }
                             item { FlowRow(Modifier.padding(top = 24.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

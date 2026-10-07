@@ -99,6 +99,32 @@ class ForumApiContractTest {
         }
     }
 
+    @Test fun clearingPostTagsSendsAnExplicitEmptyArrayAndListWithoutTagFilter() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody(post))
+            server.enqueue(MockResponse().setBody("""{"total":0,"items":[]}"""))
+            val client = api(server)
+            client.updatePost(5, ForumPostInput(7, "标题", "正文", emptyList()))
+            val update = server.takeRequest()
+            assertEquals("PATCH", update.method)
+            assertEquals(JsonArray(emptyList()), appJson.parseToJsonElement(update.body.readUtf8()).jsonObject["tagIds"])
+            client.posts(0, "novel", tagIds = emptyList())
+            assertNull(server.takeRequest().requestUrl!!.queryParameter("tag"))
+        }
+    }
+
+    @Test fun filteredArticlesRestoreOnlyTheKnownCategoryTagWithoutDuplicatingReturnedTags() {
+        val original = appJson.decodeFromString<ForumPost>(post)
+        val selected = ForumTag(10, "书单", 1)
+        val categories = listOf(ForumCategory(7, "novel", listOf(selected)), ForumCategory(8, "feedback", listOf(ForumTag(11, "其他分类标签"))))
+        val restored = original.article(categories, filterTagId = 10)
+        assertEquals(listOf(9L, 10L), restored.forumTags.map { it.id })
+        assertEquals(selected, restored.forumTags.last())
+        assertEquals(listOf(10L), original.copy(tags = listOf(selected)).article(categories, 10).forumTags.map { it.id })
+        assertEquals(original.tags, original.article(categories, 11).forumTags)
+        assertEquals(original.tags, original.article(categories).forumTags)
+    }
+
     @Test fun rootCommentsAndRepliesUseIndependentPagingAndReplyUsesRootId() = runBlocking {
         MockWebServer().use { server ->
             val root = appJson.decodeFromString<ForumComment>(comment).copy(id = 8, rootId = null, replyCount = 21)

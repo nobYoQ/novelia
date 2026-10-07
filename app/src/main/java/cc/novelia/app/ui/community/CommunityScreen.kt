@@ -54,6 +54,12 @@ import cc.novelia.app.ui.theme.motionClickable
     var source by rememberSaveable { mutableIntStateOf(0) }
     var sort by rememberSaveable { mutableStateOf(ForumSort.ACTIVE) }
     var searchExpanded by rememberSaveable { mutableStateOf(false) }
+    var tagId by rememberSaveable(category) { mutableStateOf<Long?>(null) }
+    val availableTags = available.firstOrNull { it.slug == category }?.tags.orEmpty()
+    val selectedTagId = tagId?.takeIf { id -> availableTags.any { it.id == id } }
+    LaunchedEffect(availableTags) {
+        if(tagId != null && availableTags.none { it.id == tagId }) { tagId = null; page = 0 }
+    }
     LaunchedEffect(available) {
         if(available.none { it.slug == category }) { category = available.first().slug; page = 0 }
     }
@@ -100,12 +106,16 @@ import cc.novelia.app.ui.theme.motionClickable
                 if(source == 0) ForumSortPicker(sort) { sort = it; page = 0 }
                 else TextButton(onClick = { showFeed(0) }) { Text("返回全部帖子") }
             }
+            if(source == 0) ForumTagFilter(availableTags, selectedTagId) { tagId = it; page = 0 }
             val settledSearch = rememberDebouncedQuery(search)
             MotionContent(listOf(category, source), Modifier.weight(1f), animateInitial = false) {
-                AsyncContent(listOf(category, page, settledSearch, source, sort, forumBinding, profile?.role), load = {
-                    when(source) { 1 -> c.forumApi.favorites(page); 2 -> c.forumApi.myPosts(page); else -> c.forumApi.posts(page, category, settledSearch, sort.apiValue) }
+                AsyncContent(listOf(category, page, settledSearch, source, sort, selectedTagId, forumBinding, profile?.role), load = {
+                    when(source) { 1 -> c.forumApi.favorites(page); 2 -> c.forumApi.myPosts(page); else -> c.forumApi.posts(page, category, settledSearch, sort.apiValue, listOfNotNull(selectedTagId)) }
                 }) { result, _ ->
-                    val articles = remember(result.items, settledSearch, state.blockedUsers, available) { result.items.filter { (source == 0 || it.title.contains(settledSearch, true)) && it.authorUsername !in state.blockedUsers }.map { it.article(available) } }
+                    val articles = remember(result.items, settledSearch, source, selectedTagId, state.blockedUsers, available) {
+                        result.items.filter { (source == 0 || it.title.contains(settledSearch, true)) && it.authorUsername !in state.blockedUsers }
+                            .map { it.article(available, if(source == 0) selectedTagId else null) }
+                    }
                     ArticleList(c, Page(result.pageCount(), articles), page, { page = it })
                 }
             }
@@ -122,6 +132,7 @@ import cc.novelia.app.ui.theme.motionClickable
                 Column(Modifier.fillMaxWidth().motionClickable { c.go("article/${article.id}") }.padding(horizontal = 20.dp, vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) { if(article.pinned) Icon(Icons.Outlined.PushPin, "置顶", Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary); Text(categories[article.category] ?: article.category, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium); if(article.locked) Icon(Icons.Outlined.Lock, "已锁定", Modifier.size(14.dp)); if(article.hidden) Text("已隐藏", style = MaterialTheme.typography.labelMedium) }
                     Text(article.title, style = MaterialTheme.typography.titleMedium)
+                    ForumTagBadges(article.forumTags)
                     FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("${article.user.username} · ${displayDate(article.createAt)}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text("${article.numComments} 评论 · ${article.numViews} 查看", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)

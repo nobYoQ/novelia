@@ -61,9 +61,16 @@ import kotlinx.serialization.encodeToString
     val editorState = rememberSaveableStateHolder()
     var categoryId by rememberSaveable(key) { mutableStateOf(if(forum && saved != null) saved.forumCategory(forumCategories)?.id
         else article?.forumCategoryId ?: writableCategories.firstOrNull { it.slug == "novel" }?.id ?: writableCategories.firstOrNull()?.id) }
-    var tagIds by rememberSaveable(key) { mutableStateOf(if(forum && saved != null) saved.forumTags(forumCategories)
-        else saved?.tagIds ?: article?.forumTags?.map { it.id }.orEmpty()) }
+    var tagIds by rememberSaveable(key) {
+        val restored = if(forum && saved != null) saved.forumTags(forumCategories) else saved?.tagIds ?: article?.forumTags?.map { it.id }.orEmpty()
+        val validIds = forumCategories.firstOrNull { it.id == categoryId }?.tags?.map { it.id }.orEmpty().toSet()
+        mutableStateOf(if(forum) restored.filter { it in validIds }.distinct() else restored)
+    }
     val selectedForumCategory = forumCategories.firstOrNull { it.id == categoryId }
+    val availableTags = selectedForumCategory?.tags.orEmpty()
+    LaunchedEffect(forum, categoryId, availableTags) {
+        if(forum) tagIds = tagIds.filter { id -> availableTags.any { it.id == id } }.distinct()
+    }
     val titleLimit = if(forum) ForumRules.TITLE_LIMIT else 80
     val titleLength = if(forum) ForumRules.length(title.trim()) else title.length
     val forumError = if(forum) ForumRules.postError(ForumPostInput(categoryId ?: 0, title, content, tagIds)) else null
@@ -89,17 +96,22 @@ import kotlinx.serialization.encodeToString
                     if(!canPublish) Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.medium) {
                         Text("当前账号暂不具备社区发布权限。你仍可编辑和预览，草稿会保存在此设备，获得权限后可以继续发布。", Modifier.padding(16.dp), style = MaterialTheme.typography.bodyMedium)
                     }
-                    if(preview) { Text(title, style = MaterialTheme.typography.headlineMedium); MarkdownText(c, content, renderer = renderer, documentUrl = article?.id?.let(ForumLinks::articleUrl) ?: if(forum) ForumLinks.ORIGIN else null) }
+                    if(preview) {
+                        if(forum) selectedForumCategory?.let { Text(it.title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary) }
+                        Text(title, style = MaterialTheme.typography.headlineMedium)
+                        if(forum) ForumTagBadges(availableTags.filter { it.id in tagIds })
+                        MarkdownText(c, content, renderer = renderer, documentUrl = article?.id?.let(ForumLinks::articleUrl) ?: if(forum) ForumLinks.ORIGIN else null)
+                    }
                     else {
                         OutlinedTextField(title, { if(forum || it.length <= titleLimit) title = it }, label = { Text("标题") }, supportingText = { Text("$titleLength / $titleLimit") }, isError = forum && title.isNotEmpty() && ForumRules.titleError(title) != null, modifier = Modifier.fillMaxWidth().testTag("article-title"), singleLine = true)
                         if(forum) {
-                            ChoiceRow("分类", writableCategories.map { it.title }, writableCategories.indexOfFirst { it.id == categoryId }) { categoryId = writableCategories[it].id; tagIds = emptyList() }
+                            ChoiceRow("分类", writableCategories.map { it.title }, writableCategories.indexOfFirst { it.id == categoryId }) {
+                                val nextCategoryId = writableCategories[it].id
+                                if(nextCategoryId != categoryId) { categoryId = nextCategoryId; tagIds = emptyList() }
+                            }
                             if(!categoryAllowed) Text(if(selectedForumCategory?.slug == "announcements") "站务公告仅管理员可以发帖，请选择其他分类。"
                                 else if(saved != null) "草稿分类需要重新确认，请选择可发布的分类。" else "请选择可发布的分类。", color = MaterialTheme.colorScheme.error)
-                            Text("标签 ${tagIds.size} / ${ForumRules.TAG_LIMIT}", style = MaterialTheme.typography.labelMedium)
-                            forumCategories.firstOrNull { it.id == categoryId }?.tags?.forEach { tag ->
-                                FilterChip(selected = tag.id in tagIds, enabled = tag.id in tagIds || tagIds.size < ForumRules.TAG_LIMIT, onClick = { tagIds = if(tag.id in tagIds) tagIds - tag.id else tagIds + tag.id }, label = { Text(tag.name) })
-                            }
+                            ForumTagSelector(availableTags, tagIds, enabled = !sending) { tagIds = it }
                         } else ChoiceRow("分类", categories.values.toList(), categories.keys.indexOf(category)) { category = categories.keys.elementAt(it) }
                         MarkdownEditor(content, { content = it }, editorHeight, unicodeLimit = if(forum) ForumRules.POST_LIMIT else null)
                     }
