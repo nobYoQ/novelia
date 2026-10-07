@@ -27,6 +27,7 @@ import cc.novelia.app.ui.components.AppLazyColumn
 import cc.novelia.app.ui.components.AppSheet
 import cc.novelia.app.ui.components.AsyncContent
 import cc.novelia.app.ui.components.EmptyState
+import cc.novelia.app.ui.components.FilterPanelVisibility
 import cc.novelia.app.ui.components.PageControls
 import cc.novelia.app.ui.components.Screen
 import cc.novelia.app.ui.components.displayDate
@@ -54,6 +55,7 @@ import cc.novelia.app.ui.theme.motionClickable
     var source by rememberSaveable { mutableIntStateOf(0) }
     var sort by rememberSaveable { mutableStateOf(ForumSort.ACTIVE) }
     var searchExpanded by rememberSaveable { mutableStateOf(false) }
+    var tagsExpanded by rememberSaveable { mutableStateOf(false) }
     var tagId by rememberSaveable(category) { mutableStateOf<Long?>(null) }
     val availableTags = available.firstOrNull { it.slug == category }?.tags.orEmpty()
     val selectedTagId = tagId?.takeIf { id -> availableTags.any { it.id == id } }
@@ -103,15 +105,19 @@ import cc.novelia.app.ui.theme.motionClickable
                 search, searchExpanded,
                 if(source == 0) "搜索论坛帖子" else "在本页文章中查找",
                 onExpanded = { searchExpanded = it }, onSearch = { search = it; page = 0 }) {
+                if(source == 0 && availableTags.isNotEmpty()) ForumTagFilterToggle(tagsExpanded,
+                    availableTags.firstOrNull { it.id == selectedTagId }?.name) { tagsExpanded = !tagsExpanded }
                 if(source == 0) ForumSortPicker(sort) { sort = it; page = 0 }
                 else TextButton(onClick = { showFeed(0) }) { Text("返回全部帖子") }
             }
-            if(source == 0) ForumTagFilter(availableTags, selectedTagId) { tagId = it; page = 0 }
+            FilterPanelVisibility(source == 0 && tagsExpanded) {
+                ForumTagFilter(availableTags, selectedTagId) { tagId = it; page = 0 }
+            }
             val settledSearch = rememberDebouncedQuery(search)
             MotionContent(listOf(category, source), Modifier.weight(1f), animateInitial = false) {
                 AsyncContent(listOf(category, page, settledSearch, source, sort, selectedTagId, forumBinding, profile?.role), load = {
                     when(source) { 1 -> c.forumApi.favorites(page); 2 -> c.forumApi.myPosts(page); else -> c.forumApi.posts(page, category, settledSearch, sort.apiValue, listOfNotNull(selectedTagId)) }
-                }) { result, _ ->
+                }, revealContent = true) { result, _ ->
                     val articles = remember(result.items, settledSearch, source, selectedTagId, state.blockedUsers, available) {
                         result.items.filter { (source == 0 || it.title.contains(settledSearch, true)) && it.authorUsername !in state.blockedUsers }
                             .map { it.article(available, if(source == 0) selectedTagId else null) }

@@ -2,6 +2,9 @@
 package cc.novelia.app.ui.discover
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -26,6 +29,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.ui.components.rememberCloudFilterCollapse
+import cc.novelia.app.ui.theme.AppMotion
+import cc.novelia.app.ui.theme.appReducedMotion
 
 /** 搜索始终在标题栏内编辑；离开编辑状态后显示已生效的搜索词，保留输入草稿。 */
 @Composable internal fun DiscoverSearchLayout(
@@ -42,6 +47,7 @@ import cc.novelia.app.ui.components.rememberCloudFilterCollapse
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     val focus = remember { FocusRequester() }
+    val reducedMotion = appReducedMotion()
     fun finishEditing() {
         onEditingChange(false)
         focusManager.clearFocus()
@@ -89,7 +95,12 @@ import cc.novelia.app.ui.components.rememberCloudFilterCollapse
                     }
                 }
             }
-        }, actions = actions)
+        }, actions = {
+            // 动画动作区宽度，使标题栏重新测量时搜索框同步伸缩。
+            Row(if(reducedMotion) Modifier else Modifier.animateContentSize(
+                tween(AppMotion.Panel, easing = FastOutSlowInEasing)),
+                verticalAlignment = Alignment.CenterVertically, content = actions)
+        })
     }) { padding ->
         // 只监听结果区，输入及筛选弹层中的滚动不会结束编辑。
         Box(Modifier.fillMaxSize().padding(padding).nestedScroll(scrollCollapse)) {

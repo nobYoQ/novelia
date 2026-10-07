@@ -119,7 +119,7 @@ import kotlinx.coroutines.sync.withPermit
             MotionContent(category, Modifier.weight(1f), animateInitial = false) {
                 Column(Modifier.fillMaxSize()) {
                     if(category == 0) {
-                        AsyncContent(listOf("recommend", profile?.username, local.blockedAuthors), load = { coroutineScope { val web = async { c.api.webList(0, sort = 1) }; val wenku = async { c.api.wenkuList(0) }; enrichAuthors(web.await().items.map { it.card() }, c, local.blockedAuthors) to enrichAuthors(wenku.await().items.map { it.card() }, c, local.blockedAuthors) } }) { (web, wenku), refresh ->
+                        AsyncContent(listOf("recommend", profile?.username, local.blockedAuthors), load = { coroutineScope { val web = async { c.api.webList(0, sort = 1) }; val wenku = async { c.api.wenkuList(0) }; enrichAuthors(web.await().items.map { it.card() }, c, local.blockedAuthors) to enrichAuthors(wenku.await().items.map { it.card() }, c, local.blockedAuthors) } }, revealContent = true) { (web, wenku), refresh ->
                             val visibleWeb = remember(web, local.blockedBooks, local.blockedTags, local.blockedAuthors) { web.asSequence().filter { visibleBook(it, local) }.take(8).toList() }
                             val visibleWenku = remember(wenku, local.blockedBooks, local.blockedTags, local.blockedAuthors) { wenku.asSequence().filter { visibleBook(it, local) }.take(6).toList() }
                             AppLazyColumn(contentPadding = PaddingValues(bottom = 20.dp), onPageTurn = onPageTurn) {
@@ -169,7 +169,7 @@ import kotlinx.coroutines.sync.withPermit
                                 Page(it.pageNumber, enrichAuthors(it.items.map(WenkuOutline::card), c, local.blockedAuthors))
                             }
                         }, initialResult = c.discoverPage?.takeIf { it.first == requestKey }?.second,
-                            onLoaded = { c.discoverPage = requestKey to it }) { result, refresh ->
+                            onLoaded = { c.discoverPage = requestKey to it }, revealContent = true) { result, refresh ->
                             val books = remember(result.items, local.blockedBooks, local.blockedTags, local.blockedAuthors) { result.items.filter { visibleBook(it, local) } }
                             val resultScroll = rememberLazyListState()
                             AppLazyColumn(state = resultScroll, onPageTurn = onPageTurn) {

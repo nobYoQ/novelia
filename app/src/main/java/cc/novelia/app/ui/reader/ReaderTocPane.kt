@@ -19,11 +19,13 @@ import cc.novelia.app.data.model.Article
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.TocItem
 import cc.novelia.app.data.model.WebDetail
+import cc.novelia.app.data.library.offlineRangeLabel
 import cc.novelia.app.ui.components.AppLazyColumn
 import cc.novelia.app.ui.components.AsyncContent
 import cc.novelia.app.ui.components.EmptyState
 import cc.novelia.app.ui.components.SectionTitle
 import cc.novelia.app.ui.components.rememberDebouncedQuery
+import cc.novelia.app.ui.components.rememberCachedChapterIds
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.theme.appReducedMotion
 import cc.novelia.app.ui.theme.motionClickable
@@ -55,6 +57,7 @@ import kotlinx.coroutines.withContext
             else c.detail<WebDetail>("novel/${ref.key}").toc
         }
     }, modifier = modifier.testTag("reader-toc-pane")) { toc, _ ->
+        val cachedIds = rememberCachedChapterIds(c.store, ref, toc)
         val settledQuery = rememberDebouncedQuery(query)
         val indexed = remember(toc) { toc.withIndex().toList() }
         val entries = remember(indexed, settledQuery, reversed) {
@@ -81,6 +84,9 @@ import kotlinx.coroutines.withContext
                 TextButton(onClick = { scope.launch(Dispatchers.Main.immediate) { locate() } }, enabled = currentIndex >= 0, modifier = Modifier.heightIn(min = 48.dp)) { Text("定位当前") }
                 if(query.isNotBlank()) TextButton(onClick = { onQuery("") }, modifier = Modifier.heightIn(min = 48.dp)) { Text("清空") }
             }
+            if(!ref.isLocal) Text(remember(toc, cachedIds) { offlineRangeLabel(toc, cachedIds) },
+                Modifier.padding(horizontal = 20.dp, vertical = 4.dp).testTag("reader-toc-cache-summary"),
+                style = MaterialTheme.typography.labelMedium)
             HorizontalDivider()
             AppLazyColumn(state = scroll, modifier = Modifier.weight(1f).testTag("reader-toc-list")) {
                 items(entries, key = { it.value.chapterId?.let { id -> "chapter-$id" } ?: "section-${it.index}" }, contentType = { if(it.value.chapterId == null) "section" else "chapter" }) { entry ->
@@ -90,7 +96,10 @@ import kotlinx.coroutines.withContext
                     else ListItem(
                         headlineContent = { Text(item.title, color = if(id == current) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) },
                         leadingContent = { Icon(if(id == current) Icons.Outlined.Bookmark else Icons.Outlined.Article, null) },
-                        supportingContent = if(id == current) ({ Text("正在阅读") }) else null,
+                        supportingContent = if(id == current || (!ref.isLocal && id in cachedIds)) ({
+                            Text(listOfNotNull("正在阅读".takeIf { id == current },
+                                "可离线阅读".takeIf { !ref.isLocal && id in cachedIds }).joinToString(" · "))
+                        }) else null,
                         modifier = Modifier.fillMaxWidth().testTag("reader-toc-chapter-$id").semantics { selected = id == current }.motionClickable { onRead(id) }
                     )
                 }

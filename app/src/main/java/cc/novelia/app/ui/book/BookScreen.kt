@@ -49,6 +49,7 @@ import cc.novelia.app.ui.components.TagList
 import cc.novelia.app.ui.components.displayDate
 import cc.novelia.app.ui.components.readDocument
 import cc.novelia.app.ui.components.rememberDebouncedQuery
+import cc.novelia.app.ui.components.rememberCachedChapterIds
 import cc.novelia.app.ui.downloads.DownloadSheet
 import cc.novelia.app.ui.markdown.format
 import cc.novelia.app.ui.navigation.AppController
@@ -58,6 +59,7 @@ import cc.novelia.app.ui.shelf.bookFavoriteState
 import cc.novelia.app.ui.shelf.WenkuSiteOrderActions
 import cc.novelia.app.data.library.withCloudReadingMetadata
 import cc.novelia.app.ui.theme.AppMotion
+import cc.novelia.app.ui.theme.MotionContent
 import cc.novelia.app.ui.theme.appReducedMotion
 import cc.novelia.app.ui.theme.motionClickable
 import java.io.File
@@ -92,7 +94,7 @@ import kotlinx.coroutines.withContext
             DropdownMenuItem({ Text("屏蔽这本书") }, { c.store.update { it.copy(blockedBooks = it.blockedBooks + ref.key) }; c.message("已从发现列表中屏蔽"); menu = false }, leadingIcon = { Icon(Icons.Outlined.Block, null) })
         } }
     }) { padding ->
-        if(ref.isWenku) AsyncContent(listOf(ref, profile?.username), refreshKey = refreshKey, load = { c.detail<WenkuDetail>("wenku/${ref.id}", forceNetwork = version > 0) }, modifier = Modifier.padding(padding)) { detail, _ ->
+        if(ref.isWenku) AsyncContent(listOf(ref, profile?.username), refreshKey = refreshKey, load = { c.detail<WenkuDetail>("wenku/${ref.id}", forceNetwork = version > 0) }, modifier = Modifier.padding(padding), revealContent = true) { detail, _ ->
             val book = remember(detail, ref) { detail.card(ref) }
             val favoriteState = bookFavoriteState(ref, localSaved, detail.favored, profile?.username, state.pending)
             val refresh: () -> Unit = { version++ }
@@ -122,7 +124,7 @@ import kotlinx.coroutines.withContext
                         2 -> NovelCommentsPanel(c, "wenku-${ref.id}")
                     }
             }
-        } else AsyncContent(listOf(ref, profile?.username), refreshKey = refreshKey, load = { c.detail<WebDetail>("novel/${ref.key}", forceNetwork = version > 0) }, modifier = Modifier.padding(padding)) { detail, _ ->
+        } else AsyncContent(listOf(ref, profile?.username), refreshKey = refreshKey, load = { c.detail<WebDetail>("novel/${ref.key}", forceNetwork = version > 0) }, modifier = Modifier.padding(padding), revealContent = true) { detail, _ ->
             val book = remember(detail, ref, profile?.username) { detail.card(ref, profile?.username) }
             LaunchedEffect(book) {
                 c.store.update { it.withCloudReadingMetadata(listOf(book), c.session.profile.value?.username) }
@@ -180,7 +182,7 @@ import kotlinx.coroutines.withContext
 @Composable private fun LocalBookDetailScreen(c: AppController, ref: BookRef, onBack: () -> Unit) {
     val state by c.store.state.collectAsStateWithLifecycle()
     Screen("本地书籍", onBack) { padding ->
-        AsyncContent(ref, load = { withContext(Dispatchers.IO) { c.store.documentIndex(ref.id) } }, modifier = Modifier.padding(padding)) { document, _ ->
+        AsyncContent(ref, load = { withContext(Dispatchers.IO) { c.store.documentIndex(ref.id) } }, modifier = Modifier.padding(padding), revealContent = true) { document, _ ->
             val book = state.books.firstOrNull { it.book.ref == ref }?.book ?: BookCard(ref, document.name, cover = document.coverImage, total = document.chapters.size)
             val toc = remember(document) { document.chapters.map { TocItem(titleJp = it.title, chapterId = it.id) } }
             val savedPosition = state.positions[ref.key]
@@ -260,7 +262,12 @@ import kotlinx.coroutines.withContext
             } }, text = { Text(title) })
         } }
         HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth().testTag("book-detail-pager"),
-            key = { it + firstPanel }) { panel(it + firstPanel) }
+            key = { it + firstPanel }) { index ->
+            // 以可见页为触发点，预组合的目录也能在切入时播放，所有入口行为一致。
+            MotionContent(pager.currentPage == index, Modifier.fillMaxSize()) {
+                panel(index + firstPanel)
+            }
+        }
     }
 }
 @Composable private fun Stat(label: String, value: String) { Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(value, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary); Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
@@ -276,12 +283,7 @@ import kotlinx.coroutines.withContext
 @Composable fun TocPanel(c: AppController, ref: BookRef, toc: List<TocItem>, current: String?, onRead: (String) -> Unit) {
     var search by rememberSaveable(ref.key) { mutableStateOf("") }; var reversed by rememberSaveable(ref.key) { mutableStateOf(false) }
     var cacheDialog by remember(ref.key) { mutableStateOf(false) }
-    var cacheRevision by remember(ref.key) { mutableIntStateOf(0) }
-    val cacheGeneration by c.store.cacheGeneration.collectAsStateWithLifecycle()
-    var cachedIds by remember(ref.key) { mutableStateOf<Set<String>>(emptySet()) }
-    LaunchedEffect(ref, toc, cacheRevision, cacheGeneration) {
-        cachedIds = withContext(Dispatchers.IO) { toc.mapNotNull { item -> item.chapterId?.takeIf { ref.isLocal || c.store.chapterFile(ref, it).isFile } }.toSet() }
-    }
+    val cachedIds = rememberCachedChapterIds(c.store, ref, toc)
     val settledSearch = rememberDebouncedQuery(search)
     val indexedToc = remember(toc) { toc.withIndex().toList() }
     val list = remember(indexedToc, settledSearch, reversed) {
@@ -309,5 +311,5 @@ import kotlinx.coroutines.withContext
             if(list.isEmpty()) item { EmptyState("没有匹配的章节", "可以修改搜索词，或刷新书籍目录。") }
         }
     }
-    if(cacheDialog) ChapterCacheDialog(c, ref, toc, current, onChanged = { cacheRevision++ }, onDismiss = { cacheDialog = false; cacheRevision++ })
+    if(cacheDialog) ChapterCacheDialog(c, ref, toc, current, onChanged = {}, onDismiss = { cacheDialog = false })
 }

@@ -46,9 +46,13 @@ fun StickerAccent(sticker: MidoriSticker, trigger: Any? = Unit, modifier: Modifi
         resumed = true
         onPauseOrDispose { resumed = false }
     }
+    // 使用本次组合的快照。导航页面已恢复时，ResumeEffect 可能先更新 resumed，
+    // 再启动仍以 false 为键的旧协程；直接读取实时状态会过早标记 played，
+    // 随后的重组取消动画并跳到终态，导致贴纸在真正的页面中完全不动。
+    val startThisEffect = resumed && !played
     LaunchedEffect(sticker, trigger, motion, resumed) {
         progress.snapTo(1f)
-        if(!resumed || played) return@LaunchedEffect
+        if(!startThisEffect) return@LaunchedEffect
         played = true
         if(motion) {
             progress.snapTo(0f)
@@ -60,7 +64,15 @@ fun StickerAccent(sticker: MidoriSticker, trigger: Any? = Unit, modifier: Modifi
         val arc = sin(p * PI).toFloat()
         transformOrigin = TransformOrigin(.5f, .8f)
         when(sticker) {
-            MidoriSticker.Wave -> rotationZ = sin(p * PI * 6).toFloat() * (1f - p) * 10f
+            MidoriSticker.Wave -> {
+                // 脚底为支点，起跳后逐渐衰减的挤压与拉伸带来 Q 弹招手反馈。
+                val bounce = sin(p * PI * 4).toFloat() * (1f - p) * (1f - p)
+                transformOrigin = TransformOrigin(.5f, 1f)
+                translationY = -kotlin.math.abs(bounce) * 12.dp.toPx()
+                scaleX = 1f - bounce * .16f
+                scaleY = 1f + bounce * .20f
+                rotationZ = sin(p * PI * 6).toFloat() * (1f - p) * 10f
+            }
             MidoriSticker.Concerned, MidoriSticker.Curious -> rotationZ = sin(p * PI * 4).toFloat() * (1f - p) * 5f
             MidoriSticker.Sleep -> { scaleX = 1f + arc * .045f; scaleY = scaleX }
             else -> {

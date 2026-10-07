@@ -39,13 +39,16 @@ import kotlinx.coroutines.launch
     val reducedMotion = appReducedMotion()
     val feedback = remember(site, parent) { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    var composerExpanded by remember(site, parent) { mutableStateOf(parent != null && !locked) }
     if(!site.startsWith("article-") && preferences.hideNovelComments) { EmptyState("小说评论已隐藏", "可以在设置的阅读体验中重新开启。", Icons.Outlined.CommentsDisabled); return }
     val markdownRenderer = rememberMarkdownRenderer(c)
     val documentUrl = remember(site) { MarkdownLinks.commentDocumentUrl(site) }
+    Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize()) {
         AsyncContent(listOf(site, parent, page, profile?.username), refreshKey = version, load = { c.api.get<Page<Comment>>("comment", buildMap { put("site", site); put("page", "$page"); put("pageSize", "20"); parent?.let { put("parentId", it) } }) }, modifier = Modifier.weight(1f)) { result, _ ->
             val comments = remember(result.items, preferences.blockedUsers) { result.items.filter { it.user.username !in preferences.blockedUsers } }
-            AppLazyColumn(contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)) {
+            AppLazyColumn(contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 12.dp,
+                bottom = if(!locked && !composerExpanded) 88.dp else 12.dp)) {
                 if(comments.isEmpty()) item {
                     if(result.items.isNotEmpty()) EmptyState("本页评论已屏蔽", "可撤销刚才的屏蔽，或在屏蔽管理中恢复用户。", Icons.Outlined.PersonOff)
                     else EmptyState("还没有讨论", "读完之后，来分享你的感想吧。", Icons.Outlined.ChatBubbleOutline)
@@ -72,13 +75,18 @@ import kotlinx.coroutines.launch
                 item { PageControls(page, result.pageNumber) { page = it } }
             }
         }
-        SnackbarHost(feedback, Modifier.fillMaxWidth().padding(horizontal = 12.dp))
+        SnackbarHost(feedback, Modifier.fillMaxWidth().padding(horizontal = 12.dp)
+            .padding(bottom = if(feedback.currentSnackbarData != null && !locked && !composerExpanded) 80.dp else 0.dp))
         if(locked) Text("此讨论已锁定，暂时不能回复。", Modifier.padding(20.dp), style = MaterialTheme.typography.bodyMedium)
-        else Box(Modifier.fillMaxWidth().imePadding().padding(12.dp)) {
+        else CommentEditor(composerExpanded, { composerExpanded = false }) {
+        Box(Modifier.fillMaxWidth().imePadding().padding(12.dp)) {
             MarkdownCommentInput(text, { text = it; c.store.update { s -> s.copy(drafts = s.drafts + ("comment:$site:$parent" to text)) } }, if(parent == null) "写下评论" else "回复这条评论") {
-            FilledIconButton(onClick = { c.requireLogin { c.action { sending = true; try { val submittedText = text; val body = buildMap { put("site", site); put("content", submittedText.trim()); parent?.let { put("parent", it) } }; c.api.post("comment", body); if(text == submittedText) { text = ""; c.store.update { it.copy(drafts = it.drafts - "comment:$site:$parent") } }; version++ } finally { sending = false } } } }, enabled = text.isNotBlank() && !sending) { Icon(Icons.Outlined.Send, "发送评论") }
+            FilledIconButton(onClick = { c.requireLogin { c.action { sending = true; try { val submittedText = text; val body = buildMap { put("site", site); put("content", submittedText.trim()); parent?.let { put("parent", it) } }; c.api.post("comment", body); if(text == submittedText) { text = ""; composerExpanded = false; c.store.update { it.copy(drafts = it.drafts - "comment:$site:$parent") } }; version++ } finally { sending = false } } } }, enabled = text.isNotBlank() && !sending) { Icon(Icons.Outlined.Send, "发送评论") }
             }
         }
+        }
+    }
+    CommentButton(!locked && !composerExpanded, { composerExpanded = true }, Modifier.align(Alignment.BottomEnd).padding(16.dp))
     }
     reply?.let { comment -> AppSheet(onDismissRequest = { reply = null }) { Column(Modifier.fillMaxHeight(.85f)) { Text("回复 ${comment.user.username}", Modifier.padding(20.dp), style = MaterialTheme.typography.titleLarge); CommentsPanel(c, site, locked, comment.id) } } }
     deleting?.let { comment -> ConfirmDialog("删除评论？", "这条评论将从原站移除。", { deleting = null }, confirmLabel = "删除评论") { c.action { c.api.request("DELETE", "comment/${comment.id}"); version++ } } }

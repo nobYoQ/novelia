@@ -1,6 +1,7 @@
 package cc.novelia.app.ui.community
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -13,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.model.ForumTag
 import cc.novelia.app.ui.theme.LocalEInkMode
 import cc.novelia.app.ui.theme.NoveliaTheme
+import cc.novelia.app.ui.components.FilterPanelVisibility
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -20,6 +22,24 @@ import org.junit.Test
 class ForumTagsUiTest {
     @get:Rule val compose = createComposeRule()
     private val tags = listOf(ForumTag(1, "书单"), ForumTag(2, "工具", 1), ForumTag(3, "教程", 2), ForumTag(4, "资源"))
+
+    @Test fun collapsingFilterKeepsTheSelectedTagAndShowsItOnTheToggle() {
+        var expanded by mutableStateOf(false)
+        var selected by mutableStateOf<Long?>(null)
+        compose.setContent { NoveliaTheme("light") { Column {
+            ForumTagFilterToggle(expanded, tags.firstOrNull { it.id == selected }?.name) { expanded = !expanded }
+            FilterPanelVisibility(expanded) { ForumTagFilter(tags, selected) { selected = it } }
+        } } }
+        compose.onNodeWithTag("forum-tag-filter").assertDoesNotExist()
+        compose.onNodeWithContentDescription("展开标签筛选").performClick()
+        compose.onNodeWithText("书单").performClick()
+        compose.onNodeWithContentDescription("收起标签筛选").performClick()
+        compose.onNodeWithTag("forum-tag-filter").assertDoesNotExist()
+        compose.onNodeWithTag("forum-tag-toggle").assert(SemanticsMatcher.expectValue(
+            androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "已筛选：书单"))
+        compose.onNodeWithContentDescription("展开标签筛选").performClick()
+        compose.onNodeWithText("书单").assertIsSelected()
+    }
 
     @Test fun filterSelectsOneTagAndCanClearByTogglingOrSelectingAll() {
         var selected by mutableStateOf<Long?>(null)

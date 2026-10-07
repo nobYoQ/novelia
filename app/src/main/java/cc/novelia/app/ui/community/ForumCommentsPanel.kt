@@ -29,6 +29,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -58,6 +59,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
     val profile by session.profile.collectAsStateWithLifecycle()
     val state by c.store.state.collectAsStateWithLifecycle()
     val viewerKey = profile?.userId?.toString() ?: profile?.username
+    var composerExpanded by remember(discussionKey, viewerKey) { mutableStateOf(false) }
     var page by rememberSaveable(discussionKey) { mutableIntStateOf(0) }
     var version by remember(discussionKey) { mutableIntStateOf(0) }
     // 保留在列表层，LazyColumn 回收单条评论时不会丢失计数；刷新、换账号或角色时失效。
@@ -74,6 +76,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
     var text by rememberSaveable(draftKey) { mutableStateOf(state.drafts[draftKey] ?: editing?.content.orEmpty()) }
     val latestDraft by rememberUpdatedState(draftKey to text)
     val renderer = rememberMarkdownRenderer(c, documentUrl)
+    Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize()) {
         AsyncContent(listOf(discussionKey, page, binding, profile?.role), refreshKey = version, load = {
             session.ensureCurrent(binding)
@@ -96,7 +99,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
                     comments.filterNot { replyCounts.containsKey(it.id) }.forEach { replyCounts[it.id] = null }
                 }
             }
-            AppLazyColumn(contentPadding = PaddingValues(20.dp)) {
+            AppLazyColumn(contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 20.dp,
+                bottom = if(!locked && !composerExpanded) 88.dp else 20.dp)) {
                 if(comments.isEmpty()) item { EmptyState("还没有讨论", "来分享你的感想吧。", Icons.Outlined.ChatBubbleOutline) }
                 items(comments, key = { "${profile?.userId}:${profile?.role}:${it.id}" }) { root ->
                     ForumCommentThread(discussionKey, root, profile, version, replyFocus, state.blockedUsers,
@@ -108,8 +112,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
                             discussion.replies(root.id, it).also { session.ensureCurrent(binding) }
                         }) { comment, rootPublished, replyToggle ->
                         ForumCommentRow(comment, profile, locked || !rootPublished,
-                            onReply = { editing = null; rootId = comment.replyRoot; replyCount = replyCounts[root.id] ?: root.replyCount ?: 0 },
-                            onEdit = { editing = comment; rootId = null }, onDelete = { deleting = comment },
+                            onReply = { editing = null; rootId = comment.replyRoot; replyCount = replyCounts[root.id] ?: root.replyCount ?: 0; composerExpanded = true },
+                            onEdit = { editing = comment; rootId = null; composerExpanded = true }, onDelete = { deleting = comment },
                             onBlock = { c.store.update { it.copy(blockedUsers = it.blockedUsers + comment.authorUsername) } }, extraAction = replyToggle) {
                             MarkdownText(c, it, renderer = renderer, documentUrl = documentUrl)
                         }
@@ -120,7 +124,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
             }
         }
         if(locked && editing == null) Text("此讨论已锁定，暂时不能回复。", Modifier.padding(20.dp))
-        else Column(Modifier.fillMaxWidth().imePadding().padding(12.dp)) {
+        else CommentEditor(composerExpanded, { composerExpanded = false }) {
+        Column(Modifier.fillMaxWidth().imePadding().padding(12.dp)) {
             val commentContent = text.trim()
             val commentError = ForumRules.contentError(commentContent, comment = true)
             val canSend = profile == null || ForumRules.canWrite(profile)
@@ -146,7 +151,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
                                     (submittedReplyCount / 20).coerceIn(0, Int.MAX_VALUE - 1L).toInt(), created.id) }
                             }
                             c.store.update { if(it.drafts[submittedDraft] == submittedText) it.copy(drafts = it.drafts - submittedDraft) else it }
-                            if(latestDraft == (submittedDraft to submittedText)) { text = ""; rootId = null; editing = null }
+                            if(latestDraft == (submittedDraft to submittedText)) { text = ""; rootId = null; editing = null; composerExpanded = false }
                             version++
                         } finally { sending = false }
                     } }
@@ -158,6 +163,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
             if(!canSend) Text("当前账号暂不具备评论权限，草稿会保存在此设备。", style = MaterialTheme.typography.bodySmall)
             if(!canEditDraft) Text("评论修改时限已过，草稿已保留。", style = MaterialTheme.typography.bodySmall)
         }
+        }
+    }
+    CommentButton((!locked || editing != null) && !composerExpanded, { composerExpanded = true },
+        Modifier.align(Alignment.BottomEnd).padding(16.dp))
     }
     deleting?.let { comment -> ConfirmDialog("删除评论？", "确定删除这条评论吗？", { deleting = null }, confirmLabel = "删除评论") {
         c.action {

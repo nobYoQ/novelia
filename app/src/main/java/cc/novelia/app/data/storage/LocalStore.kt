@@ -102,6 +102,9 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
     private val chapterIndex = ChapterCacheIndex(cacheDir, 256L * 1024 * 1024)
     private val mutableCacheGeneration = MutableStateFlow(0L)
     val cacheGeneration = mutableCacheGeneration.asStateFlow()
+    // 显示缓存状态用的修订号；不能复用会使在途下载失效的 cacheGeneration。
+    private val mutableChapterCacheRevision = MutableStateFlow(0L)
+    val chapterCacheRevision = mutableChapterCacheRevision.asStateFlow()
     val chapterRequests = ChapterRequests(this)
 
     /**
@@ -232,6 +235,7 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
         atomicText(file, appJson.encodeToString(chapter))
         chapterMemory.put(file.name, chapter)
         chapterIndex.written(file).forEach(chapterMemory::remove)
+        mutableChapterCacheRevision.value += 1
     }
 
     /**
@@ -349,6 +353,7 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
             .filter { it.isFile }.forEach { it.delete() }
         metadataCache.clear()
         chapterIndex.reset()
+        mutableChapterCacheRevision.value += 1
         clearChapterFreshness(this)
         mutableCacheGeneration.value += 1
         chapterRequests.invalidateBefore(mutableCacheGeneration.value)

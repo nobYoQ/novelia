@@ -24,7 +24,8 @@ import kotlinx.coroutines.ensureActive
  * load 必须可取消且自行切换耗时工作的调度器；取消不转换为错误页，结果发布前再次检查取消。
  */
 @Composable fun <T> AsyncContent(key: Any?, load: suspend () -> T, modifier: Modifier = Modifier, refreshKey: Any? = Unit,
-    initialResult: T? = null, onLoaded: (T) -> Unit = {}, content: @Composable (T, () -> Unit) -> Unit) {
+    initialResult: T? = null, onLoaded: (T) -> Unit = {}, revealContent: Boolean = false,
+    content: @Composable (T, () -> Unit) -> Unit) {
     var refresh by remember(key) { mutableIntStateOf(0) }
     var result by remember(key) { mutableStateOf<Result<T>?>(initialResult?.let { Result.success(it) }) }
     var loading by remember(key) { mutableStateOf(initialResult == null) }
@@ -56,7 +57,7 @@ import kotlinx.coroutines.ensureActive
             current.isFailure -> if(loading) { if(appReducedMotion()) Text("正在加载…", Modifier.align(Alignment.Center)) else CircularProgressIndicator(Modifier.align(Alignment.Center)) } else EmptyState("暂时无法加载", current.exceptionOrNull().friendlyMessage(), Icons.Outlined.CloudOff, "重试", retry, sticker = MidoriSticker.Concerned)
             else -> {
                 // 刷新时保留原组合，使列表位置和编辑器状态得以延续。
-                MotionContent(key, Modifier.fillMaxSize(), animateInitial = false) {
+                MotionContent(key, Modifier.fillMaxSize(), animateInitial = revealContent) {
                     content(current.getOrThrow(), retry)
                 }
                 if(loading) { if(appReducedMotion()) Text("正在刷新…", Modifier.align(Alignment.TopCenter)) else LinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter)) }

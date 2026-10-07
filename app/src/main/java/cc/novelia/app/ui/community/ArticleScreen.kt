@@ -43,7 +43,7 @@ import cc.novelia.app.ui.theme.MotionContent
     var tab by rememberSaveable(id) { mutableIntStateOf(0) }; var deletion by remember(id) { mutableStateOf<Article?>(null) }
     val tabState = rememberSaveableStateHolder()
     Screen("文章", c::back, actions = { IconButton(onClick = { c.share(ForumLinks.articleUrl(id)) }) { Icon(Icons.Outlined.Share, "分享文章") } }) { padding ->
-        AsyncContent(listOf(id, binding, profile?.userId, profile?.role), load = { c.article(id) }, modifier = Modifier.padding(padding)) { article, _ ->
+        AsyncContent(listOf(id, binding, profile?.userId, profile?.role), load = { c.article(id) }, modifier = Modifier.padding(padding), revealContent = true) { article, _ ->
             val now = rememberForumModificationTime(article.createAt)
             val favorite = remember(article, binding) { ForumFavoriteState(article.forumFavorited) }
             fun saveFavorite(value: Boolean) {

@@ -1,6 +1,7 @@
 package cc.novelia.app.ui.discover
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
@@ -16,6 +17,9 @@ import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.Page
 import cc.novelia.app.ui.components.*
 import cc.novelia.app.ui.navigation.AppController
+import cc.novelia.app.ui.theme.AppMotion
+import cc.novelia.app.ui.theme.MotionContent
+import cc.novelia.app.ui.theme.appReducedMotion
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -51,6 +55,8 @@ import kotlinx.coroutines.ensureActive
         finally { loading = false; forceNetwork = false }
     }
     val scroll = key(requestKey) { rememberLazyListState() }
+    val reducedMotion = appReducedMotion()
+    MotionContent(listOf(requestKey, result != null), Modifier.fillMaxSize(), animateInitial = result != null) {
     AppLazyColumn(state = scroll, modifier = Modifier.fillMaxSize(), onPageTurn = onPageTurn) {
         item {
             Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
@@ -61,7 +67,10 @@ import kotlinx.coroutines.ensureActive
             }
         }
         items(result?.books.orEmpty(), key = { it.ref.key }) { book ->
-            DiscoverBookRow(book, { c.book(book.ref) }, keywordLabels = keywordLabels, showCharacterCount = filter.characters.active)
+            DiscoverBookRow(book, { c.book(book.ref) },
+                modifier = if(reducedMotion) Modifier else Modifier.animateItem(
+                    fadeInSpec = tween(AppMotion.Quick), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit)),
+                keywordLabels = keywordLabels, showCharacterCount = filter.characters.active)
         }
         item {
             Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -73,5 +82,6 @@ import kotlinx.coroutines.ensureActive
                 TextButton(onClick = onReset) { Text("清空筛选") }
             }
         }
+    }
     }
 }

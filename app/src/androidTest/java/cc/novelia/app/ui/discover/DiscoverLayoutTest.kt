@@ -5,6 +5,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.IconButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -24,6 +25,35 @@ import org.junit.Test
 
 class DiscoverLayoutTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun switchingActionsAnimatesSearchWidthAndStaticModeFinishesImmediately() {
+        var wenku by mutableStateOf(false)
+        var reduced by mutableStateOf(false)
+        compose.setContent {
+            AppInteractionMode(eInk = false, reducedMotion = reduced) {
+                MaterialTheme {
+                    DiscoverSearchLayout("", "", false, {}, {}, {}, actions = {
+                        if(wenku) IconButton(onClick = {}) { Text("新建") }
+                        IconButton(onClick = {}) { Text("排行") }
+                    }) { Box(Modifier.fillMaxSize()) }
+                }
+            }
+        }
+        fun searchWidth() = compose.onNodeWithTag("discover-search-bar").getUnclippedBoundsInRoot().let { it.right - it.left }
+        val fullWidth = searchWidth()
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { wenku = true }
+        compose.mainClock.advanceTimeBy(80)
+        val during = searchWidth()
+        compose.runOnIdle { reduced = true }
+        compose.mainClock.advanceTimeByFrame()
+        val narrow = searchWidth()
+        assertTrue("搜索框应经过中间宽度", during < fullWidth && during > narrow)
+        compose.runOnIdle { wenku = false }
+        compose.mainClock.advanceTimeByFrame()
+        assertEquals(fullWidth, searchWidth())
+        compose.mainClock.autoAdvance = true
+    }
     private var query by mutableStateOf("魔法")
     private var submitted by mutableStateOf("魔法")
     private var editing by mutableStateOf(false)
