@@ -12,22 +12,23 @@ import cc.novelia.app.BuildConfig
 import cc.novelia.app.data.updates.AppRelease
 import cc.novelia.app.ui.components.AppAlertDialog
 import cc.novelia.app.ui.components.AppScrollColumn
+import cc.novelia.app.ui.markdown.MarkdownText
 import cc.novelia.app.ui.navigation.AppController
 
 @Composable internal fun ObserveAppUpdates(c: AppController, show: Boolean) {
     val release by c.app.appUpdates.available.collectAsStateWithLifecycle()
-    if(show) release?.let { update -> AppUpdateDialog(update, c.app.appUpdates::later,
+    if(show) release?.let { update -> AppUpdateDialog(c, update, c.app.appUpdates::later,
         onIgnore = { c.app.appUpdates.ignore(update) },
         onUpdate = { c.external(update.url); c.app.appUpdates.later() }) }
 }
 
-@Composable internal fun AppUpdateDialog(release: AppRelease, onLater: () -> Unit, onIgnore: () -> Unit, onUpdate: () -> Unit) {
+@Composable internal fun AppUpdateDialog(c: AppController, release: AppRelease, onLater: () -> Unit, onIgnore: () -> Unit, onUpdate: () -> Unit) {
     AppAlertDialog(onDismissRequest = onLater, modifier = Modifier.testTag("app-update-dialog"),
         icon = { MidoriIllustration(MidoriSticker.Welcome, Modifier.size(96.dp)) },
         title = { Text("发现新版本 ${release.tag}") },
         text = { AppScrollColumn(contentModifier = Modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("当前版本 ${BuildConfig.VERSION_NAME}，可以更新啦。")
-            release.body?.takeIf(String::isNotBlank)?.let { Text(it.take(1600), style = MaterialTheme.typography.bodySmall) }
+            release.body?.takeIf(String::isNotBlank)?.let { MarkdownText(c, it, documentUrl = release.url) }
             Text("直接更新将打开 GitHub Release 页面。", style = MaterialTheme.typography.bodySmall)
             TextButton(onClick = onIgnore) { Text("不再显示此版本") }
         } },
