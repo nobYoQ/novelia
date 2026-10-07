@@ -47,6 +47,11 @@ private val DarkColors = darkColorScheme(
 /** 正文阅读配色独立于偏好设置和其他弹层使用的应用主题。 */
 internal data class ReaderColors(val background: Color, val foreground: Color, val toolbar: Color)
 
+// 跟随应用只决定深浅模式，与手动选择共用配色。
+private val ReaderLightColors = ReaderColors(Color(0xFFE8F2E5), Color(0xFF263C2B), Color(0xFFCDDEC8))
+private val ReaderDarkColors = ReaderColors(DarkColors.surface, DarkColors.onSurface,
+    lerp(DarkColors.surface, Color.Black, .55f))
+
 internal fun readerColors(settings: ReaderSettings, appColors: ColorScheme): ReaderColors =
     if(settings.resolvedTheme == "custom") settings.resolvedCustomColors.let {
         ReaderColors(Color(0xFF000000L or it.background), Color(0xFF000000L or it.text), Color(0xFF000000L or it.toolbar))
@@ -54,11 +59,10 @@ internal fun readerColors(settings: ReaderSettings, appColors: ColorScheme): Rea
 
 internal fun readerColors(theme: String, appColors: ColorScheme): ReaderColors = when(theme) {
     "paper" -> ReaderColors(Color(0xFFF4ECD8), Color(0xFF282E27), Color(0xFFDED2B8))
-    "light" -> ReaderColors(Color(0xFFE8F2E5), Color(0xFF263C2B), Color(0xFFCDDEC8))
-    "dark" -> ReaderColors(Color(0xFF141A16), Color(0xFFDDE5DC), Color(0xFF050A07))
+    "light" -> ReaderLightColors
+    "dark" -> ReaderDarkColors
     "monochrome" -> ReaderColors(Color.White, Color.Black, Color(0xFFE0E0E0))
-    else -> ReaderColors(appColors.surface, appColors.onSurface,
-        lerp(appColors.surface, Color.Black, if(appColors.surface.luminance() > .5f) .10f else .55f))
+    else -> if(appColors.surface.luminance() > .5f) ReaderLightColors else ReaderDarkColors
 }
 
 @Composable internal fun ReaderPageTheme(monochrome: Boolean, content: @Composable () -> Unit) {
