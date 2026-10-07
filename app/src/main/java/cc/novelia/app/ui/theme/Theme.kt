@@ -27,13 +27,23 @@ internal fun android.content.Context.activityOrNull(): android.app.Activity? {
     return current as? android.app.Activity
 }
 
+// 浅灰绿纸色配低饱和强调色，容器层级也避免使用纯白。
 private val LightColors = lightColorScheme(
-    primary = Color(0xFF006C4C), onPrimary = Color.White, primaryContainer = Color(0xFFADF2CF), onPrimaryContainer = Color(0xFF002115),
-    secondary = Color(0xFF4C6357), onSecondary = Color.White, secondaryContainer = Color(0xFFCFE9D8), onSecondaryContainer = Color(0xFF102119),
-    tertiary = Color(0xFF3C6373), tertiaryContainer = Color(0xFFC1E8FA), onTertiaryContainer = Color(0xFF001F29),
-    background = Color(0xFFF7FAF5), onBackground = Color(0xFF191D1A), surface = Color(0xFFF7FAF5), onSurface = Color(0xFF191D1A),
-    surfaceVariant = Color(0xFFDBE5DC), onSurfaceVariant = Color(0xFF404942), outline = Color(0xFF707A72), outlineVariant = Color(0xFFBFC9C0),
-    surfaceContainerLowest = Color.White, surfaceContainerLow = Color(0xFFF0F5EF), surfaceContainer = Color(0xFFEBF0E9), surfaceContainerHigh = Color(0xFFE5EAE3), surfaceContainerHighest = Color(0xFFDFE5DE)
+    primary = Color(0xFF3E6B3B), onPrimary = Color(0xFFF6F8F1),
+    primaryContainer = Color(0xFFDCE8D4), onPrimaryContainer = Color(0xFF304A2B),
+    secondary = Color(0xFF596951), onSecondary = Color(0xFFF6F8F1),
+    secondaryContainer = Color(0xFFE0E7D7), onSecondaryContainer = Color(0xFF35422F),
+    tertiary = Color(0xFF68684C), onTertiary = Color(0xFFF6F8F1),
+    tertiaryContainer = Color(0xFFE8E7D5), onTertiaryContainer = Color(0xFF44452E),
+    background = Color(0xFFF1F4EC), onBackground = Color(0xFF30372E),
+    surface = Color(0xFFF1F4EC), onSurface = Color(0xFF30372E),
+    surfaceVariant = Color(0xFFDFE5D7), onSurfaceVariant = Color(0xFF596352),
+    surfaceTint = Color(0xFF3E6B3B),
+    inverseSurface = Color(0xFF30382D), inverseOnSurface = Color(0xFFEEF2E7), inversePrimary = Color(0xFFB6D2A7),
+    outline = Color(0xFF727D6B), outlineVariant = Color(0xFFC6CDBC),
+    surfaceBright = Color(0xFFF1F4EC), surfaceDim = Color(0xFFD8DFD0),
+    surfaceContainerLowest = Color(0xFFF6F8F1), surfaceContainerLow = Color(0xFFEAEFE3),
+    surfaceContainer = Color(0xFFE5EBDD), surfaceContainerHigh = Color(0xFFDFE5D7), surfaceContainerHighest = Color(0xFFD8DFD0)
 )
 private val DarkColors = darkColorScheme(
     primary = Color(0xFF8FD6B4), onPrimary = Color(0xFF003825), primaryContainer = Color(0xFF005137), onPrimaryContainer = Color(0xFFADF2CF),

@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources><style name="Theme.Novelia" parent="android:style/Theme.Material.Light.NoActionBar">
-    <item name="android:fontFamily">sans</item>
-    <item name="android:windowLightStatusBar">true</item>
-    <item name="android:windowActionModeOverlay">true</item>
-    <item name="android:colorAccent">#006C4C</item>
-    <item name="android:windowBackground">#F7FAF5</item>
-</style></resources>
+<resources>
+    <color name="app_light_background">#F1F4EC</color>
+    <style name="Theme.Novelia" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:colorAccent">#3E6B3B</item>
+        <item name="android:windowBackground">@color/app_light_background</item>
+    </style>
+</resources>

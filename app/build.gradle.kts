@@ -207,7 +207,7 @@ abstract class LauncherSplashResourcesTask : DefaultTask() {
             icons.forEach { icon ->
                 appendLine("    <style name=\"${icon.splashTheme}\" parent=\"Theme.Novelia\">")
                 appendLine("        <item name=\"android:windowSplashScreenAnimatedIcon\">@drawable/${icon.drawable}</item>")
-                appendLine("        <item name=\"android:windowSplashScreenBackground\">#F7FAF5</item>")
+                appendLine("        <item name=\"android:windowSplashScreenBackground\">@color/app_light_background</item>")
                 appendLine("    </style>")
             }
             appendLine("</resources>")
