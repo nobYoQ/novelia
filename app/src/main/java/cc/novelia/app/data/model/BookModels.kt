@@ -34,5 +34,8 @@ import kotlinx.serialization.Serializable
     val cloudReading: CloudReadingProgress? = null, val authors: List<String> = emptyList(),
     // null 表示旧书目尚未获取分类；空 attentions 则明确表示没有内容警告。
     val novelType: String? = null, val attentions: List<String>? = null,
-    val totalCharacters: Long? = null
+    val totalCharacters: Long? = null,
+    // 出版目录的卷数；文库的 total / volumeIds 仍记录上传文件，不能用于显示出版卷数。
+    // null 表示列表摘要或旧收藏尚未取得出版目录，不能从中日文文件数推算。
+    val publishedVolumeCount: Int? = null
 )

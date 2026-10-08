@@ -46,8 +46,9 @@ import cc.novelia.app.ui.theme.motionClickable
         (book.attentions.orEmpty() + book.tags).filter(String::isNotBlank)
             .map { keywordLabels[it] ?: it }.distinct()
     }
+    val publishedVolumes = book.publishedVolumeCount ?: saved?.book?.publishedVolumeCount
     val metadata = when {
-        book.ref.isWenku -> if(book.total > 0) "${book.total} 卷" else ""
+        book.ref.isWenku -> publishedVolumes?.takeIf { it > 0 }?.let { "$it 卷" }.orEmpty()
         !book.novelType.isNullOrBlank() -> "${book.novelType} · ${book.total} 章"
         book.total > 0 -> "${book.total} 章"
         else -> book.subtitle.takeUnless { it == source || it == authors.joinToString() }.orEmpty()

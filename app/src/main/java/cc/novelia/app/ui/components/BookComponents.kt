@@ -112,8 +112,9 @@ import coil.decode.DataSource
     val subtitle = book.subtitle.ifBlank { providers[book.ref.provider] ?: "本地小说" }
     val characters = book.totalCharacters ?: saved?.book?.totalCharacters
     val novelType = book.novelType?.takeIf(String::isNotBlank) ?: saved?.book?.novelType?.takeIf(String::isNotBlank)
+    val publishedVolumes = book.publishedVolumeCount ?: saved?.book?.publishedVolumeCount
     val metadata = when {
-        book.ref.isWenku -> if(book.total > 0) "${book.total} 卷" else ""
+        book.ref.isWenku -> publishedVolumes?.takeIf { it > 0 }?.let { "$it 卷" }.orEmpty()
         novelType != null -> "$novelType · ${book.total} 章"
         book.total > 0 -> "${book.total} 章"
         else -> ""

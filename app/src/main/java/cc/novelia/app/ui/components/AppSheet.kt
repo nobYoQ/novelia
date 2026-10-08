@@ -21,7 +21,14 @@ internal val LocalInAppSheet = compositionLocalOf { false }
  */
 @Composable internal fun AppSheet(onDismissRequest: () -> Unit, sheetState: SheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), content: @Composable ColumnScope.() -> Unit) {
     val session = remember { Any() }
-    if (!appReducedMotion()) ModalBottomSheet(onDismissRequest = onDismissRequest, sheetState = sheetState) {
+    if (!appReducedMotion()) ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = sheetState,
+        // 顶部安全区放在可拖动面板外，保持内容测量高度和展开锚点稳定。
+        // 默认的内容顶部 inset 随 offset 改变，临近全屏的面板会反复改高并重启动画。
+        modifier = Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)),
+        contentWindowInsets = { WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom) },
+    ) {
         CompositionLocalProvider(LocalInAppSheet provides true, LocalPanelSession provides session) { content() }
     }
     else AppDialog(onDismissRequest, properties = DialogProperties(usePlatformDefaultWidth = false)) {

@@ -1,12 +1,14 @@
 package cc.novelia.app.data.model
 
-/** 部分元数据响应不得抹去已有的更新时间或封面分类。 */
+/** 部分元数据响应不得抹去已有的更新时间、分类或出版卷数。 */
 fun BookCard.withKnownUpdateTime(previous: BookCard?): BookCard = copy(
     updateAt = updateAt?.takeIf { it > 0 }
         ?: previous?.takeIf { it.ref == ref }?.updateAt?.takeIf { it > 0 },
     novelType = novelType?.takeIf { it.isNotBlank() } ?: previous?.takeIf { it.ref == ref }?.novelType,
     attentions = attentions ?: previous?.takeIf { it.ref == ref }?.attentions,
     totalCharacters = totalCharacters?.takeIf { it >= 0 } ?: previous?.takeIf { it.ref == ref }?.totalCharacters,
+    publishedVolumeCount = publishedVolumeCount?.takeIf { it >= 0 }
+        ?: previous?.takeIf { it.ref == ref }?.publishedVolumeCount,
 )
 
 /** 列表中的粗略历史标记只有时间更新时，才可替换已知的具体章节。 */
