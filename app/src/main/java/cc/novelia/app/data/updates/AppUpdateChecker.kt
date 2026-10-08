@@ -8,9 +8,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/** 前台启动后检查，成功检查间隔一天；离线失败间隔一小时，不阻塞首屏。 */
+/** 每次前台启动后检查；自动检查遵守本机开关及提醒偏好，手动检查始终可用。 */
 class AppUpdateChecker(context: Context, private val load: suspend () -> AppRelease? = AppReleaseClient()::latest,
     private val currentVersion: String = BuildConfig.VERSION_NAME,
+    private val automaticChecksEnabled: () -> Boolean = { true },
     private val now: () -> Long = System::currentTimeMillis,
 ) {
     private val preferences = context.getSharedPreferences("app-release-updates", Context.MODE_PRIVATE)
@@ -19,16 +20,16 @@ class AppUpdateChecker(context: Context, private val load: suspend () -> AppRele
     val available = mutable.asStateFlow()
 
     suspend fun check(force: Boolean = false): AppRelease? = lock.withLock {
-        val time = now()
-        if(!force && time < preferences.getLong("nextCheckAt", 0L)) return@withLock mutable.value
-        preferences.edit().putLong("nextCheckAt", time + 60 * 60_000L).apply()
+        if(!force && !automaticChecksEnabled()) {
+            mutable.value = null
+            return@withLock null
+        }
         val release = try { load() }
         catch(cancelled: CancellationException) { throw cancelled }
         catch(error: Exception) { if(force) throw error else return@withLock null }
-        preferences.edit().putLong("nextCheckAt", time + 24 * 60 * 60_000L).apply()
         val newer = release?.takeIf { it.availableFor(currentVersion) }
         mutable.value = newer?.takeIf {
-            force || (it.tag != preferences.getString("ignoredVersion", null) && time >= preferences.getLong("promptAfter", 0L))
+            force || (automaticChecksEnabled() && it.tag != preferences.getString("ignoredVersion", null) && now() >= preferences.getLong("promptAfter", 0L))
         }
         newer
     }

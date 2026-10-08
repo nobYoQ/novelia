@@ -66,6 +66,8 @@ fun legacyFolderId(name: String): String = if(name == DEFAULT_FOLDER) DEFAULT_FO
     // 文件清理仅为本机偏好，默认关闭，普通设置备份会保留这两个选项。
     val deleteDownloadAfterImport: Boolean = false, val deleteLocalCopyOnShelfRemoval: Boolean = false,
     val pending: List<PendingAction> = emptyList(), val updateNotifications: Boolean = false,
+    // 本机启动检查偏好，普通设置备份保留，WebDAV 不同步。
+    val autoCheckAppUpdates: Boolean = true,
     val blockedUsers: Set<String> = emptySet(), val hideNovelComments: Boolean = false, val wifiOnly: Boolean = false,
     val personalGlossaries: Map<String, Map<String, String>> = emptyMap(),
     val autoSync: Boolean = true, val syncStatus: Map<String, CloudSyncStatus> = emptyMap(),

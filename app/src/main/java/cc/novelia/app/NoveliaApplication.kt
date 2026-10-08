@@ -77,7 +77,9 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
     private var webDavEdit: Job? = null
     internal val clipboardLinkHistory = ClipboardLinkHistory()
     val metadataCache get() = store.metadataCache
-    val appUpdates by lazy { cc.novelia.app.data.updates.AppUpdateChecker(this) }
+    val appUpdates by lazy { cc.novelia.app.data.updates.AppUpdateChecker(this,
+        automaticChecksEnabled = { store.state.value.autoCheckAppUpdates }) }
+    private var appUpdateCheck: Job? = null
     val api by lazy { NoveliaApi(session, transport = httpTransport, onMutation = { metadataCache.invalidate(it) }, onKeywords = { tags -> keywords.enqueueObservation(tags) }) }
     val forumApi by lazy { ForumApi(NoveliaApi(forumSession, ForumApi.BASE_URL, httpTransport)) }
     val novelCommentApi by lazy { NovelCommentApi(NoveliaApi(session, ForumApi.BASE_URL, httpTransport)) }
@@ -104,7 +106,8 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
         initialization
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) {
-                applicationScope.launch {
+                appUpdateCheck?.cancel()
+                appUpdateCheck = applicationScope.launch {
                     initialization.await()
                     delay(3_000)
                     appUpdates.check()
@@ -121,6 +124,7 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
                 }
             }
             override fun onStop(owner: LifecycleOwner) {
+                appUpdateCheck?.cancel()
                 webDavForeground = false
                 webDavPoll?.cancel()
                 webDavEdit?.cancel()
