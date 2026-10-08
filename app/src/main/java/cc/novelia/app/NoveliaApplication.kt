@@ -79,6 +79,7 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
     val metadataCache get() = store.metadataCache
     val appUpdates by lazy { cc.novelia.app.data.updates.AppUpdateChecker(this,
         automaticChecksEnabled = { store.state.value.autoCheckAppUpdates }) }
+    val appReleaseDownloads by lazy { cc.novelia.app.data.updates.AppReleaseDownloader(this) }
     private var appUpdateCheck: Job? = null
     val api by lazy { NoveliaApi(session, transport = httpTransport, onMutation = { metadataCache.invalidate(it) }, onKeywords = { tags -> keywords.enqueueObservation(tags) }) }
     val forumApi by lazy { ForumApi(NoveliaApi(forumSession, ForumApi.BASE_URL, httpTransport)) }
