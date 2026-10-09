@@ -54,6 +54,12 @@ fun isNewerAppVersion(current: String, candidate: String): Boolean {
     return released > installed
 }
 
+internal fun compareAppVersions(candidate: String, current: String): Int? {
+    val a = ReleaseVersion.parse(candidate) ?: return null
+    val b = ReleaseVersion.parse(current) ?: return null
+    return a.compareTo(b)
+}
+
 @Serializable data class AppRelease(
     @SerialName("tag_name") val tag: String,
     @SerialName("html_url") val url: String,
@@ -85,16 +91,24 @@ fun isNewerAppVersion(current: String, candidate: String): Boolean {
     @SerialName("browser_download_url") val downloadUrl: String,
     val size: Long = 0,
     val state: String = "",
+    val id: Long = 0,
+    @SerialName("updated_at") val updatedAt: String = "",
+    val digest: String? = null,
 ) {
     internal val abi: String? get() = APK_ABI.find(name)?.value?.lowercase()
+    val identity: String get() = "$downloadUrl|$id|$updatedAt|$size|${digest.orEmpty()}"
+    val sha256: String? get() = digest?.removePrefix("sha256:")?.lowercase()
+        ?.takeIf { it.matches(Regex("[a-f0-9]{64}")) }
 
-    internal fun isDownloadableApk(tag: String): Boolean {
+    internal fun isOfficialFor(tag: String): Boolean {
         val destination = downloadUrl.toHttpUrlOrNull() ?: return false
-        return state == "uploaded" && size > 0 && name.endsWith(".apk", ignoreCase = true) &&
-            name.matches(Regex("[A-Za-z0-9][A-Za-z0-9._+-]*")) && !NON_DISTRIBUTION_APK.containsMatchIn(name) &&
+        return state == "uploaded" && size > 0 && name.matches(Regex("[A-Za-z0-9][A-Za-z0-9._+-]*")) &&
             destination.isOfficialGithubUrl() &&
             destination.pathSegments == listOf("nobYoQ", "novelia", "releases", "download", tag, name)
     }
+
+    internal fun isDownloadableApk(tag: String): Boolean = isOfficialFor(tag) &&
+        name.endsWith(".apk", ignoreCase = true) && !NON_DISTRIBUTION_APK.containsMatchIn(name)
 }
 
 private val APK_ABI = Regex("(?<![a-z0-9])(?:arm64-v8a|armeabi-v7a|x86_64|x86|universal)(?![a-z0-9])", RegexOption.IGNORE_CASE)
@@ -112,6 +126,23 @@ class AppReleaseClient(
     suspend fun latest(): AppRelease? = fetch(endpoint)
 
     suspend fun preview(): AppRelease? = fetch(previewEndpoint)?.takeIf { it.prerelease && it.isOfficial() }
+
+    suspend fun candidate(channel: AppReleaseChannel, abis: List<String>, currentVersion: String? = null): AppDownloadCandidate? {
+        val release = (if(channel == AppReleaseChannel.Preview) preview() else latest())
+            ?: throw AppReleaseException("暂时没有可用的${if(channel == AppReleaseChannel.Preview) "预览版" else "正式版"}")
+        if(!release.isOfficial() || release.prerelease != (channel == AppReleaseChannel.Preview))
+            throw AppReleaseException("发行版信息无效，请稍后重试")
+        if(channel == AppReleaseChannel.Stable && currentVersion != null && !isNewerAppVersion(currentVersion, release.tag)) return null
+        val apk = release.apkFor(abis) ?: throw AppReleaseException("此发行版暂未提供适合当前设备的 APK")
+        if(channel == AppReleaseChannel.Stable)
+            return AppDownloadCandidate(channel, release.tag.removePrefix("v").removePrefix("V"), apk)
+        val info = release.assets.singleOrNull { it.name == "Novelia-preview-build-info.txt" && it.isOfficialFor(release.tag) }
+            ?: throw AppReleaseException("预览包缺少构建信息，暂时无法检查版本")
+        val response = client.newCall(Request.Builder().url(info.downloadUrl).build()).awaitText()
+        if(response.code !in 200..299 || response.text.length > 16_384)
+            throw AppReleaseException("获取预览构建信息失败，请稍后重试")
+        return parsePreviewCandidate(apk, response.text)
+    }
 
     private suspend fun fetch(url: String): AppRelease? {
         val request = Request.Builder().url(url).header("Accept", "application/vnd.github+json")

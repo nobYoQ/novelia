@@ -10,6 +10,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.catalog.ForumLinks
+import cc.novelia.app.data.updates.AppReleaseChannel
+import cc.novelia.app.ui.feedback.appDownloadDescription
 import cc.novelia.app.ui.components.AppLazyColumn
 import cc.novelia.app.ui.components.MenuRow
 import cc.novelia.app.ui.components.MetaParagraph
@@ -20,7 +22,7 @@ import cc.novelia.app.ui.navigation.downloadAppRelease
 import cc.novelia.app.ui.theme.MotionContent
 
 @Composable fun AboutScreen(c: AppController) {
-    val preparing by c.app.appReleaseDownloads.preparing.collectAsStateWithLifecycle()
+    val downloads by c.app.appReleaseDownloads.coordinator.states.collectAsStateWithLifecycle()
     Screen("帮助与关于", c::back) { padding ->
     MotionContent(Unit, Modifier.padding(padding).fillMaxSize()) {
     AppLazyColumn(Modifier.fillMaxSize()) {
@@ -30,8 +32,8 @@ import cc.novelia.app.ui.theme.MotionContent
         item { MenuRow("检查应用更新", "当前版本 ${BuildConfig.VERSION_NAME} · 从 GitHub 检查正式版", Icons.Outlined.SystemUpdate, { c.action {
             if(c.app.appUpdates.check(force = true) == null) c.message("当前已是最新正式版")
         } }) }
-        item { MenuRow("下载新版本", if(preparing) "正在准备安装包…" else "直接下载最新正式版 APK", Icons.Outlined.Download, { c.downloadAppRelease() }) }
-        item { MenuRow("下载预览包", if(preparing) "正在准备安装包…" else "体验最新开发进展 · 测试签名可能无法覆盖正式版", Icons.Outlined.Science, { c.downloadAppRelease(preview = true) }) }
+        item { MenuRow("下载新版本", appDownloadDescription(downloads.getValue(AppReleaseChannel.Stable), "检查并下载最新正式版"), Icons.Outlined.Download, { c.downloadAppRelease() }) }
+        item { MenuRow("下载预览包", appDownloadDescription(downloads.getValue(AppReleaseChannel.Preview), "检查预览更新 · 下载前需确认不稳定提示"), Icons.Outlined.Science, { c.downloadAppRelease(preview = true) }) }
         item { MenuRow("发行说明", "查看 GitHub 发行版与更新说明", Icons.Outlined.NewReleases, { c.external(cc.novelia.app.data.updates.APP_RELEASES_URL) }) }
         item { MenuRow("项目源码", "查看源码与贡献指南", Icons.Outlined.Code, { c.external("https://github.com/nobYoQ/novelia") }) }
         item { MenuRow("开源许可证", "离线查看项目许可与第三方声明", Icons.Outlined.Description, { c.go("licenses") }) }

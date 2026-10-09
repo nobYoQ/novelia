@@ -136,4 +136,13 @@ class AppReleaseTest {
         val reason = "此发行版暂未提供适合当前设备的 APK"
         assertEquals(reason, AppReleaseException(reason).friendlyMessage())
     }
+
+    @Test fun anInstalledStableReleaseDoesNotNeedACompatibleAssetOrAnyDownload() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""{"tag_name":"v0.3.0","html_url":"$APP_RELEASES_URL/tag/v0.3.0","assets":[]}"""))
+            val client = AppReleaseClient(endpoint = server.url("/latest").toString())
+            assertNull(client.candidate(AppReleaseChannel.Stable, listOf("x86"), "0.3.0"))
+            assertEquals(1, server.requestCount)
+        }
+    }
 }

@@ -66,6 +66,15 @@ android {
     defaultConfig {
         applicationId = "cc.novelia.app"
         buildConfigField("String", "MIRROR_ACCESS_TOKEN", "\"$mirrorAccessToken\"")
+        // 滚动预览的版本名可能不变，记录公开构建身份以避免重复更新或回退。
+        val previewRun = if(providers.environmentVariable("GITHUB_WORKFLOW").orNull == "Preview APK")
+            providers.environmentVariable("GITHUB_RUN_NUMBER").orNull?.toLongOrNull() ?: 0L else 0L
+        val sourceCommit = providers.environmentVariable("GITHUB_SHA").orNull
+            ?.takeIf { it.matches(Regex("[0-9a-f]{40}")) }.orEmpty()
+        buildConfigField("long", "PREVIEW_RUN_NUMBER", "${previewRun}L")
+        val previewAttempt = providers.environmentVariable("GITHUB_RUN_ATTEMPT").orNull?.toLongOrNull() ?: 1L
+        buildConfigField("long", "PREVIEW_RUN_ATTEMPT", "${previewAttempt}L")
+        buildConfigField("String", "SOURCE_COMMIT", "\"$sourceCommit\"")
         minSdk = 26
         targetSdk = 36
         versionCode = appVersion.getProperty("versionCode").toInt().also { require(it > 0) }
