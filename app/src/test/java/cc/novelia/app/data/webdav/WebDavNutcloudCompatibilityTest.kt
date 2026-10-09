@@ -122,7 +122,31 @@ class WebDavNutcloudCompatibilityTest {
                     it.path!!.contains("novelia-upload-") || it.path!!.contains("novelia-probe-")
                 })
                 assertTrue(service.requests.none { it.path!!.contains("manifest.json") })
+                assertEquals(if(properties) 34 else 15, service.requests.size)
             }
+        }
+    }
+
+    @Test fun nutcloudRateLimitBlocksOtherClientInstancesAndDefaultsToThirtyMinutes() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setResponseCode(503).setBody("Too many requests are received recently"))
+            server.start()
+            val saved = mutableMapOf<String, Long>()
+            val gate = WebDavRequestCooldown({ 1000 }, { saved[it] ?: 0L }, { key, until -> saved[key] = until })
+            val config = WebDavConfig(endpoint = "http://dav.jianguoyun.com:${server.port}/dav/", allowInsecureHttp = true)
+            val transport = OkHttpClient.Builder().dns(object : Dns {
+                override fun lookup(hostname: String) = listOf(InetAddress.getByName("127.0.0.1"))
+            }).proxy(Proxy.NO_PROXY).build()
+            fun guardedClient() = WebDavClient(config, "", transport,
+                beforeRequest = { gate.check("account") }, onRateLimit = { gate.record("account", it) })
+            repeat(2) {
+                try { guardedClient().get("manifest.json"); fail("Expected rate limit") }
+                catch(error: WebDavException) {
+                    assertEquals(WebDavFailure.RATE_LIMITED, error.failure)
+                    assertEquals(1_800_000L, error.retryAfterMillis)
+                }
+            }
+            assertEquals(1, server.requestCount)
         }
     }
 

@@ -5,6 +5,8 @@ import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.URI
 import java.net.SocketTimeoutException
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLException
@@ -19,9 +21,10 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 
-enum class WebDavFailure { AUTHENTICATION, PERMISSION, NOT_FOUND, CONFLICT, STORAGE, SERVER, NETWORK, INSECURE, UNSUPPORTED, INVALID_DATA }
+enum class WebDavFailure { AUTHENTICATION, PERMISSION, NOT_FOUND, CONFLICT, STORAGE, SERVER, RATE_LIMITED, NETWORK, INSECURE, UNSUPPORTED, INVALID_DATA }
 
-class WebDavException(val failure: WebDavFailure, message: String, val statusCode: Int? = null) : IOException(message)
+class WebDavException(val failure: WebDavFailure, message: String, val statusCode: Int? = null,
+    val retryAfterMillis: Long? = null) : IOException(message)
 
 data class WebDavResource(val data: ByteArray, val etag: String?, val notModified: Boolean = false)
 
@@ -53,7 +56,8 @@ internal object WebDavPaths {
 }
 
 /** 独立连接栈；没有原站认证、Cookie、ECH 或网络日志拦截器。 */
-class WebDavClient(config: WebDavConfig, password: String, transport: OkHttpClient? = null) {
+class WebDavClient(config: WebDavConfig, password: String, transport: OkHttpClient? = null,
+    private val beforeRequest: () -> Unit = {}, private val onRateLimit: (WebDavException) -> Unit = {}) {
     private val endpoint = WebDavPaths.endpoint(config)
     // 坚果云不可靠地执行 PUT If-None-Match:*；首次创建改用禁止覆盖的原子 MOVE。
     private val isNutcloud = endpoint.host == "dav.jianguoyun.com"
@@ -61,6 +65,7 @@ class WebDavClient(config: WebDavConfig, password: String, transport: OkHttpClie
     private val directory = folderSegments.fold(endpoint) { url, segment -> url.newBuilder().addPathSegment(segment).build() }
         .newBuilder().addPathSegment("").build()
     private val authorization = if(config.username.isEmpty() && password.isEmpty()) null else Credentials.basic(config.username, password, Charsets.UTF_8)
+    private var rateLimitError: WebDavException? = null
     private val client = (transport ?: defaultTransport).newBuilder()
         .cookieJar(CookieJar.NO_COOKIES).authenticator(okhttp3.Authenticator.NONE).proxyAuthenticator(okhttp3.Authenticator.NONE)
         .followRedirects(false).followSslRedirects(false)
@@ -269,13 +274,31 @@ class WebDavClient(config: WebDavConfig, password: String, transport: OkHttpClie
     private suspend fun request(url: HttpUrl, method: String, headers: Map<String, String> = emptyMap(), body: ByteArray? = null): Reply {
         var target = url
         repeat(4) {
+            // 同一轮的后续类型和 finally 清理都停止发请求；下轮也受 manager 的账号冷却约束。
+            rateLimitError?.let { throw it }
+            beforeRequest()
             val request = Request.Builder().url(target).apply { authorization?.let { header("Authorization", it) } }
                 .header("Accept", "application/json, application/xml, text/plain, */*")
                 // 避免中间服务压缩响应时将原文件的强版本降为弱版本。
                 .header("Accept-Encoding", "identity")
                 .apply { headers.forEach { (key, value) -> header(key, value) } }
                 .method(method, when { body != null -> body.toRequestBody(if(method == "PROPFIND") "application/xml; charset=utf-8".toMediaType() else "application/octet-stream".toMediaType()); method == "PUT" -> ByteArray(0).toRequestBody(); else -> null }).build()
-            val reply = try { client.newCall(request).awaitBody { response -> Reply(response.code, boundedBody(response), normalizeReturnedEtag(response.header("ETag")), response.header("Location")) } }
+            val reply = try { client.newCall(request).awaitBody { response ->
+                val data = boundedBody(response)
+                val limited = response.code == 429 || response.code == 503 &&
+                    data.toString(Charsets.UTF_8).let {
+                        it.contains("too many requests", ignoreCase = true) || it.contains("rate limit", ignoreCase = true)
+                    }
+                if(limited) {
+                    val wait = retryAfterMillis(response.header("Retry-After"))?.coerceAtLeast(1_000L) ?: 30 * 60_000L
+                    val error = WebDavException(WebDavFailure.RATE_LIMITED,
+                        "WebDAV 服务请求过于频繁（${response.code}），已暂停请求，请稍后重试", response.code, wait)
+                    rateLimitError = error
+                    onRateLimit(error)
+                    throw error
+                }
+                Reply(response.code, data, normalizeReturnedEtag(response.header("ETag")), response.header("Location"))
+            } }
             catch(cancelled: CancellationException) { throw cancelled }
             catch(error: WebDavException) { throw error }
             catch(_: SocketTimeoutException) { throw WebDavException(WebDavFailure.NETWORK, "连接超时，请检查网络后重试") }
@@ -344,6 +367,13 @@ class WebDavClient(config: WebDavConfig, password: String, transport: OkHttpClie
         const val MAX_RESPONSE_BYTES = 16 * 1024 * 1024
         // 仅 WebDAV 内部共享连接池，周期检查可复用 TLS 连接，仍按请求携带本次凭据。
         private val defaultTransport by lazy { OkHttpClient() }
+        internal fun retryAfterMillis(value: String?, now: Long = System.currentTimeMillis()): Long? {
+            val text = value?.trim() ?: return null
+            text.toLongOrNull()?.takeIf { it >= 0 }?.let { return it.coerceAtMost(Long.MAX_VALUE / 1_000) * 1_000 }
+            return runCatching {
+                (ZonedDateTime.parse(text, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant().toEpochMilli() - now).coerceAtLeast(0)
+            }.getOrNull()
+        }
         fun isStrongEtag(value: String): Boolean = value.length in 2..1024 && value.startsWith('"') && value.endsWith('"') &&
             value.substring(1, value.lastIndex).all { it.code in 0x21..0xff && it != '"' && it.code != 0x7f }
         fun requireStrongEtag(value: String?): String = value?.takeIf(::isStrongEtag)

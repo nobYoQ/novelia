@@ -1,8 +1,10 @@
 package cc.novelia.app.data.webdav
 
 import android.util.AtomicFile
+import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.os.SystemClock
 import cc.novelia.app.NoveliaApplication
 import java.io.File
 import java.util.UUID
@@ -27,6 +29,14 @@ class WebDavSyncManager(private val app: NoveliaApplication) {
     private val file = File(app.filesDir, "webdav-state.json")
     private val atomic = AtomicFile(file)
     private val wireJson = Json { encodeDefaults = true; explicitNulls = false; ignoreUnknownKeys = false }
+    private val manifestReader = WebDavManifestReader(wireJson)
+    private val automaticPolicy = WebDavAutomaticPolicy(SystemClock::elapsedRealtime)
+    private val cooldownPreferences = app.getSharedPreferences("webdav-request-cooldown", Context.MODE_PRIVATE)
+    private val requestCooldown = WebDavRequestCooldown(System::currentTimeMillis,
+        readUntil = { cooldownPreferences.getLong(it, 0L) },
+        writeUntil = { account, until ->
+            check(cooldownPreferences.edit().putLong(account, until).commit()) { "无法保存 WebDAV 请求冷却时间" }
+        })
     @Volatile private var runtimeError: String? = null
     @Volatile private var runtime = readRuntime()
     private val mutableStatus = MutableStateFlow(WebDavSyncStatus(error = runtimeError))
@@ -101,6 +111,7 @@ class WebDavSyncManager(private val app: NoveliaApplication) {
                 current(binding)
                 app.webDavConfig.bindDataset(binding.generation, id)
                 synchronizeDomains(binding.copy(datasetId = id, enabled = true), client, joining = true, preference = preference)
+                automaticPolicy.completedFullSync(binding)
             }
         }
     }
@@ -112,6 +123,9 @@ class WebDavSyncManager(private val app: NoveliaApplication) {
             if(!binding.enabled || (!manual && !binding.automatic) || binding.selected.isEmpty()) return@withLock
             // 等待另一轮同步时，网络和配置都可能改变；必须以取得锁后的状态再次判断。
             if(!manual && !automaticNetworkAvailable(binding)) return@withLock
+            // 锁内重新规划，前台、Worker 和轮询排队后不会重复做同一轮全量检查。
+            val domains = if(manual) binding.selected else automaticPolicy.domains(binding, pendingDomains(binding))
+            if(domains.isEmpty()) return@withLock
             running {
                 ready()
                 require(runtimeError == null) { runtimeError ?: "同步状态无法读取" }
@@ -122,7 +136,9 @@ class WebDavSyncManager(private val app: NoveliaApplication) {
                 requireNotNull(manifest(client, binding)) { "已连接的同步目录标识消失，请检查服务或目录" }
                 current(binding)
                 app.webDavConfig.withBinding(binding.generation) { prepareReplicas(id, binding.selected, binding.syncDevicePreferences) }
-                synchronizeDomains(binding, client, joining = false, preference = BootstrapPreference.REMOTE_SETTINGS, automatic = !manual)
+                synchronizeDomains(binding, client, joining = false, preference = BootstrapPreference.REMOTE_SETTINGS,
+                    automatic = !manual, domains = domains)
+                if(manual) automaticPolicy.completedFullSync(binding)
             }
         }
     }
@@ -148,10 +164,10 @@ class WebDavSyncManager(private val app: NoveliaApplication) {
     }
 
     private suspend fun synchronizeDomains(binding: WebDavConfig, client: WebDavClient, joining: Boolean, preference: BootstrapPreference,
-        automatic: Boolean = false) {
+        automatic: Boolean = false, domains: Set<SyncDomain> = binding.selected) {
         val id = requireNotNull(binding.datasetId)
         val errors = linkedMapOf<SyncDomain, String>()
-        for(domain in binding.selected.sortedBy { it.ordinal }) {
+        for(domain in domains.sortedBy { it.ordinal }) {
             currentCoroutineContext().ensureActive()
             current(binding)
             if(automatic) requireAutomaticNetwork(binding)
@@ -168,6 +184,10 @@ class WebDavSyncManager(private val app: NoveliaApplication) {
                 errors[domain] = message
                 mutableStatus.update { it.copy(domains = it.domains +
                     (domain to WebDavDomainStatus(it.domains[domain]?.lastSuccessAt ?: 0, message, true, retryWebDavFailure(error)))) }
+                if(error is WebDavException && error.failure == WebDavFailure.RATE_LIMITED) {
+                    refreshPendingStatus()
+                    throw error
+                }
             }
         }
         refreshPendingStatus()
@@ -221,7 +241,12 @@ class WebDavSyncManager(private val app: NoveliaApplication) {
         if(domain == SyncDomain.KEYWORDS) require(app.keywords.syncReadError.value == null) { "标签库读取失败，请先从备份恢复标签库" }
     }
 
-    private fun client(binding: WebDavConfig) = WebDavClient(binding, app.webDavConfig.password(binding))
+    private fun client(binding: WebDavConfig): WebDavClient {
+        val account = webDavAccountKey(binding)
+        return WebDavClient(binding, app.webDavConfig.password(binding),
+            beforeRequest = { requestCooldown.check(account) },
+            onRateLimit = { requestCooldown.record(account, it) })
+    }
     private fun current(binding: WebDavConfig) = app.webDavConfig.ensureCurrent(binding.generation)
     private fun automaticNetworkAvailable(binding: WebDavConfig): Boolean {
         val manager = app.getSystemService(ConnectivityManager::class.java) ?: return false
@@ -250,17 +275,7 @@ class WebDavSyncManager(private val app: NoveliaApplication) {
         }
     }
 
-    private suspend fun manifest(client: WebDavClient, binding: WebDavConfig): WebDavManifest? {
-        val resource = client.get(MANIFEST) ?: run {
-            require(binding.datasetId == null) { "已连接的同步目录标识消失，请检查服务或目录" }
-            return null
-        }
-        WebDavClient.requireStrongEtag(resource.etag)
-        val value = wireJson.decodeFromString<WebDavManifest>(checkedWebDavJson(resource.data))
-        require(value.format == "novelia-webdav" && value.schemaVersion == 1 && WebDavMerge.validId(value.datasetId)) { "同步目录格式或版本不支持" }
-        require(binding.datasetId == null || binding.datasetId == value.datasetId) { "同步目录数据集已变化，请检查目录配置" }
-        return value
-    }
+    private suspend fun manifest(client: WebDavClient, binding: WebDavConfig) = manifestReader.read(client, binding)
 
     private suspend fun readDocument(client: WebDavClient, domain: SyncDomain, id: String, useCache: Boolean = true): WebDavCachedDomain? {
         val cached = runtime.cached[domain]?.takeIf { useCache && it.document.datasetId == id }
@@ -363,14 +378,14 @@ class WebDavSyncManager(private val app: NoveliaApplication) {
         return next
     }
 
-    fun hasPending(): Boolean {
-        val binding = app.webDavConfig.config.value
-        return binding.selected.any { domain ->
+    fun hasPending(): Boolean = pendingDomains(app.webDavConfig.config.value).isNotEmpty()
+
+    private fun pendingDomains(binding: WebDavConfig): Set<SyncDomain> =
+        binding.selected.filterTo(mutableSetOf()) { domain ->
             val replica = if(domain == SyncDomain.KEYWORDS) app.keywords.state.value.syncReplica else app.store.state.value.syncReplica
-            val local = replica.documents[domain] ?: return@any true
+            val local = replica.documents[domain] ?: return@filterTo true
             runtime.cached[domain]?.document != local
         }
-    }
 
     fun refreshPendingStatus() {
         val binding = app.webDavConfig.config.value

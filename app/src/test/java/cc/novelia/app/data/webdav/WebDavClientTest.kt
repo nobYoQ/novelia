@@ -118,9 +118,8 @@ class WebDavClientTest {
             server.enqueue(MockResponse().setResponseCode(429))
             server.enqueue(MockResponse().setResponseCode(408))
             server.start()
-            val c = client(server)
-            for((code, expected, retryable) in listOf(Triple(422, WebDavFailure.INVALID_DATA, false), Triple(429, WebDavFailure.SERVER, true), Triple(408, WebDavFailure.NETWORK, true))) {
-                try { c.get("settings.json"); fail("Expected rejected response") }
+            for((code, expected, retryable) in listOf(Triple(422, WebDavFailure.INVALID_DATA, false), Triple(429, WebDavFailure.RATE_LIMITED, true), Triple(408, WebDavFailure.NETWORK, true))) {
+                try { client(server).get("settings.json"); fail("Expected rejected response") }
                 catch(error: WebDavException) {
                     assertEquals(code, error.statusCode)
                     assertEquals(expected, error.failure)
@@ -129,6 +128,71 @@ class WebDavClientTest {
             }
             assertEquals(3, server.requestCount)
         }
+    }
+
+    @Test fun rateLimitedProbeStopsBeforeCleanupOrMoreRequests() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setResponseCode(201))
+            server.enqueue(MockResponse().setResponseCode(201))
+            server.enqueue(MockResponse().setResponseCode(503).setBody("Too many requests are received recently"))
+            server.start()
+            val c = client(server)
+            try { c.testConnection(); fail("Expected rate limit") }
+            catch(error: WebDavException) {
+                assertEquals(WebDavFailure.RATE_LIMITED, error.failure)
+                assertEquals(503, error.statusCode)
+                assertTrue(error.retryAfterMillis!! >= 60_000)
+            }
+            try { c.get("settings.json"); fail("Expected stopped client") }
+            catch(error: WebDavException) { assertEquals(WebDavFailure.RATE_LIMITED, error.failure) }
+            assertEquals(3, server.requestCount)
+        }
+    }
+
+    @Test fun ordinaryServiceUnavailableIsNotReportedAsRateLimiting() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setResponseCode(503).setBody("Maintenance in progress"))
+            server.start()
+            try { client(server).get("settings.json"); fail("Expected unavailable service") }
+            catch(error: WebDavException) {
+                assertEquals(WebDavFailure.SERVER, error.failure)
+                assertEquals(503, error.statusCode)
+                assertNull(error.retryAfterMillis)
+            }
+        }
+    }
+
+    @Test fun rateLimitRespectsRetryAfterAndDoesNotExposeResponseBody() = runBlocking {
+        for(seconds in listOf(90L, 7200L)) MockWebServer().use { server ->
+            server.enqueue(MockResponse().setResponseCode(429).setHeader("Retry-After", seconds).setBody("private server diagnostic"))
+            server.start()
+            try { client(server).get("settings.json"); fail("Expected rate limit") }
+            catch(error: WebDavException) {
+                assertEquals(seconds * 1_000, error.retryAfterMillis)
+                assertFalse(error.message!!.contains("private server diagnostic"))
+            }
+        }
+    }
+
+    @Test fun serviceSpecificRateLimit503UsesTheSameGenericPolicy() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setResponseCode(503).setBody("Rate limit exceeded"))
+            server.start()
+            try { client(server).get("settings.json"); fail("Expected rate limit") }
+            catch(error: WebDavException) {
+                assertEquals(WebDavFailure.RATE_LIMITED, error.failure)
+                assertEquals(1_800_000L, error.retryAfterMillis)
+            }
+        }
+    }
+
+    @Test fun retryAfterAcceptsSecondsAndHttpDates() {
+        val now = java.time.Instant.parse("2026-10-09T00:00:00Z").toEpochMilli()
+        assertEquals(90_000L, WebDavClient.retryAfterMillis("90", now))
+        assertEquals(120_000L, WebDavClient.retryAfterMillis("Fri, 09 Oct 2026 00:02:00 GMT", now))
+        assertEquals(0L, WebDavClient.retryAfterMillis("Fri, 09 Oct 2026 00:00:00 GMT", now + 1))
+        assertNull(WebDavClient.retryAfterMillis("invalid", now))
+        assertNull(WebDavClient.retryAfterMillis("-1", now))
     }
 
     @Test fun redirectsNeverForwardCredentialsAcrossOrigins() = runBlocking {

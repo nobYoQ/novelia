@@ -18,7 +18,7 @@ import kotlinx.coroutines.CancellationException
 
 internal fun WebDavConfig.automaticallySyncable() = enabled && automatic && bound && selected.isNotEmpty()
 internal fun retryWebDavFailure(error: Exception): Boolean = error is WebDavException &&
-    error.failure in setOf(WebDavFailure.NETWORK, WebDavFailure.SERVER, WebDavFailure.CONFLICT)
+    error.failure in setOf(WebDavFailure.NETWORK, WebDavFailure.SERVER, WebDavFailure.RATE_LIMITED, WebDavFailure.CONFLICT)
 
 class WebDavSyncWorker(context: Context, parameters: WorkerParameters) : CoroutineWorker(context, parameters) {
     override suspend fun doWork(): Result {
@@ -27,10 +27,9 @@ class WebDavSyncWorker(context: Context, parameters: WorkerParameters) : Corouti
         if(!configuration.automaticallySyncable() || inputData.getLong("generation", -1) != configuration.generation) return Result.success()
         return try {
             app.webDav.synchronize(manual = false, expectedGeneration = configuration.generation)
-            // KEEP 任务运行时可能有新编辑，因此在结束前补一次。周期任务兜底剩余修改。
-            if(app.webDavConfig.config.value.generation == configuration.generation && app.webDav.hasPending())
-                app.webDav.synchronize(manual = false, expectedGeneration = configuration.generation)
-            Result.success()
+            // KEEP 任务运行时可能有新编辑；退避后提交，避免立即再同步一轮。
+            if(app.webDavConfig.config.value.generation == configuration.generation && app.webDav.hasPending()) Result.retry()
+            else Result.success()
         } catch(cancelled: CancellationException) { throw cancelled }
         catch(_: WebDavConfigChangedException) { Result.success() }
         catch(error: Exception) {
