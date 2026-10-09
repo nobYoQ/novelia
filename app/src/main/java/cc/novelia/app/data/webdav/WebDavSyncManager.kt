@@ -59,6 +59,21 @@ class WebDavSyncManager(private val app: NoveliaApplication) {
         }
     }
 
+    /** 用户确认后回到首次连接流程；不改本机资料，也不直接创建或覆盖远端文件。 */
+    suspend fun prepareReconnect(recovery: WebDavRecovery) = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            if(mutableStatus.value.recovery != recovery) throw WebDavConfigChangedException()
+            running(recordSuccess = false) {
+                app.webDavConfig.clearDatasetBinding(recovery)
+                runtime = WebDavRuntimeState()
+                runtimeError = null
+                writeRuntime()
+                mutableStatus.update { WebDavSyncStatus(running = it.running, lastAttemptAt = it.lastAttemptAt) }
+                refreshPendingStatus()
+            }
+        }
+    }
+
     suspend fun preview(): WebDavPreview = withContext(Dispatchers.IO) {
         mutex.withLock {
             val binding = app.webDavConfig.config.value
@@ -66,7 +81,8 @@ class WebDavSyncManager(private val app: NoveliaApplication) {
                 require(binding.selected.isNotEmpty()) { "请至少选择一项同步内容" }
                 ready()
                 val client = client(binding)
-                client.ensureDirectory()
+                // 已绑定目录丢失时先交给用户处理，不在查看资料时悄悄重建。
+                if(!binding.bound) client.ensureDirectory()
                 val manifest = manifest(client, binding)
                 val id = manifest?.datasetId ?: UUID.randomUUID().toString()
                 val items = binding.selected.sortedBy { it.ordinal }.map { domain ->
@@ -121,6 +137,9 @@ class WebDavSyncManager(private val app: NoveliaApplication) {
             expectedGeneration?.let(app.webDavConfig::ensureCurrent)
             val binding = app.webDavConfig.config.value
             if(!binding.enabled || (!manual && !binding.automatic) || binding.selected.isEmpty()) return@withLock
+            if(!manual) mutableStatus.value.recovery?.takeIf { it.matches(binding) }?.let {
+                throw WebDavRecoveryRequiredException(it)
+            }
             // 等待另一轮同步时，网络和配置都可能改变；必须以取得锁后的状态再次判断。
             if(!manual && !automaticNetworkAvailable(binding)) return@withLock
             // 锁内重新规划，前台、Worker 和轮询排队后不会重复做同一轮全量检查。
@@ -275,7 +294,12 @@ class WebDavSyncManager(private val app: NoveliaApplication) {
         }
     }
 
-    private suspend fun manifest(client: WebDavClient, binding: WebDavConfig) = manifestReader.read(client, binding)
+    private suspend fun manifest(client: WebDavClient, binding: WebDavConfig): WebDavManifest? {
+        val result = manifestReader.read(client, binding)
+        current(binding)
+        mutableStatus.update { if(it.recovery?.matches(binding) == true) it.copy(recovery = null) else it }
+        return result
+    }
 
     private suspend fun readDocument(client: WebDavClient, domain: SyncDomain, id: String, useCache: Boolean = true): WebDavCachedDomain? {
         val cached = runtime.cached[domain]?.takeIf { useCache && it.document.datasetId == id }
@@ -418,7 +442,8 @@ class WebDavSyncManager(private val app: NoveliaApplication) {
             return block().also { if(recordSuccess) mutableStatus.update { it.copy(lastSuccessAt = System.currentTimeMillis()) } }
         } catch(cancelled: CancellationException) { throw cancelled }
         catch(error: Exception) {
-            mutableStatus.update { it.copy(error = error.message ?: "同步未完成，请稍后重试") }
+            mutableStatus.update { it.copy(error = error.message ?: "同步未完成，请稍后重试",
+                recovery = (error as? WebDavRecoveryRequiredException)?.recovery ?: it.recovery) }
             throw error
         } finally { mutableStatus.update { it.copy(running = false) } }
     }

@@ -28,6 +28,7 @@ internal data class WebDavSyncActions(
     val onInterval: (Long) -> Unit = {},
     val onSync: () -> Unit = {},
     val onPreview: () -> Unit = {},
+    val onRecover: (WebDavRecovery) -> Unit = {},
     val onConflict: (SyncConflict) -> Unit = {},
     val conflictTitle: (SyncConflict) -> String = { "${webDavLabels.getValue(it.domain).first} · 查看保留的版本" },
 )
@@ -46,21 +47,36 @@ private fun SyncDomain.icon(): ImageVector = when(this) {
 @Composable
 internal fun WebDavSyncContent(config: WebDavConfig, status: WebDavSyncStatus, needsConfirmation: Boolean, working: Boolean, actions: WebDavSyncActions) {
     var showDetails by remember { mutableStateOf(false) }
+    val recovery = status.recovery?.takeIf { it.matches(config) }
     val action = when {
         working -> "正在处理…"
         config.endpoint.isBlank() -> "配置同步服务器"
+        recovery != null -> "处理同步目录"
         !config.enabled -> "启用并同步"
         needsConfirmation -> "查看资料并连接"
         else -> "立即同步"
     }
     WebDavPage("多设备同步", actions.onBack, action, Icons.Outlined.Sync,
-        !working && (config.endpoint.isBlank() || config.selected.isNotEmpty()), working, actions.onSync) { padding ->
+        !working && (config.endpoint.isBlank() || recovery != null || config.selected.isNotEmpty()), working,
+        { if(recovery != null) actions.onRecover(recovery) else actions.onSync() }) { padding ->
         Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.TopCenter) {
             AppLazyColumn(Modifier.widthIn(max = 640.dp).fillMaxSize(), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 item { WebDavHero("WebDAV", "连接自己的云盘，让收藏与阅读资料在多台设备间同步。", Icons.Outlined.Devices) }
+                if(recovery != null) item { WebDavCard {
+                    Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("同步目录需要重新连接", style = MaterialTheme.typography.titleMedium)
+                        Text(if(recovery.reason == WebDavRecoveryReason.MISSING_DATASET)
+                            "找不到原来的云端同步资料。本机资料已保留，可以重新建立同步，也可以检查服务器地址和目录。"
+                            else "云端目录中的同步资料已更换。本机资料已保留，重新连接前会展示合并预览。",
+                            style = MaterialTheme.typography.bodyMedium)
+                        TextButton(onClick = { actions.onRecover(recovery) }, enabled = !working) { Text("重新连接") }
+                        TextButton(onClick = actions.onServer, enabled = !working) { Text("检查服务器和目录") }
+                    }
+                } }
                 item { WebDavMenuRow("同步服务器", webDavServerLabel(config), Icons.Outlined.Dns, webDavRowShape(0, 2), enabled = !working, onClick = actions.onServer) }
                 item { WebDavToggleRow("启用 WebDAV", when {
                     !config.enabled -> "已停用，选择下方要同步的内容"
+                    recovery != null -> "已暂停，等待处理同步目录"
                     needsConfirmation -> "已开启，等待确认同步资料"
                     else -> "已开启，同步所选内容"
                 }, Icons.Outlined.CloudSync, config.enabled, webDavRowShape(1, 2), enabled = !working || config.enabled, onCheckedChange = actions.onEnabled) }
@@ -96,7 +112,7 @@ internal fun WebDavSyncContent(config: WebDavConfig, status: WebDavSyncStatus, n
                 item { WebDavSection("同步状态") }
                 item { WebDavCard {
                     Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text(when { status.running -> "正在同步"; !config.enabled -> "同步已停用"; needsConfirmation -> "等待确认同步资料"; else -> "已连接同步资料" }, style = MaterialTheme.typography.titleMedium)
+                        Text(when { status.running -> "正在同步"; recovery != null -> "等待处理同步目录"; !config.enabled -> "同步已停用"; needsConfirmation -> "等待确认同步资料"; else -> "已连接同步资料" }, style = MaterialTheme.typography.titleMedium)
                         Text("最近成功：${syncTime(status.lastSuccessAt)}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         status.error?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error) }
                         TextButton(onClick = { showDetails = !showDetails }, contentPadding = PaddingValues(0.dp)) {
@@ -117,7 +133,7 @@ internal fun WebDavSyncContent(config: WebDavConfig, status: WebDavSyncStatus, n
                         }
                     }
                 } }
-                if(config.bound && config.enabled && config.selected.isNotEmpty()) item {
+                if(config.bound && recovery == null && config.enabled && config.selected.isNotEmpty()) item {
                     TextButton(onClick = actions.onPreview, enabled = !working, modifier = Modifier.fillMaxWidth()) { Text("查看并合并同步资料") }
                 }
                 if(status.conflicts.isNotEmpty()) {

@@ -34,6 +34,7 @@ fun WebDavSyncScreen(c: AppController) {
     var preview by remember { mutableStateOf<WebDavPreview?>(null) }
     var settingsPreference by remember { mutableStateOf(BootstrapPreference.LOCAL_SETTINGS) }
     var conflict by remember { mutableStateOf<SyncConflict?>(null) }
+    var recovery by remember { mutableStateOf<WebDavRecovery?>(null) }
     val working = busy || status.running
 
     fun conflictTitle(value: SyncConflict): String {
@@ -93,9 +94,21 @@ fun WebDavSyncScreen(c: AppController) {
             }
         },
         onPreview = ::showPreview,
+        onRecover = { recovery = it },
         onConflict = { conflict = it },
         conflictTitle = ::conflictTitle,
     ))
+
+    recovery?.takeIf { it.matches(config) }?.let { value ->
+        WebDavReconnectDialog(working, onDismiss = { recovery = null }, onConfirm = {
+            runTask {
+                c.app.webDav.prepareReconnect(value)
+                recovery = null
+                preview = c.app.webDav.preview()
+                settingsPreference = BootstrapPreference.LOCAL_SETTINGS
+            }
+        })
+    }
 
     preview?.let { value ->
         AlertDialog(
@@ -136,6 +149,17 @@ fun WebDavSyncScreen(c: AppController) {
             confirmButton = { TextButton(onClick = { conflict = null }, enabled = !working) { Text("稍后处理") } },
         )
     }
+}
+
+@Composable
+internal fun WebDavReconnectDialog(working: Boolean, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = { if(!working) onDismiss() },
+        title = { Text("重新连接同步目录？") },
+        text = { Text("本机资料和服务器登录信息会保留。接下来将重新检查当前目录：目录为空时可用本机资料建立同步；已有同步资料时会先展示合并预览。如果重新建立了云端资料，其他设备也需重新连接。") },
+        confirmButton = { TextButton(onClick = onConfirm, enabled = !working) { Text("重新检查并预览") } },
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !working) { Text("取消") } },
+    )
 }
 
 /** 将保留的进度/正文转为可阅读内容，避免把同步协议暴露在选择流程里。 */

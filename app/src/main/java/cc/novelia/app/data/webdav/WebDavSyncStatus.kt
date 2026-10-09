@@ -15,6 +15,7 @@ data class WebDavSyncStatus(
     val error: String? = null,
     val domains: Map<SyncDomain, WebDavDomainStatus> = emptyMap(),
     val conflicts: List<SyncConflict> = emptyList(),
+    val recovery: WebDavRecovery? = null,
 )
 
 @Serializable internal data class WebDavManifest(

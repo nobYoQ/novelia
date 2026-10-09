@@ -32,6 +32,7 @@ class WebDavSyncWorker(context: Context, parameters: WorkerParameters) : Corouti
             else Result.success()
         } catch(cancelled: CancellationException) { throw cancelled }
         catch(_: WebDavConfigChangedException) { Result.success() }
+        catch(_: WebDavRecoveryRequiredException) { Result.success() }
         catch(error: Exception) {
             val retry = if(error is WebDavException) retryWebDavFailure(error) else
                 app.webDav.status.value.domains.filterKeys { it in app.webDavConfig.config.value.selected }.values.any { it.retryable }

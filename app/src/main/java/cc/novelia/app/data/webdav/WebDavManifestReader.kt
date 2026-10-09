@@ -11,14 +11,16 @@ internal class WebDavManifestReader(private val json: Json) {
         val previous = cached?.takeIf { it.binding == binding }
         val resource = client.get("manifest.json", previous?.etag) ?: run {
             cached = null
-            require(binding.datasetId == null) { "已连接的同步目录标识消失，请检查服务或目录" }
+            binding.datasetId?.let { throw WebDavRecoveryRequiredException(
+                WebDavRecovery(binding.generation, it, WebDavRecoveryReason.MISSING_DATASET)) }
             return null
         }
         if(resource.notModified) return requireNotNull(previous) { "缺少同步目录标识缓存，请重试" }.value
         val etag = WebDavClient.requireStrongEtag(resource.etag)
         val value = json.decodeFromString<WebDavManifest>(checkedWebDavJson(resource.data))
         require(value.format == "novelia-webdav" && value.schemaVersion == 1 && WebDavMerge.validId(value.datasetId)) { "同步目录格式或版本不支持" }
-        require(binding.datasetId == null || binding.datasetId == value.datasetId) { "同步目录数据集已变化，请检查目录配置" }
+        binding.datasetId?.takeIf { it != value.datasetId }?.let { throw WebDavRecoveryRequiredException(
+            WebDavRecovery(binding.generation, it, WebDavRecoveryReason.REPLACED_DATASET)) }
         cached = Cached(binding, etag, value)
         return value
     }

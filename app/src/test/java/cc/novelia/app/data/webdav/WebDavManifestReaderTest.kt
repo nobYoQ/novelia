@@ -25,9 +25,9 @@ class WebDavManifestReaderTest {
             assertNull(server.takeRequest().getHeader("If-None-Match"))
             assertEquals("\"v1\"", server.takeRequest().getHeader("If-None-Match"))
             try { reader.read(client, binding); fail("Expected changed dataset rejection") }
-            catch(_: IllegalArgumentException) { }
+            catch(error: WebDavRecoveryRequiredException) { assertEquals(WebDavRecoveryReason.REPLACED_DATASET, error.recovery.reason) }
             try { reader.read(client, binding); fail("Expected missing manifest rejection") }
-            catch(_: IllegalArgumentException) { }
+            catch(error: WebDavRecoveryRequiredException) { assertEquals(WebDavRecoveryReason.MISSING_DATASET, error.recovery.reason) }
             assertEquals(4, server.requestCount)
         }
     }

@@ -109,6 +109,15 @@ class WebDavConfigStore(context: Context) {
     @Synchronized
     fun disable() { save(mutableConfig.value.copy(enabled = false)) }
 
+    /** 重新连接只解除目录绑定；地址、账号、加密密码和同步选项保持不变。 */
+    @Synchronized
+    fun clearDatasetBinding(recovery: WebDavRecovery): WebDavConfig {
+        val saved = mutableConfig.value.withoutDatasetBinding(recovery)
+        check(preferences.edit().putString("configuration", appJson.encodeToString(saved)).commit()) { "无法保存同步目录连接" }
+        mutableConfig.value = saved
+        return saved
+    }
+
     @Synchronized
     fun ensureCurrent(generation: Long) {
         if(mutableConfig.value.generation != generation) throw WebDavConfigChangedException()

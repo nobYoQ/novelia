@@ -12,6 +12,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.data.webdav.SyncDomain
 import cc.novelia.app.data.webdav.WebDavConfig
 import cc.novelia.app.data.webdav.WebDavSyncStatus
+import cc.novelia.app.data.webdav.WebDavRecovery
+import cc.novelia.app.data.webdav.WebDavRecoveryReason
 import cc.novelia.app.ui.theme.AppInteractionMode
 import cc.novelia.app.ui.theme.NoveliaTheme
 import java.io.File
@@ -90,6 +92,46 @@ class WebDavLayoutTest {
         compose.onNodeWithText("保存并测试").assertIsDisplayed().performClick()
         assertEquals("reader", saved?.username)
         assertEquals("sample-input", entered)
+    }
+
+    @Test fun missingDirectoryExposesRecoveryInsteadOfRepeatingTheFailedSync() {
+        val recovery = WebDavRecovery(fixture.generation, fixture.datasetId!!, WebDavRecoveryReason.MISSING_DATASET)
+        var requested: WebDavRecovery? = null
+        var synced = false
+        var openedServer = false
+        compose.setContent {
+            AppInteractionMode(false, true) { NoveliaTheme("light") {
+                WebDavSyncContent(fixture, WebDavSyncStatus(recovery = recovery), false, false,
+                    WebDavSyncActions(onRecover = { requested = it }, onSync = { synced = true }, onServer = { openedServer = true }))
+            } }
+        }
+        compose.onNodeWithText("处理同步目录").assertIsDisplayed().performClick()
+        assertEquals(recovery, requested)
+        assertFalse(synced)
+        compose.onNodeWithText("同步目录需要重新连接").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("检查服务器和目录").performScrollTo().performClick()
+        assertTrue(openedServer)
+        compose.onNodeWithText("查看并合并同步资料").assertDoesNotExist()
+        screenshot("missing-directory")
+    }
+
+    @Test fun reconnectRequiresConfirmationAndCanBeCancelled() {
+        var visible by mutableStateOf(true)
+        var working by mutableStateOf(false)
+        var confirmed = false
+        compose.setContent {
+            NoveliaTheme("light") {
+                if(visible) WebDavReconnectDialog(working, onDismiss = { visible = false }, onConfirm = { confirmed = true })
+            }
+        }
+        compose.onNodeWithText("重新连接同步目录？").assertIsDisplayed()
+        compose.onNodeWithText("取消").performClick()
+        assertFalse(confirmed)
+        compose.runOnIdle { visible = true; working = true }
+        compose.onNodeWithText("重新检查并预览").assertIsNotEnabled()
+        compose.runOnIdle { working = false }
+        compose.onNodeWithText("重新检查并预览").performClick()
+        assertTrue(confirmed)
     }
 
     @Test fun darkServerPageKeepsAdvancedFieldsAccessible() {
