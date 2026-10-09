@@ -85,7 +85,7 @@ import cc.novelia.app.ui.theme.motionClickable
     var draftBoxOpen by rememberSaveable { mutableStateOf(false) }
     fun showFeed(value: Int) { source = value; page = 0 }
     Screen("社区", actions = {
-        IconButton(onClick = { draftBoxOpen = true }) { Icon(Icons.Outlined.Drafts, "新帖草稿箱") }
+        IconButton(onClick = { draftBoxOpen = true }) { Icon(Icons.Outlined.Drafts, "帖子草稿箱") }
         IconButton(onClick = { c.go("compose") }) { Icon(Icons.Outlined.Edit, "新建帖子草稿") }
         ForumAccountMenu(profile, hasUnreadStrikes, onOpen = { attentionRefresh++ }) { action ->
             when(action) {

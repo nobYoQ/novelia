@@ -1,9 +1,13 @@
 package cc.novelia.app.ui.community
 
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.navigation.compose.rememberNavController
@@ -20,12 +24,79 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
 import org.junit.Rule
 import org.junit.Test
+import org.junit.Assert.*
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class ForumEditorUiTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
     private val categories = listOf(ForumCategory(1, "announcements"), ForumCategory(100, "novel", (1L..4).map { ForumTag(it, "标签$it") }), ForumCategory(2, "feedback"))
+
+    private val latestArticle = Article(id = "f-91004", title = "最新帖子标题", content = "最新帖子正文", category = "小说讨论",
+        forumCategoryId = 100, forumTags = listOf(ForumTag(2, "标签2")))
+    private val oldEdit = ArticleDrafts.snapshot("旧帖子标题", "旧帖子正文", "意见反馈", 2, "feedback", emptyList())
+
+    @Test fun hiddenEditDraftRequiresExplicitChoiceAndCanStillBeRecovered() = withEditor(latestArticle, savedDraft = oldEdit) {
+        val app = compose.activity.application as NoveliaApplication
+        compose.onNodeWithText("发现本地修改草稿").assertIsDisplayed()
+        compose.onNodeWithTag("article-title").assertDoesNotExist()
+        compose.mainClock.advanceTimeBy(1000)
+        compose.runOnIdle { assertEquals(oldEdit, app.store.state.value.drafts["article:${latestArticle.id}"]) }
+        compose.onNodeWithText("继续本地草稿").performClick()
+        compose.onNodeWithTag("article-title").performScrollTo().assertTextContains("旧帖子标题")
+        compose.onNodeWithTag("article-body").performScrollTo().assertTextContains("旧帖子正文")
+        compose.onNodeWithText("意见反馈").performScrollTo().assertIsSelected()
+    }
+
+    @Test fun choosingLatestPostDiscardsOldEditAndDoesNotRecreateItOnExit() = withEditor(latestArticle, savedDraft = oldEdit) {
+        val app = compose.activity.application as NoveliaApplication
+        compose.onNodeWithText("使用最新帖子").performClick()
+        compose.onNodeWithTag("article-title").performScrollTo().assertTextContains("最新帖子标题")
+        compose.onNodeWithTag("article-body").performScrollTo().assertTextContains("最新帖子正文")
+        compose.onNodeWithText("标签2").performScrollTo().assertIsSelected()
+        compose.onNodeWithText("预览").performClick()
+        compose.onNodeWithText("编辑").performClick()
+        compose.mainClock.advanceTimeBy(1000)
+        compose.runOnIdle { assertFalse(app.store.state.value.drafts.containsKey("article:${latestArticle.id}")) }
+        compose.runOnUiThread { compose.activity.setContent {} }
+        compose.runOnIdle { assertFalse(app.store.state.value.drafts.containsKey("article:${latestArticle.id}")) }
+    }
+
+    @Test fun emptyDraftBoxUsesLatestPostAndOpeningEditorDoesNotCreateAnEditDraft() = withEditor(latestArticle) {
+        val app = compose.activity.application as NoveliaApplication
+        compose.onNodeWithText("发现本地修改草稿").assertDoesNotExist()
+        compose.onNodeWithTag("article-title").performScrollTo().assertTextContains("最新帖子标题")
+        compose.onNodeWithTag("article-body").performScrollTo().assertTextContains("最新帖子正文")
+        compose.mainClock.advanceTimeBy(1000)
+        compose.runOnIdle { assertFalse(app.store.state.value.drafts.containsKey("article:${latestArticle.id}")) }
+        compose.onNodeWithTag("article-body").performTextReplacement("新输入的正文")
+        compose.runOnUiThread { compose.activity.setContent {} }
+        compose.runOnIdle {
+            val stored = app.store.state.value.drafts.getValue("article:${latestArticle.id}")
+            assertEquals("新输入的正文", ArticleDrafts.read("article:${latestArticle.id}", stored).content)
+        }
+    }
+
+    @Test fun leavingBeforeChoosingDoesNotOverwriteTheOldDraft() = withEditor(latestArticle, savedDraft = oldEdit) {
+        val app = compose.activity.application as NoveliaApplication
+        compose.onNodeWithText("发现本地修改草稿").assertIsDisplayed()
+        compose.runOnUiThread { compose.activity.setContent {} }
+        compose.runOnIdle { assertEquals(oldEdit, app.store.state.value.drafts["article:${latestArticle.id}"]) }
+    }
+
+    @Test fun editDraftCanBeDeletedFromDraftBoxBeforeOpeningLatestPost() = withEditor(latestArticle, savedDraft = oldEdit, startInDraftBox = true) {
+        val app = compose.activity.application as NoveliaApplication
+        compose.onNodeWithText("旧帖子标题").assertExists()
+        compose.onNodeWithContentDescription("删除草稿 旧帖子标题").performClick()
+        compose.onNodeWithText("删除草稿").performClick()
+        compose.onNodeWithText("旧帖子标题").assertDoesNotExist()
+        compose.onNodeWithText("关闭").performClick()
+        compose.onNodeWithText("发现本地修改草稿").assertDoesNotExist()
+        compose.onNodeWithTag("article-title").performScrollTo().assertTextContains("最新帖子标题")
+        compose.onNodeWithTag("article-body").performScrollTo().assertTextContains("最新帖子正文")
+        compose.runOnUiThread { compose.activity.setContent {} }
+        compose.runOnIdle { assertFalse(app.store.state.value.drafts.containsKey("article:${latestArticle.id}")) }
+    }
 
     @Test fun newPostGuidanceRemainsVisibleAfterDismissingTheGeneralReminder() = withEditor(null, noticeDismissed = true) {
         compose.onNodeWithTag("forum-publishing-notice").assertExists()
@@ -97,7 +168,7 @@ class ForumEditorUiTest {
         compose.onNodeWithText("标签2").performScrollTo().assertIsSelected()
     }
 
-    private fun withEditor(article: Article?, noticeDismissed: Boolean = false, savedDraft: String? = null, check: () -> Unit) {
+    private fun withEditor(article: Article?, noticeDismissed: Boolean = false, savedDraft: String? = null, startInDraftBox: Boolean = false, check: () -> Unit) {
         val app = compose.activity.application as NoveliaApplication
         runBlocking { app.initialization.await() }
         val key = article?.let { "article:${it.id}" } ?: ArticleDrafts.newKey(true)
@@ -109,7 +180,9 @@ class ForumEditorUiTest {
                 compose.activity.setContent {
                     NoveliaTheme("light") {
                         val c = AppController(app, rememberNavController(), rememberCoroutineScope(), remember { SnackbarHostState() })
-                        ArticleEditor(c, article, categories, forum = true, newPostKey = key)
+                        var draftBox by remember { mutableStateOf(startInDraftBox) }
+                        if(draftBox) Column { ArticleDraftBox(c) { draftBox = false } }
+                        else ArticleEditor(c, article, categories, forum = true, newPostKey = key)
                     }
                 }
             }

@@ -8,6 +8,35 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class EditorStateRegressionTest {
+    @Test fun unchangedPostDoesNotBecomeADraftAndRevertingRemovesSavedEdits() {
+        var input = "服务器原文"
+        var stored: String? = null
+        val drafts = DraftPersistence({ input }, { stored = it }, baseline = input)
+        drafts.save()
+        assertNull(stored)
+        input = "本地修改"
+        drafts.save()
+        assertEquals(input, stored)
+        input = "服务器原文"
+        drafts.save()
+        assertNull(stored)
+        drafts.save() // 离开时也不能重新生成原文草稿。
+        assertNull(stored)
+    }
+
+    @Test fun revertingToOldPostWhileSubmissionIsPendingPreservesTheUnsubmittedRevert() {
+        var input = "服务器原文"
+        var stored: String? = null
+        val drafts = DraftPersistence({ input }, { stored = it }, baseline = input)
+        input = "提交的修改"
+        val submitted = input
+        drafts.save()
+        input = "服务器原文"
+        drafts.submittedSuccessfully(submitted)
+        drafts.save()
+        assertEquals("服务器原文", stored)
+    }
+
     @Test fun leavingBeforeDebounceSavesLatestInput() {
         var input = "已保存"
         var stored: String? = input

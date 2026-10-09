@@ -27,6 +27,37 @@ class EditorDraftLifecycleTest {
         return directory to LocalStore(isolatedContext)
     }
 
+    @Test fun unchangedArticleDoesNotCreateDraftAndRevertingEditsRemovesIt() {
+        val (directory, store) = isolatedStore()
+        var visible by mutableStateOf(true)
+        var text by mutableStateOf("最新帖子")
+        lateinit var persistence: DraftPersistence
+        try {
+            compose.setContent {
+                if(visible) persistence = rememberDraftPersistence(store, "article:test", baseline = "最新帖子") { text }
+            }
+            compose.runOnIdle {
+                persistence.save()
+                assertFalse(store.state.value.drafts.containsKey("article:test"))
+                text = "未提交修改"
+                persistence.save()
+                assertEquals(text, store.state.value.drafts["article:test"])
+                text = "最新帖子"
+                persistence.save()
+                assertFalse(store.state.value.drafts.containsKey("article:test"))
+                visible = false
+            }
+            compose.waitForIdle()
+            runBlocking { store.flush() }
+            assertFalse(LocalStore(store.context).state.value.drafts.containsKey("article:test"))
+        } finally {
+            compose.runOnIdle { visible = false }
+            compose.waitForIdle()
+            runBlocking { store.flush() }
+            directory.deleteRecursively()
+        }
+    }
+
     @Test fun disposalSavesInputChangedInTheSameFrameAsLeaving() {
         val (directory, store) = isolatedStore()
         var visible by mutableStateOf(true)

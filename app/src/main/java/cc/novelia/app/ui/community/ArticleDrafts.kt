@@ -3,6 +3,7 @@ package cc.novelia.app.ui.community
 import cc.novelia.app.data.model.ForumCategory
 import cc.novelia.app.data.storage.appJson
 import java.util.UUID
+import kotlinx.serialization.encodeToString
 
 internal data class ArticleDraft(val key: String, val title: String, val content: String, val category: String,
     val categoryId: Long? = null, val tagIds: List<Long>? = null, val categorySlug: String? = null) {
@@ -24,6 +25,13 @@ internal object ArticleDrafts {
     fun isForumNewPostKey(key: String): Boolean = matches(key, "article:forum-new")
     fun isNewPostKey(key: String): Boolean = matches(key, "article:new") || isForumNewPostKey(key)
 
+    fun editedArticleId(key: String): String? = key.takeIf { it.startsWith("article:") }
+        ?.removePrefix("article:")?.takeIf { it.isNotBlank() && ':' !in it && it !in setOf("new", "forum-new") }
+
+    fun snapshot(title: String, content: String, category: String, categoryId: Long?, categorySlug: String?, tagIds: List<Long>): String =
+        appJson.encodeToString(mapOf("title" to title, "content" to content, "category" to category,
+            "categoryId" to categoryId.toString(), "categorySlug" to categorySlug.orEmpty(), "tagIds" to tagIds.joinToString(",")))
+
     fun read(key: String, snapshot: String): ArticleDraft {
         val fields = runCatching { appJson.decodeFromString<Map<String, String>>(snapshot) }.getOrNull()
         return ArticleDraft(key, fields?.get("title").orEmpty(), fields?.get("content") ?: snapshot,
@@ -33,6 +41,6 @@ internal object ArticleDrafts {
             fields?.get("categorySlug")?.takeIf { it.isNotBlank() })
     }
 
-    fun newPosts(drafts: Map<String, String>): List<ArticleDraft> = drafts.entries
-        .filter { isNewPostKey(it.key) }.map { read(it.key, it.value) }.reversed()
+    fun posts(drafts: Map<String, String>): List<ArticleDraft> = drafts.entries
+        .filter { isNewPostKey(it.key) || editedArticleId(it.key) != null }.map { read(it.key, it.value) }.reversed()
 }

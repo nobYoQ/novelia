@@ -10,6 +10,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import cc.novelia.app.data.catalog.ForumLinks
 import cc.novelia.app.data.network.encodeSegment
 import cc.novelia.app.ui.components.AppAlertDialog
 import cc.novelia.app.ui.components.AppLazyColumn
@@ -19,22 +20,24 @@ import cc.novelia.app.ui.navigation.AppController
 
 @Composable internal fun ArticleDraftBox(c: AppController, onClose: () -> Unit) {
     val state by c.store.state.collectAsStateWithLifecycle()
-    val drafts = remember(state.drafts) { ArticleDrafts.newPosts(state.drafts) }
+    val drafts = remember(state.drafts) { ArticleDrafts.posts(state.drafts) }
     var deleting by remember { mutableStateOf<ArticleDraft?>(null) }
     Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("新帖草稿箱", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+        Text("帖子草稿箱", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
         TextButton(onClick = onClose) { Text("关闭") }
     }
-    Text("草稿保存在此设备，旧站与论坛的草稿分别续写。", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.bodySmall)
+    Text("新帖和已发布帖子的修改草稿都保存在此设备，旧站与论坛的草稿分别续写。", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.bodySmall)
     FilledTonalButton(onClick = { onClose(); c.go("compose") }, Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
         Icon(Icons.Outlined.Add, null, Modifier.size(18.dp)); Text(" 新建草稿")
     }
     AppLazyColumn(Modifier.fillMaxWidth().heightIn(max = 520.dp)) {
-        if(drafts.isEmpty()) item { EmptyState("还没有新帖草稿", "新建一篇帖子，输入会自动保存。", Icons.Outlined.Drafts) }
+        if(drafts.isEmpty()) item { EmptyState("还没有帖子草稿", "新建帖子或修改已发布的帖子，输入会自动保存。", Icons.Outlined.Drafts) }
         items(drafts, key = { it.key }) { draft ->
-            val source = if(ArticleDrafts.isForumNewPostKey(draft.key)) "论坛" else "旧站 · ${categories[draft.category]}"
-            MenuRow(draft.displayTitle, "$source · ${draft.content.length} 字 · 点击续写", Icons.Outlined.Description,
-                { onClose(); c.go("compose?draft=${encodeSegment(draft.key)}") },
+            val articleId = ArticleDrafts.editedArticleId(draft.key)
+            val source = if(ArticleDrafts.isForumNewPostKey(draft.key) || articleId?.let(ForumLinks::postId) != null) "论坛" else "旧站 · ${categories[draft.category]}"
+            val kind = if(articleId == null) "新帖" else "修改已发布帖子"
+            MenuRow(draft.displayTitle, "$source · $kind · ${draft.content.length} 字 · 点击续写", Icons.Outlined.Description,
+                { onClose(); c.go(if(articleId == null) "compose?draft=${encodeSegment(draft.key)}" else "compose?article=${encodeSegment(articleId)}") },
                 trailing = { IconButton(onClick = { deleting = draft }) { Icon(Icons.Outlined.DeleteOutline, "删除草稿 ${draft.displayTitle}") } })
         }
     }

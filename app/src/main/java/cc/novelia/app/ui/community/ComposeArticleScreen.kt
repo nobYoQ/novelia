@@ -19,7 +19,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.model.Article
-import cc.novelia.app.data.storage.appJson
+import cc.novelia.app.ui.components.AppAlertDialog
 import cc.novelia.app.ui.components.AppScrollColumn
 import cc.novelia.app.ui.components.AsyncContent
 import cc.novelia.app.ui.components.ChoiceRow
@@ -31,7 +31,6 @@ import cc.novelia.app.ui.markdown.rememberMarkdownRenderer
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.navigation.ObserveForumLogin
 import cc.novelia.app.ui.theme.MotionContent
-import kotlinx.serialization.encodeToString
 
 @Composable fun ComposeArticleScreen(c: AppController, articleId: String?, draftKey: String? = null) {
     val requestedKey = draftKey?.takeIf(ArticleDrafts::isNewPostKey)
@@ -55,12 +54,35 @@ import kotlinx.serialization.encodeToString
     val generatedKey = rememberSaveable(forum) { ArticleDrafts.newKey(forum) }
     val key = article?.id?.let { "article:$it" } ?: newPostKey ?: generatedKey
     val draft = remember(key) { c.store.state.value.drafts[key] }
-    val saved = remember(key) { draft?.let { ArticleDrafts.read(key, it) } }
+    val originalCategoryId = article?.forumCategoryId ?: writableCategories.firstOrNull { it.slug == "novel" }?.id ?: writableCategories.firstOrNull()?.id
+    val originalCategory = forumCategories.firstOrNull { it.id == originalCategoryId }
+    val originalTags = article?.forumTags?.map { it.id }.orEmpty().let { ids ->
+        if(forum) ids.filter { id -> originalCategory?.tags.orEmpty().any { it.id == id } }.distinct() else ids
+    }
+    val baseline = remember(article, originalCategoryId, originalCategory?.slug, originalTags) {
+        article?.let { ArticleDrafts.snapshot(it.title, it.content, it.category, originalCategoryId, originalCategory?.slug, originalTags) }
+    }
+    var useSavedDraft by rememberSaveable(key) { mutableStateOf(article == null) }
+    var chooseDraft by rememberSaveable(key) { mutableStateOf(article != null && draft != null && draft != baseline) }
+    if(chooseDraft) {
+        Screen("编辑帖子", c::back) { padding ->
+            Text("已加载最新帖子，请选择要继续编辑的内容。", Modifier.padding(padding).padding(20.dp))
+        }
+        AppAlertDialog(onDismissRequest = c::back, title = { Text("发现本地修改草稿") },
+            text = { Text("本地草稿可能早于已发布内容。选择使用最新帖子将删除这份本地草稿；也可以继续编辑草稿。") },
+            confirmButton = { TextButton(onClick = {
+                c.store.update { it.copy(drafts = it.drafts - key) }
+                useSavedDraft = false; chooseDraft = false
+            }) { Text("使用最新帖子") } },
+            dismissButton = { TextButton(onClick = { useSavedDraft = true; chooseDraft = false }) { Text("继续本地草稿") } })
+        return
+    }
+    val saved = remember(key, useSavedDraft) { if(useSavedDraft) draft?.let { ArticleDrafts.read(key, it) } else null }
     var title by rememberSaveable(key) { mutableStateOf(saved?.title ?: article?.title.orEmpty()) }; var content by rememberSaveable(key) { mutableStateOf(saved?.content ?: article?.content.orEmpty()) }; var category by rememberSaveable(key) { mutableStateOf(saved?.category ?: article?.category ?: "General") }; var preview by rememberSaveable(key) { mutableStateOf(false) }; var sending by remember { mutableStateOf(false) }
     val persistenceError by c.store.persistenceError.collectAsStateWithLifecycle()
     val editorState = rememberSaveableStateHolder()
     var categoryId by rememberSaveable(key) { mutableStateOf(if(forum && saved != null) saved.forumCategory(forumCategories)?.id
-        else article?.forumCategoryId ?: writableCategories.firstOrNull { it.slug == "novel" }?.id ?: writableCategories.firstOrNull()?.id) }
+        else originalCategoryId) }
     var tagIds by rememberSaveable(key) {
         val restored = if(forum && saved != null) saved.forumTags(forumCategories) else saved?.tagIds ?: article?.forumTags?.map { it.id }.orEmpty()
         val validIds = forumCategories.firstOrNull { it.id == categoryId }?.tags?.map { it.id }.orEmpty().toSet()
@@ -78,9 +100,8 @@ import kotlinx.serialization.encodeToString
 
     val renderer = rememberMarkdownRenderer(c, article?.id?.let(ForumLinks::articleUrl) ?: if(forum) ForumLinks.ORIGIN else null)
     val focusManager = LocalFocusManager.current
-    fun draftSnapshot() = appJson.encodeToString(mapOf("title" to title, "content" to content, "category" to category,
-        "categoryId" to categoryId.toString(), "categorySlug" to selectedForumCategory?.slug.orEmpty(), "tagIds" to tagIds.joinToString(",")))
-    val draftPersistence = rememberDraftPersistence(c.store, key, ::draftSnapshot)
+    fun draftSnapshot() = ArticleDrafts.snapshot(title, content, category, categoryId, selectedForumCategory?.slug, tagIds)
+    val draftPersistence = rememberDraftPersistence(c.store, key, baseline, ::draftSnapshot)
     LaunchedEffect(title, content, category, categoryId, tagIds) { kotlinx.coroutines.delay(700); draftPersistence.save() }
     Screen(if(article == null) "写一篇帖子" else "编辑帖子", c::back, actions = { TextButton(onClick = { focusManager.clearFocus(); preview = !preview }) { Text(if(preview) "编辑" else "预览") } }) { padding ->
         BoxWithConstraints(Modifier.padding(padding).consumeWindowInsets(padding).imePadding().fillMaxSize()) {
@@ -116,7 +137,7 @@ import kotlinx.serialization.encodeToString
                         MarkdownEditor(content, { content = it }, editorHeight, unicodeLimit = if(forum) ForumRules.POST_LIMIT else null)
                     }
                     if(forumError != null) Text(forumError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                    Text(persistenceError ?: if(article == null) "草稿自动保存在此设备，可从社区草稿箱继续写作。" else "草稿自动保存在此设备，重新编辑此帖时恢复。", style = MaterialTheme.typography.bodySmall, color = if(persistenceError == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error)
+                    Text(persistenceError ?: if(article == null) "草稿自动保存在此设备，可从社区草稿箱继续写作。" else "修改自动保存在此设备，可从帖子草稿箱管理；重新编辑时可选择最新帖子或本地草稿。", style = MaterialTheme.typography.bodySmall, color = if(persistenceError == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error)
                     OutlinedButton(onClick = { c.action {
                         check(c.store.recoveryIssue.value == null) { "本地资料处于恢复保护状态，暂时无法保存草稿" }
                         draftPersistence.save(); c.store.flush(); c.back()
