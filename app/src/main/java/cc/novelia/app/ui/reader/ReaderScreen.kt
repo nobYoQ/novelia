@@ -376,8 +376,10 @@ import kotlinx.serialization.encodeToString
         val density = LocalDensity.current
         // 分页模式预留固定页脚，不随工具栏或按钮显隐变化。
         val pageProgressHeight = with(density) { 16.sp.toDp() } + 12.dp
-        // 搜索框和键盘也属于浮层，正文视口仅受系统栏和屏幕缺口约束。
-        val readingInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
+        val safeInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
+        // 隐藏状态栏时正文延伸到顶部，避免屏幕缺口仍留出整条空白；
+        // 保留横屏两侧和底部安全区，目录与引导控件仍避让全部系统区域。
+        val readingInsets = if(settings.hideStatusBar) safeInsets.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom) else safeInsets
         val safeTop = readingInsets.getTop(density)
         // 恢复定位或重新分页期间的中间画面不能覆盖真实进度。两种模式统一保存正文下标 + 1，
         // 因为滚动列表的第 0 项是章标题；字符偏移支持重排，像素偏移用于恢复原滚动布局。
@@ -694,7 +696,7 @@ import kotlinx.serialization.encodeToString
         ReaderPageTheme(settings.resolvedTheme == "monochrome") {
         Row(Modifier.fillMaxSize().background(background).testTag(if(wide) "reader-wide-layout" else "reader-compact-layout")) {
         if(wide) {
-            Surface(Modifier.width(292.dp).fillMaxHeight().windowInsetsPadding(readingInsets), color = MaterialTheme.colorScheme.surface) {
+            Surface(Modifier.width(292.dp).fillMaxHeight().windowInsetsPadding(safeInsets), color = MaterialTheme.colorScheme.surface) {
                 ReaderTocPane(c, ref, chapterId, tocScroll, tocQuery, { tocQuery = it }, tocReversed, { tocReversed = it }, tocLocateRequest, { tocLocateRequest = 0; tocLocated = true }, { if(it != chapterId) rememberReadingPlace(); openChapter(it) })
             }
             VerticalDivider(Modifier.fillMaxHeight())
@@ -874,7 +876,7 @@ import kotlinx.serialization.encodeToString
             }
             }
             if(showTapTutorial) ReaderTapTutorial(settings.staticPagination, settings.eInkMode || eInkInteraction,
-                readingInsets, settings.width, pageProgressHeight, Modifier.matchParentSize()) {
+                safeInsets, settings.width, pageProgressHeight, Modifier.matchParentSize()) {
                 c.store.update { it.copy(readerTapTutorialSeen = true) }
             }
         }

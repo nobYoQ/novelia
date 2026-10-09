@@ -8,6 +8,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
@@ -102,5 +103,74 @@ class ReaderPanelSessionTest {
             compose.mainClock.advanceTimeByFrame()
             assertEquals(expanded, height(), 1f)
         } finally { compose.mainClock.autoAdvance = true }
+    }
+
+    @Test fun preferencesHandleDragExpandsAndShortDownwardDragReturnsToHalfHeight() = verifyDragResizing(reduced = false)
+
+    @Test fun reducedMotionPreferencesTitleDragKeepsTheSameTwoHeightStops() = verifyDragResizing(reduced = true)
+
+    private fun verifyDragResizing(reduced: Boolean) {
+        if(!reduced) assumeTrue(ValueAnimator.areAnimatorsEnabled())
+        var open by mutableStateOf(true)
+        var settings by mutableStateOf(ReaderSettings())
+        lateinit var state: ReaderPreferencesState
+        compose.setContent {
+            MaterialTheme {
+                CompositionLocalProvider(LocalReducedMotion provides reduced) {
+                    state = rememberReaderPreferencesState(open)
+                    if(open) ReaderPreferencesSheet({ open = false }) { expanded, setExpanded ->
+                        ReaderPreferences(settings, state = state, modifier = Modifier.fillMaxSize(), headerActions = {
+                            Button(onClick = { setExpanded(!expanded) }) { Text(if(expanded) "收起面板" else "展开面板") }
+                        }) { settings = it }
+                    }
+                }
+            }
+        }
+        fun height() = compose.onNodeWithTag("reader-preferences-panel").getUnclippedBoundsInRoot().let { (it.bottom - it.top).value }
+        fun drag(distanceDp: Float) {
+            val distance = with(compose.density) { distanceDp.dp.toPx() }
+            val target = if(reduced) compose.onNodeWithText("阅读偏好") else compose.onNodeWithTag("reader-preferences-drag-handle")
+            target.performTouchInput { swipe(center, center + Offset(0f, distance), durationMillis = 300) }
+            compose.waitForIdle()
+        }
+        val halfHeight = height()
+        drag(-64f)
+        val largeHeight = height()
+        assertTrue("上拖应展开为大半屏", largeHeight > halfHeight * 1.4f)
+        compose.onNodeWithText("收起面板").assertIsDisplayed()
+        drag(40f)
+        assertEquals("轻下拖应回到半屏", halfHeight, height(), 1f)
+        compose.runOnIdle { assertTrue("大半屏下拖不应关闭面板", open) }
+
+        // 取消和轻微手抖不提交高度变化。
+        val cancelDistance = with(compose.density) { 64.dp.toPx() }
+        compose.onNodeWithText("阅读偏好").performTouchInput {
+            down(center); moveBy(Offset(0f, -cancelDistance)); cancel()
+        }
+        assertEquals(halfHeight, height(), 1f)
+        drag(-8f)
+        assertEquals(halfHeight, height(), 1f)
+
+        // 列表与滑条仍优先消费自己的手势。
+        compose.onNodeWithText("翻页").performClick()
+        compose.onNodeWithTag("reader-toolbar-transparency").performScrollTo()
+        compose.runOnIdle { assertTrue(state.scrollStates[1].value > 0) }
+        assertEquals(halfHeight, height(), 1f)
+        compose.onNodeWithTag("reader-toolbar-transparency").performTouchInput {
+            swipe(Offset(width * .25f, centerY), Offset(width * .8f, centerY), durationMillis = 300)
+        }
+        compose.runOnIdle { assertTrue(settings.resolvedToolbarTransparency > .25f) }
+        assertEquals(halfHeight, height(), 1f)
+
+        // 拖拽和原有展开按钮共用状态，切换高度不重建偏好会话。
+        compose.onNodeWithText("展开面板").performClick()
+        assertEquals(largeHeight, height(), 1f)
+        drag(40f)
+        compose.onNodeWithText("翻页").assertIsSelected()
+        assertEquals(halfHeight, height(), 1f)
+        compose.runOnIdle { assertTrue(settings.resolvedToolbarTransparency > .25f) }
+        drag(100f)
+        compose.onNodeWithTag("reader-preferences-panel").assertDoesNotExist()
+        compose.runOnIdle { assertFalse(open) }
     }
 }
