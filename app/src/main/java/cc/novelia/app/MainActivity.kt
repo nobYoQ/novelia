@@ -10,17 +10,14 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.*
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.*
@@ -48,6 +45,7 @@ import cc.novelia.app.ui.downloads.DownloadsScreen
 import cc.novelia.app.ui.feedback.ObserveDownloadCelebrations
 import cc.novelia.app.ui.feedback.StickerSnackbarHost
 import cc.novelia.app.ui.navigation.AppController
+import cc.novelia.app.ui.navigation.RootDestinationLayout
 import cc.novelia.app.ui.navigation.switchRootTab
 import cc.novelia.app.ui.navigation.ObserveClipboardLinks
 import cc.novelia.app.ui.notes.NotesScreen
@@ -148,86 +146,97 @@ class MainActivity : ComponentActivity() {
                 cc.novelia.app.ui.feedback.ObserveAppUpdates(controller, show = route?.startsWith("reader/") != true)
                 ObserveClipboardLinks(controller, externalLinkPending = link != null)
                 val roots = listOf("shelf", "discover?query={query}", "community", "profile")
-                val tabs = listOf(Triple("shelf", "书架", Icons.Outlined.CollectionsBookmark), Triple("discover", "发现", Icons.Outlined.Explore), Triple("community", "社区", Icons.Outlined.Forum), Triple("profile", "我的", Icons.Outlined.PersonOutline))
                 fun switchTab(target: String) { nav.switchRootTab(target) }
-                val showNavigation = route in roots
-                var compactShelfDetail by remember { mutableStateOf(false) }
-                BoxWithConstraints(Modifier.fillMaxSize()) {
-                    val wide = maxWidth >= 600.dp
-                    val compactRail = maxHeight < 480.dp
-                    Scaffold(snackbarHost = { StickerSnackbarHost(snackbar) }, bottomBar = {
-                        if(showNavigation && !wide && !(route == "shelf" && compactShelfDetail)) NavigationBar { tabs.forEach { (target, label, icon) ->
-                            val selected = route?.startsWith(target) == true
-                            NavigationBarItem(selected, { if(!selected) switchTab(target) }, { NavigationIcon(icon, label, selected) }, label = { Text(label) })
-                        } }
-                    }) { padding ->
-                        Row(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding())) {
-                            if(wide && showNavigation) NavigationRail { Spacer(Modifier.height(if(compactRail) 12.dp else 40.dp)); tabs.forEach { (target, label, icon) ->
-                                val selected = route?.startsWith(target) == true
-                                NavigationRailItem(selected, { if(!selected) switchTab(target) }, { NavigationIcon(icon, label, selected) }, label = if(compactRail) null else { { Text(label) } })
-                            } }
-                            val duration = if(appReducedMotion()) 0 else AppMotion.Standard
-                            val travel = with(LocalDensity.current) { 24.dp.roundToPx() }
-                            fun staticReader(entry: androidx.navigation.NavBackStackEntry): Boolean = entry.destination.route?.startsWith("reader/") == true &&
-                                "${entry.arguments?.getString("provider")}/${entry.arguments?.getString("id")}" in appearance.eInkBooks
-                            NavHost(nav, startDestination = "shelf", modifier = Modifier.weight(1f), enterTransition = {
-                                if(duration == 0 || staticReader(initialState) || staticReader(targetState)) return@NavHost EnterTransition.None
-                                val from = roots.indexOf(initialState.destination.route)
-                                val to = roots.indexOf(targetState.destination.route)
-                                val direction = if(from >= 0 && to >= 0 && to < from) -1 else 1
-                                fadeIn(tween(duration)) + slideInHorizontally(tween(duration, easing = FastOutSlowInEasing)) { direction * travel }
-                            }, exitTransition = {
-                                if(duration == 0 || staticReader(initialState) || staticReader(targetState)) return@NavHost ExitTransition.None
-                                val from = roots.indexOf(initialState.destination.route)
-                                val to = roots.indexOf(targetState.destination.route)
-                                val direction = if(from >= 0 && to >= 0 && to < from) -1 else 1
-                                fadeOut(tween(AppMotion.Exit)) + slideOutHorizontally(tween(duration, easing = FastOutSlowInEasing)) { -direction * travel / 2 }
-                            }, popEnterTransition = {
-                                if(duration == 0 || staticReader(initialState) || staticReader(targetState)) return@NavHost EnterTransition.None
-                                fadeIn(tween(duration)) + slideInHorizontally(tween(duration, easing = FastOutSlowInEasing)) { -travel / 2 }
-                            }, popExitTransition = {
-                                if(duration == 0 || staticReader(initialState) || staticReader(targetState)) return@NavHost ExitTransition.None
-                                fadeOut(tween(AppMotion.Exit)) + slideOutHorizontally(tween(duration, easing = FastOutSlowInEasing)) { travel }
-                            }) {
-                                composable("shelf") { entry -> AdaptiveLibraryScreen(controller, entry.savedStateHandle) { compactShelfDetail = it } }
-                                composable("discover?query={query}") { DiscoverScreen(controller, it.arguments?.getString("query").orEmpty()) }
-                                composable("rank") { RankScreen(controller) }
-                                composable("wenku-new") { WenkuEditorScreen(controller) }
-                                composable("community") { CommunityScreen(controller) }
-                                composable("profile") { ProfileScreen(controller) }
-                                composable("book/{provider}/{id}") { BookScreen(controller, BookRef(it.arguments!!.getString("provider")!!, it.arguments!!.getString("id")!!)) }
-                                composable("reader/{provider}/{id}/{chapter}") { ReaderScreen(controller, BookRef(it.arguments!!.getString("provider")!!, it.arguments!!.getString("id")!!), it.arguments!!.getString("chapter")!!) }
-                                composable("article/{id}") { ArticleScreen(controller, it.arguments!!.getString("id")!!, it.savedStateHandle) }
-                                composable("compose?article={article}&draft={draft}") { ComposeArticleScreen(controller, it.arguments?.getString("article"), it.arguments?.getString("draft")) }
-                                composable("login") { LoginScreen(controller) }
-                                composable("forum-login") { LoginScreen(controller, forum = true) }
-                                composable("forum-strikes") { ForumStrikesScreen(controller) }
-                                composable("forum-rules") { ForumRulesScreen(controller) }
-                                composable("settings?section={section}") { entry -> SettingsScreen(controller, entry.arguments?.getString("section")) }
-                                composable("backup") { LibraryBackupScreen(controller) }
-                                composable("keywords") { KeywordLibraryScreen(controller) }
-                                composable("sync") { CloudSyncScreen(controller) }
-                                // 外层已留出导航栏空间；同步页面本身也可独立处理系统边距。
-                                composable("webdav") { Box(Modifier.consumeWindowInsets(WindowInsets.navigationBars)) { WebDavSyncScreen(controller) } }
-                                composable("webdav-server") { Box(Modifier.consumeWindowInsets(WindowInsets.navigationBars)) { WebDavServerScreen(controller) } }
-                                composable("updates") { BookUpdatesScreen(controller) }
-                                composable("downloads") { DownloadsScreen(controller) }
-                                composable("tools") { ToolsScreen(controller) }
-                                // 保留已移除功能的路由，使升级前保存的返回栈仍能恢复。
-                                composable("ocr") {
-                                    LaunchedEffect(Unit) {
-                                        nav.navigate("tools") { popUpTo("ocr") { inclusive = true }; launchSingleTop = true }
-                                    }
+                var navigationBarHeight by remember { mutableStateOf(0.dp) }
+                fun reportNavigationBarHeight(root: String): (Dp) -> Unit = { height ->
+                    if(route?.startsWith(root) == true) navigationBarHeight = height
+                }
+                Scaffold(snackbarHost = {
+                    Box(Modifier.padding(bottom = if(route in roots) navigationBarHeight else 0.dp)) {
+                        StickerSnackbarHost(snackbar)
+                    }
+                }) { padding ->
+                    // NavHost 的尺寸不随当前路由改变；各根页面自己持有侧栏/底栏。
+                    val bottomPadding = PaddingValues(bottom = padding.calculateBottomPadding())
+                    Box(Modifier.fillMaxSize().padding(bottomPadding).consumeWindowInsets(bottomPadding)) {
+                        val duration = if(appReducedMotion()) 0 else AppMotion.Standard
+                        val travel = with(LocalDensity.current) { 24.dp.roundToPx() }
+                        fun staticReader(entry: androidx.navigation.NavBackStackEntry): Boolean = entry.destination.route?.startsWith("reader/") == true &&
+                            "${entry.arguments?.getString("provider")}/${entry.arguments?.getString("id")}" in appearance.eInkBooks
+                        NavHost(nav, startDestination = "shelf", modifier = Modifier.fillMaxSize(), enterTransition = {
+                            if(duration == 0 || staticReader(initialState) || staticReader(targetState)) return@NavHost EnterTransition.None
+                            val from = roots.indexOf(initialState.destination.route)
+                            val to = roots.indexOf(targetState.destination.route)
+                            val direction = if(from >= 0 && to >= 0 && to < from) -1 else 1
+                            fadeIn(tween(duration)) + slideInHorizontally(tween(duration, easing = FastOutSlowInEasing)) { direction * travel }
+                        }, exitTransition = {
+                            if(duration == 0 || staticReader(initialState) || staticReader(targetState)) return@NavHost ExitTransition.None
+                            val from = roots.indexOf(initialState.destination.route)
+                            val to = roots.indexOf(targetState.destination.route)
+                            val direction = if(from >= 0 && to >= 0 && to < from) -1 else 1
+                            fadeOut(tween(AppMotion.Exit)) + slideOutHorizontally(tween(duration, easing = FastOutSlowInEasing)) { -direction * travel / 2 }
+                        }, popEnterTransition = {
+                            if(duration == 0 || staticReader(initialState) || staticReader(targetState)) return@NavHost EnterTransition.None
+                            fadeIn(tween(duration)) + slideInHorizontally(tween(duration, easing = FastOutSlowInEasing)) { -travel / 2 }
+                        }, popExitTransition = {
+                            if(duration == 0 || staticReader(initialState) || staticReader(targetState)) return@NavHost ExitTransition.None
+                            fadeOut(tween(AppMotion.Exit)) + slideOutHorizontally(tween(duration, easing = FastOutSlowInEasing)) { travel }
+                        }) {
+                            composable("shelf") { entry ->
+                                var compactShelfDetail by rememberSaveable { mutableStateOf(false) }
+                                RootDestinationLayout("shelf", ::switchTab, hideBottomNavigation = compactShelfDetail,
+                                    onNavigationBarHeightChanged = reportNavigationBarHeight("shelf")) {
+                                    AdaptiveLibraryScreen(controller, entry.savedStateHandle) { compactShelfDetail = it }
                                 }
-                                composable("notes") { NotesScreen(controller) }
-                                composable("blocked") { BlockedScreen(controller) }
-                                composable("history") { HistoryScreen(controller) }
-                                composable("glossary/{provider}/{id}") { GlossaryScreen(controller, BookRef(it.arguments!!.getString("provider")!!, it.arguments!!.getString("id")!!)) }
-                                composable("edit/{provider}/{id}") { EditBookScreen(controller, BookRef(it.arguments!!.getString("provider")!!, it.arguments!!.getString("id")!!)) }
-                                composable("about") { AboutScreen(controller) }
-                                composable("licenses") { OpenSourceLicensesScreen(controller) }
-                                composable("web?url={url}") { SiteWebScreen(controller, it.arguments?.getString("url").orEmpty()) }
                             }
+                            composable("discover?query={query}") { entry ->
+                                RootDestinationLayout("discover", ::switchTab,
+                                    onNavigationBarHeightChanged = reportNavigationBarHeight("discover")) {
+                                    DiscoverScreen(controller, entry.arguments?.getString("query").orEmpty())
+                                }
+                            }
+                            composable("rank") { RankScreen(controller) }
+                            composable("wenku-new") { WenkuEditorScreen(controller) }
+                            composable("community") {
+                                RootDestinationLayout("community", ::switchTab,
+                                    onNavigationBarHeightChanged = reportNavigationBarHeight("community")) { CommunityScreen(controller) }
+                            }
+                            composable("profile") {
+                                RootDestinationLayout("profile", ::switchTab,
+                                    onNavigationBarHeightChanged = reportNavigationBarHeight("profile")) { ProfileScreen(controller) }
+                            }
+                            composable("book/{provider}/{id}") { BookScreen(controller, BookRef(it.arguments!!.getString("provider")!!, it.arguments!!.getString("id")!!)) }
+                            composable("reader/{provider}/{id}/{chapter}") { ReaderScreen(controller, BookRef(it.arguments!!.getString("provider")!!, it.arguments!!.getString("id")!!), it.arguments!!.getString("chapter")!!) }
+                            composable("article/{id}") { ArticleScreen(controller, it.arguments!!.getString("id")!!, it.savedStateHandle) }
+                            composable("compose?article={article}&draft={draft}") { ComposeArticleScreen(controller, it.arguments?.getString("article"), it.arguments?.getString("draft")) }
+                            composable("login") { LoginScreen(controller) }
+                            composable("forum-login") { LoginScreen(controller, forum = true) }
+                            composable("forum-strikes") { ForumStrikesScreen(controller) }
+                            composable("forum-rules") { ForumRulesScreen(controller) }
+                            composable("settings?section={section}") { entry -> SettingsScreen(controller, entry.arguments?.getString("section")) }
+                            composable("backup") { LibraryBackupScreen(controller) }
+                            composable("keywords") { KeywordLibraryScreen(controller) }
+                            composable("sync") { CloudSyncScreen(controller) }
+                            // 外层已留出导航栏空间；同步页面本身也可独立处理系统边距。
+                            composable("webdav") { Box(Modifier.consumeWindowInsets(WindowInsets.navigationBars)) { WebDavSyncScreen(controller) } }
+                            composable("webdav-server") { Box(Modifier.consumeWindowInsets(WindowInsets.navigationBars)) { WebDavServerScreen(controller) } }
+                            composable("updates") { BookUpdatesScreen(controller) }
+                            composable("downloads") { DownloadsScreen(controller) }
+                            composable("tools") { ToolsScreen(controller) }
+                            // 保留已移除功能的路由，使升级前保存的返回栈仍能恢复。
+                            composable("ocr") {
+                                LaunchedEffect(Unit) {
+                                    nav.navigate("tools") { popUpTo("ocr") { inclusive = true }; launchSingleTop = true }
+                                }
+                            }
+                            composable("notes") { NotesScreen(controller) }
+                            composable("blocked") { BlockedScreen(controller) }
+                            composable("history") { HistoryScreen(controller) }
+                            composable("glossary/{provider}/{id}") { GlossaryScreen(controller, BookRef(it.arguments!!.getString("provider")!!, it.arguments!!.getString("id")!!)) }
+                            composable("edit/{provider}/{id}") { EditBookScreen(controller, BookRef(it.arguments!!.getString("provider")!!, it.arguments!!.getString("id")!!)) }
+                            composable("about") { AboutScreen(controller) }
+                            composable("licenses") { OpenSourceLicensesScreen(controller) }
+                            composable("web?url={url}") { SiteWebScreen(controller, it.arguments?.getString("url").orEmpty()) }
                         }
                     }
                 }
@@ -244,18 +253,4 @@ class MainActivity : ComponentActivity() {
     }
     override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); receive(intent) }
     private fun receive(intent: Intent) { incoming.value = intent.dataString ?: intent.getStringExtra(Intent.EXTRA_TEXT) }
-}
-
-@Composable private fun NavigationIcon(icon: ImageVector, label: String, selected: Boolean) {
-    val reducedMotion = appReducedMotion()
-    val emphasis = animateFloatAsState(
-        targetValue = if(selected) 1f else 0f,
-        animationSpec = tween(if(reducedMotion) 0 else AppMotion.Release, easing = FastOutSlowInEasing),
-        label = "navigation selection",
-    )
-    Icon(icon, label, Modifier.graphicsLayer {
-        val scale = if(reducedMotion) 1f else 1f + .08f * emphasis.value
-        scaleX = scale
-        scaleY = scale
-    })
 }
