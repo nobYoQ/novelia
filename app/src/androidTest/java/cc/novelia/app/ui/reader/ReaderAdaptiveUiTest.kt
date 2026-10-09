@@ -36,6 +36,57 @@ import org.junit.Test
 class ReaderAdaptiveUiTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun nextChapterAndLayoutChangesReuseTheLoadedDirectory() = verifyDirectoryReuse(eInk = false)
+
+    @Test fun eInkNextChapterAndLayoutChangesReuseTheLoadedDirectory() = verifyDirectoryReuse(eInk = true)
+
+    @Test fun reopeningTheBookStartsANewDirectorySession() {
+        lateinit var controller: AppController
+        withReader(1024.dp, onController = { controller = it }) { _, ref, _ ->
+            val previous = controller.readerToc(ref)
+            compose.runOnIdle {
+                controller.back()
+                controller.read(ref, "second")
+            }
+            compose.waitUntil(10_000) { compose.onAllNodesWithTag("reader-toc-chapter-second").fetchSemanticsNodes().any { it.config[SemanticsProperties.Selected] } }
+            compose.runOnIdle {
+                assertNotSame(previous, controller.readerToc(ref))
+                assertNotNull(controller.readerToc(ref).toc)
+            }
+        }
+    }
+
+    private fun verifyDirectoryReuse(eInk: Boolean) {
+        lateinit var controller: AppController
+        withReader(1024.dp, eInk, onController = { controller = it }) { app, ref, resize ->
+            val directory = controller.readerToc(ref)
+            compose.waitUntil(10_000) { directory.toc != null }
+            val original = requireNotNull(directory.toc)
+            compose.onNodeWithContentDescription("下一章").performClick()
+            compose.waitUntil(10_000) { app.store.state.value.positions[ref.key]?.chapterId == "second" }
+            compose.onNodeWithTag("reader-toc-chapter-second").assertIsSelected()
+            compose.onNodeWithTag("reader-toc-loading").assertDoesNotExist()
+            compose.runOnIdle {
+                assertSame(directory, controller.readerToc(ref))
+                assertSame(original, directory.toc)
+                assertEquals(100, app.store.state.value.positions[ref.key]?.chapterCount)
+                resize(390.dp)
+            }
+            repeat(2) {
+                compose.onNodeWithText("目录", substring = true).performClick()
+                compose.onNodeWithTag("reader-toc-chapter-second").assertIsDisplayed().assertIsSelected()
+                compose.onNodeWithTag("reader-toc-loading").assertDoesNotExist()
+                compose.onNodeWithText("关闭面板").performClick()
+            }
+            compose.runOnIdle { resize(1024.dp) }
+            compose.onNodeWithTag("reader-toc-chapter-second").assertIsSelected()
+            compose.runOnIdle {
+                assertSame(directory, controller.readerToc(ref))
+                assertSame(original, directory.toc)
+            }
+        }
+    }
+
     @Test fun directoryOpeningAndReopeningBothFindTheCurrentChapter() =
         withReader(390.dp, initialChapter = "extra-80") { _, _, _ ->
             compose.onNodeWithText("目录", substring = true).performClick()
@@ -135,7 +186,7 @@ class ReaderAdaptiveUiTest {
     private fun scrollPosition(): Float = compose.onNodeWithTag("reader-scroll").fetchSemanticsNode()
         .config[SemanticsProperties.VerticalScrollAxisRange].value()
 
-    private fun withReader(initialWidth: Dp, eInk: Boolean = false, initialChapter: String = "first", block: (NoveliaApplication, BookRef, (Dp) -> Unit) -> Unit) {
+    private fun withReader(initialWidth: Dp, eInk: Boolean = false, initialChapter: String = "first", onController: (AppController) -> Unit = {}, block: (NoveliaApplication, BookRef, (Dp) -> Unit) -> Unit) {
         val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
         runBlocking { app.initialization.await() }
         val previous = app.store.state.value
@@ -171,6 +222,7 @@ class ReaderAdaptiveUiTest {
             compose.runOnIdle { controller.read(ref, initialChapter) }
             compose.waitUntil(10_000) { app.store.state.value.positions[ref.key]?.chapterId == initialChapter }
             compose.waitForIdle()
+            onController(controller)
             block(app, ref) { width = it }
         } finally {
             compose.runOnIdle { controller.back() }

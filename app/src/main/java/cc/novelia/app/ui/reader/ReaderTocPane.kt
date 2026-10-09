@@ -9,20 +9,18 @@ import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import cc.novelia.app.data.model.Article
 import cc.novelia.app.data.model.BookRef
-import cc.novelia.app.data.model.TocItem
-import cc.novelia.app.data.model.WebDetail
 import cc.novelia.app.data.library.offlineRangeLabel
 import cc.novelia.app.ui.components.AppLazyColumn
-import cc.novelia.app.ui.components.AsyncContent
 import cc.novelia.app.ui.components.EmptyState
+import cc.novelia.app.ui.components.friendlyMessage
 import cc.novelia.app.ui.components.SectionTitle
 import cc.novelia.app.ui.components.rememberDebouncedQuery
 import cc.novelia.app.ui.components.rememberCachedChapterIds
@@ -32,12 +30,13 @@ import cc.novelia.app.ui.theme.motionClickable
 import kotlin.math.abs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 /** 目录列表和筛选由 ReaderContent 持有，侧栏与弹层切换时保留状态。 */
 @Composable internal fun ReaderTocPane(
     c: AppController,
     ref: BookRef,
+    state: ReaderTocState,
+    onRetry: () -> Unit,
     current: String,
     scroll: LazyListState,
     query: String,
@@ -51,12 +50,16 @@ import kotlinx.coroutines.withContext
 ) {
     val reducedMotion = appReducedMotion()
     val scope = rememberCoroutineScope()
-    AsyncContent(ref.key, load = {
-        withContext(Dispatchers.IO) {
-            if(ref.isLocal) c.store.documentIndex(ref.id).chapters.map { TocItem(it.title, it.title, it.id) }
-            else c.detail<WebDetail>("novel/${ref.key}").toc
+    Box(modifier.fillMaxSize().testTag("reader-toc-pane")) {
+        val toc = state.toc
+        if(toc == null) {
+            if(state.error != null && !state.loading) EmptyState("暂时无法加载目录", state.error.friendlyMessage(), action = "重试", onAction = onRetry)
+            else Column(Modifier.align(Alignment.Center).testTag("reader-toc-loading"), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                if(!reducedMotion) CircularProgressIndicator()
+                Text("正在加载目录…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            return@Box
         }
-    }, modifier = modifier.testTag("reader-toc-pane")) { toc, _ ->
         val cachedIds = rememberCachedChapterIds(c.store, ref, toc)
         val settledQuery = rememberDebouncedQuery(query)
         val indexed = remember(toc) { toc.withIndex().toList() }
@@ -83,6 +86,9 @@ import kotlinx.coroutines.withContext
                 TextButton(onClick = { onReversed(!reversed) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if(reversed) "倒序" else "正序") }
                 TextButton(onClick = { scope.launch(Dispatchers.Main.immediate) { locate() } }, enabled = currentIndex >= 0, modifier = Modifier.heightIn(min = 48.dp)) { Text("定位当前") }
                 if(query.isNotBlank()) TextButton(onClick = { onQuery("") }, modifier = Modifier.heightIn(min = 48.dp)) { Text("清空") }
+            }
+            state.error?.let {
+                TextButton(onClick = onRetry, enabled = !state.loading, modifier = Modifier.padding(horizontal = 8.dp)) { Text("目录更新失败，点击重试") }
             }
             if(!ref.isLocal) Text(remember(toc, cachedIds) { offlineRangeLabel(toc, cachedIds) },
                 Modifier.padding(horizontal = 20.dp, vertical = 4.dp).testTag("reader-toc-cache-summary"),

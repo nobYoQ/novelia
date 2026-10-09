@@ -27,6 +27,7 @@ import cc.novelia.app.data.model.Chapter
 import cc.novelia.app.data.model.toReaderChapter
 import cc.novelia.app.data.model.PendingAction
 import cc.novelia.app.data.model.WebDetail
+import cc.novelia.app.data.model.TocItem
 import cc.novelia.app.data.model.WenkuDetail
 import cc.novelia.app.data.updates.withBookUpdate
 import cc.novelia.app.data.library.withCloudReadingMetadata
@@ -43,6 +44,7 @@ import cc.novelia.app.data.sync.updateCloudPending
 import cc.novelia.app.ui.components.friendlyMessage
 import cc.novelia.app.ui.feedback.MidoriSticker
 import cc.novelia.app.ui.feedback.StickerSnackbarVisuals
+import cc.novelia.app.ui.reader.ReaderTocState
 import java.io.IOException
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
@@ -128,6 +130,24 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
     /** 一次性正文交接，附带账号绑定和缓存代次，避免跨章导航后再次请求或接收过期内容。 */
     internal data class ReaderHandoff(val ref: BookRef, val id: String, val value: Pair<Chapter, Boolean>, val binding: SessionBinding, val generation: Long)
     private var readerHandoff: ReaderHandoff? = null
+    private data class ReaderTocKey(val ref: BookRef, val binding: SessionBinding, val generation: Long)
+    private var readerToc: Pair<ReaderTocKey, ReaderTocState>? = null
+
+    /** 只保留最近一本目录，身份/书源或缓存代次改变时隔离旧结果。 */
+    @Synchronized internal fun readerToc(ref: BookRef): ReaderTocState {
+        val key = ReaderTocKey(ref, session.capture(), store.cacheGeneration.value)
+        readerToc?.takeIf { it.first == key }?.let { return it.second }
+        return ReaderTocState { forceNetwork ->
+            withContext(Dispatchers.IO) {
+                session.ensureCurrent(key.binding)
+                val toc = if(ref.isLocal) store.documentIndex(ref.id).chapters.map { TocItem(it.title, it.title, it.id) }
+                    else detail<WebDetail>("novel/${ref.key}", forceNetwork).toc
+                session.ensureCurrent(key.binding)
+                check(key.generation == store.cacheGeneration.value) { "缓存已更新，请重新加载目录" }
+                toc
+            }
+        }.also { readerToc = key to it }
+    }
     private val cloudBookMetadata = CloudBookMetadataLoader(session) { ref -> detail<WebDetail>("novel/${ref.key}") }
 
     /** 仅云端收藏也需要章节元数据，补取详情时不隐式加入本地书架。 */
@@ -150,7 +170,12 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
             read(ref, chapter)
         } else go("book/${ref.provider}/${ref.id}")
     }
-    fun read(ref: BookRef, chapter: String) = go("reader/${ref.provider}/${ref.id}/${Uri.encode(chapter)}")
+    fun read(ref: BookRef, chapter: String) {
+        // 从书架/详情重新开始阅读时重新检查目录；连续切章走下面的交接入口。
+        synchronized(this) { readerToc = null }
+        goReader(ref, chapter)
+    }
+    private fun goReader(ref: BookRef, chapter: String) = go("reader/${ref.provider}/${ref.id}/${Uri.encode(chapter)}")
     internal suspend fun prepareReaderChapter(ref: BookRef, id: String): ReaderHandoff {
         val binding = session.capture()
         val generation = store.cacheGeneration.value
@@ -164,7 +189,7 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
         check(prepared.generation == store.cacheGeneration.value) { "缓存已更新，请重新加载章节" }
         synchronized(this) { readerHandoff = prepared }
         nav.popBackStack()
-        read(prepared.ref, prepared.id)
+        goReader(prepared.ref, prepared.id)
     }
     fun openLink(text: String) {
         when(val link = BookLinks.parse(text)) {

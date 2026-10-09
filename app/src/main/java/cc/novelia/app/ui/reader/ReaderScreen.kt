@@ -77,9 +77,7 @@ import cc.novelia.app.data.model.Chapter
 import cc.novelia.app.data.model.Note
 import cc.novelia.app.data.model.Position
 import cc.novelia.app.data.model.ReaderSettings
-import cc.novelia.app.data.model.WebDetail
 import cc.novelia.app.data.storage.appJson
-import cc.novelia.app.data.storage.hashName
 import cc.novelia.app.data.webdav.WebDavProjection
 import cc.novelia.app.reader.*
 import cc.novelia.app.ui.components.AppAlertDialog
@@ -135,7 +133,7 @@ import kotlinx.serialization.encodeToString
 }
 
 /**
- * 当前导航项拥有正文、目录与弹层会话；跨章先准备正文，再保存位置并交接导航状态。
+ * 当前导航项拥有正文与弹层会话，目录数据跨章复用；跨章先准备正文，再保存位置并交接导航状态。
  * 滚动和静态分页共享段落/字符锚点，恢复、拖动预览或重新测量期间不提交中间位置。
  * 已读状态独立于屏顶位置保存，工具栏、搜索框和键盘以浮层叠加，不参与正文分页。
  */
@@ -172,6 +170,8 @@ import kotlinx.serialization.encodeToString
     val returnPoint = remember(returnPointJson) { returnPointJson?.let { runCatching { appJson.decodeFromString<ReadingReturnPoint>(it) }.getOrNull() } }
     var refreshAnchor by remember(ref, chapterId) { mutableStateOf<ReadingRestoreAnchor?>(null) }
     val cacheGeneration by c.store.cacheGeneration.collectAsStateWithLifecycle()
+    val profile by c.session.profile.collectAsStateWithLifecycle()
+    val tocState = remember(c, ref, profile, c.session.capture(), cacheGeneration) { c.readerToc(ref) }
     val enteredCacheGeneration = remember(ref, chapterId) { c.store.cacheGeneration.value }
     val readingLifecycle = LocalLifecycleOwner.current
     val speechStatus by ReadAloudService.status.collectAsStateWithLifecycle()
@@ -191,24 +191,14 @@ import kotlinx.serialization.encodeToString
     }
     BackHandler(preferences || (toc && !wide) || search || bookSearch) { preferences = false; toc = false; search = false; bookSearch = false }
     AsyncContent(listOf(ref, chapterId), load = { c.chapter(ref, chapterId, version > 0) }, refreshKey = version) { (chapter, cached), _ ->
-        var chapterProgress by remember(ref, chapterId) { mutableStateOf<Pair<Int, Int>?>(null) }
         val knownChapterCount = maxOf(local.books.firstOrNull { it.book.ref == ref }?.book?.total ?: 0,
             local.updateSnapshots[ref.key]?.total ?: 0)
-        LaunchedEffect(ref, chapterId, knownChapterCount, cacheGeneration, version) {
-            chapterProgress = withContext(Dispatchers.IO) {
-                try {
-                    val ids = if(ref.isLocal) c.store.documentIndex(ref.id).chapters.map { it.id }
-                    else {
-                        // 优先复用目录；缺失当前章或落后于更新计数时异步补齐，不阻塞正文。
-                        val account = c.session.capture().account ?: "guest"
-                        val cachedIds = c.metadataCache.read(hashName("$account:novel/${ref.key}"))
-                            ?.let { raw -> runCatching { appJson.decodeFromString<WebDetail>(raw).toc.mapNotNull { it.chapterId } }.getOrNull() }
-                        if(cachedIds != null && chapterId in cachedIds && cachedIds.size >= knownChapterCount) cachedIds
-                        else c.detail<WebDetail>("novel/${ref.key}", forceNetwork = cachedIds != null).toc.mapNotNull { it.chapterId }
-                    }
-                    ids?.let { chapters -> chapters.indexOf(chapterId).takeIf { it >= 0 }?.let { it to chapters.size } }
-                } catch(e: CancellationException) { throw e }
-                catch(_: Exception) { null }
+        LaunchedEffect(tocState, chapterId, knownChapterCount) {
+            tocState.ensureLoaded(chapterId, knownChapterCount)
+        }
+        val chapterProgress = remember(tocState.toc, chapterId) {
+            tocState.toc?.mapNotNull { it.chapterId }?.let { chapters ->
+                chapters.indexOf(chapterId).takeIf { it >= 0 }?.let { it to chapters.size }
             }
         }
         // 只有内容和语言选择会改变投影；字号、段距等变化只触发后续重新排版。
@@ -506,6 +496,7 @@ import kotlinx.serialization.encodeToString
                     paragraphHash(paragraphs.getOrNull(firstParagraph)))
             savePosition()
             version++
+            scope.launch { tocState.ensureLoaded(chapterId, knownChapterCount, refresh = true) }
         }
         fun openNextVolume() {
             val target = nextVolume ?: return
@@ -697,7 +688,7 @@ import kotlinx.serialization.encodeToString
         Row(Modifier.fillMaxSize().background(background).testTag(if(wide) "reader-wide-layout" else "reader-compact-layout")) {
         if(wide) {
             Surface(Modifier.width(292.dp).fillMaxHeight().windowInsetsPadding(safeInsets), color = MaterialTheme.colorScheme.surface) {
-                ReaderTocPane(c, ref, chapterId, tocScroll, tocQuery, { tocQuery = it }, tocReversed, { tocReversed = it }, tocLocateRequest, { tocLocateRequest = 0; tocLocated = true }, { if(it != chapterId) rememberReadingPlace(); openChapter(it) })
+                ReaderTocPane(c, ref, tocState, { scope.launch { tocState.ensureLoaded(chapterId, knownChapterCount, refresh = true) } }, chapterId, tocScroll, tocQuery, { tocQuery = it }, tocReversed, { tocReversed = it }, tocLocateRequest, { tocLocateRequest = 0; tocLocated = true }, { if(it != chapterId) rememberReadingPlace(); openChapter(it) })
             }
             VerticalDivider(Modifier.fillMaxHeight())
         }
@@ -898,7 +889,7 @@ import kotlinx.serialization.encodeToString
             }
         }
         if(toc && !wide) ReaderSheet(onDismissRequest = { toc = false }) {
-            ReaderTocPane(c, ref, chapterId, tocScroll, tocQuery, { tocQuery = it }, tocReversed, { tocReversed = it }, tocLocateRequest, { tocLocateRequest = 0; tocLocated = true },
+            ReaderTocPane(c, ref, tocState, { scope.launch { tocState.ensureLoaded(chapterId, knownChapterCount, refresh = true) } }, chapterId, tocScroll, tocQuery, { tocQuery = it }, tocReversed, { tocReversed = it }, tocLocateRequest, { tocLocateRequest = 0; tocLocated = true },
                 { id -> if(id != chapterId) rememberReadingPlace(); toc = false; openChapter(id) }, Modifier.fillMaxHeight(.8f))
         }
         if(speechSheet) ReaderSheet(onDismissRequest = { speechSheet = false }) {
