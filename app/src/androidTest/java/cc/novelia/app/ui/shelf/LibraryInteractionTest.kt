@@ -21,6 +21,7 @@ import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.DownloadEntry
 import cc.novelia.app.data.model.Note
 import cc.novelia.app.ui.book.AdaptiveBookDetail
+import cc.novelia.app.ui.book.BookFavoriteActions
 import cc.novelia.app.ui.downloads.DownloadsScreen
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.navigation.finishLoginNavigation
@@ -38,6 +39,37 @@ class LibraryInteractionTest {
     @get:Rule val compose = createComposeRule()
     private fun application(): NoveliaApplication =
         (InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication).also { runBlocking { it.initialization.await() } }
+
+    @Test fun detailFavoriteSheetCanRemoveAndRestoreLocalFavorite() {
+        val app = application()
+        val before = app.store.state.value
+        val book = BookCard(BookRef("syosetu", "favorite-remove-ui"), "详情页移除测试")
+        try {
+            app.store.saveBook(book)
+            compose.setContent {
+                NoveliaTheme("light") {
+                    val library by app.store.state.collectAsState()
+                    val snackbar = remember { SnackbarHostState() }
+                    val controller = AppController(app, rememberNavController(), rememberCoroutineScope(), snackbar)
+                    var visible by remember { mutableStateOf(false) }
+                    Scaffold(snackbarHost = { SnackbarHost(snackbar) }) { padding ->
+                        Box(Modifier.padding(padding)) {
+                            BookFavoriteActions(bookFavoriteState(book.ref, library.books.any { it.book.ref == book.ref }, null, null, emptyList()),
+                                onLocal = { visible = true }, onCloud = { visible = true })
+                        }
+                    }
+                    if(visible) FavoriteSheet(controller, book) { visible = false }
+                }
+            }
+            compose.onNodeWithTag("book-local-favorite").performClick()
+            compose.onNodeWithText("取消本地收藏").performScrollTo().performClick()
+            compose.waitUntil(5_000) { app.store.state.value.books.none { it.book.ref == book.ref } }
+            compose.onNodeWithText("撤销").performClick()
+            compose.waitUntil(5_000) { app.store.state.value.books.any { it.book.ref == book.ref } }
+            compose.onNodeWithTag("book-local-favorite").performClick()
+            compose.onNodeWithText("取消本地收藏").assertIsDisplayed()
+        } finally { app.store.update { before } }
+    }
 
     @Test fun deletingNoteOffersUndoAndPreservesItsMetadata() {
         val app = application()

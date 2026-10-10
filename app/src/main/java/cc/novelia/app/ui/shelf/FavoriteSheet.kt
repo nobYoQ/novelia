@@ -39,6 +39,19 @@ import cc.novelia.app.ui.navigation.loginForFavorite
             if(!cloud) {
                 val currentFolder = state.books.firstOrNull { it.book.ref == book.ref }?.folder
                 state.folders.forEach { folder -> MenuRow(folder, if(folder == currentFolder) "当前本地收藏夹" else "本地收藏", if(folder == currentFolder) Icons.Outlined.FolderSpecial else Icons.Outlined.Folder, { c.store.saveBook(book, folder); c.message("已加入 $folder"); dismiss() }) }
+                if(currentFolder != null) MenuRow("取消本地收藏",
+                    if(book.ref.isLocal && state.deleteLocalCopyOnShelfRemoval) "同时删除导入副本，无法撤销；原文件不受影响" else "保留文件和阅读记录，移除后可撤销",
+                    Icons.Outlined.BookmarkRemove, {
+                        val previous = c.store.state.value.books
+                        dismiss()
+                        c.action {
+                            val deleted = c.store.removeShelfBook(book.ref)
+                            if(deleted) { c.message("已移出书架并删除「${book.title}」的导入副本"); return@action }
+                            if(c.snackbar.showSnackbar("已取消「${book.title}」的本地收藏", actionLabel = "撤销", withDismissAction = true, duration = SnackbarDuration.Long) == SnackbarResult.ActionPerformed) {
+                                c.store.update { current -> restoreRemovedShelfBook(current, previous, book.ref) }
+                            }
+                        }
+                    })
                 MenuRow("新建收藏夹", "创建并收藏这本书", Icons.Outlined.CreateNewFolder, { create = true })
             }
             else if(profile == null) EmptyState("登录后继续收藏", "登录成功后会回到这本书的云端收藏选择。", action = "登录后继续", onAction = {
