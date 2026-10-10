@@ -50,7 +50,7 @@ class ProfileLandscapeTest {
                                 Screen("我的", actions = {
                                     AppIconButton({ visits += "settings" }) { Icon(Icons.Outlined.Tune, "设置") }
                                 }) { padding ->
-                                    ProfileDashboard(profile, 7, 0, visits::add, {}, Modifier.padding(padding))
+                                    ProfileDashboard(profile, 7, 2, 0, visits::add, {}, Modifier.padding(padding))
                                 }
                             }
                         }

@@ -30,6 +30,7 @@ import cc.novelia.app.ui.theme.LocalEInkMode
 @Composable internal fun ProfileDashboard(
     profile: Profile?,
     noteCount: Int,
+    updateCount: Int,
     pendingCount: Int,
     onNavigate: (String) -> Unit,
     onLogout: () -> Unit,
@@ -55,7 +56,7 @@ import cc.novelia.app.ui.theme.LocalEInkMode
                     ProfileAccountCard(profile, companionVisible, onLogin = { onNavigate("login") }, onLogout = onLogout,
                         modifier = Modifier.onSizeChanged { accountHeight = it.height }, compact = true)
                     ProfileReadingCards(onNavigate)
-                    ProfileShortcuts(noteCount, onNavigate)
+                    ProfileShortcuts(noteCount, updateCount, onNavigate)
                     ProfilePreferences(pendingCount, onNavigate, minRowHeight = 88.dp)
                     ProfileAboutCard(minHeight = 88.dp) { onNavigate("about") }
                 }) { measurables, constraints ->
@@ -83,7 +84,7 @@ import cc.novelia.app.ui.theme.LocalEInkMode
                     ProfileAccountCard(profile, companionVisible, onLogin = { onNavigate("login") }, onLogout = onLogout)
                 }
                 item(key = "profile-reading") { ProfileReadingCards(onNavigate) }
-                item(key = "profile-shortcuts") { ProfileShortcuts(noteCount, onNavigate) }
+                item(key = "profile-shortcuts") { ProfileShortcuts(noteCount, updateCount, onNavigate) }
                 item(key = "profile-preferences") { ProfilePreferences(pendingCount, onNavigate) }
                 item(key = "profile-about") { ProfileAboutCard { onNavigate("about") } }
             }
@@ -133,7 +134,7 @@ import cc.novelia.app.ui.theme.LocalEInkMode
     }
 }
 
-@Composable private fun ProfileShortcuts(noteCount: Int, onNavigate: (String) -> Unit) {
+@Composable private fun ProfileShortcuts(noteCount: Int, updateCount: Int, onNavigate: (String) -> Unit) {
     val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
     Surface(modifier = Modifier.testTag("profile-shortcuts"), shape = appRoundedCornerShape(28.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow, border = profileCardBorder()) {
@@ -144,15 +145,14 @@ import cc.novelia.app.ui.theme.LocalEInkMode
                 Triple("书签与笔记", "notes", Icons.Outlined.EditNote),
                 Triple("文件工具", "tools", Icons.Outlined.Handyman),
             )
+            val details = mapOf("updates" to "$updateCount 本更新", "notes" to "$noteCount 条")
             if(stacked) Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 shortcuts.forEach { (title, route, icon) ->
-                    ProfileShortcut(title, route, icon, if(route == "notes") "$noteCount 条" else null,
-                        true, onNavigate, Modifier.fillMaxWidth())
+                    ProfileShortcut(title, route, icon, details[route], true, onNavigate, Modifier.fillMaxWidth())
                 }
             } else Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 shortcuts.forEach { (title, route, icon) ->
-                    ProfileShortcut(title, route, icon, if(route == "notes") "$noteCount 条" else null,
-                        false, onNavigate, Modifier.weight(1f).fillMaxHeight())
+                    ProfileShortcut(title, route, icon, details[route], false, onNavigate, Modifier.weight(1f).fillMaxHeight())
                 }
             }
         }
@@ -166,8 +166,11 @@ import cc.novelia.app.ui.theme.LocalEInkMode
         if(stacked) Row(Modifier.padding(14.dp).heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Icon(icon, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
-            Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
-            if(detail != null) Text(detail, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(title, style = MaterialTheme.typography.titleSmall)
+                if(detail != null) Text(detail, style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         } else Column(Modifier.padding(horizontal = 4.dp, vertical = 14.dp), horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Icon(icon, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)

@@ -36,10 +36,11 @@ class ProfileDashboardTest {
     @Test fun guestKeepsEveryDestinationAndIndependentCompanion() {
         val visits = mutableListOf<String>()
         var theme by mutableStateOf("light")
+        var updateCount by mutableIntStateOf(2)
         compose.setContent {
             AppInteractionMode(eInk = false, reducedMotion = true) {
                 NoveliaTheme(theme) {
-                    Surface { ProfileDashboard(null, 7, 0, visits::add, {}) }
+                    Surface { ProfileDashboard(null, 7, updateCount, 0, visits::add, {}) }
                 }
             }
         }
@@ -56,6 +57,10 @@ class ProfileDashboardTest {
         capture("profile-dark")
         destination("notes")
         compose.onNodeWithText("7 条").assertIsDisplayed()
+        destination("updates")
+        compose.onNodeWithText("2 本更新").assertIsDisplayed()
+        compose.runOnIdle { updateCount = 0 }
+        compose.onNodeWithText("0 本更新").assertIsDisplayed()
     }
 
     @Test fun permissionsOverlayKeepsLayoutAndDismissesWithoutAccountActions() {
@@ -67,13 +72,17 @@ class ProfileDashboardTest {
                 NoveliaTheme("light") {
                     Surface {
                         Screen("我的") { padding ->
-                            ProfileDashboard(profile, 12, 3, {}, { logouts++ }, Modifier.padding(padding))
+                            ProfileDashboard(profile, 12, 5, 3, {}, { logouts++ }, Modifier.padding(padding))
                         }
                     }
                 }
             }
         }
         compose.onNodeWithText("普通成员").assertIsDisplayed()
+        val roleBounds = compose.onNodeWithText("普通成员").getUnclippedBoundsInRoot()
+        val cardBounds = compose.onNodeWithTag("profile-account-card").getUnclippedBoundsInRoot()
+        assertTrue("账号文字应靠近卡片顶部", roleBounds.top - cardBounds.top <= 32.dp)
+        compose.onNodeWithText("5 本更新").assertIsDisplayed()
         compose.onNodeWithText("社区发布").assertDoesNotExist()
         val accountBounds = compose.onNodeWithTag("profile-account-card").fetchSemanticsNode().boundsInRoot
         val readingBounds = compose.onNodeWithTag("profile-history").fetchSemanticsNode().boundsInRoot
@@ -120,7 +129,7 @@ class ProfileDashboardTest {
             CompositionLocalProvider(LocalDensity provides Density(density.density, 2f)) {
                 AppInteractionMode(eInk = true, reducedMotion = true) {
                     NoveliaTheme("light") {
-                        Surface(Modifier.requiredWidth(320.dp)) { ProfileDashboard(null, 128, 4, visits::add, {}) }
+                        Surface(Modifier.requiredWidth(320.dp)) { ProfileDashboard(null, 128, 6, 4, visits::add, {}) }
                     }
                 }
             }
@@ -144,7 +153,7 @@ class ProfileDashboardTest {
                 AppInteractionMode(eInk = false, reducedMotion = true) {
                     NoveliaTheme("dark") {
                         Surface(Modifier.requiredWidth(960.dp).height(720.dp)) {
-                            ProfileDashboard(Profile("阅读者", "admin", 0, Long.MAX_VALUE), 7, 3, visits::add, {})
+                            ProfileDashboard(Profile("阅读者", "admin", 0, Long.MAX_VALUE), 7, 4, 3, visits::add, {})
                         }
                     }
                 }

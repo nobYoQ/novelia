@@ -53,7 +53,8 @@ import cc.novelia.app.ui.theme.appReducedMotion
     Screen("我的", actions = {
         AppIconButton(onClick = { c.go("settings") }) { Icon(Icons.Outlined.Tune, "设置") }
     }) { padding ->
-        ProfileDashboard(profile, state.notes.size, state.pending.count { it.account == profile?.username },
+        ProfileDashboard(profile, state.notes.size, state.books.count { it.hasUpdates },
+            state.pending.count { it.account == profile?.username },
             onNavigate = { c.go(it) }, onLogout = { logout = true }, modifier = Modifier.padding(padding))
     }
     if(logout) ConfirmDialog("退出主站登录？", "本地小说、下载和笔记仍保留在此设备。", { logout = false }, confirmLabel = "退出主站登录") { c.action("已退出主站登录") { c.session.logout() } }
@@ -79,7 +80,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
         color = MaterialTheme.colorScheme.surfaceContainerLow, border = profileCardBorder()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     val role = profile?.let { mapOf("admin" to "管理员", "member" to "普通成员", "trusted" to "可信成员",
                         "restricted" to "受限账号", "banned" to "被封禁账号")[it.role] ?: it.role }
