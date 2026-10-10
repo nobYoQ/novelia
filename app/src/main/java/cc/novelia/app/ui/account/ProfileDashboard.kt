@@ -14,10 +14,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.Constraints
 import cc.novelia.app.data.model.Profile
 import cc.novelia.app.ui.components.AppLazyColumn
 import cc.novelia.app.ui.theme.LocalEInkMode
@@ -32,8 +36,12 @@ import cc.novelia.app.ui.theme.LocalEInkMode
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
+    var accountHeight by remember { mutableIntStateOf(0) }
     val companionVisible by remember { derivedStateOf {
-        listState.layoutInfo.visibleItemsInfo.any { it.key == "profile-card" }
+        val layout = listState.layoutInfo
+        layout.visibleItemsInfo.any {
+            it.key == "profile-card" || (it.key == "profile-columns" && it.offset + accountHeight > layout.viewportStartOffset)
+        }
     } }
     val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
     BoxWithConstraints(modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
@@ -42,21 +50,38 @@ import cc.novelia.app.ui.theme.LocalEInkMode
             listModifier = Modifier.testTag("profile-list"),
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            item(key = "profile-card") {
-                ProfileAccountCard(profile, companionVisible, onLogin = { onNavigate("login") }, onLogout = onLogout)
-            }
             if(wide) item(key = "profile-columns") {
-                Row(Modifier.fillMaxWidth().testTag("profile-wide-layout"), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        ProfileReadingCards(onNavigate)
-                        ProfileShortcuts(noteCount, onNavigate)
+                Layout(modifier = Modifier.fillMaxWidth().testTag("profile-wide-layout"), content = {
+                    ProfileAccountCard(profile, companionVisible, onLogin = { onNavigate("login") }, onLogout = onLogout,
+                        modifier = Modifier.onSizeChanged { accountHeight = it.height }, compact = true)
+                    ProfileReadingCards(onNavigate)
+                    ProfileShortcuts(noteCount, onNavigate)
+                    ProfilePreferences(pendingCount, onNavigate, minRowHeight = 88.dp)
+                    ProfileAboutCard(minHeight = 88.dp) { onNavigate("about") }
+                }) { measurables, constraints ->
+                    val columnGap = 24.dp.roundToPx()
+                    val cardGap = 16.dp.roundToPx()
+                    val leftWidth = (constraints.maxWidth - columnGap) / 2
+                    val rightWidth = constraints.maxWidth - columnGap - leftWidth
+                    val (account, reading, shortcuts, preferences, about) = measurables.mapIndexed { index, measurable ->
+                        measurable.measure(Constraints.fixedWidth(if(index < 3) leftWidth else rightWidth))
                     }
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        ProfilePreferences(pendingCount, onNavigate)
-                        ProfileAboutCard { onNavigate("about") }
+                    val leftHeight = account.height + reading.height + shortcuts.height + cardGap * 2
+                    val rightHeight = preferences.height + about.height + cardGap
+                    val height = maxOf(leftHeight, rightHeight)
+                    // 按实际内容共用底边；多出的空间均分到左栏间距，保留卡片的自然高度。
+                    layout(constraints.maxWidth, height) {
+                        account.placeRelative(0, 0)
+                        reading.placeRelative(0, account.height + cardGap + (height - leftHeight) / 2)
+                        shortcuts.placeRelative(0, height - shortcuts.height)
+                        preferences.placeRelative(leftWidth + columnGap, 0)
+                        about.placeRelative(leftWidth + columnGap, height - about.height)
                     }
                 }
             } else {
+                item(key = "profile-card") {
+                    ProfileAccountCard(profile, companionVisible, onLogin = { onNavigate("login") }, onLogout = onLogout)
+                }
                 item(key = "profile-reading") { ProfileReadingCards(onNavigate) }
                 item(key = "profile-shortcuts") { ProfileShortcuts(noteCount, onNavigate) }
                 item(key = "profile-preferences") { ProfilePreferences(pendingCount, onNavigate) }
@@ -110,7 +135,8 @@ import cc.novelia.app.ui.theme.LocalEInkMode
 
 @Composable private fun ProfileShortcuts(noteCount: Int, onNavigate: (String) -> Unit) {
     val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
-    Surface(shape = appRoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surfaceContainerLow, border = profileCardBorder()) {
+    Surface(modifier = Modifier.testTag("profile-shortcuts"), shape = appRoundedCornerShape(28.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow, border = profileCardBorder()) {
         BoxWithConstraints(Modifier.fillMaxWidth().padding(6.dp)) {
             val stacked = (maxWidth + 12.dp) / fontScale < 300.dp
             val shortcuts = listOf(
@@ -151,31 +177,31 @@ import cc.novelia.app.ui.theme.LocalEInkMode
     }
 }
 
-@Composable private fun ProfilePreferences(pendingCount: Int, onNavigate: (String) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+@Composable private fun ProfilePreferences(pendingCount: Int, onNavigate: (String) -> Unit, minRowHeight: Dp = 80.dp) {
+    Column(Modifier.testTag("profile-preferences"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("偏好与数据", Modifier.padding(start = 4.dp, top = 4.dp), style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
             ProfilePreferenceRow("设置", "阅读、外观与下载", Icons.Outlined.Tune, "settings", onNavigate,
-                appRoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 6.dp, bottomEnd = 6.dp))
-            ProfilePreferenceRow("屏蔽管理", "作品与标签", Icons.Outlined.Block, "blocked", onNavigate, appRoundedCornerShape(6.dp))
+                appRoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 6.dp, bottomEnd = 6.dp), minHeight = minRowHeight)
+            ProfilePreferenceRow("屏蔽管理", "作品与标签", Icons.Outlined.Block, "blocked", onNavigate, appRoundedCornerShape(6.dp), minHeight = minRowHeight)
             ProfilePreferenceRow("网络与同步", if(pendingCount > 0) "$pendingCount 项待处理" else "账号同步、WebDAV 与网络",
-                Icons.Outlined.Sync, "sync", onNavigate, appRoundedCornerShape(6.dp))
+                Icons.Outlined.Sync, "sync", onNavigate, appRoundedCornerShape(6.dp), minHeight = minRowHeight)
             ProfilePreferenceRow("阅读资料备份", "书架、进度与本地资料", Icons.Outlined.Backup, "backup", onNavigate,
-                appRoundedCornerShape(topStart = 6.dp, topEnd = 6.dp, bottomStart = 24.dp, bottomEnd = 24.dp))
+                appRoundedCornerShape(topStart = 6.dp, topEnd = 6.dp, bottomStart = 24.dp, bottomEnd = 24.dp), minHeight = minRowHeight)
         }
     }
 }
 
-@Composable private fun ProfileAboutCard(onClick: () -> Unit) {
-    ProfilePreferenceRow("帮助与关于", "使用说明、版本与反馈", Icons.Outlined.Info, "about", { onClick() }, appRoundedCornerShape(24.dp))
+@Composable private fun ProfileAboutCard(minHeight: Dp = 80.dp, onClick: () -> Unit) {
+    ProfilePreferenceRow("帮助与关于", "使用说明、版本与反馈", Icons.Outlined.Info, "about", { onClick() }, appRoundedCornerShape(24.dp), minHeight)
 }
 
 @Composable private fun ProfilePreferenceRow(title: String, subtitle: String, icon: ImageVector, route: String,
-    onNavigate: (String) -> Unit, shape: Shape) {
+    onNavigate: (String) -> Unit, shape: Shape, minHeight: Dp = 80.dp) {
     Surface(onClick = { onNavigate(route) }, modifier = Modifier.fillMaxWidth().testTag("profile-$route"), shape = shape,
         color = MaterialTheme.colorScheme.surfaceContainerLow, border = profileCardBorder()) {
-        Row(Modifier.heightIn(min = 80.dp).padding(horizontal = 18.dp, vertical = 16.dp),
+        Row(Modifier.heightIn(min = minHeight).padding(horizontal = 18.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             Icon(icon, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {

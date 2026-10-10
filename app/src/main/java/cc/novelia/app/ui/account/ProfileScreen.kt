@@ -60,9 +60,21 @@ import cc.novelia.app.ui.theme.appReducedMotion
 }
 
 @Composable internal fun ProfileAccountCard(profile: Profile?, companionVisible: Boolean,
-    onLogin: () -> Unit, onLogout: () -> Unit, modifier: Modifier = Modifier) {
+    onLogin: () -> Unit, onLogout: () -> Unit, modifier: Modifier = Modifier, compact: Boolean = false) {
     var accountMenu by remember(profile?.username) { mutableStateOf(false) }
     val separateLogin = LocalDensity.current.fontScale > 1.3f
+    val accountActions: @Composable () -> Unit = {
+        if(profile != null) Box {
+            AppIconButton(onClick = { accountMenu = true }, modifier = Modifier.size(48.dp).testTag("profile-account-menu")) {
+                Icon(Icons.Outlined.MoreHoriz, "账号操作")
+            }
+            AppDropdownMenu(accountMenu, { accountMenu = false }) {
+                DropdownMenuItem(text = { Text("退出登录") }, onClick = { accountMenu = false; onLogout() },
+                    leadingIcon = { Icon(Icons.AutoMirrored.Outlined.Logout, null) },
+                    modifier = Modifier.heightIn(min = 48.dp).testTag("profile-logout"))
+            }
+        }
+    }
     Surface(modifier.fillMaxWidth().testTag("profile-account-card"), shape = appRoundedCornerShape(28.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow, border = profileCardBorder()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -79,17 +91,11 @@ import cc.novelia.app.ui.theme.appReducedMotion
                     else if(!separateLogin) AppTextButton(onClick = onLogin, contentPadding = PaddingValues(vertical = 8.dp),
                         modifier = Modifier.heightIn(min = 48.dp)) { Text("登录 / 注册") }
                 }
-                Column(horizontalAlignment = Alignment.End) {
-                    if(profile != null) Box {
-                        AppIconButton(onClick = { accountMenu = true }, modifier = Modifier.size(48.dp).testTag("profile-account-menu")) {
-                            Icon(Icons.Outlined.MoreHoriz, "账号操作")
-                        }
-                        AppDropdownMenu(accountMenu, { accountMenu = false }) {
-                            DropdownMenuItem(text = { Text("退出登录") }, onClick = { accountMenu = false; onLogout() },
-                                leadingIcon = { Icon(Icons.AutoMirrored.Outlined.Logout, null) },
-                                modifier = Modifier.heightIn(min = 48.dp).testTag("profile-logout"))
-                        }
-                    }
+                if(compact) Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    MidoriCompanion(Modifier.size(88.dp), visible = companionVisible)
+                    accountActions()
+                } else Column(horizontalAlignment = Alignment.End) {
+                    accountActions()
                     MidoriCompanion(Modifier.size(96.dp), visible = companionVisible)
                 }
             }
