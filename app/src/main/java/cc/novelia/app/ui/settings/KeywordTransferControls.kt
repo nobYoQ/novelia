@@ -13,7 +13,7 @@ import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.catalog.KeywordLibraryFormat
 import cc.novelia.app.data.catalog.KeywordLibraryImport
 import cc.novelia.app.ui.components.AppAlertDialog
-import cc.novelia.app.ui.components.MenuRow
+import cc.novelia.app.ui.account.ProfileMenuRow
 import cc.novelia.app.ui.components.friendlyMessage
 import cc.novelia.app.ui.navigation.AppController
 import kotlinx.coroutines.Dispatchers
@@ -81,9 +81,9 @@ internal data class KeywordTransferState(val busy: Boolean, val error: String?, 
 }
 
 @Composable internal fun KeywordTransferControls(state: KeywordTransferState) {
-    Column {
-        MenuRow("导出标签库", "标签原文、中文译名和自定义分类", Icons.Outlined.IosShare, state.export)
-        MenuRow("导入标签库", "保留本机已修改的译名和分类", Icons.Outlined.FileOpen, state.importLibrary)
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        ProfileMenuRow("导出标签库", "标签原文、中文译名和自定义分类", Icons.Outlined.IosShare, state.export)
+        ProfileMenuRow("导入标签库", "保留本机已修改的译名和分类", Icons.Outlined.FileOpen, state.importLibrary)
         if(state.busy) Text("正在处理标签库…", Modifier.padding(horizontal = 20.dp), color = MaterialTheme.colorScheme.primary)
         state.error?.let { Text(it, Modifier.padding(horizontal = 20.dp, vertical = 8.dp), color = MaterialTheme.colorScheme.error) }
     }

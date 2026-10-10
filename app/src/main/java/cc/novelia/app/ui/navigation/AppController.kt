@@ -375,7 +375,7 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
             val result = synchronizePending(app, manual = true, binding = binding)
             session.ensureCurrent(binding)
             val remaining = store.state.value.pending.count { it.account == account }
-            message(if(remaining == 0) "同步完成" else "已同步 ${result.completed} 项，仍有 $remaining 项待处理，可在同步状态中查看原因")
+            message(if(remaining == 0) "同步完成" else "已同步 ${result.completed} 项，仍有 $remaining 项待处理，可在网络与同步中查看原因")
         }
     }
 }

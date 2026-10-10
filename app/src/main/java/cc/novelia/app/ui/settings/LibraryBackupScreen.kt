@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.settings
 
+import cc.novelia.app.ui.account.ProfileDetailCard
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -11,9 +13,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.backup.BackupPreview
 import cc.novelia.app.data.backup.LibraryBackupService
-import cc.novelia.app.ui.components.AppLazyColumn
+import cc.novelia.app.ui.account.ProfileDetailList
+import cc.novelia.app.ui.account.ProfileToggle
+import cc.novelia.app.ui.account.ProfileSectionTitle
 import cc.novelia.app.ui.components.ConfirmDialog
-import cc.novelia.app.ui.components.Screen
+import cc.novelia.app.ui.account.ProfileDetailScreen
 import cc.novelia.app.ui.components.friendlyMessage
 import cc.novelia.app.ui.markdown.format
 import cc.novelia.app.ui.navigation.AppController
@@ -66,36 +70,35 @@ import kotlinx.coroutines.withContext
             finally { busy = false }
         }
     }
-    Screen("阅读资料备份与恢复", if (recovery == null) c::back else null) { padding ->
-        AppLazyColumn(Modifier.padding(padding), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    ProfileDetailScreen("阅读资料备份", if (recovery == null) c::back else null) { padding ->
+        ProfileDetailList(Modifier.padding(padding)) {
             recovery?.let { issue -> item {
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
+                ProfileDetailCard(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(issue.message)
                         if (issue.hasLastGood) Button(onClick = { confirmLastGood = true }, enabled = !busy) { Text("恢复最后良好副本") }
                     }
                 }
             } }
-            item {
-                Text("保存书架、收藏夹、进度、笔记、阅读偏好、分卷挂载与排序、个人术语、标签翻译和自定义分类。备份始终包含可阅读的本地正文与插图；没有原始文件也能恢复阅读。", style = MaterialTheme.typography.bodyMedium)
-            }
-            item {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Column(Modifier.weight(1f)) {
-                        Text("同时打包原始小说文件", style = MaterialTheme.typography.titleSmall)
-                        Text("可选保存已有 EPUB、TXT、SRT 原件，文件体积会增加。", style = MaterialTheme.typography.bodySmall)
-                    }
-                    Switch(includeOriginals, { includeOriginals = it }, enabled = !busy)
+            item { ProfileDetailCard(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("导出阅读资料", style = MaterialTheme.typography.titleLarge)
+                    Text("保存书架、进度、笔记、阅读偏好、分卷设置、术语和标签。包含本地正文与插图。", style = MaterialTheme.typography.bodyMedium)
+                    Button(onClick = { export.launch("novelia-library-${java.time.LocalDate.now()}.zip") }, enabled = !busy) { Text("导出备份") }
                 }
-            }
-            item { Button(onClick = { export.launch("novelia-library-${java.time.LocalDate.now()}.zip") }, enabled = !busy) { Text("导出阅读资料") } }
-            item { HorizontalDivider() }
-            item { Text("从备份恢复", style = MaterialTheme.typography.titleLarge) }
-            item { OutlinedButton(onClick = { selectBackup.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) }, enabled = !busy) { Text("选择备份并检查") } }
+            } }
+            item { ProfileToggle("同时打包原始小说文件", "包含已有 EPUB、TXT、SRT 原件", includeOriginals, enabled = !busy) { includeOriginals = it } }
+            item { ProfileSectionTitle("从备份恢复") }
+            item { ProfileDetailCard {
+                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("选择备份后先检查内容，再确认合并。", style = MaterialTheme.typography.bodyMedium)
+                    OutlinedButton(onClick = { selectBackup.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) }, enabled = !busy) { Text("选择备份并检查") }
+                }
+            } }
             if (busy) item { Text("正在处理资料，请稍候…", color = MaterialTheme.colorScheme.primary) }
             error?.let { text -> item { Text(text, color = MaterialTheme.colorScheme.error) } }
             preview?.let { p -> item {
-                Card { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                ProfileDetailCard { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("备份检查通过", style = MaterialTheme.typography.titleMedium)
                     Text("创建于 ${DateFormat.getDateTimeInstance().format(Date(p.createdAt))}\n${p.books} 本书 · ${p.positions} 条进度 · ${p.notes} 条笔记\n${p.documents} 本本地正文 · ${p.keywords} 个标签\n正文与文件 ${"%.1f".format(p.bytes / 1024.0 / 1024.0)} MB${if (p.originalsIncluded) " · 包含已有原件" else ""}")
                     if (p.missingDocuments > 0) Text("${p.missingDocuments} 本本地书的内容在备份时已缺失，只能恢复记录。", color = MaterialTheme.colorScheme.error)

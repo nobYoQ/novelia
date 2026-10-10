@@ -2,6 +2,8 @@
 
 package cc.novelia.app.ui.notes
 
+import cc.novelia.app.ui.account.ProfileDetailCard
+
 import cc.novelia.app.ui.components.AppSelectionChip
 import cc.novelia.app.ui.components.AppChipFlowRow
 import androidx.compose.foundation.layout.*
@@ -18,10 +20,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.Note
 import cc.novelia.app.ui.components.AppLazyColumn
+import cc.novelia.app.ui.account.ProfileDetailList
+import androidx.compose.foundation.shape.RoundedCornerShape
 import cc.novelia.app.ui.components.AppSheet
-import cc.novelia.app.ui.components.EmptyState
+import cc.novelia.app.ui.account.ProfileEmptyState
 import cc.novelia.app.ui.components.MenuRow
-import cc.novelia.app.ui.components.Screen
+import cc.novelia.app.ui.account.ProfileDetailScreen
 import cc.novelia.app.ui.components.rememberDebouncedQuery
 import cc.novelia.app.ui.navigation.AppController
 
@@ -35,10 +39,12 @@ import cc.novelia.app.ui.navigation.AppController
     val bookChoices = remember(allNotes) { allNotes.distinctBy { it.note.key }.sortedBy { it.bookTitle } }
     val bookCounts = remember(allNotes) { allNotes.groupingBy { it.note.key }.eachCount() }
     val notes = remember(state.notes, state.books, state.positions, settledQuery, bookKey) { presentNotes(state, settledQuery, bookKey) }
-    Screen("书签与笔记", c::back) { padding -> AppLazyColumn(Modifier.padding(padding), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    ProfileDetailScreen("书签与笔记", c::back) { padding -> ProfileDetailList(Modifier.padding(padding)) {
         item(key = "note-search") {
             OutlinedTextField(query, { query = it }, label = { Text("搜索书名、章节、摘录或笔记") }, singleLine = true,
-                leadingIcon = { Icon(Icons.Outlined.Search, null) }, modifier = Modifier.fillMaxWidth().testTag("notes-search"))
+                leadingIcon = { Icon(Icons.Outlined.Search, null) }, shape = RoundedCornerShape(24.dp),
+                colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                modifier = Modifier.fillMaxWidth().testTag("notes-search"))
         }
         item(key = "note-filter") {
             AppChipFlowRow() {
@@ -47,9 +53,9 @@ import cc.novelia.app.ui.navigation.AppController
                 Text("${notes.size} 条", Modifier.padding(vertical = 12.dp), style = MaterialTheme.typography.labelMedium)
             }
         }
-        if(allNotes.isEmpty()) item { EmptyState("记下喜欢的句子", "在阅读器长按段落，或点击书签按钮保存。", Icons.Outlined.EditNote) }
-        else if(notes.isEmpty()) item { EmptyState("没有匹配的笔记", "调整关键词，或查看全部书籍的笔记。", Icons.Outlined.SearchOff, "清空筛选", { query = ""; bookKey = null }) }
-        items(notes, key = { it.note.id }) { item -> val note = item.note; Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        if(allNotes.isEmpty()) item { ProfileEmptyState("记下喜欢的句子", "在阅读器长按段落，或点击书签按钮保存。", Icons.Outlined.EditNote) }
+        else if(notes.isEmpty()) item { ProfileEmptyState("没有匹配的笔记", "调整关键词，或查看全部书籍的笔记。", Icons.Outlined.SearchOff, "清空筛选", { query = ""; bookKey = null }) }
+        items(notes, key = { it.note.id }) { item -> val note = item.note; ProfileDetailCard(Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(item.bookTitle, style = MaterialTheme.typography.titleSmall)
             Text("${item.chapterTitle} · 第 ${note.paragraph + 1} 段", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(note.quote, maxLines = 5, style = MaterialTheme.typography.bodyMedium); if(note.text.isNotBlank()) Text(note.text, color = MaterialTheme.colorScheme.primary)

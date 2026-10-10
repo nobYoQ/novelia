@@ -16,7 +16,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.network.BookSource
 import cc.novelia.app.ui.components.AppSheet
-import cc.novelia.app.ui.components.MenuRow
+import cc.novelia.app.ui.account.ProfileMenuRow
 import cc.novelia.app.ui.navigation.AppController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -25,7 +25,7 @@ import kotlinx.coroutines.withContext
     val selected by c.app.bookSources.state.collectAsStateWithLifecycle()
     var open by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
-    MenuRow("书源线路", "${selected.source.title} · ${selected.source.origin.substringAfter("://")}", Icons.Outlined.Public, { open = true })
+    ProfileMenuRow("书源线路", "${selected.source.title} · ${selected.source.origin.substringAfter("://")}", Icons.Outlined.Public, { open = true })
     if(open) BookSourcePicker(selected.source, selected.hasAccessToken, busy, { open = false }) { source ->
         if(source == selected.source) { open = false; return@BookSourcePicker }
         busy = true

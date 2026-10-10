@@ -10,8 +10,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import cc.novelia.app.ui.components.AppLazyColumn
-import cc.novelia.app.ui.components.Screen
+import cc.novelia.app.ui.account.ProfileDetailList
+import cc.novelia.app.ui.account.ProfileDetailCard
+import cc.novelia.app.ui.account.ProfileDetailScreen
 import cc.novelia.app.ui.navigation.AppController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -27,13 +28,13 @@ fun OpenSourceLicensesScreen(c: AppController) {
             }.getOrElse { listOf("无法读取许可证，请从项目源码仓库查看 LICENSE、NOTICE.md 与 licenses 目录。") }
         }
     }
-    Screen("开源许可证", c::back) { padding ->
-        AppLazyColumn(Modifier.padding(padding)) {
+    ProfileDetailScreen("开源许可证", c::back) { padding ->
+        ProfileDetailList(Modifier.padding(padding)) {
             if (paragraphs == null) item { Text("正在读取许可证…", Modifier.padding(20.dp)) }
             items(paragraphs.orEmpty()) { paragraph ->
-                SelectionContainer {
+                ProfileDetailCard { SelectionContainer {
                     Text(paragraph, Modifier.padding(horizontal = 20.dp, vertical = 6.dp), style = MaterialTheme.typography.bodySmall)
-                }
+                } }
             }
         }
     }

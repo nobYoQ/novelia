@@ -15,11 +15,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.ui.components.AppAlertDialog
 import cc.novelia.app.ui.components.ChoiceRow
-import cc.novelia.app.ui.components.MenuRow
+import cc.novelia.app.ui.account.ProfileMenuRow
 
 @Composable internal fun KeywordLimitPreference(limit: Int?, entryCount: Int, onSave: (Int?) -> Unit) {
     var editing by rememberSaveable { mutableStateOf(false) }
-    MenuRow("标签数量上限", "${limit?.let { "$it 个" } ?: "不限"} · 当前 $entryCount 个标签", Icons.Outlined.Tune, { editing = true })
+    ProfileMenuRow("标签数量上限", "${limit?.let { "$it 个" } ?: "不限"} · 当前 $entryCount 个标签", Icons.Outlined.Tune, { editing = true })
     if(editing) KeywordLimitDialog(limit, entryCount, { editing = false }) { value -> onSave(value); editing = false }
 }
 

@@ -1,6 +1,8 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.downloads
 
+import cc.novelia.app.ui.account.ProfileDetailCard
+
 import android.content.Intent
 import android.content.ClipData
 import androidx.activity.compose.BackHandler
@@ -29,12 +31,12 @@ import cc.novelia.app.data.model.DownloadEntry
 import cc.novelia.app.data.library.originBook
 import cc.novelia.app.files.*
 import cc.novelia.app.ui.components.AppDropdownMenu
-import cc.novelia.app.ui.components.AppLazyColumn
+import cc.novelia.app.ui.account.ProfileDetailList
 import cc.novelia.app.ui.components.ConfirmDialog
 import cc.novelia.app.ui.components.CreateBookDocument
-import cc.novelia.app.ui.components.EmptyState
+import cc.novelia.app.ui.account.ProfileEmptyState
 import cc.novelia.app.ui.components.ImportResultsPanel
-import cc.novelia.app.ui.components.Screen
+import cc.novelia.app.ui.account.ProfileDetailScreen
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.MotionContent
@@ -172,7 +174,7 @@ import kotlinx.coroutines.withContext
             }
         }
     }
-    Screen("下载管理", c::back, actions = {
+    ProfileDetailScreen("下载管理", c::back, actions = {
         TextButton(onClick = { selecting = !selecting; selection = emptyList() },
             enabled = !operating && !batch.running && importing.isEmpty() && (selecting || available.isNotEmpty())) {
             Icon(if(selecting) Icons.Outlined.Close else Icons.Outlined.Checklist, null, Modifier.size(18.dp))
@@ -220,8 +222,8 @@ import kotlinx.coroutines.withContext
             else -> "导入、导出和分享仅处理已完成文件；删除可处理所有选中任务。" }, Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         ImportResultsPanel(batch.items, batch.running, importer::pause, { if(!operating) importer.retryFailed() }, { if(!operating) importer.resume() }, c::book)
-        AppLazyColumn(Modifier.weight(1f).testTag("downloads-list"), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        if(state.downloads.isEmpty()) item { EmptyState("还没有下载任务", "在作品详情或文库分卷中下载小说，完成后可以导出或导入阅读。", Icons.Outlined.Download) }
+        ProfileDetailList(Modifier.weight(1f).testTag("downloads-list"), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        if(state.downloads.isEmpty()) item { ProfileEmptyState("还没有下载任务", "在作品详情或文库分卷中下载小说，完成后可以导出或导入阅读。", Icons.Outlined.Download) }
         items(state.downloads, key = { it.id }, contentType = { "download" }) { entry ->
             var more by remember(entry.id) { mutableStateOf(false) }
             val itemMotion = if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(AppMotion.Release), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit))
@@ -229,7 +231,7 @@ import kotlinx.coroutines.withContext
                 .toggleable(entry.id in selected, enabled = !operating && entry.id in available, role = Role.Checkbox) { checked ->
                     selection = if(checked) selection + entry.id else selection - entry.id
                 } else Modifier
-            Card(itemMotion.fillMaxWidth().animateContentSize(tween(if(reducedMotion) 0 else AppMotion.Standard)).then(selectionModifier)) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            ProfileDetailCard(itemMotion.fillMaxWidth().animateContentSize(tween(if(reducedMotion) 0 else AppMotion.Standard)).then(selectionModifier)) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(entry.title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, maxLines = 2)
                 if(selecting) Checkbox(entry.id in selected, onCheckedChange = null, enabled = !operating && entry.id in available)

@@ -14,7 +14,7 @@
 | `article/{id}`、`compose?article={article}&draft={draft}` | 文章详情、新建/编辑/续写草稿 |
 | `login`、`forum-login` | 小说服务登录、独立论坛登录 |
 | `forum-rules`、`forum-strikes` | 社区守则、处罚记录 |
-| `settings?section={section}`、`backup`、`sync` | 设置分类（section 可省略）、资料备份、原站待同步状态 |
+| `settings?section={section}`、`backup`、`sync` | 设置分类（section 可省略）、资料备份、网络与同步；`section=NETWORK` 与 `sync` 共用页面 |
 | `webdav`、`webdav-server` | WebDAV 同步、服务器配置 |
 | `updates`、`downloads`、`tools` | 更新中心、下载、文件工具 |
 | `notes`、`blocked`、`history` | 笔记、屏蔽、阅读历史 |

@@ -29,7 +29,7 @@ import cc.novelia.app.launcher.LauncherIconManager
 import cc.novelia.app.launcher.LauncherIconState
 import cc.novelia.app.ui.components.AppLazyColumn
 import cc.novelia.app.ui.components.AppSheet
-import cc.novelia.app.ui.components.MenuRow
+import cc.novelia.app.ui.account.ProfileMenuRow
 
 @Composable internal fun LauncherIconPreference(manager: LauncherIconManager) {
     val state by manager.state.collectAsStateWithLifecycle()
@@ -40,7 +40,7 @@ import cc.novelia.app.ui.components.MenuRow
         state.pending -> "${state.selected?.title} · 待退到后台时切换"
         else -> state.selected?.title.orEmpty()
     }
-    MenuRow("桌面图标", description, Icons.Outlined.Apps, { show = true })
+    ProfileMenuRow("桌面图标", description, Icons.Outlined.Apps, { show = true })
     if (show) AppSheet(onDismissRequest = { show = false }) {
         LauncherIconPicker(state, manager::select, Modifier.fillMaxWidth().fillMaxHeight(.7f))
     }

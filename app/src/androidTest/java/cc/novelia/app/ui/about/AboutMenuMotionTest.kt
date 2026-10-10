@@ -35,7 +35,7 @@ class AboutMenuMotionTest {
                 }
             }
         }
-        fun menuTop() = compose.onNodeWithText("Novelia使用教程").getUnclippedBoundsInRoot().top
+        fun menuTop() = compose.onNodeWithText("Novelia 使用教程").getUnclippedBoundsInRoot().top
         compose.mainClock.advanceTimeBy(32)
         val entering = menuTop()
         compose.mainClock.advanceTimeBy(320)
@@ -47,6 +47,6 @@ class AboutMenuMotionTest {
             assertEquals("静态模式首帧即到位", settled, menuTop())
         }
         compose.mainClock.autoAdvance = true
-        compose.onNodeWithText("Novelia使用教程").assertIsDisplayed()
+        compose.onNodeWithText("Novelia 使用教程").assertIsDisplayed()
     }
 }

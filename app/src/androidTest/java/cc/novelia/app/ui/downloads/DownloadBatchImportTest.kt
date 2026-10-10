@@ -182,7 +182,7 @@ class DownloadBatchImportTest {
         runBlocking { app.initialization.await() }
         val before = app.store.state.value
         val id = "download-import-${UUID.randomUUID()}"
-        val parent = SavedBook(BookCard(BookRef("wenku", id), "已有文库收藏"), folder = "我的文库", pinned = true, status = "已读", addedAt = 1234)
+        val parent = SavedBook(BookCard(BookRef("wenku", id), "已有文库收藏"), folder = "我的文库", pinned = true, status = "读完", addedAt = 1234)
         val entries = (1..5).map { index ->
             DownloadEntry("$id-$index", "测试分卷 $index", "$id-$index.txt", "https://example.invalid/$index",
                 status = if(index == 5) "等待下载" else "已完成",
@@ -194,12 +194,15 @@ class DownloadBatchImportTest {
                 File(app.store.downloadsDir, entry.fileName).writeText("第一章 测试\n测试文件正文 ${entry.id}\n第二段正文", Charsets.UTF_8)
             }
             app.store.update { it.copy(books = listOf(parent), downloads = entries, folders = listOf("默认收藏", parent.folder), positions = emptyMap()) }
-            block(app, parent, entries)
+            // LocalStore 会为收藏夹补齐稳定 ID；基准取保存后的条目，继续完整比较导入前后资料。
+            block(app, app.store.state.value.books.single { it.book.ref == parent.book.ref }, entries)
         } finally {
             compose.runOnIdle {
                 app.store.state.value.books.filter { it.book.ref.isLocal && before.books.none { old -> old.book.ref == it.book.ref } }
                     .forEach { app.store.removeDocument(it.book.ref.id) }
                 app.store.update { before }
+                // 合成资料也进入同步副本，必须能在下次启动时通过校验。
+                app.store.state.value.syncReplica.validate()
             }
             entries.forEach { File(app.store.downloadsDir, it.fileName).delete() }
             runBlocking { app.store.flush() }

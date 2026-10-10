@@ -159,7 +159,7 @@ import cc.novelia.app.ui.theme.LocalEInkMode
             ProfilePreferenceRow("设置", "阅读、外观与下载", Icons.Outlined.Tune, "settings", onNavigate,
                 RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 6.dp, bottomEnd = 6.dp))
             ProfilePreferenceRow("屏蔽管理", "作品与标签", Icons.Outlined.Block, "blocked", onNavigate, RoundedCornerShape(6.dp))
-            ProfilePreferenceRow("同步状态", if(pendingCount > 0) "$pendingCount 项待处理" else "自动同步与重试",
+            ProfilePreferenceRow("网络与同步", if(pendingCount > 0) "$pendingCount 项待处理" else "账号同步、WebDAV 与网络",
                 Icons.Outlined.Sync, "sync", onNavigate, RoundedCornerShape(6.dp))
             ProfilePreferenceRow("阅读资料备份", "书架、进度与本地资料", Icons.Outlined.Backup, "backup", onNavigate,
                 RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp, bottomStart = 24.dp, bottomEnd = 24.dp))
