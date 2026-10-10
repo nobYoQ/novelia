@@ -38,8 +38,8 @@ class ReadingUsabilityTest {
         compose.onNodeWithTag("account-permissions-toggle").assertHeightIsAtLeast(48.dp).performClick()
         compose.onNodeWithText("社区发布").assertIsDisplayed()
         compose.onNodeWithText("书籍编辑").assertIsDisplayed()
-        capture("account-permissions")
-        compose.onNodeWithTag("account-permissions-toggle").performClick()
+        capture("account-permissions", popup = true)
+        compose.onNodeWithContentDescription("收起账号权限").performClick()
         compose.onNodeWithText("社区发布").assertDoesNotExist()
     }
 
@@ -152,10 +152,10 @@ class ReadingUsabilityTest {
         } finally { app.store.update { previous } }
     }
 
-    private fun capture(name: String) {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val image = compose.onRoot().captureToImage().asAndroidBitmap()
-        File(context.getExternalFilesDir("ux-screenshots"), "$name.png").outputStream().use {
+    private fun capture(name: String, popup: Boolean = false) {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val image = if(popup) instrumentation.uiAutomation.takeScreenshot() else compose.onRoot().captureToImage().asAndroidBitmap()
+        File(instrumentation.targetContext.getExternalFilesDir("ux-screenshots"), "$name.png").outputStream().use {
             image.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
         }
     }

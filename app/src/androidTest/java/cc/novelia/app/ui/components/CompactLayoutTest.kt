@@ -162,11 +162,12 @@ class CompactLayoutTest {
             capture("profile-card-$scale")
             compose.onNodeWithTag("profile-account-menu").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
             compose.onNodeWithTag("account-permissions-toggle").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
-            assertTextFits("原站账号 · 普通成员")
+            assertTextFits("普通成员")
         }
         compose.onNodeWithText("退出登录").assertDoesNotExist()
         compose.onNodeWithTag("account-permissions-toggle").performClick()
         compose.onNodeWithText("社区发布").assertIsDisplayed()
+        compose.onNodeWithContentDescription("收起账号权限").performClick()
         compose.onNodeWithTag("profile-account-menu").performClick()
         compose.runOnIdle { assertEquals(0, logout) }
         compose.onNodeWithTag("profile-logout").performClick()
