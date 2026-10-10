@@ -1,5 +1,8 @@
 package cc.novelia.app.ui.discover
 
+import cc.novelia.app.ui.components.AppTextButton
+import cc.novelia.app.ui.components.AppIconButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ManageSearch
@@ -46,23 +49,23 @@ import cc.novelia.app.ui.components.QuickFilterButton
                 else filters.take(visibleCount).forEach { filter ->
                     QuickFilterButton(filter, Modifier.weight(1f), compact = true)
                 }
-                if(compact) IconButton(onClick = onFilter) {
+                if(compact) AppIconButton(onClick = onFilter) {
                     BadgedBox(badge = { if(filterCount > 0) Badge { Text(filterCount.toString()) } }) {
                         Icon(Icons.Outlined.Tune, "筛选${if(filterCount == 0) "" else " $filterCount"}")
                     }
-                } else TextButton(onClick = onFilter, contentPadding = PaddingValues(horizontal = 8.dp)) {
+                } else AppTextButton(onClick = onFilter, contentPadding = PaddingValues(horizontal = 8.dp)) {
                     Text(if(filterCount == 0) "筛选" else "筛选 $filterCount", maxLines = 1)
                 }
                 if(onAssistant != null) {
-                    if(compact) IconButton(onClick = onAssistant, Modifier.testTag("open-search-assistant")) {
+                    if(compact) AppIconButton(onClick = onAssistant, Modifier.testTag("open-search-assistant")) {
                         Icon(Icons.AutoMirrored.Outlined.ManageSearch, "辅助搜索")
-                    } else TextButton(onClick = onAssistant, modifier = Modifier.testTag("open-search-assistant")
+                    } else AppTextButton(onClick = onAssistant, modifier = Modifier.testTag("open-search-assistant")
                         .semantics { contentDescription = "辅助搜索" }, contentPadding = PaddingValues(horizontal = 8.dp)) {
                         Text("辅助搜索", maxLines = 1)
                     }
                 }
                 Box {
-                    IconButton(onClick = { moreOpen = true }) { Icon(Icons.Outlined.MoreVert, "更多搜索操作") }
+                    AppIconButton(onClick = { moreOpen = true }) { Icon(Icons.Outlined.MoreVert, "更多搜索操作") }
                     AppDropdownMenu(moreOpen, { moreOpen = false }) {
                         DropdownMenuItem(text = { Text("最近搜索") }, leadingIcon = { Icon(Icons.Outlined.History, null) },
                             onClick = { moreOpen = false; onRecent() })

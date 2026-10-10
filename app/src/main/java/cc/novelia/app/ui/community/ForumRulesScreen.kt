@@ -1,5 +1,10 @@
 package cc.novelia.app.ui.community
 
+import cc.novelia.app.ui.components.AppLinearProgressIndicator
+
+import cc.novelia.app.ui.components.AppTextButton
+import cc.novelia.app.ui.components.AppIconButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -34,11 +39,11 @@ import kotlinx.coroutines.CancellationException
         finally { loading = false }
     }
     Screen("社区守则", c::back, actions = {
-        IconButton(onClick = { refresh++ }, enabled = !loading) { Icon(Icons.Outlined.Refresh, "更新社区守则") }
+        AppIconButton(onClick = { refresh++ }, enabled = !loading) { Icon(Icons.Outlined.Refresh, "更新社区守则") }
     }) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
             Text(status, Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if(loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+            if(loading) AppLinearProgressIndicator(Modifier.fillMaxWidth())
             ForumRulesContent(document = document) { c.requireForumLogin { c.go("forum-strikes") } }
         }
     }
@@ -47,7 +52,7 @@ import kotlinx.coroutines.CancellationException
 @Composable internal fun ForumRulesContent(modifier: Modifier = Modifier, document: ForumCommunityRules = bundledForumCommunityRules, onStrikes: () -> Unit) {
     AppScrollColumn(modifier = modifier.fillMaxSize().testTag("forum-rules-page"),
         contentModifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        TextButton(onClick = onStrikes) { Text("查看处罚记录") }
+        AppTextButton(onClick = onStrikes) { Text("查看处罚记录") }
         document.blocks.forEachIndexed { index, block ->
             if(block.table != null) ForumPermissionsContent(block.table)
             else if(index != 0 || !block.heading || block.text != "社区守则") {

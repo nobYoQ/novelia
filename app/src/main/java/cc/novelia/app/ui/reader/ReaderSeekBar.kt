@@ -1,6 +1,8 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.reader
 
+import cc.novelia.app.ui.components.AppSlider
+
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -11,7 +13,6 @@ import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,6 +32,8 @@ import cc.novelia.app.reader.chapterSeekPage
 import cc.novelia.app.reader.safeFraction
 import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.LocalEInkMode
+import cc.novelia.app.ui.theme.LocalSquareCorners
+import androidx.compose.ui.geometry.Size
 import cc.novelia.app.ui.theme.appReducedMotion
 import kotlinx.coroutines.flow.first
 import kotlin.math.abs
@@ -45,6 +48,7 @@ import kotlin.math.roundToInt
     onSeek: (Float) -> Unit, modifier: Modifier = Modifier,
 ) {
     val eInk = LocalEInkMode.current
+    val squareCorners = LocalSquareCorners.current
     val reducedMotion = appReducedMotion()
     var draft by remember { mutableStateOf<Float?>(null) }
     val interaction = remember { MutableInteractionSource() }
@@ -65,7 +69,7 @@ import kotlin.math.roundToInt
             Text(if(pageCount != null) "${chapterSeekPage(current, pageCount) + 1} / ${pageCount.coerceAtLeast(1)} 页"
                 else "${(current * 100).roundToInt()}%", Modifier.testTag("reader-seek-preview"), style = MaterialTheme.typography.labelSmall, color = foreground)
         }
-        Slider(value = current, onValueChange = { next ->
+        AppSlider(value = current, onValueChange = { next ->
             draft = next.safeFraction()
             if(!eInk) latestSeek(next.safeFraction())
         }, onValueChangeFinished = {
@@ -85,13 +89,17 @@ import kotlin.math.roundToInt
                 .semantics { contentDescription = "本章阅读进度" },
             thumb = {
                 Canvas(Modifier.size(width = 24.dp, height = 48.dp)) {
-                    drawCircle(foreground.copy(alpha = if(enabled) 1f else .38f), radius.toPx())
+                    val color = foreground.copy(alpha = if(enabled) 1f else .38f)
+                    val r = radius.toPx()
+                    if(squareCorners) drawRect(color, center - Offset(r, r), Size(r * 2, r * 2))
+                    else drawCircle(color, r)
                 }
             }, track = { state ->
                 Canvas(Modifier.fillMaxWidth().height(4.dp)) {
                     val middle = size.height / 2
-                    drawLine(foreground.copy(alpha = if(eInk) .5f else .2f), Offset(0f, middle), Offset(size.width, middle), size.height, StrokeCap.Round)
-                    drawLine(foreground.copy(alpha = if(enabled) 1f else .38f), Offset(0f, middle), Offset(size.width * state.value, middle), size.height, StrokeCap.Round)
+                    val cap = if(squareCorners) StrokeCap.Butt else StrokeCap.Round
+                    drawLine(foreground.copy(alpha = if(eInk) .5f else .2f), Offset(0f, middle), Offset(size.width, middle), size.height, cap)
+                    drawLine(foreground.copy(alpha = if(enabled) 1f else .38f), Offset(0f, middle), Offset(size.width * state.value, middle), size.height, cap)
                 }
             })
     }

@@ -1,5 +1,8 @@
 package cc.novelia.app.ui.account
 
+import cc.novelia.app.ui.components.AppButton
+import cc.novelia.app.ui.components.AppTextButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -51,8 +54,8 @@ import kotlinx.coroutines.launch
                     label = { Text("邮箱") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
                 OutlinedTextField(otp, { otp = it }, Modifier.fillMaxWidth(), enabled = !busy,
                     label = { Text("邮箱验证码") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-                TextButton(enabled = !busy && !sending && cooldown == 0 && email.isNotBlank(), onClick = {
-                    if(!android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) { error = "请填写有效的邮箱"; return@TextButton }
+                AppTextButton(enabled = !busy && !sending && cooldown == 0 && email.isNotBlank(), onClick = {
+                    if(!android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) { error = "请填写有效的邮箱"; return@AppTextButton }
                     sending = true; error = null; notice = null
                     scope.launch {
                         try { session.requestMirrorOtp(email); notice = "验证码已发送，请检查邮箱及垃圾箱"; cooldown = 60 }
@@ -64,10 +67,10 @@ import kotlinx.coroutines.launch
             }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
             notice?.let { Text(it, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium) }
-            Button(enabled = !busy && !sending && username.isNotBlank() && password.isNotEmpty(), modifier = Modifier.fillMaxWidth(), onClick = {
+            AppButton(enabled = !busy && !sending && username.isNotBlank() && password.isNotEmpty(), modifier = Modifier.fillMaxWidth(), onClick = {
                 if(register && (username.trim().length !in 2..16 || password.length !in 8..100 ||
                         !android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches() || !otp.trim().matches(Regex("[0-9]{6}")))) {
-                    error = "请检查用户名（2–16 字符）、密码（8–100 字符）、邮箱和 6 位验证码"; return@Button
+                    error = "请检查用户名（2–16 字符）、密码（8–100 字符）、邮箱和 6 位验证码"; return@AppButton
                 }
                 busy = true; error = null; notice = null
                 scope.launch {
@@ -82,10 +85,10 @@ import kotlinx.coroutines.launch
                     finally { busy = false }
                 }
             }) { Text(if(busy) "验证中…" else if(register) "注册并登录" else "登录") }
-            TextButton(enabled = !busy && !sending, onClick = { register = !register; error = null; notice = null; password = ""; otp = "" }) {
+            AppTextButton(enabled = !busy && !sending, onClick = { register = !register; error = null; notice = null; password = ""; otp = "" }) {
                 Text(if(register) "已有账号，去登录" else "没有账号，注册")
             }
-            TextButton(enabled = !busy, onClick = { c.go("settings?section=NETWORK") }) { Text("切换书源线路") }
+            AppTextButton(enabled = !busy, onClick = { c.go("settings?section=NETWORK") }) { Text("切换书源线路") }
         }
     }
 }

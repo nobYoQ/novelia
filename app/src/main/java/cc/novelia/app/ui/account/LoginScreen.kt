@@ -2,6 +2,10 @@
 
 package cc.novelia.app.ui.account
 
+import cc.novelia.app.ui.components.AppLinearProgressIndicator
+
+import cc.novelia.app.ui.components.AppTextButton
+
 import android.annotation.SuppressLint
 import android.webkit.*
 import androidx.compose.foundation.layout.*
@@ -44,7 +48,7 @@ import kotlinx.coroutines.launch
     if(checking) Screen("登录 Novelia 论坛", c::back) { padding ->
         Column(Modifier.padding(padding).padding(20.dp)) {
             Text("正在恢复登录状态…")
-            if(!appReducedMotion()) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 12.dp))
+            if(!appReducedMotion()) AppLinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 12.dp))
         }
     } else if(c.app.bookSources.capture().source == cc.novelia.app.data.network.BookSource.XKVI)
         MirrorLoginScreen(c, forum = true)
@@ -86,10 +90,10 @@ import kotlinx.coroutines.launch
         loadDataWithBaseURL(target.origin, """<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;background:#f7faf5}iframe{position:fixed;inset:0;width:100vw;height:100vh;border:0}</style></head><body><iframe title="Novelia 统一认证" src="https://auth.novelia.cc/?app=${target.appId}&amp;theme=system"></iframe><script>window.addEventListener('message',function(e){if(e.origin==='https://auth.novelia.cc'&&e.data&&e.data.type==='login_success'&&window.NoveliaAuth){window.NoveliaAuth.postMessage('login_success');}});</script></body></html>""", "text/html", "UTF-8", null)
     } }
     DisposableEffect(web) { onDispose { web.stopLoading(); web.destroy(); c.afterLogin = null } }
-    Screen(if(forum) "登录 Novelia 论坛" else "登录 Novelia", c::back, actions = { TextButton(onClick = ::complete, enabled = !busy) { Text(if(busy) "验证中…" else "完成登录") } }) { padding -> Column(Modifier.padding(padding)) {
+    Screen(if(forum) "登录 Novelia 论坛" else "登录 Novelia", c::back, actions = { AppTextButton(onClick = ::complete, enabled = !busy) { Text(if(busy) "验证中…" else "完成登录") } }) { padding -> Column(Modifier.padding(padding)) {
         Text("使用Novelia账号登录、注册或找回密码。密码由认证网站直接处理。", Modifier.padding(horizontal = 20.dp, vertical = 12.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        if(loading || busy) { if(appReducedMotion()) Text(if(busy) "验证中…" else "正在加载认证页面…", Modifier.padding(horizontal = 20.dp)) else LinearProgressIndicator(Modifier.fillMaxWidth()) }
-        error?.let { Text(it, Modifier.padding(16.dp), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium); TextButton(onClick = { error = null; loading = true; web.reload() }) { Text("重新加载认证页") } }
+        if(loading || busy) { if(appReducedMotion()) Text(if(busy) "验证中…" else "正在加载认证页面…", Modifier.padding(horizontal = 20.dp)) else AppLinearProgressIndicator(Modifier.fillMaxWidth()) }
+        error?.let { Text(it, Modifier.padding(16.dp), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium); AppTextButton(onClick = { error = null; loading = true; web.reload() }) { Text("重新加载认证页") } }
         AndroidView(factory = { web }, modifier = Modifier.weight(1f).fillMaxWidth())
     } }
 }

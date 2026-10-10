@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.reader
 
+import cc.novelia.app.ui.components.AppTextButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
@@ -83,12 +85,12 @@ import kotlinx.coroutines.launch
             OutlinedTextField(query, onQuery, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).testTag("reader-toc-query"),
                 label = { Text("搜索章节") }, leadingIcon = { Icon(Icons.Outlined.Search, null) }, singleLine = true)
             Row(Modifier.padding(horizontal = 8.dp)) {
-                TextButton(onClick = { onReversed(!reversed) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if(reversed) "倒序" else "正序") }
-                TextButton(onClick = { scope.launch(Dispatchers.Main.immediate) { locate() } }, enabled = currentIndex >= 0, modifier = Modifier.heightIn(min = 48.dp)) { Text("定位当前") }
-                if(query.isNotBlank()) TextButton(onClick = { onQuery("") }, modifier = Modifier.heightIn(min = 48.dp)) { Text("清空") }
+                AppTextButton(onClick = { onReversed(!reversed) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if(reversed) "倒序" else "正序") }
+                AppTextButton(onClick = { scope.launch(Dispatchers.Main.immediate) { locate() } }, enabled = currentIndex >= 0, modifier = Modifier.heightIn(min = 48.dp)) { Text("定位当前") }
+                if(query.isNotBlank()) AppTextButton(onClick = { onQuery("") }, modifier = Modifier.heightIn(min = 48.dp)) { Text("清空") }
             }
             state.error?.let {
-                TextButton(onClick = onRetry, enabled = !state.loading, modifier = Modifier.padding(horizontal = 8.dp)) { Text("目录更新失败，点击重试") }
+                AppTextButton(onClick = onRetry, enabled = !state.loading, modifier = Modifier.padding(horizontal = 8.dp)) { Text("目录更新失败，点击重试") }
             }
             if(!ref.isLocal) Text(remember(toc, cachedIds) { offlineRangeLabel(toc, cachedIds) },
                 Modifier.padding(horizontal = 20.dp, vertical = 4.dp).testTag("reader-toc-cache-summary"),

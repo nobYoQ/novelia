@@ -62,6 +62,8 @@ fun legacyFolderId(name: String): String = if(name == DEFAULT_FOLDER) DEFAULT_FO
     val savedSearchPresets: List<SavedSearchPreset> = emptyList(),
     val drafts: Map<String, String> = emptyMap(), val reader: ReaderSettings = ReaderSettings(), val bookSettings: Map<String, ReaderSettings> = emptyMap(),
     val theme: String = "system", val reducedMotion: Boolean = false, val historyPaused: Boolean = false, val autoCollapseCloudFilters: Boolean = true,
+    // 直角彩蛋是本机偏好，普通设置备份保留，WebDAV 不同步。
+    val squareCorners: Boolean = false,
     val autoSaveCloudFavoritesLocally: Boolean = true,
     // 文件清理仅为本机偏好，默认关闭，普通设置备份会保留这两个选项。
     val deleteDownloadAfterImport: Boolean = false, val deleteLocalCopyOnShelfRemoval: Boolean = false,

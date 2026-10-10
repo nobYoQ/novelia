@@ -1,6 +1,11 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.discover
 
+import cc.novelia.app.ui.components.AppButton
+import cc.novelia.app.ui.components.AppTextButton
+import cc.novelia.app.ui.components.AppFilledTonalButton
+import cc.novelia.app.ui.components.AppIconButton
+
 import androidx.compose.animation.core.tween
 import cc.novelia.app.ui.components.AppActionChip
 import androidx.compose.foundation.layout.*
@@ -113,7 +118,7 @@ import kotlinx.coroutines.sync.withPermit
     }
     val filterCount = filterSummary.size + if(category == 1) listOf(type, sort).count { it != 0 } else 0
     DiscoverSearchLayout(query, submitted, searchEditing, { query = it }, { searchEditing = it }, ::search,
-        actions = { if(category == 2) IconButton(onClick = { c.requireLogin { c.go("wenku-new") } }) { Icon(Icons.Outlined.Add, "新建文库条目") }; IconButton(onClick = { c.go("rank") }) { Icon(Icons.Outlined.Leaderboard, "排行榜") } }) { onPageTurn ->
+        actions = { if(category == 2) AppIconButton(onClick = { c.requireLogin { c.go("wenku-new") } }) { Icon(Icons.Outlined.Add, "新建文库条目") }; AppIconButton(onClick = { c.go("rank") }) { Icon(Icons.Outlined.Leaderboard, "排行榜") } }) { onPageTurn ->
         Column(Modifier.fillMaxSize()) {
             PrimaryTabRow(category) { listOf("为你发现", "网络小说", "文库小说").forEachIndexed { i, label -> Tab(category == i, onClick = { category = i; page = 0 }, text = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) }) } }
             MotionContent(category, Modifier.weight(1f), animateInitial = false) {
@@ -136,7 +141,7 @@ import kotlinx.coroutines.sync.withPermit
                                 items(visibleWeb, key = { "web-${it.ref.key}" }, contentType = { "book" }) { BookRow(it, { c.book(it.ref) }, if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(AppMotion.Quick), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit)), showReadingProgress = false) }
                                 item(key = "wenku-heading", contentType = "heading") { SectionTitle("文库新近更新", "更多") { category = 2 } }
                                 items(visibleWenku, key = { "wenku-${it.ref.key}" }, contentType = { "book" }) { BookRow(it, { c.book(it.ref) }, if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(AppMotion.Quick), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit)), showReadingProgress = false) }
-                                item(key = "refresh", contentType = "controls") { TextButton(onClick = refresh, Modifier.fillMaxWidth()) { Text("刷新推荐") } }
+                                item(key = "refresh", contentType = "controls") { AppTextButton(onClick = refresh, Modifier.fillMaxWidth()) { Text("刷新推荐") } }
                             }
                         }
                     } else {
@@ -177,7 +182,7 @@ import kotlinx.coroutines.sync.withPermit
                                     EmptyState("没有找到匹配的作品", if(filterCount > 0) "先放宽筛选条件，搜索关键词会保留。" else "试试较短的关键词，或检查屏蔽条件。", Icons.Outlined.SearchOff,
                                         if(filterCount > 0) "放宽筛选" else if(submitted.isNotBlank()) "浏览全部作品" else "重新加载",
                                         { if(filterCount > 0) resetFilters() else if(submitted.isNotBlank()) { query = ""; submitted = ""; page = 0 } else refresh() }, sticker = MidoriSticker.Curious)
-                                    if(local.blockedBooks.isNotEmpty() || local.blockedTags.isNotEmpty() || local.blockedAuthors.isNotEmpty()) TextButton(onClick = { c.go("blocked") }, Modifier.fillMaxWidth()) { Text("检查屏蔽条件") }
+                                    if(local.blockedBooks.isNotEmpty() || local.blockedTags.isNotEmpty() || local.blockedAuthors.isNotEmpty()) AppTextButton(onClick = { c.go("blocked") }, Modifier.fillMaxWidth()) { Text("检查屏蔽条件") }
                                 }
                                 items(books, key = { it.ref.key }, contentType = { "book" }) {
                                     DiscoverBookRow(it, { c.book(it.ref) }, if(reducedMotion) Modifier else Modifier.animateItem(
@@ -195,7 +200,7 @@ import kotlinx.coroutines.sync.withPermit
     if(filterOpen) AppSheet(onDismissRequest = { filterOpen = false }) {
         AppScrollColumn(contentModifier = Modifier.padding(bottom = 24.dp)) {
             Text("筛选作品", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.titleLarge)
-            TextButton(onClick = ::resetFilters, Modifier.padding(horizontal = 12.dp)) { Text("重置全部筛选") }
+            AppTextButton(onClick = ::resetFilters, Modifier.padding(horizontal = 12.dp)) { Text("重置全部筛选") }
             if(category == 1) {
                 WebSourceFilter(source) { source = it; page = 0 }
                 ChoiceRow("连载状态", listOf("全部", "连载中", "已完结", "短篇"), type) { type = it; page = 0 }
@@ -205,10 +210,10 @@ import kotlinx.coroutines.sync.withPermit
                 CharacterCountFilterFields(localFilter.characters) { localFilter = localFilter.copy(characters = it); page = 0 }
                 Text("按作品提供的字数筛选；首次查找会补取字数，可继续加载更多结果。", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.bodySmall)
             } else ChoiceRow("文库分类", if(profile?.canEdit == true) listOf("全部小说", "轻小说", "轻文学", "文学", "非小说", "R18男性向", "R18女性向") else listOf("全部小说", "轻小说", "轻文学", "文学", "非小说"), wenkuLevel.coerceIn(0, if(profile?.canEdit == true) 6 else 4)) { wenkuLevel = it; page = 0 }
-            if(category == 1) FilledTonalButton(onClick = { filterOpen = false; assistantOpen = true }, Modifier.padding(horizontal = 20.dp)) { Text("打开辅助搜索") }
+            if(category == 1) AppFilledTonalButton(onClick = { filterOpen = false; assistantOpen = true }, Modifier.padding(horizontal = 20.dp)) { Text("打开辅助搜索") }
             Text("搜索框支持原站查询表达式。规则与示例可在站内使用教程中查看。", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.bodyMedium)
-            TextButton(onClick = { c.go("article/${ForumLinks.TUTORIAL_ID}"); filterOpen = false }, Modifier.padding(horizontal = 12.dp)) { Text("查看搜索语法") }
-            Button(onClick = { filterOpen = false }, Modifier.fillMaxWidth().padding(horizontal = 20.dp)) { Text("查看结果") }
+            AppTextButton(onClick = { c.go("article/${ForumLinks.TUTORIAL_ID}"); filterOpen = false }, Modifier.padding(horizontal = 12.dp)) { Text("查看搜索语法") }
+            AppButton(onClick = { filterOpen = false }, Modifier.fillMaxWidth().padding(horizontal = 20.dp)) { Text("查看结果") }
         }
     }
     if(assistantOpen) AppSheet(onDismissRequest = { assistantOpen = false }) {
@@ -226,8 +231,8 @@ import kotlinx.coroutines.sync.withPermit
         val searches = local.recentSearches
         Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(if(recent) "最近搜索" else "保存的搜索", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
-            if(recent && searches.isNotEmpty()) TextButton(onClick = { c.store.update { it.copy(recentSearches = emptyList()) } }) { Text("清空") }
-            TextButton(onClick = { searchListOpen = "" }) { Text("关闭") }
+            if(recent && searches.isNotEmpty()) AppTextButton(onClick = { c.store.update { it.copy(recentSearches = emptyList()) } }) { Text("清空") }
+            AppTextButton(onClick = { searchListOpen = "" }) { Text("关闭") }
         }
         AppScrollColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp), contentModifier = Modifier.padding(bottom = 24.dp)) {
             if(if(recent) searches.isEmpty() else local.savedSearchPresets.isEmpty()) Text(if(recent) "还没有搜索记录" else "还没有保存的搜索", Modifier.padding(20.dp),
@@ -238,8 +243,8 @@ import kotlinx.coroutines.sync.withPermit
                 MenuRow(value.name, value.summary(), Icons.Outlined.Bookmark,
                     { searchListOpen = ""; applyPreset(value) },
                     trailing = { Row {
-                        IconButton(onClick = { presetToSave = value; searchListOpen = "" }) { Icon(Icons.Outlined.Edit, "重命名搜索 ${value.name}") }
-                        IconButton(onClick = { c.store.update { state -> state.copy(savedSearchPresets = state.savedSearchPresets.filterNot { it.id == value.id }) } }) { Icon(Icons.Outlined.Close, "删除保存的搜索 ${value.name}") }
+                        AppIconButton(onClick = { presetToSave = value; searchListOpen = "" }) { Icon(Icons.Outlined.Edit, "重命名搜索 ${value.name}") }
+                        AppIconButton(onClick = { c.store.update { state -> state.copy(savedSearchPresets = state.savedSearchPresets.filterNot { it.id == value.id }) } }) { Icon(Icons.Outlined.Close, "删除保存的搜索 ${value.name}") }
                     } })
             }
         }

@@ -1,6 +1,9 @@
 @file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.components
 
+import cc.novelia.app.ui.components.AppTextButton
+import cc.novelia.app.ui.components.AppIconButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.foundation.text.KeyboardActions
@@ -58,7 +61,7 @@ internal fun paginationItems(page: Int, count: Int): List<Int?> {
                 if (item == null) Box(Modifier.width(20.dp).height(48.dp), contentAlignment = Alignment.Center) { Text("…") }
                 else {
                     val active = item == current
-                    TextButton(onClick = { if (!active) onChange(item) },
+                    AppTextButton(onClick = { if (!active) onChange(item) },
                         modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp).semantics {
                             selected = active
                             contentDescription = "第 ${item + 1} 页"
@@ -74,11 +77,11 @@ internal fun paginationItems(page: Int, count: Int): List<Int?> {
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            IconButton(onClick = { onChange(current - 1) }, enabled = current > 0) {
+            AppIconButton(onClick = { onChange(current - 1) }, enabled = current > 0) {
                 Icon(Icons.AutoMirrored.Outlined.KeyboardArrowLeft, "上一页")
             }
             Text("第 ${current + 1} / $total 页", style = MaterialTheme.typography.labelMedium)
-            IconButton(onClick = { onChange(current + 1) }, enabled = current < total - 1) {
+            AppIconButton(onClick = { onChange(current + 1) }, enabled = current < total - 1) {
                 Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, "下一页")
             }
         }
@@ -90,7 +93,7 @@ internal fun paginationItems(page: Int, count: Int): List<Int?> {
                 supportingText = if (invalid) ({ Text("请输入 1–$total 的页码") }) else null,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Go),
                 keyboardActions = KeyboardActions(onGo = { jump() }))
-            TextButton(onClick = { jump() }, enabled = target != null) { Text("跳转") }
+            AppTextButton(onClick = { jump() }, enabled = target != null) { Text("跳转") }
         }
     }
 }

@@ -2,6 +2,8 @@
 
 package cc.novelia.app.ui.book
 
+import cc.novelia.app.ui.components.AppButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
@@ -33,7 +35,7 @@ import kotlinx.serialization.json.*
                 if(ref.isWenku) { OutlinedTextField(jp, { jp = it }, label = { Text("原文标题") }, modifier = Modifier.fillMaxWidth()); OutlinedTextField(authors, { authors = it }, label = { Text("作者，每行一位") }, modifier = Modifier.fillMaxWidth()); OutlinedTextField(tags, { tags = it }, label = { Text("标签，每行一个") }, modifier = Modifier.fillMaxWidth()) }
                 OutlinedTextField(intro, { intro = it }, label = { Text("中文简介") }, minLines = 8, modifier = Modifier.fillMaxWidth())
                 if(!ref.isWenku) OutlinedTextField(linked, { linked = it }, label = { Text("关联文库 ID（可留空）") }, modifier = Modifier.fillMaxWidth())
-                Button(onClick = { c.action("书籍信息已保存") { saving = true; try {
+                AppButton(onClick = { c.action("书籍信息已保存") { saving = true; try {
                     if(ref.isWenku) {
                         val body = original.filterKeys { it in setOf("title", "titleZh", "cover", "authors", "artists", "level", "introduction", "keywords", "volumes") }.toMutableMap()
                         body["title"] = JsonPrimitive(jp); body["titleZh"] = JsonPrimitive(title); body["introduction"] = JsonPrimitive(intro); body["authors"] = JsonArray(authors.lines().filter(String::isNotBlank).map(::JsonPrimitive)); body["keywords"] = JsonArray(tags.lines().filter(String::isNotBlank).map(::JsonPrimitive))

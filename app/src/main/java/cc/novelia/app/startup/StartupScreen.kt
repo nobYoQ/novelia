@@ -1,5 +1,9 @@
 package cc.novelia.app.startup
 
+import cc.novelia.app.ui.components.AppButton
+
+import cc.novelia.app.ui.components.AppLinearProgressIndicator
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
@@ -25,7 +29,7 @@ import cc.novelia.app.ui.components.AppScrollColumn
                     Modifier.testTag("startup-current-step"), style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.height(24.dp))
                 // 使用离散进度，不添加强制等待或持续旋转动画，电子纸也能明确显示状态。
-                LinearProgressIndicator(progress = { progress.completed / StartupStep.READY.ordinal.toFloat() },
+                AppLinearProgressIndicator(progress = { progress.completed / StartupStep.READY.ordinal.toFloat() },
                     modifier = Modifier.fillMaxWidth().testTag("startup-progress"))
                 Spacer(Modifier.height(16.dp))
                 StartupStep.entries.filter { it != StartupStep.READY }.forEach { step ->
@@ -38,7 +42,7 @@ import cc.novelia.app.ui.components.AppScrollColumn
                             style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-                if(progress.failed) Button(onClick = onRetry, modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) { Text("重试加载") }
+                if(progress.failed) AppButton(onClick = onRetry, modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) { Text("重试加载") }
             }
         }
     }

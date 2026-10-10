@@ -1,5 +1,8 @@
 package cc.novelia.app.ui.community
 
+import cc.novelia.app.ui.components.AppTextButton
+import cc.novelia.app.ui.components.AppFilledIconButton
+
 import cc.novelia.app.data.catalog.ForumLinks
 import cc.novelia.app.data.model.ForumComment
 import cc.novelia.app.data.model.ForumCommentInput
@@ -133,10 +136,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
             val canEditDraft = editing?.canModify(profile, editNow) != false
             if(rootId != null || editing != null) Row {
                 Text(if(editing != null) "编辑评论 #${editing?.id}" else "回复 #$rootId", Modifier.weight(1f))
-                TextButton(onClick = { rootId = null; editing = null }) { Text("取消") }
+                AppTextButton(onClick = { rootId = null; editing = null }) { Text("取消") }
             }
             MarkdownCommentInput(text, { value -> text = value; c.store.update { it.copy(drafts = it.drafts + (draftKey to value)) } }, if(editing != null) "编辑评论" else "写下评论", isError = commentContent.isNotEmpty() && commentError != null, softLimit = true, unicodeLimit = ForumRules.COMMENT_LIMIT) {
-                FilledIconButton(enabled = commentError == null && canSend && canEditDraft && !sending, modifier = Modifier.testTag("forum-comment-submit"), onClick = {
+                AppFilledIconButton(enabled = commentError == null && canSend && canEditDraft && !sending, modifier = Modifier.testTag("forum-comment-submit"), onClick = {
                     // Login changes the account-specific draft key; retain the text being submitted.
                     val submittedText = text; val content = submittedText.trim(); val submittedRoot = rootId; val submittedReplyCount = replyCount; val submittedEdit = editing; val submittedDraft = draftKey
                     requireLogin { c.action {
@@ -186,11 +189,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
         comment.rootId?.let { Text("回复 #$it", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         ForumCommentContent(comment, profile, render)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            if(!locked && comment.status == 0) TextButton(onClick = onReply) { Text("回复") }
+            if(!locked && comment.status == 0) AppTextButton(onClick = onReply) { Text("回复") }
             if(comment.status == 0 && comment.canModify(profile, now)) {
-                if(ForumRules.canWrite(profile)) TextButton(onClick = onEdit) { Text("编辑") }
-                TextButton(onClick = onDelete) { Text("删除") }
-            } else if(comment.authorId != profile?.userId) TextButton(onClick = onBlock) { Text("屏蔽用户") }
+                if(ForumRules.canWrite(profile)) AppTextButton(onClick = onEdit) { Text("编辑") }
+                AppTextButton(onClick = onDelete) { Text("删除") }
+            } else if(comment.authorId != profile?.userId) AppTextButton(onClick = onBlock) { Text("屏蔽用户") }
             extraAction?.invoke()
         }
     }
@@ -202,7 +205,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
     else {
         val label = if(comment.status == 2) "该评论已删除" else "该评论已隐藏"
         if(profile?.role == "admin" && comment.content.isNotEmpty()) {
-            TextButton(onClick = { expanded = !expanded }) { Text("$label · ${if(expanded) "收起原文" else "查看原文"}") }
+            AppTextButton(onClick = { expanded = !expanded }) { Text("$label · ${if(expanded) "收起原文" else "查看原文"}") }
             if(expanded) render(comment.content)
         } else Text(label)
     }

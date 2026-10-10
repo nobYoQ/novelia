@@ -1,6 +1,10 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.book
 
+import cc.novelia.app.ui.components.AppButton
+import cc.novelia.app.ui.components.AppTextButton
+import cc.novelia.app.ui.components.AppIconButton
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.tween
@@ -83,8 +87,8 @@ import kotlinx.coroutines.withContext
     var uploadBusy by remember { mutableStateOf(false) }
     val uploader = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let { c.action("分卷上传完成") { uploadBusy = true; try { withContext(Dispatchers.IO) { val (name, bytes) = readDocument(c, it); require(name.substringAfterLast('.').lowercase() in listOf("epub", "txt") && bytes.size <= 40 * 1024 * 1024) { "文库上传支持不超过 40 MB 的 EPUB / TXT" }; val file = File(c.app.cacheDir, "upload-${System.nanoTime()}"); try { file.writeBytes(bytes); c.api.uploadVolume(ref, name, file) } finally { file.delete() } }; version++ } finally { uploadBusy = false } } } }
     Screen(if(ref.isWenku) "文库详情" else "作品详情", onBack, actions = {
-        IconButton(onClick = { c.share(ref.url) }) { Icon(Icons.Outlined.Share, "分享作品") }
-        Box { IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "更多操作") }; AppDropdownMenu(menu, { menu = false }) {
+        AppIconButton(onClick = { c.share(ref.url) }) { Icon(Icons.Outlined.Share, "分享作品") }
+        Box { AppIconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "更多操作") }; AppDropdownMenu(menu, { menu = false }) {
             DropdownMenuItem({ Text("刷新资料") }, { version++; menu = false }, leadingIcon = { Icon(Icons.Outlined.Refresh, null) })
             DropdownMenuItem({ Text("术语表") }, { c.go("glossary/${ref.key}"); menu = false }, leadingIcon = { Icon(Icons.Outlined.Translate, null) })
             DropdownMenuItem({ Text("编辑书籍信息") }, { c.requireLogin { c.go("edit/${ref.key}") }; menu = false }, leadingIcon = { Icon(Icons.Outlined.Edit, null) })
@@ -116,7 +120,7 @@ import kotlinx.coroutines.withContext
                                 })
                             } }
                             if(detail.volumeJp.isNotEmpty() || detail.volumeZh.isNotEmpty()) item { MetaParagraph("译文情况", "中文文件 ${detail.volumeZh.size} 卷 · 日文分卷 ${detail.volumeJp.size} 卷\nSakura ${detail.volumeJp.sumOf { it.sakura }} · GPT ${detail.volumeJp.sumOf { it.gpt }} · 有道 ${detail.volumeJp.sumOf { it.youdao }} / ${detail.volumeJp.sumOf { it.total }}") }
-                            if(detail.webIds.isNotEmpty()) item { SectionTitle("关联网络版"); detail.webIds.forEach { id -> TextButton(onClick = { c.book(BookRef.fromKey(id)) }, Modifier.padding(horizontal = 12.dp)) { Text(id) } } }
+                            if(detail.webIds.isNotEmpty()) item { SectionTitle("关联网络版"); detail.webIds.forEach { id -> AppTextButton(onClick = { c.book(BookRef.fromKey(id)) }, Modifier.padding(horizontal = 12.dp)) { Text(id) } } }
                         }
                         1 -> WenkuVolumesPanel(c, book, detail, uploadBusy,
                             onUpload = { uploader.launch(arrayOf("*/*")) }, onRefresh = refresh)
@@ -158,15 +162,15 @@ import kotlinx.coroutines.withContext
                             item { TagList(detail.keywords + detail.attentions, c) }
                             item { SectionTitle("作者"); detail.authors.filter { it.name.isNotBlank() }.forEach { author ->
                                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    TextButton(onClick = { c.go("discover?query=${android.net.Uri.encode(author.name)}") }, Modifier.weight(1f)) { Text(author.name) }
-                                    IconButton(onClick = { c.store.update { it.copy(blockedAuthors = it.blockedAuthors + author.name.trim()) }; c.message("已屏蔽作者 ${author.name}") }) {
+                                    AppTextButton(onClick = { c.go("discover?query=${android.net.Uri.encode(author.name)}") }, Modifier.weight(1f)) { Text(author.name) }
+                                    AppIconButton(onClick = { c.store.update { it.copy(blockedAuthors = it.blockedAuthors + author.name.trim()) }; c.message("已屏蔽作者 ${author.name}") }) {
                                         Icon(Icons.Outlined.PersonOff, "屏蔽作者 ${author.name}")
                                     }
                                 }
                             } }
                             item { MetaParagraph("译文进度", "原文 ${detail.jp} · Sakura ${detail.sakura} · GPT ${detail.gpt} · 有道 ${detail.youdao}") }
                             detail.wenkuId?.let { id -> item { MenuRow("关联文库版", "查看分卷与出版信息", Icons.Outlined.LibraryBooks, { c.book(BookRef("wenku", id)) }) } }
-                            item { TextButton(onClick = refresh, Modifier.fillMaxWidth()) { Text("刷新书籍资料") } }
+                            item { AppTextButton(onClick = refresh, Modifier.fillMaxWidth()) { Text("刷新书籍资料") } }
                         }
                         1 -> TocPanel(c, ref, detail.toc, start) { id -> c.read(ref, id) }
                         2 -> NovelCommentsPanel(c, "web-${ref.provider}-${ref.id}")
@@ -176,7 +180,7 @@ import kotlinx.coroutines.withContext
     }
     favorite?.let { (book, cloud) -> FavoriteSheet(c, book, initialCloud = cloud) { favorite = null } }
     download?.let { book -> DownloadSheet(c, book, emptyList()) { download = null } }
-    progressChoice?.let { (localChapter, cloudChapter) -> AppAlertDialog(onDismissRequest = { progressChoice = null }, title = { Text("选择继续阅读的位置") }, text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { Text("本机与原站记录的章节不同，请选择这次从哪里继续。"); Text("本机：${localChapter.label}"); Text("原站：${cloudChapter.label}") } }, confirmButton = { TextButton(onClick = { progressChoice = null; c.read(ref, cloudChapter.chapterId) }) { Text("原站进度") } }, dismissButton = { TextButton(onClick = { progressChoice = null; c.read(ref, localChapter.chapterId) }) { Text("本机进度") } }) }
+    progressChoice?.let { (localChapter, cloudChapter) -> AppAlertDialog(onDismissRequest = { progressChoice = null }, title = { Text("选择继续阅读的位置") }, text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { Text("本机与原站记录的章节不同，请选择这次从哪里继续。"); Text("本机：${localChapter.label}"); Text("原站：${cloudChapter.label}") } }, confirmButton = { AppTextButton(onClick = { progressChoice = null; c.read(ref, cloudChapter.chapterId) }) { Text("原站进度") } }, dismissButton = { AppTextButton(onClick = { progressChoice = null; c.read(ref, localChapter.chapterId) }) { Text("本机进度") } }) }
 }
 @Composable private fun LocalBookDetailScreen(c: AppController, ref: BookRef, onBack: () -> Unit) {
     val state by c.store.state.collectAsStateWithLifecycle()
@@ -200,7 +204,7 @@ import kotlinx.coroutines.withContext
                         }
                     }
                     item {
-                        Button(onClick = { destination?.let { c.read(ref, it.chapterId) } }, enabled = destination != null,
+                        AppButton(onClick = { destination?.let { c.read(ref, it.chapterId) } }, enabled = destination != null,
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
                             Text(if(savedPosition == null) "开始阅读" else "继续阅读 · 第 ${destination?.number} 章")
                         }
@@ -294,9 +298,9 @@ import kotlinx.coroutines.withContext
     Column {
         OutlinedTextField(search, { search = it }, label = { Text("搜索章节") }, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), singleLine = true, leadingIcon = { Icon(Icons.Outlined.Search, null) })
         Row(Modifier.padding(horizontal = 12.dp)) {
-            TextButton(onClick = { reversed = !reversed }) { Text(if(reversed) "倒序" else "正序") }
-            TextButton(onClick = { scope.launch { if(reducedMotion || abs(currentIndex - scroll.firstVisibleItemIndex) > 100) scroll.scrollToItem(currentIndex) else scroll.animateScrollToItem(currentIndex) } }, enabled = currentIndex >= 0) { Text("定位当前") }
-            if(!ref.isLocal) TextButton(onClick = { cacheDialog = true }, enabled = hasChapters) { Text("缓存章节") }
+            AppTextButton(onClick = { reversed = !reversed }) { Text(if(reversed) "倒序" else "正序") }
+            AppTextButton(onClick = { scope.launch { if(reducedMotion || abs(currentIndex - scroll.firstVisibleItemIndex) > 100) scroll.scrollToItem(currentIndex) else scroll.animateScrollToItem(currentIndex) } }, enabled = currentIndex >= 0) { Text("定位当前") }
+            if(!ref.isLocal) AppTextButton(onClick = { cacheDialog = true }, enabled = hasChapters) { Text("缓存章节") }
         }
         if(!ref.isLocal) Text(remember(toc, cachedIds) { offlineRangeLabel(toc, cachedIds) }, Modifier.padding(horizontal = 20.dp, vertical = 4.dp), style = MaterialTheme.typography.labelMedium)
         AppLazyColumn(state = scroll, modifier = Modifier.weight(1f)) {

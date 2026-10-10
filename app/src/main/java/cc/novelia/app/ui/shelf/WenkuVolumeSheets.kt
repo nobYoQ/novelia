@@ -1,6 +1,10 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.shelf
 
+import cc.novelia.app.ui.components.AppCheckbox
+
+import cc.novelia.app.ui.components.AppButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.toggleable
@@ -64,13 +68,13 @@ internal data class ShelfRowItem(val saved: SavedBook, val parent: SavedBook? = 
                     val key = volume.book.ref.key
                     ListItem(headlineContent = { Text(volume.book.title) },
                         supportingContent = { Text(parents[volume.parentWenkuKey]?.let { "已挂载：${it.book.title}" } ?: "未挂载") },
-                        trailingContent = { Checkbox(key in chosen, onCheckedChange = null) },
+                        trailingContent = { AppCheckbox(key in chosen, onCheckedChange = null) },
                         modifier = Modifier.testTag("mount-volume-$key").toggleable(key in chosen, role = Role.Checkbox) { checked ->
                             chosen = if(checked) (chosen + key).distinct() else chosen - key
                         })
                 }
             }
-            Button(onClick = { onSave(chosen.toSet().intersect(localBooks.map { it.book.ref.key }.toSet())) },
+            AppButton(onClick = { onSave(chosen.toSet().intersect(localBooks.map { it.book.ref.key }.toSet())) },
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) { Text("保存挂载（${chosen.size}）") }
         }
     }

@@ -74,9 +74,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.delay
 import cc.novelia.app.startup.StartupScreen
 
-private data class AppAppearance(val theme: String, val reducedMotion: Boolean, val eInk: Boolean, val eInkBooks: Set<String>,
+private data class AppAppearance(val theme: String, val squareCorners: Boolean, val reducedMotion: Boolean, val eInk: Boolean, val eInkBooks: Set<String>,
     val screenButtons: Boolean, val hideStatusBar: Boolean, val bookStatusBars: Map<String, Boolean>)
-private fun LibraryState.appearance() = AppAppearance(theme, reducedMotion || reader.eInkMode, reader.eInkMode,
+private fun LibraryState.appearance() = AppAppearance(theme, squareCorners, reducedMotion || reader.eInkMode, reader.eInkMode,
     bookSettings.filterValues { it.eInkMode }.keys, reader.showEInkScreenButtons, reader.hideStatusBar, bookSettings.mapValues { it.value.hideStatusBar })
 
 /**
@@ -107,7 +107,7 @@ class MainActivity : ComponentActivity() {
                 .collectAsStateWithLifecycle(initialValue = remember(app) { app.store.state.value.appearance() })
             val link by incoming.collectAsStateWithLifecycle()
             AppInteractionMode(appearance.eInk, appearance.reducedMotion) {
-            NoveliaTheme(appearance.theme) {
+            NoveliaTheme(appearance.theme, squareCorners = appearance.squareCorners) {
                 val nav = rememberNavController(); val scope = rememberCoroutineScope(); val snackbar = remember { SnackbarHostState() }
                 val source by app.bookSources.state.collectAsStateWithLifecycle()
                 val controller = remember(source.revision) { AppController(app, nav, scope, snackbar) }

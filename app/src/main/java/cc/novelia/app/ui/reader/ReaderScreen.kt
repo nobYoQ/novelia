@@ -1,6 +1,11 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.reader
 
+import cc.novelia.app.ui.components.AppButton
+import cc.novelia.app.ui.components.AppTextButton
+import cc.novelia.app.ui.components.AppOutlinedButton
+import cc.novelia.app.ui.components.AppIconButton
+
 import android.content.Intent
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
@@ -754,9 +759,9 @@ import kotlinx.serialization.encodeToString
                         if(chapter.nextId != null) ReaderChapterPullHint(chapterPull.progress, chapterPull.active, chapterPull.ready,
                             inlineChapterLoad && chapterLoad.loading, foreground, Modifier.padding(bottom = 8.dp))
                         if(settings.showScrollPageButtons) {
-                            if(chapter.nextId != null) Button(onClick = { openChapter(chapter.nextId, inline = true) }, modifier = Modifier.heightIn(min = 48.dp), enabled = !leaving && !chapterLoad.loading) { Text("阅读下一章") }
-                            else if(nextVolume != null) { Text("下一分卷：${nextVolume.book.title}", color = foreground, modifier = Modifier.padding(bottom = 12.dp)); Button(onClick = { nextVolumePrompt = true }, modifier = Modifier.heightIn(min = 48.dp), enabled = !leaving) { Text("阅读下一分卷") } }
-                            else OutlinedButton(onClick = { if(wide) { tocQuery = ""; tocLocateRequest++ } else toc = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text("返回目录") }
+                            if(chapter.nextId != null) AppButton(onClick = { openChapter(chapter.nextId, inline = true) }, modifier = Modifier.heightIn(min = 48.dp), enabled = !leaving && !chapterLoad.loading) { Text("阅读下一章") }
+                            else if(nextVolume != null) { Text("下一分卷：${nextVolume.book.title}", color = foreground, modifier = Modifier.padding(bottom = 12.dp)); AppButton(onClick = { nextVolumePrompt = true }, modifier = Modifier.heightIn(min = 48.dp), enabled = !leaving) { Text("阅读下一分卷") } }
+                            else AppOutlinedButton(onClick = { if(wide) { tocQuery = ""; tocLocateRequest++ } else toc = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text("返回目录") }
                         }
                         // 章末留白让同一提示句位于控件上方，
                         // 不会改变正文视口高度或使章节重新分页。
@@ -769,14 +774,14 @@ import kotlinx.serialization.encodeToString
                 // 此高度仅用于把搜索结果放在浮层下方。
                 Column(Modifier.onSizeChanged { topOverlayHeight = it.height }) {
                     TopAppBar(title = { Text(chapter.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium) }, navigationIcon = {
-                        IconButton(onClick = { if(!leaving) { seekGeneration++; seekJob?.cancel(); seekTarget = null; chapterLoad.cancel(); savePosition(); leaving = true; c.back() } }) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "返回") }
+                        AppIconButton(onClick = { if(!leaving) { seekGeneration++; seekJob?.cancel(); seekTarget = null; chapterLoad.cancel(); savePosition(); leaving = true; c.back() } }) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "返回") }
                     }, actions = {
-                        if(!ref.isLocal) IconButton(onClick = { refreshChapter() }, enabled = !leaving) { Icon(Icons.Outlined.Refresh, "刷新本章译文") }
-                        IconButton(onClick = { if(search) focusManager.clearFocus(); search = !search }) { Icon(Icons.Outlined.Search, "搜索本章") }
-                        IconButton(onClick = { preferences = true }) { Icon(Icons.Outlined.TextFields, "阅读设置") }
+                        if(!ref.isLocal) AppIconButton(onClick = { refreshChapter() }, enabled = !leaving) { Icon(Icons.Outlined.Refresh, "刷新本章译文") }
+                        AppIconButton(onClick = { if(search) focusManager.clearFocus(); search = !search }) { Icon(Icons.Outlined.Search, "搜索本章") }
+                        AppIconButton(onClick = { preferences = true }) { Icon(Icons.Outlined.TextFields, "阅读设置") }
                     }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent, scrolledContainerColor = Color.Transparent, titleContentColor = foreground, actionIconContentColor = foreground, navigationIconContentColor = foreground))
-                    if(translationUpdate != null) TextButton(onClick = { refreshChapter() }, enabled = !leaving, colors = ButtonDefaults.textButtonColors(contentColor = foreground)) { Text("本书有新的译文，可刷新本章") }
-                    if(returnPoint != null) TextButton(onClick = { returnToReadingPlace() }, enabled = !leaving && !chapterLoad.loading && !restoringAnchor && initialAnchorRestored,
+                    if(translationUpdate != null) AppTextButton(onClick = { refreshChapter() }, enabled = !leaving, colors = ButtonDefaults.textButtonColors(contentColor = foreground)) { Text("本书有新的译文，可刷新本章") }
+                    if(returnPoint != null) AppTextButton(onClick = { returnToReadingPlace() }, enabled = !leaving && !chapterLoad.loading && !restoringAnchor && initialAnchorRestored,
                         colors = ButtonDefaults.textButtonColors(contentColor = foreground), modifier = Modifier.testTag("reader-return-to-reading")) {
                         Icon(Icons.Outlined.Undo, null, Modifier.size(18.dp)); Text("回到刚才阅读处", Modifier.padding(start = 6.dp))
                     }
@@ -790,15 +795,15 @@ import kotlinx.serialization.encodeToString
                                 colors = OutlinedTextFieldDefaults.colors(focusedTextColor = foreground, unfocusedTextColor = foreground,
                                     focusedBorderColor = foreground, unfocusedBorderColor = foreground.copy(alpha = .5f),
                                     focusedLabelColor = foreground, unfocusedLabelColor = foreground.copy(alpha = .7f), cursorColor = foreground))
-                            TextButton(onClick = { findNext() }, enabled = search && query.isNotBlank() && !finding,
+                            AppTextButton(onClick = { findNext() }, enabled = search && query.isNotBlank() && !finding,
                                 colors = ButtonDefaults.textButtonColors(contentColor = foreground, disabledContentColor = foreground.copy(alpha = .38f))) { Text(if(finding) "查找中" else "查找") }
                         }
                         if(chapterMatches.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text("${(chapterMatches.indexOf(activeMatch) + 1).coerceAtLeast(0)} / ${chapterMatches.size}${if(chapterMatches.size == 2000) "+" else ""}", style = MaterialTheme.typography.labelMedium, color = foreground)
-                            TextButton(onClick = { findNext(-1) }, enabled = !finding, colors = ButtonDefaults.textButtonColors(contentColor = foreground)) { Text("上一处") }
-                            TextButton(onClick = { findNext(1) }, enabled = !finding, colors = ButtonDefaults.textButtonColors(contentColor = foreground)) { Text("下一处") }
+                            AppTextButton(onClick = { findNext(-1) }, enabled = !finding, colors = ButtonDefaults.textButtonColors(contentColor = foreground)) { Text("上一处") }
+                            AppTextButton(onClick = { findNext(1) }, enabled = !finding, colors = ButtonDefaults.textButtonColors(contentColor = foreground)) { Text("下一处") }
                         }
-                        TextButton(onClick = { focusManager.clearFocus(); bookSearch = true }, Modifier.padding(horizontal = 12.dp), colors = ButtonDefaults.textButtonColors(contentColor = foreground)) { Text("整本搜索（本地 / 已缓存章节）") }
+                        AppTextButton(onClick = { focusManager.clearFocus(); bookSearch = true }, Modifier.padding(horizontal = 12.dp), colors = ButtonDefaults.textButtonColors(contentColor = foreground)) { Text("整本搜索（本地 / 已缓存章节）") }
                         }
                     }
                 }
@@ -807,8 +812,8 @@ import kotlinx.serialization.encodeToString
             Column(Modifier.align(Alignment.BottomCenter).testTag("reader-bottom-toolbar").onSizeChanged { bottomOverlayHeight = it.height }) {
                 val persistentControls = settings.showPageButtons || settings.staticPagination
                 if(settings.showPageButtons) Row(Modifier.fillMaxWidth().background(toolbarBackground).padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedButton(onClick = { page(-1) }, colors = ButtonDefaults.outlinedButtonColors(contentColor = foreground, disabledContentColor = foreground.copy(alpha = .38f)), enabled = if(settings.staticPagination) eInk.ready && (eInk.canGoBack || (eInk.pages.isNotEmpty() && chapter.prevId != null)) else scroll.canScrollBackward) { Text(if(settings.staticPagination) "上一页" else "上一屏") }
-                    OutlinedButton(onClick = { page(1) }, colors = ButtonDefaults.outlinedButtonColors(contentColor = foreground, disabledContentColor = foreground.copy(alpha = .38f)), enabled = if(settings.staticPagination) eInk.ready && (eInk.canGoForward || (eInk.pages.isNotEmpty() && (chapter.nextId != null || nextVolume != null))) else scroll.canScrollForward) { Text(if(settings.staticPagination) "下一页" else "下一屏") }
+                    AppOutlinedButton(onClick = { page(-1) }, colors = ButtonDefaults.outlinedButtonColors(contentColor = foreground, disabledContentColor = foreground.copy(alpha = .38f)), enabled = if(settings.staticPagination) eInk.ready && (eInk.canGoBack || (eInk.pages.isNotEmpty() && chapter.prevId != null)) else scroll.canScrollBackward) { Text(if(settings.staticPagination) "上一页" else "上一屏") }
+                    AppOutlinedButton(onClick = { page(1) }, colors = ButtonDefaults.outlinedButtonColors(contentColor = foreground, disabledContentColor = foreground.copy(alpha = .38f)), enabled = if(settings.staticPagination) eInk.ready && (eInk.canGoForward || (eInk.pages.isNotEmpty() && (chapter.nextId != null || nextVolume != null))) else scroll.canScrollForward) { Text(if(settings.staticPagination) "下一页" else "下一屏") }
                 }
                 ReaderOverlayVisibility(menu, Modifier, enter = if(reducedMotion) EnterTransition.None else fadeIn(tween(AppMotion.Quick)) + slideInVertically(tween(AppMotion.Standard)) { it }, exit = if(reducedMotion) ExitTransition.None else fadeOut(tween(AppMotion.Exit)) + slideOutVertically(tween(AppMotion.Release)) { it }) {
                     Surface(color = toolbarBackground, contentColor = foreground) {
@@ -819,17 +824,17 @@ import kotlinx.serialization.encodeToString
                                     (if(settings.staticPagination) eInk.ready && eInk.pages.size > 1 else paragraphs.isNotEmpty() && (scroll.canScrollForward || scroll.canScrollBackward)),
                                 foreground = foreground, onSeek = { seekChapter(it) }, modifier = Modifier.padding(top = 8.dp).onFocusChanged { seekFocused = it.hasFocus })
                             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                IconButton(onClick = { chapter.prevId?.let { openChapter(it) } }, enabled = chapter.prevId != null && !leaving && !chapterLoad.loading) { Icon(Icons.Outlined.SkipPrevious, "上一章") }
-                                TextButton(onClick = { if(wide) { tocQuery = ""; tocLocateRequest++ } else toc = true }, colors = ButtonDefaults.textButtonColors(contentColor = foreground)) { Icon(Icons.Outlined.FormatListBulleted, null, Modifier.size(18.dp)); Text(if(wide) " 定位目录" else " 目录") }
+                                AppIconButton(onClick = { chapter.prevId?.let { openChapter(it) } }, enabled = chapter.prevId != null && !leaving && !chapterLoad.loading) { Icon(Icons.Outlined.SkipPrevious, "上一章") }
+                                AppTextButton(onClick = { if(wide) { tocQuery = ""; tocLocateRequest++ } else toc = true }, colors = ButtonDefaults.textButtonColors(contentColor = foreground)) { Icon(Icons.Outlined.FormatListBulleted, null, Modifier.size(18.dp)); Text(if(wide) " 定位目录" else " 目录") }
                                 val bookmarked = local.notes.any { it.bookmarked && it.key == ref.key && it.chapterId == chapterId && it.paragraph == paragraphs.getOrNull(firstParagraph)?.index }
-                                IconButton(onClick = { paragraphs.getOrNull(firstParagraph)?.let { saveBookmark(it) } }, enabled = paragraphs.isNotEmpty(), modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp)) {
+                                AppIconButton(onClick = { paragraphs.getOrNull(firstParagraph)?.let { saveBookmark(it) } }, enabled = paragraphs.isNotEmpty(), modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp)) {
                                     Icon(if(bookmarked) Icons.Outlined.BookmarkAdded else Icons.Outlined.BookmarkAdd, if(bookmarked) "已保存书签" else "保存书签")
                                 }
-                                IconButton(onClick = { speechSheet = true }) {
+                                AppIconButton(onClick = { speechSheet = true }) {
                                     if(speechStatus == ReadAloudService.SLEEP_TIMER_FINISHED) StickerAccent(MidoriSticker.Sleep, speechStatus, Modifier.size(40.dp).semantics { contentDescription = "朗读定时已结束，打开朗读设置" })
                                     else Icon(Icons.Outlined.VolumeUp, "朗读本章")
                                 }
-                                IconButton(onClick = { if(chapter.nextId != null) openChapter(chapter.nextId) else nextVolumePrompt = true }, enabled = (chapter.nextId != null || nextVolume != null) && !leaving && !chapterLoad.loading) { Icon(Icons.Outlined.SkipNext, if(chapter.nextId == null && nextVolume != null) "下一分卷" else "下一章") }
+                                AppIconButton(onClick = { if(chapter.nextId != null) openChapter(chapter.nextId) else nextVolumePrompt = true }, enabled = (chapter.nextId != null || nextVolume != null) && !leaving && !chapterLoad.loading) { Icon(Icons.Outlined.SkipNext, if(chapter.nextId == null && nextVolume != null) "下一分卷" else "下一章") }
                             }
                             val toolbarHint = if(settings.tapPageTurn) "点击中间区域收起工具栏" else "点击正文收起工具栏"
                             Text(if(settings.staticPagination) "${if(settings.eInkMode) "电子纸" else "分页阅读"} · $toolbarHint" else "${if(cached) "本地内容 · " else ""}$toolbarHint", Modifier.align(Alignment.CenterHorizontally).padding(bottom = 8.dp), style = MaterialTheme.typography.labelSmall, color = foreground)
@@ -860,8 +865,8 @@ import kotlinx.serialization.encodeToString
                     Text(if(chapterLoad.loading) "正在加载章节…" else "章节加载失败，仍在当前章", style = MaterialTheme.typography.titleSmall)
                     chapterLoad.error?.let { Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 3, overflow = TextOverflow.Ellipsis) }
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        if(!chapterLoad.loading) TextButton(onClick = chapterLoad::retry) { Text("重试加载章节") }
-                        TextButton(onClick = chapterLoad::cancel) { Text(if(chapterLoad.loading) "取消加载" else "继续阅读") }
+                        if(!chapterLoad.loading) AppTextButton(onClick = chapterLoad::retry) { Text("重试加载章节") }
+                        AppTextButton(onClick = chapterLoad::cancel) { Text(if(chapterLoad.loading) "取消加载" else "继续阅读") }
                     }
                 }
             }
@@ -873,7 +878,7 @@ import kotlinx.serialization.encodeToString
         }
         }
         }
-        if(nextVolumePrompt && nextVolume != null) AppAlertDialog(onDismissRequest = { nextVolumePrompt = false }, title = { Text("本卷已读完") }, text = { Column { Text("按书架中的分卷顺序接续：${nextVolume.book.title}"); volumeError?.let { Text(it, color = MaterialTheme.colorScheme.error) } } }, confirmButton = { TextButton(onClick = { openNextVolume() }, enabled = !openingVolume) { Text(if(openingVolume) "正在打开…" else "阅读下一分卷") } }, dismissButton = { TextButton(onClick = { nextVolumePrompt = false }) { Text("稍后") } })
+        if(nextVolumePrompt && nextVolume != null) AppAlertDialog(onDismissRequest = { nextVolumePrompt = false }, title = { Text("本卷已读完") }, text = { Column { Text("按书架中的分卷顺序接续：${nextVolume.book.title}"); volumeError?.let { Text(it, color = MaterialTheme.colorScheme.error) } } }, confirmButton = { AppTextButton(onClick = { openNextVolume() }, enabled = !openingVolume) { Text(if(openingVolume) "正在打开…" else "阅读下一分卷") } }, dismissButton = { AppTextButton(onClick = { nextVolumePrompt = false }) { Text("稍后") } })
         if(bookSearch) ReaderSheet(onDismissRequest = { bookSearch = false }) {
             BookSearchPanel(c, ref, chapterId, chapter, settings) { match ->
                 rememberReadingPlace()
@@ -901,7 +906,7 @@ import kotlinx.serialization.encodeToString
                 }
                 Text("${settings.speechRate}× · ${settings.speechMinutes} 分钟后停止", style = MaterialTheme.typography.labelLarge)
                 if(settings.speechContinueChapters) Text(if(settings.speechNetworkContinuation) "连续听书 · 优先本地与缓存，未缓存章节自动联网加载" else "连续听书 · 仅本地与缓存章节", style = MaterialTheme.typography.bodySmall)
-                Button(onClick = {
+                AppButton(onClick = {
                     val first = firstParagraph
                     val originalIndex = paragraphs.getOrNull(first)?.index ?: 0
                     scope.launch {
@@ -915,10 +920,10 @@ import kotlinx.serialization.encodeToString
                     }
                 }, Modifier.fillMaxWidth(), enabled = speechStatus != "正在准备朗读…") { Text(if(speechStatus == "正在准备朗读…") "正在准备朗读…" else "从这里开始朗读") }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    TextButton(onClick = { context.startService(Intent(context, ReadAloudService::class.java).setAction("pause")) }, enabled = speechStatus.startsWith("正在朗读") || speechStatus == "正在准备下一章…") { Text("暂停") }
-                    TextButton(onClick = { context.startService(Intent(context, ReadAloudService::class.java).setAction("resume")) }, enabled = speechStatus == "朗读已暂停" || speechStatus.startsWith("续章已暂停")) { Text("继续") }
-                    TextButton(onClick = { context.startService(Intent(context, ReadAloudService::class.java).setAction("stop")) }) { Text("停止") }
-                    TextButton(onClick = { speechSheet = false; preferences = true }) { Text("设置") }
+                    AppTextButton(onClick = { context.startService(Intent(context, ReadAloudService::class.java).setAction("pause")) }, enabled = speechStatus.startsWith("正在朗读") || speechStatus == "正在准备下一章…") { Text("暂停") }
+                    AppTextButton(onClick = { context.startService(Intent(context, ReadAloudService::class.java).setAction("resume")) }, enabled = speechStatus == "朗读已暂停" || speechStatus.startsWith("续章已暂停")) { Text("继续") }
+                    AppTextButton(onClick = { context.startService(Intent(context, ReadAloudService::class.java).setAction("stop")) }) { Text("停止") }
+                    AppTextButton(onClick = { speechSheet = false; preferences = true }) { Text("设置") }
                 }
             }
         }
@@ -926,9 +931,9 @@ import kotlinx.serialization.encodeToString
             Column(Modifier.padding(20.dp)) {
                 SelectionContainer { Text(paragraph.parts.joinToString("\n\n") { it.text }, Modifier.heightIn(max = 240.dp).appVerticalScroll(rememberScrollState())) }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = { c.share(paragraph.parts.joinToString("\n\n") { it.text }); selected = null }, modifier = Modifier.heightIn(min = 48.dp)) { Text("分享段落") }
-                    TextButton(onClick = { saveBookmark(paragraph); selected = null }, modifier = Modifier.heightIn(min = 48.dp)) { Text("保存书签") }
-                    TextButton(onClick = { saveBookmark(paragraph, edit = true); selected = null }, modifier = Modifier.heightIn(min = 48.dp)) { Text("编辑笔记") }
+                    AppTextButton(onClick = { c.share(paragraph.parts.joinToString("\n\n") { it.text }); selected = null }, modifier = Modifier.heightIn(min = 48.dp)) { Text("分享段落") }
+                    AppTextButton(onClick = { saveBookmark(paragraph); selected = null }, modifier = Modifier.heightIn(min = 48.dp)) { Text("保存书签") }
+                    AppTextButton(onClick = { saveBookmark(paragraph, edit = true); selected = null }, modifier = Modifier.heightIn(min = 48.dp)) { Text("编辑笔记") }
                 }
             }
         } }
@@ -942,10 +947,10 @@ import kotlinx.serialization.encodeToString
     if(preferences) ReaderPreferencesSheet(onDismissRequest = { preferences = false }) { expanded, onExpandedChange ->
         ReaderPreferences(settings, local.bookSettings.containsKey(ref.key), { perBook -> c.store.update { it.copy(bookSettings = if(perBook) it.bookSettings + (ref.key to settings) else it.bookSettings - ref.key) } },
             state = preferenceState, modifier = Modifier.fillMaxSize(), livePreview = true, defaultSettings = local.reader, headerActions = {
-                IconButton(onClick = { onExpandedChange(!expanded) }) {
+                AppIconButton(onClick = { onExpandedChange(!expanded) }) {
                     ReaderSheetExpandIcon(expanded)
                 }
-                TextButton(onClick = { preferences = false }) { Text("关闭面板") }
+                AppTextButton(onClick = { preferences = false }) { Text("关闭面板") }
             }) { value -> c.store.update { if(it.bookSettings.containsKey(ref.key)) it.copy(bookSettings = it.bookSettings + (ref.key to value)) else it.copy(reader = value) } }
     }
 }

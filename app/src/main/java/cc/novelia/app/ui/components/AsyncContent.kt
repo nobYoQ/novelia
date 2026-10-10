@@ -1,5 +1,9 @@
 package cc.novelia.app.ui.components
 
+import cc.novelia.app.ui.components.AppLinearProgressIndicator
+
+import cc.novelia.app.ui.components.AppTextButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CloudOff
@@ -60,10 +64,10 @@ import kotlinx.coroutines.ensureActive
                 MotionContent(key, Modifier.fillMaxSize(), animateInitial = revealContent) {
                     content(current.getOrThrow(), retry)
                 }
-                if(loading) { if(appReducedMotion()) Text("正在刷新…", Modifier.align(Alignment.TopCenter)) else LinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter)) }
+                if(loading) { if(appReducedMotion()) Text("正在刷新…", Modifier.align(Alignment.TopCenter)) else AppLinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter)) }
                 refreshError?.let { error ->
                     MotionContent(error, Modifier.align(Alignment.BottomCenter).padding(12.dp)) {
-                        Snackbar(modifier = Modifier.heightIn(min = 64.dp), action = { TextButton(onClick = retry) { Text("重试") } }) {
+                        Snackbar(modifier = Modifier.heightIn(min = 64.dp), action = { AppTextButton(onClick = retry) { Text("重试") } }) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 StickerAccent(MidoriSticker.Concerned, error, Modifier.size(40.dp))
                                 Text("刷新未完成：${error.friendlyMessage()}", Modifier.weight(1f))

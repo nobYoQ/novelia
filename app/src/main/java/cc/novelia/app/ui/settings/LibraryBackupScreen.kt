@@ -1,5 +1,9 @@
 package cc.novelia.app.ui.settings
 
+import cc.novelia.app.ui.components.AppButton
+import cc.novelia.app.ui.components.AppTextButton
+import cc.novelia.app.ui.components.AppOutlinedButton
+
 import cc.novelia.app.ui.account.ProfileDetailCard
 
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -76,7 +80,7 @@ import kotlinx.coroutines.withContext
                 ProfileDetailCard(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(issue.message)
-                        if (issue.hasLastGood) Button(onClick = { confirmLastGood = true }, enabled = !busy) { Text("恢复最后良好副本") }
+                        if (issue.hasLastGood) AppButton(onClick = { confirmLastGood = true }, enabled = !busy) { Text("恢复最后良好副本") }
                     }
                 }
             } }
@@ -84,7 +88,7 @@ import kotlinx.coroutines.withContext
                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("导出阅读资料", style = MaterialTheme.typography.titleLarge)
                     Text("保存书架、进度、笔记、阅读偏好、分卷设置、术语和标签。包含本地正文与插图。", style = MaterialTheme.typography.bodyMedium)
-                    Button(onClick = { export.launch("novelia-library-${java.time.LocalDate.now()}.zip") }, enabled = !busy) { Text("导出备份") }
+                    AppButton(onClick = { export.launch("novelia-library-${java.time.LocalDate.now()}.zip") }, enabled = !busy) { Text("导出备份") }
                 }
             } }
             item { ProfileToggle("同时打包原始小说文件", "包含已有 EPUB、TXT、SRT 原件", includeOriginals, enabled = !busy) { includeOriginals = it } }
@@ -92,7 +96,7 @@ import kotlinx.coroutines.withContext
             item { ProfileDetailCard {
                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("选择备份后先检查内容，再确认合并。", style = MaterialTheme.typography.bodyMedium)
-                    OutlinedButton(onClick = { selectBackup.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) }, enabled = !busy) { Text("选择备份并检查") }
+                    AppOutlinedButton(onClick = { selectBackup.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) }, enabled = !busy) { Text("选择备份并检查") }
                 }
             } }
             if (busy) item { Text("正在处理资料，请稍候…", color = MaterialTheme.colorScheme.primary) }
@@ -104,8 +108,8 @@ import kotlinx.coroutines.withContext
                     if (p.missingDocuments > 0) Text("${p.missingDocuments} 本本地书的内容在备份时已缺失，只能恢复记录。", color = MaterialTheme.colorScheme.error)
                     Text("合并到当前资料：同一本书、同 ID 笔记、单书设置与标签翻译保留本机版本，阅读进度选择更新时间较新的一条。新资料会加入书架；空资料库同时恢复全局偏好。", style = MaterialTheme.typography.bodySmall)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { confirm = true }, enabled = !busy) { Text("合并恢复") }
-                        TextButton(onClick = { val id = stagingId; stagingId = null; preview = null; if (id != null) c.action { service.discard(id) } }, enabled = !busy) { Text("取消") }
+                        AppButton(onClick = { confirm = true }, enabled = !busy) { Text("合并恢复") }
+                        AppTextButton(onClick = { val id = stagingId; stagingId = null; preview = null; if (id != null) c.action { service.discard(id) } }, enabled = !busy) { Text("取消") }
                     }
                 } }
             } }

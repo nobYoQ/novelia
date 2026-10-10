@@ -2,6 +2,10 @@
 
 package cc.novelia.app.ui.settings
 
+import cc.novelia.app.ui.components.AppButton
+import cc.novelia.app.ui.components.AppTextButton
+import cc.novelia.app.ui.components.AppOutlinedButton
+
 import android.content.ClipData
 import android.content.ClipboardManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -62,15 +66,15 @@ import java.util.Locale
             Text("网络诊断与日志", style = MaterialTheme.typography.titleLarge)
             TogglePreference("启用 ECH", "对原站小说、论坛和认证接口使用加密握手；镜像线路使用普通 HTTPS", enabled, transport::setEnabled)
             Text("检测针对原站，对照直连和 ECH 的实际接口请求，最长约 3 分钟。关闭此面板后仍会继续，可返回查看结果。", style = MaterialTheme.typography.bodyMedium)
-            Button(enabled = !diagnosis.running, onClick = transport::startDiagnostics) { Text("运行网络诊断") }
+            AppButton(enabled = !diagnosis.running, onClick = transport::startDiagnostics) { Text("运行网络诊断") }
             if (diagnosis.running) {
                 Text("正在检测 ${diagnosis.completed}/${diagnosis.total}")
-                TextButton(onClick = transport::cancelDiagnostics) { Text("取消诊断") }
+                AppTextButton(onClick = transport::cancelDiagnostics) { Text("取消诊断") }
             }
             HorizontalDivider()
             TogglePreference("记录问题复现过程", "开启后返回出错页面重试，再回来导出；30 分钟后自动停止", recording, transport::setRecording)
             Text("日志最多约 1 MiB，仅含连接阶段、耗时、接口类别、服务器地址和设备网络概况，不含账号、令牌、Cookie、搜索词及正文；不会自动上传。", style = MaterialTheme.typography.bodySmall)
-            OutlinedButton(enabled = !exporting && pendingExportId == null, onClick = {
+            AppOutlinedButton(enabled = !exporting && pendingExportId == null, onClick = {
                 exporting = true; notice = ""
                 scope.launch {
                     try {
@@ -90,7 +94,7 @@ import java.util.Locale
                     finally { exporting = false }
                 }
             }) { Text(if (exporting) "正在导出…" else "导出网络日志") }
-            TextButton(enabled = !diagnosis.running && !exporting, onClick = {
+            AppTextButton(enabled = !diagnosis.running && !exporting, onClick = {
                 scope.launch {
                     try { transport.clearNetworkLogs(); notice = "网络日志已清空" }
                     catch (cancelled: CancellationException) { throw cancelled }
@@ -99,7 +103,7 @@ import java.util.Locale
             }) { Text("清空网络日志") }
             if (notice.isNotEmpty()) Text(notice, style = MaterialTheme.typography.bodyMedium)
             if (diagnosis.report.isNotEmpty()) {
-                TextButton(onClick = {
+                AppTextButton(onClick = {
                     context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("网络诊断", diagnosis.report))
                 }) { Text("复制诊断结果") }
                 Text(diagnosis.report, style = MaterialTheme.typography.bodyMedium)

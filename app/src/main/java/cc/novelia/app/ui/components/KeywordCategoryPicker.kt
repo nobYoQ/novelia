@@ -1,5 +1,8 @@
 package cc.novelia.app.ui.components
 
+import cc.novelia.app.ui.components.AppOutlinedButton
+import cc.novelia.app.ui.theme.appShape
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -20,7 +23,7 @@ import androidx.compose.ui.unit.dp
         categories.forEach { name ->
             key(name) {
                 AppSelectionChip(name == selected, { onSelect(name) },
-                    label = { Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis) }, shape = CircleShape,
+                    label = { Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis) }, shape = appShape(CircleShape),
                     modifier = Modifier.widthIn(max = 240.dp).testTag("keyword-category-$name"))
             }
         }
@@ -30,7 +33,7 @@ import androidx.compose.ui.unit.dp
 @Composable fun KeywordCategoryPicker(categories: List<String>, selected: String, onSelect: (String) -> Unit, modifier: Modifier = Modifier) {
     var expanded by remember { mutableStateOf(false) }
     Box(modifier) {
-        OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+        AppOutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
             Text("分类：$selected", Modifier.weight(1f))
             Icon(Icons.Outlined.ExpandMore, null)
         }

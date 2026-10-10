@@ -1,6 +1,8 @@
 @file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.shelf
 
+import cc.novelia.app.ui.components.AppOutlinedButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -31,8 +33,8 @@ import cc.novelia.app.ui.navigation.AppController
     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
         Text("挂载分卷排序", style = MaterialTheme.typography.titleSmall)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { sort(false) }, enabled = !busy, modifier = Modifier.testTag("wenku-site-order-ascending")) { Text("网站正序") }
-            OutlinedButton(onClick = { sort(true) }, enabled = !busy, modifier = Modifier.testTag("wenku-site-order-descending")) { Text("网站倒序") }
+            AppOutlinedButton(onClick = { sort(false) }, enabled = !busy, modifier = Modifier.testTag("wenku-site-order-ascending")) { Text("网站正序") }
+            AppOutlinedButton(onClick = { sort(true) }, enabled = !busy, modifier = Modifier.testTag("wenku-site-order-descending")) { Text("网站倒序") }
         }
         Text(if(busy) "正在读取网站分卷目录…" else "无法匹配的本地卷保留原顺序，排在末尾。新导入卷沿用所选方向。",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

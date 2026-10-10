@@ -1,6 +1,9 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.community
 
+import cc.novelia.app.ui.components.AppTextButton
+import cc.novelia.app.ui.components.AppIconButton
+
 import cc.novelia.app.data.model.ForumSort
 import cc.novelia.app.data.model.ForumCategory
 import cc.novelia.app.data.auth.SessionChangedException
@@ -85,8 +88,8 @@ import cc.novelia.app.ui.theme.motionClickable
     var draftBoxOpen by rememberSaveable { mutableStateOf(false) }
     fun showFeed(value: Int) { source = value; page = 0 }
     Screen("社区", actions = {
-        IconButton(onClick = { draftBoxOpen = true }) { Icon(Icons.Outlined.Drafts, "帖子草稿箱") }
-        IconButton(onClick = { c.go("compose") }) { Icon(Icons.Outlined.Edit, "新建帖子草稿") }
+        AppIconButton(onClick = { draftBoxOpen = true }) { Icon(Icons.Outlined.Drafts, "帖子草稿箱") }
+        AppIconButton(onClick = { c.go("compose") }) { Icon(Icons.Outlined.Edit, "新建帖子草稿") }
         ForumAccountMenu(profile, hasUnreadStrikes, onOpen = { attentionRefresh++ }) { action ->
             when(action) {
                 ForumAccountAction.LOGIN -> c.go("forum-login")
@@ -108,7 +111,7 @@ import cc.novelia.app.ui.theme.motionClickable
                 if(source == 0 && availableTags.isNotEmpty()) ForumTagFilterToggle(tagsExpanded,
                     availableTags.firstOrNull { it.id == selectedTagId }?.name) { tagsExpanded = !tagsExpanded }
                 if(source == 0) ForumSortPicker(sort) { sort = it; page = 0 }
-                else TextButton(onClick = { showFeed(0) }) { Text("返回全部帖子") }
+                else AppTextButton(onClick = { showFeed(0) }) { Text("返回全部帖子") }
             }
             FilterPanelVisibility(source == 0 && tagsExpanded) {
                 ForumTagFilter(availableTags, selectedTagId) { tagId = it; page = 0 }

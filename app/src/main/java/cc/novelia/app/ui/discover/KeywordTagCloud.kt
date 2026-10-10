@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.discover
 
+import cc.novelia.app.ui.components.AppLinearProgressIndicator
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
@@ -71,7 +73,7 @@ private data class MeasuredKeyword(val entry: KeywordEntry, val width: Int)
                 packed
             }
         }
-        if(rows == null) LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 20.dp))
+        if(rows == null) AppLinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 20.dp))
         AppLazyColumn(Modifier.fillMaxSize(), state = listState, listModifier = Modifier.testTag("keyword-library-list"),
             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(ChipSpacing)) {
             items(rows.orEmpty(), key = { it.first().entry.original }) { row ->

@@ -1,6 +1,8 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.discover
 
+import cc.novelia.app.ui.components.AppIconButton
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -87,7 +89,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
                                         input()
                                     }
                                 })
-                            IconButton(onClick = ::submit, modifier = Modifier.size(40.dp)) {
+                            AppIconButton(onClick = ::submit, modifier = Modifier.size(40.dp)) {
                                 Icon(Icons.AutoMirrored.Outlined.ArrowForward, "搜索", Modifier.size(20.dp))
                             }
                         } else Text(submitted.ifBlank { "搜索小说" }, Modifier.weight(1f),

@@ -1,6 +1,9 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.discover
 
+import cc.novelia.app.ui.components.AppButton
+import cc.novelia.app.ui.components.AppIconButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -35,7 +38,7 @@ private val syosetuGenres = listOf("恋爱：异世界", "恋爱：现实世界"
     val states = if(source == 0) listOf("全部", "短篇", "连载", "完结") else listOf("全部", "长篇", "短篇")
     val genres = if(source == 1) kakuyomuGenres else if(kind == 2) listOf("恋爱", "幻想", "文学/科幻/其他") else syosetuGenres
     val params = buildMap { put("range", ranges[range]); put("status", states[status]); if(source == 0) { put("type", listOf("流派", "综合", "异世界转生/转移")[kind]); put("page", "${page + 1}") }; if(source == 1 || kind != 1) put("genre", genres[genre]) }
-    Screen("排行榜", c::back, actions = { IconButton(onClick = { filters = true }) { Icon(Icons.Outlined.Tune, "榜单条件") } }) { padding ->
+    Screen("排行榜", c::back, actions = { AppIconButton(onClick = { filters = true }) { Icon(Icons.Outlined.Tune, "榜单条件") } }) { padding ->
         Column(Modifier.padding(padding)) {
             ChoiceRow("平台", listOf("成为小说家吧", "Kakuyomu"), source) { source = it; range = 0; genre = 0; status = 0; page = 0 }
             MotionContent(listOf(source, kind, genre, range, status), animateInitial = false) { Text("${params["type"] ?: genres[genre]} · ${ranges[range]} · ${states[status]}", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge) }
@@ -55,6 +58,6 @@ private val syosetuGenres = listOf("恋爱：异世界", "恋爱：现实世界"
         if(source == 0) ChoiceRow("榜单", listOf("流派", "综合", "异世界转生/转移"), kind) { kind = it; genre = 0; page = 0 }
         if(source == 1 || kind != 1) ChoiceRow("流派", genres, genre) { genre = it; page = 0 }
         ChoiceRow("周期", ranges, range) { range = it; page = 0 }; ChoiceRow("状态", states, status) { status = it; page = 0 }
-        Button(onClick = { filters = false }, Modifier.fillMaxWidth().padding(horizontal = 20.dp)) { Text("查看榜单") }
+        AppButton(onClick = { filters = false }, Modifier.fillMaxWidth().padding(horizontal = 20.dp)) { Text("查看榜单") }
     } }
 }

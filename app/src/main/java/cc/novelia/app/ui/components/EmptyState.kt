@@ -1,7 +1,9 @@
 package cc.novelia.app.ui.components
 
+import cc.novelia.app.ui.components.AppFilledTonalButton
+
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
+import cc.novelia.app.ui.theme.appRoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material3.*
@@ -18,10 +20,10 @@ import cc.novelia.app.ui.theme.MotionContent
     MotionContent(Unit, Modifier.fillMaxWidth()) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 40.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if(sticker != null) StickerAccent(sticker, modifier = Modifier.size(112.dp))
-            else Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = RoundedCornerShape(28.dp), modifier = Modifier.size(88.dp)) { Box(contentAlignment = Alignment.Center) { Icon(icon, null, Modifier.size(36.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer) } }
+            else Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = appRoundedCornerShape(28.dp), modifier = Modifier.size(88.dp)) { Box(contentAlignment = Alignment.Center) { Icon(icon, null, Modifier.size(36.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer) } }
             Text(title, style = MaterialTheme.typography.titleLarge)
             Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if(action != null) FilledTonalButton(onClick = onAction) { Text(action) }
+            if(action != null) AppFilledTonalButton(onClick = onAction) { Text(action) }
         }
     }
 }

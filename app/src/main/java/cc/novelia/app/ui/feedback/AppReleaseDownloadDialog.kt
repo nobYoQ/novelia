@@ -1,5 +1,9 @@
 package cc.novelia.app.ui.feedback
 
+import cc.novelia.app.ui.components.AppLinearProgressIndicator
+
+import cc.novelia.app.ui.components.AppTextButton
+
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -107,8 +111,8 @@ internal fun appDownloadDescription(state: AppDownloadState, fallback: String): 
                 AppDownloadPhase.Ready -> Text("安装包已下载并校验完成。点击“立即安装”打开系统安装界面；选择“稍后”会保留安装包，再次点击下载按钮将先检查更新，有更新则下载新包，否则安装已下载版本。")
                 AppDownloadPhase.Checking -> Text("正在检查当前版本和最新发行信息…")
                 AppDownloadPhase.Downloading -> {
-                    if(state.progress != null) LinearProgressIndicator(progress = { state.progress!! }, modifier = Modifier.fillMaxWidth().testTag("app-apk-progress"))
-                    else if(!static) LinearProgressIndicator(Modifier.fillMaxWidth().testTag("app-apk-progress"))
+                    if(state.progress != null) AppLinearProgressIndicator(progress = { state.progress!! }, modifier = Modifier.fillMaxWidth().testTag("app-apk-progress"))
+                    else if(!static) AppLinearProgressIndicator(Modifier.fillMaxWidth().testTag("app-apk-progress"))
                     Text("${state.progress?.let { "${(it * 100).toInt()}% · " }.orEmpty()}${apkSize(state.bytes)} / ${if(state.total > 0) apkSize(state.total) else "未知大小"}")
                     Text("可在后台继续下载，完成后会提示安装。")
                 }
@@ -118,13 +122,13 @@ internal fun appDownloadDescription(state: AppDownloadState, fallback: String): 
                 color = if(state.phase == AppDownloadPhase.Failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant) }
         } },
         confirmButton = { when(state.phase) {
-            AppDownloadPhase.PreviewConsent -> TextButton(onClick = onConfirmPreview) { Text("了解风险，下载") }
-            AppDownloadPhase.Ready -> TextButton(onClick = onInstall) { Text("立即安装") }
-            AppDownloadPhase.Failed -> TextButton(onClick = onRetry) { Text("重试") }
-            AppDownloadPhase.Current, AppDownloadPhase.Idle -> TextButton(onClick = onDismiss) { Text("知道了") }
+            AppDownloadPhase.PreviewConsent -> AppTextButton(onClick = onConfirmPreview) { Text("了解风险，下载") }
+            AppDownloadPhase.Ready -> AppTextButton(onClick = onInstall) { Text("立即安装") }
+            AppDownloadPhase.Failed -> AppTextButton(onClick = onRetry) { Text("重试") }
+            AppDownloadPhase.Current, AppDownloadPhase.Idle -> AppTextButton(onClick = onDismiss) { Text("知道了") }
             else -> Unit
         } },
-        dismissButton = { if(state.phase !in listOf(AppDownloadPhase.Current, AppDownloadPhase.Idle)) TextButton(onClick = onDismiss) {
+        dismissButton = { if(state.phase !in listOf(AppDownloadPhase.Current, AppDownloadPhase.Idle)) AppTextButton(onClick = onDismiss) {
             Text(when(state.phase) { AppDownloadPhase.Downloading -> "后台下载"; AppDownloadPhase.PreviewConsent -> "取消"; else -> "稍后" })
         } })
 }

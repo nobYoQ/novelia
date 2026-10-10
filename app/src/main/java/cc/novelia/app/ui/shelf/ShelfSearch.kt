@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.shelf
 
+import cc.novelia.app.ui.components.AppIconButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -20,7 +22,7 @@ import cc.novelia.app.ui.components.FilterPanelVisibility
 @Composable internal fun ShelfSearchToggle(
     expanded: Boolean, active: Boolean, onToggle: () -> Unit, tagPrefix: String, enabled: Boolean = true,
 ) {
-    IconButton(onClick = onToggle, enabled = enabled,
+    AppIconButton(onClick = onToggle, enabled = enabled,
         modifier = Modifier.size(48.dp).testTag("$tagPrefix-search-toggle").semantics {
             stateDescription = if(expanded) "搜索已展开" else if(active) "搜索已收起，关键词仍生效" else "搜索已收起"
         }, colors = IconButtonDefaults.iconButtonColors(
@@ -42,9 +44,9 @@ import cc.novelia.app.ui.components.FilterPanelVisibility
             keyboardActions = KeyboardActions(onSearch = { submit() }),
             trailingIcon = {
                 Row {
-                    if(query.isNotEmpty()) IconButton(onClick = onClear, enabled = enabled,
+                    if(query.isNotEmpty()) AppIconButton(onClick = onClear, enabled = enabled,
                         modifier = Modifier.testTag("$tagPrefix-search-clear")) { Icon(Icons.Outlined.Close, "清空搜索") }
-                    IconButton(onClick = submit, enabled = enabled, modifier = Modifier.testTag("$tagPrefix-search-submit")) {
+                    AppIconButton(onClick = submit, enabled = enabled, modifier = Modifier.testTag("$tagPrefix-search-submit")) {
                         Icon(Icons.Outlined.Search, "搜索书架")
                     }
                 }

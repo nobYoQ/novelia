@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.settings
 
+import cc.novelia.app.ui.components.AppTextButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.CompareArrows
@@ -69,8 +71,8 @@ internal fun WebDavSyncContent(config: WebDavConfig, status: WebDavSyncStatus, n
                             "找不到原来的云端同步资料。本机资料已保留，可以重新建立同步，也可以检查服务器地址和目录。"
                             else "云端目录中的同步资料已更换。本机资料已保留，重新连接前会展示合并预览。",
                             style = MaterialTheme.typography.bodyMedium)
-                        TextButton(onClick = { actions.onRecover(recovery) }, enabled = !working) { Text("重新连接") }
-                        TextButton(onClick = actions.onServer, enabled = !working) { Text("检查服务器和目录") }
+                        AppTextButton(onClick = { actions.onRecover(recovery) }, enabled = !working) { Text("重新连接") }
+                        AppTextButton(onClick = actions.onServer, enabled = !working) { Text("检查服务器和目录") }
                     }
                 } }
                 item { WebDavMenuRow("同步服务器", webDavServerLabel(config), Icons.Outlined.Dns, webDavRowShape(0, 2), enabled = !working, onClick = actions.onServer) }
@@ -115,7 +117,7 @@ internal fun WebDavSyncContent(config: WebDavConfig, status: WebDavSyncStatus, n
                         Text(when { status.running -> "正在同步"; recovery != null -> "等待处理同步目录"; !config.enabled -> "同步已停用"; needsConfirmation -> "等待确认同步资料"; else -> "已连接同步资料" }, style = MaterialTheme.typography.titleMedium)
                         Text("最近成功：${syncTime(status.lastSuccessAt)}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         status.error?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error) }
-                        TextButton(onClick = { showDetails = !showDetails }, contentPadding = PaddingValues(0.dp)) {
+                        AppTextButton(onClick = { showDetails = !showDetails }, contentPadding = PaddingValues(0.dp)) {
                             Text(if(showDetails) "收起详细状态" else "查看详细状态")
                             Icon(if(showDetails) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, null)
                         }
@@ -134,7 +136,7 @@ internal fun WebDavSyncContent(config: WebDavConfig, status: WebDavSyncStatus, n
                     }
                 } }
                 if(config.bound && recovery == null && config.enabled && config.selected.isNotEmpty()) item {
-                    TextButton(onClick = actions.onPreview, enabled = !working, modifier = Modifier.fillMaxWidth()) { Text("查看并合并同步资料") }
+                    AppTextButton(onClick = actions.onPreview, enabled = !working, modifier = Modifier.fillMaxWidth()) { Text("查看并合并同步资料") }
                 }
                 if(status.conflicts.isNotEmpty()) {
                     item { WebDavSection("需要选择的资料") }

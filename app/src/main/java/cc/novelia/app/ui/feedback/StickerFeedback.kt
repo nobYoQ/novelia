@@ -1,5 +1,8 @@
 package cc.novelia.app.ui.feedback
 
+import cc.novelia.app.ui.components.AppTextButton
+import cc.novelia.app.ui.components.AppIconButton
+
 import android.os.SystemClock
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
@@ -126,8 +129,8 @@ fun StickerSnackbarHost(state: SnackbarHostState) {
             Snackbar(
                 modifier = Modifier.padding(12.dp).heightIn(min = 80.dp),
                 actionOnNewLine = visuals.actionLabel != null,
-                action = visuals.actionLabel?.let { label -> ({ TextButton(onClick = data::performAction) { Text(label) } }) },
-                dismissAction = if(visuals.withDismissAction) ({ IconButton(onClick = data::dismiss) { Icon(Icons.Outlined.Close, "关闭提示") } }) else null,
+                action = visuals.actionLabel?.let { label -> ({ AppTextButton(onClick = data::performAction) { Text(label) } }) },
+                dismissAction = if(visuals.withDismissAction) ({ AppIconButton(onClick = data::dismiss) { Icon(Icons.Outlined.Close, "关闭提示") } }) else null,
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     StickerAccent(visuals.sticker, data, Modifier.size(56.dp))

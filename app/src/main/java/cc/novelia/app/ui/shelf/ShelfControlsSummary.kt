@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.shelf
 
+import cc.novelia.app.ui.components.AppTextButton
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -62,7 +64,7 @@ import cc.novelia.app.ui.components.FilterPanelVisibility
         verticalAlignment = Alignment.CenterVertically) {
         Text(label, Modifier.weight(1f), style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
-        TextButton(onClick = onManage, enabled = manageEnabled,
+        AppTextButton(onClick = onManage, enabled = manageEnabled,
             modifier = Modifier.heightIn(min = 48.dp).testTag("$tagPrefix-batch-manage"),
             contentPadding = PaddingValues(horizontal = 8.dp)) {
             Icon(if(managing) Icons.Outlined.Check else Icons.Outlined.Checklist, null, Modifier.size(18.dp))

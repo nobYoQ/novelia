@@ -2,12 +2,16 @@
 
 package cc.novelia.app.ui.account
 
+import cc.novelia.app.ui.components.AppTextButton
+import cc.novelia.app.ui.components.AppFilledTonalButton
+import cc.novelia.app.ui.components.AppIconButton
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
+import cc.novelia.app.ui.theme.appRoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.*
@@ -47,7 +51,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
     val state by c.store.state.collectAsStateWithLifecycle()
     var logout by remember { mutableStateOf(false) }
     Screen("我的", actions = {
-        IconButton(onClick = { c.go("settings") }) { Icon(Icons.Outlined.Tune, "设置") }
+        AppIconButton(onClick = { c.go("settings") }) { Icon(Icons.Outlined.Tune, "设置") }
     }) { padding ->
         ProfileDashboard(profile, state.notes.size, state.pending.count { it.account == profile?.username },
             onNavigate = { c.go(it) }, onLogout = { logout = true }, modifier = Modifier.padding(padding))
@@ -59,7 +63,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
     onLogin: () -> Unit, onLogout: () -> Unit, modifier: Modifier = Modifier) {
     var accountMenu by remember(profile?.username) { mutableStateOf(false) }
     val separateLogin = LocalDensity.current.fontScale > 1.3f
-    Surface(modifier.fillMaxWidth().testTag("profile-account-card"), shape = RoundedCornerShape(28.dp),
+    Surface(modifier.fillMaxWidth().testTag("profile-account-card"), shape = appRoundedCornerShape(28.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow, border = profileCardBorder()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(Modifier.fillMaxWidth(),
@@ -72,12 +76,12 @@ import cc.novelia.app.ui.theme.appReducedMotion
                         maxLines = 2, overflow = TextOverflow.Ellipsis)
                     if(profile != null) Text("注册于 ${displayDate(profile.createdAt)}",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    else if(!separateLogin) TextButton(onClick = onLogin, contentPadding = PaddingValues(vertical = 8.dp),
+                    else if(!separateLogin) AppTextButton(onClick = onLogin, contentPadding = PaddingValues(vertical = 8.dp),
                         modifier = Modifier.heightIn(min = 48.dp)) { Text("登录 / 注册") }
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     if(profile != null) Box {
-                        IconButton(onClick = { accountMenu = true }, modifier = Modifier.size(48.dp).testTag("profile-account-menu")) {
+                        AppIconButton(onClick = { accountMenu = true }, modifier = Modifier.size(48.dp).testTag("profile-account-menu")) {
                             Icon(Icons.Outlined.MoreHoriz, "账号操作")
                         }
                         AppDropdownMenu(accountMenu, { accountMenu = false }) {
@@ -89,7 +93,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
                     MidoriCompanion(Modifier.size(96.dp), visible = companionVisible)
                 }
             }
-            if(profile == null && separateLogin) FilledTonalButton(onClick = onLogin,
+            if(profile == null && separateLogin) AppFilledTonalButton(onClick = onLogin,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("登录 / 注册") }
             if(profile != null) AccountPermissionsCard(profile.username, profile.canPost, profile.canEdit, Modifier.widthIn(max = 520.dp))
         }
@@ -99,11 +103,11 @@ import cc.novelia.app.ui.theme.appReducedMotion
 @Composable internal fun AccountPermissionsCard(username: String, canPost: Boolean, canEdit: Boolean, modifier: Modifier = Modifier) {
     var expanded by rememberSaveable(username) { mutableStateOf(false) }
     Box(modifier.fillMaxWidth()) {
-        TextButton(onClick = { expanded = !expanded }, modifier = Modifier.fillMaxWidth()
+        AppTextButton(onClick = { expanded = !expanded }, modifier = Modifier.fillMaxWidth()
             .heightIn(min = 48.dp).testTag("account-permissions-toggle")
             .semantics { stateDescription = if(expanded) "已展开" else "已收起" },
             colors = ButtonDefaults.textButtonColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-            shape = RoundedCornerShape(20.dp), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)) {
+            shape = appRoundedCornerShape(20.dp), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)) {
             Icon(Icons.Outlined.VerifiedUser, null, Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
             Text("账号权限", Modifier.weight(1f))
@@ -133,7 +137,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
                     scaleIn(tween(AppMotion.Standard), initialScale = .92f, transformOrigin = TransformOrigin(0f, 0f)),
                 exit = if(reduced) ExitTransition.None else fadeOut(tween(AppMotion.Exit)) +
                     scaleOut(tween(AppMotion.Page), targetScale = .96f, transformOrigin = TransformOrigin(0f, 0f))) {
-                Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                Surface(shape = appRoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh,
                     tonalElevation = 4.dp, shadowElevation = if(LocalEInkMode.current) 0.dp else 8.dp, border = profileCardBorder(),
                     modifier = Modifier.width(minOf(336.dp, (configuration.screenWidthDp.dp - 24.dp).coerceAtLeast(1.dp)))
                         .heightIn(max = (configuration.screenHeightDp.dp - 32.dp).coerceAtLeast(1.dp))
@@ -141,7 +145,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
                     AppScrollColumn(contentModifier = Modifier.padding(vertical = 8.dp)) {
                         Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text("账号权限", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                            IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
+                            AppIconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
                                 Icon(Icons.Outlined.Close, "收起账号权限", Modifier.size(20.dp))
                             }
                         }

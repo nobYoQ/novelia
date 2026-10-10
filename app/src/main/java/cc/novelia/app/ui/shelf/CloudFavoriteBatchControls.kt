@@ -1,6 +1,9 @@
 @file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.shelf
 
+import cc.novelia.app.ui.components.AppTextButton
+import cc.novelia.app.ui.components.AppFilledTonalButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
@@ -26,10 +29,10 @@ import cc.novelia.app.ui.components.TextPrompt
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).testTag("cloud-batch-controls")) {
             if(managing) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = onSelectPage, enabled = !busy && pageCount > 0) { Text(if(allOnPageSelected) "取消本页全选" else "全选本页") }
-                    TextButton(onClick = onClear, enabled = !busy && selectedCount > 0) { Text("清空选择") }
-                    FilledTonalButton(onClick = onLocal, enabled = !busy && selectedCount > 0) { Text("加入本地收藏") }
-                    TextButton(onClick = onRemove, enabled = !busy && selectedCount > 0,
+                    AppTextButton(onClick = onSelectPage, enabled = !busy && pageCount > 0) { Text(if(allOnPageSelected) "取消本页全选" else "全选本页") }
+                    AppTextButton(onClick = onClear, enabled = !busy && selectedCount > 0) { Text("清空选择") }
+                    AppFilledTonalButton(onClick = onLocal, enabled = !busy && selectedCount > 0) { Text("加入本地收藏") }
+                    AppTextButton(onClick = onRemove, enabled = !busy && selectedCount > 0,
                         colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("取消云端收藏") }
                 }
                 Text(if(busy) "正在处理 $progress / $selectedCount 本…" else "支持跨页选择；切换收藏夹或筛选会清空选择。",

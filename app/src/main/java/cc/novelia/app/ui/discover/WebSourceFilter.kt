@@ -1,9 +1,10 @@
 package cc.novelia.app.ui.discover
 
+import cc.novelia.app.ui.components.AppTextButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -19,7 +20,7 @@ import cc.novelia.app.ui.components.AppSelectionChip
     val selected = remember(source) { if(source.isBlank()) providers.keys.toSet() else source.split(',').toSet() }
     Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Text("书源（可多选，至少保留一个）", Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
-        TextButton(onClick = { onChange("") }, enabled = selected != providers.keys) { Text("全选") }
+        AppTextButton(onClick = { onChange("") }, enabled = selected != providers.keys) { Text("全选") }
     }
     AppChipFlowRow(Modifier.padding(horizontal = 20.dp, vertical = 10.dp)) {
         providers.forEach { (id, title) ->

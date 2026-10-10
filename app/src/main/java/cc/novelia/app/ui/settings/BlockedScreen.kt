@@ -2,6 +2,8 @@
 
 package cc.novelia.app.ui.settings
 
+import cc.novelia.app.ui.components.AppIconButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -23,7 +25,7 @@ import cc.novelia.app.ui.navigation.AppController
     val state by c.store.state.collectAsStateWithLifecycle(); var add by remember { mutableStateOf(false) }
     var addUser by remember { mutableStateOf(false) }
     var addAuthor by remember { mutableStateOf(false) }
-    ProfileDetailScreen("屏蔽管理", c::back, actions = { IconButton(onClick = { add = true }) { Icon(Icons.Outlined.Add, "屏蔽标签") } }) { padding -> ProfileDetailList(Modifier.padding(padding)) {
+    ProfileDetailScreen("屏蔽管理", c::back, actions = { AppIconButton(onClick = { add = true }) { Icon(Icons.Outlined.Add, "屏蔽标签") } }) { padding -> ProfileDetailList(Modifier.padding(padding)) {
         item { ProfileSummary("本地屏蔽", "只影响此设备的发现列表，不更改原站收藏。", Icons.Outlined.Block) }
         item { ProfileSectionTitle("用户", "添加用户") { addUser = true } }
         items(state.blockedUsers.toList()) { user -> ProfileMenuRow(user, "点击取消屏蔽", Icons.Outlined.PersonOff, { c.store.update { it.copy(blockedUsers = it.blockedUsers - user) } }) }

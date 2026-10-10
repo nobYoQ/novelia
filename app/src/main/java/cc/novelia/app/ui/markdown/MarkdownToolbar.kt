@@ -1,5 +1,8 @@
 package cc.novelia.app.ui.markdown
 
+import cc.novelia.app.ui.components.AppTextButton
+import cc.novelia.app.ui.components.AppIconButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -37,7 +40,7 @@ internal fun TextFieldValue.format(template: MarkdownTemplate, limit: Int): Text
     Surface(modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.small) {
         Row(Modifier.appHorizontalScroll(rememberScrollState())) {
             MarkdownTemplate.entries.forEach { template ->
-                IconButton(onClick = { onFormat(template) }, modifier = Modifier.size(48.dp)) {
+                AppIconButton(onClick = { onFormat(template) }, modifier = Modifier.size(48.dp)) {
                     Icon(when (template) {
                         MarkdownTemplate.Bold -> Icons.Outlined.FormatBold
                         MarkdownTemplate.Italic -> Icons.Outlined.FormatItalic
@@ -49,7 +52,7 @@ internal fun TextFieldValue.format(template: MarkdownTemplate, limit: Int): Text
                     }, "插入${template.label}")
                 }
             }
-            IconButton(onClick = { help = true }, modifier = Modifier.size(48.dp)) {
+            AppIconButton(onClick = { help = true }, modifier = Modifier.size(48.dp)) {
                 Icon(Icons.Outlined.HelpOutline, "Markdown 格式帮助")
             }
         }
@@ -62,7 +65,7 @@ internal fun TextFieldValue.format(template: MarkdownTemplate, limit: Int): Text
                     Text("**粗体**\n*斜体*\n~~删除线~~\n[文字](https://n.novelia.cc/)\n!!剧透!!\n\n::: star 4.5\n\n::: details 点击展开\n折叠内容\n:::\n\n# 标题\n\n- 无序列表\n1. 有序列表\n\n> 引用\n\n---\n\n![图片说明](图片链接)\n\n| 左对齐 | 居中 | 右对齐 |\n| :- | :-: | -: |\n| 文本 | 文本 | 文本 |", fontFamily = FontFamily.Monospace)
                 }
             }
-        }, confirmButton = { TextButton(onClick = { help = false }) { Text("知道了") } })
+        }, confirmButton = { AppTextButton(onClick = { help = false }) { Text("知道了") } })
 }
 
 @Composable internal fun MarkdownCommentInput(text: String, onTextChange: (String) -> Unit, label: String, isError: Boolean = false, softLimit: Boolean = false, unicodeLimit: Int? = null, sendButton: @Composable () -> Unit) {

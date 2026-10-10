@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.feedback
 
+import cc.novelia.app.ui.components.AppTextButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -40,8 +42,8 @@ import cc.novelia.app.ui.navigation.downloadAppRelease
             Text("当前版本 ${BuildConfig.VERSION_NAME}，可以更新啦。")
             release.body?.takeIf(String::isNotBlank)?.let { MarkdownText(c, it, documentUrl = release.url) }
             Text("检查最新版本后下载适合当前设备的安装包，完成后可在应用内安装。", style = MaterialTheme.typography.bodySmall)
-            TextButton(onClick = onIgnore) { Text("不再显示此版本") }
+            AppTextButton(onClick = onIgnore) { Text("不再显示此版本") }
         } } },
-        confirmButton = { TextButton(onClick = onUpdate, enabled = !preparing) { Text(if(preparing) "正在准备下载…" else "下载更新") } },
-        dismissButton = { TextButton(onClick = onLater) { Text("稍后") } })
+        confirmButton = { AppTextButton(onClick = onUpdate, enabled = !preparing) { Text(if(preparing) "正在准备下载…" else "下载更新") } },
+        dismissButton = { AppTextButton(onClick = onLater) { Text("稍后") } })
 }

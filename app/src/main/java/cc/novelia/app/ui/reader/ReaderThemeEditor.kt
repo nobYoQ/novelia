@@ -2,6 +2,9 @@
 
 package cc.novelia.app.ui.reader
 
+import cc.novelia.app.ui.components.AppTextButton
+import cc.novelia.app.ui.theme.appShape
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -48,7 +51,7 @@ private fun hex(value: Long) = "#%06X".format(value)
                 modifier = Modifier.fillMaxWidth().testTag("reader-color-$field")) {
                 Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Surface(color = rgb(current), shape = CircleShape,
+                    Surface(color = rgb(current), shape = appShape(CircleShape),
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline), modifier = Modifier.size(40.dp)) {}
                     Column(Modifier.weight(1f)) {
                         Text(label, style = MaterialTheme.typography.labelLarge)
@@ -59,7 +62,7 @@ private fun hex(value: Long) = "#%06X".format(value)
             }
         }
         Text("点击打开取色盘，也可输入 #RRGGBB。工具栏透明度可在「翻页」中调整。", style = MaterialTheme.typography.bodySmall)
-        TextButton(onClick = { onChange(settings.copy(customColors = defaults?.resolvedCustomColors ?: ReaderCustomColors())) }) {
+        AppTextButton(onClick = { onChange(settings.copy(customColors = defaults?.resolvedCustomColors ?: ReaderCustomColors())) }) {
             Text(if(defaults != null) "恢复默认阅读配色" else "重置自定义配色")
         }
     }

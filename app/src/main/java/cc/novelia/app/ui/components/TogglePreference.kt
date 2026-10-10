@@ -1,6 +1,9 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.components
 
+import cc.novelia.app.ui.components.AppSwitch
+import cc.novelia.app.ui.theme.LocalSquareCorners
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
@@ -23,9 +26,9 @@ import cc.novelia.app.ui.theme.LocalEInkMode
     val scheme = MaterialTheme.colorScheme
     val changed = defaultValue != null && value != defaultValue
     ListItem(headlineContent = { Text(title) }, supportingContent = if(subtitle.isNotBlank()) ({ Text(subtitle) }) else null, trailingContent = {
-        if(LocalEInkMode.current) Icon(if(value) Icons.Outlined.ToggleOn else Icons.Outlined.ToggleOff, null, Modifier.size(48.dp),
+        if(LocalEInkMode.current && !LocalSquareCorners.current) Icon(if(value) Icons.Outlined.ToggleOn else Icons.Outlined.ToggleOff, null, Modifier.size(48.dp),
             tint = if(changed || (defaultValue == null && value)) scheme.primary else scheme.onSurfaceVariant)
-        else Switch(value, onCheckedChange = null, colors = if(defaultValue == null) SwitchDefaults.colors() else SwitchDefaults.colors(
+        else AppSwitch(value, onCheckedChange = null, colors = if(defaultValue == null) SwitchDefaults.colors() else SwitchDefaults.colors(
             checkedTrackColor = if(changed) scheme.primary else scheme.primary.copy(alpha = .22f),
             checkedThumbColor = if(changed) scheme.onPrimary else scheme.primary,
             uncheckedTrackColor = if(changed) scheme.primary.copy(alpha = .22f) else scheme.surfaceContainerHighest,

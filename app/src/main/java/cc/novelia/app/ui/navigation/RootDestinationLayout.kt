@@ -4,12 +4,16 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
@@ -18,6 +22,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.appReducedMotion
+import cc.novelia.app.ui.theme.LocalSquareCorners
 
 /**
  * 导航栏属于根页面自身，与页面一起进退场。不能按当前路由在 NavHost 外增删导航栏：
@@ -53,7 +58,9 @@ internal fun RootDestinationLayout(
                 ) {
                     tabs.forEach { (target, label, icon) ->
                         val selected = route.startsWith(target)
-                        NavigationBarItem(selected, { if(!selected) onNavigate(target) },
+                        if(LocalSquareCorners.current) SquareNavigationItem(selected, { if(!selected) onNavigate(target) },
+                            icon, label, Modifier.weight(1f))
+                        else NavigationBarItem(selected, { if(!selected) onNavigate(target) },
                             { NavigationIcon(icon, label, selected) }, label = { Text(label) })
                     }
                 }
@@ -64,7 +71,9 @@ internal fun RootDestinationLayout(
                     Spacer(Modifier.height(if(compactRail) 12.dp else 40.dp))
                     tabs.forEach { (target, label, icon) ->
                         val selected = route.startsWith(target)
-                        NavigationRailItem(selected, { if(!selected) onNavigate(target) },
+                        if(LocalSquareCorners.current) SquareNavigationItem(selected, { if(!selected) onNavigate(target) },
+                            icon, label, Modifier.width(80.dp), showLabel = !compactRail)
+                        else NavigationRailItem(selected, { if(!selected) onNavigate(target) },
                             { NavigationIcon(icon, label, selected) },
                             label = if(compactRail) null else { { Text(label) } })
                     }
@@ -72,6 +81,26 @@ internal fun RootDestinationLayout(
                 Box(Modifier.weight(1f).fillMaxHeight()) { content() }
             }
         }
+    }
+}
+
+/** NavigationBarItem 的胶囊指示器不开放 shape 参数；直角模式保留标签和选中语义。 */
+@Composable private fun SquareNavigationItem(
+    selected: Boolean, onClick: () -> Unit, icon: ImageVector, label: String,
+    modifier: Modifier = Modifier, showLabel: Boolean = true,
+) {
+    val colors = MaterialTheme.colorScheme
+    Column(modifier.heightIn(min = if(showLabel) 80.dp else 56.dp)
+        .selectable(selected, role = Role.Tab, onClick = onClick).padding(vertical = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Box(Modifier.size(64.dp, 32.dp).background(if(selected) colors.secondaryContainer else androidx.compose.ui.graphics.Color.Transparent),
+            contentAlignment = Alignment.Center) {
+            androidx.compose.runtime.CompositionLocalProvider(LocalContentColor provides if(selected) colors.onSecondaryContainer else colors.onSurfaceVariant) {
+                NavigationIcon(icon, label, selected)
+            }
+        }
+        if(showLabel) Text(label, color = if(selected) colors.onSurface else colors.onSurfaceVariant,
+            style = MaterialTheme.typography.labelMedium)
     }
 }
 

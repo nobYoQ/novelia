@@ -1,6 +1,8 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.downloads
 
+import cc.novelia.app.ui.components.AppButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
@@ -43,8 +45,8 @@ import kotlinx.coroutines.CancellationException
             } else Text("已加入 $queued 个下载任务 · 剩余 ${pending.orEmpty().size} 个", Modifier.padding(20.dp))
             Text(if(book.ref.isWenku) "由原站生成已有译文文件，格式沿用原始分卷；下载资格由服务器判断。" else "由原站生成已有内容文件，不会创建新的翻译任务。", Modifier.padding(20.dp), style = MaterialTheme.typography.bodySmall)
             failure?.let { Text(it, Modifier.padding(horizontal = 20.dp, vertical = 8.dp), color = MaterialTheme.colorScheme.error) }
-            Button(onClick = {
-                if(busy) return@Button
+            AppButton(onClick = {
+                if(busy) return@AppButton
                 busy = true
                 failure = null
                 c.action {

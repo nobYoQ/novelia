@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.components
 
+import cc.novelia.app.ui.components.AppTextButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
@@ -48,7 +50,7 @@ internal val CharacterCountFilterSaver = Saver<CharacterCountFilter, String>(
         }
         Text(if(invalid) "最多字数不能小于最少字数。" else "单位为字，包含上下限；留空表示不限。", style = MaterialTheme.typography.bodySmall,
             color = if(invalid) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
-        TextButton(onClick = { onChange(CharacterCountFilter(min, max, value.includeUnknown)) }, enabled = !invalid,
+        AppTextButton(onClick = { onChange(CharacterCountFilter(min, max, value.includeUnknown)) }, enabled = !invalid,
             modifier = Modifier.testTag("apply-character-filter")) { Text("应用字数范围") }
         TogglePreference("包含字数未知作品", "未提供字数或暂时获取失败的作品也会保留", value.includeUnknown) {
             onChange(value.copy(includeUnknown = it))

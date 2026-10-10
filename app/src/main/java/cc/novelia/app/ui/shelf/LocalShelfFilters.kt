@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.shelf
 
+import cc.novelia.app.ui.components.AppTextButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
@@ -66,8 +68,8 @@ import cc.novelia.app.ui.components.CollapsibleCloudFilters
             ChoiceRow("阅读状态", listOf("全部") + readingStatuses, (listOf("全部") + readingStatuses).indexOf(status)) { onStatus((listOf("全部") + readingStatuses)[it]) }
             if(!localFiles && type == ShelfBookType.Web) CharacterCountFilterFields(characters, onCharacters)
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { onStatus("全部"); onCharacters(CharacterCountFilter()) }) { Text("重置筛选") }
-                TextButton(onClick = { focus.clearFocus(); onExpanded(false) }) { Text("完成") }
+                AppTextButton(onClick = { onStatus("全部"); onCharacters(CharacterCountFilter()) }) { Text("重置筛选") }
+                AppTextButton(onClick = { focus.clearFocus(); onExpanded(false) }) { Text("完成") }
             }
         }
         trailingContent()

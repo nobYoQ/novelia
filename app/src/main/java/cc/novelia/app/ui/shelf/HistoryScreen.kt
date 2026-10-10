@@ -1,6 +1,8 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.shelf
 
+import cc.novelia.app.ui.components.AppIconButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -35,7 +37,7 @@ import cc.novelia.app.ui.navigation.AppController
     val booksByKey = remember(state.books) { state.books.associateBy { it.book.ref.key } }
     var tab by remember { mutableIntStateOf(0) }; var page by remember { mutableIntStateOf(0) }; var version by remember { mutableIntStateOf(0) }; var clear by remember { mutableStateOf(false) }
     fun pauseHistory(value: Boolean) { c.store.update { it.copy(historyPaused = value) }; if(profile != null) c.action { c.api.request(if(value) "PUT" else "DELETE", "user/read-history/paused") } }
-    ProfileDetailScreen("阅读历史", c::back, actions = { IconButton(onClick = { clear = true }) { Icon(Icons.Outlined.DeleteSweep, "清空历史") } }) { padding -> ProfileDetailList(Modifier.padding(padding)) {
+    ProfileDetailScreen("阅读历史", c::back, actions = { AppIconButton(onClick = { clear = true }) { Icon(Icons.Outlined.DeleteSweep, "清空历史") } }) { padding -> ProfileDetailList(Modifier.padding(padding)) {
         item { ProfileChoiceRow("历史来源", listOf("此设备", "原站云端"), tab) { tab = it } }
         item { ProfileToggle("暂停阅读历史", "续读位置仍会保存", state.historyPaused, onChange = ::pauseHistory) }
         if(tab == 0) {

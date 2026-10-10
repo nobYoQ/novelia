@@ -2,6 +2,11 @@
 
 package cc.novelia.app.ui.settings
 
+import cc.novelia.app.ui.components.AppRadioButton
+import cc.novelia.app.ui.components.AppLinearProgressIndicator
+
+import cc.novelia.app.ui.components.AppTextButton
+
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
@@ -55,13 +60,13 @@ import cc.novelia.app.ui.account.ProfileMenuRow
             Text("已选择${state.selected?.title.orEmpty()}", Modifier.padding(horizontal = 24.dp, vertical = 8.dp).testTag("launcher-icon-pending"),
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
             state.current?.let { current ->
-                TextButton(onClick = { onSelect(current.id) }, enabled = !state.saving, modifier = Modifier.padding(horizontal = 12.dp)) {
+                AppTextButton(onClick = { onSelect(current.id) }, enabled = !state.saving, modifier = Modifier.padding(horizontal = 12.dp)) {
                     Text("取消待切换")
                 }
             }
         }
         state.error?.let { Text(it, Modifier.padding(horizontal = 24.dp, vertical = 8.dp), color = MaterialTheme.colorScheme.error) }
-        if (!state.ready && state.error == null) LinearProgressIndicator(Modifier.fillMaxWidth().padding(24.dp))
+        if (!state.ready && state.error == null) AppLinearProgressIndicator(Modifier.fillMaxWidth().padding(24.dp))
         AppLazyColumn(Modifier.weight(1f).selectableGroup(), contentPadding = PaddingValues(bottom = 24.dp)) {
             items(state.icons.filter { !it.hidden || it.id == state.selectedId || it.id in state.enabledIds }, key = { it.id }) { icon ->
                 val selected = icon.id == state.selectedId
@@ -75,7 +80,7 @@ import cc.novelia.app.ui.account.ProfileMenuRow
                         if (icon.id in state.enabledIds) Text("当前使用", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         else if (selected) Text("待切换", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                     }
-                    RadioButton(selected, onClick = null, enabled = !state.saving)
+                    AppRadioButton(selected, onClick = null, enabled = !state.saving)
                 }
             }
         }

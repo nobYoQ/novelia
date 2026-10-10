@@ -1,5 +1,12 @@
 package cc.novelia.app.ui.community
 
+import cc.novelia.app.ui.components.AppBadge
+
+import cc.novelia.app.ui.components.AppTextButton
+import cc.novelia.app.ui.components.AppFilledTonalButton
+import cc.novelia.app.ui.components.AppIconButton
+import cc.novelia.app.ui.theme.appShape
+
 import cc.novelia.app.ui.components.AppScrollColumn
 import cc.novelia.app.ui.components.AppDropdownMenu
 import cc.novelia.app.ui.theme.AppMotion
@@ -10,7 +17,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import cc.novelia.app.ui.theme.appRoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Rule
 import androidx.compose.material.icons.outlined.*
@@ -50,13 +57,13 @@ internal enum class ForumAccountAction { LOGIN, POSTS, FAVORITES, STRIKES, RULES
     val density = LocalDensity.current
     val position = remember(density) { ForumPanelPosition(with(density) { 12.dp.roundToPx() }, with(density) { 8.dp.roundToPx() }) }
     Box {
-        TextButton(onClick = { expanded = !expanded; if(expanded) onOpen() }, modifier = Modifier.testTag("forum-account-toggle").semantics {
+        AppTextButton(onClick = { expanded = !expanded; if(expanded) onOpen() }, modifier = Modifier.testTag("forum-account-toggle").semantics {
             contentDescription = "论坛我的"
             stateDescription = (if(expanded) "已展开" else "已收起") + if(profile != null && hasUnreadStrikes) "，有新的处罚记录" else ""
         }) {
             Icon(Icons.Outlined.PersonOutline, null, Modifier.size(20.dp))
             Spacer(Modifier.width(4.dp)); Text("我的")
-            if(profile != null && hasUnreadStrikes) Badge(Modifier.padding(start = 4.dp).testTag("forum-account-unread"))
+            if(profile != null && hasUnreadStrikes) AppBadge(Modifier.padding(start = 4.dp).testTag("forum-account-unread"))
             Icon(Icons.Outlined.KeyboardArrowDown, null, Modifier.size(18.dp).graphicsLayer { rotationZ = angle })
         }
         if(visibility.currentState || visibility.targetState) {
@@ -64,23 +71,23 @@ internal enum class ForumAccountAction { LOGIN, POSTS, FAVORITES, STRIKES, RULES
                 AnimatedVisibility(visibility,
                     enter = if(reduced) EnterTransition.None else fadeIn(tween(AppMotion.Quick)) + scaleIn(tween(AppMotion.Standard), initialScale = .92f, transformOrigin = TransformOrigin(1f, 0f)),
                     exit = if(reduced) ExitTransition.None else fadeOut(tween(AppMotion.Exit)) + scaleOut(tween(AppMotion.Page), targetScale = .96f, transformOrigin = TransformOrigin(1f, 0f))) {
-                    Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    Surface(shape = appRoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh,
                         tonalElevation = 4.dp, shadowElevation = 8.dp,
                         modifier = Modifier.width(minOf(336.dp, (configuration.screenWidthDp.dp - 24.dp).coerceAtLeast(1.dp)))
                             .heightIn(max = (configuration.screenHeightDp.dp - 32.dp).coerceAtLeast(1.dp)).testTag("forum-account-panel")) {
                         AppScrollColumn(contentModifier = Modifier.padding(vertical = 12.dp)) {
                             Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(44.dp)) {
+                                Surface(shape = appShape(CircleShape), color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(44.dp)) {
                                     Box(contentAlignment = Alignment.Center) { Icon(Icons.Outlined.PersonOutline, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) }
                                 }
                                 Column(Modifier.weight(1f).padding(start = 12.dp)) {
                                     Text(profile?.username ?: "我的论坛", style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                     Text(profile?.role?.let { forumRoleLabel(it) } ?: "登录后查看个人记录", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
-                                IconButton(onClick = { expanded = false }) { Icon(Icons.Outlined.Close, "收起我的论坛", Modifier.size(20.dp)) }
+                                AppIconButton(onClick = { expanded = false }) { Icon(Icons.Outlined.Close, "收起我的论坛", Modifier.size(20.dp)) }
                             }
                             fun select(action: ForumAccountAction) { expanded = false; onAction(action) }
-                            if(profile == null) FilledTonalButton(onClick = { select(ForumAccountAction.LOGIN) }, enabled = expanded, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) { Text("登录论坛") }
+                            if(profile == null) AppFilledTonalButton(onClick = { select(ForumAccountAction.LOGIN) }, enabled = expanded, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) { Text("登录论坛") }
                             ForumPanelItem("我的帖子", Icons.Outlined.Description, expanded) { select(ForumAccountAction.POSTS) }
                             ForumPanelItem("云端收藏", Icons.Outlined.BookmarkBorder, expanded) { select(ForumAccountAction.FAVORITES) }
                             ForumPanelItem("处罚记录", Icons.Outlined.Gavel, expanded, unread = profile != null && hasUnreadStrikes) { select(ForumAccountAction.STRIKES) }
@@ -96,7 +103,7 @@ internal enum class ForumAccountAction { LOGIN, POSTS, FAVORITES, STRIKES, RULES
 }
 
 @Composable private fun ForumPanelItem(label: String, icon: ImageVector, enabled: Boolean, destructive: Boolean = false, unread: Boolean = false, onClick: () -> Unit) {
-    TextButton(onClick = onClick, enabled = enabled, shape = RoundedCornerShape(12.dp),
+    AppTextButton(onClick = onClick, enabled = enabled, shape = appRoundedCornerShape(12.dp),
         colors = ButtonDefaults.textButtonColors(contentColor = if(destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface),
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp).heightIn(min = 52.dp), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)) {
         Icon(icon, null, Modifier.size(22.dp)); Spacer(Modifier.width(16.dp))
@@ -121,7 +128,7 @@ internal class ForumPanelPosition(private val margin: Int, private val gap: Int)
 @Composable internal fun ForumSortPicker(sort: ForumSort, onSelect: (ForumSort) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        TextButton(onClick = { expanded = true }, modifier = Modifier.testTag("forum-sort")) {
+        AppTextButton(onClick = { expanded = true }, modifier = Modifier.testTag("forum-sort")) {
             Text(sort.label); Icon(Icons.Outlined.KeyboardArrowDown, "选择帖子排序", Modifier.size(18.dp))
         }
         AppDropdownMenu(expanded, onDismissRequest = { expanded = false }) {

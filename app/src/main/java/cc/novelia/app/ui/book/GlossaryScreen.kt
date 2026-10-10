@@ -2,6 +2,10 @@
 
 package cc.novelia.app.ui.book
 
+import cc.novelia.app.ui.components.AppButton
+import cc.novelia.app.ui.components.AppTextButton
+import cc.novelia.app.ui.components.AppIconButton
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -58,7 +62,7 @@ import kotlinx.serialization.encodeToString
         }
     }
     Screen("术语表", c::back, actions = {
-        IconButton(onClick = {
+        AppIconButton(onClick = {
             val submittedData = data?.toMap()
             if(submittedData != null && !preparingExport && pendingExportId == null) {
                 preparingExport = true
@@ -86,21 +90,21 @@ import kotlinx.serialization.encodeToString
         }, enabled = data != null && !preparingExport && pendingExportId == null) {
             Icon(Icons.Outlined.IosShare, if(preparingExport) "正在准备导出" else if(pendingExportId != null) "等待选择导出位置" else "导出 JSON")
         }
-        if(canEdit) { IconButton(onClick = { importer.launch(arrayOf("application/json", "text/plain", "*/*")) }) { Icon(Icons.Outlined.FileOpen, "导入 JSON") }; IconButton(onClick = { add = true }) { Icon(Icons.Outlined.Add, "添加词条") } }
+        if(canEdit) { AppIconButton(onClick = { importer.launch(arrayOf("application/json", "text/plain", "*/*")) }) { Icon(Icons.Outlined.FileOpen, "导入 JSON") }; AppIconButton(onClick = { add = true }) { Icon(Icons.Outlined.Add, "添加词条") } }
     }) { padding -> AsyncContent(ref.key, load = { if(ref.isLocal) c.store.state.value.personalGlossaries[ref.key].orEmpty() else if(ref.isWenku) c.api.get<WenkuDetail>("wenku/${ref.id}").glossary else c.api.get<WebDetail>("novel/${ref.key}").glossary }, modifier = Modifier.padding(padding)) { glossary, _ ->
         LaunchedEffect(glossary) { if(data == null) { data = glossary; original = glossary } }
         Column {
             OutlinedTextField(query, { query = it }, label = { Text("查找原文或译名") }, modifier = Modifier.fillMaxWidth().padding(20.dp), singleLine = true)
             AppLazyColumn(Modifier.weight(1f)) {
                 if(entries.isEmpty()) item { EmptyState("暂时没有匹配词条", "术语表用于统一作品中的人名和专有名词。", Icons.Outlined.Translate) }
-                items(entries, key = { it.key }) { item -> ListItem(headlineContent = { Text(item.key) }, supportingContent = { Text(item.value) }, trailingContent = { if(canEdit) Row { IconButton(onClick = { editing = item.key to item.value }) { Icon(Icons.Outlined.Edit, "编辑词条") }; IconButton(onClick = { data = data.orEmpty() - item.key }) { Icon(Icons.Outlined.DeleteOutline, "删除词条") } } }) }
+                items(entries, key = { it.key }) { item -> ListItem(headlineContent = { Text(item.key) }, supportingContent = { Text(item.value) }, trailingContent = { if(canEdit) Row { AppIconButton(onClick = { editing = item.key to item.value }) { Icon(Icons.Outlined.Edit, "编辑词条") }; AppIconButton(onClick = { data = data.orEmpty() - item.key }) { Icon(Icons.Outlined.DeleteOutline, "删除词条") } } }) }
             }
-            if(canEdit) Button(onClick = { c.action("术语表已保存") { saving = true; val submittedData = data.orEmpty().toMap(); val submittedOriginal = original; try { if(ref.isLocal) c.store.update { it.copy(personalGlossaries = it.personalGlossaries + (ref.key to submittedData)) } else { val latest = if(ref.isWenku) c.api.get<WenkuDetail>("wenku/${ref.id}").glossary else c.api.get<WebDetail>("novel/${ref.key}").glossary; if(latest != submittedOriginal) throw ApiException(409, "原站术语表已被他人更新，请重新进入此页后再编辑"); c.api.put(if(ref.isWenku) "wenku/${ref.id}/glossary" else "novel/${ref.key}/glossary", submittedData) }; original = submittedData } finally { saving = false } } }, enabled = data != null && data != original && !saving, modifier = Modifier.fillMaxWidth().padding(20.dp)) { Text(if(saving) "保存中…" else if(ref.isLocal) "保存到此设备" else "保存到原站") }
+            if(canEdit) AppButton(onClick = { c.action("术语表已保存") { saving = true; val submittedData = data.orEmpty().toMap(); val submittedOriginal = original; try { if(ref.isLocal) c.store.update { it.copy(personalGlossaries = it.personalGlossaries + (ref.key to submittedData)) } else { val latest = if(ref.isWenku) c.api.get<WenkuDetail>("wenku/${ref.id}").glossary else c.api.get<WebDetail>("novel/${ref.key}").glossary; if(latest != submittedOriginal) throw ApiException(409, "原站术语表已被他人更新，请重新进入此页后再编辑"); c.api.put(if(ref.isWenku) "wenku/${ref.id}/glossary" else "novel/${ref.key}/glossary", submittedData) }; original = submittedData } finally { saving = false } } }, enabled = data != null && data != original && !saving, modifier = Modifier.fillMaxWidth().padding(20.dp)) { Text(if(saving) "保存中…" else if(ref.isLocal) "保存到此设备" else "保存到原站") }
             else Text("维护术语表需要符合原站编辑权限；当前可浏览和导出。", Modifier.padding(20.dp), style = MaterialTheme.typography.bodySmall)
         }
     } }
     if(add || editing != null) {
         var source by remember(editing) { mutableStateOf(editing?.first.orEmpty()) }; var target by remember(editing) { mutableStateOf(editing?.second.orEmpty()) }
-        AppAlertDialog(onDismissRequest = { add = false; editing = null }, title = { Text(if(add) "添加词条" else "编辑词条") }, text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { OutlinedTextField(source, { source = it }, label = { Text("原文") }); OutlinedTextField(target, { target = it }, label = { Text("译名") }) } }, confirmButton = { TextButton(onClick = { data = (data.orEmpty() - (editing?.first ?: "")) + (source.trim() to target.trim()); add = false; editing = null }, enabled = source.isNotBlank() && target.isNotBlank()) { Text("保存词条") } }, dismissButton = { TextButton(onClick = { add = false; editing = null }) { Text("取消") } })
+        AppAlertDialog(onDismissRequest = { add = false; editing = null }, title = { Text(if(add) "添加词条" else "编辑词条") }, text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { OutlinedTextField(source, { source = it }, label = { Text("原文") }); OutlinedTextField(target, { target = it }, label = { Text("译名") }) } }, confirmButton = { AppTextButton(onClick = { data = (data.orEmpty() - (editing?.first ?: "")) + (source.trim() to target.trim()); add = false; editing = null }, enabled = source.isNotBlank() && target.isNotBlank()) { Text("保存词条") } }, dismissButton = { AppTextButton(onClick = { add = false; editing = null }) { Text("取消") } })
     }
 }

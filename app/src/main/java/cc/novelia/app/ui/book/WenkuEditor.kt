@@ -1,6 +1,10 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.book
 
+import cc.novelia.app.ui.components.AppButton
+import cc.novelia.app.ui.components.AppTextButton
+import cc.novelia.app.ui.components.AppIconButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
@@ -70,16 +74,16 @@ import kotlinx.serialization.json.*
         OutlinedTextField(tags, { tags = it }, label = { Text("标签，每行一个") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(intro, { intro = it }, label = { Text("简介") }, minLines = 6, modifier = Modifier.fillMaxWidth())
         SectionTitle("出版分卷 ${volumes.size}", "添加分卷") { volumeEditor = -1 }
-        volumes.forEachIndexed { index, volume -> ListItem(headlineContent = { Text(volume.titleZh ?: volume.title) }, supportingContent = { Text(volume.asin) }, trailingContent = { Row { IconButton(onClick = { volumeEditor = index }) { Icon(Icons.Outlined.Edit, "编辑分卷") }; IconButton(onClick = { volumes = volumes.filterIndexed { i, _ -> i != index } }) { Icon(Icons.Outlined.DeleteOutline, "移除分卷信息") } } }) }
+        volumes.forEachIndexed { index, volume -> ListItem(headlineContent = { Text(volume.titleZh ?: volume.title) }, supportingContent = { Text(volume.asin) }, trailingContent = { Row { AppIconButton(onClick = { volumeEditor = index }) { Icon(Icons.Outlined.Edit, "编辑分卷") }; AppIconButton(onClick = { volumes = volumes.filterIndexed { i, _ -> i != index } }) { Icon(Icons.Outlined.DeleteOutline, "移除分卷信息") } } }) }
         Text("日亚资料导入依赖原站扩展。本页支持手动填写已核实的出版资料。", style = MaterialTheme.typography.bodySmall)
-        Button(onClick = ::submit, enabled = !saving && title.isNotBlank() && titleZh.isNotBlank() && (cover.isBlank() || cover.startsWith("https://")), modifier = Modifier.fillMaxWidth()) { Text(if(saving) "保存中…" else "保存到原站") }
+        AppButton(onClick = ::submit, enabled = !saving && title.isNotBlank() && titleZh.isNotBlank() && (cover.isBlank() || cover.startsWith("https://")), modifier = Modifier.fillMaxWidth()) { Text(if(saving) "保存中…" else "保存到原站") }
     } }
     volumeEditor?.let { index ->
         val existing = volumes.getOrNull(index) ?: WenkuVolume()
         var asin by remember(index) { mutableStateOf(existing.asin) }; var name by remember(index) { mutableStateOf(existing.title) }; var translated by remember(index) { mutableStateOf(existing.titleZh.orEmpty()) }; var image by remember(index) { mutableStateOf(existing.cover.orEmpty()) }; var publisher by remember(index) { mutableStateOf(existing.publisher.orEmpty()) }; var imprint by remember(index) { mutableStateOf(existing.imprint.orEmpty()) }; var date by remember(index) { mutableStateOf(existing.publishAt?.let { java.time.Instant.ofEpochSecond(it).atOffset(ZoneOffset.UTC).toLocalDate().toString() }.orEmpty()) }
         AppAlertDialog(onDismissRequest = { volumeEditor = null }, title = { Text("出版分卷") }, text = { AppScrollColumn(contentModifier = Modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedTextField(asin, { asin = it.trim() }, label = { Text("ASIN") }); OutlinedTextField(name, { name = it }, label = { Text("原文卷名") }); OutlinedTextField(translated, { translated = it }, label = { Text("中文卷名") }); OutlinedTextField(image, { image = it }, label = { Text("封面 HTTPS 链接") }); OutlinedTextField(publisher, { publisher = it }, label = { Text("出版社") }); OutlinedTextField(imprint, { imprint = it }, label = { Text("文库品牌") }); OutlinedTextField(date, { date = it }, label = { Text("出版日期 YYYY-MM-DD") })
-        } }, confirmButton = { TextButton(onClick = { val timestamp = date.takeIf(String::isNotBlank)?.let { runCatching { LocalDate.parse(it).atStartOfDay().toEpochSecond(ZoneOffset.UTC) }.getOrNull() }; if(date.isNotBlank() && timestamp == null) { c.message("请填写有效的出版日期") } else { val volume = existing.copy(asin = asin, title = name, titleZh = translated.ifBlank { null }, cover = image.ifBlank { null }, publisher = publisher.ifBlank { null }, imprint = imprint.ifBlank { null }, publishAt = timestamp); volumes = if(index < 0) volumes + volume else volumes.toMutableList().apply { set(index, volume) }; volumeEditor = null } }, enabled = asin.isNotBlank() && name.isNotBlank() && (image.isBlank() || image.startsWith("https://"))) { Text("保存分卷") } }, dismissButton = { TextButton(onClick = { volumeEditor = null }) { Text("取消") } })
+        } }, confirmButton = { AppTextButton(onClick = { val timestamp = date.takeIf(String::isNotBlank)?.let { runCatching { LocalDate.parse(it).atStartOfDay().toEpochSecond(ZoneOffset.UTC) }.getOrNull() }; if(date.isNotBlank() && timestamp == null) { c.message("请填写有效的出版日期") } else { val volume = existing.copy(asin = asin, title = name, titleZh = translated.ifBlank { null }, cover = image.ifBlank { null }, publisher = publisher.ifBlank { null }, imprint = imprint.ifBlank { null }, publishAt = timestamp); volumes = if(index < 0) volumes + volume else volumes.toMutableList().apply { set(index, volume) }; volumeEditor = null } }, enabled = asin.isNotBlank() && name.isNotBlank() && (image.isBlank() || image.startsWith("https://"))) { Text("保存分卷") } }, dismissButton = { AppTextButton(onClick = { volumeEditor = null }) { Text("取消") } })
     }
     duplicate?.let { matches ->
         AppAlertDialog(
@@ -89,18 +93,18 @@ import kotlinx.serialization.json.*
                 AppScrollColumn(contentModifier = Modifier) {
                     Text("请先确认以下作品不是你要创建的文库。")
                     matches.forEach { book ->
-                        TextButton(onClick = { duplicate = null; c.book(BookRef("wenku", book.id)) }) {
+                        AppTextButton(onClick = { duplicate = null; c.book(BookRef("wenku", book.id)) }) {
                             Text(book.titleZh.ifBlank { book.title })
                         }
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { duplicate = null; ignoreDuplicate = true; submit() }) {
+                AppTextButton(onClick = { duplicate = null; ignoreDuplicate = true; submit() }) {
                     Text("确认是新作品，继续创建")
                 }
             },
-            dismissButton = { TextButton(onClick = { duplicate = null }) { Text("返回检查") } }
+            dismissButton = { AppTextButton(onClick = { duplicate = null }) { Text("返回检查") } }
         )
     }
 }

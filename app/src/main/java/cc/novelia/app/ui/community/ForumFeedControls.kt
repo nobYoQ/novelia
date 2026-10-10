@@ -1,6 +1,8 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.community
 
+import cc.novelia.app.ui.components.AppIconButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
@@ -44,7 +46,7 @@ import cc.novelia.app.data.model.ForumCategory
             Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
             actions()
-            IconButton(onClick = { if(expanded) focusManager.clearFocus(); onExpanded(!expanded) },
+            AppIconButton(onClick = { if(expanded) focusManager.clearFocus(); onExpanded(!expanded) },
                 modifier = Modifier.testTag("forum-search-toggle").semantics {
                     stateDescription = if(search.isBlank()) "未筛选" else "搜索：$search"
                 }) {
@@ -55,7 +57,7 @@ import cc.novelia.app.data.model.ForumCategory
         }
         if(expanded) OutlinedTextField(search, onSearch, label = { Text(searchLabel) }, singleLine = true,
             leadingIcon = { Icon(Icons.Outlined.Search, null) },
-            trailingIcon = { if(search.isNotEmpty()) IconButton(onClick = { onSearch("") }) { Icon(Icons.Outlined.Close, "清空搜索") } },
+            trailingIcon = { if(search.isNotEmpty()) AppIconButton(onClick = { onSearch("") }) { Icon(Icons.Outlined.Close, "清空搜索") } },
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp).testTag("forum-search-input"),
             shape = MaterialTheme.shapes.extraLarge)
     }

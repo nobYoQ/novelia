@@ -1,10 +1,11 @@
 package cc.novelia.app.ui.book
 
+import cc.novelia.app.ui.components.AppTextButton
+
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
@@ -27,5 +28,5 @@ import cc.novelia.app.ui.theme.motionClickable
     if(expanded && count != null) AppAlertDialog(onDismissRequest = { expanded = false },
         title = { Text("作品字数") },
         text = { SelectionContainer { Text(formatExactCharacters(count), Modifier.testTag("exact-character-count")) } },
-        confirmButton = { TextButton(onClick = { expanded = false }, Modifier.heightIn(min = 48.dp)) { Text("关闭") } })
+        confirmButton = { AppTextButton(onClick = { expanded = false }, Modifier.heightIn(min = 48.dp)) { Text("关闭") } })
 }

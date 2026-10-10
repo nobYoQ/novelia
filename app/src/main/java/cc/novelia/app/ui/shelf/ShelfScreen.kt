@@ -1,6 +1,13 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.shelf
 
+import cc.novelia.app.ui.components.AppCheckbox
+
+import cc.novelia.app.ui.components.AppButton
+import cc.novelia.app.ui.components.AppTextButton
+import cc.novelia.app.ui.components.AppFilledTonalButton
+import cc.novelia.app.ui.components.AppIconButton
+
 import cc.novelia.app.data.updates.withAcknowledgedBookUpdates
 
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -155,10 +162,10 @@ import kotlinx.coroutines.withContext
     }
     val downloadableSelection = remember(books, selection) { books.filter { it.book.ref.key in selection && !it.book.ref.isLocal && !it.book.ref.isWenku } }
     Screen("书架", actions = {
-        IconButton(onClick = { c.go("updates") }) { Icon(Icons.Outlined.NewReleases, "查看书架更新") }
-        IconButton(onClick = { UpdateWorker.checkNow(c.app); c.message("已开始检查书架更新") }) { Icon(Icons.Outlined.Sync, "检查更新") }
-        IconButton(onClick = { c.go("history") }) { Icon(Icons.Outlined.History, "阅读历史") }
-        IconButton(onClick = { importer.launch(arrayOf("*/*")) }, enabled = !importing) { Icon(Icons.Outlined.FileOpen, "导入本地文件") }
+        AppIconButton(onClick = { c.go("updates") }) { Icon(Icons.Outlined.NewReleases, "查看书架更新") }
+        AppIconButton(onClick = { UpdateWorker.checkNow(c.app); c.message("已开始检查书架更新") }) { Icon(Icons.Outlined.Sync, "检查更新") }
+        AppIconButton(onClick = { c.go("history") }) { Icon(Icons.Outlined.History, "阅读历史") }
+        AppIconButton(onClick = { importer.launch(arrayOf("*/*")) }, enabled = !importing) { Icon(Icons.Outlined.FileOpen, "导入本地文件") }
     }) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
             PrimaryTabRow(tab) { listOf("我的书架", "本地文件", "云端收藏").forEachIndexed { i, label -> Tab(tab == i, { tab = i }, enabled = !batchWorking, text = { Text(label) }) } }
@@ -190,7 +197,7 @@ import kotlinx.coroutines.withContext
                                     if(filterCharacters) Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                                         val unknown = countCandidates.count { characterCounts.count(it) == null }
                                         Text(if(characterCounts.loading) "正在补全字数…" else "$unknown 本字数未知", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-                                        if(unknown > 0) TextButton(onClick = { characterCounts.loadMore(countCandidates) }, enabled = !characterCounts.loading) { Text("补全字数") }
+                                        if(unknown > 0) AppTextButton(onClick = { characterCounts.loadMore(countCandidates) }, enabled = !characterCounts.loading) { Text("补全字数") }
                                     }
                                 }
                                 val volumeCount = groups.sumOf { it.volumes.size }
@@ -198,19 +205,19 @@ import kotlinx.coroutines.withContext
                                     managing, { managing = !managing; selection = emptySet(); filtersExpanded = false; focus.clearFocus() }, "local",
                                     manageEnabled = !batchWorking && (managing || books.isNotEmpty()))
                                 ShelfControlReveal(managing) { FlowRow(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    TextButton(onClick = { selection = books.map { it.book.ref.key }.toSet() }, enabled = managing && !batchWorking) { Text("全选") }
-                                    FilledTonalButton(onClick = { bulkMove = true }, enabled = managing && !batchWorking && selection.isNotEmpty()) { Text("移动 ${selection.size} 本") }
-                                    FilledTonalButton(onClick = { bulkStatus = true }, enabled = managing && !batchWorking && selection.isNotEmpty()) { Text("修改阅读状态") }
-                                    TextButton(onClick = {
+                                    AppTextButton(onClick = { selection = books.map { it.book.ref.key }.toSet() }, enabled = managing && !batchWorking) { Text("全选") }
+                                    AppFilledTonalButton(onClick = { bulkMove = true }, enabled = managing && !batchWorking && selection.isNotEmpty()) { Text("移动 ${selection.size} 本") }
+                                    AppFilledTonalButton(onClick = { bulkStatus = true }, enabled = managing && !batchWorking && selection.isNotEmpty()) { Text("修改阅读状态") }
+                                    AppTextButton(onClick = {
                                         val refs = books.filter { it.book.ref.key in selection }.map { it.book.ref }.toSet()
                                         if(tab == 1) batchDeletion = refs.filter { it.isLocal }.toSet() else batchRemoval = refs
                                     }, enabled = managing && !batchWorking && selection.isNotEmpty()) {
                                         Text(if(batchWorking) "正在处理…" else if(tab == 1) "批量删除" else "批量移出书架")
                                     }
-                                    TextButton(onClick = {
+                                    AppTextButton(onClick = {
                                         permanentDeletion = books.filter { it.book.ref.key in selection }.map { it.book.ref }.toSet()
                                     }, enabled = managing && !batchWorking && selection.isNotEmpty()) { Text("彻底删除") }
-                                    TextButton(onClick = {
+                                    AppTextButton(onClick = {
                                         val chosen = downloadableSelection
                                         queueingDownloads = true
                                         c.action {
@@ -237,11 +244,11 @@ import kotlinx.coroutines.withContext
                                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                                     Text("已准备好阅读", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                                                    IconButton(onClick = { importedKeys = emptyList() }) { Icon(Icons.Outlined.Close, "关闭导入结果") }
+                                                    AppIconButton(onClick = { importedKeys = emptyList() }) { Icon(Icons.Outlined.Close, "关闭导入结果") }
                                                 }
                                                 importedBooks.take(3).forEach { saved ->
                                                     Text(saved.book.title, maxLines = 2)
-                                                    Button(onClick = { c.book(saved.book.ref) }, modifier = Modifier.fillMaxWidth()) { Text("开始阅读") }
+                                                    AppButton(onClick = { c.book(saved.book.ref) }, modifier = Modifier.fillMaxWidth()) { Text("开始阅读") }
                                                 }
                                                 if(importedBooks.size > 3) Text("另有 ${importedBooks.size - 3} 本小说已加入书架。", style = MaterialTheme.typography.bodySmall)
                                             }
@@ -284,7 +291,7 @@ import kotlinx.coroutines.withContext
                                         val selectable = saved.book.ref.key in selectableKeys
                                         val onOpen = { if(managing) { if(selectable) selection = if(saved.book.ref.key in selection) selection - saved.book.ref.key else selection + saved.book.ref.key } else { filtersExpanded = false; onOpenBook(saved.book.ref) } }
                                         val trailing: @Composable () -> Unit = {
-                                            if(managing) Checkbox(saved.book.ref.key in selection, { checked -> selection = if(checked) selection + saved.book.ref.key else selection - saved.book.ref.key }, enabled = selectable) else IconButton(onClick = { selected = saved }) { Icon(Icons.Outlined.MoreVert, "管理 ${saved.book.title}") }
+                                            if(managing) AppCheckbox(saved.book.ref.key in selection, { checked -> selection = if(checked) selection + saved.book.ref.key else selection - saved.book.ref.key }, enabled = selectable) else AppIconButton(onClick = { selected = saved }) { Icon(Icons.Outlined.MoreVert, "管理 ${saved.book.title}") }
                                         }
                                         if(row.parent != null) MountedVolumeRow(saved, state.positions[saved.book.ref.key],
                                             itemMotion.zIndex(if(dragging) 1f else 0f).graphicsLayer {
@@ -301,7 +308,7 @@ import kotlinx.coroutines.withContext
                                                 showCharacterCount = filterCharacters, compactMetadata = tab == 0, trailing = trailing)
                                             if(saved.book.ref.isWenku && !managing) {
                                                 val rotation by animateFloatAsState(if(row.expanded) 180f else 0f, tween(if(reducedMotion) 0 else AppMotion.Standard), label = "wenku-volume-disclosure")
-                                                TextButton(onClick = {
+                                                AppTextButton(onClick = {
                                                     if(row.volumeCount == 0) volumeManager = saved
                                                     else if(filteringVolumes) collapsedSearchGroups = if(row.expanded) collapsedSearchGroups + saved.book.ref.key else collapsedSearchGroups - saved.book.ref.key
                                                     else c.store.update { it.copy(books = it.books.map { book -> if(book.book.ref == saved.book.ref) book.copy(volumesExpanded = !row.expanded) else book }) }
@@ -367,10 +374,10 @@ import kotlinx.coroutines.withContext
     }
     if(bulkMove) AppAlertDialog(onDismissRequest = { bulkMove = false }, title = { Text("移入收藏夹") }, text = { Column {
         if(state.books.any { it.book.ref.key in selection && it.parentWenkuKey != null && it.parentWenkuKey !in selection }) Text("单独移动分卷会取消其挂载；同时移动所属文库可保留挂载。", style = MaterialTheme.typography.bodySmall)
-        state.folders.forEach { target -> TextButton(onClick = { c.store.update { it.moveShelfBooks(selection, target) }; bulkMove = false; managing = false; selection = emptySet() }) { Text(target) } }
+        state.folders.forEach { target -> AppTextButton(onClick = { c.store.update { it.moveShelfBooks(selection, target) }; bulkMove = false; managing = false; selection = emptySet() }) { Text(target) } }
     } }, confirmButton = {})
     if(bulkStatus) AppAlertDialog(onDismissRequest = { bulkStatus = false }, title = { Text("修改 ${selection.size} 本的阅读状态") }, text = { Column {
-        readingStatuses.forEach { status -> TextButton(onClick = {
+        readingStatuses.forEach { status -> AppTextButton(onClick = {
             c.store.update { it.withReadingStatus(selection, status) }
             bulkStatus = false; managing = false; selection = emptySet()
         }) { Text(status) } }

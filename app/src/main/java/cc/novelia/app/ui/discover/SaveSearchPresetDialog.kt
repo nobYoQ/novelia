@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.discover
 
+import cc.novelia.app.ui.components.AppTextButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -19,6 +21,6 @@ import cc.novelia.app.ui.components.AppAlertDialog
                 Text(preset.summary(), style = MaterialTheme.typography.bodySmall)
             }
         },
-        confirmButton = { TextButton(enabled = name.isNotBlank(), onClick = { onSave(preset.copy(name = name).normalized()) }) { Text("保存") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } })
+        confirmButton = { AppTextButton(enabled = name.isNotBlank(), onClick = { onSave(preset.copy(name = name).normalized()) }) { Text("保存") } },
+        dismissButton = { AppTextButton(onClick = onDismiss) { Text("取消") } })
 }

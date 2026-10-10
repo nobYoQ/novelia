@@ -1,6 +1,11 @@
 @file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.shelf
 
+import cc.novelia.app.ui.components.AppCheckbox
+
+import cc.novelia.app.ui.components.AppTextButton
+import cc.novelia.app.ui.components.AppIconButton
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import cc.novelia.app.ui.components.AppSelectionChip
@@ -152,7 +157,7 @@ import cc.novelia.app.ui.navigation.AppController
                         if (kind == 0) {
                             Row(Modifier.padding(start = 20.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Text("来源（可多选）", Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
-                                TextButton(onClick = { source = providers.keys.filterNot { it in selectedSources }.joinToString(","); page = 0 }) { Text("反选") }
+                                AppTextButton(onClick = { source = providers.keys.filterNot { it in selectedSources }.joinToString(","); page = 0 }) { Text("反选") }
                             }
                             AppChipFlowRow(Modifier.padding(horizontal = 20.dp, vertical = 10.dp)) {
                                 providers.forEach { (id, title) -> AppSelectionChip(id in selectedSources, {
@@ -164,10 +169,10 @@ import cc.novelia.app.ui.navigation.AppController
                             ChoiceRow("翻译", listOf("全部", "GPT", "Sakura"), translate) { translate = it; page = 0 }
                         }
                         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                            TextButton(onClick = {
+                            AppTextButton(onClick = {
                                 source = providers.keys.joinToString(","); type = 0; level = 0; translate = 0; page = 0
                             }, Modifier.heightIn(min = 48.dp)) { Text("重置筛选") }
-                            TextButton(onClick = { expanded = false; focus.clearFocus() }, Modifier.heightIn(min = 48.dp)) { Text("完成") }
+                            AppTextButton(onClick = { expanded = false; focus.clearFocus() }, Modifier.heightIn(min = 48.dp)) { Text("完成") }
                         }
                     }
                 }
@@ -211,9 +216,9 @@ import cc.novelia.app.ui.navigation.AppController
                                         Modifier.testTag("cloud-book-${book.ref.key}").semantics { selected = selectedBook }
                                             .then(if(selectedBook) Modifier.background(MaterialTheme.colorScheme.secondaryContainer) else Modifier),
                                         status = bookRowStatus(displayed, local.books.firstOrNull { it.book.ref == book.ref }, local.positions[book.ref.key], local.bookUpdates[book.ref.key], account, preferCloud = true), compactMetadata = true, trailing = {
-                                            if(managing) Checkbox(book.ref.key in selection, { toggleSelection(displayed) }, enabled = !bulkBusy,
+                                            if(managing) AppCheckbox(book.ref.key in selection, { toggleSelection(displayed) }, enabled = !bulkBusy,
                                                 modifier = Modifier.semantics { contentDescription = "选择${book.title}" })
-                                            else if(cancelling) TextButton(onClick = { c.action {
+                                            else if(cancelling) AppTextButton(onClick = { c.action {
                                                 val restoreFolder = book.favored?.takeIf { it != ALL_CLOUD_FAVORITES && it.isNotBlank() }
                                                     ?: current.id.takeUnless { it == ALL_CLOUD_FAVORITES }
                                                 if(restoreFolder != null) {
@@ -221,7 +226,7 @@ import cc.novelia.app.ui.navigation.AppController
                                                     version++
                                                 } else { c.pendingFavoriteCloud = true; c.pendingFavorite = book }
                                             } }) { Text("撤销") }
-                                            else IconButton(onClick = { c.action {
+                                            else AppIconButton(onClick = { c.action {
                                                 // 服务器按用户和小说删除收藏，此路由的收藏夹参数也接受 `all`。
                                                 val queued = c.cloudMutation("DELETE", "$path/${current.id}/${if (kind == 0) book.ref.key else book.ref.id}")
                                                 if(!queued) {

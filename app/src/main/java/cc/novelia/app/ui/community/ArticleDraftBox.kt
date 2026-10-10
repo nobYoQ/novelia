@@ -1,5 +1,9 @@
 package cc.novelia.app.ui.community
 
+import cc.novelia.app.ui.components.AppTextButton
+import cc.novelia.app.ui.components.AppFilledTonalButton
+import cc.novelia.app.ui.components.AppIconButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -24,10 +28,10 @@ import cc.novelia.app.ui.navigation.AppController
     var deleting by remember { mutableStateOf<ArticleDraft?>(null) }
     Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
         Text("帖子草稿箱", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
-        TextButton(onClick = onClose) { Text("关闭") }
+        AppTextButton(onClick = onClose) { Text("关闭") }
     }
     Text("新帖和已发布帖子的修改草稿都保存在此设备，旧站与论坛的草稿分别续写。", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.bodySmall)
-    FilledTonalButton(onClick = { onClose(); c.go("compose") }, Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+    AppFilledTonalButton(onClick = { onClose(); c.go("compose") }, Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
         Icon(Icons.Outlined.Add, null, Modifier.size(18.dp)); Text(" 新建草稿")
     }
     AppLazyColumn(Modifier.fillMaxWidth().heightIn(max = 520.dp)) {
@@ -38,13 +42,13 @@ import cc.novelia.app.ui.navigation.AppController
             val kind = if(articleId == null) "新帖" else "修改已发布帖子"
             MenuRow(draft.displayTitle, "$source · $kind · ${draft.content.length} 字 · 点击续写", Icons.Outlined.Description,
                 { onClose(); c.go(if(articleId == null) "compose?draft=${encodeSegment(draft.key)}" else "compose?article=${encodeSegment(articleId)}") },
-                trailing = { IconButton(onClick = { deleting = draft }) { Icon(Icons.Outlined.DeleteOutline, "删除草稿 ${draft.displayTitle}") } })
+                trailing = { AppIconButton(onClick = { deleting = draft }) { Icon(Icons.Outlined.DeleteOutline, "删除草稿 ${draft.displayTitle}") } })
         }
     }
     deleting?.let { draft ->
         AppAlertDialog(onDismissRequest = { deleting = null }, title = { Text("删除草稿？") },
             text = { Text("“${draft.displayTitle}”的本地草稿将被删除。") },
-            confirmButton = { TextButton(onClick = { c.store.update { it.copy(drafts = it.drafts - draft.key) }; deleting = null }) { Text("删除草稿") } },
-            dismissButton = { TextButton(onClick = { deleting = null }) { Text("取消") } })
+            confirmButton = { AppTextButton(onClick = { c.store.update { it.copy(drafts = it.drafts - draft.key) }; deleting = null }) { Text("删除草稿") } },
+            dismissButton = { AppTextButton(onClick = { deleting = null }) { Text("取消") } })
     }
 }

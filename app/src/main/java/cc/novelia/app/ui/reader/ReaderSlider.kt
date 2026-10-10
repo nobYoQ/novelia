@@ -1,6 +1,12 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.reader
 
+import cc.novelia.app.ui.components.AppSlider
+import cc.novelia.app.ui.components.AppSliderTrack
+
+import cc.novelia.app.ui.components.AppTextButton
+import cc.novelia.app.ui.components.AppOutlinedButton
+
 import androidx.compose.animation.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
@@ -19,6 +25,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
+import cc.novelia.app.ui.theme.LocalSquareCorners
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.clipPath
@@ -54,15 +61,15 @@ import kotlin.math.max
                 if(!enabled) disabled()
                 setProgress { next -> if(enabled && next.isFinite()) { onChange(next.coerceIn(range)); true } else false }
             }, horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                OutlinedButton(onClick = { onChange((value - step).coerceIn(range)) }, enabled = enabled && value > range.start, modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp)) { Icon(Icons.Outlined.Remove, "减小 $label") }
+                AppOutlinedButton(onClick = { onChange((value - step).coerceIn(range)) }, enabled = enabled && value > range.start, modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp)) { Icon(Icons.Outlined.Remove, "减小 $label") }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(formatPreferenceValue(value), style = MaterialTheme.typography.labelLarge)
-                    if(reference != null) TextButton(onClick = { onChange(reference) }, enabled = enabled,
+                    if(reference != null) AppTextButton(onClick = { onChange(reference) }, enabled = enabled,
                         modifier = Modifier.testTag("reader-default-$name").semantics { contentDescription = resetDescription }) {
                         Text("默认 ${formatPreferenceValue(reference)}", style = MaterialTheme.typography.labelSmall)
                     }
                 }
-                OutlinedButton(onClick = { onChange((value + step).coerceIn(range)) }, enabled = enabled && value < range.endInclusive, modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp)) { Icon(Icons.Outlined.Add, "增大 $label") }
+                AppOutlinedButton(onClick = { onChange((value + step).coerceIn(range)) }, enabled = enabled && value < range.endInclusive, modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp)) { Icon(Icons.Outlined.Add, "增大 $label") }
             }
         } else {
             ReaderProgressSlider(name, value, range, modifier, enabled, livePreviewStep, reference, resetDescription, onChange)
@@ -72,6 +79,7 @@ import kotlin.math.max
 
 @Composable private fun ReaderProgressSlider(name: String, value: Float, range: ClosedFloatingPointRange<Float>, modifier: Modifier,
     enabled: Boolean, livePreviewStep: Float?, reference: Float?, resetDescription: String, onChange: (Float) -> Unit) {
+    val squareCorners = LocalSquareCorners.current
     val reducedMotion = appReducedMotion()
     var draft by remember { mutableFloatStateOf(value) }
     var dragging by remember { mutableStateOf(false) }
@@ -155,7 +163,7 @@ import kotlin.math.max
             } finally { referenceTap = false }
         }
     }) {
-        Slider(displayed, { next ->
+        AppSlider(displayed, { next ->
             if(!referenceTap) {
                 resetting = false
                 draft = next
@@ -174,14 +182,14 @@ import kotlin.math.max
                     trackStart = it.positionInRoot().x
                     trackWidth = it.size.width.toFloat()
                 }) {
-                    SliderDefaults.Track(slider, enabled = enabled)
-                    if(referenceFraction != null) SliderDefaults.Track(slider, enabled = enabled,
+                    AppSliderTrack(slider, enabled = enabled)
+                    if(referenceFraction != null) AppSliderTrack(slider, enabled = enabled,
                         colors = SliderDefaults.colors(activeTrackColor = coveredColor, inactiveTrackColor = overflowColor,
                             disabledActiveTrackColor = coveredColor.copy(alpha = .38f), disabledInactiveTrackColor = overflowColor.copy(alpha = .38f)),
                         modifier = Modifier.matchParentSize().drawWithContent {
                             val end = size.width * referenceFraction
                             if(end > 0f) clipPath(Path().apply {
-                                addRoundRect(RoundRect(if(rtl) size.width - end else 0f, 0f, if(rtl) size.width else end, size.height, CornerRadius(size.height / 2)))
+                                addRoundRect(RoundRect(if(rtl) size.width - end else 0f, 0f, if(rtl) size.width else end, size.height, CornerRadius(if(squareCorners) 0f else size.height / 2)))
                             }) { this@drawWithContent.drawContent() }
                         })
                 }

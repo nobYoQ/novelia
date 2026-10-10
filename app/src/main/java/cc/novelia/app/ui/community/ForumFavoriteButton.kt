@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.community
 
+import cc.novelia.app.ui.components.AppOutlinedButton
+
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Spacer
@@ -9,7 +11,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BookmarkAdd
 import androidx.compose.material.icons.outlined.BookmarkAdded
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -34,7 +35,7 @@ internal class ForumFavoriteState(initialSaved: Boolean) {
 
 @Composable internal fun ForumFavoriteButton(favorite: ForumFavoriteState, onClick: () -> Unit) {
     val reducedMotion = appReducedMotion()
-    OutlinedButton(enabled = !favorite.saving, onClick = onClick) {
+    AppOutlinedButton(enabled = !favorite.saving, onClick = onClick) {
         Crossfade(favorite.saved, animationSpec = tween(if(reducedMotion) 0 else AppMotion.Quick), label = "articleBookmark") { saved ->
             Icon(if(saved) Icons.Outlined.BookmarkAdded else Icons.Outlined.BookmarkAdd, null, Modifier.size(18.dp))
         }

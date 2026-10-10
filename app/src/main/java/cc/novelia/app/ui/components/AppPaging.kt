@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.components
 
+import cc.novelia.app.ui.components.AppTextButton
+
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -121,8 +123,8 @@ internal class SheetEndOverscrollConnection(private val canScrollForward: () -> 
         Column {
             HorizontalDivider()
             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { page(-1) }, enabled = back, modifier = Modifier.heightIn(min = 48.dp)) { Text("上一屏") }
-                TextButton(onClick = { page(1) }, enabled = forward, modifier = Modifier.heightIn(min = 48.dp)) { Text("下一屏") }
+                AppTextButton(onClick = { page(-1) }, enabled = back, modifier = Modifier.heightIn(min = 48.dp)) { Text("上一屏") }
+                AppTextButton(onClick = { page(1) }, enabled = forward, modifier = Modifier.heightIn(min = 48.dp)) { Text("下一屏") }
             }
         }
     }

@@ -1,5 +1,8 @@
 package cc.novelia.app.ui.community
 
+import cc.novelia.app.ui.components.AppTextButton
+import cc.novelia.app.ui.components.AppIconButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
@@ -25,8 +28,8 @@ import cc.novelia.app.ui.navigation.AppController
     Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.medium,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).testTag("forum-rules-notice")) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onOpen, modifier = Modifier.weight(1f)) { Text("发言请遵守《社区守则》") }
-            IconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, "不再显示社区守则提示") }
+            AppTextButton(onClick = onOpen, modifier = Modifier.weight(1f)) { Text("发言请遵守《社区守则》") }
+            AppIconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, "不再显示社区守则提示") }
         }
     }
 }

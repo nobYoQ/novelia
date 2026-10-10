@@ -3,7 +3,7 @@ package cc.novelia.app.ui.components
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
+import cc.novelia.app.ui.theme.appRoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -11,8 +11,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.ui.theme.pressFeedback
+import cc.novelia.app.ui.theme.appShape
 
-private val ChipShape = RoundedCornerShape(14.dp)
+@Composable private fun chipShape() = appRoundedCornerShape(14.dp)
 internal val ChipSpacing = 12.dp
 
 /** 换行标签的纵向间距与同一行中的横向间距一致。 */
@@ -29,7 +30,7 @@ internal val ChipSpacing = 12.dp
     modifier: Modifier = Modifier,
     leadingIcon: (@Composable () -> Unit)? = null,
     trailingIcon: (@Composable () -> Unit)? = null,
-    shape: Shape = ChipShape,
+    shape: Shape = chipShape(),
     colors: SelectableChipColors? = null,
     border: BorderStroke? = null,
 ) {
@@ -38,7 +39,7 @@ internal val ChipSpacing = 12.dp
     FilterChip(selected = selected, onClick = onClick,
         label = { Box(Modifier.padding(vertical = 6.dp)) { label() } },
         modifier = modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp).pressFeedback(interaction),
-        leadingIcon = leadingIcon, trailingIcon = trailingIcon, shape = shape,
+        leadingIcon = leadingIcon, trailingIcon = trailingIcon, shape = appShape(shape),
         colors = colors ?: FilterChipDefaults.filterChipColors(containerColor = scheme.surfaceContainerLow,
             labelColor = scheme.onSurfaceVariant, selectedContainerColor = scheme.secondaryContainer,
             selectedLabelColor = scheme.onSecondaryContainer),
@@ -56,7 +57,7 @@ internal val ChipSpacing = 12.dp
     val colors = MaterialTheme.colorScheme
     AssistChip(onClick = onClick, label = { Box(Modifier.padding(vertical = 6.dp)) { label() } },
         modifier = modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp).pressFeedback(interaction),
-        leadingIcon = leadingIcon, shape = ChipShape,
+        leadingIcon = leadingIcon, shape = chipShape(),
         colors = AssistChipDefaults.assistChipColors(containerColor = colors.surfaceContainerLow, labelColor = colors.onSurfaceVariant),
         border = BorderStroke(1.dp, colors.outlineVariant), interactionSource = interaction)
 }

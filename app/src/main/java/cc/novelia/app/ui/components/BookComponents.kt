@@ -1,10 +1,14 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.components
 
+import cc.novelia.app.ui.components.AppLinearProgressIndicator
+
+import cc.novelia.app.ui.components.AppIconButton
+
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
+import cc.novelia.app.ui.theme.appRoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Block
@@ -55,7 +59,7 @@ import coil.decode.DataSource
                 c.go("discover?query=${android.net.Uri.encode(expression)}")
             }, label = { Text(entry.label) }, trailingIcon = {
                 Box {
-                    IconButton(onClick = { menu = true }, modifier = Modifier.size(48.dp)) { Icon(Icons.Outlined.MoreVert, "更多标签操作 $tag", Modifier.size(18.dp)) }
+                    AppIconButton(onClick = { menu = true }, modifier = Modifier.size(48.dp)) { Icon(Icons.Outlined.MoreVert, "更多标签操作 $tag", Modifier.size(18.dp)) }
                     val blocked = tag in library.blockedTags
                     DropdownMenu(menu, onDismissRequest = { menu = false }) {
                         DropdownMenuItem(text = { Text("编辑标签翻译") }, onClick = { menu = false; editing = entry },
@@ -78,7 +82,7 @@ import coil.decode.DataSource
 @Composable fun BookCover(book: BookCard, modifier: Modifier = Modifier) {
     val source = book.cover?.takeIf { it.isNotBlank() }
     var loaded by remember(source) { mutableStateOf(false) }
-    Box(modifier.width(76.dp).height(104.dp).clip(RoundedCornerShape(12.dp)).semantics {
+    Box(modifier.width(76.dp).height(104.dp).clip(appRoundedCornerShape(12.dp)).semantics {
         contentDescription = "${book.title} ${if(loaded) "封面" else "默认封面"}"
     }, contentAlignment = Alignment.Center) {
         DefaultBookCover(book, Modifier.matchParentSize().clearAndSetSemantics {})
@@ -170,7 +174,7 @@ import coil.decode.DataSource
 @Composable internal fun BookReadingProgressBar(reading: BookRowStatus, modifier: Modifier = Modifier) {
     // 服务器仅提供历史标记时，不能推导数值进度或显示为 0%。
     reading.progress?.let { progress ->
-        LinearProgressIndicator(progress = { progress }, modifier = modifier.fillMaxWidth().height(3.dp)
+        AppLinearProgressIndicator(progress = { progress }, modifier = modifier.fillMaxWidth().height(3.dp)
             .semantics { contentDescription = reading.progressLabel }, gapSize = 0.dp, drawStopIndicator = {})
     }
 }

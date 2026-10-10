@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.discover
 
+import cc.novelia.app.ui.components.AppIconButton
+
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Box
@@ -139,10 +141,10 @@ internal class KeywordCategoryReorderState(
     val index = state.order.indexOf(name)
     if(LocalEInkMode.current) {
         Column {
-            IconButton(onClick = { state.moveOne(name, -1) }, enabled = index > 0, modifier = Modifier.size(48.dp)) {
+            AppIconButton(onClick = { state.moveOne(name, -1) }, enabled = index > 0, modifier = Modifier.size(48.dp)) {
                 Icon(Icons.Outlined.KeyboardArrowUp, "上移分类 $name")
             }
-            IconButton(onClick = { state.moveOne(name, 1) }, enabled = index in 0 until state.order.lastIndex, modifier = Modifier.size(48.dp)) {
+            AppIconButton(onClick = { state.moveOne(name, 1) }, enabled = index in 0 until state.order.lastIndex, modifier = Modifier.size(48.dp)) {
                 Icon(Icons.Outlined.KeyboardArrowDown, "下移分类 $name")
             }
         }
@@ -150,7 +152,7 @@ internal class KeywordCategoryReorderState(
     }
     var menu by remember { mutableStateOf(false) }
     Box {
-        IconButton(onClick = { menu = true }, modifier = Modifier.size(48.dp).testTag("keyword-category-drag-$name")
+        AppIconButton(onClick = { menu = true }, modifier = Modifier.size(48.dp).testTag("keyword-category-drag-$name")
             .pointerInput(state, name) {
                 detectDragGestures(onDragStart = { menu = false; state.start(name) }, onDragCancel = state::cancel,
                     onDragEnd = state::finish, onDrag = { change, amount -> change.consume(); state.drag(amount.y) })

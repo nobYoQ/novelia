@@ -1,9 +1,10 @@
 package cc.novelia.app.ui.community
 
+import cc.novelia.app.ui.components.AppTextButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
@@ -58,7 +59,7 @@ internal data class ForumReplyFocus(val rootId: Long, val page: Int, val comment
         // 回复页的更新计数优先；服务端的 0 表示无回复，只有缺失字段才保留未知入口。
         val count = knownReplyCount ?: replyPages.peek(root.id, page)?.total ?: replyTotal ?: root.replyCount?.takeIf { it >= 0 }
         render(root, root.status == 0) {
-            TextButton(onClick = { expanded = !expanded }, enabled = expanded || count != 0L,
+            AppTextButton(onClick = { expanded = !expanded }, enabled = expanded || count != 0L,
                 modifier = Modifier.testTag("forum-replies-toggle-${root.id}")) {
                 Text(when {
                     expanded -> "收起回复"

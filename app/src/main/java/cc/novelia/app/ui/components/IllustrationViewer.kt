@@ -1,5 +1,8 @@
 package cc.novelia.app.ui.components
 
+import cc.novelia.app.ui.components.AppFilledTonalButton
+import cc.novelia.app.ui.components.AppIconButton
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -70,7 +73,7 @@ internal fun IllustrationViewer(model: Any, onDismiss: () -> Unit) {
             Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("插图", Modifier.weight(1f).padding(start = 8.dp), style = MaterialTheme.typography.titleMedium)
-                    IconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, "关闭插图") }
+                    AppIconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, "关闭插图") }
                 }
                 Box(Modifier.weight(1f).fillMaxWidth().clipToBounds().background(Color.Black)
                     .onSizeChanged {
@@ -102,7 +105,7 @@ internal fun IllustrationViewer(model: Any, onDismiss: () -> Unit) {
                     if(loading) { if(reducedMotion) Text("正在加载插图…") else CircularProgressIndicator(Modifier.size(32.dp), color = Color.White) }
                     if(failed) Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("插图暂时无法加载", color = Color.White)
-                        FilledTonalButton(onClick = { retry++ }) { Text("重试") }
+                        AppFilledTonalButton(onClick = { retry++ }) { Text("重试") }
                     }
                 }
                 val buttonColors = IconButtonDefaults.iconButtonColors(contentColor = Color.White, disabledContentColor = Color.White.copy(alpha = .35f))
@@ -111,14 +114,14 @@ internal fun IllustrationViewer(model: Any, onDismiss: () -> Unit) {
                         Triple(Icons.Outlined.KeyboardArrowDown, "查看插图下方", Offset(0f, -viewport.height * .7f)),
                         Triple(Icons.AutoMirrored.Outlined.KeyboardArrowLeft, "查看插图左侧", Offset(viewport.width * .7f, 0f)),
                         Triple(Icons.AutoMirrored.Outlined.KeyboardArrowRight, "查看插图右侧", Offset(-viewport.width * .7f, 0f))).forEach { (icon, label, pan) ->
-                        IconButton(onClick = { zoom(1f, pan = pan) }, enabled = ready, colors = buttonColors) { Icon(icon, label) }
+                        AppIconButton(onClick = { zoom(1f, pan = pan) }, enabled = ready, colors = buttonColors) { Icon(icon, label) }
                     }
                 }
                 Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { zoom(1 / 1.5f) }, enabled = ready && transform.scale > 1f, colors = buttonColors) { Icon(Icons.Outlined.ZoomOut, "缩小插图") }
+                    AppIconButton(onClick = { zoom(1 / 1.5f) }, enabled = ready && transform.scale > 1f, colors = buttonColors) { Icon(Icons.Outlined.ZoomOut, "缩小插图") }
                     Text("${(transform.scale * 100).roundToInt()}%", style = MaterialTheme.typography.labelLarge)
-                    IconButton(onClick = { zoom(1.5f) }, enabled = ready && transform.scale < 5f, colors = buttonColors) { Icon(Icons.Outlined.ZoomIn, "放大插图") }
-                    IconButton(onClick = { transform = IllustrationTransform() }, enabled = ready && transform.scale > 1f, colors = buttonColors) { Icon(Icons.Outlined.RestartAlt, "还原插图") }
+                    AppIconButton(onClick = { zoom(1.5f) }, enabled = ready && transform.scale < 5f, colors = buttonColors) { Icon(Icons.Outlined.ZoomIn, "放大插图") }
+                    AppIconButton(onClick = { transform = IllustrationTransform() }, enabled = ready && transform.scale > 1f, colors = buttonColors) { Icon(Icons.Outlined.RestartAlt, "还原插图") }
                 }
             }
         }

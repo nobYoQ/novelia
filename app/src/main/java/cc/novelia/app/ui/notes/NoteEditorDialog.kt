@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.notes
 
+import cc.novelia.app.ui.components.AppTextButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -19,8 +21,8 @@ import cc.novelia.app.ui.components.AppAlertDialog
                 supportingText = { Text("留空仅保留书签") }, minLines = 3, maxLines = 6)
         }
     }, confirmButton = {
-        TextButton(onClick = { onSave(text.trim()); onDismiss() }, modifier = Modifier.heightIn(min = 48.dp)) { Text("保存笔记") }
+        AppTextButton(onClick = { onSave(text.trim()); onDismiss() }, modifier = Modifier.heightIn(min = 48.dp)) { Text("保存笔记") }
     }, dismissButton = {
-        TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("取消") }
+        AppTextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("取消") }
     })
 }

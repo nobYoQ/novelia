@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.settings
 
+import cc.novelia.app.ui.components.AppTextButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -124,8 +126,8 @@ fun WebDavSyncScreen(c: AppController) {
                     ChoiceRow("首次设置", listOf("保留本机", "使用远端"), if(settingsPreference == BootstrapPreference.LOCAL_SETTINGS) 0 else 1) { settingsPreference = if(it == 0) BootstrapPreference.LOCAL_SETTINGS else BootstrapPreference.REMOTE_SETTINGS }
                 }
             } },
-            confirmButton = { TextButton(onClick = { runTask("已连接同步资料") { c.app.webDav.connect(settingsPreference); preview = null } }, enabled = !working) { Text("合并并连接") } },
-            dismissButton = { TextButton(onClick = { preview = null }, enabled = !working) { Text("取消") } },
+            confirmButton = { AppTextButton(onClick = { runTask("已连接同步资料") { c.app.webDav.connect(settingsPreference); preview = null } }, enabled = !working) { Text("合并并连接") } },
+            dismissButton = { AppTextButton(onClick = { preview = null }, enabled = !working) { Text("取消") } },
         )
     }
     conflict?.let { value ->
@@ -140,13 +142,13 @@ fun WebDavSyncScreen(c: AppController) {
                         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text("保留的版本 ${index + 1}", style = MaterialTheme.typography.titleSmall)
                             Text(if(candidate.deleted) "此版本已删除这项资料" else readableCandidate(candidate.value, expanded), style = MaterialTheme.typography.bodyMedium)
-                            if(!candidate.deleted && candidate.value.toString().length > 2000) TextButton(onClick = { expanded = !expanded }) { Text(if(expanded) "收起内容" else "显示完整内容") }
-                            TextButton(onClick = { runTask("已恢复选中的版本") { c.app.webDav.resolveConflict(value, index); conflict = null } }, enabled = !working) { Text("使用此版本") }
+                            if(!candidate.deleted && candidate.value.toString().length > 2000) AppTextButton(onClick = { expanded = !expanded }) { Text(if(expanded) "收起内容" else "显示完整内容") }
+                            AppTextButton(onClick = { runTask("已恢复选中的版本") { c.app.webDav.resolveConflict(value, index); conflict = null } }, enabled = !working) { Text("使用此版本") }
                         }
                     }
                 }
             } },
-            confirmButton = { TextButton(onClick = { conflict = null }, enabled = !working) { Text("稍后处理") } },
+            confirmButton = { AppTextButton(onClick = { conflict = null }, enabled = !working) { Text("稍后处理") } },
         )
     }
 }
@@ -157,8 +159,8 @@ internal fun WebDavReconnectDialog(working: Boolean, onDismiss: () -> Unit, onCo
         onDismissRequest = { if(!working) onDismiss() },
         title = { Text("重新连接同步目录？") },
         text = { Text("本机资料和服务器登录信息会保留。接下来将重新检查当前目录：目录为空时可用本机资料建立同步；已有同步资料时会先展示合并预览。如果重新建立了云端资料，其他设备也需重新连接。") },
-        confirmButton = { TextButton(onClick = onConfirm, enabled = !working) { Text("重新检查并预览") } },
-        dismissButton = { TextButton(onClick = onDismiss, enabled = !working) { Text("取消") } },
+        confirmButton = { AppTextButton(onClick = onConfirm, enabled = !working) { Text("重新检查并预览") } },
+        dismissButton = { AppTextButton(onClick = onDismiss, enabled = !working) { Text("取消") } },
     )
 }
 

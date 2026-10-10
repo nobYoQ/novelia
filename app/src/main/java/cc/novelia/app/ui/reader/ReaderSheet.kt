@@ -1,6 +1,8 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.reader
 
+import cc.novelia.app.ui.components.AppSheetDragHandle
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.animation.core.animateDpAsState
@@ -56,7 +58,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
         sheetGesturesEnabled = false,
         scrimColor = Color.Transparent, dragHandle = {
             Box(Modifier.fillMaxWidth().then(resizeGesture).testTag("reader-preferences-drag-handle"), contentAlignment = Alignment.Center) {
-                BottomSheetDefaults.DragHandle()
+                AppSheetDragHandle()
             }
         }) {
         CompositionLocalProvider(LocalInAppSheet provides true, LocalPanelSession provides session) {

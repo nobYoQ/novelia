@@ -1,6 +1,10 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.reader
 
+import cc.novelia.app.ui.components.AppLinearProgressIndicator
+
+import cc.novelia.app.ui.components.AppTextButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
@@ -61,11 +65,11 @@ import kotlinx.coroutines.withContext
             }
             if(!busy) TogglePreference("仅 Wi-Fi 缓存", "离开 Wi-Fi 后停止后续请求", wifiOnly) { wifiOnly = it }
             // 确定进度直接跟随已完成工作量，不使用循环动画。
-            if(busy) { if(!LocalEInkMode.current) LinearProgressIndicator(progress = { completed.toFloat() / total.coerceAtLeast(1) }, modifier = Modifier.fillMaxWidth()); Text("正在缓存 $completed / $total 章") }
+            if(busy) { if(!LocalEInkMode.current) AppLinearProgressIndicator(progress = { completed.toFloat() / total.coerceAtLeast(1) }, modifier = Modifier.fillMaxWidth()); Text("正在缓存 $completed / $total 章") }
             if(message.isNotBlank()) Text(message)
         }
     }, confirmButton = {
-        TextButton(enabled = !busy && count > 0, onClick = {
+        AppTextButton(enabled = !busy && count > 0, onClick = {
             val ids = runCatching { chapterCacheRange(toc, first.toIntOrNull() ?: 0, last.toIntOrNull() ?: 0) }
             if(ids.isFailure) message = ids.exceptionOrNull()?.message.orEmpty()
             else {
@@ -80,7 +84,7 @@ import kotlinx.coroutines.withContext
                 }
             }
         }) { Text("开始缓存") }
-    }, dismissButton = { TextButton(onClick = { if(busy) { job?.cancel(); message = "已取消，已完成的缓存会保留。" } else close() }) { Text(if(busy) "取消缓存" else "关闭") } })
+    }, dismissButton = { AppTextButton(onClick = { if(busy) { job?.cancel(); message = "已取消，已完成的缓存会保留。" } else close() }) { Text(if(busy) "取消缓存" else "关闭") } })
 }
 
 private data class SearchScope(val toc: List<TocItem>, val document: LocalDocument?, val cachedIds: Set<String>, val completeDirectory: Boolean = true)
@@ -122,7 +126,7 @@ private data class SearchScope(val toc: List<TocItem>, val document: LocalDocume
         Text("按当前阅读语言和译文设置搜索，每次最多显示 200 条结果。", style = MaterialTheme.typography.bodySmall)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(query, { query = it.take(200); requestVersion++; job?.cancel(); busy = false; result = null; failure = null }, label = { Text("搜索整本正文") }, singleLine = true, modifier = Modifier.weight(1f).testTag("book-search-query"))
-            TextButton(onClick = {
+            AppTextButton(onClick = {
                 if(busy) { requestVersion++; job?.cancel(); busy = false }
                 else if(source != null) {
                     val request = ++requestVersion

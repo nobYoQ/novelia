@@ -1,6 +1,10 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.community
 
+import cc.novelia.app.ui.components.AppButton
+import cc.novelia.app.ui.components.AppTextButton
+import cc.novelia.app.ui.components.AppOutlinedButton
+
 import cc.novelia.app.data.catalog.ForumLinks
 import cc.novelia.app.data.model.ForumCategory
 import cc.novelia.app.data.model.ForumPostInput
@@ -70,11 +74,11 @@ import cc.novelia.app.ui.theme.MotionContent
         }
         AppAlertDialog(onDismissRequest = c::back, title = { Text("发现本地修改草稿") },
             text = { Text("本地草稿可能早于已发布内容。选择使用最新帖子将删除这份本地草稿；也可以继续编辑草稿。") },
-            confirmButton = { TextButton(onClick = {
+            confirmButton = { AppTextButton(onClick = {
                 c.store.update { it.copy(drafts = it.drafts - key) }
                 useSavedDraft = false; chooseDraft = false
             }) { Text("使用最新帖子") } },
-            dismissButton = { TextButton(onClick = { useSavedDraft = true; chooseDraft = false }) { Text("继续本地草稿") } })
+            dismissButton = { AppTextButton(onClick = { useSavedDraft = true; chooseDraft = false }) { Text("继续本地草稿") } })
         return
     }
     val saved = remember(key, useSavedDraft) { if(useSavedDraft) draft?.let { ArticleDrafts.read(key, it) } else null }
@@ -103,7 +107,7 @@ import cc.novelia.app.ui.theme.MotionContent
     fun draftSnapshot() = ArticleDrafts.snapshot(title, content, category, categoryId, selectedForumCategory?.slug, tagIds)
     val draftPersistence = rememberDraftPersistence(c.store, key, baseline, ::draftSnapshot)
     LaunchedEffect(title, content, category, categoryId, tagIds) { kotlinx.coroutines.delay(700); draftPersistence.save() }
-    Screen(if(article == null) "写一篇帖子" else "编辑帖子", c::back, actions = { TextButton(onClick = { focusManager.clearFocus(); preview = !preview }) { Text(if(preview) "编辑" else "预览") } }) { padding ->
+    Screen(if(article == null) "写一篇帖子" else "编辑帖子", c::back, actions = { AppTextButton(onClick = { focusManager.clearFocus(); preview = !preview }) { Text(if(preview) "编辑" else "预览") } }) { padding ->
         BoxWithConstraints(Modifier.padding(padding).consumeWindowInsets(padding).imePadding().fillMaxSize()) {
         // 把编辑区内部滚动高度限制在键盘上方的剩余空间，横屏也如此。
         val editorHeight = maxHeight.coerceIn(1.dp, 420.dp)
@@ -138,11 +142,11 @@ import cc.novelia.app.ui.theme.MotionContent
                     }
                     if(forumError != null) Text(forumError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                     Text(persistenceError ?: if(article == null) "草稿自动保存在此设备，可从社区草稿箱继续写作。" else "修改自动保存在此设备，可从帖子草稿箱管理；重新编辑时可选择最新帖子或本地草稿。", style = MaterialTheme.typography.bodySmall, color = if(persistenceError == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error)
-                    OutlinedButton(onClick = { c.action {
+                    AppOutlinedButton(onClick = { c.action {
                         check(c.store.recoveryIssue.value == null) { "本地资料处于恢复保护状态，暂时无法保存草稿" }
                         draftPersistence.save(); c.store.flush(); c.back()
                     } }, modifier = Modifier.fillMaxWidth(), enabled = !sending) { Text("保存草稿并退出") }
-                    Button(onClick = {
+                    AppButton(onClick = {
                         draftPersistence.save()
                         val submit = { c.action {
                             if(forum) require(ForumRules.canPublish(selectedForumCategory, c.forumSession.profile.value)) { "当前账号不能在此分类发帖，草稿已保留" }

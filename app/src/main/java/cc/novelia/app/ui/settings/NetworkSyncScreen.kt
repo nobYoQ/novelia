@@ -1,5 +1,8 @@
 package cc.novelia.app.ui.settings
 
+import cc.novelia.app.ui.components.AppButton
+import cc.novelia.app.ui.components.AppTextButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -45,7 +48,7 @@ import cc.novelia.app.ui.navigation.AppController
                         Text("原站账号同步", style = MaterialTheme.typography.titleLarge)
                         if(account == null) {
                             Text("登录后同步收藏和阅读进度。", style = MaterialTheme.typography.bodyMedium)
-                            Button(onClick = { c.go("login") }) { Text("登录") }
+                            AppButton(onClick = { c.go("login") }) { Text("登录") }
                         } else {
                             Text("当前账号：$account", style = MaterialTheme.typography.titleMedium)
                             Text(when {
@@ -56,8 +59,8 @@ import cc.novelia.app.ui.navigation.AppController
                             }, style = MaterialTheme.typography.bodyLarge)
                             Text("最近成功：${syncTime(status.lastSuccessAt)}\n最近尝试：${syncTime(status.lastAttemptAt)}",
                                 style = MaterialTheme.typography.bodySmall)
-                            if(status.requiresLogin) Button(onClick = { c.go("login") }) { Text("重新登录") }
-                            Button(onClick = {
+                            if(status.requiresLogin) AppButton(onClick = { c.go("login") }) { Text("重新登录") }
+                            AppButton(onClick = {
                                 val binding = c.session.capture()
                                 busy = true
                                 c.action {
@@ -101,7 +104,7 @@ import cc.novelia.app.ui.navigation.AppController
                             Text(book?.book?.title ?: "作品操作", style = MaterialTheme.typography.titleMedium)
                             Text(operation, style = MaterialTheme.typography.labelLarge)
                             Text(if (action.id in inFlight) "正在同步…" else status.failures[action.id] ?: if(state.autoSync) "等待联网自动同步" else "等待手动同步", style = MaterialTheme.typography.bodyMedium)
-                            TextButton(onClick = {
+                            AppTextButton(onClick = {
                                 val binding = c.session.capture()
                                 if(binding.account == account) removing = action to binding
                             }, enabled = !busy && !running) { Text("移除此操作") }

@@ -2,6 +2,8 @@
 
 package cc.novelia.app.ui.settings
 
+import cc.novelia.app.ui.components.AppRadioButton
+
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -53,7 +55,7 @@ import kotlinx.coroutines.withContext
                 Row(Modifier.fillMaxWidth().testTag("book-source-${source.id}")
                     .selectable(selected = source == selected, enabled = enabled, role = Role.RadioButton, onClick = { onSelect(source) }).padding(vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(source == selected, onClick = null, enabled = enabled)
+                    AppRadioButton(source == selected, onClick = null, enabled = enabled)
                     Column(Modifier.padding(start = 12.dp).weight(1f)) {
                         Text(source.title, style = MaterialTheme.typography.titleMedium)
                         Text(source.origin.substringAfter("://"), style = MaterialTheme.typography.bodySmall)

@@ -1,5 +1,8 @@
 package cc.novelia.app.ui.settings
 
+import cc.novelia.app.ui.components.AppTextButton
+import cc.novelia.app.ui.components.AppIconButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -97,7 +100,7 @@ internal fun WebDavServerForm(
                             password, { password = it }, label = { Text("密码或应用授权码") },
                             visualTransformation = if(passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
-                            trailingIcon = { IconButton(onClick = { passwordVisible = !passwordVisible }, enabled = !working) {
+                            trailingIcon = { AppIconButton(onClick = { passwordVisible = !passwordVisible }, enabled = !working) {
                                 Icon(if(passwordVisible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility, if(passwordVisible) "隐藏密码" else "显示密码")
                             } },
                             singleLine = true, enabled = !working, modifier = Modifier.fillMaxWidth(),
@@ -120,7 +123,7 @@ internal fun WebDavServerForm(
                             singleLine = true, enabled = !working, modifier = Modifier.fillMaxWidth())
                         OutlinedTextField(draft.deviceName, { draft = draft.copy(deviceName = it) }, label = { Text("此设备名称") },
                             singleLine = true, enabled = !working, modifier = Modifier.fillMaxWidth())
-                        TextButton(onClick = { password = ""; onClearPassword() }, enabled = !working) { Text("清除已保存的密码") }
+                        AppTextButton(onClick = { password = ""; onClearPassword() }, enabled = !working) { Text("清除已保存的密码") }
                     }
                 } }
             }

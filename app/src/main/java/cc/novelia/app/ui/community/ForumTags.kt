@@ -1,5 +1,9 @@
 package cc.novelia.app.ui.community
 
+import cc.novelia.app.ui.components.AppBadge
+
+import cc.novelia.app.ui.components.AppIconButton
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -22,10 +26,10 @@ import cc.novelia.app.ui.components.appHorizontalScroll
 import cc.novelia.app.ui.theme.LocalEInkMode
 
 @Composable internal fun ForumTagFilterToggle(expanded: Boolean, selectedTag: String?, onClick: () -> Unit) {
-    IconButton(onClick, Modifier.testTag("forum-tag-toggle").semantics {
+    AppIconButton(onClick, Modifier.testTag("forum-tag-toggle").semantics {
         stateDescription = selectedTag?.let { "已筛选：$it" } ?: "全部标签"
     }) {
-        BadgedBox(badge = { if(selectedTag != null) Badge() }) {
+        BadgedBox(badge = { if(selectedTag != null) AppBadge() }) {
             Icon(Icons.Outlined.FilterAlt, if(expanded) "收起标签筛选" else "展开标签筛选",
                 tint = if(expanded || selectedTag != null) MaterialTheme.colorScheme.primary else LocalContentColor.current)
         }

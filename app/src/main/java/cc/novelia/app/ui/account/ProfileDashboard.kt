@@ -3,7 +3,7 @@ package cc.novelia.app.ui.account
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import cc.novelia.app.ui.theme.appRoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.*
@@ -73,11 +73,11 @@ import cc.novelia.app.ui.theme.LocalEInkMode
         val stacked = maxWidth / fontScale < 300.dp
         val history: @Composable (Modifier) -> Unit = { modifier ->
             ProfileFeatureCard("阅读历史", "最近阅读记录", Icons.Outlined.History, "history", onNavigate,
-                colors.primary, colors.onPrimary, RoundedCornerShape(topStart = 28.dp, topEnd = 48.dp, bottomEnd = 28.dp, bottomStart = 28.dp), modifier)
+                colors.primary, colors.onPrimary, appRoundedCornerShape(topStart = 28.dp, topEnd = 48.dp, bottomEnd = 28.dp, bottomStart = 28.dp), modifier)
         }
         val downloads: @Composable (Modifier) -> Unit = { modifier ->
             ProfileFeatureCard("下载管理", "下载与离线内容", Icons.Outlined.Download, "downloads", onNavigate,
-                colors.secondaryContainer, colors.onSecondaryContainer, RoundedCornerShape(28.dp), modifier)
+                colors.secondaryContainer, colors.onSecondaryContainer, appRoundedCornerShape(28.dp), modifier)
         }
         if(stacked) Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             history(Modifier.fillMaxWidth())
@@ -110,7 +110,7 @@ import cc.novelia.app.ui.theme.LocalEInkMode
 
 @Composable private fun ProfileShortcuts(noteCount: Int, onNavigate: (String) -> Unit) {
     val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
-    Surface(shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surfaceContainerLow, border = profileCardBorder()) {
+    Surface(shape = appRoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surfaceContainerLow, border = profileCardBorder()) {
         BoxWithConstraints(Modifier.fillMaxWidth().padding(6.dp)) {
             val stacked = (maxWidth + 12.dp) / fontScale < 300.dp
             val shortcuts = listOf(
@@ -136,7 +136,7 @@ import cc.novelia.app.ui.theme.LocalEInkMode
 @Composable private fun ProfileShortcut(title: String, route: String, icon: ImageVector, detail: String?,
     stacked: Boolean, onNavigate: (String) -> Unit, modifier: Modifier) {
     Surface(onClick = { onNavigate(route) }, modifier = modifier.testTag("profile-$route"),
-        shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surfaceContainerLow) {
+        shape = appRoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surfaceContainerLow) {
         if(stacked) Row(Modifier.padding(14.dp).heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Icon(icon, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
@@ -157,18 +157,18 @@ import cc.novelia.app.ui.theme.LocalEInkMode
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
             ProfilePreferenceRow("设置", "阅读、外观与下载", Icons.Outlined.Tune, "settings", onNavigate,
-                RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 6.dp, bottomEnd = 6.dp))
-            ProfilePreferenceRow("屏蔽管理", "作品与标签", Icons.Outlined.Block, "blocked", onNavigate, RoundedCornerShape(6.dp))
+                appRoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 6.dp, bottomEnd = 6.dp))
+            ProfilePreferenceRow("屏蔽管理", "作品与标签", Icons.Outlined.Block, "blocked", onNavigate, appRoundedCornerShape(6.dp))
             ProfilePreferenceRow("网络与同步", if(pendingCount > 0) "$pendingCount 项待处理" else "账号同步、WebDAV 与网络",
-                Icons.Outlined.Sync, "sync", onNavigate, RoundedCornerShape(6.dp))
+                Icons.Outlined.Sync, "sync", onNavigate, appRoundedCornerShape(6.dp))
             ProfilePreferenceRow("阅读资料备份", "书架、进度与本地资料", Icons.Outlined.Backup, "backup", onNavigate,
-                RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp, bottomStart = 24.dp, bottomEnd = 24.dp))
+                appRoundedCornerShape(topStart = 6.dp, topEnd = 6.dp, bottomStart = 24.dp, bottomEnd = 24.dp))
         }
     }
 }
 
 @Composable private fun ProfileAboutCard(onClick: () -> Unit) {
-    ProfilePreferenceRow("帮助与关于", "使用说明、版本与反馈", Icons.Outlined.Info, "about", { onClick() }, RoundedCornerShape(24.dp))
+    ProfilePreferenceRow("帮助与关于", "使用说明、版本与反馈", Icons.Outlined.Info, "about", { onClick() }, appRoundedCornerShape(24.dp))
 }
 
 @Composable private fun ProfilePreferenceRow(title: String, subtitle: String, icon: ImageVector, route: String,

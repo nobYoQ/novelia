@@ -1,5 +1,8 @@
 package cc.novelia.app.ui.discover
 
+import cc.novelia.app.ui.components.AppButton
+import cc.novelia.app.ui.components.AppTextButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.lazy.items
@@ -75,11 +78,11 @@ import kotlinx.coroutines.ensureActive
         item {
             Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if(!loading && result?.books.isNullOrEmpty() && error == null) Text(if(result?.endReached == true) "已检查完当前搜索结果，没有符合条件的作品。" else "暂未找到符合条件的作品，可以继续查找。")
-                if(result?.endReached != true || error != null) Button(onClick = { request++ }, enabled = !loading,
+                if(result?.endReached != true || error != null) AppButton(onClick = { request++ }, enabled = !loading,
                     modifier = Modifier.fillMaxWidth().testTag("continue-filtered-search")) { Text(if(error == null) "继续查找" else "重试") }
                 if(result?.endReached == true) Text("已检查完当前搜索结果", style = MaterialTheme.typography.bodySmall)
-                TextButton(onClick = { result = null; c.filteredDiscoverPage = null; forceNetwork = true; request++ }, enabled = !loading) { Text("重新查找") }
-                TextButton(onClick = onReset) { Text("清空筛选") }
+                AppTextButton(onClick = { result = null; c.filteredDiscoverPage = null; forceNetwork = true; request++ }, enabled = !loading) { Text("重新查找") }
+                AppTextButton(onClick = onReset) { Text("清空筛选") }
             }
         }
     }

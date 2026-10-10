@@ -1,5 +1,8 @@
 package cc.novelia.app.ui.reader
 
+import cc.novelia.app.ui.components.AppOutlinedButton
+import cc.novelia.app.ui.components.AppIconButton
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
@@ -64,7 +67,7 @@ import androidx.compose.ui.unit.dp
             Column(Modifier.widthIn(max = 640.dp).fillMaxWidth().padding(horizontal = 16.dp, vertical = if(compact) 0.dp else 16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("点击区域翻页", Modifier.weight(1f).semantics { heading() }, color = foreground, style = MaterialTheme.typography.titleLarge)
-                    IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
+                    AppIconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
                         Icon(Icons.Outlined.Close, "关闭点击翻页引导", tint = foreground)
                     }
                 }
@@ -88,7 +91,7 @@ import androidx.compose.ui.unit.dp
             }
             if(!compact) Column(Modifier.widthIn(max = 480.dp).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("保留原有滑动、长按和插图操作。\n关闭后不再自动提示。", color = foreground.copy(alpha = .85f), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
-                OutlinedButton(onClick = onDismiss, border = androidx.compose.foundation.BorderStroke(1.dp, foreground.copy(alpha = .6f)),
+                AppOutlinedButton(onClick = onDismiss, border = androidx.compose.foundation.BorderStroke(1.dp, foreground.copy(alpha = .6f)),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = foreground), modifier = Modifier.heightIn(min = 48.dp)) { Text("开始阅读") }
             }
         }

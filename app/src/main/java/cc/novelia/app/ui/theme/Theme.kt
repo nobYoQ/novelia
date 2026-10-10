@@ -3,6 +3,7 @@ package cc.novelia.app.ui.theme
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
@@ -82,14 +83,16 @@ internal fun readerColors(theme: String, appColors: ColorScheme): ReaderColors =
         content = content)
 }
 
-@Composable fun NoveliaTheme(theme: String, content: @Composable () -> Unit) {
+@Composable fun NoveliaTheme(theme: String, squareCorners: Boolean = false, content: @Composable () -> Unit) {
     val dark = theme == "dark" || (theme == "system" && isSystemInDarkTheme())
     val view = LocalView.current
     val activity = LocalContext.current.activityOrNull()
     SideEffect { activity?.let { WindowCompat.getInsetsController(it.window, view).apply { isAppearanceLightStatusBars = !dark; isAppearanceLightNavigationBars = !dark } } }
-    MaterialTheme(colorScheme = if(dark) DarkColors else LightColors, typography = Typography(
+    CompositionLocalProvider(LocalSquareCorners provides squareCorners) {
+    MaterialTheme(colorScheme = if(dark) DarkColors else LightColors, shapes = if(squareCorners) SquareShapes else DefaultShapes, typography = Typography(
         headlineLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold, fontSize = 32.sp, lineHeight = 40.sp),
         titleLarge = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 22.sp, lineHeight = 30.sp),
         bodyLarge = TextStyle(fontSize = 16.sp, lineHeight = 26.sp), bodyMedium = TextStyle(fontSize = 14.sp, lineHeight = 22.sp)
     ), content = content)
+    }
 }

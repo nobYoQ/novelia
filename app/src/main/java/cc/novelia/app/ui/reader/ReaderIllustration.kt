@@ -1,6 +1,8 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.reader
 
+import cc.novelia.app.ui.components.AppTextButton
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
@@ -40,7 +42,7 @@ import coil.request.ImageRequest
             if(loading) { if(!animate) Text("正在加载插图…", color = foreground) else CircularProgressIndicator(Modifier.size(28.dp), color = foreground.copy(alpha = .65f), strokeWidth = 2.dp) }
             if(failed) Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("插图暂时无法加载", style = MaterialTheme.typography.bodyMedium, color = foreground.copy(alpha = .7f))
-                TextButton(onClick = { retry++ }) { Text("重新加载插图", color = foreground) }
+                AppTextButton(onClick = { retry++ }) { Text("重新加载插图", color = foreground) }
             }
         }
     }

@@ -1,5 +1,9 @@
 package cc.novelia.app.ui.web
 
+import cc.novelia.app.ui.components.AppLinearProgressIndicator
+
+import cc.novelia.app.ui.components.AppTextButton
+
 import android.annotation.SuppressLint
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -123,10 +127,10 @@ import cc.novelia.app.ui.theme.appReducedMotion
     DisposableEffect(web) { onDispose { web.stopLoading(); web.destroy() } }
     Screen(if(source.source == BookSource.ORIGINAL) "原站页面" else "镜像页面", ::back) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
-            if (loading) { if(reducedMotion) Text("正在加载…", Modifier.padding(horizontal = 16.dp)) else LinearProgressIndicator(Modifier.fillMaxWidth()) }
+            if (loading) { if(reducedMotion) Text("正在加载…", Modifier.padding(horizontal = 16.dp)) else AppLinearProgressIndicator(Modifier.fillMaxWidth()) }
             if (failed) Row(Modifier.padding(16.dp)) {
                 Text("页面加载失败，请检查网络。", Modifier.weight(1f))
-                TextButton(onClick = { web.reload() }) { Text("重试") }
+                AppTextButton(onClick = { web.reload() }) { Text("重试") }
             }
             AndroidView(factory = { web }, modifier = Modifier.weight(1f).fillMaxWidth())
             if(eInk) ScreenPageButtons(canGoBack, canGoForward, web::page)

@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.book
 
+import cc.novelia.app.ui.components.AppTextButton
+
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
@@ -57,7 +59,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
     val background by animateColorAsState(
         if(saved) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
         tween(if(appReducedMotion()) 0 else AppMotion.Standard), label = "$tag-container")
-    TextButton(onClick = onClick, modifier = modifier.heightIn(min = 48.dp).testTag(tag).semantics {
+    AppTextButton(onClick = onClick, modifier = modifier.heightIn(min = 48.dp).testTag(tag).semantics {
         contentDescription = description
         stateDescription = label
     }, colors = ButtonDefaults.textButtonColors(containerColor = background), shape = MaterialTheme.shapes.medium,

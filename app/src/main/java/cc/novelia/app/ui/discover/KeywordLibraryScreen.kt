@@ -1,6 +1,12 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.discover
 
+import cc.novelia.app.ui.components.AppButton
+import cc.novelia.app.ui.components.AppTextButton
+import cc.novelia.app.ui.components.AppOutlinedButton
+import cc.novelia.app.ui.components.AppFilledTonalButton
+import cc.novelia.app.ui.components.AppIconButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -84,7 +90,7 @@ class KeywordLibraryActions(
         value = withContext(Dispatchers.Default) { KeywordCatalog.suggestions(entries, settledQuery, activeCategory, entries.size) }
     }.value
     Screen("标签库", onBack, actions = {
-        if(actions != null) TextButton(onClick = { managing = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text("管理分类") }
+        if(actions != null) AppTextButton(onClick = { managing = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text("管理分类") }
     }) { padding ->
         Column(Modifier.padding(padding)) {
             OutlinedTextField(query, { query = it }, placeholder = { Text("搜索原文、译名或别名") }, singleLine = true,
@@ -94,9 +100,9 @@ class KeywordLibraryActions(
             if(activeCategory != "全部" && onIncludeCategory != null && onExcludeCategory != null) {
                 Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilledTonalButton(onClick = { onIncludeCategory(searchableMembers) }, enabled = searchableMembers.isNotEmpty(),
+                        AppFilledTonalButton(onClick = { onIncludeCategory(searchableMembers) }, enabled = searchableMembers.isNotEmpty(),
                             modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("keyword-category-include")) { Text("包含整类（${searchableMembers.size}）") }
-                        OutlinedButton(onClick = { onExcludeCategory(searchableMembers) }, enabled = searchableMembers.isNotEmpty(),
+                        AppOutlinedButton(onClick = { onExcludeCategory(searchableMembers) }, enabled = searchableMembers.isNotEmpty(),
                             modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("keyword-category-exclude")) { Text("排除整类（${searchableMembers.size}）") }
                     }
                     Text("加入“$activeCategory”的全部标签，不受搜索词限制。包含需全部满足，加入后可逐项调整。",
@@ -148,7 +154,7 @@ class KeywordLibraryActions(
         Text("分类管理", Modifier.padding(horizontal = 20.dp, vertical = 12.dp), style = MaterialTheme.typography.titleLarge)
         Text(if(LocalEInkMode.current) "点按左侧箭头调整分类顺序。" else "拖动左侧手柄调整顺序，点按手柄也可逐项移动。", Modifier.padding(horizontal = 20.dp).padding(bottom = 12.dp),
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Button(onClick = { creating = true }, enabled = categories.size < KeywordLibrary.MAX_CATEGORIES,
+        AppButton(onClick = { creating = true }, enabled = categories.size < KeywordLibrary.MAX_CATEGORIES,
             modifier = Modifier.padding(horizontal = 20.dp).heightIn(min = 48.dp)) { Icon(Icons.Outlined.Add, null); Text("新建分类") }
         error?.let { Text(it, Modifier.padding(20.dp), color = MaterialTheme.colorScheme.error) }
         AppLazyColumn(Modifier.weight(1f, fill = false), state = listState, contentPadding = PaddingValues(vertical = 12.dp),
@@ -163,8 +169,8 @@ class KeywordLibraryActions(
                     trailingContent = {
                         if(name == KeywordLibrary.OTHER) Text("默认归类", style = MaterialTheme.typography.labelSmall)
                         else Row {
-                            IconButton(onClick = { renaming = name }, modifier = Modifier.size(48.dp)) { Icon(Icons.Outlined.Edit, "重命名分类 $name") }
-                            IconButton(onClick = { deleting = name }, modifier = Modifier.size(48.dp)) { Icon(Icons.Outlined.DeleteOutline, "删除分类 $name") }
+                            AppIconButton(onClick = { renaming = name }, modifier = Modifier.size(48.dp)) { Icon(Icons.Outlined.Edit, "重命名分类 $name") }
+                            AppIconButton(onClick = { deleting = name }, modifier = Modifier.size(48.dp)) { Icon(Icons.Outlined.DeleteOutline, "删除分类 $name") }
                         }
                     })
             }
@@ -190,7 +196,7 @@ class KeywordLibraryActions(
             isError = (name.isNotEmpty() && invalid != null) || error != null,
             supportingText = { Text(error ?: invalid?.takeIf { name.isNotEmpty() } ?: "最多 ${KeywordLibrary.MAX_CATEGORY_LENGTH} 个字符") },
             modifier = Modifier.testTag("keyword-category-name")) },
-        confirmButton = { TextButton(onClick = { try { onSave(normalized); onDismiss() } catch(failure: IllegalArgumentException) { error = failure.message } },
+        confirmButton = { AppTextButton(onClick = { try { onSave(normalized); onDismiss() } catch(failure: IllegalArgumentException) { error = failure.message } },
             enabled = invalid == null && normalized != initial) { Text(if(initial == null) "创建分类" else "保存名称") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } })
+        dismissButton = { AppTextButton(onClick = onDismiss) { Text("取消") } })
 }

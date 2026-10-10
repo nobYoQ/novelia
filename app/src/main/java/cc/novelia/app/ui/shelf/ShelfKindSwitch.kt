@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.shelf
 
+import cc.novelia.app.ui.components.AppTextButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.*
@@ -24,7 +26,7 @@ import androidx.compose.ui.unit.dp
                     Row {
                         values.forEachIndexed { column, label ->
                             val index = row * columns + column
-                            TextButton(onClick = { if(selectedIndex != index) onChange(index) },
+                            AppTextButton(onClick = { if(selectedIndex != index) onChange(index) },
                                 modifier = Modifier.weight(1f).heightIn(min = 48.dp).semantics { selected = selectedIndex == index },
                                 contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
                                 shape = MaterialTheme.shapes.small,

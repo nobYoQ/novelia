@@ -1,6 +1,15 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.downloads
 
+import cc.novelia.app.ui.components.AppCheckbox
+import cc.novelia.app.ui.components.AppLinearProgressIndicator
+
+import cc.novelia.app.ui.components.AppButton
+import cc.novelia.app.ui.components.AppTextButton
+import cc.novelia.app.ui.components.AppOutlinedButton
+import cc.novelia.app.ui.components.AppFilledTonalButton
+import cc.novelia.app.ui.components.AppIconButton
+
 import cc.novelia.app.ui.account.ProfileDetailCard
 
 import android.content.Intent
@@ -175,7 +184,7 @@ import kotlinx.coroutines.withContext
         }
     }
     ProfileDetailScreen("下载管理", c::back, actions = {
-        TextButton(onClick = { selecting = !selecting; selection = emptyList() },
+        AppTextButton(onClick = { selecting = !selecting; selection = emptyList() },
             enabled = !operating && !batch.running && importing.isEmpty() && (selecting || available.isNotEmpty())) {
             Icon(if(selecting) Icons.Outlined.Close else Icons.Outlined.Checklist, null, Modifier.size(18.dp))
             Spacer(Modifier.width(4.dp))
@@ -186,13 +195,13 @@ import kotlinx.coroutines.withContext
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("已选 ${selected.size} 个", Modifier.align(Alignment.CenterVertically), style = MaterialTheme.typography.labelLarge)
             val allSelected = available.isNotEmpty() && selected.size == available.size
-            TextButton(onClick = { selection = if(allSelected) emptyList() else available }, enabled = !operating && available.isNotEmpty()) {
+            AppTextButton(onClick = { selection = if(allSelected) emptyList() else available }, enabled = !operating && available.isNotEmpty()) {
                 Text(if(allSelected) "取消全选" else "全选")
             }
-            TextButton(onClick = { selection = completed }, enabled = !operating && completed.isNotEmpty()) {
+            AppTextButton(onClick = { selection = completed }, enabled = !operating && completed.isNotEmpty()) {
                 Text("全选已完成")
             }
-            FilledTonalButton(onClick = {
+            AppFilledTonalButton(onClick = {
                 importer.start(state.downloads.filter { it.id in importable })
                 selecting = false
                 selection = emptyList()
@@ -201,17 +210,17 @@ import kotlinx.coroutines.withContext
                 Spacer(Modifier.width(4.dp))
                 Text("导入书架（${importable.size}）")
             }
-            OutlinedButton(onClick = { transferDownloads(false) }, enabled = !operating && !batch.running && importing.isEmpty() && importable.isNotEmpty(),
+            AppOutlinedButton(onClick = { transferDownloads(false) }, enabled = !operating && !batch.running && importing.isEmpty() && importable.isNotEmpty(),
                 modifier = Modifier.testTag("download-batch-export")) {
                 Icon(if(importable.size > 1) Icons.Outlined.FolderZip else Icons.Outlined.SaveAlt, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp))
                 Text("${if(importable.size > 1) "导出 ZIP" else "导出文件"}（${importable.size}）")
             }
-            OutlinedButton(onClick = { transferDownloads(true) }, enabled = !operating && !batch.running && importing.isEmpty() && importable.isNotEmpty(),
+            AppOutlinedButton(onClick = { transferDownloads(true) }, enabled = !operating && !batch.running && importing.isEmpty() && importable.isNotEmpty(),
                 modifier = Modifier.testTag("download-batch-share")) {
                 Icon(Icons.Outlined.Share, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp))
                 Text("${if(importable.size > 1) "分享 ZIP" else "分享文件"}（${importable.size}）")
             }
-            OutlinedButton(onClick = { removeBatch = selected }, enabled = !operating && !batch.running && importing.isEmpty() && selected.isNotEmpty(),
+            AppOutlinedButton(onClick = { removeBatch = selected }, enabled = !operating && !batch.running && importing.isEmpty() && selected.isNotEmpty(),
                 modifier = Modifier.testTag("download-batch-delete")) {
                 Icon(Icons.Outlined.DeleteOutline, null, Modifier.size(18.dp))
                 Spacer(Modifier.width(4.dp))
@@ -234,7 +243,7 @@ import kotlinx.coroutines.withContext
             ProfileDetailCard(itemMotion.fillMaxWidth().animateContentSize(tween(if(reducedMotion) 0 else AppMotion.Standard)).then(selectionModifier)) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(entry.title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, maxLines = 2)
-                if(selecting) Checkbox(entry.id in selected, onCheckedChange = null, enabled = !operating && entry.id in available)
+                if(selecting) AppCheckbox(entry.id in selected, onCheckedChange = null, enabled = !operating && entry.id in available)
             }
             MotionContent(entry.status, animateInitial = false) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -246,15 +255,15 @@ import kotlinx.coroutines.withContext
             }
             if(entry.status == "下载中") {
                 val progress = animateFloatAsState((entry.progress / 100f).coerceIn(0f, 1f), tween(if(reducedMotion) 0 else AppMotion.Standard, easing = LinearEasing), label = "download progress")
-                LinearProgressIndicator(progress = { if(reducedMotion) (entry.progress / 100f).coerceIn(0f, 1f) else progress.value }, modifier = Modifier.fillMaxWidth())
+                AppLinearProgressIndicator(progress = { if(reducedMotion) (entry.progress / 100f).coerceIn(0f, 1f) else progress.value }, modifier = Modifier.fillMaxWidth())
             }
             entry.error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
             if(entry.status == "已暂停") Text("重新开始会从头下载此文件。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if(!selecting) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 when(entry.status) {
-                    "下载中", "等待下载" -> TextButton(onClick = { c.action { DownloadWorker.pause(c.app, entry.id) } }) { Text("暂停") }
+                    "下载中", "等待下载" -> AppTextButton(onClick = { c.action { DownloadWorker.pause(c.app, entry.id) } }) { Text("暂停") }
                     "已完成" -> {
-                        Button(enabled = !operating && !batch.running && entry.id !in importing, modifier = Modifier.testTag("download-read-${entry.id}"), onClick = {
+                        AppButton(enabled = !operating && !batch.running && entry.id !in importing, modifier = Modifier.testTag("download-read-${entry.id}"), onClick = {
                             importing = importing + entry.id
                             c.action {
                                 try {
@@ -263,13 +272,13 @@ import kotlinx.coroutines.withContext
                             }
                         }) { Icon(Icons.Outlined.MenuBook, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(if(entry.id in importing) "正在准备…" else "开始阅读") }
                     }
-                    else -> FilledTonalButton(onClick = {
+                    else -> AppFilledTonalButton(onClick = {
                         val restart = { c.action { c.store.state.value.downloads.firstOrNull { it.id == entry.id }?.let { DownloadWorker.enqueue(c.app, it) } } }
                         if(entry.status == "需要登录") { c.afterLogin = restart; c.go("login") } else restart()
                     }) { Text(downloadRecoveryLabel(entry.status)) }
                 }
                 Box {
-                    IconButton(onClick = { more = true }, enabled = !operating && !batch.running && entry.id !in importing) { Icon(Icons.Outlined.MoreVert, "更多下载操作 ${entry.title}") }
+                    AppIconButton(onClick = { more = true }, enabled = !operating && !batch.running && entry.id !in importing) { Icon(Icons.Outlined.MoreVert, "更多下载操作 ${entry.title}") }
                     AppDropdownMenu(expanded = more, onDismissRequest = { more = false }) {
                         if(entry.status == "已完成") {
                             DropdownMenuItem(text = { Text("用其他应用打开") }, onClick = {

@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.shelf
 
+import cc.novelia.app.ui.components.AppIconButton
+
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Box
@@ -165,15 +167,15 @@ internal class VolumeReorderState(
     val index = siblings.indexOf(key)
     if(LocalEInkMode.current) {
         Column {
-            IconButton(onClick = { state.moveOne(key, -1) }, enabled = index > 0,
+            AppIconButton(onClick = { state.moveOne(key, -1) }, enabled = index > 0,
                 modifier = Modifier.size(48.dp).testTag("volume-up-$key")) { Icon(Icons.Outlined.KeyboardArrowUp, "上移 $title") }
-            IconButton(onClick = { state.moveOne(key, 1) }, enabled = index in 0 until siblings.lastIndex,
+            AppIconButton(onClick = { state.moveOne(key, 1) }, enabled = index in 0 until siblings.lastIndex,
                 modifier = Modifier.size(48.dp).testTag("volume-down-$key")) { Icon(Icons.Outlined.KeyboardArrowDown, "下移 $title") }
         }
         return
     }
     Box {
-        IconButton(onClick = { menu = true }, modifier = Modifier.size(48.dp).testTag("volume-drag-$key")
+        AppIconButton(onClick = { menu = true }, modifier = Modifier.size(48.dp).testTag("volume-drag-$key")
             .pointerInput(state, key) {
                 detectDragGestures(
                     onDragStart = { menu = false; state.start(key) },

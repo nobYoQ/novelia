@@ -1,10 +1,17 @@
 package cc.novelia.app.ui.settings
 
+import cc.novelia.app.ui.components.AppSwitch
+import cc.novelia.app.ui.theme.LocalSquareCorners
+
+import cc.novelia.app.ui.components.AppButton
+import cc.novelia.app.ui.components.AppIconButton
+import cc.novelia.app.ui.theme.appShape
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import cc.novelia.app.ui.theme.appRoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
@@ -38,14 +45,14 @@ internal fun WebDavPage(
     Scaffold(
         topBar = { TopAppBar(
             title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-            navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "返回") } },
+            navigationIcon = { AppIconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "返回") } },
         ) },
         bottomBar = {
             Surface(color = MaterialTheme.colorScheme.background) {
                 Box(Modifier.fillMaxWidth().navigationBarsPadding().imePadding(), contentAlignment = Alignment.Center) {
-                    Button(
+                    AppButton(
                         onClick = onAction, enabled = actionEnabled,
-                        shape = CircleShape,
+                        shape = appShape(CircleShape),
                         modifier = Modifier.widthIn(max = 640.dp).fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp).heightIn(min = 56.dp),
                         contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp),
                     ) {
@@ -67,7 +74,7 @@ internal fun WebDavHero(title: String, description: String, icon: ImageVector) {
         Surface(
             color = MaterialTheme.colorScheme.primaryContainer,
             contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-            shape = RoundedCornerShape(24.dp),
+            shape = appRoundedCornerShape(24.dp),
             border = if(LocalEInkMode.current) BorderStroke(1.dp, MaterialTheme.colorScheme.outline) else null,
         ) {
             Box(Modifier.size(72.dp), contentAlignment = Alignment.Center) { Icon(icon, null, Modifier.size(36.dp)) }
@@ -80,7 +87,7 @@ internal fun WebDavHero(title: String, description: String, icon: ImageVector) {
     }
 }
 
-internal fun webDavRowShape(index: Int, count: Int): Shape = RoundedCornerShape(
+@Composable internal fun webDavRowShape(index: Int, count: Int): Shape = appRoundedCornerShape(
     topStart = if(index == 0) 28.dp else 6.dp,
     topEnd = if(index == 0) 28.dp else 6.dp,
     bottomStart = if(index == count - 1) 28.dp else 6.dp,
@@ -88,7 +95,7 @@ internal fun webDavRowShape(index: Int, count: Int): Shape = RoundedCornerShape(
 )
 
 @Composable
-internal fun WebDavCard(modifier: Modifier = Modifier, shape: Shape = RoundedCornerShape(28.dp), content: @Composable () -> Unit) {
+internal fun WebDavCard(modifier: Modifier = Modifier, shape: Shape = appRoundedCornerShape(28.dp), content: @Composable () -> Unit) {
     Surface(
         modifier = modifier.fillMaxWidth(), shape = shape,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -103,7 +110,7 @@ internal fun WebDavRow(
     description: String,
     icon: ImageVector,
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(28.dp),
+    shape: Shape = appRoundedCornerShape(28.dp),
     trailing: @Composable () -> Unit,
 ) {
     WebDavCard(modifier, shape) {
@@ -121,7 +128,7 @@ internal fun WebDavRow(
 }
 
 @Composable
-internal fun WebDavMenuRow(title: String, description: String, icon: ImageVector, shape: Shape = RoundedCornerShape(28.dp), enabled: Boolean = true, onClick: () -> Unit) {
+internal fun WebDavMenuRow(title: String, description: String, icon: ImageVector, shape: Shape = appRoundedCornerShape(28.dp), enabled: Boolean = true, onClick: () -> Unit) {
     WebDavRow(title, description, icon, Modifier.motionClickable(enabled, onClick), shape) {
         Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
@@ -133,15 +140,15 @@ internal fun WebDavToggleRow(
     description: String,
     icon: ImageVector,
     checked: Boolean,
-    shape: Shape = RoundedCornerShape(28.dp),
+    shape: Shape = appRoundedCornerShape(28.dp),
     enabled: Boolean = true,
     onCheckedChange: (Boolean) -> Unit,
 ) {
     WebDavRow(title, description, icon, Modifier.toggleable(checked, enabled = enabled, role = Role.Switch, onValueChange = onCheckedChange), shape) {
-        if(LocalEInkMode.current) Icon(
+        if(LocalEInkMode.current && !LocalSquareCorners.current) Icon(
             if(checked) Icons.Outlined.ToggleOn else Icons.Outlined.ToggleOff, null, Modifier.size(48.dp),
             tint = if(checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-        ) else Switch(checked, onCheckedChange = null, enabled = enabled)
+        ) else AppSwitch(checked, onCheckedChange = null, enabled = enabled)
     }
 }
 

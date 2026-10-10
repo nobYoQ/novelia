@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.community
 
+import cc.novelia.app.ui.components.AppIconButton
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.MutableTransitionState
@@ -34,7 +36,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
             Column {
                 Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("评论", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
-                    IconButton(onClick = onCollapse) { Icon(Icons.Outlined.ExpandMore, "收起评论框") }
+                    AppIconButton(onClick = onCollapse) { Icon(Icons.Outlined.ExpandMore, "收起评论框") }
                 }
                 content()
             }

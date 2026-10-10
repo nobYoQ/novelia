@@ -1,6 +1,10 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.community
 
+import cc.novelia.app.ui.components.AppTextButton
+import cc.novelia.app.ui.components.AppIconButton
+import cc.novelia.app.ui.components.AppFilledIconButton
+
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
@@ -59,7 +63,7 @@ import kotlinx.coroutines.launch
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text(comment.user.username, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary); Text(displayDate(comment.createAt), style = MaterialTheme.typography.labelSmall) }
                             if(comment.hidden) Text("这条评论已被隐藏", style = MaterialTheme.typography.bodyMedium) else MarkdownText(c, comment.content, renderer = markdownRenderer, documentUrl = documentUrl)
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                if(parent == null) TextButton(onClick = { reply = comment }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if(comment.numReplies > 0) "${comment.numReplies} 条回复 · 查看/回复" else if(locked) "查看回复" else "回复") }
+                                if(parent == null) AppTextButton(onClick = { reply = comment }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if(comment.numReplies > 0) "${comment.numReplies} 条回复 · 查看/回复" else if(locked) "查看回复" else "回复") }
                                 Spacer(Modifier.weight(1f))
                                 CommentMoreMenu(comment.user.username, comment.user.username == profile?.username,
                                     onDelete = { deleting = comment }, onBlock = {
@@ -81,7 +85,7 @@ import kotlinx.coroutines.launch
         else CommentEditor(composerExpanded, { composerExpanded = false }) {
         Box(Modifier.fillMaxWidth().imePadding().padding(12.dp)) {
             MarkdownCommentInput(text, { text = it; c.store.update { s -> s.copy(drafts = s.drafts + ("comment:$site:$parent" to text)) } }, if(parent == null) "写下评论" else "回复这条评论") {
-            FilledIconButton(onClick = { c.requireLogin { c.action { sending = true; try { val submittedText = text; val body = buildMap { put("site", site); put("content", submittedText.trim()); parent?.let { put("parent", it) } }; c.api.post("comment", body); if(text == submittedText) { text = ""; composerExpanded = false; c.store.update { it.copy(drafts = it.drafts - "comment:$site:$parent") } }; version++ } finally { sending = false } } } }, enabled = text.isNotBlank() && !sending) { Icon(Icons.Outlined.Send, "发送评论") }
+            AppFilledIconButton(onClick = { c.requireLogin { c.action { sending = true; try { val submittedText = text; val body = buildMap { put("site", site); put("content", submittedText.trim()); parent?.let { put("parent", it) } }; c.api.post("comment", body); if(text == submittedText) { text = ""; composerExpanded = false; c.store.update { it.copy(drafts = it.drafts - "comment:$site:$parent") } }; version++ } finally { sending = false } } } }, enabled = text.isNotBlank() && !sending) { Icon(Icons.Outlined.Send, "发送评论") }
             }
         }
         }
@@ -103,7 +107,7 @@ internal suspend fun blockCommentUser(c: AppController, feedback: SnackbarHostSt
 @Composable internal fun CommentMoreMenu(username: String, ownComment: Boolean, onDelete: () -> Unit, onBlock: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        IconButton(onClick = { expanded = true }, modifier = Modifier.size(48.dp)) { Icon(Icons.Outlined.MoreVert, "$username 的评论更多操作") }
+        AppIconButton(onClick = { expanded = true }, modifier = Modifier.size(48.dp)) { Icon(Icons.Outlined.MoreVert, "$username 的评论更多操作") }
         AppDropdownMenu(expanded, { expanded = false }) {
             if(ownComment) DropdownMenuItem(text = { Text("删除评论") }, leadingIcon = { Icon(Icons.Outlined.DeleteOutline, null) },
                 modifier = Modifier.heightIn(min = 48.dp), onClick = { expanded = false; onDelete() })

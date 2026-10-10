@@ -1,6 +1,9 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.community
 
+import cc.novelia.app.ui.components.AppTextButton
+import cc.novelia.app.ui.components.AppIconButton
+
 import cc.novelia.app.data.catalog.ForumLinks
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -42,7 +45,7 @@ import cc.novelia.app.ui.theme.MotionContent
     }
     var tab by rememberSaveable(id) { mutableIntStateOf(0) }; var deletion by remember(id) { mutableStateOf<Article?>(null) }
     val tabState = rememberSaveableStateHolder()
-    Screen("文章", c::back, actions = { IconButton(onClick = { c.share(ForumLinks.articleUrl(id)) }) { Icon(Icons.Outlined.Share, "分享文章") } }) { padding ->
+    Screen("文章", c::back, actions = { AppIconButton(onClick = { c.share(ForumLinks.articleUrl(id)) }) { Icon(Icons.Outlined.Share, "分享文章") } }) { padding ->
         AsyncContent(listOf(id, binding, profile?.userId, profile?.role), load = { c.article(id) }, modifier = Modifier.padding(padding), revealContent = true) { article, _ ->
             val now = rememberForumModificationTime(article.createAt)
             val favorite = remember(article, binding) { ForumFavoriteState(article.forumFavorited) }
@@ -83,10 +86,10 @@ import cc.novelia.app.ui.theme.MotionContent
                                     if(profile == null) loginForForumFavorite(c, forumId) else saveFavorite(!favorite.saved)
                                 }
                                 if(if(forumId != null) ForumRules.canEditPost(article, profile) else profile?.username == article.user.username) {
-                                    TextButton(onClick = { c.go("compose?article=$id") }) { Text("编辑") }
+                                    AppTextButton(onClick = { c.go("compose?article=$id") }) { Text("编辑") }
                                 }
                                 if(if(forumId != null) ForumRules.canDeletePost(article, profile, now) else profile?.username == article.user.username) {
-                                    TextButton(onClick = { deletion = article }) { Text("删除") }
+                                    AppTextButton(onClick = { deletion = article }) { Text("删除") }
                                 }
                             } }
                         }

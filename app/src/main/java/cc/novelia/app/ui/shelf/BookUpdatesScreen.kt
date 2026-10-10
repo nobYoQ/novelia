@@ -1,5 +1,8 @@
 package cc.novelia.app.ui.shelf
 
+import cc.novelia.app.ui.components.AppTextButton
+import cc.novelia.app.ui.components.AppIconButton
+
 import cc.novelia.app.ui.account.ProfileDetailCard
 
 import androidx.compose.foundation.layout.*
@@ -26,7 +29,7 @@ import cc.novelia.app.ui.navigation.AppController
     val books = remember(state.books, state.bookUpdates) { state.books.filter { it.hasUpdates }.sortedByDescending { state.bookUpdates[it.book.ref.key]?.checkedAt ?: 0 } }
     val last = state.drafts["updates:last"]?.split('|')
     ProfileDetailScreen("书架更新", c::back, actions = {
-        IconButton(onClick = { UpdateWorker.checkNow(c.app); c.message("已开始检查书架更新") }) { Icon(Icons.Outlined.Refresh, "检查更新") }
+        AppIconButton(onClick = { UpdateWorker.checkNow(c.app); c.message("已开始检查书架更新") }) { Icon(Icons.Outlined.Refresh, "检查更新") }
     }) { padding -> ProfileDetailList(Modifier.padding(padding)) {
         item { ProfileSummary("${books.size} 本有更新", "新增章节、译文与分卷文件" +
             (last?.firstOrNull()?.toLongOrNull()?.let { "\n最近检查：${syncTime(it)}" } ?: "") +
@@ -37,7 +40,7 @@ import cc.novelia.app.ui.navigation.AppController
             ProfileDetailCard {
                 Column(Modifier.padding(vertical = 8.dp)) {
                     BookRow(saved.book.copy(subtitle = update?.summary?.ifBlank { null } ?: "有更新"), { c.book(saved.book.ref) })
-                    TextButton(onClick = {
+                    AppTextButton(onClick = {
                         c.store.update { it.withAcknowledgedBookUpdates(saved.book.ref) }
                     }, modifier = Modifier.padding(horizontal = 12.dp)) { Text("标记更新已读") }
                 }

@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.components
 
+import cc.novelia.app.ui.components.AppTextButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -84,7 +86,7 @@ private data class BookSyncInputs(val pending: List<PendingAction>, val statuses
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(state.label, Modifier.weight(1f), style = MaterialTheme.typography.labelMedium,
                 color = if (error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
-            if (state.phase != BookSyncPhase.Syncing) TextButton(
+            if (state.phase != BookSyncPhase.Syncing) AppTextButton(
                 onClick = { if (state.phase == BookSyncPhase.LoginRequired) presentation.login(ref) else presentation.retry(ref) },
                 contentPadding = PaddingValues(horizontal = 8.dp),
             ) { Text(if (state.phase == BookSyncPhase.LoginRequired) "重新登录" else "重试同步") }

@@ -1,6 +1,13 @@
 @file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.book
 
+import cc.novelia.app.ui.components.AppCheckbox
+
+import cc.novelia.app.ui.components.AppTextButton
+import cc.novelia.app.ui.components.AppOutlinedButton
+import cc.novelia.app.ui.components.AppFilledTonalButton
+import cc.novelia.app.ui.components.AppIconButton
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
@@ -71,7 +78,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
         if(detail.volumeJp.isNotEmpty()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("已有译文的分卷", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
-                TextButton(onClick = { selecting = !selecting; selection = emptyList() }, enabled = selecting || available.isNotEmpty()) {
+                AppTextButton(onClick = { selecting = !selecting; selection = emptyList() }, enabled = selecting || available.isNotEmpty()) {
                     Icon(if(selecting) Icons.Outlined.Close else Icons.Outlined.Checklist, null, Modifier.size(18.dp))
                     Spacer(Modifier.width(4.dp))
                     Text(if(selecting) "取消" else "多选")
@@ -82,10 +89,10 @@ import cc.novelia.app.ui.theme.appReducedMotion
                     horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("已选 ${selected.size} 卷", Modifier.align(Alignment.CenterVertically), style = MaterialTheme.typography.labelLarge)
                     val allSelected = available.isNotEmpty() && selected.size == available.size
-                    TextButton(onClick = { selection = if(allSelected) emptyList() else available }, enabled = available.isNotEmpty()) {
+                    AppTextButton(onClick = { selection = if(allSelected) emptyList() else available }, enabled = available.isNotEmpty()) {
                         Text(if(allSelected) "取消全选" else "全选")
                     }
-                    FilledTonalButton(onClick = { download = selected }, enabled = selected.isNotEmpty(), modifier = Modifier.testTag("wenku-batch-download")) {
+                    AppFilledTonalButton(onClick = { download = selected }, enabled = selected.isNotEmpty(), modifier = Modifier.testTag("wenku-batch-download")) {
                         Icon(Icons.Outlined.Download, null, Modifier.size(18.dp))
                         Spacer(Modifier.width(4.dp))
                         Text("下载所选（${selected.size}）")
@@ -106,12 +113,12 @@ import cc.novelia.app.ui.theme.appReducedMotion
                     headlineContent = { Text(volume.volumeId) },
                     supportingContent = { Text("Sakura ${volume.sakura} · GPT ${volume.gpt} · 有道 ${volume.youdao} / ${volume.total}${if(readable) " · 已下载，点击阅读" else if(!complete) " · 译文尚未完成" else ""}") },
                     trailingContent = {
-                        if(selecting) Checkbox(checked, onCheckedChange = null, enabled = complete)
+                        if(selecting) AppCheckbox(checked, onCheckedChange = null, enabled = complete)
                         else Row {
-                            if(readable) IconButton(onClick = { openVolume(volume.volumeId) }, enabled = opening == null) {
+                            if(readable) AppIconButton(onClick = { openVolume(volume.volumeId) }, enabled = opening == null) {
                                 Icon(Icons.AutoMirrored.Outlined.MenuBook, if(opening == volume.volumeId) "正在准备阅读" else "阅读分卷")
                             }
-                            IconButton(onClick = { download = listOf(volume.volumeId) }, enabled = complete && opening == null) { Icon(Icons.Outlined.Download, if(complete) "下载分卷" else "译文尚未完成") }
+                            AppIconButton(onClick = { download = listOf(volume.volumeId) }, enabled = complete && opening == null) { Icon(Icons.Outlined.Download, if(complete) "下载分卷" else "译文尚未完成") }
                         }
                     },
                     modifier = motion.testTag("wenku-volume-${volume.volumeId}").then(if(selecting) Modifier.toggleable(checked, enabled = complete, role = Role.Checkbox) { chosen ->
@@ -132,7 +139,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
                     showReadingProgress = false, showBookMetadata = false)
             }
             if(profile?.canEdit == true) item {
-                OutlinedButton(onClick = onUpload, enabled = !uploadBusy, modifier = Modifier.fillMaxWidth().padding(20.dp)) { Text(if(uploadBusy) "正在上传…" else "上传日文分卷") }
+                AppOutlinedButton(onClick = onUpload, enabled = !uploadBusy, modifier = Modifier.fillMaxWidth().padding(20.dp)) { Text(if(uploadBusy) "正在上传…" else "上传日文分卷") }
             }
             if(detail.volumes.isEmpty() && detail.volumeJp.isEmpty() && profile != null) item {
                 EmptyState("暂时没有可用分卷", "可刷新资料，或在具有编辑权限时上传资源。", action = "刷新", onAction = onRefresh)

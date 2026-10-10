@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.settings
 
+import cc.novelia.app.ui.components.AppTextButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -40,6 +42,6 @@ import cc.novelia.app.ui.account.ProfileMenuRow
                 "已有标签超过此上限，仍会全部保留，并可继续修改译名和分类。"
                 else "调整上限不会删除已有标签。")
         } },
-        confirmButton = { TextButton(enabled = unlimited || parsed != null, onClick = { onSave(if(unlimited) null else parsed) }) { Text("保存") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } })
+        confirmButton = { AppTextButton(enabled = unlimited || parsed != null, onClick = { onSave(if(unlimited) null else parsed) }) { Text("保存") } },
+        dismissButton = { AppTextButton(onClick = onDismiss) { Text("取消") } })
 }

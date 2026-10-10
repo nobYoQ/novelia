@@ -1,6 +1,8 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.components
 
+import cc.novelia.app.ui.components.AppTextButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -24,6 +26,7 @@ internal val LocalInAppSheet = compositionLocalOf { false }
     if (!appReducedMotion()) ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         sheetState = sheetState,
+        dragHandle = { AppSheetDragHandle() },
         // 顶部安全区放在可拖动面板外，保持内容测量高度和展开锚点稳定。
         // 默认的内容顶部 inset 随 offset 改变，临近全屏的面板会反复改高并重启动画。
         modifier = Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)),
@@ -34,7 +37,7 @@ internal val LocalInAppSheet = compositionLocalOf { false }
     else AppDialog(onDismissRequest, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxWidth(.95f).fillMaxHeight(.9f), shape = MaterialTheme.shapes.large) {
             Column {
-                TextButton(onClick = onDismissRequest, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("关闭面板") }
+                AppTextButton(onClick = onDismissRequest, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("关闭面板") }
                 HorizontalDivider()
                 CompositionLocalProvider(LocalInAppSheet provides true, LocalPanelSession provides session) {
                     Column(Modifier.weight(1f), content = content)

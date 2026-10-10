@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.community
 
+import cc.novelia.app.ui.components.AppTextButton
+
 import cc.novelia.app.ui.components.AppLazyColumn
 import cc.novelia.app.ui.components.AsyncContent
 import cc.novelia.app.ui.components.EmptyState
@@ -65,7 +67,7 @@ import java.time.format.DateTimeFormatter
     }
     message?.let { text -> Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
         Text(text, style = MaterialTheme.typography.bodySmall)
-        TextButton(onClick = { if(failed) attempt++ else onReload() }) { Text(if(failed) "重试标记已读" else "刷新记录") }
+        AppTextButton(onClick = { if(failed) attempt++ else onReload() }) { Text(if(failed) "重试标记已读" else "刷新记录") }
     } }
 }
 

@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.settings
 
+import cc.novelia.app.ui.components.AppTextButton
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -62,7 +64,7 @@ internal data class KeywordTransferState(val busy: Boolean, val error: String?, 
                 Text("合并到现有标签库。同名分类合并；相同原文的标签保留本机已编辑的译名和分类，其余内容从文件补充。")
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             } },
-            confirmButton = { TextButton(enabled = !busy, onClick = {
+            confirmButton = { AppTextButton(enabled = !busy, onClick = {
                 c.action {
                     busy = true; error = null
                     try {
@@ -73,7 +75,7 @@ internal data class KeywordTransferState(val busy: Boolean, val error: String?, 
                     finally { busy = false }
                 }
             }) { Text("合并导入标签库") } },
-            dismissButton = { TextButton(enabled = !busy, onClick = { pending = null; error = null }) { Text("取消") } })
+            dismissButton = { AppTextButton(enabled = !busy, onClick = { pending = null; error = null }) { Text("取消") } })
     }
     return KeywordTransferState(busy, error.takeIf { pending == null },
         { if(!busy) export.launch("novelia-keywords-${java.time.LocalDate.now()}.json") },

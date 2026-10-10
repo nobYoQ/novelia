@@ -1,5 +1,9 @@
 package cc.novelia.app.ui.components
 
+import cc.novelia.app.ui.components.AppTextButton
+import cc.novelia.app.ui.components.AppOutlinedButton
+import cc.novelia.app.ui.components.AppFilledTonalButton
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -42,14 +46,14 @@ fun KeywordEditorDialog(
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 if(onInclude != null && onExclude != null) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilledTonalButton(onClick = { if(saveChanges()) onInclude() }, enabled = !tooLong && KeywordCatalog.canSearch(entry.original), modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("keyword-include")) { Text("包含") }
-                        OutlinedButton(onClick = { if(saveChanges()) onExclude() }, enabled = !tooLong && KeywordCatalog.canSearch(entry.original), modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("keyword-exclude")) { Text("排除") }
+                        AppFilledTonalButton(onClick = { if(saveChanges()) onInclude() }, enabled = !tooLong && KeywordCatalog.canSearch(entry.original), modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("keyword-include")) { Text("包含") }
+                        AppOutlinedButton(onClick = { if(saveChanges()) onExclude() }, enabled = !tooLong && KeywordCatalog.canSearch(entry.original), modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("keyword-exclude")) { Text("排除") }
                     }
                     if(!KeywordCatalog.canSearch(entry.original)) Text("此标签包含原站语法不支持的字符，请使用普通关键词搜索。", style = MaterialTheme.typography.bodySmall)
                 }
-                if(onRemove != null) TextButton(onClick = onRemove, modifier = Modifier.testTag("keyword-remove")) { Text("移除搜索条件") }
+                if(onRemove != null) AppTextButton(onClick = onRemove, modifier = Modifier.testTag("keyword-remove")) { Text("移除搜索条件") }
             }
         },
-        confirmButton = { TextButton(onClick = { if(saveChanges(force = true)) onDismiss() }, enabled = !tooLong) { Text(if(onSaveDetails != null) "保存标签" else "保存翻译") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("关闭") } })
+        confirmButton = { AppTextButton(onClick = { if(saveChanges(force = true)) onDismiss() }, enabled = !tooLong) { Text(if(onSaveDetails != null) "保存标签" else "保存翻译") } },
+        dismissButton = { AppTextButton(onClick = onDismiss) { Text("关闭") } })
 }

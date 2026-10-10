@@ -1,6 +1,11 @@
 @file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.discover
 
+import cc.novelia.app.ui.components.AppButton
+import cc.novelia.app.ui.components.AppTextButton
+import cc.novelia.app.ui.components.AppOutlinedButton
+import cc.novelia.app.ui.components.AppIconButton
+
 import cc.novelia.app.ui.components.AppSelectionChip
 import cc.novelia.app.ui.components.AppActionChip
 import cc.novelia.app.ui.components.AppChipFlowRow
@@ -81,8 +86,8 @@ fun SearchAssistantPanel(
         Column {
             if(sheetMode) Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                 Text("辅助搜索", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
-                TextButton(onClick = { onExpandedChange(false) }) { Text("关闭") }
-            } else TextButton(onClick = { onExpandedChange(!expanded) }, modifier = Modifier.fillMaxWidth().testTag("search-assistant-toggle")) {
+                AppTextButton(onClick = { onExpandedChange(false) }) { Text("关闭") }
+            } else AppTextButton(onClick = { onExpandedChange(!expanded) }, modifier = Modifier.fillMaxWidth().testTag("search-assistant-toggle")) {
                 Text("辅助搜索", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
                 if(generated.isNotBlank() && !expanded) Text("有待应用条件", style = MaterialTheme.typography.labelSmall)
                 FilterPanelExpandIcon(expanded, if(expanded) "收起辅助搜索" else "展开辅助搜索")
@@ -99,7 +104,7 @@ fun SearchAssistantPanel(
                 ) {
                     Text("选好条件后再应用，搜索框中的手工表达式会保留。", style = MaterialTheme.typography.bodySmall)
                     Text("标签检索", style = MaterialTheme.typography.titleSmall)
-                    OutlinedButton(onClick = { browsingLibrary = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("assistant-open-library")) {
+                    AppOutlinedButton(onClick = { browsingLibrary = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("assistant-open-library")) {
                         Text("浏览全部标签（${entries.size}）")
                     }
                     OutlinedTextField(tagQuery, { tagQuery = it }, label = { Text("输入原文或中文标签") }, singleLine = true,
@@ -115,7 +120,7 @@ fun SearchAssistantPanel(
                         }
                     }
                     if(manual != null) {
-                        OutlinedButton(onClick = { editing = KeywordEntry(manual) }, enabled = KeywordCatalog.canSearch(manual), modifier = Modifier.testTag("assistant-manual-tag")) {
+                        AppOutlinedButton(onClick = { editing = KeywordEntry(manual) }, enabled = KeywordCatalog.canSearch(manual), modifier = Modifier.testTag("assistant-manual-tag")) {
                             Text("添加原文：$manual")
                         }
                         if(manual.length <= KeywordCatalog.MAX_TEXT_LENGTH && !KeywordCatalog.canSearch(manual)) Text("原站标签不能包含空白或以 - 开头。可在下方用普通关键词搜索。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
@@ -128,7 +133,7 @@ fun SearchAssistantPanel(
                             (includedTags.map { it to true } + excludedTags.map { it to false }).forEach { (original, include) ->
                                 val entry = lookup[original] ?: KeywordEntry(original)
                                 AppSelectionChip(true, onClick = { editing = entry }, label = { Text("${if(include) "包含" else "排除"}：${entry.label}") },
-                                    trailingIcon = { IconButton(onClick = { removeTag(original) }, modifier = Modifier.size(48.dp)) { Icon(Icons.Outlined.Close, "移除条件 $original", Modifier.size(16.dp)) } })
+                                    trailingIcon = { AppIconButton(onClick = { removeTag(original) }, modifier = Modifier.size(48.dp)) { Icon(Icons.Outlined.Close, "移除条件 $original", Modifier.size(16.dp)) } })
                             }
                         }
                     }
@@ -151,10 +156,10 @@ fun SearchAssistantPanel(
                         Text(SearchExpression.append(query, generated), style = MaterialTheme.typography.bodySmall)
                     }
                     if(conflicts.isNotEmpty()) Text("这些标签与搜索框中的包含／排除条件相反：${conflicts.joinToString("、")}。请调整原条件，或选择替换搜索框。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                    Button(onClick = { apply(SearchExpression.append(query, generated)) }, enabled = generated.isNotBlank() && !invalidBounds && conflicts.isEmpty(),
+                    AppButton(onClick = { apply(SearchExpression.append(query, generated)) }, enabled = generated.isNotBlank() && !invalidBounds && conflicts.isEmpty(),
                         modifier = Modifier.fillMaxWidth().testTag("assistant-append")) { Text(if(query.isBlank()) "应用并搜索" else "追加条件并搜索") }
-                    if(query.isNotBlank()) TextButton(onClick = { replacing = true }, enabled = generated.isNotBlank() && !invalidBounds, modifier = Modifier.fillMaxWidth()) { Text("用这些条件替换搜索框…") }
-                    TextButton(onClick = onHelp) { Text("查看原站搜索语法") }
+                    if(query.isNotBlank()) AppTextButton(onClick = { replacing = true }, enabled = generated.isNotBlank() && !invalidBounds, modifier = Modifier.fillMaxWidth()) { Text("用这些条件替换搜索框…") }
+                    AppTextButton(onClick = onHelp) { Text("查看原站搜索语法") }
                 }
             }
         }
@@ -173,6 +178,6 @@ fun SearchAssistantPanel(
         onIncludeCategory = { selectTags(it, true) }, onExcludeCategory = { selectTags(it, false) }, onRemove = { removeTag(it.original) })
     if(replacing) AppAlertDialog(onDismissRequest = { replacing = false }, title = { Text("替换手工搜索条件？") },
         text = { Text("当前搜索框：\n$query\n\n替换为：\n$generated") },
-        confirmButton = { TextButton(onClick = { replacing = false; apply(generated) }) { Text("替换并搜索") } },
-        dismissButton = { TextButton(onClick = { replacing = false }) { Text("保留原内容") } })
+        confirmButton = { AppTextButton(onClick = { replacing = false; apply(generated) }) { Text("替换并搜索") } },
+        dismissButton = { AppTextButton(onClick = { replacing = false }) { Text("保留原内容") } })
 }

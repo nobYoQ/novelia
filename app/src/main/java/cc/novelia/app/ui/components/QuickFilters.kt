@@ -1,5 +1,8 @@
 package cc.novelia.app.ui.components
 
+import cc.novelia.app.ui.components.AppTextButton
+import cc.novelia.app.ui.components.AppOutlinedButton
+
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
@@ -14,9 +17,7 @@ import androidx.compose.material.icons.outlined.ArrowDropDown
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -58,10 +59,10 @@ internal data class QuickFilter(val label: String, val options: List<String>, va
                 style = if(compact) MaterialTheme.typography.labelLarge else MaterialTheme.typography.labelMedium)
             Icon(Icons.Outlined.ArrowDropDown, null, Modifier.size(18.dp))
         }
-        if(compact) TextButton(onClick = { expanded = true }, modifier = buttonModifier,
+        if(compact) AppTextButton(onClick = { expanded = true }, modifier = buttonModifier,
             colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp), content = content)
-        else OutlinedButton(onClick = { expanded = true }, modifier = buttonModifier,
+        else AppOutlinedButton(onClick = { expanded = true }, modifier = buttonModifier,
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp), content = content)
         AppDropdownMenu(expanded, { expanded = false }, modifier = Modifier.widthIn(min = 144.dp)) {
             filter.options.forEachIndexed { index, option ->

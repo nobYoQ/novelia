@@ -1,6 +1,8 @@
 @file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 package cc.novelia.app.ui.reader
 
+import cc.novelia.app.ui.components.AppTextButton
+
 import android.animation.ValueAnimator
 import android.graphics.Typeface
 import android.text.Layout
@@ -20,7 +22,6 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -255,7 +256,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
                                 onLoading = { failed = false }, onSuccess = { failed = false }, onError = { failed = true })
                             if(failed) Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text("插图暂时无法加载", color = foreground)
-                                TextButton(onClick = { retry++ }) { Text("重新加载插图", color = foreground) }
+                                AppTextButton(onClick = { retry++ }) { Text("重新加载插图", color = foreground) }
                             }
                         }
                     } else {
