@@ -2,7 +2,7 @@ package cc.novelia.app.integration
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import cc.novelia.app.data.network.ForumApi
+import cc.novelia.app.data.community.ForumApi
 import cc.novelia.app.data.network.NoveliaApi
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*

@@ -16,7 +16,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import cc.novelia.app.data.markdown.MarkdownLinks
 import java.net.URI
-import cc.novelia.app.ui.components.IllustrationViewer
+import cc.novelia.app.ui.components.media.IllustrationViewer
 import cc.novelia.app.ui.navigation.AppController
 import io.noties.markwon.AbstractMarkwonPlugin
 import io.noties.markwon.Markwon

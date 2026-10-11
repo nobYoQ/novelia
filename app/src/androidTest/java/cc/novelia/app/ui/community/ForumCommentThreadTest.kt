@@ -15,10 +15,10 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import cc.novelia.app.data.model.ForumComment
-import cc.novelia.app.data.model.ForumPage
+import cc.novelia.app.data.community.ForumComment
+import cc.novelia.app.data.community.ForumPage
 import cc.novelia.app.data.model.Profile
-import cc.novelia.app.data.network.loadForumReplyCounts
+import cc.novelia.app.data.community.loadForumReplyCounts
 import cc.novelia.app.ui.theme.NoveliaTheme
 import kotlinx.coroutines.CompletableDeferred
 import java.io.IOException

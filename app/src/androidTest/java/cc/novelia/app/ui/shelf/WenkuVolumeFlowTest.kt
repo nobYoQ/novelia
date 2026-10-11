@@ -20,7 +20,7 @@ import cc.novelia.app.data.model.Position
 import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.data.model.SavedBook
 import cc.novelia.app.data.storage.LocalStore
-import cc.novelia.app.files.importDownloadedDocument
+import cc.novelia.app.files.importing.importDownloadedDocument
 import java.io.File
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*

@@ -30,6 +30,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import java.io.File
+import cc.novelia.app.ui.components.base.CollapsibleCloudFilters
 
 class CompactLayoutTest {
     @get:Rule val compose = createComposeRule()

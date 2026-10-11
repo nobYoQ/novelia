@@ -35,10 +35,10 @@ import cc.novelia.app.ui.book.WenkuEditorScreen
 import cc.novelia.app.ui.community.ArticleScreen
 import cc.novelia.app.ui.community.CommunityScreen
 import cc.novelia.app.ui.community.ComposeArticleScreen
-import cc.novelia.app.ui.components.LocalBookSyncPresentation
-import cc.novelia.app.ui.components.rememberBookSyncPresentation
-import cc.novelia.app.ui.components.LocalBookListPresentation
-import cc.novelia.app.ui.components.rememberBookListPresentation
+import cc.novelia.app.ui.components.book.LocalBookSyncPresentation
+import cc.novelia.app.ui.components.book.rememberBookSyncPresentation
+import cc.novelia.app.ui.components.book.LocalBookListPresentation
+import cc.novelia.app.ui.components.book.rememberBookListPresentation
 import cc.novelia.app.ui.discover.DiscoverScreen
 import cc.novelia.app.ui.discover.RankScreen
 import cc.novelia.app.ui.downloads.DownloadsScreen

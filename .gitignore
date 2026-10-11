@@ -26,6 +26,8 @@ artifacts/
 *.aab.sha256
 
 resource/
+# 本地素材与工作笔记，不参与构建或版本控制
+/.local/
 app/launcher-icons/rawIcon/
 
 # 本地凭据与签名配置

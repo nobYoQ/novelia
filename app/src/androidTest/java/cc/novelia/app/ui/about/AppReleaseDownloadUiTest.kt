@@ -17,6 +17,17 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
+import cc.novelia.app.data.appupdate.APP_RELEASES_URL
+import cc.novelia.app.data.appupdate.AppDownloadBackend
+import cc.novelia.app.data.appupdate.AppDownloadCandidate
+import cc.novelia.app.data.appupdate.AppDownloadRecord
+import cc.novelia.app.data.appupdate.AppDownloadRecordStore
+import cc.novelia.app.data.appupdate.AppReleaseAsset
+import cc.novelia.app.data.appupdate.AppReleaseChannel
+import cc.novelia.app.data.appupdate.AppReleaseDownloadCoordinator
+import cc.novelia.app.data.appupdate.AppTransfer
+import cc.novelia.app.data.appupdate.AppTransferStatus
+import cc.novelia.app.data.appupdate.InstalledAppRelease
 
 class AppReleaseDownloadUiTest {
     @get:Rule val compose = createComposeRule()

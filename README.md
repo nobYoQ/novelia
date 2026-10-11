@@ -78,13 +78,13 @@ Windows 推荐使用 PowerShell 7，在仓库根目录执行：
 
 ```powershell
 # 构建 Debug APK
-./build-debug.ps1
+./scripts/build-debug.ps1
 
 # 构建本地 Release APK，同时运行单元测试和 Lint
-./build-release.ps1 -Verify
+./scripts/build-release.ps1 -Verify
 ```
 
-本地 Release 使用测试证书签名，保留 R8 压缩与资源收缩。正式发行请遵循 [发布指南](RELEASING.md)。
+本地 Release 使用测试证书签名，保留 R8 压缩与资源收缩。正式发行请遵循 [发布指南](docs/maintenance/releasing.md)。
 
 <details>
 <summary><strong>构建参数、输出位置与其他平台</strong></summary>
@@ -124,7 +124,7 @@ sh ./gradlew --no-daemon :app:assembleDebug :app:testDebugUnitTest :app:lintDebu
 
 ## 参与贡献
 
-欢迎反馈问题、完善文档或提交代码。开始前请阅读 [贡献指南](CONTRIBUTING.md) 与 [行为准则](CODE_OF_CONDUCT.md)；安全问题按 [安全政策](SECURITY.md) 报告。
+欢迎反馈问题、完善文档或提交代码。开始前请阅读 [贡献指南](.github/CONTRIBUTING.md) 与 [行为准则](.github/CODE_OF_CONDUCT.md)；安全问题按 [安全政策](.github/SECURITY.md) 报告。
 
 ## 许可证与范围
 

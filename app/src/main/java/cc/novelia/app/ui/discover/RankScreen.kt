@@ -1,9 +1,8 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.discover
 
-import cc.novelia.app.ui.components.AppButton
-import cc.novelia.app.ui.components.AppIconButton
-
+import cc.novelia.app.ui.components.base.AppButton
+import cc.novelia.app.ui.components.base.AppIconButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -16,15 +15,15 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.model.Page
 import cc.novelia.app.data.model.WebOutline
-import cc.novelia.app.ui.components.AppLazyColumn
-import cc.novelia.app.ui.components.AppScrollColumn
-import cc.novelia.app.ui.components.AppSheet
-import cc.novelia.app.ui.components.AsyncContent
-import cc.novelia.app.ui.components.BookRow
-import cc.novelia.app.ui.components.ChoiceRow
-import cc.novelia.app.ui.components.EmptyState
-import cc.novelia.app.ui.components.PageControls
-import cc.novelia.app.ui.components.Screen
+import cc.novelia.app.ui.components.base.AppLazyColumn
+import cc.novelia.app.ui.components.base.AppScrollColumn
+import cc.novelia.app.ui.components.base.AppSheet
+import cc.novelia.app.ui.components.base.AsyncContent
+import cc.novelia.app.ui.components.book.BookRow
+import cc.novelia.app.ui.components.base.ChoiceRow
+import cc.novelia.app.ui.components.base.EmptyState
+import cc.novelia.app.ui.components.base.PageControls
+import cc.novelia.app.ui.components.base.Screen
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.theme.MotionContent
 

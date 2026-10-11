@@ -17,6 +17,7 @@ import kotlinx.coroutines.CompletableDeferred
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
+import cc.novelia.app.ui.components.base.AsyncContent
 
 class AsyncContentRevealTest {
     @get:Rule val compose = createComposeRule()

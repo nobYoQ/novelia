@@ -1,15 +1,13 @@
 @file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.shelf
 
-import cc.novelia.app.ui.components.AppCheckbox
-
-import cc.novelia.app.ui.components.AppTextButton
-import cc.novelia.app.ui.components.AppIconButton
-
+import cc.novelia.app.ui.components.base.AppCheckbox
+import cc.novelia.app.ui.components.base.AppTextButton
+import cc.novelia.app.ui.components.base.AppIconButton
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import cc.novelia.app.ui.components.AppSelectionChip
-import cc.novelia.app.ui.components.AppChipFlowRow
+import cc.novelia.app.ui.components.base.AppSelectionChip
+import cc.novelia.app.ui.components.base.AppChipFlowRow
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -44,18 +42,18 @@ import cc.novelia.app.data.network.ALL_CLOUD_FAVORITES
 import cc.novelia.app.data.network.CloudWebFilter
 import cc.novelia.app.data.network.cloudFavorites
 import cc.novelia.app.data.network.cloudFolderChoices
-import cc.novelia.app.ui.components.AppLazyColumn
-import cc.novelia.app.ui.components.AsyncContent
-import cc.novelia.app.ui.components.BookRow
-import cc.novelia.app.ui.components.bookRowStatus
-import cc.novelia.app.ui.components.rememberCloudBookMetadata
-import cc.novelia.app.ui.components.ChoiceRow
-import cc.novelia.app.ui.components.CollapsibleCloudFilters
-import cc.novelia.app.ui.components.ConfirmDialog
-import cc.novelia.app.ui.components.EmptyState
-import cc.novelia.app.ui.components.PageControls
-import cc.novelia.app.ui.components.TextPrompt
-import cc.novelia.app.ui.components.friendlyMessage
+import cc.novelia.app.ui.components.base.AppLazyColumn
+import cc.novelia.app.ui.components.base.AsyncContent
+import cc.novelia.app.ui.components.book.BookRow
+import cc.novelia.app.ui.components.book.bookRowStatus
+import cc.novelia.app.ui.components.book.rememberCloudBookMetadata
+import cc.novelia.app.ui.components.base.ChoiceRow
+import cc.novelia.app.ui.components.base.CollapsibleCloudFilters
+import cc.novelia.app.ui.components.base.ConfirmDialog
+import cc.novelia.app.ui.components.base.EmptyState
+import cc.novelia.app.ui.components.base.PageControls
+import cc.novelia.app.ui.components.base.TextPrompt
+import cc.novelia.app.ui.components.base.friendlyMessage
 import cc.novelia.app.ui.navigation.AppController
 
 @Composable fun CloudShelf(c: AppController, onOpenBook: (BookRef) -> Unit = c::book, selectedBookKey: String? = null) {

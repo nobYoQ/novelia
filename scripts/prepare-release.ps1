@@ -71,7 +71,6 @@ try {
     $stem = "Novelia-$versionName-$Abi"
     Copy-Item -LiteralPath $apk -Destination (Join-Path $outputPath "$stem.apk")
     Copy-Item -LiteralPath 'app/build/generated/openSourceAssets/open-source/NOTICE.txt' -Destination (Join-Path $outputPath 'OPEN_SOURCE_NOTICES.txt')
-    Copy-Item -LiteralPath 'CHANGELOG.md' -Destination $outputPath
     $sourceArchive = Join-Path $outputPath "Novelia-$versionName-source.zip"
     Invoke-CheckedGit -Arguments @('archive', '--format=zip', "--prefix=Novelia-$versionName/", "--output=$sourceArchive", $commit) | Out-Null
     Compress-Archive -LiteralPath 'app/build/outputs/mapping/release/mapping.txt' -DestinationPath (Join-Path $outputPath "$stem-mapping.zip")

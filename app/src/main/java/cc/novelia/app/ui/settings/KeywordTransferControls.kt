@@ -1,7 +1,6 @@
 package cc.novelia.app.ui.settings
 
-import cc.novelia.app.ui.components.AppTextButton
-
+import cc.novelia.app.ui.components.base.AppTextButton
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -14,9 +13,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.catalog.KeywordLibraryFormat
 import cc.novelia.app.data.catalog.KeywordLibraryImport
-import cc.novelia.app.ui.components.AppAlertDialog
+import cc.novelia.app.ui.components.base.AppAlertDialog
 import cc.novelia.app.ui.account.ProfileMenuRow
-import cc.novelia.app.ui.components.friendlyMessage
+import cc.novelia.app.ui.components.base.friendlyMessage
 import cc.novelia.app.ui.navigation.AppController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

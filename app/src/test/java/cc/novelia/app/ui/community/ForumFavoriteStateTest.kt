@@ -6,7 +6,7 @@ import cc.novelia.app.data.auth.SessionBinding
 import cc.novelia.app.data.auth.SessionChangedException
 import cc.novelia.app.data.auth.SessionState
 import cc.novelia.app.data.model.Profile
-import cc.novelia.app.data.network.ForumApi
+import cc.novelia.app.data.community.ForumApi
 import cc.novelia.app.data.network.NoveliaApi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred

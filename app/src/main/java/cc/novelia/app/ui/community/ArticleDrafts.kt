@@ -1,6 +1,6 @@
 package cc.novelia.app.ui.community
 
-import cc.novelia.app.data.model.ForumCategory
+import cc.novelia.app.data.community.ForumCategory
 import cc.novelia.app.data.storage.appJson
 import java.util.UUID
 import kotlinx.serialization.encodeToString

@@ -2,10 +2,9 @@
 
 package cc.novelia.app.ui.account
 
-import cc.novelia.app.ui.components.AppTextButton
-import cc.novelia.app.ui.components.AppFilledTonalButton
-import cc.novelia.app.ui.components.AppIconButton
-
+import cc.novelia.app.ui.components.base.AppTextButton
+import cc.novelia.app.ui.components.base.AppFilledTonalButton
+import cc.novelia.app.ui.components.base.AppIconButton
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.MutableTransitionState
@@ -33,13 +32,13 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.model.Profile
-import cc.novelia.app.ui.components.AppDropdownMenu
-import cc.novelia.app.ui.components.AppScrollColumn
-import cc.novelia.app.ui.components.ConfirmDialog
-import cc.novelia.app.ui.components.Screen
-import cc.novelia.app.ui.components.displayDate
-import cc.novelia.app.ui.components.FilterPanelExpandIcon
-import cc.novelia.app.ui.components.StaticMenuPosition
+import cc.novelia.app.ui.components.base.AppDropdownMenu
+import cc.novelia.app.ui.components.base.AppScrollColumn
+import cc.novelia.app.ui.components.base.ConfirmDialog
+import cc.novelia.app.ui.components.base.Screen
+import cc.novelia.app.ui.components.base.displayDate
+import cc.novelia.app.ui.components.base.FilterPanelExpandIcon
+import cc.novelia.app.ui.components.base.StaticMenuPosition
 import cc.novelia.app.ui.feedback.MidoriCompanion
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.theme.AppMotion

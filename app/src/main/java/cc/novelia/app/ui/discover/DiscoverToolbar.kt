@@ -1,8 +1,7 @@
 package cc.novelia.app.ui.discover
 
-import cc.novelia.app.ui.components.AppTextButton
-import cc.novelia.app.ui.components.AppIconButton
-
+import cc.novelia.app.ui.components.base.AppTextButton
+import cc.novelia.app.ui.components.base.AppIconButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ManageSearch
@@ -17,9 +16,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import cc.novelia.app.ui.components.AppDropdownMenu
-import cc.novelia.app.ui.components.QuickFilter
-import cc.novelia.app.ui.components.QuickFilterButton
+import cc.novelia.app.ui.components.base.AppDropdownMenu
+import cc.novelia.app.ui.components.base.QuickFilter
+import cc.novelia.app.ui.components.base.QuickFilterButton
 
 /** 常用操作占一行；窄屏隐藏的快捷条件仍在完整筛选及摘要中可见。 */
 @Composable internal fun DiscoverToolbar(

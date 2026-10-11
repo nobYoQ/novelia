@@ -18,6 +18,8 @@ import okio.Buffer
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
+import cc.novelia.app.data.community.ForumAccountApi
+import cc.novelia.app.data.community.ForumApi
 
 /** Synthetic credentials and intercepted responses only; no live authentication or forum writes. */
 @RunWith(AndroidJUnit4::class)

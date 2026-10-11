@@ -14,9 +14,9 @@ import androidx.navigation.compose.rememberNavController
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import cc.novelia.app.MainActivity
 import cc.novelia.app.NoveliaApplication
-import cc.novelia.app.data.model.Article
-import cc.novelia.app.data.model.ForumCategory
-import cc.novelia.app.data.model.ForumTag
+import cc.novelia.app.data.community.Article
+import cc.novelia.app.data.community.ForumCategory
+import cc.novelia.app.data.community.ForumTag
 import cc.novelia.app.data.storage.appJson
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.theme.NoveliaTheme

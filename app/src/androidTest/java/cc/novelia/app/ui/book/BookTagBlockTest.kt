@@ -11,7 +11,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.navigation.compose.rememberNavController
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.NoveliaApplication
-import cc.novelia.app.ui.components.TagList
+import cc.novelia.app.ui.components.book.TagList
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.theme.NoveliaTheme
 import cc.novelia.app.ui.saveTestScreenshot

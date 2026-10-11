@@ -1,8 +1,7 @@
 package cc.novelia.app.ui.markdown
 
-import cc.novelia.app.ui.components.AppTextButton
-import cc.novelia.app.ui.components.AppIconButton
-
+import cc.novelia.app.ui.components.base.AppTextButton
+import cc.novelia.app.ui.components.base.AppIconButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -25,9 +24,9 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.markdown.MarkdownTemplate
 import cc.novelia.app.data.markdown.applyMarkdownTemplate
-import cc.novelia.app.ui.components.AppAlertDialog
-import cc.novelia.app.ui.components.AppScrollColumn
-import cc.novelia.app.ui.components.appHorizontalScroll
+import cc.novelia.app.ui.components.base.AppAlertDialog
+import cc.novelia.app.ui.components.base.AppScrollColumn
+import cc.novelia.app.ui.components.base.appHorizontalScroll
 
 internal fun TextFieldValue.format(template: MarkdownTemplate, limit: Int): TextFieldValue {
     val edit = applyMarkdownTemplate(text, selection.start, selection.end, template, limit)

@@ -1,10 +1,8 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.reader
 
-import cc.novelia.app.ui.components.AppLinearProgressIndicator
-
-import cc.novelia.app.ui.components.AppTextButton
-
+import cc.novelia.app.ui.components.base.AppLinearProgressIndicator
+import cc.novelia.app.ui.components.base.AppTextButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
@@ -27,10 +25,10 @@ import cc.novelia.app.data.model.WebDetail
 import cc.novelia.app.data.storage.appJson
 import cc.novelia.app.data.storage.hashName
 import cc.novelia.app.reader.*
-import cc.novelia.app.ui.components.AppAlertDialog
-import cc.novelia.app.ui.components.AppLazyColumn
-import cc.novelia.app.ui.components.TogglePreference
-import cc.novelia.app.ui.components.friendlyMessage
+import cc.novelia.app.ui.components.base.AppAlertDialog
+import cc.novelia.app.ui.components.base.AppLazyColumn
+import cc.novelia.app.ui.components.base.TogglePreference
+import cc.novelia.app.ui.components.base.friendlyMessage
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.theme.LocalEInkMode
 import cc.novelia.app.ui.theme.motionClickable

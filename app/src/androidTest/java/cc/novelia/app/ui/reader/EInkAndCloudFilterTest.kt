@@ -17,12 +17,8 @@ import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.reader.*
-import cc.novelia.app.ui.components.CollapsibleCloudFilters
-import cc.novelia.app.ui.components.rememberCloudFilterCollapse
-import cc.novelia.app.ui.reader.EInkPage
-import cc.novelia.app.ui.reader.EInkPageState
-import cc.novelia.app.ui.reader.ReaderPreferences
-import cc.novelia.app.ui.reader.measureEInkChapter
+import cc.novelia.app.ui.components.base.CollapsibleCloudFilters
+import cc.novelia.app.ui.components.base.rememberCloudFilterCollapse
 import cc.novelia.app.ui.theme.LocalReducedMotion
 import org.junit.Assert.*
 import org.junit.Rule

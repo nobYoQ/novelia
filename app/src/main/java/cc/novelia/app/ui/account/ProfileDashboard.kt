@@ -23,7 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Constraints
 import cc.novelia.app.data.model.Profile
-import cc.novelia.app.ui.components.AppLazyColumn
+import cc.novelia.app.ui.components.base.AppLazyColumn
 import cc.novelia.app.ui.theme.LocalEInkMode
 
 /** 同一组真实入口在宽屏并列显示；空间不足或字号放大时恢复纵向阅读顺序。 */

@@ -13,13 +13,18 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
-import cc.novelia.app.ui.components.*
 import cc.novelia.app.ui.theme.NoveliaTheme
 import cc.novelia.app.ui.theme.appShape
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import kotlin.math.abs
+import cc.novelia.app.ui.components.base.AppButton
+import cc.novelia.app.ui.components.base.AppCheckbox
+import cc.novelia.app.ui.components.base.AppFilledIconButton
+import cc.novelia.app.ui.components.base.AppSelectionChip
+import cc.novelia.app.ui.components.base.AppSlider
+import cc.novelia.app.ui.components.base.AppSwitch
 
 class SquareCornersComponentsTest {
     @get:Rule val compose = createComposeRule()

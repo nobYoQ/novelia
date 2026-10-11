@@ -19,7 +19,7 @@ import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.ui.account.AccountPermissionsCard
 import cc.novelia.app.ui.community.CommentMoreMenu
 import cc.novelia.app.ui.community.blockCommentUser
-import cc.novelia.app.ui.components.ChoiceRow
+import cc.novelia.app.ui.components.base.ChoiceRow
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.theme.NoveliaTheme
 import kotlinx.coroutines.launch

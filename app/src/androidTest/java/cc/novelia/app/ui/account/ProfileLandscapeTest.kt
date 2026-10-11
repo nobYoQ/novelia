@@ -17,8 +17,8 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.data.model.Profile
-import cc.novelia.app.ui.components.Screen
-import cc.novelia.app.ui.components.AppIconButton
+import cc.novelia.app.ui.components.base.Screen
+import cc.novelia.app.ui.components.base.AppIconButton
 import cc.novelia.app.ui.navigation.RootDestinationLayout
 import cc.novelia.app.ui.theme.AppInteractionMode
 import cc.novelia.app.ui.theme.NoveliaTheme

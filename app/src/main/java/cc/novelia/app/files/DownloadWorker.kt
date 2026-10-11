@@ -14,6 +14,8 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
+import cc.novelia.app.files.downloads.DownloadFiles
+import cc.novelia.app.files.downloads.downloadFile
 
 /**
  * 后台文件下载任务，业务下载 ID 与本轮 WorkManager workId 共同确定写入所有权。

@@ -1,17 +1,14 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.downloads
 
-import cc.novelia.app.ui.components.AppCheckbox
-import cc.novelia.app.ui.components.AppLinearProgressIndicator
-
-import cc.novelia.app.ui.components.AppButton
-import cc.novelia.app.ui.components.AppTextButton
-import cc.novelia.app.ui.components.AppOutlinedButton
-import cc.novelia.app.ui.components.AppFilledTonalButton
-import cc.novelia.app.ui.components.AppIconButton
-
+import cc.novelia.app.ui.components.base.AppCheckbox
+import cc.novelia.app.ui.components.base.AppLinearProgressIndicator
+import cc.novelia.app.ui.components.base.AppButton
+import cc.novelia.app.ui.components.base.AppTextButton
+import cc.novelia.app.ui.components.base.AppOutlinedButton
+import cc.novelia.app.ui.components.base.AppFilledTonalButton
+import cc.novelia.app.ui.components.base.AppIconButton
 import cc.novelia.app.ui.account.ProfileDetailCard
-
 import android.content.Intent
 import android.content.ClipData
 import androidx.activity.compose.BackHandler
@@ -39,12 +36,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.model.DownloadEntry
 import cc.novelia.app.data.library.originBook
 import cc.novelia.app.files.*
-import cc.novelia.app.ui.components.AppDropdownMenu
+import cc.novelia.app.ui.components.base.AppDropdownMenu
 import cc.novelia.app.ui.account.ProfileDetailList
-import cc.novelia.app.ui.components.ConfirmDialog
-import cc.novelia.app.ui.components.CreateBookDocument
+import cc.novelia.app.ui.components.base.ConfirmDialog
+import cc.novelia.app.ui.components.documents.CreateBookDocument
 import cc.novelia.app.ui.account.ProfileEmptyState
-import cc.novelia.app.ui.components.ImportResultsPanel
+import cc.novelia.app.ui.components.documents.ImportResultsPanel
 import cc.novelia.app.ui.account.ProfileDetailScreen
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.theme.AppMotion
@@ -55,6 +52,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import cc.novelia.app.files.downloads.DownloadFiles
+import cc.novelia.app.files.downloads.deleteBookFiles
+import cc.novelia.app.files.exporting.DownloadArchiveFiles
+import cc.novelia.app.files.exporting.bookFileMimeType
+import cc.novelia.app.files.importing.importDownloadedDocument
 
 @Composable fun DownloadsScreen(c: AppController) {
     val state by c.store.state.collectAsStateWithLifecycle(); var exportId by rememberSaveable { mutableStateOf<String?>(null) }; var remove by remember { mutableStateOf<DownloadEntry?>(null) }

@@ -15,7 +15,7 @@ import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.data.model.TocItem
 import cc.novelia.app.data.model.WebDetail
-import cc.novelia.app.ui.components.bookUpdateDateTime
+import cc.novelia.app.ui.components.book.bookUpdateDateTime
 import cc.novelia.app.ui.theme.NoveliaTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue

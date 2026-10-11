@@ -1,0 +1,379 @@
+package cc.novelia.app.data.community
+
+import cc.novelia.app.data.auth.*
+import cc.novelia.app.data.catalog.BookLinks
+import cc.novelia.app.data.catalog.SiteLink
+import cc.novelia.app.data.markdown.MarkdownLinks
+import cc.novelia.app.data.model.*
+import cc.novelia.app.data.storage.appJson
+import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.*
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.Dispatcher
+import okhttp3.mockwebserver.RecordedRequest
+import org.junit.Assert.*
+import org.junit.Test
+import java.time.Instant
+import cc.novelia.app.data.network.ApiException
+import cc.novelia.app.data.network.NoveliaApi
+
+class ForumApiContractTest {
+    private val post = """{"id":9007199254740993,"categoryId":7,"title":"测试帖子","authorId":42,"authorUsername":"读者","status":0,"viewsCount":3,"commentsCount":21,"commentsLocked":true,"pinOrder":0,"favorited":true,"createdAt":"2026-09-14T18:31:15.123456Z","updatedAt":"2026-09-15T02:31:15+08:00","activeAt":"2026-09-14T18:31:15Z","tags":[{"id":9,"name":"讨论","color":2}],"content":"# 正文"}"""
+    private val comment = """{"id":12,"postId":9007199254740993,"rootId":8,"content":"回复","authorId":42,"authorUsername":"读者","status":0,"createdAt":"2026-09-14T18:31:15Z","updatedAt":"2026-09-14T18:31:15Z"}"""
+    private fun api(server: MockWebServer, session: ApiSession? = null) = ForumApi(NoveliaApi(session, server.url("/api/v1/").toString()))
+
+    @Test fun embeddedRepliesDecodeAndSeedWithoutAnExtraHttpRequest() = runBlocking {
+        MockWebServer().use { server ->
+            val rootJson = appJson.parseToJsonElement(comment).jsonObject.toMutableMap().apply {
+                put("id", JsonPrimitive(8)); put("rootId", JsonNull); put("replyCount", JsonPrimitive(1))
+                put("replies", appJson.parseToJsonElement("""{"total":1,"items":[$comment]}"""))
+            }
+            server.enqueue(MockResponse().setBody("""{"total":1,"items":[${JsonObject(rootJson)}]}"""))
+            val root = api(server).comments(5, 0).items.single()
+            assertEquals(12L, root.replies!!.items.single().id)
+            val cache = ForumReplyPageCache(this)
+            try {
+                assertTrue(cache.seedFirstPage(root))
+                assertEquals(1L, cache.load(root.id, 0) { api(server).replies(5, root.id, 0) }.total)
+                assertEquals(1, server.requestCount)
+            } finally { cache.close() }
+            assertNull(appJson.decodeFromString<ForumComment>(comment).replies)
+        }
+    }
+
+    @Test fun listUsesSlugOneBasedPagingAndServerSearch() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""{"total":21,"items":[$post]}"""))
+            val result = api(server).posts(0, "novel", "中文 & 标签", "newest", listOf(9, 10))
+            val request = server.takeRequest()
+            assertEquals("/api/v1/post/", request.requestUrl!!.encodedPath)
+            assertEquals("1", request.requestUrl!!.queryParameter("page"))
+            assertEquals("20", request.requestUrl!!.queryParameter("page_size"))
+            assertEquals("novel", request.requestUrl!!.queryParameter("category"))
+            assertEquals("中文 & 标签", request.requestUrl!!.queryParameter("q"))
+            assertEquals("9,10", request.requestUrl!!.queryParameter("tag"))
+            assertEquals("newest", request.requestUrl!!.queryParameter("sort"))
+            assertNull(request.getHeader("Authorization"))
+            assertEquals(2, result.pageCount())
+            val article = result.items.single().article(listOf(ForumCategory(7, "novel")))
+            assertEquals("f-9007199254740993", article.id)
+            assertEquals("小说讨论", article.category)
+            assertEquals(Instant.parse("2026-09-14T18:31:15Z").epochSecond, article.createAt)
+            assertEquals(article.createAt, article.updateAt)
+            assertTrue(article.pinned && article.locked && article.forumFavorited)
+            assertEquals(listOf(9L), article.forumTags.map { it.id })
+        }
+    }
+
+    @Test fun dynamicCategoriesAndEmptyPagesDecode() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""[{"id":7,"slug":"novel","tags":[{"id":9,"name":"标签","color":1,"sortOrder":2}]}]"""))
+            server.enqueue(MockResponse().setBody("""{"total":0,"items":[]}"""))
+            val client = api(server)
+            assertEquals(7L, client.categories().single().id)
+            assertEquals("/api/v1/category/", server.takeRequest().path)
+            assertEquals(0, client.posts(1, "novel").pageCount())
+            assertEquals("2", server.takeRequest().requestUrl!!.queryParameter("page"))
+            assertEquals(1, ForumPage<ForumPost>(20, emptyList()).pageCount())
+            assertTrue(runCatching { appJson.decodeFromString<ForumPage<ForumPost>>("""{"pageNumber":1,"items":[]}""") }.isFailure)
+        }
+    }
+
+    @Test fun postCreateAndPatchSendNumericIdsAndPreserveTags() = runBlocking {
+        MockWebServer().use { server ->
+            repeat(2) { server.enqueue(MockResponse().setResponseCode(201).setBody(post)) }
+            val client = api(server)
+            val input = ForumPostInput(7, "标题", "正文", listOf(9))
+            val created = client.createPost(input)
+            client.updatePost(created.id, input)
+            val create = server.takeRequest(); val update = server.takeRequest()
+            assertEquals("POST", create.method); assertEquals("/api/v1/post/", create.path)
+            assertEquals("PATCH", update.method); assertEquals("/api/v1/post/9007199254740993/", update.path)
+            for(request in listOf(create, update)) {
+                val body = appJson.parseToJsonElement(request.body.readUtf8()).jsonObject
+                assertEquals(JsonPrimitive(7), body["categoryId"])
+                assertEquals(JsonArray(listOf(JsonPrimitive(9))), body["tagIds"])
+                assertFalse(body.containsKey("category"))
+            }
+        }
+    }
+
+    @Test fun clearingPostTagsSendsAnExplicitEmptyArrayAndListWithoutTagFilter() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody(post))
+            server.enqueue(MockResponse().setBody("""{"total":0,"items":[]}"""))
+            val client = api(server)
+            client.updatePost(5, ForumPostInput(7, "标题", "正文", emptyList()))
+            val update = server.takeRequest()
+            assertEquals("PATCH", update.method)
+            assertEquals(JsonArray(emptyList()), appJson.parseToJsonElement(update.body.readUtf8()).jsonObject["tagIds"])
+            client.posts(0, "novel", tagIds = emptyList())
+            assertNull(server.takeRequest().requestUrl!!.queryParameter("tag"))
+        }
+    }
+
+    @Test fun filteredArticlesRestoreOnlyTheKnownCategoryTagWithoutDuplicatingReturnedTags() {
+        val original = appJson.decodeFromString<ForumPost>(post)
+        val selected = ForumTag(10, "书单", 1)
+        val categories = listOf(ForumCategory(7, "novel", listOf(selected)), ForumCategory(8, "feedback", listOf(ForumTag(11, "其他分类标签"))))
+        val restored = original.article(categories, filterTagId = 10)
+        assertEquals(listOf(9L, 10L), restored.forumTags.map { it.id })
+        assertEquals(selected, restored.forumTags.last())
+        assertEquals(listOf(10L), original.copy(tags = listOf(selected)).article(categories, 10).forumTags.map { it.id })
+        assertEquals(original.tags, original.article(categories, 11).forumTags)
+        assertEquals(original.tags, original.article(categories).forumTags)
+    }
+
+    @Test fun rootCommentsAndRepliesUseIndependentPagingAndReplyUsesRootId() = runBlocking {
+        MockWebServer().use { server ->
+            val root = appJson.decodeFromString<ForumComment>(comment).copy(id = 8, rootId = null, replyCount = 21)
+            server.enqueue(MockResponse().setBody("""{"total":1,"items":[${appJson.encodeToString(root)}]}"""))
+            server.enqueue(MockResponse().setBody("""{"total":21,"items":[$comment]}"""))
+            server.enqueue(MockResponse().setResponseCode(201).setBody(comment))
+            server.enqueue(MockResponse().setBody(comment))
+            val client = api(server)
+            val list = client.comments(5, 1)
+            assertEquals(1, list.pageCount())
+            assertNull(list.items.single().rootId)
+            assertEquals(21L, list.items.single().replyCount)
+            val replies = client.replies(5, list.items.single().id, 1)
+            assertEquals(2, replies.pageCount())
+            val reply = replies.items.single()
+            client.createComment(5, ForumCommentInput("嵌套回复", reply.replyRoot))
+            client.updateComment(12, "编辑")
+            val read = server.takeRequest(); val readReplies = server.takeRequest(); val write = server.takeRequest(); val edit = server.takeRequest()
+            assertEquals("/api/v1/post/5/comment?page=2&page_size=20", read.path)
+            assertNull(read.requestUrl!!.queryParameter("parentId"))
+            assertEquals("/api/v1/post/5/comment/8/reply?page=2&page_size=20", readReplies.path)
+            assertEquals("/api/v1/post/5/comment", write.path)
+            val body = appJson.parseToJsonElement(write.body.readUtf8()).jsonObject
+            assertEquals(JsonPrimitive(8), body["rootId"])
+            assertFalse(body.containsKey("site") || body.containsKey("parent"))
+            assertEquals("PATCH", edit.method); assertEquals("/api/v1/comment/12", edit.path)
+            assertEquals("""{"content":"编辑"}""", edit.body.readUtf8())
+            val user = Profile("读者", "member", 0, Long.MAX_VALUE, 42)
+            assertTrue(reply.canModify(user, reply.createdEpoch + 1199))
+            assertFalse(reply.canModify(user, reply.createdEpoch + 1200))
+            assertFalse(reply.canModify(user.copy(userId = 43), reply.createdEpoch))
+        }
+    }
+
+    @Test fun replyCountDistinguishesMissingAndZeroAndKeeps64BitCounts() {
+        assertNull(appJson.decodeFromString<ForumComment>(comment).replyCount)
+        val missing = comment.dropLast(1) + """, "replyCount":null}"""
+        assertNull(appJson.decodeFromString<ForumComment>(missing).replyCount)
+        val empty = comment.dropLast(1) + """, "replyCount":0}"""
+        assertEquals(0L, appJson.decodeFromString<ForumComment>(empty).replyCount)
+        val large = comment.dropLast(1) + """, "replyCount":9007199254740993}"""
+        assertEquals(9007199254740993L, appJson.decodeFromString<ForumComment>(large).replyCount)
+    }
+
+    @Test fun rootListUsesServerCountsAndOnlyRequestsRepliesForLegacyRoots() = runBlocking {
+        MockWebServer().use { server ->
+            val base = appJson.decodeFromString<ForumComment>(comment).copy(postId = 5, rootId = null)
+            val roots = listOf(base.copy(id = 8, replyCount = 7), base.copy(id = 9, replyCount = 0), base.copy(id = 10))
+            server.enqueue(MockResponse().setBody(appJson.encodeToString(ForumPage(3, roots))))
+            // 若误补查前两条评论，MockWebServer 也及时响应，由请求数和路径断言发现问题。
+            repeat(3) { server.enqueue(MockResponse().setBody("""{"total":2,"items":[$comment]}""")) }
+            val client = api(server)
+            val result = client.comments(5, 0)
+            val counts = mutableMapOf<Long, Long?>()
+            loadForumReplyCounts(result.items, { client.replyCount(5, it) }) { id, count -> counts[id] = count }
+            assertEquals(mapOf(8L to 7L, 9L to 0L, 10L to 2L), counts)
+            assertEquals(2, server.requestCount)
+            assertEquals("/api/v1/post/5/comment?page=1&page_size=20", server.takeRequest().path)
+            assertEquals("/api/v1/post/5/comment/10/reply?page=1&page_size=1", server.takeRequest().path)
+        }
+    }
+
+    @Test fun missingReplyCountsUseSmallIndependentRequestsIncludingZero() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""{"total":9007199254740993,"items":[$comment]}"""))
+            server.enqueue(MockResponse().setBody("""{"total":0,"items":[]}"""))
+            val client = api(server)
+            assertEquals(9007199254740993L, client.replyCount(5, 8))
+            assertEquals(0L, client.replyCount(5, 9))
+            for(rootId in listOf(8, 9)) {
+                val request = server.takeRequest()
+                assertEquals("/api/v1/post/5/comment/$rootId/reply?page=1&page_size=1", request.path)
+                assertNull(request.getHeader("Authorization"))
+            }
+        }
+    }
+
+    @Test fun invalidReplyIdsAndPagesFailBeforeSending() = runBlocking {
+        MockWebServer().use { server ->
+            val client = api(server)
+            assertTrue(runCatching { client.replies(0, 8, 0) }.isFailure)
+            assertTrue(runCatching { client.replies(5, 0, 0) }.isFailure)
+            assertTrue(runCatching { client.replies(5, 8, -1) }.isFailure)
+            assertEquals(0, server.requestCount)
+        }
+    }
+
+    @Test fun favoritesAndDeletesAcceptEmpty204Responses() = runBlocking {
+        MockWebServer().use { server ->
+            repeat(4) { server.enqueue(MockResponse().setResponseCode(204)) }
+            val client = api(server)
+            client.favorite(5, true); client.favorite(5, false); client.deletePost(5); client.deleteComment(12)
+            assertEquals("PUT" to "/api/v1/post/5/favorite", server.takeRequest().let { it.method to it.path })
+            assertEquals("DELETE" to "/api/v1/post/5/favorite", server.takeRequest().let { it.method to it.path })
+            assertEquals("DELETE" to "/api/v1/post/5/", server.takeRequest().let { it.method to it.path })
+            assertEquals("DELETE" to "/api/v1/comment/12", server.takeRequest().let { it.method to it.path })
+        }
+    }
+
+    @Test fun accountListsUseForumPaging() = runBlocking {
+        MockWebServer().use { server ->
+            repeat(2) { server.enqueue(MockResponse().setBody("""{"total":0,"items":[]}""")) }
+            val client = api(server)
+            client.favorites(0); client.myPosts(1)
+            assertEquals("/api/v1/me/favorite?page=1&page_size=20", server.takeRequest().path)
+            assertEquals("/api/v1/me/post?page=2&page_size=20", server.takeRequest().path)
+        }
+    }
+
+    private class FakeSession(override val target: AuthTarget) : ApiSession {
+        private val profile = Profile("reader", "member", 0, Long.MAX_VALUE, 42)
+        val state = SessionState("forum-test-session", profile)
+        override val token: String? get() = state.token
+        var refreshes = 0
+        override fun capture() = state.capture()
+        override fun tokenFor(binding: SessionBinding) = state.tokenFor(binding)
+        override suspend fun refreshIfCurrent(binding: SessionBinding, previousToken: String?): Boolean {
+            tokenFor(binding)
+            refreshes++
+            return state.commit(binding, "refreshed-test-session", profile, false)
+        }
+    }
+
+    @Test fun forumDiscardsResponsesFromAnEarlierLoginWithoutRetrying() = runBlocking {
+        for(status in listOf(200, 401)) MockWebServer().use { server ->
+            val session = FakeSession(AuthTarget.FORUM)
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse {
+                    session.state.clear()
+                    session.state.commit(session.capture(), "new-login", Profile("reader", "member", 0, Long.MAX_VALUE, 42), true)
+                    return MockResponse().setResponseCode(status).setBody(post)
+                }
+            }
+            assertTrue(runCatching { api(server, session).post(5) }.exceptionOrNull() is SessionChangedException)
+            assertEquals(0, session.refreshes)
+            assertEquals(1, server.requestCount)
+        }
+    }
+
+    @Test fun forumRejectsMainSessionAndRefreshesOnlyForumTokenOnce() = runBlocking {
+        MockWebServer().use { server ->
+            assertTrue(runCatching { api(server, FakeSession(AuthTarget.NOVEL)) }.isFailure)
+            val session = FakeSession(AuthTarget.FORUM)
+            server.enqueue(MockResponse().setResponseCode(401))
+            server.enqueue(MockResponse().setResponseCode(401))
+            val error = runCatching { api(server, session).post(5) }.exceptionOrNull()
+            assertEquals(401, (error as ApiException).status)
+            assertEquals(1, session.refreshes)
+            assertEquals("Bearer forum-test-session", server.takeRequest().getHeader("Authorization"))
+            assertEquals("Bearer refreshed-test-session", server.takeRequest().getHeader("Authorization"))
+            assertEquals(2, server.requestCount)
+        }
+    }
+
+    @Test fun failedWritesAreNotRetried() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setResponseCode(503))
+            val error = runCatching { api(server).createPost(ForumPostInput(7, "标题", "正文")) }.exceptionOrNull()
+            assertEquals(503, (error as ApiException).status)
+            assertEquals(1, server.requestCount)
+        }
+    }
+
+    @Test fun currentCategoriesPutAnnouncementsFirstWithoutDroppingFutureCategories() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""[{"id":1,"slug":"novel"},{"id":2,"slug":"announcements"},{"id":3,"slug":"feedback"},{"id":4,"slug":"future"}]"""))
+            val categories = api(server).categories()
+            assertEquals(listOf(2L, 1L, 3L, 4L), categories.map { it.id })
+            assertEquals("站务公告", categories.first().title)
+            assertEquals("站务公告", appJson.decodeFromString<ForumPost>(post).copy(categoryId = 2).article(categories).category)
+        }
+    }
+
+    @Test fun invalidWritesAreRejectedBeforeSendingAndValidUnicodeStillReachesServer() = runBlocking {
+        MockWebServer().use { server ->
+            val client = api(server)
+            val input = ForumPostInput(1, "标题", "正文")
+            for(invalid in listOf(input.copy(title = "字"), input.copy(content = "字".repeat(20001)), input.copy(tagIds = listOf(1, 2, 3, 4)))) {
+                assertTrue(runCatching { client.createPost(invalid) }.exceptionOrNull() is IllegalArgumentException)
+                assertTrue(runCatching { client.updatePost(1, invalid) }.exceptionOrNull() is IllegalArgumentException)
+            }
+            assertTrue(runCatching { client.createComment(1, ForumCommentInput("字".repeat(1001))) }.exceptionOrNull() is IllegalArgumentException)
+            assertTrue(runCatching { client.updateComment(1, " ") }.exceptionOrNull() is IllegalArgumentException)
+            assertTrue(runCatching { client.createComment(1, ForumCommentInput("评论", 0)) }.exceptionOrNull() is IllegalArgumentException)
+            assertEquals(0, server.requestCount)
+            server.enqueue(MockResponse().setBody(comment))
+            val unicode = "😀".repeat(1000)
+            client.updateComment(1, unicode)
+            val body = appJson.parseToJsonElement(server.takeRequest().body.readUtf8()).jsonObject
+            assertEquals(JsonPrimitive(unicode), body["content"])
+            assertEquals(setOf("content"), body.keys)
+        }
+    }
+
+    @Test fun forumValidationErrorsExplainDomainFilteringAndExpiredDeletionWithoutRetrying() = runBlocking {
+        MockWebServer().use { server ->
+            val client = api(server)
+            server.enqueue(MockResponse().setResponseCode(400).setHeader("Content-Type", "text/plain; charset=utf-8").setBody("content 包含禁止使用的域名"))
+            val blocked = runCatching { client.createPost(ForumPostInput(1, "标题", "正文")) }.exceptionOrNull() as ApiException
+            assertEquals(400, blocked.status)
+            assertEquals("正文包含禁止使用的域名", blocked.message)
+            server.enqueue(MockResponse().setResponseCode(403).setHeader("Content-Type", "text/plain").setBody("帖子只能在发布后 20 分钟内删除"))
+            assertEquals("帖子只能在发布后 20 分钟内删除", runCatching { client.deletePost(1) }.exceptionOrNull()?.message)
+            server.enqueue(MockResponse().setResponseCode(400).setHeader("Content-Type", "text/html").setBody("<html>proxy failure</html>"))
+            assertFalse(runCatching { client.deletePost(1) }.exceptionOrNull()!!.message!!.contains("proxy"))
+            server.enqueue(MockResponse().setResponseCode(500).setHeader("Content-Type", "text/plain").setBody("internal details"))
+            assertFalse(runCatching { client.deletePost(1) }.exceptionOrNull()!!.message!!.contains("internal"))
+            assertEquals(4, server.requestCount)
+            // The shared main-site client retains its own generic error behavior.
+            server.enqueue(MockResponse().setResponseCode(400).setHeader("Content-Type", "text/plain").setBody("forum-only explanation"))
+            val main = NoveliaApi(null, server.url("/api/").toString())
+            assertFalse(runCatching { main.request("POST", "article", "{}") }.exceptionOrNull()!!.message!!.contains("forum-only"))
+        }
+    }
+
+    @Test fun categorizedCommentFailuresKeepTheirSpecificReasonWithoutRetrying() = runBlocking {
+        MockWebServer().use { server ->
+            val client = api(server)
+            for((status, reason) in listOf(400 to "根评论无效", 403 to "只能修改自己的评论", 404 to "根评论不存在", 409 to "评论区已锁定", 409 to "评论数据冲突")) {
+                server.enqueue(MockResponse().setResponseCode(status).setHeader("Content-Type", "text/plain; charset=utf-8").setBody(reason))
+                val error = runCatching { client.createComment(5, ForumCommentInput("测试回复", 8)) }.exceptionOrNull() as ApiException
+                assertEquals(status, error.status)
+                assertEquals(reason, error.message)
+            }
+            assertEquals(5, server.requestCount)
+            server.enqueue(MockResponse().setResponseCode(404).setHeader("Content-Type", "text/plain").setBody("根评论不存在"))
+            assertEquals("根评论不存在", runCatching { client.replies(5, 8, 0) }.exceptionOrNull()?.message)
+            server.enqueue(MockResponse().setResponseCode(409).setHeader("Content-Type", "text/html").setBody("<html>proxy failure</html>"))
+            assertFalse(runCatching { client.deleteComment(8) }.exceptionOrNull()!!.message!!.contains("proxy"))
+            server.enqueue(MockResponse().setResponseCode(404).setHeader("Content-Type", "text/plain").setBody("x".repeat(301)))
+            assertFalse(runCatching { client.deleteComment(8) }.exceptionOrNull()!!.message!!.contains("xxx"))
+        }
+    }
+
+    @Test fun legacyArticlesAndNewLinksKeepSeparateIdentities() {
+        val old = appJson.decodeFromString<Article>("""{"id":"abc123","category":"General","title":"旧文章"}""")
+        assertNull(old.forumCategoryId)
+        assertEquals(old, appJson.decodeFromString<Article>(appJson.encodeToString(old)))
+        assertEquals(SiteLink.Post("f-123"), BookLinks.parse("https://forum.novelia.cc/p/123"))
+        assertEquals(SiteLink.Post("abc123"), BookLinks.parse("https://n.novelia.cc/forum/abc123"))
+        assertNull(BookLinks.parse("https://forum.novelia.cc/p/123/edit"))
+        assertNull(BookLinks.parse("https://forum.novelia.cc/p/0"))
+        assertNull(BookLinks.parse("https://forum.novelia.cc.evil.test/p/123"))
+        assertEquals("article/f-123", MarkdownLinks.nativeRoute("https://forum.novelia.cc/p/123"))
+        assertNull(MarkdownLinks.nativeRoute("https://forum.novelia.cc/p/123#comment-8"))
+        assertNull(MarkdownLinks.nativeRoute("https://forum.novelia.cc/c/guide?page=2"))
+        assertEquals("https://forum.novelia.cc/p/123", MarkdownLinks.commentDocumentUrl("article-f-123"))
+        assertEquals("https://forum.novelia.cc/p/456", MarkdownLinks.resolve("/p/456", "https://forum.novelia.cc/p/123"))
+        assertEquals("https://n.novelia.cc/forum/abc123", ForumLinks.articleUrl(old.id))
+    }
+}

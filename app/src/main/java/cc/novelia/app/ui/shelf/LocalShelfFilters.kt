@@ -1,7 +1,6 @@
 package cc.novelia.app.ui.shelf
 
-import cc.novelia.app.ui.components.AppTextButton
-
+import cc.novelia.app.ui.components.base.AppTextButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
@@ -18,10 +17,10 @@ import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.library.ShelfBookType
 import cc.novelia.app.data.library.readingStatuses
 import cc.novelia.app.data.catalog.CharacterCountFilter
-import cc.novelia.app.ui.components.CharacterCountFilterFields
+import cc.novelia.app.ui.components.base.CharacterCountFilterFields
 import cc.novelia.app.data.model.Folder
-import cc.novelia.app.ui.components.ChoiceRow
-import cc.novelia.app.ui.components.CollapsibleCloudFilters
+import cc.novelia.app.ui.components.base.ChoiceRow
+import cc.novelia.app.ui.components.base.CollapsibleCloudFilters
 
 @Composable internal fun LocalShelfFilters(
     localFiles: Boolean, type: ShelfBookType, onType: (ShelfBookType) -> Unit,

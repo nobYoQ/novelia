@@ -15,8 +15,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.MainActivity
 import cc.novelia.app.NoveliaApplication
-import cc.novelia.app.data.model.Article
-import cc.novelia.app.ui.community.ArticleEditor
+import cc.novelia.app.data.community.Article
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.theme.LocalReducedMotion
 import cc.novelia.app.ui.theme.NoveliaTheme

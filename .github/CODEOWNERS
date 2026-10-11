@@ -8,4 +8,4 @@
 /app/build.gradle.kts @nobYoQ
 /scripts/ @nobYoQ
 /version.properties @nobYoQ
-/RELEASING.md @nobYoQ
+/docs/maintenance/releasing.md @nobYoQ

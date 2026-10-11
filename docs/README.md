@@ -31,7 +31,7 @@ Novelia 是轻小说机翻机器人的非官方 Android 客户端，使用 Kotli
 | 排查登录、请求或原站同步 | [认证](network/authentication.md)、[网络与同步](network/network-and-sync.md) |
 | 改镜像线路、ECH 或诊断 | [书源线路](development/book-source-mirrors.md)、[网络诊断](network/network-diagnostics.md) |
 | 改 WebDAV 多设备同步 | [WebDAV](network/webdav-sync.md) |
-| 做测试、性能分析或发布 | [测试](quality/testing.md)、[性能](quality/performance.md)、[发布](../RELEASING.md) |
+| 做测试、性能分析或发布 | [测试](quality/testing.md)、[性能](quality/performance.md)、[发布](maintenance/releasing.md) |
 | 定位故障 | [排障指南](maintenance/troubleshooting.md) |
 
 完整分类：[开发](development/README.md) · [架构](architecture/README.md) · [功能](features/README.md) · [数据](data/README.md) · [网络](network/README.md) · [质量](quality/README.md) · [维护](maintenance/README.md)。
@@ -46,8 +46,8 @@ Novelia 是轻小说机翻机器人的非官方 Android 客户端，使用 Kotli
 
 ## 文档依据与维护
 
-本轮按 **2026-10-06、源码提交 `24a3125`** 核对当前客户端行为。服务端在线状态、GitHub 后台设置和实际设备验收不由这次源码核对证明。已知的正式发布脚本问题见[发布指南](../RELEASING.md#准备附件)。
+功能说明按 **2026-10-06、源码提交 `24a3125`** 核对，目录与命令入口在 **2026-10-11** 整理时同步更新。服务端在线状态、GitHub 后台设置和实际设备验收不由这次源码核对证明。正式发布前提见[发布指南](maintenance/releasing.md#准备附件)。
 
 功能说明描述当前实现；旧论坛部署适配记录单独放在[历史记录](maintenance/history/forum-adaptation.md)，其中的测试结果只属于对应日期。后续修改请同步相关专题，写法见[文档维护](maintenance/documentation.md)。
 
-协作规则见[贡献指南](../CONTRIBUTING.md)，漏洞报告见[安全政策](../SECURITY.md)，来源与许可见 [NOTICE](../NOTICE.md) 和[许可证目录](../licenses/README.md)。
+协作规则见[贡献指南](../.github/CONTRIBUTING.md)，漏洞报告见[安全政策](../.github/SECURITY.md)，来源与许可见 [NOTICE](../NOTICE.md) 和[许可证目录](../licenses/README.md)。

@@ -3,7 +3,7 @@ package cc.novelia.app.ui.community
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
-import cc.novelia.app.data.model.ForumRules
+import cc.novelia.app.data.community.ForumRules
 import java.time.Instant
 import kotlinx.coroutines.delay
 

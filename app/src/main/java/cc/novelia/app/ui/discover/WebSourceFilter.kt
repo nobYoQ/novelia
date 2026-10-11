@@ -1,7 +1,6 @@
 package cc.novelia.app.ui.discover
 
-import cc.novelia.app.ui.components.AppTextButton
-
+import cc.novelia.app.ui.components.base.AppTextButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -12,8 +11,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.catalog.providers
-import cc.novelia.app.ui.components.AppChipFlowRow
-import cc.novelia.app.ui.components.AppSelectionChip
+import cc.novelia.app.ui.components.base.AppChipFlowRow
+import cc.novelia.app.ui.components.base.AppSelectionChip
 
 @Composable internal fun WebSourceFilter(source: String, onChange: (String) -> Unit) {
     // 空条件在网络接口中代表全部书源，默认、重置和旧搜索方案均显示全选。

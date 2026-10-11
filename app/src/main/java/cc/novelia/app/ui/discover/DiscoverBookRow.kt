@@ -18,12 +18,12 @@ import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.catalog.formatApproximateCharacters
 import cc.novelia.app.data.catalog.providers
 import cc.novelia.app.data.model.BookCard
-import cc.novelia.app.ui.components.BookCover
-import cc.novelia.app.ui.components.BookSyncIndicator
-import cc.novelia.app.ui.components.LocalBookListPresentation
-import cc.novelia.app.ui.components.FilterPanelExpandIcon
-import cc.novelia.app.ui.components.bookRowStatus
-import cc.novelia.app.ui.components.bookUpdateDate
+import cc.novelia.app.ui.components.book.BookCover
+import cc.novelia.app.ui.components.book.BookSyncIndicator
+import cc.novelia.app.ui.components.book.LocalBookListPresentation
+import cc.novelia.app.ui.components.base.FilterPanelExpandIcon
+import cc.novelia.app.ui.components.book.bookRowStatus
+import cc.novelia.app.ui.components.book.bookUpdateDate
 import cc.novelia.app.ui.theme.motionClickable
 
 /** 搜索结果优先展示选书信息，只使用列表和本地已有的元数据。 */

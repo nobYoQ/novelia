@@ -1,12 +1,11 @@
 package cc.novelia.app.ui.community
 
-import cc.novelia.app.ui.components.AppTextButton
-
-import cc.novelia.app.ui.components.AppLazyColumn
-import cc.novelia.app.ui.components.AsyncContent
-import cc.novelia.app.ui.components.EmptyState
-import cc.novelia.app.ui.components.PageControls
-import cc.novelia.app.ui.components.Screen
+import cc.novelia.app.ui.components.base.AppTextButton
+import cc.novelia.app.ui.components.base.AppLazyColumn
+import cc.novelia.app.ui.components.base.AsyncContent
+import cc.novelia.app.ui.components.base.EmptyState
+import cc.novelia.app.ui.components.base.PageControls
+import cc.novelia.app.ui.components.base.Screen
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.navigation.ObserveForumLogin
 import androidx.compose.foundation.layout.*
@@ -19,9 +18,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import cc.novelia.app.data.model.ForumStrike
-import cc.novelia.app.data.model.ForumStrikeReadState
-import cc.novelia.app.ui.components.friendlyMessage
+import cc.novelia.app.data.community.ForumStrike
+import cc.novelia.app.data.community.ForumStrikeReadState
+import cc.novelia.app.ui.components.base.friendlyMessage
 import kotlinx.coroutines.CancellationException
 import java.time.Instant
 import java.time.ZoneId

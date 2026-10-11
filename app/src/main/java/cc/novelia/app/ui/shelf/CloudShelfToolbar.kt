@@ -1,8 +1,7 @@
 package cc.novelia.app.ui.shelf
 
-import cc.novelia.app.ui.components.AppTextButton
-import cc.novelia.app.ui.components.AppOutlinedButton
-
+import cc.novelia.app.ui.components.base.AppTextButton
+import cc.novelia.app.ui.components.base.AppOutlinedButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Sort
@@ -19,8 +18,8 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.model.Folder
-import cc.novelia.app.ui.components.AppDropdownMenu
-import cc.novelia.app.ui.components.FilterPanelExpandIcon
+import cc.novelia.app.ui.components.base.AppDropdownMenu
+import cc.novelia.app.ui.components.base.FilterPanelExpandIcon
 
 /** 收藏夹管理和排序直接可达，无需先打开筛选面板。 */
 @Composable internal fun CloudShelfToolbar(

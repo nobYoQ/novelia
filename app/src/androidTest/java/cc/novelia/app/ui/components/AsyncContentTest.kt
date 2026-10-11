@@ -16,7 +16,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import cc.novelia.app.ui.components.AsyncContent
+import cc.novelia.app.ui.components.base.AsyncContent
 import cc.novelia.app.ui.theme.LocalReducedMotion
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.CompletableDeferred

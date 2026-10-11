@@ -5,7 +5,7 @@ import android.content.ContextWrapper
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.data.model.*
-import cc.novelia.app.files.importLocalDocument
+import cc.novelia.app.files.importing.importLocalDocument
 import java.io.File
 import java.util.UUID
 import kotlinx.coroutines.runBlocking

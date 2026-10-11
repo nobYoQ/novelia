@@ -18,11 +18,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import cc.novelia.app.data.model.ReaderSettings
-import cc.novelia.app.ui.components.AppLazyColumn
-import cc.novelia.app.ui.components.AppScrollColumn
-import cc.novelia.app.ui.components.AppSheet
-import cc.novelia.app.ui.components.appHorizontalScroll
-import cc.novelia.app.ui.components.screenPageDistance
+import cc.novelia.app.ui.components.base.AppLazyColumn
+import cc.novelia.app.ui.components.base.AppScrollColumn
+import cc.novelia.app.ui.components.base.AppSheet
+import cc.novelia.app.ui.components.base.appHorizontalScroll
+import cc.novelia.app.ui.components.base.screenPageDistance
 import cc.novelia.app.ui.reader.ReaderPreferences
 import cc.novelia.app.ui.reader.rememberReaderPreferencesState
 import cc.novelia.app.ui.theme.AppInteractionMode

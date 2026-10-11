@@ -1,8 +1,7 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.reader
 
-import cc.novelia.app.ui.components.AppSlider
-
+import cc.novelia.app.ui.components.base.AppSlider
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas

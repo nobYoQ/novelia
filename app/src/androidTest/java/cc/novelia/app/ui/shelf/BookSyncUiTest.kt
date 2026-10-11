@@ -10,10 +10,10 @@ import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.PendingAction
 import cc.novelia.app.data.sync.CloudMutationQueue
 import cc.novelia.app.data.sync.CloudSyncStatus
-import cc.novelia.app.ui.components.BookRow
-import cc.novelia.app.ui.components.BookSyncPresentation
-import cc.novelia.app.ui.components.LocalBookSyncPresentation
-import cc.novelia.app.ui.components.bookSyncStates
+import cc.novelia.app.ui.components.book.BookRow
+import cc.novelia.app.ui.components.book.BookSyncPresentation
+import cc.novelia.app.ui.components.book.LocalBookSyncPresentation
+import cc.novelia.app.ui.components.book.bookSyncStates
 import cc.novelia.app.ui.theme.NoveliaTheme
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.launch

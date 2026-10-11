@@ -1,11 +1,9 @@
 package cc.novelia.app.ui.settings
 
-import cc.novelia.app.ui.components.AppButton
-import cc.novelia.app.ui.components.AppTextButton
-import cc.novelia.app.ui.components.AppOutlinedButton
-
+import cc.novelia.app.ui.components.base.AppButton
+import cc.novelia.app.ui.components.base.AppTextButton
+import cc.novelia.app.ui.components.base.AppOutlinedButton
 import cc.novelia.app.ui.account.ProfileDetailCard
-
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -20,9 +18,9 @@ import cc.novelia.app.data.backup.LibraryBackupService
 import cc.novelia.app.ui.account.ProfileDetailList
 import cc.novelia.app.ui.account.ProfileToggle
 import cc.novelia.app.ui.account.ProfileSectionTitle
-import cc.novelia.app.ui.components.ConfirmDialog
+import cc.novelia.app.ui.components.base.ConfirmDialog
 import cc.novelia.app.ui.account.ProfileDetailScreen
-import cc.novelia.app.ui.components.friendlyMessage
+import cc.novelia.app.ui.components.base.friendlyMessage
 import cc.novelia.app.ui.markdown.format
 import cc.novelia.app.ui.navigation.AppController
 import java.text.DateFormat

@@ -1,6 +1,6 @@
 package cc.novelia.app.ui.about
-import cc.novelia.app.BuildConfig
 
+import cc.novelia.app.BuildConfig
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
@@ -9,8 +9,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import cc.novelia.app.data.catalog.ForumLinks
-import cc.novelia.app.data.updates.AppReleaseChannel
+import cc.novelia.app.data.community.ForumLinks
+import cc.novelia.app.data.appupdate.AppReleaseChannel
 import cc.novelia.app.ui.feedback.appDownloadDescription
 import cc.novelia.app.ui.account.ProfileDetailList
 import cc.novelia.app.ui.account.ProfileDetailCard
@@ -38,7 +38,7 @@ import cc.novelia.app.ui.theme.MotionContent
         } }) }
         item { ProfileMenuRow("下载新版本", appDownloadDescription(downloads.getValue(AppReleaseChannel.Stable), "检查并下载最新正式版"), Icons.Outlined.Download, { c.downloadAppRelease() }) }
         item { ProfileMenuRow("下载预览包", appDownloadDescription(downloads.getValue(AppReleaseChannel.Preview), "检查预览更新 · 下载前需确认不稳定提示"), Icons.Outlined.Science, { c.downloadAppRelease(preview = true) }) }
-        item { ProfileMenuRow("发行说明", "查看 GitHub 发行版与更新说明", Icons.Outlined.NewReleases, { c.external(cc.novelia.app.data.updates.APP_RELEASES_URL) }) }
+        item { ProfileMenuRow("发行说明", "查看 GitHub 发行版与更新说明", Icons.Outlined.NewReleases, { c.external(cc.novelia.app.data.appupdate.APP_RELEASES_URL) }) }
         item { ProfileSectionTitle("项目与许可") }
         item { ProfileMenuRow("项目源码", "查看源码与贡献指南", Icons.Outlined.Code, { c.external("https://github.com/nobYoQ/novelia") }) }
         item { ProfileMenuRow("开源许可证", "离线查看项目许可与第三方声明", Icons.Outlined.Description, { c.go("licenses") }) }

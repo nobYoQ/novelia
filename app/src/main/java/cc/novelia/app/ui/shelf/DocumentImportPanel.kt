@@ -12,12 +12,16 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.storage.LocalStore
 import cc.novelia.app.files.*
-import cc.novelia.app.ui.components.ImportResultsPanel
-import cc.novelia.app.ui.components.friendlyMessage
+import cc.novelia.app.ui.components.documents.ImportResultsPanel
+import cc.novelia.app.ui.components.base.friendlyMessage
 import cc.novelia.app.ui.navigation.AppController
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import cc.novelia.app.files.importing.ImportItem
+import cc.novelia.app.files.importing.ImportStatus
+import cc.novelia.app.files.importing.importDocumentUri
+import cc.novelia.app.files.importing.runDocumentImportBatch
 
 internal data class DocumentImportState(val items: List<ImportItem> = emptyList(), val running: Boolean = false) {
     val completed get() = items.count { it.status in setOf(ImportStatus.Success, ImportStatus.Duplicate, ImportStatus.Failed) }

@@ -46,7 +46,7 @@
 命令默认从仓库根执行，Windows 使用 PowerShell 7。优先采用项目脚本，例如：
 
 ```powershell
-./build.ps1 -Tasks @(':app:testDebugUnitTest', '--tests', 'cc.novelia.app.ApiContractTest')
+./build.ps1 -Tasks @(':app:testDebugUnitTest', '--tests', 'cc.novelia.app.data.network.ApiContractTest')
 ```
 
 说明前提、产物和副作用；联网、设备及发布操作保留显式开关。示例不包含真实凭据，不混用 Bash 转义。

@@ -21,8 +21,8 @@ import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.Folder
 import cc.novelia.app.data.model.SavedBook
-import cc.novelia.app.ui.components.AppLazyColumn
-import cc.novelia.app.ui.components.BookRow
+import cc.novelia.app.ui.components.base.AppLazyColumn
+import cc.novelia.app.ui.components.book.BookRow
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.theme.AppInteractionMode
 import cc.novelia.app.ui.theme.NoveliaTheme

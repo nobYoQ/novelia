@@ -2,6 +2,7 @@ package cc.novelia.app.data.catalog
 
 import cc.novelia.app.data.model.BookRef
 import java.net.URI
+import cc.novelia.app.data.community.ForumLinks
 
 sealed interface SiteLink {
     data class Book(val ref: BookRef, val chapterId: String? = null) : SiteLink

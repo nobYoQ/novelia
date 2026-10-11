@@ -1,15 +1,14 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.community
 
-import cc.novelia.app.ui.components.AppButton
-import cc.novelia.app.ui.components.AppTextButton
-import cc.novelia.app.ui.components.AppOutlinedButton
-
-import cc.novelia.app.data.catalog.ForumLinks
-import cc.novelia.app.data.model.ForumCategory
-import cc.novelia.app.data.model.ForumPostInput
-import cc.novelia.app.data.model.ForumRules
-import cc.novelia.app.ui.components.EmptyState
+import cc.novelia.app.ui.components.base.AppButton
+import cc.novelia.app.ui.components.base.AppTextButton
+import cc.novelia.app.ui.components.base.AppOutlinedButton
+import cc.novelia.app.data.community.ForumLinks
+import cc.novelia.app.data.community.ForumCategory
+import cc.novelia.app.data.community.ForumPostInput
+import cc.novelia.app.data.community.ForumRules
+import cc.novelia.app.ui.components.base.EmptyState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.foundation.layout.*
@@ -22,12 +21,12 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import cc.novelia.app.data.model.Article
-import cc.novelia.app.ui.components.AppAlertDialog
-import cc.novelia.app.ui.components.AppScrollColumn
-import cc.novelia.app.ui.components.AsyncContent
-import cc.novelia.app.ui.components.ChoiceRow
-import cc.novelia.app.ui.components.Screen
+import cc.novelia.app.data.community.Article
+import cc.novelia.app.ui.components.base.AppAlertDialog
+import cc.novelia.app.ui.components.base.AppScrollColumn
+import cc.novelia.app.ui.components.base.AsyncContent
+import cc.novelia.app.ui.components.base.ChoiceRow
+import cc.novelia.app.ui.components.base.Screen
 import cc.novelia.app.ui.markdown.MarkdownEditor
 import cc.novelia.app.ui.markdown.MarkdownText
 import cc.novelia.app.ui.markdown.rememberDraftPersistence

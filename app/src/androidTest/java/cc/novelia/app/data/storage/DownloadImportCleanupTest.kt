@@ -4,7 +4,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.NoveliaApplication
 import cc.novelia.app.data.model.DownloadEntry
-import cc.novelia.app.files.importDownloadedDocument
+import cc.novelia.app.files.importing.importDownloadedDocument
 import java.io.File
 import java.util.UUID
 import kotlinx.coroutines.runBlocking

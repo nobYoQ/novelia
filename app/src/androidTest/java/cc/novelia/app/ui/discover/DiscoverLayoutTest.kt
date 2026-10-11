@@ -17,7 +17,7 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
-import cc.novelia.app.ui.components.AppLazyColumn
+import cc.novelia.app.ui.components.base.AppLazyColumn
 import cc.novelia.app.ui.theme.AppInteractionMode
 import org.junit.Assert.*
 import org.junit.Rule

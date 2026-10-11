@@ -1,14 +1,12 @@
 package cc.novelia.app.ui.community
 
-import cc.novelia.app.ui.components.AppBadge
-
-import cc.novelia.app.ui.components.AppTextButton
-import cc.novelia.app.ui.components.AppFilledTonalButton
-import cc.novelia.app.ui.components.AppIconButton
+import cc.novelia.app.ui.components.base.AppBadge
+import cc.novelia.app.ui.components.base.AppTextButton
+import cc.novelia.app.ui.components.base.AppFilledTonalButton
+import cc.novelia.app.ui.components.base.AppIconButton
 import cc.novelia.app.ui.theme.appShape
-
-import cc.novelia.app.ui.components.AppScrollColumn
-import cc.novelia.app.ui.components.AppDropdownMenu
+import cc.novelia.app.ui.components.base.AppScrollColumn
+import cc.novelia.app.ui.components.base.AppDropdownMenu
 import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.appReducedMotion
 import androidx.compose.animation.*
@@ -39,7 +37,7 @@ import androidx.compose.ui.unit.*
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
-import cc.novelia.app.data.model.ForumSort
+import cc.novelia.app.data.community.ForumSort
 import cc.novelia.app.data.model.Profile
 
 internal enum class ForumAccountAction { LOGIN, POSTS, FAVORITES, STRIKES, RULES, LOGOUT }

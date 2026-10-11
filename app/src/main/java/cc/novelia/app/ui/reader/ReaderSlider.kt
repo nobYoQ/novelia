@@ -1,12 +1,10 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.reader
 
-import cc.novelia.app.ui.components.AppSlider
-import cc.novelia.app.ui.components.AppSliderTrack
-
-import cc.novelia.app.ui.components.AppTextButton
-import cc.novelia.app.ui.components.AppOutlinedButton
-
+import cc.novelia.app.ui.components.base.AppSlider
+import cc.novelia.app.ui.components.base.AppSliderTrack
+import cc.novelia.app.ui.components.base.AppTextButton
+import cc.novelia.app.ui.components.base.AppOutlinedButton
 import androidx.compose.animation.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap

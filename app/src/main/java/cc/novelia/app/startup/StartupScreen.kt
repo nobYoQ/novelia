@@ -1,9 +1,7 @@
 package cc.novelia.app.startup
 
-import cc.novelia.app.ui.components.AppButton
-
-import cc.novelia.app.ui.components.AppLinearProgressIndicator
-
+import cc.novelia.app.ui.components.base.AppButton
+import cc.novelia.app.ui.components.base.AppLinearProgressIndicator
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
@@ -14,7 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import cc.novelia.app.ui.components.AppScrollColumn
+import cc.novelia.app.ui.components.base.AppScrollColumn
 
 @Composable internal fun StartupScreen(progress: StartupProgress, onRetry: () -> Unit) {
     Surface(Modifier.fillMaxSize()) {

@@ -1,11 +1,10 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.reader
 
-import cc.novelia.app.ui.components.AppButton
-import cc.novelia.app.ui.components.AppTextButton
-import cc.novelia.app.ui.components.AppOutlinedButton
-import cc.novelia.app.ui.components.AppIconButton
-
+import cc.novelia.app.ui.components.base.AppButton
+import cc.novelia.app.ui.components.base.AppTextButton
+import cc.novelia.app.ui.components.base.AppOutlinedButton
+import cc.novelia.app.ui.components.base.AppIconButton
 import android.content.Intent
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
@@ -85,11 +84,11 @@ import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.data.storage.appJson
 import cc.novelia.app.data.webdav.WebDavProjection
 import cc.novelia.app.reader.*
-import cc.novelia.app.ui.components.AppAlertDialog
-import cc.novelia.app.ui.components.AppScrollColumn
-import cc.novelia.app.ui.components.AsyncContent
-import cc.novelia.app.ui.components.appVerticalScroll
-import cc.novelia.app.ui.components.friendlyMessage
+import cc.novelia.app.ui.components.base.AppAlertDialog
+import cc.novelia.app.ui.components.base.AppScrollColumn
+import cc.novelia.app.ui.components.base.AsyncContent
+import cc.novelia.app.ui.components.base.appVerticalScroll
+import cc.novelia.app.ui.components.base.friendlyMessage
 import cc.novelia.app.ui.feedback.MidoriSticker
 import cc.novelia.app.ui.feedback.StickerAccent
 import cc.novelia.app.ui.markdown.textOffsetAt

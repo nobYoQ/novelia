@@ -26,10 +26,9 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import cc.novelia.app.ui.components.AppLazyColumn
-import cc.novelia.app.ui.components.CollapsibleCloudFilters
-import cc.novelia.app.ui.components.rememberCloudFilterCollapse
-import cc.novelia.app.ui.discover.SearchAssistantPanel
+import cc.novelia.app.ui.components.base.AppLazyColumn
+import cc.novelia.app.ui.components.base.CollapsibleCloudFilters
+import cc.novelia.app.ui.components.base.rememberCloudFilterCollapse
 import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.LocalEInkMode
 import cc.novelia.app.ui.theme.LocalReducedMotion

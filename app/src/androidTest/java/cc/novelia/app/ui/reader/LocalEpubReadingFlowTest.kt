@@ -10,8 +10,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.data.model.*
 import cc.novelia.app.data.storage.LocalStore
 import cc.novelia.app.files.DocumentTools
-import cc.novelia.app.files.importDownloadedDocument
-import cc.novelia.app.files.importLocalDocument
+import cc.novelia.app.files.importing.importDownloadedDocument
+import cc.novelia.app.files.importing.importLocalDocument
 import cc.novelia.app.reader.projectParagraphs
 import java.io.ByteArrayOutputStream
 import java.io.File

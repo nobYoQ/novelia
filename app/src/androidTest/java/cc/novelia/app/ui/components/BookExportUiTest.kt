@@ -54,6 +54,7 @@ import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import cc.novelia.app.ui.components.documents.CreateBookDocument
 
 class BookExportUiTest {
     @get:Rule val compose = createComposeRule()

@@ -1,7 +1,6 @@
 package cc.novelia.app.ui.shelf
 
-import cc.novelia.app.ui.components.AppIconButton
-
+import cc.novelia.app.ui.components.base.AppIconButton
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Box
@@ -19,7 +18,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import cc.novelia.app.ui.components.AppDropdownMenu
+import cc.novelia.app.ui.components.base.AppDropdownMenu
 import cc.novelia.app.ui.theme.LocalEInkMode
 import kotlin.math.abs
 

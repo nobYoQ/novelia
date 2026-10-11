@@ -11,10 +11,10 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
-import cc.novelia.app.data.model.ForumTag
+import cc.novelia.app.data.community.ForumTag
 import cc.novelia.app.ui.theme.LocalEInkMode
 import cc.novelia.app.ui.theme.NoveliaTheme
-import cc.novelia.app.ui.components.FilterPanelVisibility
+import cc.novelia.app.ui.components.base.FilterPanelVisibility
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test

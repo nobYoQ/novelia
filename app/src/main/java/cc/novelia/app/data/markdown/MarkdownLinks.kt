@@ -1,6 +1,6 @@
 package cc.novelia.app.data.markdown
 
-import cc.novelia.app.data.catalog.ForumLinks
+import cc.novelia.app.data.community.ForumLinks
 import cc.novelia.app.data.catalog.BookLinks
 import cc.novelia.app.data.catalog.SiteLink
 import cc.novelia.app.data.catalog.SiteUrls

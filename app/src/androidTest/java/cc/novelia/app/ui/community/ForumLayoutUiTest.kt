@@ -12,9 +12,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Density
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import cc.novelia.app.data.model.ForumCategory
-import cc.novelia.app.data.model.ForumComment
-import cc.novelia.app.data.model.ForumPage
+import cc.novelia.app.data.community.ForumCategory
+import cc.novelia.app.data.community.ForumComment
+import cc.novelia.app.data.community.ForumPage
 import cc.novelia.app.data.storage.LocalStore
 import cc.novelia.app.ui.theme.NoveliaTheme
 import java.io.File

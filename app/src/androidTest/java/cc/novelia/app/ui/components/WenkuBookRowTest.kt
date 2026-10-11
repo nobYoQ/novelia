@@ -13,6 +13,9 @@ import cc.novelia.app.ui.discover.DiscoverBookRow
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import cc.novelia.app.ui.components.book.BookListPresentation
+import cc.novelia.app.ui.components.book.BookRow
+import cc.novelia.app.ui.components.book.LocalBookListPresentation
 
 @RunWith(AndroidJUnit4::class)
 class WenkuBookRowTest {

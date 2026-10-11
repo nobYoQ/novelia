@@ -13,7 +13,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.library.readingDestination
 import cc.novelia.app.data.model.WebDetail
-import cc.novelia.app.ui.components.bookUpdateDateTime
+import cc.novelia.app.ui.components.book.bookUpdateDateTime
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable internal fun BookUpdateSummary(detail: WebDetail, onReadChapter: (String) -> Unit) {

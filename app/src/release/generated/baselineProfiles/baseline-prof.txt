@@ -19205,11 +19205,11 @@ Lcc/novelia/app/NoveliaApplication$onCreate$5$invokeSuspend$$inlined$map$2$2$1;
 SPLcc/novelia/app/NoveliaApplication$onCreate$5$invokeSuspend$$inlined$map$2$2$1;-><init>(Lcc/novelia/app/NoveliaApplication$onCreate$5$invokeSuspend$$inlined$map$2$2;Lkotlin/coroutines/Continuation;)V
 SPLcc/novelia/app/NoveliaApplication$onCreate$5$invokeSuspend$$inlined$map$2$2$1;->invokeSuspend(Ljava/lang/Object;)Ljava/lang/Object;
 Lcc/novelia/app/R$drawable;
-Lcc/novelia/app/files/DownloadFiles;
-SPLcc/novelia/app/files/DownloadFiles;-><clinit>()V
-SPLcc/novelia/app/files/DownloadFiles;-><init>()V
-SPLcc/novelia/app/files/DownloadFiles;->cleanup$default(Lcc/novelia/app/files/DownloadFiles;Ljava/io/File;Ljava/lang/String;ILjava/lang/Object;)V
-SPLcc/novelia/app/files/DownloadFiles;->cleanup(Ljava/io/File;Ljava/lang/String;)V
+Lcc/novelia/app/files/downloads/DownloadFiles;
+SPLcc/novelia/app/files/downloads/DownloadFiles;-><clinit>()V
+SPLcc/novelia/app/files/downloads/DownloadFiles;-><init>()V
+SPLcc/novelia/app/files/downloads/DownloadFiles;->cleanup$default(Lcc/novelia/app/files/downloads/DownloadFiles;Ljava/io/File;Ljava/lang/String;ILjava/lang/Object;)V
+SPLcc/novelia/app/files/downloads/DownloadFiles;->cleanup(Ljava/io/File;Ljava/lang/String;)V
 Lcc/novelia/app/files/RetiredModelsKt;
 SPLcc/novelia/app/files/RetiredModelsKt;->removeRetiredModels(Ljava/io/File;)V
 PLcoil/Coil;-><clinit>()V

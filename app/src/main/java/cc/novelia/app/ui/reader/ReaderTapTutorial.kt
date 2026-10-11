@@ -1,8 +1,7 @@
 package cc.novelia.app.ui.reader
 
-import cc.novelia.app.ui.components.AppOutlinedButton
-import cc.novelia.app.ui.components.AppIconButton
-
+import cc.novelia.app.ui.components.base.AppOutlinedButton
+import cc.novelia.app.ui.components.base.AppIconButton
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable

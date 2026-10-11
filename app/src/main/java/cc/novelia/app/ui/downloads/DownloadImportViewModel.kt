@@ -8,10 +8,10 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import cc.novelia.app.NoveliaApplication
 import cc.novelia.app.data.model.DownloadEntry
-import cc.novelia.app.files.ImportItem
-import cc.novelia.app.files.importDownloadedDocument
-import cc.novelia.app.files.runDocumentImportBatch
-import cc.novelia.app.ui.components.friendlyMessage
+import cc.novelia.app.files.importing.ImportItem
+import cc.novelia.app.files.importing.importDownloadedDocument
+import cc.novelia.app.files.importing.runDocumentImportBatch
+import cc.novelia.app.ui.components.base.friendlyMessage
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

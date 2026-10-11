@@ -14,7 +14,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.ui.book.BookScreen
-import cc.novelia.app.ui.components.EmptyState
+import cc.novelia.app.ui.components.base.EmptyState
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.navigation.SHOW_SHELF_LIST
 import kotlinx.coroutines.flow.distinctUntilChanged

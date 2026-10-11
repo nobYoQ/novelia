@@ -1,10 +1,8 @@
 package cc.novelia.app.ui.community
 
-import cc.novelia.app.ui.components.AppLinearProgressIndicator
-
-import cc.novelia.app.ui.components.AppTextButton
-import cc.novelia.app.ui.components.AppIconButton
-
+import cc.novelia.app.ui.components.base.AppLinearProgressIndicator
+import cc.novelia.app.ui.components.base.AppTextButton
+import cc.novelia.app.ui.components.base.AppIconButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -13,12 +11,12 @@ import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import cc.novelia.app.ui.components.AppScrollColumn
-import cc.novelia.app.ui.components.Screen
+import cc.novelia.app.ui.components.base.AppScrollColumn
+import cc.novelia.app.ui.components.base.Screen
 import cc.novelia.app.ui.navigation.AppController
-import cc.novelia.app.data.model.ForumCommunityRules
-import cc.novelia.app.data.model.ForumRuleTable
-import cc.novelia.app.data.model.bundledForumCommunityRules
+import cc.novelia.app.data.community.ForumCommunityRules
+import cc.novelia.app.data.community.ForumRuleTable
+import cc.novelia.app.data.community.bundledForumCommunityRules
 import kotlinx.coroutines.CancellationException
 
 /** 先显示本地副本，进入页面时检查原站更新；同步失败仍可离线阅读。 */

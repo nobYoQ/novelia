@@ -1,10 +1,8 @@
 package cc.novelia.app.ui.account
 
-import cc.novelia.app.ui.components.AppSwitch
+import cc.novelia.app.ui.components.base.AppSwitch
 import cc.novelia.app.ui.theme.LocalSquareCorners
-
-import cc.novelia.app.ui.components.AppTextButton
-
+import cc.novelia.app.ui.components.base.AppTextButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.selection.toggleable
@@ -19,8 +17,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import cc.novelia.app.ui.components.*
 import cc.novelia.app.ui.theme.LocalEInkMode
+import cc.novelia.app.ui.components.base.AppLazyColumn
+import cc.novelia.app.ui.components.base.ChoiceRow
+import cc.novelia.app.ui.components.base.EmptyState
+import cc.novelia.app.ui.components.base.Screen
 
 /** “我的”二级页共用内容宽度，保留系统栏、返回和电子纸翻屏行为。 */
 @Composable internal fun ProfileDetailScreen(

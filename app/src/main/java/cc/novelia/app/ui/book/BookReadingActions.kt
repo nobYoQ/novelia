@@ -1,7 +1,6 @@
 package cc.novelia.app.ui.book
 
-import cc.novelia.app.ui.components.AppButton
-
+import cc.novelia.app.ui.components.base.AppButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook

@@ -1,9 +1,7 @@
 package cc.novelia.app.ui.community
 
-import cc.novelia.app.ui.components.AppBadge
-
-import cc.novelia.app.ui.components.AppIconButton
-
+import cc.novelia.app.ui.components.base.AppBadge
+import cc.novelia.app.ui.components.base.AppIconButton
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -20,9 +18,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
-import cc.novelia.app.data.model.ForumRules
-import cc.novelia.app.data.model.ForumTag
-import cc.novelia.app.ui.components.appHorizontalScroll
+import cc.novelia.app.data.community.ForumRules
+import cc.novelia.app.data.community.ForumTag
+import cc.novelia.app.ui.components.base.appHorizontalScroll
 import cc.novelia.app.ui.theme.LocalEInkMode
 
 @Composable internal fun ForumTagFilterToggle(expanded: Boolean, selectedTag: String?, onClick: () -> Unit) {

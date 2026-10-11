@@ -66,7 +66,7 @@
 
 远端有结果但本页都被本地筛掉时，界面可能为空，应保留调整条件的入口。发现和排行榜不显示书架阅读进度。
 
-网络小说默认封面按连载状态和内容分级配色；`R18` 或 `性描写` 参与该分级，不能从标题或任意标签猜测。旧摘要未知时使用中性色，详情可补齐。规则见 [CoverPresentation.kt](../../app/src/main/java/cc/novelia/app/ui/components/CoverPresentation.kt)。
+网络小说默认封面按连载状态和内容分级配色；`R18` 或 `性描写` 参与该分级，不能从标题或任意标签猜测。旧摘要未知时使用中性色，详情可补齐。规则见 [CoverPresentation.kt](../../app/src/main/java/cc/novelia/app/ui/components/book/CoverPresentation.kt)。
 
 ## 代码与验证
 

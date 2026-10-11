@@ -3,7 +3,7 @@ package cc.novelia.app.integration
 import android.os.Bundle
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.data.markdown.MarkdownLinks
-import cc.novelia.app.data.model.Article
+import cc.novelia.app.data.community.Article
 import cc.novelia.app.data.network.NoveliaApi
 import cc.novelia.app.ui.markdown.configureSiteMarkdownParser
 import cc.novelia.app.ui.markdown.configureSpoilerParser

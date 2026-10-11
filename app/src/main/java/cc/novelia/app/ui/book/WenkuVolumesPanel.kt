@@ -1,13 +1,11 @@
 @file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.book
 
-import cc.novelia.app.ui.components.AppCheckbox
-
-import cc.novelia.app.ui.components.AppTextButton
-import cc.novelia.app.ui.components.AppOutlinedButton
-import cc.novelia.app.ui.components.AppFilledTonalButton
-import cc.novelia.app.ui.components.AppIconButton
-
+import cc.novelia.app.ui.components.base.AppCheckbox
+import cc.novelia.app.ui.components.base.AppTextButton
+import cc.novelia.app.ui.components.base.AppOutlinedButton
+import cc.novelia.app.ui.components.base.AppFilledTonalButton
+import cc.novelia.app.ui.components.base.AppIconButton
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
@@ -32,13 +30,13 @@ import cc.novelia.app.data.library.siteVolumeIds
 import cc.novelia.app.data.library.downloadedVolume
 import cc.novelia.app.data.library.originBook
 import cc.novelia.app.data.library.originVolumeId
-import cc.novelia.app.files.downloadedVolumeForReading
+import cc.novelia.app.files.downloads.downloadedVolumeForReading
 import cc.novelia.app.data.network.encodeSegment
-import cc.novelia.app.ui.components.AppLazyColumn
-import cc.novelia.app.ui.components.BookRow
-import cc.novelia.app.ui.components.EmptyState
-import cc.novelia.app.ui.components.MenuRow
-import cc.novelia.app.ui.components.SectionTitle
+import cc.novelia.app.ui.components.base.AppLazyColumn
+import cc.novelia.app.ui.components.book.BookRow
+import cc.novelia.app.ui.components.base.EmptyState
+import cc.novelia.app.ui.components.base.MenuRow
+import cc.novelia.app.ui.components.base.SectionTitle
 import cc.novelia.app.ui.downloads.DownloadSheet
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.theme.AppMotion

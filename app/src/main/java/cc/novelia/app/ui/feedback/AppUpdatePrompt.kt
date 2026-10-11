@@ -1,7 +1,6 @@
 package cc.novelia.app.ui.feedback
 
-import cc.novelia.app.ui.components.AppTextButton
-
+import cc.novelia.app.ui.components.base.AppTextButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -10,10 +9,10 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.BuildConfig
-import cc.novelia.app.data.updates.AppRelease
-import cc.novelia.app.data.updates.AppDownloadPhase
-import cc.novelia.app.ui.components.AppAlertDialog
-import cc.novelia.app.ui.components.AppScrollColumn
+import cc.novelia.app.data.appupdate.AppRelease
+import cc.novelia.app.data.appupdate.AppDownloadPhase
+import cc.novelia.app.ui.components.base.AppAlertDialog
+import cc.novelia.app.ui.components.base.AppScrollColumn
 import cc.novelia.app.ui.markdown.MarkdownText
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.navigation.downloadAppRelease

@@ -8,8 +8,8 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.catalog.CharacterCountFilter
-import cc.novelia.app.ui.components.AppScrollColumn
-import cc.novelia.app.ui.components.CharacterCountFilterFields
+import cc.novelia.app.ui.components.base.AppScrollColumn
+import cc.novelia.app.ui.components.base.CharacterCountFilterFields
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test

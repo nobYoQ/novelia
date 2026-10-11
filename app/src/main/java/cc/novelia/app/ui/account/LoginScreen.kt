@@ -2,10 +2,8 @@
 
 package cc.novelia.app.ui.account
 
-import cc.novelia.app.ui.components.AppLinearProgressIndicator
-
-import cc.novelia.app.ui.components.AppTextButton
-
+import cc.novelia.app.ui.components.base.AppLinearProgressIndicator
+import cc.novelia.app.ui.components.base.AppTextButton
 import android.annotation.SuppressLint
 import android.webkit.*
 import androidx.compose.foundation.layout.*
@@ -18,8 +16,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import cc.novelia.app.data.sync.CloudSyncWorker
-import cc.novelia.app.ui.components.Screen
-import cc.novelia.app.ui.components.friendlyMessage
+import cc.novelia.app.ui.components.base.Screen
+import cc.novelia.app.ui.components.base.friendlyMessage
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.navigation.finishLoginNavigation
 import cc.novelia.app.ui.theme.appReducedMotion

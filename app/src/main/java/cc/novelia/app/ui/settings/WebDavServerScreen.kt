@@ -1,8 +1,7 @@
 package cc.novelia.app.ui.settings
 
-import cc.novelia.app.ui.components.AppTextButton
-import cc.novelia.app.ui.components.AppIconButton
-
+import cc.novelia.app.ui.components.base.AppTextButton
+import cc.novelia.app.ui.components.base.AppIconButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -18,7 +17,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.webdav.WebDavConfig
-import cc.novelia.app.ui.components.AppLazyColumn
+import cc.novelia.app.ui.components.base.AppLazyColumn
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.theme.motionClickable
 import kotlinx.coroutines.Dispatchers

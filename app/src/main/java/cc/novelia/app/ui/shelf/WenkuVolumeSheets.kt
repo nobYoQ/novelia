@@ -1,10 +1,8 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.shelf
 
-import cc.novelia.app.ui.components.AppCheckbox
-
-import cc.novelia.app.ui.components.AppButton
-
+import cc.novelia.app.ui.components.base.AppCheckbox
+import cc.novelia.app.ui.components.base.AppButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.toggleable
@@ -22,10 +20,10 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.model.Position
 import cc.novelia.app.data.model.SavedBook
-import cc.novelia.app.ui.components.AppLazyColumn
-import cc.novelia.app.ui.components.AppSheet
-import cc.novelia.app.ui.components.BookReadingProgressBar
-import cc.novelia.app.ui.components.bookRowStatus
+import cc.novelia.app.ui.components.base.AppLazyColumn
+import cc.novelia.app.ui.components.base.AppSheet
+import cc.novelia.app.ui.components.book.BookReadingProgressBar
+import cc.novelia.app.ui.components.book.bookRowStatus
 import cc.novelia.app.ui.theme.motionClickable
 
 internal data class ShelfRowItem(val saved: SavedBook, val parent: SavedBook? = null, val volumeCount: Int = 0, val expanded: Boolean = false)

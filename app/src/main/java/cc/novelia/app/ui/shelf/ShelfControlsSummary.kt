@@ -1,7 +1,6 @@
 package cc.novelia.app.ui.shelf
 
-import cc.novelia.app.ui.components.AppTextButton
-
+import cc.novelia.app.ui.components.base.AppTextButton
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -18,8 +17,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import cc.novelia.app.ui.components.FilterPanelExpandIcon
-import cc.novelia.app.ui.components.FilterPanelVisibility
+import cc.novelia.app.ui.components.base.FilterPanelExpandIcon
+import cc.novelia.app.ui.components.base.FilterPanelVisibility
 
 /** 开关始终留在筛选区顶部，只有下方条件参与展开动画。 */
 @Composable internal fun ShelfControlsPanel(

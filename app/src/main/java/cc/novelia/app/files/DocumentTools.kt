@@ -11,6 +11,9 @@ import java.util.UUID
 import java.util.zip.ZipInputStream
 import org.jsoup.Jsoup
 import org.jsoup.parser.Parser
+import cc.novelia.app.files.epub.EpubContents
+import cc.novelia.app.files.epub.parseEpubChapter
+import cc.novelia.app.files.epub.readEpubFile
 
 /**
  * EPUB、TXT、SRT 的解析与转换工具，统一限制输入大小和压缩内容展开体积。

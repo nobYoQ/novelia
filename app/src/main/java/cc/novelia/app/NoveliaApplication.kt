@@ -1,9 +1,9 @@
 package cc.novelia.app
 
-import cc.novelia.app.data.network.ForumAccountApi
+import cc.novelia.app.data.community.ForumAccountApi
 import cc.novelia.app.data.auth.AuthTarget
-import cc.novelia.app.data.network.ForumApi
-import cc.novelia.app.data.network.ForumCommunityRulesRepository
+import cc.novelia.app.data.community.ForumApi
+import cc.novelia.app.data.community.ForumCommunityRulesRepository
 import cc.novelia.app.data.cache.MetadataCache
 import android.app.Application
 import cc.novelia.app.data.auth.Session
@@ -11,7 +11,7 @@ import cc.novelia.app.data.catalog.KeywordStore
 import cc.novelia.app.data.catalog.ClipboardLinkHistory
 import cc.novelia.app.data.model.User
 import cc.novelia.app.data.network.NoveliaApi
-import cc.novelia.app.data.network.NovelCommentApi
+import cc.novelia.app.data.community.NovelCommentApi
 import cc.novelia.app.data.network.EchTransport
 import cc.novelia.app.data.network.BookSources
 import cc.novelia.app.data.network.BookSourceInterceptor
@@ -77,9 +77,9 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
     private var webDavEdit: Job? = null
     internal val clipboardLinkHistory = ClipboardLinkHistory()
     val metadataCache get() = store.metadataCache
-    val appUpdates by lazy { cc.novelia.app.data.updates.AppUpdateChecker(this,
+    val appUpdates by lazy { cc.novelia.app.data.appupdate.AppUpdateChecker(this,
         automaticChecksEnabled = { store.state.value.autoCheckAppUpdates }) }
-    val appReleaseDownloads by lazy { cc.novelia.app.data.updates.AppReleaseDownloader(this) }
+    val appReleaseDownloads by lazy { cc.novelia.app.data.appupdate.AppReleaseDownloader(this) }
     private var appUpdateCheck: Job? = null
     val api by lazy { NoveliaApi(session, transport = httpTransport, onMutation = { metadataCache.invalidate(it) }, onKeywords = { tags -> keywords.enqueueObservation(tags) }) }
     val forumApi by lazy { ForumApi(NoveliaApi(forumSession, ForumApi.BASE_URL, httpTransport)) }
@@ -171,7 +171,7 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
         }
         applicationScope.launch {
             initialization.await()
-            cc.novelia.app.files.DownloadFiles.cleanup(store.downloadsDir)
+            cc.novelia.app.files.downloads.DownloadFiles.cleanup(store.downloadsDir)
             // 回收已停用图片识别工具遗留的可选模型下载。
             // 用户编辑的文字仍保留在草稿中，可通过普通文本工具继续使用。
             runCatching { cc.novelia.app.files.removeRetiredModels(noBackupFilesDir) }

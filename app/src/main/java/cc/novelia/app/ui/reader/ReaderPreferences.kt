@@ -24,9 +24,9 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.reader.*
-import cc.novelia.app.ui.components.AppScrollColumn
-import cc.novelia.app.ui.components.ChoiceRow
-import cc.novelia.app.ui.components.TogglePreference
+import cc.novelia.app.ui.components.base.AppScrollColumn
+import cc.novelia.app.ui.components.base.ChoiceRow
+import cc.novelia.app.ui.components.base.TogglePreference
 import cc.novelia.app.ui.markdown.format
 import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.appReducedMotion

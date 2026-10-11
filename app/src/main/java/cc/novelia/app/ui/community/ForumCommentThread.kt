@@ -1,7 +1,6 @@
 package cc.novelia.app.ui.community
 
-import cc.novelia.app.ui.components.AppTextButton
-
+import cc.novelia.app.ui.components.base.AppTextButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
@@ -10,12 +9,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import cc.novelia.app.data.model.ForumComment
-import cc.novelia.app.data.model.ForumPage
+import cc.novelia.app.data.community.ForumComment
+import cc.novelia.app.data.community.ForumPage
 import cc.novelia.app.data.model.Profile
-import cc.novelia.app.data.network.ForumReplyPageCache
-import cc.novelia.app.ui.components.AsyncContent
-import cc.novelia.app.ui.components.PageControls
+import cc.novelia.app.data.community.ForumReplyPageCache
+import cc.novelia.app.ui.components.base.AsyncContent
+import cc.novelia.app.ui.components.base.PageControls
 
 internal data class ForumReplyFocus(val rootId: Long, val page: Int, val commentId: Long)
 

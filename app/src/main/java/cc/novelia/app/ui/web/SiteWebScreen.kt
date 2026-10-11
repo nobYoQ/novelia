@@ -1,9 +1,7 @@
 package cc.novelia.app.ui.web
 
-import cc.novelia.app.ui.components.AppLinearProgressIndicator
-
-import cc.novelia.app.ui.components.AppTextButton
-
+import cc.novelia.app.ui.components.base.AppLinearProgressIndicator
+import cc.novelia.app.ui.components.base.AppTextButton
 import android.annotation.SuppressLint
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -25,8 +23,8 @@ import cc.novelia.app.data.network.echRedirects
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 import java.io.ByteArrayInputStream
-import cc.novelia.app.ui.components.Screen
-import cc.novelia.app.ui.components.ScreenPageButtons
+import cc.novelia.app.ui.components.base.Screen
+import cc.novelia.app.ui.components.base.ScreenPageButtons
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.theme.LocalEInkMode
 import cc.novelia.app.ui.theme.appReducedMotion

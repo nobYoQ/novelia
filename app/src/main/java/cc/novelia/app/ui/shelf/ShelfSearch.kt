@@ -1,7 +1,6 @@
 package cc.novelia.app.ui.shelf
 
-import cc.novelia.app.ui.components.AppIconButton
-
+import cc.novelia.app.ui.components.base.AppIconButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -17,7 +16,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import cc.novelia.app.ui.components.FilterPanelVisibility
+import cc.novelia.app.ui.components.base.FilterPanelVisibility
 
 @Composable internal fun ShelfSearchToggle(
     expanded: Boolean, active: Boolean, onToggle: () -> Unit, tagPrefix: String, enabled: Boolean = true,

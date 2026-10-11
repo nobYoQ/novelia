@@ -1,8 +1,7 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.reader
 
-import cc.novelia.app.ui.components.AppSheetDragHandle
-
+import cc.novelia.app.ui.components.base.AppSheetDragHandle
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.animation.core.animateDpAsState
@@ -30,10 +29,10 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
-import cc.novelia.app.ui.components.AppDialog
-import cc.novelia.app.ui.components.AppSheet
-import cc.novelia.app.ui.components.LocalInAppSheet
-import cc.novelia.app.ui.components.LocalPanelSession
+import cc.novelia.app.ui.components.base.AppDialog
+import cc.novelia.app.ui.components.base.AppSheet
+import cc.novelia.app.ui.components.base.LocalInAppSheet
+import cc.novelia.app.ui.components.base.LocalPanelSession
 import cc.novelia.app.ui.theme.appReducedMotion
 
 @Composable internal fun ReaderSheet(onDismissRequest: () -> Unit, content: @Composable ColumnScope.() -> Unit) {

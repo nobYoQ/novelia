@@ -16,6 +16,9 @@ import cc.novelia.app.ui.theme.LocalReducedMotion
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import cc.novelia.app.ui.components.base.AppLazyColumn
+import cc.novelia.app.ui.components.base.AppScrollColumn
+import cc.novelia.app.ui.components.base.AppSheet
 
 @RunWith(AndroidJUnit4::class)
 class PanelSessionTest {

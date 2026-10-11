@@ -8,12 +8,12 @@
 
 | 职责 | 入口 |
 | --- | --- |
-| URI 暂存、来源去重、导入提交 | [DownloadImport.kt](../../app/src/main/java/cc/novelia/app/files/DownloadImport.kt) |
-| 多文件批次 | [DocumentImportBatch.kt](../../app/src/main/java/cc/novelia/app/files/DocumentImportBatch.kt) |
+| URI 暂存、来源去重、导入提交 | [DownloadImport.kt](../../app/src/main/java/cc/novelia/app/files/importing/DownloadImport.kt) |
+| 多文件批次 | [DocumentImportBatch.kt](../../app/src/main/java/cc/novelia/app/files/importing/DocumentImportBatch.kt) |
 | 格式分派与文本工具 | [DocumentTools.kt](../../app/src/main/java/cc/novelia/app/files/DocumentTools.kt) |
-| 磁盘 EPUB 解析与对照识别 | [EpubReader.kt](../../app/src/main/java/cc/novelia/app/files/EpubReader.kt)、[EpubChapter.kt](../../app/src/main/java/cc/novelia/app/files/EpubChapter.kt) |
-| 下载任务与文件锁 | [DownloadWorker.kt](../../app/src/main/java/cc/novelia/app/files/DownloadWorker.kt)、[DownloadFiles.kt](../../app/src/main/java/cc/novelia/app/files/DownloadFiles.kt) |
-| 原件/正文导出和临时文件 | [BookExport.kt](../../app/src/main/java/cc/novelia/app/files/BookExport.kt)、[PendingExportFiles.kt](../../app/src/main/java/cc/novelia/app/files/PendingExportFiles.kt) |
+| 磁盘 EPUB 解析与对照识别 | [EpubReader.kt](../../app/src/main/java/cc/novelia/app/files/epub/EpubReader.kt)、[EpubChapter.kt](../../app/src/main/java/cc/novelia/app/files/epub/EpubChapter.kt) |
+| 下载任务与文件锁 | [DownloadWorker.kt](../../app/src/main/java/cc/novelia/app/files/DownloadWorker.kt)、[DownloadFiles.kt](../../app/src/main/java/cc/novelia/app/files/downloads/DownloadFiles.kt) |
+| 原件/正文导出和临时文件 | [BookExport.kt](../../app/src/main/java/cc/novelia/app/files/exporting/BookExport.kt)、[PendingExportFiles.kt](../../app/src/main/java/cc/novelia/app/files/exporting/PendingExportFiles.kt) |
 | 下载与工具页面 | [ui/downloads](../../app/src/main/java/cc/novelia/app/ui/downloads)、[ui/tools](../../app/src/main/java/cc/novelia/app/ui/tools) |
 
 ## 导入流程

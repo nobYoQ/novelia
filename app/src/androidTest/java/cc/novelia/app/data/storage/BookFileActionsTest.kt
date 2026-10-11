@@ -12,6 +12,10 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
+import cc.novelia.app.files.downloads.deleteBookFiles
+import cc.novelia.app.files.downloads.downloadedVolumeForReading
+import cc.novelia.app.files.importing.importDownloadedDocument
+import cc.novelia.app.files.importing.importLocalDocument
 
 @RunWith(AndroidJUnit4::class)
 class BookFileActionsTest {

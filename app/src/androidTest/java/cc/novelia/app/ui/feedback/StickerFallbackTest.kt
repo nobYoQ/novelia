@@ -15,10 +15,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.R
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
-import cc.novelia.app.ui.components.AsyncContent
-import cc.novelia.app.ui.components.BookCover
-import cc.novelia.app.ui.feedback.MidoriSticker
-import cc.novelia.app.ui.feedback.StickerAccent
+import cc.novelia.app.ui.components.base.AsyncContent
+import cc.novelia.app.ui.components.book.BookCover
 import cc.novelia.app.ui.theme.LocalReducedMotion
 import java.io.File
 import java.net.UnknownHostException

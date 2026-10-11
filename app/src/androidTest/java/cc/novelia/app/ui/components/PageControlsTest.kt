@@ -11,6 +11,7 @@ import cc.novelia.app.ui.theme.NoveliaTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
+import cc.novelia.app.ui.components.base.PageControls
 
 class PageControlsTest {
     @get:Rule val compose = createComposeRule()

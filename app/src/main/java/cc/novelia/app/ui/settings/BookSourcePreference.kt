@@ -2,8 +2,7 @@
 
 package cc.novelia.app.ui.settings
 
-import cc.novelia.app.ui.components.AppRadioButton
-
+import cc.novelia.app.ui.components.base.AppRadioButton
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -17,7 +16,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.network.BookSource
-import cc.novelia.app.ui.components.AppSheet
+import cc.novelia.app.ui.components.base.AppSheet
 import cc.novelia.app.ui.account.ProfileMenuRow
 import cc.novelia.app.ui.navigation.AppController
 import kotlinx.coroutines.Dispatchers

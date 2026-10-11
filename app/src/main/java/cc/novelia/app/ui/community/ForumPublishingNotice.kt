@@ -14,7 +14,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
-import cc.novelia.app.data.catalog.ForumLinks
+import cc.novelia.app.data.community.ForumLinks
 
 /** 新帖发布提示独立于可关闭的首次社区守则提醒。 */
 @Composable internal fun ForumPublishingNotice(onOpen: (String) -> Unit) {

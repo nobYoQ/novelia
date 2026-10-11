@@ -1,7 +1,6 @@
 package cc.novelia.app.ui.settings
 
-import cc.novelia.app.ui.components.AppTextButton
-
+import cc.novelia.app.ui.components.base.AppTextButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.CompareArrows
@@ -14,9 +13,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.webdav.*
-import cc.novelia.app.ui.components.AppLazyColumn
-import cc.novelia.app.ui.components.ChoiceRow
-import cc.novelia.app.ui.components.syncTime
+import cc.novelia.app.ui.components.base.AppLazyColumn
+import cc.novelia.app.ui.components.base.ChoiceRow
+import cc.novelia.app.ui.components.base.syncTime
 import java.net.URI
 
 internal data class WebDavSyncActions(

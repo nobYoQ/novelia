@@ -7,7 +7,7 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.ViewConfiguration
 import android.webkit.WebView
-import cc.novelia.app.ui.components.screenPageDistance
+import cc.novelia.app.ui.components.base.screenPageDistance
 import kotlin.math.abs
 
 /** 原站网页沿用原生页面的松手翻屏手势。 */

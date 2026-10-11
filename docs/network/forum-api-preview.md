@@ -4,7 +4,7 @@
 
 当前社区入口使用独立论坛 `forum.novelia.cc`；网络小说和文库小说的评论也已迁至论坛的外部资源接口，旧站文章仍使用小说服务。本文描述当前客户端合约。文件名保留早期的 `preview` 以兼容旧链接，分支适配过程和当时的测试结果已移至[历史记录](../maintenance/history/forum-adaptation.md)。
 
-核对依据为仓库中的 [ForumApi](../../app/src/main/java/cc/novelia/app/data/network/ForumApi.kt)、[NovelCommentApi](../../app/src/main/java/cc/novelia/app/data/network/NovelCommentApi.kt)、[ForumAccountApi](../../app/src/main/java/cc/novelia/app/data/network/ForumAccountApi.kt)、[模型](../../app/src/main/java/cc/novelia/app/data/model/ForumModels.kt) 和合约测试。2026-10-06 已只读核对线上教程、网络小说评论及回复、文库评论分页。
+核对依据为仓库中的 [ForumApi](../../app/src/main/java/cc/novelia/app/data/community/ForumApi.kt)、[NovelCommentApi](../../app/src/main/java/cc/novelia/app/data/community/NovelCommentApi.kt)、[ForumAccountApi](../../app/src/main/java/cc/novelia/app/data/community/ForumAccountApi.kt)、[模型](../../app/src/main/java/cc/novelia/app/data/community/ForumModels.kt) 和合约测试。2026-10-06 已只读核对线上教程、网络小说评论及回复、文库评论分页。
 
 2026-10-06 进一步核对上游当前主分支：[主站 `176190fd`](https://github.com/auto-novel/auto-novel/blob/176190fd2b57fb89c4ac147832863f3e26bdfe8a/web/src/api/novel/CommentApi.ts)、[论坛 `c322dda3`](https://github.com/auto-novel/forum/blob/c322dda3d388b4914fbdbcf92fd443106ea4ac29/packages/forum-api/src/api.ts)、[认证 `632ea746`](https://github.com/auto-novel/auth/blob/632ea746d409e0115eb02f48e0b9ddd08ce54071/packages/auth-api/src/api.ts)。主站合并后的小说评论路径、资源标识、`app=n` 会话及回复首屏结构已由当前客户端支持；本次新增处罚与未读接口的镜像路由，不接入管理接口。
 
@@ -32,7 +32,7 @@ API 根路径为 `https://forum.novelia.cc/api/v1/`。客户端页码从 0 开�
 
 ## 小说评论
 
-[NovelCommentApi](../../app/src/main/java/cc/novelia/app/data/network/NovelCommentApi.kt) 使用相同的 API 根路径，但携带小说账号 `app=n` 的令牌；帖子评论继续使用论坛账号 `app=f`。两者的路径和登录入口分别绑定，共用分页、回复缓存和 Markdown 展示。
+[NovelCommentApi](../../app/src/main/java/cc/novelia/app/data/community/NovelCommentApi.kt) 使用相同的 API 根路径，但携带小说账号 `app=n` 的令牌；帖子评论继续使用论坛账号 `app=f`。两者的路径和登录入口分别绑定，共用分页、回复缓存和 Markdown 展示。
 
 | 操作 | 方法与路径 | 请求要点 |
 | --- | --- | --- |
@@ -47,7 +47,7 @@ API 根路径为 `https://forum.novelia.cc/api/v1/`。客户端页码从 0 开�
 
 分类数字 ID 可被服务端重新分配。**权限按 slug 判断，提交使用本次分类列表返回的 ID。** 不要硬编码“某个数字就是公告”。
 
-论坛允许的标题为 2–100 个 Unicode 码点，正文 1–20,000，评论 1–1,000，标签最多 3 个。规则集中在 [ForumRules.kt](../../app/src/main/java/cc/novelia/app/data/model/ForumRules.kt)，不能用 UTF-16 长度替代码点数。
+论坛允许的标题为 2–100 个 Unicode 码点，正文 1–20,000，评论 1–1,000，标签最多 3 个。规则集中在 [ForumRules.kt](../../app/src/main/java/cc/novelia/app/data/community/ForumRules.kt)，不能用 UTF-16 长度替代码点数。
 
 `member`、`trusted`、`admin` 可发言，公告限管理员。普通作者删除帖子、修改或删除评论有发布后 20 分钟限制，管理员不受此时限影响；最终权限仍由服务端校验。
 
@@ -61,7 +61,7 @@ API 根路径为 `https://forum.novelia.cc/api/v1/`。客户端页码从 0 开�
 
 一级评论可携带 `replyCount` 和 `replies: { total, items }`。有效计数包括零，直接使用；只有旧响应缺失或 null 时才用一项回复查询补计数，失败保持未知。
 
-[ForumReplyPageCache](../../app/src/main/java/cc/novelia/app/data/network/ForumReplyPageCache.kt) 校验附带首屏的完整性、根评论、资源及重复 ID，通过后放入列表级缓存。回复默认折叠，展开命中时无需重复请求；异常或旧响应回退独立接口。
+[ForumReplyPageCache](../../app/src/main/java/cc/novelia/app/data/community/ForumReplyPageCache.kt) 校验附带首屏的完整性、根评论、资源及重复 ID，通过后放入列表级缓存。回复默认折叠，展开命中时无需重复请求；异常或旧响应回退独立接口。
 
 每串保留最近三页。同一页并发等待共享请求，滚出屏幕不丢已读正文。刷新、增删改、帖子或论坛身份变化时重建缓存；离开列表后取消请求，回复正文不落盘。
 
@@ -77,7 +77,7 @@ API 根路径为 `https://forum.novelia.cc/api/v1/`。客户端页码从 0 开�
 
 缺少快照 ID 时不确认已读；确认失败可重试，后来新增的记录不能被旧确认吞掉。读取与确认都绑定所选线路的论坛会话，切换线路后丢弃旧响应，处罚内容和提示状态不持久缓存。
 
-守则没有独立数据 API。[ForumCommunityRulesRepository](../../app/src/main/java/cc/novelia/app/data/network/ForumCommunityRulesRepository.kt) 从线上入口取得部署 SHA，再读取该提交的公开守则源码；解析已知静态结构，不执行脚本。未知结构或网络失败保留缓存，首次离线使用内置副本。当前内置材料见 [ForumCommunityRules.kt](../../app/src/main/java/cc/novelia/app/data/model/ForumCommunityRules.kt)。
+守则没有独立数据 API。[ForumCommunityRulesRepository](../../app/src/main/java/cc/novelia/app/data/community/ForumCommunityRulesRepository.kt) 从线上入口取得部署 SHA，再读取该提交的公开守则源码；解析已知静态结构，不执行脚本。未知结构或网络失败保留缓存，首次离线使用内置副本。当前内置材料见 [ForumCommunityRules.kt](../../app/src/main/java/cc/novelia/app/data/community/ForumCommunityRules.kt)。
 
 ## 错误与验证
 

@@ -1,15 +1,12 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.shelf
 
-import cc.novelia.app.ui.components.AppCheckbox
-
-import cc.novelia.app.ui.components.AppButton
-import cc.novelia.app.ui.components.AppTextButton
-import cc.novelia.app.ui.components.AppFilledTonalButton
-import cc.novelia.app.ui.components.AppIconButton
-
+import cc.novelia.app.ui.components.base.AppCheckbox
+import cc.novelia.app.ui.components.base.AppButton
+import cc.novelia.app.ui.components.base.AppTextButton
+import cc.novelia.app.ui.components.base.AppFilledTonalButton
+import cc.novelia.app.ui.components.base.AppIconButton
 import cc.novelia.app.data.updates.withAcknowledgedBookUpdates
-
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -46,7 +43,7 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.library.moveShelfBooks
 import cc.novelia.app.data.catalog.CharacterCountFilter
-import cc.novelia.app.ui.components.CharacterCountFilterSaver
+import cc.novelia.app.ui.components.base.CharacterCountFilterSaver
 import cc.novelia.app.data.library.ShelfBookType
 import cc.novelia.app.data.library.readingStatuses
 import cc.novelia.app.data.library.shelfGroups
@@ -61,23 +58,23 @@ import cc.novelia.app.data.model.createShelfFolder
 import cc.novelia.app.data.model.renameShelfFolder
 import cc.novelia.app.data.model.deleteShelfFolder
 import cc.novelia.app.data.updates.UpdateWorker
-import cc.novelia.app.ui.components.AppAlertDialog
-import cc.novelia.app.ui.components.AppLazyColumn
-import cc.novelia.app.ui.components.AppScrollColumn
-import cc.novelia.app.ui.components.AppSheet
-import cc.novelia.app.ui.components.BookRow
-import cc.novelia.app.ui.components.bookRowStatus
-import cc.novelia.app.ui.components.ChoiceRow
-import cc.novelia.app.ui.components.ConfirmDialog
-import cc.novelia.app.ui.components.CreateBookDocument
-import cc.novelia.app.files.prepareLocalBookExport
-import cc.novelia.app.files.exportLocalBook
-import cc.novelia.app.files.deleteBookFiles
-import cc.novelia.app.ui.components.EmptyState
-import cc.novelia.app.ui.components.MenuRow
-import cc.novelia.app.ui.components.Screen
-import cc.novelia.app.ui.components.TextPrompt
-import cc.novelia.app.ui.components.rememberDebouncedQuery
+import cc.novelia.app.ui.components.base.AppAlertDialog
+import cc.novelia.app.ui.components.base.AppLazyColumn
+import cc.novelia.app.ui.components.base.AppScrollColumn
+import cc.novelia.app.ui.components.base.AppSheet
+import cc.novelia.app.ui.components.book.BookRow
+import cc.novelia.app.ui.components.book.bookRowStatus
+import cc.novelia.app.ui.components.base.ChoiceRow
+import cc.novelia.app.ui.components.base.ConfirmDialog
+import cc.novelia.app.ui.components.documents.CreateBookDocument
+import cc.novelia.app.files.exporting.prepareLocalBookExport
+import cc.novelia.app.files.exporting.exportLocalBook
+import cc.novelia.app.files.downloads.deleteBookFiles
+import cc.novelia.app.ui.components.base.EmptyState
+import cc.novelia.app.ui.components.base.MenuRow
+import cc.novelia.app.ui.components.base.Screen
+import cc.novelia.app.ui.components.base.TextPrompt
+import cc.novelia.app.ui.components.base.rememberDebouncedQuery
 import cc.novelia.app.ui.feedback.MidoriSticker
 import cc.novelia.app.ui.markdown.format
 import cc.novelia.app.ui.navigation.AppController

@@ -13,9 +13,9 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import cc.novelia.app.data.model.ForumSort
-import cc.novelia.app.data.model.ForumComment
-import cc.novelia.app.data.model.ForumStrike
+import cc.novelia.app.data.community.ForumSort
+import cc.novelia.app.data.community.ForumComment
+import cc.novelia.app.data.community.ForumStrike
 import cc.novelia.app.data.model.Profile
 import cc.novelia.app.ui.theme.*
 import org.junit.Assert.*

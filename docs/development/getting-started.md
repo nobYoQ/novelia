@@ -30,10 +30,10 @@
 ./build.ps1 -CheckEnvironment
 
 # 构建可安装的 Debug 包
-./build-debug.ps1
+./scripts/build-debug.ps1
 
 # 提交前增加 JVM 单元测试和 Lint
-./build-debug.ps1 -Verify
+./scripts/build-debug.ps1 -Verify
 ```
 
 环境检查只覆盖脚本的 JDK/SDK 等配置，不能证明 Go、NDK、SDK 组件和全部依赖已经齐备。真正构建遇到缺项时，按错误提示补齐。
@@ -44,17 +44,17 @@ APK 归档到 `outputs/packages/debug/`，日志在 `outputs/logs/`。脚本不�
 
 | 命令 | 结果 |
 | --- | --- |
-| `./build-debug.ps1` | Debug APK |
-| `./build-release.ps1 -Verify` | 启用 R8 和资源收缩的本地 Release；使用与 Actions 共用的固定测试证书，并运行 Release 单元测试、Lint |
-| `./build-release.ps1 -Unsigned` | 未签名 Release，不能直接安装 |
+| `./scripts/build-debug.ps1` | Debug APK |
+| `./scripts/build-release.ps1 -Verify` | 启用 R8 和资源收缩的本地 Release；使用与 Actions 共用的固定测试证书，并运行 Release 单元测试、Lint |
+| `./scripts/build-release.ps1 -Unsigned` | 未签名 Release，不能直接安装 |
 | `./build.ps1 -Tasks @(...)` | 执行指定 Gradle 任务，不整理 APK 归档 |
-| `./scripts/prepare-release.ps1 ...` | 正式签名与发行附件，前提和现存限制见[发布指南](../../RELEASING.md) |
+| `./scripts/prepare-release.ps1 ...` | 正式签名与发行附件，前提见[发布指南](../maintenance/releasing.md) |
 
 Debug 和本地 Release 都支持 `-Abi`、`-Offline` 和 `-Verify`。默认 ABI 为 `universal`，也可选 `arm64-v8a`、`armeabi-v7a`、`x86_64`、`x86`：
 
 ```powershell
-./build-release.ps1 -Abi arm64-v8a -Verify
-./build-debug.ps1 -Offline
+./scripts/build-release.ps1 -Abi arm64-v8a -Verify
+./scripts/build-debug.ps1 -Offline
 ```
 
 `-Verify` 不运行设备测试；原生 AAR 构建自身依赖 Go 单元测试。Go 的真实网络测试另有显式开关，见[测试指南](../quality/testing.md)。
@@ -142,7 +142,7 @@ gh auth login
 ```powershell
 $env:JAVA_HOME = 'C:/Tools/jdk-17'
 $env:ANDROID_HOME = 'C:/Tools/Android/Sdk'
-./build-debug.ps1
+./scripts/build-debug.ps1
 ```
 
 如果已有 `local.properties`，它的 SDK 路径优先于环境变量。也可在 `build.ps1` 顶部填写 `$ManualJavaHome`、`$ManualAndroidSdk` 等变量；路径指向安装根目录，留空表示自动选择。无效的手动配置会直接报错。
@@ -154,7 +154,7 @@ $env:ANDROID_HOME = 'C:/Tools/Android/Sdk'
 聚焦单个任务时使用通用入口：
 
 ```powershell
-./build.ps1 -Tasks @(':app:testDebugUnitTest', '--tests', 'cc.novelia.app.ApiContractTest')
+./build.ps1 -Tasks @(':app:testDebugUnitTest', '--tests', 'cc.novelia.app.data.network.ApiContractTest')
 ./build.ps1 -Tasks @(':app:assembleRelease', ':app:testReleaseUnitTest', ':app:lintRelease')
 ./build.ps1 -Tasks @(':app:generateOpenSourceNotices')
 ```
@@ -167,7 +167,7 @@ Linux / macOS 准备好同版本工具链后使用 Wrapper：
 sh ./gradlew --no-daemon :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
 ```
 
-Windows 的标准入口是 `./gradlew.bat`，它不会执行 PowerShell 脚本的环境自动检测。`.reference/` 和 `resource/` 等本地参考目录不是构建依赖。
+Windows 的标准入口是 `./gradlew.bat`，它不会执行 PowerShell 脚本的环境自动检测。`.reference/` 和 `.local/` 等本地参考目录不是构建依赖。
 
 ## 产物在哪里
 

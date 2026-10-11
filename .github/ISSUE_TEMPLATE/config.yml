@@ -1,7 +1,7 @@
 blank_issues_enabled: true
 contact_links:
   - name: 安全漏洞报告
-    url: https://github.com/nobYoQ/novelia/blob/main/SECURITY.md
+    url: https://github.com/nobYoQ/novelia/blob/main/.github/SECURITY.md
     about: 请按安全政策使用私密渠道，不要公开漏洞细节。
   - name: 原站帮助
     url: https://n.novelia.cc/

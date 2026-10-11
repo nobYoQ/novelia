@@ -14,7 +14,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import cc.novelia.app.data.model.ReaderSettings
-import cc.novelia.app.ui.components.AppSheet
+import cc.novelia.app.ui.components.base.AppSheet
 import cc.novelia.app.ui.theme.LocalReducedMotion
 import org.junit.Assert.*
 import org.junit.Assume.assumeTrue

@@ -11,9 +11,9 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
-import cc.novelia.app.data.model.ForumStrikeReadState
+import cc.novelia.app.data.community.ForumStrikeReadState
 import cc.novelia.app.data.model.Profile
-import cc.novelia.app.data.model.bundledForumCommunityRules
+import cc.novelia.app.data.community.bundledForumCommunityRules
 import cc.novelia.app.data.network.ApiException
 import cc.novelia.app.ui.theme.NoveliaTheme
 import kotlinx.coroutines.CompletableDeferred

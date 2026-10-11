@@ -1,10 +1,8 @@
 package cc.novelia.app.ui.shelf
 
-import cc.novelia.app.ui.components.AppTextButton
-import cc.novelia.app.ui.components.AppIconButton
-
+import cc.novelia.app.ui.components.base.AppTextButton
+import cc.novelia.app.ui.components.base.AppIconButton
 import cc.novelia.app.ui.account.ProfileDetailCard
-
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -17,11 +15,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.updates.UpdateWorker
 import cc.novelia.app.data.updates.withAcknowledgedBookUpdates
 import cc.novelia.app.ui.account.ProfileDetailList
-import cc.novelia.app.ui.components.BookRow
+import cc.novelia.app.ui.components.book.BookRow
 import cc.novelia.app.ui.account.ProfileEmptyState
 import cc.novelia.app.ui.account.ProfileSummary
 import cc.novelia.app.ui.account.ProfileDetailScreen
-import cc.novelia.app.ui.components.syncTime
+import cc.novelia.app.ui.components.base.syncTime
 import cc.novelia.app.ui.navigation.AppController
 
 @Composable fun BookUpdatesScreen(c: AppController) {

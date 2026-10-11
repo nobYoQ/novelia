@@ -12,7 +12,7 @@
    { "id": "sakura", "title": "樱花", "drawable": "launcher_sakura" }
    ```
 
-4. 在仓库根目录运行 `./build-debug.ps1` 或 `./build-release.ps1`，安装新 APK。Gradle 会检查清单并自动生成桌面入口及对应的系统启动主题；不需要手工修改 Manifest、启动主题或 Kotlin。
+4. 在仓库根目录运行 `./scripts/build-debug.ps1` 或 `./scripts/build-release.ps1`，安装新 APK。Gradle 会检查清单并自动生成桌面入口及对应的系统启动主题；不需要手工修改 Manifest、启动主题或 Kotlin。
 
 `id` 是安装后保持稳定的标识，只能使用小写字母、数字和下划线，以字母开头。`title` 是设置中的名称，桌面应用名称保持 Novelia。默认图标 `default` 使用现有的 `ic_launcher`。
 

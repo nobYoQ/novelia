@@ -2,8 +2,7 @@
 
 package cc.novelia.app.ui.book
 
-import cc.novelia.app.ui.components.AppButton
-
+import cc.novelia.app.ui.components.base.AppButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
@@ -14,10 +13,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.storage.appJson
-import cc.novelia.app.ui.components.AppScrollColumn
-import cc.novelia.app.ui.components.AsyncContent
-import cc.novelia.app.ui.components.EmptyState
-import cc.novelia.app.ui.components.Screen
+import cc.novelia.app.ui.components.base.AppScrollColumn
+import cc.novelia.app.ui.components.base.AsyncContent
+import cc.novelia.app.ui.components.base.EmptyState
+import cc.novelia.app.ui.components.base.Screen
 import cc.novelia.app.ui.navigation.AppController
 import kotlinx.serialization.json.*
 

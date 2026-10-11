@@ -1,8 +1,7 @@
 package cc.novelia.app.ui.settings
 
-import cc.novelia.app.ui.components.AppButton
-import cc.novelia.app.ui.components.AppTextButton
-
+import cc.novelia.app.ui.components.base.AppButton
+import cc.novelia.app.ui.components.base.AppTextButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -21,8 +20,8 @@ import cc.novelia.app.data.sync.pendingBookKey
 import cc.novelia.app.data.sync.removePendingForSession
 import cc.novelia.app.data.sync.synchronizePending
 import cc.novelia.app.ui.account.*
-import cc.novelia.app.ui.components.ConfirmDialog
-import cc.novelia.app.ui.components.syncTime
+import cc.novelia.app.ui.components.base.ConfirmDialog
+import cc.novelia.app.ui.components.base.syncTime
 import cc.novelia.app.ui.navigation.AppController
 
 /** “我的”、设置分类和旧的网络深链共用同一页面。 */

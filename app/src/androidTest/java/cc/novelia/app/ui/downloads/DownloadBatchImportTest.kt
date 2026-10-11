@@ -18,7 +18,7 @@ import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.DownloadEntry
 import cc.novelia.app.data.model.Position
 import cc.novelia.app.data.model.SavedBook
-import cc.novelia.app.files.importDownloadedDocument
+import cc.novelia.app.files.importing.importDownloadedDocument
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.theme.AppInteractionMode
 import cc.novelia.app.ui.theme.NoveliaTheme

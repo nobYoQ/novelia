@@ -2,12 +2,10 @@
 
 package cc.novelia.app.ui.notes
 
-import cc.novelia.app.ui.components.AppTextButton
-
+import cc.novelia.app.ui.components.base.AppTextButton
 import cc.novelia.app.ui.account.ProfileDetailCard
-
-import cc.novelia.app.ui.components.AppSelectionChip
-import cc.novelia.app.ui.components.AppChipFlowRow
+import cc.novelia.app.ui.components.base.AppSelectionChip
+import cc.novelia.app.ui.components.base.AppChipFlowRow
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -21,14 +19,14 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.Note
-import cc.novelia.app.ui.components.AppLazyColumn
+import cc.novelia.app.ui.components.base.AppLazyColumn
 import cc.novelia.app.ui.account.ProfileDetailList
 import cc.novelia.app.ui.theme.appRoundedCornerShape
-import cc.novelia.app.ui.components.AppSheet
+import cc.novelia.app.ui.components.base.AppSheet
 import cc.novelia.app.ui.account.ProfileEmptyState
-import cc.novelia.app.ui.components.MenuRow
+import cc.novelia.app.ui.components.base.MenuRow
 import cc.novelia.app.ui.account.ProfileDetailScreen
-import cc.novelia.app.ui.components.rememberDebouncedQuery
+import cc.novelia.app.ui.components.base.rememberDebouncedQuery
 import cc.novelia.app.ui.navigation.AppController
 
 @Composable fun NotesScreen(c: AppController) {

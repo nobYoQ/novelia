@@ -1,9 +1,7 @@
 package cc.novelia.app.ui.feedback
 
-import cc.novelia.app.ui.components.AppLinearProgressIndicator
-
-import cc.novelia.app.ui.components.AppTextButton
-
+import cc.novelia.app.ui.components.base.AppLinearProgressIndicator
+import cc.novelia.app.ui.components.base.AppTextButton
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -21,13 +19,17 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import cc.novelia.app.data.updates.*
-import cc.novelia.app.ui.components.AppAlertDialog
-import cc.novelia.app.ui.components.AppScrollColumn
+import cc.novelia.app.ui.components.base.AppAlertDialog
+import cc.novelia.app.ui.components.base.AppScrollColumn
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.navigation.downloadAppRelease
 import cc.novelia.app.ui.theme.appReducedMotion
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import cc.novelia.app.data.appupdate.AppDownloadPhase
+import cc.novelia.app.data.appupdate.AppDownloadState
+import cc.novelia.app.data.appupdate.AppReleaseChannel
+import cc.novelia.app.data.appupdate.AppReleaseException
 
 @Composable internal fun ObserveAppReleaseDownloads(c: AppController, show: Boolean) {
     val service = c.app.appReleaseDownloads

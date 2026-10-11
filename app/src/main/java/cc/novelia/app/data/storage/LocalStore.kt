@@ -27,11 +27,11 @@ import cc.novelia.app.data.model.LocalDocument
 import cc.novelia.app.data.model.LocalReadingContent
 import cc.novelia.app.data.model.Position
 import cc.novelia.app.files.DocumentTools
-import cc.novelia.app.files.downloadedBookLock
-import cc.novelia.app.files.documentImportLock
-import cc.novelia.app.files.EPUB_CONTENT_VERSION
-import cc.novelia.app.files.contentMode
-import cc.novelia.app.files.recoverEpubChapter
+import cc.novelia.app.files.downloads.downloadedBookLock
+import cc.novelia.app.files.importing.documentImportLock
+import cc.novelia.app.files.epub.EPUB_CONTENT_VERSION
+import cc.novelia.app.files.epub.contentMode
+import cc.novelia.app.files.epub.recoverEpubChapter
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

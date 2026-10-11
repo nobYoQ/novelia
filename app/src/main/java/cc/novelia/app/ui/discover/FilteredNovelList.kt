@@ -1,8 +1,7 @@
 package cc.novelia.app.ui.discover
 
-import cc.novelia.app.ui.components.AppButton
-import cc.novelia.app.ui.components.AppTextButton
-
+import cc.novelia.app.ui.components.base.AppButton
+import cc.novelia.app.ui.components.base.AppTextButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.lazy.items
@@ -18,7 +17,6 @@ import cc.novelia.app.data.catalog.loadFilteredNovels
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.Page
-import cc.novelia.app.ui.components.*
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.MotionContent
@@ -26,6 +24,8 @@ import cc.novelia.app.ui.theme.appReducedMotion
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import cc.novelia.app.ui.components.base.AppLazyColumn
+import cc.novelia.app.ui.components.base.friendlyMessage
 
 /** 本地筛选使用继续加载游标，不把原站页数当成筛选后的总页数。 */
 @Composable internal fun FilteredNovelList(c: AppController, requestKey: Any, filter: NovelLocalFilter, library: LibraryState,

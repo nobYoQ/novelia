@@ -9,8 +9,8 @@
 | 服务 | 入口 | 认证与线路 |
 | --- | --- | --- |
 | 小说 | [NoveliaApi](../../app/src/main/java/cc/novelia/app/data/network/NoveliaApi.kt) | `https://n.novelia.cc/api/`，可切换镜像；小说会话 |
-| 论坛 | [ForumApi](../../app/src/main/java/cc/novelia/app/data/network/ForumApi.kt) | `https://forum.novelia.cc/api/v1/`，可切换镜像；独立论坛会话 |
-| 论坛账号记录 | [ForumAccountApi](../../app/src/main/java/cc/novelia/app/data/network/ForumAccountApi.kt) | 认证服务的 `/api/v1/me/...`；论坛令牌 |
+| 论坛 | [ForumApi](../../app/src/main/java/cc/novelia/app/data/community/ForumApi.kt) | `https://forum.novelia.cc/api/v1/`，可切换镜像；独立论坛会话 |
+| 论坛账号记录 | [ForumAccountApi](../../app/src/main/java/cc/novelia/app/data/community/ForumAccountApi.kt) | 认证服务的 `/api/v1/me/...`；论坛令牌 |
 | WebDAV | [data/webdav](../../app/src/main/java/cc/novelia/app/data/webdav) | 用户指定 HTTPS 服务；独立凭据和客户端 |
 
 这些地址是当前客户端配置，不是本轮在线可用性验证。登录与退出见[认证](authentication.md)，镜像配置见[书源线路](../development/book-source-mirrors.md)，论坛请求见[论坛接口](forum-api-preview.md)。

@@ -16,7 +16,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.data.library.ShelfBookType
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
-import cc.novelia.app.ui.components.BookRow
+import cc.novelia.app.ui.components.book.BookRow
 import cc.novelia.app.ui.theme.AppInteractionMode
 import cc.novelia.app.ui.theme.NoveliaTheme
 import org.junit.Assert.*

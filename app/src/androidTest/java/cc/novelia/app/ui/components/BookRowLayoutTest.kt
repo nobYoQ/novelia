@@ -41,6 +41,12 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Rule
 import org.junit.Test
 import java.io.File
+import cc.novelia.app.ui.components.book.BookListPresentation
+import cc.novelia.app.ui.components.book.BookRow
+import cc.novelia.app.ui.components.book.BookRowStatus
+import cc.novelia.app.ui.components.book.LocalBookListPresentation
+import cc.novelia.app.ui.components.book.bookRowStatus
+import cc.novelia.app.ui.components.book.rememberCloudBookMetadata
 
 class BookRowLayoutTest {
     @get:Rule val compose = createComposeRule()

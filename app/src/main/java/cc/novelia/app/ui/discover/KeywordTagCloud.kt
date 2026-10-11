@@ -1,7 +1,6 @@
 package cc.novelia.app.ui.discover
 
-import cc.novelia.app.ui.components.AppLinearProgressIndicator
-
+import cc.novelia.app.ui.components.base.AppLinearProgressIndicator
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
@@ -21,9 +20,9 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.catalog.KeywordEntry
-import cc.novelia.app.ui.components.AppLazyColumn
-import cc.novelia.app.ui.components.AppSelectionChip
-import cc.novelia.app.ui.components.ChipSpacing
+import cc.novelia.app.ui.components.base.AppLazyColumn
+import cc.novelia.app.ui.components.base.AppSelectionChip
+import cc.novelia.app.ui.components.base.ChipSpacing
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext

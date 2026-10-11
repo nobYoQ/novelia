@@ -15,10 +15,9 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.data.catalog.KeywordCatalog
 import cc.novelia.app.data.catalog.KeywordEntry
-import cc.novelia.app.ui.components.AppLazyColumn
-import cc.novelia.app.ui.components.KeywordEditorDialog
-import cc.novelia.app.ui.components.rememberCloudFilterCollapse
-import cc.novelia.app.ui.discover.SearchAssistantPanel
+import cc.novelia.app.ui.components.base.AppLazyColumn
+import cc.novelia.app.ui.components.keywords.KeywordEditorDialog
+import cc.novelia.app.ui.components.base.rememberCloudFilterCollapse
 import cc.novelia.app.ui.theme.AppInteractionMode
 import java.io.File
 import org.junit.Assert.*

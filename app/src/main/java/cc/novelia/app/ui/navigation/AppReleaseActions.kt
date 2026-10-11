@@ -1,7 +1,7 @@
 package cc.novelia.app.ui.navigation
 
-import cc.novelia.app.data.updates.AppDownloadPhase
-import cc.novelia.app.data.updates.AppReleaseChannel
+import cc.novelia.app.data.appupdate.AppDownloadPhase
+import cc.novelia.app.data.appupdate.AppReleaseChannel
 
 internal fun AppController.downloadAppRelease(preview: Boolean = false, onQueued: () -> Unit = {}) {
     val downloads = app.appReleaseDownloads

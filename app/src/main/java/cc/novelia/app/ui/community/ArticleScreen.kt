@@ -1,10 +1,9 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.community
 
-import cc.novelia.app.ui.components.AppTextButton
-import cc.novelia.app.ui.components.AppIconButton
-
-import cc.novelia.app.data.catalog.ForumLinks
+import cc.novelia.app.ui.components.base.AppTextButton
+import cc.novelia.app.ui.components.base.AppIconButton
+import cc.novelia.app.data.community.ForumLinks
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
@@ -17,14 +16,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.SavedStateHandle
-import cc.novelia.app.data.model.Article
-import cc.novelia.app.data.model.ForumRules
+import cc.novelia.app.data.community.Article
+import cc.novelia.app.data.community.ForumRules
 import cc.novelia.app.data.storage.appJson
-import cc.novelia.app.ui.components.AppLazyColumn
-import cc.novelia.app.ui.components.AsyncContent
-import cc.novelia.app.ui.components.ConfirmDialog
-import cc.novelia.app.ui.components.Screen
-import cc.novelia.app.ui.components.displayDate
+import cc.novelia.app.ui.components.base.AppLazyColumn
+import cc.novelia.app.ui.components.base.AsyncContent
+import cc.novelia.app.ui.components.base.ConfirmDialog
+import cc.novelia.app.ui.components.base.Screen
+import cc.novelia.app.ui.components.base.displayDate
 import cc.novelia.app.ui.markdown.MarkdownText
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.navigation.ObserveForumLogin

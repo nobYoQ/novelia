@@ -1,8 +1,7 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.shelf
 
-import cc.novelia.app.ui.components.AppIconButton
-
+import cc.novelia.app.ui.components.base.AppIconButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -20,14 +19,14 @@ import cc.novelia.app.data.model.WebOutline
 import cc.novelia.app.ui.account.ProfileDetailList
 import cc.novelia.app.ui.account.ProfileDetailCard
 import cc.novelia.app.ui.account.ProfileToggle
-import cc.novelia.app.ui.components.AsyncContent
-import cc.novelia.app.ui.components.BookRow
-import cc.novelia.app.ui.components.bookRowStatus
-import cc.novelia.app.ui.components.rememberCloudBookMetadata
+import cc.novelia.app.ui.components.base.AsyncContent
+import cc.novelia.app.ui.components.book.BookRow
+import cc.novelia.app.ui.components.book.bookRowStatus
+import cc.novelia.app.ui.components.book.rememberCloudBookMetadata
 import cc.novelia.app.ui.account.ProfileChoiceRow
-import cc.novelia.app.ui.components.ConfirmDialog
+import cc.novelia.app.ui.components.base.ConfirmDialog
 import cc.novelia.app.ui.account.ProfileEmptyState
-import cc.novelia.app.ui.components.PageControls
+import cc.novelia.app.ui.components.base.PageControls
 import cc.novelia.app.ui.account.ProfileDetailScreen
 import cc.novelia.app.ui.navigation.AppController
 

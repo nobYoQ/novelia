@@ -1,8 +1,7 @@
 @file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 package cc.novelia.app.ui.reader
 
-import cc.novelia.app.ui.components.AppTextButton
-
+import cc.novelia.app.ui.components.base.AppTextButton
 import android.animation.ValueAnimator
 import android.graphics.Typeface
 import android.text.Layout
@@ -44,7 +43,7 @@ import cc.novelia.app.data.model.Page
 import cc.novelia.app.data.model.Position
 import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.reader.*
-import cc.novelia.app.ui.components.IllustrationViewer
+import cc.novelia.app.ui.components.media.IllustrationViewer
 import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.LocalEInkMode
 import cc.novelia.app.ui.theme.LocalReducedMotion

@@ -19,6 +19,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import cc.novelia.app.ui.components.base.QuickFilter
+import cc.novelia.app.ui.components.base.QuickFilterBar
 
 @RunWith(AndroidJUnit4::class)
 class QuickFilterBarTest {

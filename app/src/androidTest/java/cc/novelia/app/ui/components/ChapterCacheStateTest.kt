@@ -15,6 +15,7 @@ import java.util.UUID
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
+import cc.novelia.app.ui.components.book.rememberCachedChapterIds
 
 class ChapterCacheStateTest {
     @get:Rule val compose = createComposeRule()

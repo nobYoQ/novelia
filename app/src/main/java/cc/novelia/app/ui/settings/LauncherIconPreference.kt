@@ -2,11 +2,9 @@
 
 package cc.novelia.app.ui.settings
 
-import cc.novelia.app.ui.components.AppRadioButton
-import cc.novelia.app.ui.components.AppLinearProgressIndicator
-
-import cc.novelia.app.ui.components.AppTextButton
-
+import cc.novelia.app.ui.components.base.AppRadioButton
+import cc.novelia.app.ui.components.base.AppLinearProgressIndicator
+import cc.novelia.app.ui.components.base.AppTextButton
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
@@ -32,8 +30,8 @@ import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.launcher.LauncherIconManager
 import cc.novelia.app.launcher.LauncherIconState
-import cc.novelia.app.ui.components.AppLazyColumn
-import cc.novelia.app.ui.components.AppSheet
+import cc.novelia.app.ui.components.base.AppLazyColumn
+import cc.novelia.app.ui.components.base.AppSheet
 import cc.novelia.app.ui.account.ProfileMenuRow
 
 @Composable internal fun LauncherIconPreference(manager: LauncherIconManager) {

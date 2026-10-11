@@ -1,7 +1,7 @@
 package cc.novelia.app.ui.navigation
 
-import cc.novelia.app.data.model.Article
-import cc.novelia.app.data.catalog.ForumLinks
+import cc.novelia.app.data.community.Article
+import cc.novelia.app.data.community.ForumLinks
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.material3.SnackbarHostState
@@ -41,7 +41,7 @@ import cc.novelia.app.data.sync.pendingBookKey
 import cc.novelia.app.data.sync.syncFailureMessage
 import cc.novelia.app.data.sync.synchronizePending
 import cc.novelia.app.data.sync.updateCloudPending
-import cc.novelia.app.ui.components.friendlyMessage
+import cc.novelia.app.ui.components.base.friendlyMessage
 import cc.novelia.app.ui.feedback.MidoriSticker
 import cc.novelia.app.ui.feedback.StickerSnackbarVisuals
 import cc.novelia.app.ui.reader.ReaderTocState

@@ -2,9 +2,8 @@
 
 package cc.novelia.app.ui.reader
 
-import cc.novelia.app.ui.components.AppTextButton
+import cc.novelia.app.ui.components.base.AppTextButton
 import cc.novelia.app.ui.theme.appShape
-
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape

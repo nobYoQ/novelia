@@ -1,12 +1,10 @@
 package cc.novelia.app.ui.settings
 
-import cc.novelia.app.ui.components.AppSwitch
+import cc.novelia.app.ui.components.base.AppSwitch
 import cc.novelia.app.ui.theme.LocalSquareCorners
-
-import cc.novelia.app.ui.components.AppButton
-import cc.novelia.app.ui.components.AppIconButton
+import cc.novelia.app.ui.components.base.AppButton
+import cc.novelia.app.ui.components.base.AppIconButton
 import cc.novelia.app.ui.theme.appShape
-
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.toggleable

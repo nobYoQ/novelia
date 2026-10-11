@@ -1,9 +1,8 @@
 @file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.shelf
 
-import cc.novelia.app.ui.components.AppTextButton
-import cc.novelia.app.ui.components.AppFilledTonalButton
-
+import cc.novelia.app.ui.components.base.AppTextButton
+import cc.novelia.app.ui.components.base.AppFilledTonalButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
@@ -12,10 +11,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import cc.novelia.app.ui.components.AppScrollColumn
-import cc.novelia.app.ui.components.AppSheet
-import cc.novelia.app.ui.components.MenuRow
-import cc.novelia.app.ui.components.TextPrompt
+import cc.novelia.app.ui.components.base.AppScrollColumn
+import cc.novelia.app.ui.components.base.AppSheet
+import cc.novelia.app.ui.components.base.MenuRow
+import cc.novelia.app.ui.components.base.TextPrompt
 
 @Composable internal fun CloudFavoriteBatchControls(
     managing: Boolean, selectedCount: Int, pageCount: Int, allOnPageSelected: Boolean,

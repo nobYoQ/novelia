@@ -1,7 +1,6 @@
 package cc.novelia.app.ui.community
 
-import cc.novelia.app.ui.components.AppOutlinedButton
-
+import cc.novelia.app.ui.components.base.AppOutlinedButton
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Spacer

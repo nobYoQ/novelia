@@ -1,9 +1,8 @@
 package cc.novelia.app.ui.community
 
-import cc.novelia.app.ui.components.AppTextButton
-import cc.novelia.app.ui.components.AppFilledTonalButton
-import cc.novelia.app.ui.components.AppIconButton
-
+import cc.novelia.app.ui.components.base.AppTextButton
+import cc.novelia.app.ui.components.base.AppFilledTonalButton
+import cc.novelia.app.ui.components.base.AppIconButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -14,12 +13,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import cc.novelia.app.data.catalog.ForumLinks
+import cc.novelia.app.data.community.ForumLinks
 import cc.novelia.app.data.network.encodeSegment
-import cc.novelia.app.ui.components.AppAlertDialog
-import cc.novelia.app.ui.components.AppLazyColumn
-import cc.novelia.app.ui.components.EmptyState
-import cc.novelia.app.ui.components.MenuRow
+import cc.novelia.app.ui.components.base.AppAlertDialog
+import cc.novelia.app.ui.components.base.AppLazyColumn
+import cc.novelia.app.ui.components.base.EmptyState
+import cc.novelia.app.ui.components.base.MenuRow
 import cc.novelia.app.ui.navigation.AppController
 
 @Composable internal fun ArticleDraftBox(c: AppController, onClose: () -> Unit) {

@@ -1,8 +1,7 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.downloads
 
-import cc.novelia.app.ui.components.AppButton
-
+import cc.novelia.app.ui.components.base.AppButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
@@ -13,11 +12,11 @@ import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.DownloadEntry
 import cc.novelia.app.files.*
-import cc.novelia.app.ui.components.AppScrollColumn
-import cc.novelia.app.ui.components.AppSheet
-import cc.novelia.app.ui.components.ChoiceRow
-import cc.novelia.app.ui.components.TogglePreference
-import cc.novelia.app.ui.components.friendlyMessage
+import cc.novelia.app.ui.components.base.AppScrollColumn
+import cc.novelia.app.ui.components.base.AppSheet
+import cc.novelia.app.ui.components.base.ChoiceRow
+import cc.novelia.app.ui.components.base.TogglePreference
+import cc.novelia.app.ui.components.base.friendlyMessage
 import cc.novelia.app.ui.navigation.AppController
 import kotlinx.coroutines.CancellationException
 

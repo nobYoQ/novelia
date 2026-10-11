@@ -1,10 +1,9 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.community
 
-import cc.novelia.app.ui.components.AppTextButton
-import cc.novelia.app.ui.components.AppIconButton
-import cc.novelia.app.ui.components.AppFilledIconButton
-
+import cc.novelia.app.ui.components.base.AppTextButton
+import cc.novelia.app.ui.components.base.AppIconButton
+import cc.novelia.app.ui.components.base.AppFilledIconButton
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
@@ -18,16 +17,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.markdown.MarkdownLinks
-import cc.novelia.app.data.model.Comment
+import cc.novelia.app.data.community.Comment
 import cc.novelia.app.data.model.Page
-import cc.novelia.app.ui.components.AppLazyColumn
-import cc.novelia.app.ui.components.AppDropdownMenu
-import cc.novelia.app.ui.components.AppSheet
-import cc.novelia.app.ui.components.AsyncContent
-import cc.novelia.app.ui.components.ConfirmDialog
-import cc.novelia.app.ui.components.EmptyState
-import cc.novelia.app.ui.components.PageControls
-import cc.novelia.app.ui.components.displayDate
+import cc.novelia.app.ui.components.base.AppLazyColumn
+import cc.novelia.app.ui.components.base.AppDropdownMenu
+import cc.novelia.app.ui.components.base.AppSheet
+import cc.novelia.app.ui.components.base.AsyncContent
+import cc.novelia.app.ui.components.base.ConfirmDialog
+import cc.novelia.app.ui.components.base.EmptyState
+import cc.novelia.app.ui.components.base.PageControls
+import cc.novelia.app.ui.components.base.displayDate
 import cc.novelia.app.ui.markdown.MarkdownCommentInput
 import cc.novelia.app.ui.markdown.MarkdownText
 import cc.novelia.app.ui.markdown.rememberMarkdownRenderer

@@ -33,7 +33,7 @@ benchmark 模块最低 API 28。`ReadingBenchmark` 使用 `CompilationMode.Parti
 
 ## 大标签库回归
 
-[KeywordPerformanceRegressionTest](../../app/src/test/java/cc/novelia/app/KeywordPerformanceRegressionTest.kt) 使用 1,000、20,000 和 50,000 条合成标签验证增量同步与整库参考算法一致、未变记录复用、仅使用时间变化不产生同步版本，以及流式读写保留用户编辑和同步身份。它也验证收集合并、失败重试和显式保存排空队列；不使用机器相关的耗时阈值作为正确性断言。
+[KeywordPerformanceRegressionTest](../../app/src/test/java/cc/novelia/app/data/catalog/KeywordPerformanceRegressionTest.kt) 使用 1,000、20,000 和 50,000 条合成标签验证增量同步与整库参考算法一致、未变记录复用、仅使用时间变化不产生同步版本，以及流式读写保留用户编辑和同步身份。它也验证收集合并、失败重试和显式保存排空队列；不使用机器相关的耗时阈值作为正确性断言。
 
 ```powershell
 ./build.ps1 -Offline -Tasks @(':app:testDebugUnitTest', '--tests', 'cc.novelia.app.Keyword*Test', '--tests', 'cc.novelia.app.data.webdav.*')

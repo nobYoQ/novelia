@@ -1,8 +1,7 @@
 package cc.novelia.app.ui.account
 
-import cc.novelia.app.ui.components.AppButton
-import cc.novelia.app.ui.components.AppTextButton
-
+import cc.novelia.app.ui.components.base.AppButton
+import cc.novelia.app.ui.components.base.AppTextButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -14,8 +13,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.sync.CloudSyncWorker
-import cc.novelia.app.ui.components.Screen
-import cc.novelia.app.ui.components.friendlyMessage
+import cc.novelia.app.ui.components.base.Screen
+import cc.novelia.app.ui.components.base.friendlyMessage
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.navigation.finishLoginNavigation
 import kotlinx.coroutines.CancellationException

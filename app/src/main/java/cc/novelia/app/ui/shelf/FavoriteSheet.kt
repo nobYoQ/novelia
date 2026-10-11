@@ -15,14 +15,14 @@ import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.CloudFolders
 import cc.novelia.app.data.model.WebDetail
 import cc.novelia.app.data.model.WenkuDetail
-import cc.novelia.app.ui.components.AppLazyColumn
-import cc.novelia.app.ui.components.AppScrollColumn
-import cc.novelia.app.ui.components.AppSheet
-import cc.novelia.app.ui.components.AsyncContent
-import cc.novelia.app.ui.components.ChoiceRow
-import cc.novelia.app.ui.components.EmptyState
-import cc.novelia.app.ui.components.MenuRow
-import cc.novelia.app.ui.components.TextPrompt
+import cc.novelia.app.ui.components.base.AppLazyColumn
+import cc.novelia.app.ui.components.base.AppScrollColumn
+import cc.novelia.app.ui.components.base.AppSheet
+import cc.novelia.app.ui.components.base.AsyncContent
+import cc.novelia.app.ui.components.base.ChoiceRow
+import cc.novelia.app.ui.components.base.EmptyState
+import cc.novelia.app.ui.components.base.MenuRow
+import cc.novelia.app.ui.components.base.TextPrompt
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.navigation.loginForFavorite
 

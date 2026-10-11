@@ -8,9 +8,9 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.MainActivity
 import cc.novelia.app.NoveliaApplication
-import cc.novelia.app.data.model.Article
+import cc.novelia.app.data.community.Article
 import cc.novelia.app.data.model.BookRef
-import cc.novelia.app.data.model.Comment
+import cc.novelia.app.data.community.Comment
 import cc.novelia.app.data.model.Page
 import cc.novelia.app.data.model.WebDetail
 import cc.novelia.app.data.model.WenkuDetail

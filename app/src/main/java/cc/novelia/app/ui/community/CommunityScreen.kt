@@ -1,11 +1,10 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.community
 
-import cc.novelia.app.ui.components.AppTextButton
-import cc.novelia.app.ui.components.AppIconButton
-
-import cc.novelia.app.data.model.ForumSort
-import cc.novelia.app.data.model.ForumCategory
+import cc.novelia.app.ui.components.base.AppTextButton
+import cc.novelia.app.ui.components.base.AppIconButton
+import cc.novelia.app.data.community.ForumSort
+import cc.novelia.app.data.community.ForumCategory
 import cc.novelia.app.data.auth.SessionChangedException
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
@@ -24,17 +23,17 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
-import cc.novelia.app.data.model.Article
+import cc.novelia.app.data.community.Article
 import cc.novelia.app.data.model.Page
-import cc.novelia.app.ui.components.AppLazyColumn
-import cc.novelia.app.ui.components.AppSheet
-import cc.novelia.app.ui.components.AsyncContent
-import cc.novelia.app.ui.components.EmptyState
-import cc.novelia.app.ui.components.FilterPanelVisibility
-import cc.novelia.app.ui.components.PageControls
-import cc.novelia.app.ui.components.Screen
-import cc.novelia.app.ui.components.displayDate
-import cc.novelia.app.ui.components.rememberDebouncedQuery
+import cc.novelia.app.ui.components.base.AppLazyColumn
+import cc.novelia.app.ui.components.base.AppSheet
+import cc.novelia.app.ui.components.base.AsyncContent
+import cc.novelia.app.ui.components.base.EmptyState
+import cc.novelia.app.ui.components.base.FilterPanelVisibility
+import cc.novelia.app.ui.components.base.PageControls
+import cc.novelia.app.ui.components.base.Screen
+import cc.novelia.app.ui.components.base.displayDate
+import cc.novelia.app.ui.components.base.rememberDebouncedQuery
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.navigation.ObserveForumLogin
 import cc.novelia.app.ui.theme.AppMotion

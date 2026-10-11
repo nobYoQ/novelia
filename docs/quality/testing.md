@@ -10,13 +10,13 @@
 
 ```powershell
 # Debug 构建、JVM 单元测试、Lint，并归档 APK
-./build-debug.ps1 -Verify
+./scripts/build-debug.ps1 -Verify
 
 # 含 R8 的本地 Release 检查，使用测试证书
-./build-release.ps1 -Verify
+./scripts/build-release.ps1 -Verify
 
 # 聚焦一个逻辑测试
-./build.ps1 -Tasks @(':app:testDebugUnitTest', '--tests', 'cc.novelia.app.ApiContractTest')
+./build.ps1 -Tasks @(':app:testDebugUnitTest', '--tests', 'cc.novelia.app.data.network.ApiContractTest')
 
 # Go 原生包及本地解析器依赖测试
 ./build.ps1 -Tasks @(':app:testEchNative')
@@ -39,17 +39,18 @@ Release 报告对应替换变体名。警告、失败和跳过分别记录。
 
 | 修改范围 | JVM 入口 |
 | --- | --- |
-| 请求、账号和书源 | `ApiContractTest`、`data.auth.SessionIsolationTest`、`data.network.BookSourceTest` |
+| 请求、账号和书源 | `data.network.ApiContractTest`、`data.auth.SessionIsolationTest`、`data.network.BookSourceTest` |
 | ECH 和日志 | `data.network.EchInterceptorTest`、`EchApiContractTest`、`EchDiagnosticsTest`、`NetworkLoggingTest`（后三者也在 data.network） |
-| 论坛协议与回复 | `data.network.ForumApiContractTest`、`ForumAccountApiTest`、`ForumReplyPageCacheTest`（均在 data.network） |
+| 论坛协议与回复 | `data.community.ForumApiContractTest`、`ForumAccountApiTest`、`ForumReplyPageCacheTest`（均在 data.community） |
 | 原站队列 | `data.sync.CloudMutationQueueTest`、`CloudSyncPolicyTest`、`BoundCloudSyncTest`（均在 data.sync） |
 | WebDAV | `data.webdav.WebDavMergeTest`、`WebDavProjectionTest`、`WebDavExchangeTest`、`WebDavClientTest`（均在 data.webdav） |
 | 持久化和恢复 | `data.storage.StatePersistenceTest`、`data.storage.LibraryStateCodecTest`、`data.backup.LibraryBackupTest` |
-| 导入、下载、导出 | `FileImportRegressionTest`、`DocumentImportBatchTest`、`DownloadFilesTest`、`PendingExportFilesTest` |
-| 阅读投影、分页、定位 | `ReaderProjectionTest`、`ReaderExactSearchTest`、`StaticPaginationTest`、`ReaderChapterLoadTest` |
-| 位置、历史、更新 | `ReadingProgressUpdatesTest`、`LocalReadingProgressTest`、`data.updates.BookUpdateStateTest` |
-| 搜索和标签 | `SearchExpressionBoundaryTest`、`NovelLocalFilterTest`、`KeywordLibraryTest`、`SavedSearchPresetTest` |
-| Markdown 和草稿 | `SiteMarkdownTest`、`MarkdownLinkPasteTest`、`EditorStateRegressionTest`、`ArticleDraftsTest` |
+| 导入、下载、导出 | `files.FileImportRegressionTest`、`files.importing.DocumentImportBatchTest`、`files.downloads.DownloadFilesTest`、`files.exporting.PendingExportFilesTest` |
+| 阅读投影、分页、定位 | `reader.ReaderProjectionTest`、`reader.ReaderExactSearchTest`、`reader.StaticPaginationTest`、`ui.reader.ReaderChapterLoadTest` |
+| 位置、历史、更新 | `data.library.ReadingProgressUpdatesTest`、`data.storage.LocalReadingProgressTest`、`data.updates.BookUpdateStateTest` |
+| 应用版本与下载 | `data.appupdate.AppReleaseTest`、`AppReleaseDownloadCoordinatorTest`、`AppUpdateSettingsTest`（均在 data.appupdate） |
+| 搜索和标签 | `data.catalog.SearchExpressionBoundaryTest`、`NovelLocalFilterTest`、`KeywordLibraryTest`、`SavedSearchPresetTest`（均在 data.catalog） |
+| Markdown 和草稿 | `ui.markdown.SiteMarkdownTest`、`data.markdown.MarkdownLinkPasteTest`、`ui.markdown.EditorStateRegressionTest`、`ui.community.ArticleDraftsTest` |
 | 旧 Worker 兼容 | `data.compat.LegacyWorkerCompatibilityTest` |
 
 完整文件在 [JVM 测试目录](../../app/src/test/java/cc/novelia/app)。新用例应复现真实故障或保护不变量，例如换号后旧响应不能写回、损坏备份不能覆盖资料、重排后定位同一原文段。

@@ -1,8 +1,7 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.community
 
-import cc.novelia.app.ui.components.AppIconButton
-
+import cc.novelia.app.ui.components.base.AppIconButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
@@ -18,7 +17,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import cc.novelia.app.data.model.ForumCategory
+import cc.novelia.app.data.community.ForumCategory
 
 @Composable internal fun ForumCategoryTabs(categories: List<ForumCategory>, selected: String, onSelect: (String) -> Unit) {
     val index = categories.indexOfFirst { it.slug == selected }.coerceAtLeast(0)

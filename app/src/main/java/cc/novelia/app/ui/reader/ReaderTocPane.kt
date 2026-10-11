@@ -1,7 +1,6 @@
 package cc.novelia.app.ui.reader
 
-import cc.novelia.app.ui.components.AppTextButton
-
+import cc.novelia.app.ui.components.base.AppTextButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
@@ -20,12 +19,12 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.library.offlineRangeLabel
-import cc.novelia.app.ui.components.AppLazyColumn
-import cc.novelia.app.ui.components.EmptyState
-import cc.novelia.app.ui.components.friendlyMessage
-import cc.novelia.app.ui.components.SectionTitle
-import cc.novelia.app.ui.components.rememberDebouncedQuery
-import cc.novelia.app.ui.components.rememberCachedChapterIds
+import cc.novelia.app.ui.components.base.AppLazyColumn
+import cc.novelia.app.ui.components.base.EmptyState
+import cc.novelia.app.ui.components.base.friendlyMessage
+import cc.novelia.app.ui.components.base.SectionTitle
+import cc.novelia.app.ui.components.base.rememberDebouncedQuery
+import cc.novelia.app.ui.components.book.rememberCachedChapterIds
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.theme.appReducedMotion
 import cc.novelia.app.ui.theme.motionClickable

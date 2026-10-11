@@ -2,8 +2,7 @@
 
 package cc.novelia.app.ui.settings
 
-import cc.novelia.app.ui.components.AppIconButton
-
+import cc.novelia.app.ui.components.base.AppIconButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -18,7 +17,7 @@ import cc.novelia.app.ui.account.ProfileMenuRow
 import cc.novelia.app.ui.account.ProfileSummary
 import cc.novelia.app.ui.account.ProfileDetailScreen
 import cc.novelia.app.ui.account.ProfileSectionTitle
-import cc.novelia.app.ui.components.TextPrompt
+import cc.novelia.app.ui.components.base.TextPrompt
 import cc.novelia.app.ui.navigation.AppController
 
 @Composable fun BlockedScreen(c: AppController) {

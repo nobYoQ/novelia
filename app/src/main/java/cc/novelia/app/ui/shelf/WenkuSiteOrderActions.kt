@@ -1,8 +1,7 @@
 @file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.shelf
 
-import cc.novelia.app.ui.components.AppOutlinedButton
-
+import cc.novelia.app.ui.components.base.AppOutlinedButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*

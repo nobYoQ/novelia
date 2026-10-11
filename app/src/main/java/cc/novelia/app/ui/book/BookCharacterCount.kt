@@ -1,7 +1,6 @@
 package cc.novelia.app.ui.book
 
-import cc.novelia.app.ui.components.AppTextButton
-
+import cc.novelia.app.ui.components.base.AppTextButton
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.MaterialTheme
@@ -14,7 +13,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.catalog.formatApproximateCharacters
 import cc.novelia.app.data.catalog.formatExactCharacters
-import cc.novelia.app.ui.components.AppAlertDialog
+import cc.novelia.app.ui.components.base.AppAlertDialog
 import cc.novelia.app.ui.theme.motionClickable
 
 @Composable internal fun BookCharacterCount(characters: Long?) {

@@ -1,14 +1,13 @@
 @file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.discover
 
-import cc.novelia.app.ui.components.AppButton
-import cc.novelia.app.ui.components.AppTextButton
-import cc.novelia.app.ui.components.AppOutlinedButton
-import cc.novelia.app.ui.components.AppIconButton
-
-import cc.novelia.app.ui.components.AppSelectionChip
-import cc.novelia.app.ui.components.AppActionChip
-import cc.novelia.app.ui.components.AppChipFlowRow
+import cc.novelia.app.ui.components.base.AppButton
+import cc.novelia.app.ui.components.base.AppTextButton
+import cc.novelia.app.ui.components.base.AppOutlinedButton
+import cc.novelia.app.ui.components.base.AppIconButton
+import cc.novelia.app.ui.components.base.AppSelectionChip
+import cc.novelia.app.ui.components.base.AppActionChip
+import cc.novelia.app.ui.components.base.AppChipFlowRow
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -25,13 +24,13 @@ import cc.novelia.app.data.catalog.KeywordCatalog
 import cc.novelia.app.data.catalog.KeywordEntry
 import cc.novelia.app.data.catalog.SearchExpression
 import cc.novelia.app.data.catalog.KeywordSelection
-import cc.novelia.app.ui.components.AppAlertDialog
-import cc.novelia.app.ui.components.AppScrollColumn
-import cc.novelia.app.ui.components.FilterPanelExpandIcon
-import cc.novelia.app.ui.components.FilterPanelVisibility
-import cc.novelia.app.ui.components.KeywordEditorDialog
-import cc.novelia.app.ui.components.KeywordCategoryChips
-import cc.novelia.app.ui.components.rememberPanelScrollState
+import cc.novelia.app.ui.components.base.AppAlertDialog
+import cc.novelia.app.ui.components.base.AppScrollColumn
+import cc.novelia.app.ui.components.base.FilterPanelExpandIcon
+import cc.novelia.app.ui.components.base.FilterPanelVisibility
+import cc.novelia.app.ui.components.keywords.KeywordEditorDialog
+import cc.novelia.app.ui.components.keywords.KeywordCategoryChips
+import cc.novelia.app.ui.components.base.rememberPanelScrollState
 
 @Composable
 fun SearchAssistantPanel(

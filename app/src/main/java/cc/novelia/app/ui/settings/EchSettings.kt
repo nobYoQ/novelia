@@ -2,10 +2,9 @@
 
 package cc.novelia.app.ui.settings
 
-import cc.novelia.app.ui.components.AppButton
-import cc.novelia.app.ui.components.AppTextButton
-import cc.novelia.app.ui.components.AppOutlinedButton
-
+import cc.novelia.app.ui.components.base.AppButton
+import cc.novelia.app.ui.components.base.AppTextButton
+import cc.novelia.app.ui.components.base.AppOutlinedButton
 import android.content.ClipData
 import android.content.ClipboardManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -21,9 +20,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.network.EchTransport
-import cc.novelia.app.files.PendingExportFiles
-import cc.novelia.app.ui.components.AppSheet
-import cc.novelia.app.ui.components.TogglePreference
+import cc.novelia.app.files.exporting.PendingExportFiles
+import cc.novelia.app.ui.components.base.AppSheet
+import cc.novelia.app.ui.components.base.TogglePreference
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
