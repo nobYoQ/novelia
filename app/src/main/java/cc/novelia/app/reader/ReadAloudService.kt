@@ -143,7 +143,7 @@ class ReadAloudService : Service() {
                 document.chapters.getOrNull(chapterIndex - 1)?.id, document.chapters.getOrNull(chapterIndex + 1)?.id,
                 chapter.paragraphs, chapter.paragraphs)
         }, cached = { app.store.cachedChapter(ref, it) }, network = {
-            app.store.chapterRequests.load(app.api, app.session, binding, app.store.cacheGeneration.value, ref, it)
+            app.store.chapterRequests.load(app.api, app.session, binding, app.store.chapterGeneration(ref), ref, it)
         })
         if(!ref.isLocal) app.session.ensureCurrent(binding)
         return loaded

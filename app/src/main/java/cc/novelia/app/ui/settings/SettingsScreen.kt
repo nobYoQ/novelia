@@ -28,6 +28,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.data.model.validFont
 import cc.novelia.app.data.model.SettingsBackup
@@ -81,7 +83,10 @@ private enum class SettingsSection(val title: String, val summary: String) {
     val preferenceState = rememberReaderPreferencesState(reader)
     val keywordTransfer = rememberKeywordTransfer(c)
     val keywordLibrary by c.app.keywords.state.collectAsStateWithLifecycle()
-    LaunchedEffect(c, selectedSection) { if(selectedSection == SettingsSection.STORAGE) size = withContext(Dispatchers.IO) { c.store.cacheSize() + (c.app.imageLoader.diskCache?.size ?: 0L) } }
+    val cacheRevision by c.store.chapterCacheRevision.collectAsStateWithLifecycle()
+    var storageRefresh by remember { mutableIntStateOf(0) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { storageRefresh++ }
+    LaunchedEffect(c, selectedSection, cacheRevision, storageRefresh) { if(selectedSection == SettingsSection.STORAGE) size = withContext(Dispatchers.IO) { c.store.cacheSize() + (c.app.imageLoader.diskCache?.size ?: 0L) } }
     val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> c.message(if(granted) "已允许通知" else "可在系统设置中开启通知") }
     val exportSettings = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri -> uri?.let { c.action("设置已导出") { val s = c.store.state.value; val backup = SettingsBackup(reader = s.reader, theme = s.theme, reducedMotion = s.reducedMotion, squareCorners = s.squareCorners, amoledBlack = s.amoledBlack, discoverWenkuGrid = s.discoverWenkuGrid, shelfGrid = s.shelfGrid, localFilesGrid = s.localFilesGrid, cloudShelfGrid = s.cloudShelfGrid, edgeToolbar = s.edgeToolbar.normalized(), blockedBooks = s.blockedBooks, blockedTags = s.blockedTags, blockedAuthors = s.blockedAuthors, blockedUsers = s.blockedUsers, hideNovelComments = s.hideNovelComments, wifiOnly = s.wifiOnly, autoCollapseCloudFilters = s.autoCollapseCloudFilters, autoSaveCloudFavoritesLocally = s.autoSaveCloudFavoritesLocally, clipboardLinkHints = s.clipboardLinkHints, autoCheckAppUpdates = s.autoCheckAppUpdates, keywordLimit = s.keywordLimit, deleteDownloadAfterImport = s.deleteDownloadAfterImport, deleteLocalCopyOnShelfRemoval = s.deleteLocalCopyOnShelfRemoval); withContext(Dispatchers.IO) { c.app.contentResolver.openOutputStream(it)?.use { output -> output.write(appJson.encodeToString(backup).toByteArray()) } ?: error("无法写入文件") } } } }
     val importSettings = rememberOpenDocumentPicker(DocumentPickerTypes.Json) { uri -> uri?.let { c.action("设置已导入") { val backup = withContext(Dispatchers.IO) { appJson.decodeFromString<SettingsBackup>(readDocument(c, it).second.toString(Charsets.UTF_8)) }; require(backup.edgeToolbar.valid && backup.version == 1 && backup.theme in listOf("system", "light", "dark") && (backup.keywordLimit == null || backup.keywordLimit > 0) && backup.reader.fontSize in 14f..32f && backup.reader.lineHeight in ReaderSettings.LINE_HEIGHT_RANGE && backup.reader.paragraphSpacing in 0f..32f && backup.reader.width in 300f..900f && backup.reader.engines.toSet() == setOf("sakura", "gpt", "youdao") && backup.reader.theme in ReaderSettings.THEMES && backup.reader.customColors.valid && backup.reader.validFont); c.store.update { s -> s.copy(reader = backup.reader, theme = backup.theme, reducedMotion = backup.reducedMotion, squareCorners = backup.squareCorners, amoledBlack = backup.amoledBlack, discoverWenkuGrid = backup.discoverWenkuGrid, shelfGrid = backup.shelfGrid, localFilesGrid = backup.localFilesGrid, cloudShelfGrid = backup.cloudShelfGrid, edgeToolbar = backup.edgeToolbar, blockedBooks = backup.blockedBooks, blockedTags = backup.blockedTags, blockedAuthors = backup.blockedAuthors, blockedUsers = backup.blockedUsers, hideNovelComments = backup.hideNovelComments, wifiOnly = backup.wifiOnly, autoCollapseCloudFilters = backup.autoCollapseCloudFilters, autoSaveCloudFavoritesLocally = backup.autoSaveCloudFavoritesLocally, clipboardLinkHints = backup.clipboardLinkHints, autoCheckAppUpdates = backup.autoCheckAppUpdates, keywordLimit = backup.keywordLimit, deleteDownloadAfterImport = backup.deleteDownloadAfterImport, deleteLocalCopyOnShelfRemoval = backup.deleteLocalCopyOnShelfRemoval) } } } }
@@ -145,6 +150,7 @@ private enum class SettingsSection(val title: String, val summary: String) {
         }
         if(section == SettingsSection.STORAGE) {
         item { ProfileSectionTitle("数据与存储") }
+        item { ProfileMenuRow("书籍章节缓存", "查看每本书的缓存章节和占用空间，按书清理", Icons.Outlined.AutoStories, { c.go("chapter-cache") }) }
         item { ProfileMenuRow("阅读与图片缓存", if(clearing) "正在清理…" else size?.let { "已使用 ${"%.1f".format(it / 1024.0 / 1024.0)} MB · 点击清理" } ?: "正在计算缓存大小…", Icons.Outlined.Storage, { if (!clearing) clear = true }) }
         item { ProfileMenuRow("导出普通设置", "阅读偏好、外观与屏蔽名单，不含账号会话", Icons.Outlined.IosShare, { exportSettings.launch("novelia-settings.json") }) }
         item { ProfileMenuRow("导入普通设置", "从 Novelia 设置文件恢复偏好", Icons.Outlined.FileOpen, { importSettings.launch() }) }

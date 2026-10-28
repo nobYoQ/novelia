@@ -143,9 +143,12 @@ import kotlinx.serialization.encodeToString
     val returnPoint = remember(returnPointJson) { returnPointJson?.let { runCatching { appJson.decodeFromString<ReadingReturnPoint>(it) }.getOrNull() } }
     var refreshAnchor by remember(ref, chapterId) { mutableStateOf<ReadingRestoreAnchor?>(null) }
     val cacheGeneration by c.store.cacheGeneration.collectAsStateWithLifecycle()
+    val bookCacheGenerations by c.store.bookCacheGenerations.collectAsStateWithLifecycle()
+    val bookCacheGeneration = bookCacheGenerations[ref.key] ?: 0L
     val profile by c.session.profile.collectAsStateWithLifecycle()
     val tocState = remember(c, ref, profile, c.session.capture(), cacheGeneration) { c.readerToc(ref) }
     val enteredCacheGeneration = remember(ref, chapterId) { c.store.cacheGeneration.value }
+    val enteredBookCacheGeneration = remember(ref, chapterId) { bookCacheGeneration }
     val readingLifecycle = LocalLifecycleOwner.current
     val speechStatus by ReadAloudService.status.collectAsStateWithLifecycle()
     val context = LocalContext.current; val activity = context.activityOrNull()
@@ -197,8 +200,8 @@ import kotlinx.serialization.encodeToString
         fun paragraphHash(paragraph: ReadingParagraph?): String? = paragraph?.let {
             paragraphTextHashes.getOrPut(it.index) { it.readingTextHash() }
         }
-        LaunchedEffect(ref, chapterId, chapter.nextId, settings.prefetchChapters, settings.prefetchWifiOnly, cacheGeneration, readingLifecycle) {
-            if(!ref.isLocal && settings.prefetchChapters > 0 && cacheGeneration == enteredCacheGeneration) readingLifecycle.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+        LaunchedEffect(ref, chapterId, chapter.nextId, settings.prefetchChapters, settings.prefetchWifiOnly, cacheGeneration, bookCacheGeneration, readingLifecycle) {
+            if(!ref.isLocal && settings.prefetchChapters > 0 && cacheGeneration == enteredCacheGeneration && bookCacheGeneration == enteredBookCacheGeneration) readingLifecycle.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 delay(600)
                 try { ChapterOffline(c.store, c.api, c.session).prefetch(ref, chapter.nextId, settings.prefetchChapters, settings.prefetchWifiOnly) }
                 catch(e: CancellationException) { throw e }

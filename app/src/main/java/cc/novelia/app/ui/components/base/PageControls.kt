@@ -17,6 +17,8 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 
@@ -40,6 +42,7 @@ internal fun paginationItems(page: Int, count: Int): List<Int?> {
     val total = count.coerceAtLeast(1)
     val current = page.coerceIn(0, total - 1)
     var input by rememberSaveable(page, count) { mutableStateOf("") }
+    var expanded by rememberSaveable(page, count) { mutableStateOf(false) }
     val target = input.toIntOrNull()?.takeIf { it in 1..total }
     val invalid = input.isNotEmpty() && target == null
     val focus = LocalFocusManager.current
@@ -47,6 +50,7 @@ internal fun paginationItems(page: Int, count: Int): List<Int?> {
         target?.let {
             focus.clearFocus()
             input = ""
+            expanded = false
             if (it - 1 != current) onChange(it - 1)
         }
     }
@@ -73,24 +77,36 @@ internal fun paginationItems(page: Int, count: Int): List<Int?> {
                 }
             }
         }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            AppIconButton(onClick = { onChange(current - 1) }, enabled = current > 0) {
-                Icon(Icons.AutoMirrored.Outlined.KeyboardArrowLeft, "上一页")
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                AppIconButton(onClick = { onChange(current - 1) }, enabled = current > 0) {
+                    Icon(Icons.AutoMirrored.Outlined.KeyboardArrowLeft, "上一页")
+                }
+                Text("第 ${current + 1} / $total 页", style = MaterialTheme.typography.labelMedium)
+                AppIconButton(onClick = { onChange(current + 1) }, enabled = current < total - 1) {
+                    Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, "下一页")
+                }
             }
-            Text("第 ${current + 1} / $total 页", style = MaterialTheme.typography.labelMedium)
-            AppIconButton(onClick = { onChange(current + 1) }, enabled = current < total - 1) {
-                Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, "下一页")
+            AppTextButton(onClick = {
+                expanded = !expanded
+                if(!expanded) focus.clearFocus()
+            }, modifier = Modifier.align(Alignment.CenterVertically).testTag("page-jump-toggle")
+                .semantics { stateDescription = if(expanded) "已展开" else "已收起" }) {
+                Text(if(expanded) "收起跳转" else "跳转到…")
+                FilterPanelExpandIcon(expanded)
             }
         }
-        Row(Modifier.widthIn(max = 320.dp), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedTextField(value = input, onValueChange = { input = it },
-                modifier = Modifier.weight(1f), singleLine = true, label = { Text("跳转页码") },
-                placeholder = { Text("1–$total") }, isError = invalid,
-                supportingText = if (invalid) ({ Text("请输入 1–$total 的页码") }) else null,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Go),
-                keyboardActions = KeyboardActions(onGo = { jump() }))
-            AppTextButton(onClick = { jump() }, enabled = target != null) { Text("跳转") }
+        FilterPanelVisibility(expanded) {
+            Row(Modifier.widthIn(max = 320.dp).testTag("page-jump-input"), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(value = input, onValueChange = { input = it },
+                    modifier = Modifier.weight(1f), singleLine = true, label = { Text("跳转页码") },
+                    placeholder = { Text("1–$total") }, isError = invalid,
+                    supportingText = if (invalid) ({ Text("请输入 1–$total 的页码") }) else null,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Go),
+                    keyboardActions = KeyboardActions(onGo = { jump() }))
+                AppTextButton(onClick = { jump() }, enabled = target != null) { Text("跳转") }
+            }
         }
     }
 }

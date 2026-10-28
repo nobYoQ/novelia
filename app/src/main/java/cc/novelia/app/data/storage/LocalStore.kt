@@ -3,6 +3,9 @@ package cc.novelia.app.data.storage
 import android.content.Context
 import android.util.AtomicFile
 import cc.novelia.app.data.cache.ChapterCacheIndex
+import cc.novelia.app.data.cache.ChapterCacheCatalog
+import cc.novelia.app.data.cache.ChapterCacheGeneration
+import cc.novelia.app.data.cache.ChapterCacheSummary
 import cc.novelia.app.data.cache.MetadataCache
 import cc.novelia.app.data.cache.WeightedMemoryCache
 import cc.novelia.app.data.chapters.ChapterRequests
@@ -26,6 +29,7 @@ import cc.novelia.app.data.model.LocalChapter
 import cc.novelia.app.data.model.LocalDocument
 import cc.novelia.app.data.model.LocalReadingContent
 import cc.novelia.app.data.model.Position
+import cc.novelia.app.data.model.WebDetail
 import cc.novelia.app.files.DocumentTools
 import cc.novelia.app.files.downloads.downloadedBookLock
 import cc.novelia.app.files.importing.documentImportLock
@@ -103,6 +107,10 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
     private var importBatchDepth = 0
     private var importCatalogReady = false
     private val chapterIndex = ChapterCacheIndex(cacheDir, 256L * 1024 * 1024)
+    private val chapterCatalog = ChapterCacheCatalog(cacheDir, File(context.filesDir, "chapter-cache-index.json"))
+    private var legacyChapterCacheChecked = false
+    private val mutableBookCacheGenerations = MutableStateFlow<Map<String, Long>>(emptyMap())
+    val bookCacheGenerations = mutableBookCacheGenerations.asStateFlow()
     private val mutableCacheGeneration = MutableStateFlow(0L)
     val cacheGeneration = mutableCacheGeneration.asStateFlow()
     // 显示缓存状态用的修订号；不能复用会使在途下载失效的 cacheGeneration。
@@ -249,7 +257,10 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
         chapterMemory[file.name]?.let { chapterIndex.accessed(file); return@synchronized it }
         runCatching {
             appJson.decodeFromString<Chapter>(AtomicFile(file).openRead().bufferedReader(Charsets.UTF_8).use { it.readText() })
-        }.getOrNull()?.also { chapterMemory.put(file.name, it); chapterIndex.accessed(file) }
+        }.getOrNull()?.also {
+            chapterMemory.put(file.name, it); chapterIndex.accessed(file)
+            runCatching { chapterCatalog.register(ref, it.novelTitleZh?.takeIf(String::isNotBlank) ?: it.novelTitleJp.orEmpty(), listOf(chapter)) }
+        }
     }
 
     fun cacheChapter(ref: BookRef, id: String, chapter: Chapter) = synchronized(chapterLock) {
@@ -258,6 +269,72 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
         chapterMemory.put(file.name, chapter)
         chapterIndex.written(file).forEach(chapterMemory::remove)
         mutableChapterCacheRevision.value += 1
+        chapterCatalog.register(ref, chapter.novelTitleZh?.takeIf(String::isNotBlank) ?: chapter.novelTitleJp.orEmpty(), listOf(id))
+    }
+
+    fun registerCachedChapters(ref: BookRef, title: String, ids: Collection<String>) = synchronized(chapterLock) {
+        chapterCatalog.register(ref, title, ids)
+    }
+
+    /** 只在管理页打开时恢复旧索引；利用目录里的章节 ID 和已知书籍做哈希精确匹配。 */
+    fun chapterCacheSummaries(): List<ChapterCacheSummary> = synchronized(chapterLock) {
+        if(!legacyChapterCacheChecked) {
+            recoverChapterCacheCatalog()
+            legacyChapterCacheChecked = true
+        }
+        chapterCatalog.summaries()
+    }
+
+    fun chapterCacheSummary(ref: BookRef): ChapterCacheSummary = synchronized(chapterLock) {
+        recoverChapterCacheCatalog(ref)
+        chapterCatalog.summaries().firstOrNull { it.ref == ref } ?: ChapterCacheSummary(ref, ref.key, 0, 0)
+    }
+
+    private fun recoverChapterCacheCatalog(extraRef: BookRef? = null) {
+        if(chapterCatalog.files(null).isEmpty()) return
+        val snapshot = state.value
+        val known = if(extraRef == null) snapshot.books.map { it.book.ref }.toSet() +
+            (snapshot.positions.keys + snapshot.readingHistory.keys).map(BookRef::fromKey) else setOf(extraRef)
+        val titles = snapshot.readingHistory.mapValues { it.value.bookTitle } + snapshot.books.associate { it.book.ref.key to it.book.title }
+        val ids = (snapshot.positions.values.map { it.chapterId } + snapshot.readingHistory.values.map { it.chapterId }).toMutableSet()
+        metadataDir.listFiles().orEmpty().filter { it.isFile && it.extension == "json" }.forEach { file ->
+            runCatching { appJson.decodeFromString<WebDetail>(file.readText(Charsets.UTF_8)) }
+                .getOrNull()?.toc?.mapNotNullTo(ids) { it.chapterId }
+        }
+        chapterCatalog.recover(known.associateWith { titles[it.key].orEmpty() }, ids)
+    }
+
+    fun chapterGeneration(ref: BookRef): ChapterCacheGeneration = synchronized(chapterLock) {
+        ChapterCacheGeneration(mutableCacheGeneration.value, mutableBookCacheGenerations.value[ref.key] ?: 0L)
+    }
+
+    fun <T> withChapterCacheGeneration(ref: BookRef, generation: ChapterCacheGeneration, block: () -> T): T? = synchronized(chapterLock) {
+        if(generation == chapterGeneration(ref)) block() else null
+    }
+
+    /** null 只代表无法识别归属的旧缓存；本地小说和其他书籍不在删除范围内。 */
+    fun clearChapterCache(ref: BookRef?) = synchronized(chapterLock) {
+        require(ref == null || !ref.isLocal && !ref.isWenku)
+        if(ref != null) {
+            recoverChapterCacheCatalog(ref)
+            mutableBookCacheGenerations.value = mutableBookCacheGenerations.value + (ref.key to ((mutableBookCacheGenerations.value[ref.key] ?: 0L) + 1))
+            chapterRequests.invalidateBook(ref)
+        } else {
+            // 旧缓存没有归属时无法确定对应在途请求，保守地使旧章节请求失效。
+            mutableCacheGeneration.value += 1
+            chapterRequests.invalidateBefore(mutableCacheGeneration.value)
+        }
+        val files = chapterCatalog.files(ref)
+        try {
+            for(file in files) {
+                AtomicFile(file).delete()
+                check(listOf(file, File(file.path + ".bak"), File(file.path + ".new")).none { it.exists() }) { "部分章节缓存未能清理，请重试" }
+                chapterMemory.remove(file.name)
+                chapterIndex.removed(file)
+            }
+            clearChapterFreshness(this, files.map { it.name }.toSet())
+            chapterCatalog.prune()
+        } finally { mutableChapterCacheRevision.value += 1 }
     }
 
     /**
@@ -379,15 +456,16 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
 
     /** 清除可重新获取的网络缓存，并取消旧代次请求；已导入的本地文档独立保存。 */
     fun clearCache() = synchronized(chapterLock) {
+        mutableCacheGeneration.value += 1
+        chapterRequests.invalidateBefore(mutableCacheGeneration.value)
         chapterMemory.clear()
         cacheDir.listFiles()?.toList().orEmpty()
             .filter { it.isFile }.forEach { it.delete() }
         metadataCache.clear()
         chapterIndex.reset()
+        chapterCatalog.clear()
         mutableChapterCacheRevision.value += 1
         clearChapterFreshness(this)
-        mutableCacheGeneration.value += 1
-        chapterRequests.invalidateBefore(mutableCacheGeneration.value)
     }
 
     /** 在清理缓存所用的同一把锁内检查代次并写入，避免清理前的慢响应重新填回缓存。 */

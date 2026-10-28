@@ -39,8 +39,10 @@ class ChapterCacheStateTest {
         store.cacheChapter(ref, "one", Chapter(paragraphs = listOf("测试正文")))
         compose.waitUntil(5_000) { compose.onAllNodesWithText("可离线阅读").fetchSemanticsNodes().isNotEmpty() }
         assertEquals("落盘通知不能使其他在途章节请求失效", generation, store.cacheGeneration.value)
-        store.clearCache()
+        store.clearChapterCache(ref)
         compose.waitUntil(5_000) { compose.onAllNodesWithText("未缓存").fetchSemanticsNodes().isNotEmpty() }
+        assertEquals("单书清理不使其他书籍的请求失效", generation, store.cacheGeneration.value)
+        store.clearCache()
         assertEquals(generation + 1, store.cacheGeneration.value)
     }
 }

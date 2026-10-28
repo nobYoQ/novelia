@@ -60,6 +60,7 @@ import cc.novelia.app.ui.settings.WebDavSyncScreen
 import cc.novelia.app.ui.settings.WebDavServerScreen
 import cc.novelia.app.ui.settings.LibraryBackupScreen
 import cc.novelia.app.ui.settings.SettingsScreen
+import cc.novelia.app.ui.settings.ChapterCacheScreen
 import cc.novelia.app.ui.discover.KeywordLibraryScreen
 import cc.novelia.app.ui.shelf.AdaptiveLibraryScreen
 import cc.novelia.app.ui.shelf.BookUpdatesScreen
@@ -261,6 +262,7 @@ class MainActivity : ComponentActivity() {
                             composable("edge-toolbar") { EdgeToolbarSettingsScreen(controller) }
                             composable("edge-toolbar-edit") { EdgeToolbarEditorScreen(controller) }
                             composable("backup") { LibraryBackupScreen(controller) }
+                            composable("chapter-cache") { ChapterCacheScreen(controller) }
                             composable("keywords") { KeywordLibraryScreen(controller) }
                             composable("sync") { NetworkSyncScreen(controller) }
                             // 外层已留出导航栏空间；同步页面本身也可独立处理系统边距。
