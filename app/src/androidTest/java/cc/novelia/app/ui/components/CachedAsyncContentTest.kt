@@ -7,6 +7,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -100,6 +101,59 @@ class CachedAsyncContentTest {
         awaitText("暂时无法加载")
         compose.onNodeWithText("旧权限内容 0").assertDoesNotExist()
         compose.runOnIdle { assertNull(cache.snapshot("page")) }
+    }
+
+    @Test fun nestedCachedRefreshShowsOnlyTheBookProgressAndStillReportsFolderFailures() {
+        val folders = UiResultCache<String>().apply { put("folders", "已缓存收藏夹"); invalidate() }
+        val books = UiResultCache<String>().apply { put("books", "已缓存书籍"); invalidate() }
+        val folderResponse = CompletableDeferred<String>()
+        val bookResponse = CompletableDeferred<String>()
+        val attempts = AtomicInteger()
+        var reducedMotion by mutableStateOf(false)
+        compose.setContent {
+            AppInteractionMode(eInk = false, reducedMotion = reducedMotion) { MaterialTheme {
+                CachedAsyncContent(folders, "folders", load = {
+                    if(attempts.incrementAndGet() == 1) folderResponse.await() else "已更新收藏夹"
+                }, modifier = Modifier.size(360.dp, 480.dp), showRefreshIndicator = false) { folder, _ ->
+                    Column {
+                        Text(folder)
+                        CachedAsyncContent(books, "books", load = { bookResponse.await() },
+                            modifier = Modifier.weight(1f).testTag("books")) { value, _ -> Text(value) }
+                    }
+                }
+            } }
+        }
+        val progress = SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo)
+        compose.onNodeWithText("已缓存收藏夹").assertIsDisplayed()
+        compose.onNodeWithText("已缓存书籍").assertIsDisplayed()
+        compose.onAllNodes(progress).assertCountEquals(1)
+        compose.onNode(progress and hasAnyAncestor(hasTestTag("books"))).assertIsDisplayed()
+        compose.runOnIdle { reducedMotion = true }
+        compose.onAllNodesWithText("正在刷新…").assertCountEquals(1)
+        compose.runOnIdle { bookResponse.complete("已更新书籍") }
+        awaitText("已更新书籍")
+        compose.onAllNodes(progress).assertCountEquals(0)
+        compose.onAllNodesWithText("正在刷新…").assertCountEquals(0)
+        compose.runOnIdle { folderResponse.completeExceptionally(IllegalArgumentException("收藏夹刷新失败")) }
+        compose.onNodeWithText("刷新未完成：收藏夹刷新失败").assertIsDisplayed()
+        compose.onNodeWithText("已缓存收藏夹").assertIsDisplayed()
+        compose.onNodeWithText("重试").performClick()
+        awaitText("已更新收藏夹")
+        compose.onNodeWithText("已更新书籍").assertIsDisplayed()
+    }
+
+    @Test fun silentRefreshOptionPreservesInitialLoadingAndFailureFeedback() {
+        val cache = UiResultCache<String>()
+        val response = CompletableDeferred<String>()
+        compose.setContent {
+            AppInteractionMode(eInk = false, reducedMotion = true) { MaterialTheme {
+                CachedAsyncContent(cache, "folders", load = { response.await() }, showRefreshIndicator = false) { value, _ -> Text(value) }
+            } }
+        }
+        compose.onNodeWithText("正在加载…").assertIsDisplayed()
+        compose.runOnIdle { response.completeExceptionally(IOException("离线")) }
+        awaitText("暂时无法加载")
+        compose.onNodeWithText("重试").assertIsDisplayed()
     }
 
     private fun awaitText(text: String) {

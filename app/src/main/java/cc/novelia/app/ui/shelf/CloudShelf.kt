@@ -91,8 +91,9 @@ import cc.novelia.app.ui.navigation.AppController
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val filterHeight = maxHeight * .9f
+        // 已有收藏夹时静默更新辅助数据，仅书籍列表显示刷新提示，避免上下两条加载条。
         CachedAsyncContent(c.uiResults.folders, foldersKey, load = { c.api.get<CloudFolders>("user/favored") }, refreshKey = refreshKey,
-            observeInvalidation = !bulkBusy, validate = { c.session.ensureCurrent(binding) }) { folders, _ ->
+            observeInvalidation = !bulkBusy, validate = { c.session.ensureCurrent(binding) }, showRefreshIndicator = false) { folders, _ ->
             val realFolders = if (kind == 0) folders.favoredWeb else folders.favoredWenku
             val choices = cloudFolderChoices(realFolders)
             val current = choices.find { it.id == folderId } ?: choices.firstOrNull()

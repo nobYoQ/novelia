@@ -28,12 +28,14 @@ import kotlinx.coroutines.ensureActive
  * initialResult 是同一内容的首帧种子；refreshOnEnter 可在展示种子时更新过期内容。
  * discardContentOnError 用于权限或删除错误，不把已不可访问的内容继续保留在页面上。
  * pullToRefreshEnabled 为可滚动内容启用顶部下拉刷新，共用重试和刷新状态。
+ * showRefreshIndicator 只控制已有内容时的刷新提示，嵌套的辅助数据可静默刷新；首次加载和错误仍显示。
  * load 必须可取消且自行切换耗时工作的调度器；取消不转换为错误页，结果发布前再次检查取消。
  */
 @Composable fun <T> AsyncContent(key: Any?, load: suspend () -> T, modifier: Modifier = Modifier, refreshKey: Any? = Unit,
     initialResult: T? = null, onLoaded: (T) -> Unit = {}, revealContent: Boolean = false,
     pullToRefreshEnabled: Boolean = false, refreshOnEnter: Boolean = false,
     discardContentOnError: (Exception) -> Boolean = { false },
+    showRefreshIndicator: Boolean = true,
     content: @Composable (T, () -> Unit) -> Unit) {
     var refresh by remember(key) { mutableIntStateOf(0) }
     var result by remember(key) { mutableStateOf<Result<T>?>(initialResult?.let { Result.success(it) }) }
@@ -76,15 +78,17 @@ import kotlinx.coroutines.ensureActive
                 MotionContent(key, Modifier.fillMaxSize(), animateInitial = revealContent && initialResult == null) {
                     content(current.getOrThrow(), retry)
                 }
-                if(canPull && !reducedMotion) {
-                    PullToRefreshDefaults.Indicator(isRefreshing = loading, state = pullState,
-                        modifier = Modifier.align(Alignment.TopCenter))
-                } else if(loading) {
-                    if(reducedMotion) Text("正在刷新…", Modifier.align(Alignment.TopCenter))
-                    else AppLinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter))
-                } else if(canPull && pullState.distanceFraction > 0f) {
-                    Surface(Modifier.align(Alignment.TopCenter), shape = MaterialTheme.shapes.small) {
-                        Text(if(pullState.distanceFraction >= 1f) "松开刷新" else "下拉刷新", Modifier.padding(8.dp))
+                if(showRefreshIndicator) {
+                    if(canPull && !reducedMotion) {
+                        PullToRefreshDefaults.Indicator(isRefreshing = loading, state = pullState,
+                            modifier = Modifier.align(Alignment.TopCenter))
+                    } else if(loading) {
+                        if(reducedMotion) Text("正在刷新…", Modifier.align(Alignment.TopCenter))
+                        else AppLinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter))
+                    } else if(canPull && pullState.distanceFraction > 0f) {
+                        Surface(Modifier.align(Alignment.TopCenter), shape = MaterialTheme.shapes.small) {
+                            Text(if(pullState.distanceFraction >= 1f) "松开刷新" else "下拉刷新", Modifier.padding(8.dp))
+                        }
                     }
                 }
                 refreshError?.let { error ->
