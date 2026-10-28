@@ -110,6 +110,12 @@ import kotlinx.coroutines.withContext
             modifier = Modifier.padding(padding), validate = { c.session.ensureCurrent(detailKey.binding) }, revealContent = true) { detail, _ ->
             val book = remember(detail, ref) { detail.card(ref) }
             val favoriteState = bookFavoriteState(ref, localSaved, detail.favored, profile?.username, state.pending)
+            val relatedWebRefs = remember(detail.webIds) {
+                detail.webIds.map { BookRef.fromKey(it.trim()) }
+                    .filter { it.provider.isNotBlank() && it.id.isNotBlank() && !it.isWenku && !it.isLocal }
+                    .distinct()
+            }
+            var relatedWeb by rememberSaveable(ref.key) { mutableStateOf(false) }
             val refresh: () -> Unit = { version++ }
             var tab by rememberSaveable(ref.key) { mutableIntStateOf(0) }
             val tabState = rememberSaveableStateHolder()
@@ -117,7 +123,8 @@ import kotlinx.coroutines.withContext
                     when(panel) {
                         0 -> AppLazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
                             item { BookHero(book, "${detail.level} · ${detail.volumes.size} 卷") {
-                                BookFavoriteActions(favoriteState, { favorite = book to false }, { favorite = book to true })
+                                BookFavoriteActions(favoriteState, { favorite = book to false }, { favorite = book to true },
+                                    onRelatedWeb = if(relatedWebRefs.isEmpty()) null else ({ relatedWeb = true }))
                             } }
                             detail.latestPublishAt?.takeIf { it > 0 }?.let { item { MetaParagraph("最近出版", displayDate(it)) } }
                             item { MetaParagraph("简介", detail.introduction) }
@@ -130,7 +137,6 @@ import kotlinx.coroutines.withContext
                                 })
                             } }
                             if(detail.volumeJp.isNotEmpty() || detail.volumeZh.isNotEmpty()) item { MetaParagraph("译文情况", "中文文件 ${detail.volumeZh.size} 卷 · 日文分卷 ${detail.volumeJp.size} 卷\nSakura ${detail.volumeJp.sumOf { it.sakura }} · GPT ${detail.volumeJp.sumOf { it.gpt }} · 有道 ${detail.volumeJp.sumOf { it.youdao }} / ${detail.volumeJp.sumOf { it.total }}") }
-                            if(detail.webIds.isNotEmpty()) item { SectionTitle("关联网络版"); detail.webIds.forEach { id -> AppTextButton(onClick = { c.book(BookRef.fromKey(id)) }, Modifier.padding(horizontal = 12.dp)) { Text(id) } } }
                         }
                         1 -> WenkuVolumesPanel(c, book, detail, uploadBusy,
                             onUpload = uploader.launch, onRefresh = refresh,
@@ -138,6 +144,15 @@ import kotlinx.coroutines.withContext
                         2 -> NovelCommentsPanel(c, "wenku-${ref.id}")
                     }
             }
+            if(relatedWeb && relatedWebRefs.isNotEmpty()) RelatedWebNovelsSheet(
+                refs = relatedWebRefs, requestKey = detailKey,
+                loadTitle = { webRef ->
+                    c.session.ensureCurrent(detailKey.binding)
+                    c.detail<WebDetail>("novel/${webRef.key}").title.also { c.session.ensureCurrent(detailKey.binding) }
+                },
+                onOpen = { webRef -> relatedWeb = false; c.book(webRef) },
+                onDismiss = { relatedWeb = false },
+            )
         } else CachedAsyncContent(c.uiResults.webDetails, detailKey, refreshKey = refreshKey,
             load = { c.detail<WebDetail>("novel/${ref.key}", forceNetwork = version > 0 || c.uiResults.webDetails.snapshot(detailKey) != null) },
             modifier = Modifier.padding(padding), validate = { c.session.ensureCurrent(detailKey.binding) }, revealContent = true) { detail, _ ->

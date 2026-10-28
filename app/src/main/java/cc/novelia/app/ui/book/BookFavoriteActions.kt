@@ -31,6 +31,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
     onCloud: () -> Unit,
     modifier: Modifier = Modifier,
     onDownload: (() -> Unit)? = null,
+    onRelatedWeb: (() -> Unit)? = null,
 ) {
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val stacked = maxWidth < (240 * LocalDensity.current.fontScale).dp
@@ -42,6 +43,9 @@ import cc.novelia.app.ui.theme.appReducedMotion
                 state.cloudFolder != null -> Icons.Outlined.CloudDone
                 else -> Icons.Outlined.CloudQueue
             }, state.cloudFolder != null, "book-cloud-favorite", "管理云端收藏", stacked, onCloud, actionModifier)
+            onRelatedWeb?.let { relatedWeb ->
+                FavoriteAction("相关网络版", Icons.Outlined.Language, false, "book-related-web", "查看相关网络小说", stacked, relatedWeb, actionModifier)
+            }
             onDownload?.let { download ->
                 FavoriteAction("下载", Icons.Outlined.Download, false, "book-download", "下载小说", stacked, download, actionModifier)
             }
