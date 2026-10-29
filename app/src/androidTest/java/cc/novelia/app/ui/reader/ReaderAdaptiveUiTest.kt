@@ -36,6 +36,62 @@ import org.junit.Test
 class ReaderAdaptiveUiTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun automaticScrollingAdvancesAndTouchPausesIt() = withReader(390.dp) { app, _, _ ->
+        compose.runOnIdle { app.store.update { it.copy(reader = it.reader.copy(autoReadSpeed = 80f)) } }
+        val before = scrollPosition()
+        startAutomaticReading()
+        compose.waitUntil(5_000) { scrollPosition() > before + .05f }
+        compose.onNodeWithTag("reader-scroll").performTouchInput { click(center) }
+        compose.onNodeWithTag("reader-auto-reading").assertDoesNotExist()
+        val stopped = scrollPosition()
+        Thread.sleep(250)
+        assertEquals(stopped, scrollPosition(), .001f)
+        assertEquals(80f, app.store.state.value.reader.autoReadSpeed)
+    }
+
+    @Test fun automaticPagesWaitThenAdvanceAndCanBePaused() = withReader(390.dp) { app, ref, _ ->
+        compose.runOnIdle { app.store.update { it.copy(reader = it.reader.withPaginationMode("auto").copy(autoReadIntervalSeconds = 5)) } }
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("正在分页…").fetchSemanticsNodes().isEmpty() }
+        val before = app.store.state.value.positions.getValue(ref.key)
+        startAutomaticReading()
+        compose.runOnIdle { assertEquals(before.textOffset, app.store.state.value.positions.getValue(ref.key).textOffset) }
+        compose.waitUntil(9_000) { app.store.state.value.positions[ref.key]?.textOffset != before.textOffset }
+        compose.onNodeWithTag("reader-page").performTouchInput { click(center) }
+        compose.onNodeWithTag("reader-auto-reading").assertDoesNotExist()
+    }
+
+    @Test fun automaticReadingContinuesIntoTheNextChapter() = withReader(390.dp, initialChapter = "second") { app, ref, _ ->
+        compose.runOnIdle { app.store.update { it.copy(reader = it.reader.copy(autoReadIntervalSeconds = 5)) } }
+        startAutomaticReading()
+        compose.waitUntil(12_000) { app.store.state.value.positions[ref.key]?.chapterId == "extra-3" }
+        compose.onNodeWithTag("reader-auto-reading").assertExists().performClick()
+        compose.onNodeWithTag("reader-auto-reading").assertDoesNotExist()
+    }
+
+    @Test fun automaticContinuationFailureKeepsTheChapterAndRetryStaysPaused() = withReader(390.dp, initialChapter = "second") { app, ref, _ ->
+        val index = app.store.documentIndex(ref.id)
+        val file = File(app.store.documentsDir, "${ref.id}-chapters/${index.chapterFiles.getValue("extra-3")}.json")
+        val original = file.readBytes()
+        try {
+            file.writeText("interrupted test fixture", Charsets.UTF_8)
+            compose.runOnIdle { app.store.update { it.copy(reader = it.reader.copy(autoReadIntervalSeconds = 5)) } }
+            startAutomaticReading()
+            compose.waitUntil(12_000) { compose.onAllNodesWithText("章节加载失败，仍在当前章").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithTag("reader-auto-reading").assertDoesNotExist()
+            assertEquals("second", app.store.state.value.positions[ref.key]?.chapterId)
+            file.writeBytes(original)
+            compose.onNodeWithText("重试加载章节").performClick()
+            compose.waitUntil(10_000) { app.store.state.value.positions[ref.key]?.chapterId == "extra-3" }
+            compose.onNodeWithTag("reader-auto-reading").assertDoesNotExist()
+        } finally { file.writeBytes(original) }
+    }
+
+    private fun startAutomaticReading() {
+        compose.onNodeWithContentDescription("自动阅读").performClick()
+        compose.onNodeWithText("开始自动阅读").performScrollTo().performClick()
+        compose.onNodeWithTag("reader-auto-reading").assertExists()
+    }
+
     @Test fun spokenSentenceFollowsInScrollModeAndManualTouchStopsFollowing() = verifySpeechFollowing(false)
     @Test fun spokenSentenceFollowsInPagesAndManualTouchStopsFollowing() = verifySpeechFollowing(true)
 

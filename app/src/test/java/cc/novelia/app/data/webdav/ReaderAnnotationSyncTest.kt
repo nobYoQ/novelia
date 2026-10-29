@@ -10,6 +10,25 @@ class ReaderAnnotationSyncTest {
     private fun documents(state: LibraryState, devices: Boolean = false) = SyncReplica(deviceId = "reader-test")
         .track(emptyMap(), WebDavProjection.library(state, includeDevicePreferences = devices)).bind("dataset").documents
 
+    @Test fun autoReadPaceSyncsWithoutAnyRunningStateAndLegacyRecordsKeepLocalValues() {
+        val settings = ReaderSettings(autoReadSpeed = 45f, autoReadIntervalSeconds = 25)
+        val docs = documents(LibraryState(reader = settings, bookSettings = mapOf(key to settings.copy(autoReadSpeed = 10f))))
+        docs.values.forEach { WebDavProjection.validateRecords(it) }
+        val restored = WebDavProjection.applyLibrary(LibraryState(), docs, setOf(SyncDomain.SETTINGS))
+        assertEquals(45f, restored.reader.autoReadSpeed)
+        assertEquals(25, restored.reader.autoReadIntervalSeconds)
+        assertEquals(10f, restored.bookSettings.getValue(key).autoReadSpeed)
+        val legacy = docs.getValue(SyncDomain.SETTINGS).let { doc -> doc.copy(records = doc.records.mapValues { (_, record) ->
+            record.copy(fields = record.fields - setOf("autoReadSpeed", "autoReadIntervalSeconds"))
+        }) }
+        WebDavProjection.validateRecords(legacy)
+        assertEquals(45f, WebDavProjection.applyLibrary(LibraryState(reader = settings), mapOf(SyncDomain.SETTINGS to legacy), setOf(SyncDomain.SETTINGS)).reader.autoReadSpeed)
+        for(value in listOf(4, 121)) assertThrows(IllegalArgumentException::class.java) {
+            WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "autoReadIntervalSeconds", JsonPrimitive(value))
+        }
+        assertThrows(IllegalArgumentException::class.java) { WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "autoReadSpeed", JsonPrimitive(0)) }
+    }
+
     @Test fun highlightsWithoutNoteTextSyncAndDeletingNotesDoesNotDeleteBookmarks() {
         val highlight = Note("highlight", key, "one", 3, "选文", "", bookmarked = false, selection = NoteSelection("gpt", start = 2, end = 4))
         val bookmark = Note("bookmark", key, "one", 3, "整个段落", "")

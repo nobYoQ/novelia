@@ -62,7 +62,7 @@ internal data class ReaderChapterSearchState(
     menu: Boolean, reducedMotion: Boolean, toolbarBackground: Color, foreground: Color,
     modifier: Modifier, onHeightChanged: (Int) -> Unit,
     onBack: () -> Unit, onRefresh: () -> Unit, onToggleSearch: () -> Unit,
-    onSpeech: () -> Unit, onReturnToReading: () -> Unit,
+    onSpeech: () -> Unit, onAutoRead: () -> Unit, onReturnToReading: () -> Unit,
     onQueryChange: (String) -> Unit, onFind: (Int) -> Unit, onBookSearch: () -> Unit,
 ) {
     ReaderOverlayVisibility(menu, modifier, enter = if(reducedMotion) EnterTransition.None else fadeIn(tween(AppMotion.Quick)) + slideInVertically(tween(AppMotion.Standard)) { -it }, exit = if(reducedMotion) ExitTransition.None else fadeOut(tween(AppMotion.Exit)) + slideOutVertically(tween(AppMotion.Release)) { -it }) {
@@ -74,6 +74,7 @@ internal data class ReaderChapterSearchState(
             }, actions = {
                 if(!state.localBook) AppIconButton(onClick = onRefresh, enabled = !state.leaving) { Icon(Icons.Outlined.Refresh, "刷新本章译文") }
                 AppIconButton(onClick = onToggleSearch) { Icon(Icons.Outlined.Search, "搜索本章") }
+                AppIconButton(onClick = onAutoRead) { Icon(Icons.Outlined.PlayArrow, "自动阅读") }
                 AppIconButton(onClick = onSpeech) {
                     if(state.speechStatus == ReadAloudService.SLEEP_TIMER_FINISHED) StickerAccent(MidoriSticker.Sleep, state.speechStatus, Modifier.size(40.dp).semantics { contentDescription = "朗读定时已结束，打开朗读设置" })
                     else Icon(Icons.Outlined.VolumeUp, "朗读本章")

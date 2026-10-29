@@ -219,6 +219,17 @@ class ReadAloudService : Service() {
         val status = MutableStateFlow("")
         internal val playback = MutableStateFlow<SpeechPlayback?>(null)
         internal fun follow(enabled: Boolean) { playback.update { it?.copy(following = enabled) } }
+        internal fun pauseForAutomaticReading(context: Context) {
+            // 连准备中的请求也要失效，防止用户启动自动阅读后旧队列才开始播放。
+            requestGeneration.incrementAndGet()
+            if(playback.value != null) {
+                follow(false)
+                context.startService(Intent(context, ReadAloudService::class.java).setAction("pause"))
+            } else if(status.value == "正在准备朗读…") {
+                context.stopService(Intent(context, ReadAloudService::class.java))
+                status.value = "朗读准备已取消"
+            }
+        }
         private val requestGeneration = AtomicLong()
         private val QUEUE_ID = Regex("[a-f0-9-]{36}")
         private fun queueFile(context: Context, id: String) = File(context.cacheDir, "tts-queue-$id.json")

@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
@@ -129,6 +130,10 @@ import kotlinx.serialization.encodeToString
     }
     var preferences by remember { mutableStateOf(false) }; var toc by remember { mutableStateOf(false) }; var search by remember { mutableStateOf(false) }; var query by rememberSaveable { mutableStateOf("") }; var version by remember { mutableIntStateOf(0) }
     var speechSheet by remember { mutableStateOf(false) }
+    var autoReadSheet by remember { mutableStateOf(false) }
+    var autoReading by remember(ref, chapterId) {
+        mutableStateOf(readerEntry?.savedStateHandle?.remove<Boolean>("readerAutoReading") ?: false)
+    }
     var editingTapZones by remember { mutableStateOf(false) }
     val preferenceState = rememberReaderPreferencesState(preferences)
     var tocQuery by rememberSaveable(ref.key) { mutableStateOf(readerEntry?.savedStateHandle?.remove<String>("readerTocQuery").orEmpty()) }
@@ -162,7 +167,10 @@ import kotlinx.serialization.encodeToString
     val speechStatus by ReadAloudService.status.collectAsStateWithLifecycle()
     val speechPlayback by ReadAloudService.playback.collectAsStateWithLifecycle()
     val lifecycleState by readingLifecycle.lifecycle.currentStateFlow.collectAsState()
-    fun pauseSpeechFollowing() { if(speechPlayback?.bookKey == ref.key) ReadAloudService.follow(false) }
+    fun pauseReadingAutomation() {
+        autoReading = false
+        if(speechPlayback?.bookKey == ref.key) ReadAloudService.follow(false)
+    }
     val context = LocalContext.current; val activity = context.activityOrNull()
     val colors = readerColors(settings, MaterialTheme.colorScheme)
     val reducedMotion = appReducedMotion()
@@ -171,9 +179,9 @@ import kotlinx.serialization.encodeToString
     val foreground = colors.foreground
     val toolbarBackground = colors.toolbar.copy(alpha = 1f - settings.resolvedToolbarTransparency)
     SideEffect { activity?.let { WindowCompat.getInsetsController(it.window, it.window.decorView).apply { isAppearanceLightStatusBars = background.luminance() > .5f; isAppearanceLightNavigationBars = background.luminance() > .5f } } }
-    DisposableEffect(settings.keepScreenOn, settings.brightness) {
+    DisposableEffect(settings.keepScreenOn, settings.brightness, autoReading) {
         val old = activity?.window?.attributes?.screenBrightness
-        if(settings.keepScreenOn) activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        if(settings.keepScreenOn || autoReading) activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         activity?.window?.attributes = activity?.window?.attributes?.apply { screenBrightness = settings.brightness }
         onDispose { activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); activity?.window?.attributes = activity?.window?.attributes?.apply { screenBrightness = old ?: -1f } }
     }
@@ -413,13 +421,16 @@ import kotlinx.serialization.encodeToString
             returnPointJson = appJson.encodeToString(retainReadingReturnPoint(returnPoint, current))
         }
         val onChapterLoaded by rememberUpdatedState<(ReaderChapterTarget, AppController.ReaderHandoff) -> Unit>({ target, loaded ->
-            if(!leaving && c.nav.currentBackStackEntry == readerEntry) {
+            if(!leaving && c.nav.currentBackStackEntry == readerEntry &&
+                (!target.automatic || (autoReading && readingLifecycle.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)))) {
+            val continueAutomatic = target.automatic && autoReading
             savePosition()
             c.readPreparedChapter(loaded)
             leaving = true
             c.nav.currentBackStackEntry?.savedStateHandle?.apply {
                 // 切换章节会重建阅读器，需一并交接工具栏可见状态。
                 set("readerMenuVisible", menu)
+                if(continueAutomatic) set("readerAutoReading", true)
                 set("readerTocQuery", tocQuery)
                 set("readerTocReversed", tocReversed)
                 set("readerTocIndex", tocScroll.firstVisibleItemIndex)
@@ -444,7 +455,17 @@ import kotlinx.serialization.encodeToString
         val reconnecting = cc.novelia.app.ui.components.base.networkReconnecting()
         var inlineChapterLoad by remember { mutableStateOf(false) }
         DisposableEffect(chapterLoad) { onDispose { chapterLoad.cancel() } }
-        val panelsClosed = !preferences && !editingTapZones && !search && (!toc || wide) && !speechSheet && !bookSearch && !nextVolumePrompt && selected == null && note == null
+        DisposableEffect(readingLifecycle, chapterLoad) {
+            val observer = LifecycleEventObserver { _, event ->
+                if(event == Lifecycle.Event.ON_PAUSE) {
+                    autoReading = false
+                    if(chapterLoad.target?.automatic == true) chapterLoad.cancel()
+                }
+            }
+            readingLifecycle.lifecycle.addObserver(observer)
+            onDispose { readingLifecycle.lifecycle.removeObserver(observer) }
+        }
+        val panelsClosed = !preferences && !editingTapZones && !search && (!toc || wide) && !speechSheet && !autoReadSheet && !bookSearch && !nextVolumePrompt && selected == null && note == null
         val showTapTutorial = settings.tapPageTurn && !local.readerTapTutorialSeen && panelsClosed && !leaving &&
             !chapterLoad.loading && chapterLoad.error == null && positionState.initialAnchorRestored && !positionState.restoringAnchor && seekTarget == null &&
             (!settings.staticPagination || eInk.ready)
@@ -454,15 +475,15 @@ import kotlinx.serialization.encodeToString
         val volumeKeysActive = panelsClosed && !showTapTutorial
         LaunchedEffect(volumeKeysActive) { if(volumeKeysActive) runCatching { focus.requestFocus() } }
         fun openChapter(id: String, startAtEnd: Boolean = false, match: ReadingTextMatch? = null, inline: Boolean = false,
-            restore: ReadingReturnPoint? = null, followingSpeech: Boolean = false) {
+            restore: ReadingReturnPoint? = null, followingSpeech: Boolean = false, automatic: Boolean = false) {
             if(leaving || id == chapterId) return
-            if(!followingSpeech) pauseSpeechFollowing()
+            if(!followingSpeech && !automatic) pauseReadingAutomation()
             seekGeneration++; seekJob?.cancel(); seekTarget = null
             inlineChapterLoad = inline
-            chapterLoad.request(ReaderChapterTarget(id, startAtEnd, match, restore))
+            chapterLoad.request(ReaderChapterTarget(id, startAtEnd, match, restore, automatic))
         }
         fun returnToReadingPlace() {
-            pauseSpeechFollowing()
+            pauseReadingAutomation()
             val target = returnPoint ?: return
             searchGeneration++; searchJob?.cancel(); finding = false; activeMatch = null
             search = false; bookSearch = false; toc = false; focusManager.clearFocus()
@@ -493,7 +514,7 @@ import kotlinx.serialization.encodeToString
             }
         }
         fun refreshChapter() {
-            pauseSpeechFollowing()
+            pauseReadingAutomation()
             seekGeneration++; seekJob?.cancel(); seekTarget = null
             chapterLoad.cancel()
             refreshAnchor = if(settings.staticPagination) ReadingRestoreAnchor(eInk.paragraph, eInk.sourceIndex, eInk.textOffset,
@@ -526,7 +547,7 @@ import kotlinx.serialization.encodeToString
             }
         }
         fun page(direction: Int) {
-            pauseSpeechFollowing()
+            pauseReadingAutomation()
             if(chapterLoad.loading || leaving) return
             seekGeneration++; seekJob?.cancel(); seekTarget = null
             if(settings.staticPagination) {
@@ -543,7 +564,7 @@ import kotlinx.serialization.encodeToString
             scope.launch(Dispatchers.Main.immediate) { if(reducedMotion) scroll.scrollBy(distance * direction) else scroll.animateScrollBy(distance * direction, tween(AppMotion.Standard)) }
         }
         fun seekChapter(progress: Float) {
-            pauseSpeechFollowing()
+            pauseReadingAutomation()
             if(leaving || chapterLoad.loading || positionState.restoringAnchor || !positionState.initialAnchorRestored ||
                 (settings.staticPagination && !eInk.ready)) return
             val generation = ++seekGeneration
@@ -586,8 +607,44 @@ import kotlinx.serialization.encodeToString
             if(current.chapterId != chapterId) openChapter(requireNotNull(current.chapterId), followingSpeech = true)
             else spokenMatch?.let { revealMatch(it, markSearch = false) }
         }
+        LaunchedEffect(autoReading, menu, panelsClosed, showTapTutorial, chapterLoad.error) {
+            if(menu || !panelsClosed || showTapTutorial || chapterLoad.error != null) autoReading = false
+            if(!autoReading && chapterLoad.loading && chapterLoad.target?.automatic == true) chapterLoad.cancel()
+        }
+        LaunchedEffect(autoReading, lifecycleState, layoutGeneration, chapterLoad.loading, panelsClosed, menu) {
+            if(!autoReading || menu || !panelsClosed || chapterLoad.loading || leaving ||
+                !lifecycleState.isAtLeast(Lifecycle.State.RESUMED)) return@LaunchedEffect
+            snapshotFlow { positionState.initialAnchorRestored && !positionState.restoringAnchor &&
+                (!settings.staticPagination || eInk.ready) }.first { it }
+            val discrete = settings.staticPagination || eInkInteraction
+            var previousFrame = android.os.SystemClock.elapsedRealtime()
+            var lastAutoSave = previousFrame
+            while(autoReading) {
+                val atEnd = if(settings.staticPagination) !eInk.canGoForward else !scroll.canScrollForward
+                delay(if(discrete || atEnd) settings.resolvedAutoReadIntervalSeconds * 1000L else 32L)
+                if(!autoReading || !readingLifecycle.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return@LaunchedEffect
+                if(atEnd) {
+                    if(chapter.nextId != null) openChapter(chapter.nextId, automatic = true)
+                    else {
+                        autoReading = false
+                        if(nextVolume != null) nextVolumePrompt = true else c.message("已到末章，自动阅读已暂停")
+                    }
+                    return@LaunchedEffect
+                }
+                if(settings.staticPagination) { eInk.move(1); savePosition() }
+                else {
+                    val now = android.os.SystemClock.elapsedRealtime()
+                    val distance = if(discrete) scroll.layoutInfo.viewportSize.height * .85f
+                        else autoReadDistance(settings, density.density, now - previousFrame)
+                    scroll.scrollBy(distance)
+                    previousFrame = now
+                    // 持续滚动不会触发原有“停止滚动 500 ms”保存，需要周期性落盘。
+                    if(now - lastAutoSave >= 2000) { savePosition(); lastAutoSave = now }
+                }
+            }
+        }
         fun findNext(direction: Int = 1) {
-            pauseSpeechFollowing()
+            pauseReadingAutomation()
             if(query.isBlank() || finding) return
             val term = query.trim()
             focusManager.clearFocus()
@@ -645,7 +702,7 @@ import kotlinx.serialization.encodeToString
             }
             VerticalDivider(Modifier.fillMaxHeight())
         }
-        Box(Modifier.weight(1f).fillMaxHeight().background(background).then(readerInteractionModifier { pauseSpeechFollowing() }).focusRequester(focus).onPreviewKeyEvent { event ->
+        Box(Modifier.weight(1f).fillMaxHeight().background(background).then(readerInteractionModifier { pauseReadingAutomation() }).focusRequester(focus).onPreviewKeyEvent { event ->
             val direction = readerKeyDirection(event.nativeKeyEvent.keyCode, settings.volumeKeys)
             if(volumeKeysActive && !seekFocused && direction != 0) {
                 if(event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) page(direction)
@@ -730,7 +787,8 @@ import kotlinx.serialization.encodeToString
                 modifier = Modifier.align(Alignment.TopCenter), onHeightChanged = { topOverlayHeight = it },
                 onBack = { if(!leaving) { seekGeneration++; seekJob?.cancel(); seekTarget = null; chapterLoad.cancel(); savePosition(); leaving = true; c.back() } },
                 onRefresh = { refreshChapter() }, onToggleSearch = { if(search) focusManager.clearFocus(); search = !search },
-                onSpeech = { speechSheet = true }, onReturnToReading = { returnToReadingPlace() },
+                onSpeech = { autoReading = false; speechSheet = true },
+                onAutoRead = { autoReading = false; autoReadSheet = true }, onReturnToReading = { returnToReadingPlace() },
                 onQueryChange = { searchGeneration++; searchJob?.cancel(); finding = false; query = it; activeMatch = null; chapterMatches = emptyList(); matchedQuery = "" },
                 onFind = { findNext(it) }, onBookSearch = { focusManager.clearFocus(); bookSearch = true },
             )
@@ -756,6 +814,11 @@ import kotlinx.serialization.encodeToString
                 onToc = { if(wide) { setWideToc(!settings.showWideToc); if(!settings.showWideToc) tocLocateRequest++ } else toc = true },
                 onBookmark = { paragraphs.getOrNull(firstParagraph)?.let { saveBookmark(it) } }, onPreferences = { preferences = true },
             )
+            if(autoReading) Surface(Modifier.align(Alignment.TopEnd).windowInsetsPadding(readingInsets).padding(12.dp)
+                .testTag("reader-auto-reading").clickable { autoReading = false },
+                color = toolbarBackground.copy(alpha = 1f), contentColor = foreground, shape = MaterialTheme.shapes.small) {
+                Text("自动阅读中 · 点按暂停", Modifier.padding(horizontal = 12.dp, vertical = 8.dp), style = MaterialTheme.typography.labelMedium)
+            }
             if((chapterLoad.loading && (!inlineChapterLoad || settings.staticPagination)) || chapterLoad.error != null) Surface(
                 Modifier.align(Alignment.BottomCenter).windowInsetsPadding(readingInsets)
                     .padding(bottom = with(density) { (bottomOverlayHeight - readingInsets.getBottom(density)).coerceAtLeast(0).toDp() })
@@ -810,6 +873,17 @@ import kotlinx.serialization.encodeToString
             ReaderTocPane(c, ref, tocState, { scope.launch { tocState.ensureLoaded(chapterId, knownChapterCount, refresh = true) } }, chapterId, tocScroll, tocQuery, { tocQuery = it }, tocReversed, { tocReversed = it }, tocLocateRequest, { tocLocateRequest = 0; tocLocated = true },
                 { id -> if(id != chapterId) rememberReadingPlace(); toc = false; openChapter(id) }, Modifier.fillMaxHeight(.8f))
         }
+        if(autoReadSheet) ReaderAutoReadSheet(settings, settings.staticPagination || eInkInteraction,
+            onDismiss = { autoReadSheet = false }, onSettings = { value ->
+                c.store.update { state ->
+                    if(state.bookSettings.containsKey(ref.key)) state.copy(bookSettings = state.bookSettings + (ref.key to value))
+                    else state.copy(reader = value)
+                }
+            }, onStart = {
+                pauseReadingAutomation()
+                ReadAloudService.pauseForAutomaticReading(context)
+                autoReadSheet = false; menu = false; autoReading = true
+            })
         if(speechSheet) ReaderSpeechSheet(settings, speechStatus, onDismiss = { speechSheet = false },
             onStart = {
                 menu = false
