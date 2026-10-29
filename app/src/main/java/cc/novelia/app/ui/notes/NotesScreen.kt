@@ -32,7 +32,7 @@ import cc.novelia.app.ui.navigation.AppController
 @Composable fun NotesScreen(c: AppController) {
     val state by c.store.state.collectAsStateWithLifecycle(); var editing by remember { mutableStateOf<Note?>(null) }
     var query by rememberSaveable { mutableStateOf("") }
-    var bookKey by rememberSaveable { mutableStateOf<String?>(null) }
+    var bookKey by rememberSaveable { mutableStateOf(c.nav.currentBackStackEntry?.savedStateHandle?.remove<String>("notesBookKey")) }
     var choosingBook by remember { mutableStateOf(false) }
     val settledQuery = rememberDebouncedQuery(query)
     val allNotes = remember(state.notes, state.books, state.positions) { presentNotes(state) }
@@ -64,6 +64,7 @@ import cc.novelia.app.ui.navigation.AppController
                     val ref = BookRef.fromKey(note.key)
                     c.read(ref, note.chapterId)
                     c.nav.currentBackStackEntry?.savedStateHandle?.set("readerNoteSourceIndex", note.paragraph)
+                    c.nav.currentBackStackEntry?.savedStateHandle?.set("readerNoteId", note.id)
                 }) { Text("回到原文") }
                 AppTextButton(onClick = { editing = note }, modifier = Modifier.heightIn(min = 48.dp)) { Text("编辑笔记") }
                 AppTextButton(onClick = { c.share("${item.bookTitle} · ${item.chapterTitle}\n\n${note.quote}" + if(note.text.isNotBlank()) "\n\n${note.text}" else "") }) { Text("分享") }
@@ -85,5 +86,5 @@ import cc.novelia.app.ui.navigation.AppController
             items(bookChoices, key = { it.note.key }) { item -> MenuRow(item.bookTitle, "${bookCounts[item.note.key] ?: 0} 条笔记", Icons.Outlined.MenuBook, { bookKey = item.note.key; choosingBook = false }) }
         }
     }
-    editing?.let { note -> NoteEditorDialog(note, { editing = null }) { value -> c.store.update { it.copy(notes = it.notes.map { n -> if(n.id == note.id) n.copy(text = value) else n }.filter { it.bookmarked || it.text.isNotBlank() }) } } }
+    editing?.let { note -> NoteEditorDialog(note, { editing = null }) { value -> c.store.update { it.copy(notes = it.notes.map { n -> if(n.id == note.id) n.copy(text = value) else n }.filter { it.bookmarked || it.text.isNotBlank() || it.selection != null }) } } }
 }

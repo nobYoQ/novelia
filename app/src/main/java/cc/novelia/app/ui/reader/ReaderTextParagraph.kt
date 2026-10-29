@@ -26,6 +26,7 @@ import kotlin.math.roundToInt
 
 @Composable internal fun ReaderTextParagraph(paragraph: ReadingParagraph, settings: ReaderSettings, layoutGeneration: Any, foreground: Color, onToggleMenu: () -> Unit, onSelect: () -> Unit, activeMatch: ReadingTextMatch?,
     fontFamily: FontFamily = rememberReaderFont(settings).family,
+    annotations: List<ReadingTextMatch> = emptyList(),
     onLayout: (Int, List<ReadingAnchorLine>) -> Unit) {
     val starts = remember(paragraph, settings.indent, settings.parallel) { paragraphPartStarts(paragraph, settings) }
     val latestLayout by rememberUpdatedState(onLayout)
@@ -50,6 +51,11 @@ import kotlin.math.roundToInt
             val highlighted = buildAnnotatedString {
                 val indent = if(settings.indent) "　　" else ""
                 append(indent); append(part.text)
+                annotations.filter { it.part == partIndex }.forEach {
+                    val start = (indent.length + it.start).coerceIn(0, length)
+                    val end = (indent.length + it.end).coerceIn(start, length)
+                    addStyle(SpanStyle(textDecoration = TextDecoration.Underline, background = foreground.copy(alpha = .1f)), start, end)
+                }
                 activeMatch?.takeIf { it.part == partIndex && it.end > it.start }?.let {
                     val start = (indent.length + it.start).coerceIn(0, length)
                     val end = (indent.length + it.end).coerceIn(start, length)

@@ -73,7 +73,7 @@ object WebDavProjection {
                 mapOf("position" to JsonObject(position)).asObject()
             }
             SyncDomain.BOOKMARKS, SyncDomain.NOTES -> state.notes.filter { isNetworkKey(it.key) &&
-                (if (domain == SyncDomain.BOOKMARKS) it.bookmarked else it.text.isNotEmpty()) }.associate { note ->
+                (if (domain == SyncDomain.BOOKMARKS) it.bookmarked else it.text.isNotEmpty() || it.selection != null) }.associate { note ->
                 val fields = json.encodeToJsonElement(Note.serializer(), note).jsonObject.filterKeys { it in annotationFields }.toMutableMap()
                 if (domain == SyncDomain.NOTES) fields["text"] = JsonPrimitive(note.text)
                 note.id to JsonObject(fields)
@@ -284,13 +284,16 @@ object WebDavProjection {
             val old = existing[id]
             val bookmarked = if (bookmarks == null) old?.bookmarked ?: false else id in bookmarks
             val text = if (notes == null) old?.text.orEmpty() else notes[id]?.get("text")?.jsonPrimitive?.content.orEmpty()
-            if (!bookmarked && text.isEmpty()) return@mapNotNull null
             val anchor = notes?.get(id) ?: bookmarks?.get(id)
-            if (anchor == null) old?.copy(bookmarked = bookmarked, text = text)
+            val selection = if(notes == null && old?.selection != null) old.selection else anchor?.get("selection")?.takeUnless { it == JsonNull }?.let {
+                json.decodeFromJsonElement(cc.novelia.app.data.model.NoteSelection.serializer(), it)
+            }
+            if (!bookmarked && text.isEmpty() && selection == null) return@mapNotNull null
+            if (anchor == null) old?.copy(bookmarked = bookmarked, text = text, selection = selection)
             else Note(id, anchor.getValue("key").jsonPrimitive.content, anchor.getValue("chapterId").jsonPrimitive.content,
                 anchor.getValue("paragraph").jsonPrimitive.intOrNull!!, anchor.getValue("quote").jsonPrimitive.content, text,
                 anchor.getValue("createdAt").jsonPrimitive.longOrNull!!, anchor.getValue("bookTitle").jsonPrimitive.content,
-                anchor.getValue("chapterTitle").jsonPrimitive.content, bookmarked)
+                anchor.getValue("chapterTitle").jsonPrimitive.content, bookmarked, selection)
         }
         return state.copy(notes = state.notes.filter { !isNetworkKey(it.key) } + merged)
     }

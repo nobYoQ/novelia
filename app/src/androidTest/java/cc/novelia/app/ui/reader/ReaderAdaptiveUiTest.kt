@@ -49,8 +49,6 @@ class ReaderAdaptiveUiTest {
         compose.runOnIdle { assertTrue(app.store.state.value.reader.showWideToc) }
     }
 
-
-
     @Test fun marginChangesPreserveTheCharacterAnchorInBothReadingModes() = withReader(390.dp) { app, ref, _ ->
         compose.onNodeWithTag("reader-scroll").performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 800f) }
         compose.waitUntil(10_000) { (app.store.state.value.positions[ref.key]?.textOffset ?: 0) > 0 }
@@ -77,7 +75,20 @@ class ReaderAdaptiveUiTest {
         assertTrue(app.store.state.value.positions.getValue(ref.key).textOffset + visible >= before.textOffset)
     }
 
-
+    @Test fun readerCreatesMultipleSelectionsAndCancellingANoteDoesNotSaveIt() = withReader(390.dp) { app, ref, _ ->
+        compose.onNode(hasText("第1段", substring = true) and hasClickAction()).performSemanticsAction(SemanticsActions.OnLongClick)
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("reader-selection-text").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("reader-selection-text").performTextInputSelection(androidx.compose.ui.text.TextRange(0, 3))
+        compose.onNodeWithText("划线").performScrollTo().performClick()
+        compose.waitUntil(5_000) { app.store.state.value.notes.any { it.key == ref.key && it.quote == "第1段" } }
+        compose.onNodeWithTag("reader-selection-text").performScrollTo().performTextInputSelection(androidx.compose.ui.text.TextRange(4, 8))
+        compose.onNodeWithText("划线").performScrollTo().performClick()
+        compose.waitUntil(5_000) { app.store.state.value.notes.count { it.key == ref.key && it.selection != null } == 2 }
+        compose.onNodeWithTag("reader-selection-text").performScrollTo().performTextInputSelection(androidx.compose.ui.text.TextRange(9, 12))
+        compose.onNodeWithText("写批注").performScrollTo().performClick()
+        compose.onNodeWithText("取消").performClick()
+        compose.runOnIdle { assertEquals(2, app.store.state.value.notes.count { it.key == ref.key && it.selection != null }) }
+    }
 
     @Test fun nextChapterAndLayoutChangesReuseTheLoadedDirectory() = verifyDirectoryReuse(eInk = false)
 
@@ -242,7 +253,7 @@ class ReaderAdaptiveUiTest {
                 LocalChapter("second", "第二章 归途", listOf("恢复后的下一章正文。"))
             ) + (3..100).map { LocalChapter("extra-$it", "续章 $it", listOf("续章正文 $it")) }))
             app.store.update { it.copy(reader = ReaderSettings(paginationMode = "scroll", width = 900f, eInkMode = eInk, showPageButtons = false, prefetchChapters = 0),
-                reducedMotion = true, historyPaused = false, positions = it.positions - ref.key, bookSettings = it.bookSettings - ref.key) }
+                reducedMotion = true, historyPaused = false, notes = it.notes.filterNot { note -> note.key == ref.key }, positions = it.positions - ref.key, bookSettings = it.bookSettings - ref.key) }
             compose.setContent {
                 NoveliaTheme("light") {
                     AppInteractionMode(eInk, true) {

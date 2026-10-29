@@ -191,6 +191,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
     onToggleMenu: () -> Unit, onSelect: (ReadingParagraph) -> Unit, onPage: (Int) -> Unit,
     background: Color = Color.White, foreground: Color = Color.Black,
     activeMatch: ReadingTextMatch? = null,
+    annotations: List<ReadingTextMatch> = emptyList(),
     interactionEnabled: Boolean = true, contentPadding: PaddingValues = PaddingValues(0.dp), onNavigate: () -> Unit = {},
 ) {
     val density = LocalDensity.current
@@ -311,7 +312,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
                 val shift = if(animate) pageOffset * extent else 0f
                 val direction = when { shift < 0 -> 1; shift > 0 -> -1; else -> 0 }
                 @Composable fun body(content: StaticPage?, offset: Float) {
-                    PageBody(content, chapter, settings, foreground, activeMatch, density, context,
+                    PageBody(content, chapter, settings, foreground, activeMatch, annotations, density, context,
                         tapNavigation, onSelect, imageModel, { expandedImage = it }, constraints.maxHeight,
                         Modifier.fillMaxSize().graphicsLayer {
                             translationX = if(dragAxis == 0) offset else 0f
@@ -341,6 +342,7 @@ private fun PageBody(
     settings: ReaderSettings,
     foreground: Color,
     activeMatch: ReadingTextMatch?,
+    annotations: List<ReadingTextMatch>,
     density: Density,
     context: android.content.Context,
     tapNavigation: ReaderTapNavigation,
@@ -395,6 +397,18 @@ private fun PageBody(
                         native.save()
                         native.scale(drawScale, drawScale)
                         native.translate(0f, -top.toFloat())
+                        val annotationSpans = mutableListOf<UnderlineSpan>()
+                        val spannable = layout.text as? android.text.Spannable
+                        annotations.filter { it.paragraph == index }.forEach { match ->
+                            val start = match.textOffset(paragraph, settings).coerceIn(0, layout.text.length)
+                            val end = (start + match.end - match.start).coerceIn(start, layout.text.length)
+                            val path = android.graphics.Path()
+                            layout.getSelectionPath(start, end, path)
+                            native.drawPath(path, android.graphics.Paint().apply { color = foreground.copy(alpha = .1f).toArgb() })
+                            if(spannable != null) UnderlineSpan().also {
+                                spannable.setSpan(it, start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE); annotationSpans += it
+                            }
+                        }
                         activeMatch?.takeIf { it.paragraph == index && it.end > it.start }?.let { match ->
                             val start = match.textOffset(paragraph, settings).coerceIn(0, layout.text.length)
                             val end = (start + match.end - match.start).coerceIn(start, layout.text.length)
@@ -403,7 +417,7 @@ private fun PageBody(
                             native.drawPath(path, android.graphics.Paint().apply { color = foreground.copy(alpha = .2f).toArgb() })
                         }
                         layout.paint.color = foreground.toArgb()
-                        layout.draw(native)
+                        try { layout.draw(native) } finally { annotationSpans.forEach { spannable?.removeSpan(it) } }
                         native.restore()
                     }
                 }

@@ -17,7 +17,7 @@ import cc.novelia.app.ui.components.base.AppAlertDialog
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(note.quote, maxLines = 3, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             OutlinedTextField(text, { text = it }, Modifier.fillMaxWidth(), label = { Text("笔记内容") },
-                supportingText = { Text("留空仅保留书签") }, minLines = 3, maxLines = 6)
+                supportingText = { Text(if(note.selection != null) "留空保留划线" else "留空仅保留书签") }, minLines = 3, maxLines = 6)
         }
     }, confirmButton = {
         AppTextButton(onClick = { onSave(text.trim()); onDismiss() }, modifier = Modifier.heightIn(min = 48.dp)) { Text("保存笔记") }

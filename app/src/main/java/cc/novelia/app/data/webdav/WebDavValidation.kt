@@ -12,6 +12,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 
 import cc.novelia.app.data.webdav.WebDavSchema.FOLDER
@@ -113,6 +114,14 @@ internal object WebDavValidation {
                     "createdAt" -> nonnegativeLong(value)
                     "quote" -> text(value, 100_000)
                     "text" -> text(value, 1_000_000)
+                    "selection" -> if(value != JsonNull) {
+                        require(value is JsonObject && value.keys == setOf("source", "occurrence", "start", "end")) { "批注选区不完整" }
+                        text(value.getValue("source"), 80, false)
+                        nonnegativeInt(value.getValue("occurrence"), 1000)
+                        nonnegativeInt(value.getValue("start"), 10_000_000)
+                        nonnegativeInt(value.getValue("end"), 10_000_000)
+                        require(value.getValue("end").jsonPrimitive.intOrNull!! > value.getValue("start").jsonPrimitive.intOrNull!!) { "批注选区无效" }
+                    }
                     else -> text(value, 2_000)
                 }
             }
@@ -174,12 +183,16 @@ internal object WebDavValidation {
                 SyncDomain.FAVORITES -> if (key == ORDER) setOf("ids") else if (key.startsWith(FOLDER)) setOf("name") else setOf("book", "folderId", "pinned", "status", "addedAt")
                 SyncDomain.KEYWORDS -> if (key == ORDER) orderFields else if (key.startsWith(CATEGORY)) categoryFields else keywordEntryFields
                 SyncDomain.PROGRESS -> setOf("position")
-                SyncDomain.BOOKMARKS -> annotationFields
-                SyncDomain.NOTES -> annotationFields + "text"
+                SyncDomain.BOOKMARKS -> annotationFields - "selection"
+                SyncDomain.NOTES -> (annotationFields - "selection") + "text"
                 SyncDomain.HISTORY -> historyFields
             }
             // 老版同步快照可能缺少新增偏好，保留本机选择；字段存在时仍完整校验。
-            val optional = if (document.domain == SyncDomain.SETTINGS && (key == READER || key.startsWith(BOOK_SETTING))) setOf("devicePreferences", "customColors", "showReadingStatusBar", "horizontalMargin", "verticalMargin") else emptySet()
+            val optional = when {
+                document.domain == SyncDomain.SETTINGS && (key == READER || key.startsWith(BOOK_SETTING)) -> setOf("devicePreferences", "customColors", "showReadingStatusBar", "horizontalMargin", "verticalMargin")
+                document.domain == SyncDomain.NOTES || document.domain == SyncDomain.BOOKMARKS -> setOf("selection")
+                else -> emptySet()
+            }
             require(required.all { field -> record.fields[field]?.let { WebDavMerge.winner(it)?.deleted == false } == true } &&
                 record.fields.all { (field, cell) -> WebDavMerge.winner(cell)?.deleted != false || field in required || field in optional }) {
                 "同步记录字段不完整，请恢复有效的远端数据"

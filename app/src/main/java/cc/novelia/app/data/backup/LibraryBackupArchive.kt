@@ -140,6 +140,7 @@ internal object LibraryBackupArchive {
                 settings.secondaryAlpha in 0f..1f && (settings.brightness == -1f || settings.brightness in 0f..1f)) { "备份阅读设置无效" }
         }
         require(state.positions.values.all { it.index >= 0 && it.offset >= 0 && it.textOffset >= 0 }) { "备份阅读进度无效" }
+        require(state.notes.all { note -> note.selection?.let { it.valid && it.end - it.start == note.quote.length } != false }) { "备份批注选区无效" }
         require(localDocumentIds(state).all { it in documentIds || it in missing }) { "备份包含未列入索引的本地文档" }
         val books = state.books.associateBy { it.book.ref.key }
         state.books.forEach { book ->

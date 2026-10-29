@@ -34,7 +34,7 @@ internal object WebDavSchema {
         "updateAt", "translations", "volumeIds", "authors", "novelType", "attentions", "totalCharacters")
     val positionFields = setOf("chapterId", "sourceParagraph", "textOffset", "title", "updatedAt", "anchorSource", "chapterIndex",
         "chapterCount", "paragraphCount", "chapterCompleted", "anchorTextHash")
-    val annotationFields = setOf("key", "chapterId", "paragraph", "quote", "createdAt", "bookTitle", "chapterTitle")
+    val annotationFields = setOf("key", "chapterId", "paragraph", "quote", "createdAt", "bookTitle", "chapterTitle", "selection")
     val historyFields = setOf("bookKey", "bookTitle", "chapterId", "chapterTitle", "lastReadAt")
 
     fun isNetworkKey(key: String): Boolean {

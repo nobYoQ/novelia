@@ -6,6 +6,8 @@ import cc.novelia.app.ui.components.base.AppTextButton
 import cc.novelia.app.ui.components.base.AppOutlinedButton
 import cc.novelia.app.ui.components.base.AppIconButton
 import android.content.Intent
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
@@ -219,6 +221,13 @@ import kotlinx.serialization.encodeToString
         LaunchedEffect(ref, chapterId, chapter, version) { cachedWrittenAt = withContext(Dispatchers.IO) { chapterFreshness(c.store, ref, chapterId) } }
         val translationUpdate = local.bookUpdates[ref.key]?.takeIf { update -> cached && !ref.isLocal && cachedWrittenAt < update.latestTranslationAt(settings.engines) }
         key(ref, chapterId, chapter) {
+        val chapterNotes = remember(local.notes, ref, chapterId) { local.notes.filter { it.key == ref.key && it.chapterId == chapterId } }
+        val noteArrival = remember { readerEntry?.savedStateHandle?.remove<String>("readerNoteId")?.let { id -> chapterNotes.firstOrNull { it.id == id } } }
+        val noteArrivalMatch = remember { noteArrival?.let { note -> paragraphs.withIndex().firstNotNullOfOrNull { (index, paragraph) -> noteMatch(note, paragraph, index) } } }
+        val annotations = remember(chapterNotes, paragraphs) {
+            val bySource = chapterNotes.groupBy { it.paragraph }
+            paragraphs.withIndex().flatMap { (index, paragraph) -> bySource[paragraph.index].orEmpty().mapNotNull { noteMatch(it, paragraph, index) } }
+        }
         val searchArrival = remember(ref, chapterId) { readerEntry?.savedStateHandle?.remove<Int>("readerSearchParagraph") }
         val arrivalMatch = remember(ref, chapterId) {
             val state = readerEntry?.savedStateHandle
@@ -227,7 +236,7 @@ import kotlinx.serialization.encodeToString
             val end = state?.remove<Int>("readerSearchEnd") ?: start
             searchArrival?.let { ReadingTextMatch(it, part, start, end) }
         }
-        var activeMatch by remember { mutableStateOf(arrivalMatch) }
+        var activeMatch by remember { mutableStateOf(arrivalMatch ?: noteArrivalMatch) }
         var chapterMatches by remember { mutableStateOf<List<ReadingTextMatch>>(emptyList()) }
         var matchedQuery by remember { mutableStateOf("") }
         var searchedParagraphs by remember { mutableStateOf(paragraphs) }
@@ -243,7 +252,9 @@ import kotlinx.serialization.encodeToString
             val noteAnchor = noteSource?.let { readingSourceAnchor(chapter, it) }
             val returned = readerEntry?.savedStateHandle?.remove<String>("readerRestorePosition")
                 ?.let { runCatching { appJson.decodeFromString<ReadingReturnPoint>(it).resolvedPosition(paragraphs, settings) }.getOrNull() }
-            if(noteAnchor != null) Position(chapterId,
+            if(noteArrivalMatch != null) Position(chapterId, noteArrivalMatch.paragraph + 1,
+                textOffset = noteArrivalMatch.textOffset(paragraphs[noteArrivalMatch.paragraph], settings))
+            else if(noteAnchor != null) Position(chapterId,
                 paragraphs.indexOfFirst { it.index >= noteAnchor }
                     .takeIf { it >= 0 }?.plus(1) ?: paragraphs.size)
             else if(returned != null) returned
@@ -293,6 +304,16 @@ import kotlinx.serialization.encodeToString
         }
         val hasFallback = remember(paragraphs) { paragraphs.any { it.fallback } }
         var selected by remember { mutableStateOf<ReadingParagraph?>(null) }
+        var versions by remember { mutableStateOf<ReadingParagraph?>(null) }
+        LaunchedEffect(selected, chapter, settings.traditional) {
+            versions = null
+            selected?.let { paragraph ->
+                versions = withContext(Dispatchers.Default) {
+                    val jobContext = currentCoroutineContext()
+                    paragraphVersions(chapter, paragraph.index, settings) { jobContext.ensureActive() } ?: paragraph
+                }
+            }
+        }
         var note by remember { mutableStateOf<Note?>(null) }
         var bookmarkFeedback by remember { mutableStateOf<Job?>(null) }
         fun saveBookmark(paragraph: ReadingParagraph, edit: Boolean = false) {
@@ -301,11 +322,11 @@ import kotlinx.serialization.encodeToString
                 bookTitle = c.store.state.value.books.firstOrNull { it.book.ref == ref }?.book?.title
                     ?: chapter.novelTitleZh?.takeIf(String::isNotBlank) ?: chapter.novelTitleJp.orEmpty(), chapterTitle = chapter.title)
             c.store.update { state ->
-                if(state.notes.any { it.key == ref.key && it.chapterId == chapterId && it.paragraph == paragraph.index })
-                    if(edit) state else state.copy(notes = state.notes.map { if(it.key == ref.key && it.chapterId == chapterId && it.paragraph == paragraph.index) it.copy(bookmarked = true) else it })
+                if(state.notes.any { it.key == ref.key && it.chapterId == chapterId && it.paragraph == paragraph.index && it.selection == null })
+                    if(edit) state else state.copy(notes = state.notes.map { if(it.key == ref.key && it.chapterId == chapterId && it.paragraph == paragraph.index && it.selection == null) it.copy(bookmarked = true) else it })
                 else state.copy(notes = state.notes + candidate)
             }
-            val saved = c.store.state.value.notes.firstOrNull { it.key == ref.key && it.chapterId == chapterId && it.paragraph == paragraph.index } ?: return
+            val saved = c.store.state.value.notes.firstOrNull { it.key == ref.key && it.chapterId == chapterId && it.paragraph == paragraph.index && it.selection == null } ?: return
             bookmarkFeedback?.cancel()
             if(edit) note = saved
             else bookmarkFeedback = scope.launch {
@@ -620,7 +641,7 @@ import kotlinx.serialization.encodeToString
                     .widthIn(max = settings.width.dp).fillMaxWidth(),
                 imageModel = { it.imageUrl ?: it.localImageId?.takeIf { ref.isLocal }?.let { id -> c.store.documentImage(ref.id, id) } },
                 onToggleMenu = { menu = !menu }, onSelect = { selected = it }, onPage = { page(it) },
-                background = background, foreground = foreground, activeMatch = activeMatch,
+                background = background, foreground = foreground, activeMatch = activeMatch, annotations = annotations,
                 interactionEnabled = bodyInputEnabled, contentPadding = PaddingValues(horizontal = settings.resolvedHorizontalMargin.dp, vertical = settings.resolvedVerticalMargin.dp), onNavigate = openToc)
             else LazyColumn(state = scroll, overscrollEffect = null, modifier = Modifier.testTag("reader-scroll").align(Alignment.TopCenter).fillMaxHeight()
                 .windowInsetsPadding(readingInsets).padding(bottom = readingStatusBarHeight).widthIn(max = settings.width.dp).fillMaxWidth()
@@ -655,7 +676,8 @@ import kotlinx.serialization.encodeToString
                         paragraph.imageUrl ?: paragraph.localImageId?.takeIf { ref.isLocal }?.let { c.store.documentImage(ref.id, it) }
                     }
                     if(image != null) ReaderIllustration(image, foreground, tapNavigation::click)
-                    else ReaderTextParagraph(paragraph, settings, layoutGeneration, foreground, tapNavigation::click, { selected = paragraph }, activeMatch?.takeIf { it.paragraph == paragraphIndex }, fontFamily = readerFont.family) { part, lines ->
+                    else ReaderTextParagraph(paragraph, settings, layoutGeneration, foreground, tapNavigation::click, { selected = paragraph }, activeMatch?.takeIf { it.paragraph == paragraphIndex }, fontFamily = readerFont.family,
+                        annotations = annotations.filter { it.paragraph == paragraphIndex }) { part, lines ->
                         val existing = scrollLayouts[paragraph.index] ?: ParagraphScrollLayout()
                         if(existing.parts[part] != lines) scrollLayouts[paragraph.index] = existing.copy(parts = existing.parts + (part to lines))
                     }
@@ -784,13 +806,35 @@ import kotlinx.serialization.encodeToString
             onStop = { context.startService(Intent(context, ReadAloudService::class.java).setAction("stop")) },
             onSettings = { speechSheet = false; preferences = true },
         )
-        selected?.let { paragraph -> ReaderParagraphSheet(paragraph, onDismiss = { selected = null },
-            onShare = { c.share(paragraph.parts.joinToString("\n\n") { it.text }); selected = null },
+        selected?.let { paragraph -> ReaderParagraphSheet(paragraph, versions, chapterNotes.filter { it.paragraph == paragraph.index }, onDismiss = { selected = null },
+            onCopy = { text -> context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("选文", text)); c.message("选文已复制") },
+            onShare = c::share, onLookup = { lookupReaderText(context, it, c::message) },
             onBookmark = { saveBookmark(paragraph); selected = null },
-            onEditNote = { saveBookmark(paragraph, edit = true); selected = null },
+            onAnnotate = { quote, selection, edit ->
+                val existing = chapterNotes.firstOrNull { it.paragraph == paragraph.index && it.selection == selection && it.quote == quote }
+                val candidate = existing ?: Note(UUID.randomUUID().toString(), ref.key, chapterId, paragraph.index, quote, "",
+                    bookTitle = local.books.firstOrNull { it.book.ref == ref }?.book?.title
+                        ?: chapter.novelTitleZh?.takeIf(String::isNotBlank) ?: chapter.novelTitleJp.orEmpty(),
+                    chapterTitle = chapter.title, bookmarked = false, selection = selection)
+                if(edit) { note = candidate; selected = null }
+                else { if(existing == null) c.store.update { it.copy(notes = it.notes + candidate) }; c.message(if(existing == null) "划线已保存" else "此选文已保存") }
+            },
+            onEditNote = { note = it; selected = null },
+            onNotes = { selected = null; c.go("notes"); c.nav.currentBackStackEntry?.savedStateHandle?.set("notesBookKey", ref.key) },
+            onDeleteNote = { removed ->
+                c.store.update { it.copy(notes = it.notes.filterNot { n -> n.id == removed.id }) }
+                scope.launch {
+                    if(c.snackbar.showSnackbar("记录已删除", actionLabel = "撤销", withDismissAction = true) == SnackbarResult.ActionPerformed)
+                        c.store.update { if(it.notes.any { n -> n.id == removed.id }) it else it.copy(notes = it.notes + removed) }
+                }
+            },
         ) }
         note?.let { bookmark -> NoteEditorDialog(bookmark, { note = null }) { text ->
-            c.store.update { it.copy(notes = it.notes.map { existing -> if(existing.id == bookmark.id) existing.copy(text = text) else existing }.filter { it.bookmarked || it.text.isNotBlank() }) }
+            c.store.update { state ->
+                val updated = if(state.notes.any { it.id == bookmark.id }) state.notes.map { if(it.id == bookmark.id) it.copy(text = text) else it }
+                    else state.notes + bookmark.copy(text = text)
+                state.copy(notes = updated.filter { it.bookmarked || it.text.isNotBlank() || it.selection != null })
+            }
             bookmarkFeedback?.cancel()
             bookmarkFeedback = scope.launch { c.snackbar.showSnackbar("笔记已保存") }
         } }
