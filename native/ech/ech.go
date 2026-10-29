@@ -20,15 +20,23 @@ import (
 // Client owns reusable TLS connections and DNS/ECH caches. All protected calls
 // require accepted ECH; there is no automatic plaintext-SNI fallback.
 type Client struct {
-	transportMu sync.RWMutex
-	core        *core.Client
-	probe       *core.Client
-	transport   *http.Transport
-	do          func(*http.Request) (*http.Response, error)
+	transportMu       sync.RWMutex
+	core              *core.Client
+	probe             *core.Client
+	transport         *http.Transport
+	resolverTransport *resolverHTTPTransport
+	proxy             ProxyResolver
+	do                func(*http.Request) (*http.Response, error)
 }
 
 func NewClient() *Client {
+	return NewClientWithProxyResolver(nil)
+}
+
+func NewClientWithProxyResolver(proxy ProxyResolver) *Client {
 	config := core.DefaultConfig()
+	resolverTransport := newResolverHTTPTransport(proxy)
+	config.ResolverTransport = resolverTransport
 	// Each provider supplies A, AAAA and HTTPS records. Do not mix their answers.
 	// IP-literal endpoints also work when the system DNS resolver is unavailable.
 	config.WireResolvers = []string{
@@ -50,7 +58,7 @@ func NewClient() *Client {
 	if err != nil {
 		panic("invalid built-in ECH probe configuration")
 	}
-	client := &Client{core: c, probe: p, transport: newHTTPTransport(c)}
+	client := &Client{core: c, probe: p, transport: newHTTPTransport(c, proxy), resolverTransport: resolverTransport, proxy: proxy}
 	client.do = client.doCurrent
 	return client
 }
@@ -79,19 +87,20 @@ func protectedURL(raw string) bool {
 
 // Call can be cancelled while connecting, uploading, awaiting headers or reading.
 type Call struct {
-	client         *Client
-	request        *http.Request
-	connectTimeout time.Duration
-	readTimeout    time.Duration
-	writeTimeout   time.Duration
-	ctx            context.Context
-	cancel         context.CancelFunc
-	mu             sync.Mutex
-	readMu         sync.Mutex
-	executed       bool
-	body           io.ReadCloser
-	failure        string
-	diagnostics    *connectionDiagnostics
+	client          *Client
+	request         *http.Request
+	connectTimeout  time.Duration
+	readTimeout     time.Duration
+	writeTimeout    time.Duration
+	connectAttempts int
+	ctx             context.Context
+	cancel          context.CancelFunc
+	mu              sync.Mutex
+	readMu          sync.Mutex
+	executed        bool
+	body            io.ReadCloser
+	failure         string
+	diagnostics     *connectionDiagnostics
 }
 
 // Upload is fed by a bounded Android pipe; no request body is saved to disk.
@@ -156,10 +165,22 @@ func (c *Client) NewCall(method, rawURL, headersJSON string, upload Upload, cont
 		// GetBody stays nil: a non-idempotent upload is never automatically replayed.
 	}
 	return &Call{client: c, request: request,
-		connectTimeout: time.Duration(connectTimeoutMillis) * time.Millisecond,
-		readTimeout:    time.Duration(readTimeoutMillis) * time.Millisecond,
-		writeTimeout:   time.Duration(writeTimeoutMillis) * time.Millisecond,
-		ctx:            ctx, cancel: cancel, diagnostics: diagnostics}, nil
+		connectAttempts: 3,
+		connectTimeout:  time.Duration(connectTimeoutMillis) * time.Millisecond,
+		readTimeout:     time.Duration(readTimeoutMillis) * time.Millisecond,
+		writeTimeout:    time.Duration(writeTimeoutMillis) * time.Millisecond,
+		ctx:             ctx, cancel: cancel, diagnostics: diagnostics}, nil
+}
+
+// SetConnectAttempts lets a bounded outer recovery policy own retries without multiplying them.
+func (c *Call) SetConnectAttempts(attempts int) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.executed || attempts < 1 || attempts > 3 {
+		return errors.New("invalid connect attempts")
+	}
+	c.connectAttempts = attempts
+	return nil
 }
 
 // Reply contains headers only. The body remains streamed through Call.Read.
@@ -212,7 +233,7 @@ func (c *Call) Execute() (*Reply, error) {
 		GotFirstResponseByte: func() { diagnostic(c.ctx, diagnosticEvent{Stage: "first_byte", Outcome: "ok"}) },
 	}
 	request := c.request.Clone(httptrace.WithClientTrace(c.request.Context(), trace))
-	response, err := doWithConnectRetry(c.client.do, request, c.connectTimeout)
+	response, err := doWithConnectRetry(c.client.do, request, c.connectTimeout, c.connectAttempts)
 	phase.stop()
 	if err != nil {
 		diagnostic(c.ctx, diagnosticEvent{Stage: "request", Outcome: "failed", Reason: diagnosticReason(err)})
@@ -327,7 +348,7 @@ func (c *Client) Probe(host string) string {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	connection, err := dialResolvedECH(ctx, c.probe, "tcp", host)
+	connection, err := dialResolvedECH(ctx, c.probe, "tcp", host, c.proxy)
 	if err == nil {
 		connection.Close()
 		return "TLS 1.3 / ECH 握手成功"
@@ -348,8 +369,9 @@ func (c *Client) ResetNetworkState() {
 	defer c.transportMu.Unlock()
 	c.core.ResetNetworkState()
 	c.probe.ResetNetworkState()
+	c.resolverTransport.reset()
 	previous := c.transport
-	c.transport = newHTTPTransport(c.core)
+	c.transport = newHTTPTransport(c.core, c.proxy)
 	previous.CloseIdleConnections()
 }
 
@@ -359,12 +381,20 @@ func failureReason(detail string) string {
 	switch {
 	case strings.Contains(text, "x509"), strings.Contains(text, "certificate"):
 		return "证书验证未通过"
+	case strings.Contains(text, "proxy authentication"):
+		return "系统代理需要认证"
+	case strings.Contains(text, "unsupported system proxy"), strings.Contains(text, "invalid system proxy"):
+		return "系统代理配置不受支持"
+	case strings.Contains(text, "proxy"):
+		return "系统代理连接失败"
 	case strings.Contains(text, "deadline"), strings.Contains(text, "timeout"), strings.Contains(text, "context canceled"):
 		return "连接超时"
 	case strings.Contains(text, "reset"), strings.Contains(text, "forcibly closed"), strings.Contains(text, "eof"):
 		return "连接被中断"
 	case strings.Contains(text, "rejected"):
 		return "服务器拒绝 ECH 配置"
+	case strings.HasPrefix(text, "tcp:"), strings.Contains(text, "dial tcp"), strings.Contains(text, "no such host"), strings.Contains(text, "network is unreachable"), strings.Contains(text, "network is down"):
+		return "连接失败"
 	default:
 		return "TLS 协商未完成"
 	}

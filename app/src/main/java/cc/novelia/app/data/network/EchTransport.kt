@@ -45,6 +45,7 @@ class EchTransport(context: Context) {
         recorder.system("network", if (snapshot.ready) "ready" else "unavailable", networkGeneration = connections.generation())
     })
     private val networkMonitor = AndroidNetworkMonitor(applicationContext, networkChanges)
+    internal val networkStatus get() = connections.state
     private val diagnosticEchClient by lazy { diagnosticClient(true) }
     private val diagnosticDirectClient by lazy { diagnosticClient(false) }
     // Separate pool and no account, source routing, ECH or request logging for public services/WebDAV.
@@ -55,6 +56,7 @@ class EchTransport(context: Context) {
             .connectTimeout(8, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
             .writeTimeout(60, TimeUnit.SECONDS)
+            .callTimeout(FOREGROUND_REQUEST_MILLIS, TimeUnit.MILLISECONDS)
             .followRedirects(false)
             .addInterceptor(NetworkGenerationInterceptor(connections))
             .addInterceptor(EchInterceptor(engine, { state.value }))
@@ -76,6 +78,7 @@ class EchTransport(context: Context) {
     /** Reuse for novel/forum APIs and their sessions; derive download/image clients from this one. */
     fun client(): OkHttpClient = httpClient
     internal fun publicClient(): OkHttpClient = publicHttpClient
+    internal fun imageRecovery() = NetworkImageRecovery(connections)
 
     private fun diagnosticClient(ech: Boolean) = recorder.attach(OkHttpClient.Builder()) { ech }
         .connectTimeout(8, TimeUnit.SECONDS).readTimeout(20, TimeUnit.SECONDS)

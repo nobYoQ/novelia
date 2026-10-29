@@ -1,14 +1,13 @@
 package cc.novelia.app.data.network
 
 import java.io.IOException
-import java.net.ProtocolException
 import java.util.IdentityHashMap
 import java.util.WeakHashMap
-import javax.net.ssl.SSLException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -25,9 +24,9 @@ import okio.Buffer
 import okio.ForwardingSource
 import okio.buffer
 
-internal data class NetworkStatus(val generation: Long = 0, val ready: Boolean = false)
+internal data class NetworkStatus(val generation: Long = 0, val ready: Boolean = false, val recovering: Int = 0)
 internal data class NetworkRequestGeneration(val value: Long, val pool: ConnectionPool? = null)
-/** Opt-in only for fully buffered, bodyless reads; streaming consumers must never replay implicitly. */
+/** Opt-in for bodyless reads with an owner that can safely discard or validate partial results. */
 internal object RecoverableNetworkRead
 internal class NetworkChangedException(val connections: NetworkConnections, val generation: Long,
     cause: IOException) : IOException("网络切换导致连接中断，请重试", cause)
@@ -36,6 +35,7 @@ internal class NetworkChangedException(val connections: NetworkConnections, val 
 internal class NetworkConnections(private val resetNative: () -> Unit,
     private val now: () -> Long = { System.nanoTime() / 1_000_000 }, private val stallMillis: Long = 3_000) {
     private val status = MutableStateFlow(NetworkStatus())
+    val state = status.asStateFlow()
     private var snapshot = NetworkSnapshot()
     private var changing = false
     private var changedAt = 0L
@@ -73,7 +73,7 @@ internal class NetworkConnections(private val resetNative: () -> Unit,
         resolvers.clear()
         clients.clear()
         changedAt = now()
-        status.value = NetworkStatus(status.value.generation + 1, ready)
+        status.value = status.value.copy(generation = status.value.generation + 1, ready = ready)
         updateWatch()
     }
 
@@ -85,7 +85,7 @@ internal class NetworkConnections(private val resetNative: () -> Unit,
             val dns = resolvers.getOrPut(delegate) {
                 object : Dns { override fun lookup(hostname: String) = delegate.lookup(hostname) }
             }
-            client.newBuilder().connectionPool(pool).dns(dns).build()
+            client.newBuilder().connectionPool(pool).dns(dns).retryOnConnectionFailure(false).build()
         }
         return managed.newCall(request.newBuilder()
             .tag(NetworkRequestGeneration::class.java, NetworkRequestGeneration(status.value.generation, pool)).build())
@@ -119,6 +119,11 @@ internal class NetworkConnections(private val resetNative: () -> Unit,
         true
     } ?: false
 
+    suspend fun awaitReady(): Boolean = withTimeoutOrNull(5_000) { status.first { it.ready }; true } ?: false
+    @Synchronized fun recovering(start: Boolean) {
+        status.value = status.value.copy(recovering = (status.value.recovering + if (start) 1 else -1).coerceAtLeast(0))
+    }
+
     internal fun progress(attempt: NetworkReadAttempt) { attempt.progressAt = now() }
 }
 
@@ -143,8 +148,7 @@ internal class NetworkGenerationInterceptor(val connections: NetworkConnections)
         val attempt = if (recoverable) connections.track(chain.call(), generation) else null
         fun finish() { if (attempt != null) connections.finished(attempt); connections.release(binding) }
         fun failure(error: IOException): IOException =
-            if (recoverable && error !is SSLException && error !is ProtocolException &&
-                (error !is EchIOException || error.retryableNetworkFailure) &&
+            if (recoverable && error.isRecoverableNetworkFailure() &&
                 (!chain.call().isCanceled() || attempt?.interrupted == true) && connections.changedSince(generation))
                 NetworkChangedException(connections, generation, error) else error
         fun checkInterrupted() {

@@ -42,6 +42,8 @@ Release 报告对应替换变体名。警告、失败和跳过分别记录。
 | 请求、账号和书源 | `data.network.ApiContractTest`、`data.auth.SessionIsolationTest`、`data.network.BookSourceTest` |
 | ECH 和日志 | `data.network.EchInterceptorTest`、`EchApiContractTest`、`EchDiagnosticsTest`、`NetworkLoggingTest`（后三者也在 data.network） |
 | 网络切换与请求代次 | `data.network.NetworkChangesTest`、`NetworkConnectionsTest`；Go `network_test.go` |
+| 网络恢复、预算和代理 | `data.network.RequestRecoveryTest`、`RequestRecoveryApiTest`、`SystemEchProxyTest`；Go `proxy_test.go`、`connect_test.go`、解析器 `resolver_transport_test.go` |
+| 下载中断与范围校验 | `files.downloads.ResumableDownloadTest`、`DownloadFilesTest` |
 | 论坛协议与回复 | `data.community.ForumApiContractTest`、`ForumAccountApiTest`、`ForumBlacklistApiTest`、`ForumCommunityRulesTest`、`ForumRulesTest`、`ForumReplyPageCacheTest`（均在 data.community） |
 | 原站队列 | `data.sync.CloudMutationQueueTest`、`CloudSyncPolicyTest`、`BoundCloudSyncTest`（均在 data.sync） |
 | WebDAV | `data.webdav.WebDavMergeTest`、`WebDavProjectionTest`、`WebDavExchangeTest`、`WebDavClientTest`（均在 data.webdav） |

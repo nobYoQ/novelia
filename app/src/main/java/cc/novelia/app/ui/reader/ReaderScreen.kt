@@ -403,6 +403,8 @@ import kotlinx.serialization.encodeToString
         val chapterLoad = remember(ref, chapterId, scope) {
             ReaderChapterLoad(scope, { id -> c.prepareReaderChapter(ref, id) }, { target, loaded -> onChapterLoaded(target, loaded) }, { it.friendlyMessage() })
         }
+        cc.novelia.app.ui.components.base.NetworkRecoveryEffect(chapterLoad.failure, chapterLoad::retry)
+        val reconnecting = cc.novelia.app.ui.components.base.networkReconnecting()
         var inlineChapterLoad by remember { mutableStateOf(false) }
         DisposableEffect(chapterLoad) { onDispose { chapterLoad.cancel() } }
         val panelsClosed = !preferences && !editingTapZones && !search && (!toc || wide) && !speechSheet && !bookSearch && !nextVolumePrompt && selected == null && note == null
@@ -707,7 +709,7 @@ import kotlinx.serialization.encodeToString
                 tonalElevation = 3.dp
             ) {
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                    Text(if(chapterLoad.loading) "正在加载章节…" else "章节加载失败，仍在当前章", style = MaterialTheme.typography.titleSmall)
+                    Text(if(chapterLoad.loading) { if(reconnecting) "正在重新连接…" else "正在加载章节…" } else "章节加载失败，仍在当前章", style = MaterialTheme.typography.titleSmall)
                     chapterLoad.error?.let { Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 3, overflow = TextOverflow.Ellipsis) }
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         if(!chapterLoad.loading) AppTextButton(onClick = chapterLoad::retry) { Text("重试加载章节") }

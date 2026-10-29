@@ -32,7 +32,26 @@ func (r wireResolution) public() Resolution {
 	return Resolution{IP: r.ip, IPs: r.ips, ECH: r.ech, Resolver: r.resolver, ExpiresAt: r.expiresAt}
 }
 
+type resolverTransportKey struct{}
+
+func resolverHTTPClient(ctx context.Context) *http.Client {
+	transport, _ := ctx.Value(resolverTransportKey{}).(http.RoundTripper)
+	return &http.Client{Timeout: 6 * time.Second, Transport: transport,
+		CheckRedirect: func(request *http.Request, previous []*http.Request) error {
+			if request.URL.Scheme != "https" {
+				return fmt.Errorf("DoH redirect must remain HTTPS")
+			}
+			if len(previous) >= 10 {
+				return fmt.Errorf("too many DoH redirects")
+			}
+			return nil
+		}}
+}
+
 func resolveECH(ctx context.Context, host string, config Config) (Resolution, error) {
+	if config.ResolverTransport != nil {
+		ctx = context.WithValue(ctx, resolverTransportKey{}, config.ResolverTransport)
+	}
 	wire, wireErr := resolveWire(ctx, host, config.WireResolvers, config.UserAgent)
 	if wireErr == nil {
 		return wire.public(), nil
@@ -52,7 +71,7 @@ func resolveWire(ctx context.Context, host string, endpoints []string, userAgent
 		err        error
 	}
 	results := make(chan result, len(endpoints))
-	client := &http.Client{Timeout: 6 * time.Second}
+	client := resolverHTTPClient(ctx)
 	for _, endpoint := range endpoints {
 		go func(endpoint string) {
 			resolution, err := resolveWireEndpoint(raceContext, client, host, endpoint, userAgent)
@@ -238,7 +257,7 @@ func resolveJSON(ctx context.Context, host string, endpoints []string, userAgent
 		err        error
 	}
 	results := make(chan result, len(endpoints))
-	client := &http.Client{Timeout: 6 * time.Second}
+	client := resolverHTTPClient(ctx)
 	for _, endpoint := range endpoints {
 		go func(endpoint string) {
 			resolution, err := resolveJSONEndpoint(ctx, client, host, endpoint, userAgent)

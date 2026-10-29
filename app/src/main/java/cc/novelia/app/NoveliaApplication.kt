@@ -272,10 +272,13 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
     }
 
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
+        .components { add(ech.imageRecovery()) }
         .callFactory {
             val client = api.transport.newBuilder().echRedirects(true).build()
             object : okhttp3.Call.Factory {
-                override fun newCall(request: okhttp3.Request) = client.newNetworkCall(request)
+                override fun newCall(request: okhttp3.Request) = client.newNetworkCall(request.newBuilder()
+                    .tag(cc.novelia.app.data.network.RecoverableNetworkRead::class.java, cc.novelia.app.data.network.RecoverableNetworkRead)
+                    .tag(cc.novelia.app.data.network.ManagedConnectAttempts::class.java, cc.novelia.app.data.network.ManagedConnectAttempts).build())
             }
         }
         .memoryCache { MemoryCache.Builder(this).maxSizePercent(0.15).build() }

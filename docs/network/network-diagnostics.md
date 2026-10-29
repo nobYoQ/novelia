@@ -30,7 +30,7 @@
 | 诊断编排与日志 | [EchDiagnostics.kt](../../app/src/main/java/cc/novelia/app/data/network/EchDiagnostics.kt)、[NetworkLogStore.kt](../../app/src/main/java/cc/novelia/app/data/network/NetworkLogStore.kt) |
 | 固定工具链与构建 | [ech-native.properties](../../gradle/ech-native.properties)、[构建指南](../development/getting-started.md) |
 
-解析器从同一 DoH 提供者取得 ECH 配置及地址，多地址错峰连接。缓存遵守 DNS TTL 且最多五分钟；网络变化取消旧解析。原生 ECH 不使用 Android 系统 HTTP 代理，设备 VPN 仍可能影响流量。
+解析器从同一 DoH 提供者取得 ECH 配置及地址，多地址错峰连接。缓存遵守 DNS TTL 且最多五分钟；网络变化取消旧解析。ECH 和 DoH 都通过 Android 的 `ProxySelector` 选择系统 HTTP 代理，遵循 PAC 和绕过规则；DoH 重定向不得降级为 HTTP。ECH 经 CONNECT 连接解析出的 IP，在隧道中仍要求 TLS 1.3 和 ECH 验证。代理拒绝、需要认证或类型不受支持时失败，不自动改走直连；VPN/TUN 是否接管流量由设备配置决定。
 
 派生客户端在插入应用拦截器后调用 `echCallTimeout()`，确保总计时在最前面，覆盖拦截器、重定向和正文读取。自动连接重试只适用于尚未发出 HTTP 字节的无请求体 GET/HEAD；不为写操作增加重放。
 
@@ -40,9 +40,11 @@
 
 `NetworkConnections` 为新请求选择新一代 OkHttp 连接池，Go ECH 同时更换传输实例并清理解析状态。旧连接中正常进行的传输可以完成，结束后清理旧池。小说、论坛、会话、图片、站内网页、WebDAV 和更新检查通过 `newNetworkCall()` 接入；派生客户端仍共享同一代连接池。WebDAV 和公开更新服务保持独立的认证与传输策略，系统 DownloadManager 管理的 APK 下载不由此接管。
 
-只有 `NoveliaApi.request()` 中完整读取到内存的无请求体 GET/HEAD 允许切网重建。旧代次读取在切网后连续约三秒没有进展时取消；确认新网络就绪后最多重建一次，等待新网络最多五秒。普通 HTTP 错误、证书/ECH 验证错误、用户取消、写操作和流式下载不自动重放。没有待处理的旧代次读取时不运行停滞检查定时器。这不是通用离线队列或下载续传机制。
+`NoveliaApi.request()` 的无请求体 GET/HEAD 和远程图片在瞬时网络故障后最多自动重建一次。旧代次读取在切网后连续约三秒没有进展时取消；等待新网络最多五秒，其他瞬时故障使用 300–600 毫秒退避。由上层管理恢复的 ECH 请求每次只进行一次原生连接尝试，OkHttp 关闭隐式连接重试，避免重试层层相乘。HTTP 错误、证书/ECH 验证错误、用户取消和写操作不因此重放。没有旧代次读取时不运行停滞检查定时器。
 
-系统 HTTP 代理变化会更新连接状态，但原生 ECH 仍不使用该代理；此行为与 VPN/TUN 接管流量不同。
+前台 API 请求总时限最多 30 秒，远程图片为 20 秒，覆盖排队、鉴权刷新、退避、等待网络及读取正文。下载和文件上传有独立的流式超时策略，不受这个短总时限截断。失败的可见页面、章节与远程图片在后续网络代次就绪后再尝试加载；失败时网络不可用的页面也会在可用性恢复后重试。离开页面或进入后台停止观察。恢复期间保留已有内容并显示重连状态，不自动重发评论、上传或其他写操作。
+
+下载最多进行三轮传输，仅在同一 Worker 持有的临时文件上续传：强 ETag、已知总长度和最终 URL 都必须匹配，发送 `Range` / `If-Range` 后还要验证 206 的范围与长度。服务器返回 200 时从头覆盖；416、版本或范围变化时重新完整下载。没有可靠校验器时也从头开始。取消、换号、存储错误和 HTTP 错误不自动续传；完整文件通过现有所有权检查与原子提交后才发布。暂停、进程终止后的跨 Worker 续传尚未实现。
 
 ## 怎样读导出的 ZIP
 
@@ -60,6 +62,7 @@
 | --- | --- |
 | 直连 dns | 系统解析路径 |
 | native.doh_ech | 尚未取得匹配的地址/ECH 配置 |
+| native.proxy | `direct` 或 `http_connect` 表示本次 ECH 建连选路，不包含代理地址 |
 | tcp / native.tcp | 建立连接 |
 | tls / native.tls / native.ech | TLS、证书或 ECH 协商 |
 | response_headers 之后 | 正文读取、容量或解析 |

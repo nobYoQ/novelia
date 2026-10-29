@@ -34,6 +34,18 @@ func TestConnectRetryRecoversBeforeSendingRequest(t *testing.T) {
 	}
 }
 
+func TestManagedReadUsesOneNativeConnectAttempt(t *testing.T) {
+	r, _ := http.NewRequest("GET", "https://forum.novelia.cc/", nil)
+	attempts := 0
+	_, err := doWithConnectRetry(func(*http.Request) (*http.Response, error) {
+		attempts++
+		return nil, io.EOF
+	}, r, time.Second, 1)
+	if err == nil || attempts != 1 {
+		t.Fatalf("nested retry: attempts=%d error=%v", attempts, err)
+	}
+}
+
 func TestConnectRetryNeverReplaysAfterConnectionOrWrite(t *testing.T) {
 	for _, method := range []string{"GET", "POST", "PUT", "PATCH", "DELETE"} {
 		r, _ := http.NewRequest(method, "https://forum.novelia.cc/", nil)

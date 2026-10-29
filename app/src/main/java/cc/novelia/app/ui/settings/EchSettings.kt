@@ -64,6 +64,7 @@ import java.util.Locale
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("网络诊断与日志", style = MaterialTheme.typography.titleLarge)
             TogglePreference("启用 ECH", "对原站小说、论坛和认证接口使用加密握手；镜像线路使用普通 HTTPS", enabled, transport::setEnabled)
+            Text("ECH 和加密 DNS 遵循系统 HTTP 代理及其绕过规则；VPN 是否接管流量由 VPN 设置决定。代理不可用时不会自动改走直连。", style = MaterialTheme.typography.bodySmall)
             Text("检测针对原站，对照直连和 ECH 的实际接口请求，最长约 3 分钟。关闭此面板后仍会继续，可返回查看结果。", style = MaterialTheme.typography.bodyMedium)
             AppButton(enabled = !diagnosis.running, onClick = transport::startDiagnostics) { Text("运行网络诊断") }
             if (diagnosis.running) {

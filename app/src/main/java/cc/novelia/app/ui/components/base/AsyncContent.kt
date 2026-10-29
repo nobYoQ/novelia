@@ -62,6 +62,8 @@ import kotlinx.coroutines.ensureActive
     }
     // 事件发生时立即上锁，连续手势或点击不能在下一帧前发出重复刷新。
     val retry: () -> Unit = { if(!loading) { loading = true; refresh++ } }
+    NetworkRecoveryEffect(if (loading) null else refreshError ?: result?.exceptionOrNull(), retry)
+    val loadingLabel = if (networkReconnecting()) "正在重新连接…" else "正在加载…"
     val reducedMotion = appReducedMotion()
     val pullState = if(pullToRefreshEnabled) key(key) { rememberPullToRefreshState() } else null
     val canPull = pullState != null && !LocalEInkMode.current && result?.isSuccess == true
@@ -71,8 +73,8 @@ import kotlinx.coroutines.ensureActive
     Box(modifier.fillMaxSize().then(refreshModifier)) {
         val current = result
         when {
-            current == null -> Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) { if(!appReducedMotion()) CircularProgressIndicator(); Text("正在加载…", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            current.isFailure -> if(loading) { if(appReducedMotion()) Text("正在加载…", Modifier.align(Alignment.Center)) else CircularProgressIndicator(Modifier.align(Alignment.Center)) } else EmptyState("暂时无法加载", current.exceptionOrNull().friendlyMessage(), Icons.Outlined.CloudOff, "重试", retry, sticker = MidoriSticker.Concerned)
+            current == null -> Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) { if(!appReducedMotion()) CircularProgressIndicator(); Text(loadingLabel, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            current.isFailure -> if(loading) { Text(loadingLabel, Modifier.align(Alignment.Center)) } else EmptyState("暂时无法加载", current.exceptionOrNull().friendlyMessage(), Icons.Outlined.CloudOff, "重试", retry, sticker = MidoriSticker.Concerned)
             else -> {
                 // 刷新时保留原组合，使列表位置和编辑器状态得以延续。
                 MotionContent(key, Modifier.fillMaxSize(), animateInitial = revealContent && initialResult == null) {

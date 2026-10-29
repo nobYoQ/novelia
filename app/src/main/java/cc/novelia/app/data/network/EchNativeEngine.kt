@@ -19,7 +19,12 @@ import okio.buffer
 /** The only production Kotlin file that knows the JNI types or their null-at-EOF convention. */
 internal class EchNativeEngine(context: Context) : EchEngine {
     private val applicationContext = context.applicationContext
-    private val nativeDelegate = lazy { go.Seq.setContext(applicationContext); Ech.newClient() }
+    private val nativeDelegate = lazy {
+        go.Seq.setContext(applicationContext)
+        Ech.newClientWithProxyResolver(object : cc.novelia.nativeech.ech.ProxyResolver {
+            override fun resolveProxy(rawURL: String) = systemEchProxy(rawURL)
+        })
+    }
     private val native by nativeDelegate
 
     override fun open(request: Request, timeouts: EchTimeouts): EchExchange {
@@ -32,6 +37,7 @@ internal class EchNativeEngine(context: Context) : EchEngine {
             native.newCall(request.method, request.url.toString(), appJson.encodeToString(headers), upload,
                 request.body?.contentLength() ?: 0, timeouts.connectMillis, timeouts.readMillis, timeouts.writeMillis)
         } catch (error: Exception) { upload?.close(); throw error }
+        if (request.tag(ManagedConnectAttempts::class.java) != null) call.setConnectAttempts(1)
         val trace = request.tag(NetworkRequestTrace::class.java)
         val exchangeId = trace?.nextNativeExchange() ?: 0
         if (trace != null) call.enableDiagnostics()
@@ -75,10 +81,10 @@ internal fun decodeEchResponseHeaders(json: String): Headers = Headers.Builder()
 }.build()
 
 private fun connectionFailure(reason: String?, fallback: String = "连接失败"): EchIOException {
-    val safeReason = reason?.takeIf { it in setOf("连接超时", "请求发送超时", "响应读取超时", "连接被中断",
-        "证书验证未通过", "服务器拒绝 ECH 配置", "TLS 协商未完成") } ?: fallback
+    val safeReason = reason?.takeIf { it in setOf("连接失败", "连接超时", "请求发送超时", "响应读取超时", "连接被中断",
+        "证书验证未通过", "服务器拒绝 ECH 配置", "TLS 协商未完成", "系统代理需要认证", "系统代理配置不受支持", "系统代理连接失败") } ?: fallback
     return EchIOException("ECH $safeReason，请在设置中运行连接诊断",
-        safeReason !in setOf("证书验证未通过", "服务器拒绝 ECH 配置", "TLS 协商未完成"))
+        safeReason !in setOf("证书验证未通过", "服务器拒绝 ECH 配置", "TLS 协商未完成", "系统代理需要认证", "系统代理配置不受支持"))
 }
 
 /** At most 64 KiB buffered per upload; request data never needs a temporary file. */

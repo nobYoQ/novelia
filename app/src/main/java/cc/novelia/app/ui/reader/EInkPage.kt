@@ -48,7 +48,7 @@ import cc.novelia.app.ui.components.media.IllustrationViewer
 import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.LocalEInkMode
 import cc.novelia.app.ui.theme.LocalReducedMotion
-import coil.compose.AsyncImage
+import cc.novelia.app.ui.components.media.RecoveringAsyncImage as AsyncImage
 import coil.request.ImageRequest
 import kotlin.math.abs
 import kotlin.math.roundToInt

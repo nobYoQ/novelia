@@ -42,6 +42,8 @@ internal class ReaderChapterLoad<T>(
         private set
     var error by mutableStateOf<String?>(null)
         private set
+    var failure by mutableStateOf<Throwable?>(null)
+        private set
     private var job: Job? = null
     private var generation = 0
 
@@ -59,7 +61,7 @@ internal class ReaderChapterLoad<T>(
                 if(generation == requestGeneration) onLoaded(next, result)
             } catch(e: CancellationException) { throw e }
             catch(e: Exception) {
-                if(generation == requestGeneration) error = errorMessage(e)
+                if(generation == requestGeneration) { failure = e; error = errorMessage(e) }
             } finally {
                 if(generation == requestGeneration) {
                     loading = false
@@ -78,5 +80,6 @@ internal class ReaderChapterLoad<T>(
         target = null
         loading = false
         error = null
+        failure = null
     }
 }
