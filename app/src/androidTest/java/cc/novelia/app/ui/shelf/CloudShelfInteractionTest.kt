@@ -14,6 +14,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
+import cc.novelia.app.data.catalog.providers
 import cc.novelia.app.data.model.*
 import cc.novelia.app.data.network.CloudWebFilter
 import cc.novelia.app.ui.navigation.LocalRootSelectionMode
@@ -93,14 +94,20 @@ class CloudShelfInteractionTest {
         compose.onNodeWithTag("cloud-search-toggle").performClick()
         compose.onNodeWithTag("cloud-clear-query").assertTextContains("搜索：森林")
         compose.onNodeWithTag("cloud-filter-toggle").performClick()
+        compose.onNodeWithTag("cloud-source-toggle").assertDoesNotExist()
+        compose.onNodeWithTag("cloud-source-syosetu").assertIsDisplayed().performClick().assertIsNotSelected()
+        compose.onNodeWithText("全选").performClick()
+        compose.onNodeWithTag("cloud-source-syosetu").assertIsSelected()
+        screenshot("cloud-source-chips", "cloud-filter-sheet")
+        compose.onNodeWithTag("cloud-source-syosetu").performClick()
         compose.onNodeWithTag("cloud-type-已完结").performScrollTo().performClick()
         screenshot("cloud-filter-v2", "cloud-filter-sheet")
         compose.runOnIdle { assertEquals(0, filter.type) }
         compose.onNodeWithTag("cloud-filter-close").performClick()
         compose.onNodeWithTag("cloud-filter-toggle").performClick()
+        compose.onNodeWithTag("cloud-source-syosetu").assertIsSelected()
         compose.onNodeWithTag("cloud-type-已完结").assertIsNotSelected().performScrollTo().performClick()
-        compose.onNodeWithTag("cloud-source-toggle").performScrollTo().performClick()
-        compose.onNodeWithTag("cloud-invert-sources").performScrollTo().performClick()
+        providers.keys.forEach { compose.onNodeWithTag("cloud-source-$it").performScrollTo().performClick().assertIsNotSelected() }
         compose.runOnIdle { assertTrue(filter.source.isNotEmpty()) }
         compose.onNodeWithTag("cloud-filter-apply").performClick()
         compose.runOnIdle { assertEquals(2, filter.type); assertEquals("", filter.source); assertEquals("reading", folder); assertEquals("create", sort); assertEquals("森林", filter.query) }
