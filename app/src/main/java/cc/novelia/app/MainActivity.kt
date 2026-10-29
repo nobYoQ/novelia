@@ -85,9 +85,11 @@ import kotlinx.coroutines.delay
 import cc.novelia.app.startup.StartupScreen
 
 private data class AppAppearance(val theme: String, val amoledBlack: Boolean, val squareCorners: Boolean, val reducedMotion: Boolean, val eInk: Boolean, val eInkBooks: Set<String>,
-    val screenButtons: Boolean, val hideStatusBar: Boolean, val bookStatusBars: Map<String, Boolean>)
+    val screenButtons: Boolean, val hideStatusBar: Boolean, val bookStatusBars: Map<String, Boolean>,
+    val readerOrientation: String, val bookOrientations: Map<String, String>)
 private fun LibraryState.appearance() = AppAppearance(theme, amoledBlack, squareCorners, reducedMotion || reader.eInkMode, reader.eInkMode,
-    bookSettings.filterValues { it.eInkMode }.keys, reader.showEInkScreenButtons, reader.hideStatusBar, bookSettings.mapValues { it.value.hideStatusBar })
+    bookSettings.filterValues { it.eInkMode }.keys, reader.showEInkScreenButtons, reader.hideStatusBar, bookSettings.mapValues { it.value.hideStatusBar },
+    reader.resolvedOrientation, bookSettings.mapValues { it.value.resolvedOrientation })
 
 /**
  * Android 生命周期与 Compose 界面的连接点：等待应用初始化，装配主题、控制器和导航图。
@@ -169,6 +171,8 @@ class MainActivity : ComponentActivity() {
                 val readingKey = "${entry?.arguments?.getString("provider")}/${entry?.arguments?.getString("id")}"
                 cc.novelia.app.ui.reader.ReadingStatusBar(route?.startsWith("reader/") == true &&
                     (appearance.bookStatusBars[readingKey] ?: appearance.hideStatusBar))
+                cc.novelia.app.ui.reader.ReaderOrientation(route?.startsWith("reader/") == true,
+                    appearance.bookOrientations[readingKey] ?: appearance.readerOrientation)
                 ObserveDownloadCelebrations(controller, route)
                 cc.novelia.app.ui.feedback.ObserveAppUpdates(controller, show = route?.startsWith("reader/") != true)
                 ObserveClipboardLinks(controller, externalLinkPending = link != null || sharedDocuments.isNotEmpty())

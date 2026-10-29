@@ -32,6 +32,25 @@ import org.junit.runner.RunWith
 class ReaderToolbarOverlayTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
 
+    @Test fun orientationAppliesPerBookAndRestoresAfterReaderExit() = withReader(ReaderSettings(orientation = "portrait")) { app, ref ->
+        compose.waitUntil(10_000) { compose.activity.requestedOrientation == android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT }
+        compose.onNodeWithTag("reader-scroll").performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 800f) }
+        compose.waitUntil(10_000) { (app.store.state.value.positions[ref.key]?.textOffset ?: 0) > 0 }
+        val before = app.store.state.value.positions.getValue(ref.key)
+        compose.runOnIdle { app.store.update { it.copy(bookSettings = it.bookSettings + (ref.key to it.reader.copy(orientation = "landscape"))) } }
+        compose.waitUntil(15_000) { compose.activity.requestedOrientation == android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE &&
+            compose.activity.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE &&
+            compose.onAllNodesWithTag("reader-scroll").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitForIdle()
+        compose.runOnIdle {
+            val after = app.store.state.value.positions.getValue(ref.key)
+            assertEquals(before.sourceParagraph, after.sourceParagraph)
+            assertEquals(before.textOffset, after.textOffset)
+        }
+        compose.onNode(hasContentDescription("返回") and hasAnyAncestor(hasTestTag("reader-top-toolbar"))).performClick()
+        compose.waitUntil(10_000) { compose.activity.requestedOrientation == android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
+    }
+
     @Test fun automaticPagesKeepExactTextPageCountAndAnchorUnderOverlays() = verifyOverlay("auto")
 
     @Test fun continuousScrollingKeepsTextCoordinatesAndPositionUnderOverlays() = verifyOverlay("scroll")

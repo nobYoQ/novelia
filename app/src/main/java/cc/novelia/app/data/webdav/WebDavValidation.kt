@@ -202,7 +202,7 @@ internal object WebDavValidation {
 
     private fun readerField(field: String, value: JsonElement) {
         if (field == "devicePreferences") {
-            require(value is JsonObject && value.keys.containsAll(deviceReaderFields - setOf("tapZoneMap", "showWideToc")) && value.keys.all { it in deviceReaderFields }) { "设备偏好原子组字段不完整" }
+            require(value is JsonObject && value.keys.containsAll(deviceReaderFields - setOf("tapZoneMap", "showWideToc", "orientation")) && value.keys.all { it in deviceReaderFields }) { "设备偏好原子组字段不完整" }
             value.forEach { (deviceField, deviceValue) -> deviceReaderField(deviceField, deviceValue) }
             return
         }
@@ -233,6 +233,7 @@ internal object WebDavValidation {
         when (field) {
             "brightness" -> number(value, -1.0, 1.0)
             "paginationMode" -> enumText(value, setOf("scroll", "auto"))
+            "orientation" -> enumText(value, ReaderSettings.ORIENTATIONS.toSet())
             "prefetchChapters" -> nonnegativeInt(value, 20)
             // 点击分区方案的编码串：限长避免同步文件被塞入超大数据，内容本身在解析时再校验。
             "tapZoneMap" -> text(value, 2_048, true)

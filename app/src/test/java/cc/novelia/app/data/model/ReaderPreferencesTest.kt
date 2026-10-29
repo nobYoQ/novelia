@@ -6,6 +6,14 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ReaderPreferencesTest {
+    @Test fun orientationDefaultsToSystemAndSurvivesBookOverridesBackupAndEInk() {
+        assertEquals("system", appJson.decodeFromString<ReaderSettings>("{}").orientation)
+        val settings = ReaderSettings(orientation = "landscape")
+        val state = LibraryState(bookSettings = mapOf("local/book" to settings))
+        assertEquals(state, appJson.decodeFromString<LibraryState>(appJson.encodeToString(state)))
+        assertEquals("landscape", settings.withEInkMode(true).withEInkMode(false).orientation)
+        assertEquals("system", settings.copy(orientation = "invalid").resolvedOrientation)
+    }
     @Test fun marginsAndSidebarPreserveLegacyLayoutAndSurvivePerBookBackupsAndEInk() {
         val old = appJson.decodeFromString<ReaderSettings>("{}")
         assertEquals(24f, old.horizontalMargin)

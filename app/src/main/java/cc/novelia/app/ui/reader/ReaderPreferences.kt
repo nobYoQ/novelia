@@ -153,6 +153,9 @@ import kotlin.math.roundToInt
                             if(value.prefetchChapters > 0) TogglePreference("仅 Wi-Fi 自动预读", "退出阅读或清理缓存时停止预读", value.prefetchWifiOnly, defaultValue = defaults?.prefetchWifiOnly) { onChange(value.copy(prefetchWifiOnly = it)) }
                         }
                         ReaderPreferenceGroup("进阶排版", "内容宽度、粗体、缩进与双语样式", expanded == "layout", { expanded = if(expanded == "layout") "" else "layout" }) {
+                            ChoiceRow("阅读方向", listOf("跟随系统", "竖屏", "横屏"), ReaderSettings.ORIENTATIONS.indexOf(value.resolvedOrientation),
+                                defaultSelected = defaults?.let { ReaderSettings.ORIENTATIONS.indexOf(it.resolvedOrientation) }) { onChange(value.copy(orientation = ReaderSettings.ORIENTATIONS[it])) }
+                            Text("仅在阅读器中锁定方向，退出阅读后恢复跟随系统。", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.bodySmall)
                             ReaderSlider("内容宽度 ${value.width.toInt()} dp", value.width, 300f..900f, defaultValue = defaults?.width) { onChange(value.copy(width = it)) }
                             ReaderSlider("左右页边距 ${value.resolvedHorizontalMargin.toInt()} dp", value.resolvedHorizontalMargin, 0f..64f,
                                 modifier = Modifier.testTag("reader-horizontal-margin"), defaultValue = defaults?.resolvedHorizontalMargin) { onChange(value.copy(horizontalMargin = it)) }

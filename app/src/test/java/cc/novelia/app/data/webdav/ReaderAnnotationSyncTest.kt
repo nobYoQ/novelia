@@ -35,7 +35,7 @@ class ReaderAnnotationSyncTest {
     }
 
     @Test fun marginsSyncWhileTheSidebarUsesOptionalDevicePreferences() {
-        val settings = ReaderSettings(horizontalMargin = 48f, verticalMargin = 0f, showWideToc = false)
+        val settings = ReaderSettings(horizontalMargin = 48f, verticalMargin = 0f, showWideToc = false, orientation = "landscape")
         val remote = LibraryState(reader = settings, bookSettings = mapOf(key to settings.copy(horizontalMargin = 8f)))
         val docs = documents(remote, devices = true)
         docs.values.forEach { WebDavProjection.validateRecords(it) }
@@ -43,6 +43,7 @@ class ReaderAnnotationSyncTest {
         assertEquals(48f, portable.reader.horizontalMargin)
         assertEquals(8f, portable.bookSettings.getValue(key).horizontalMargin)
         assertTrue(portable.reader.showWideToc)
+        assertEquals("system", portable.reader.orientation)
         val withDevices = WebDavProjection.applyLibrary(LibraryState(), docs, setOf(SyncDomain.SETTINGS), includeDevicePreferences = true)
         assertEquals(settings, withDevices.reader)
         val legacy = documents(remote).getValue(SyncDomain.SETTINGS).let { doc -> doc.copy(records = doc.records.mapValues { (_, record) ->
@@ -52,7 +53,10 @@ class ReaderAnnotationSyncTest {
         val local = LibraryState(reader = settings.copy(horizontalMargin = 12f))
         assertEquals(12f, WebDavProjection.applyLibrary(local, mapOf(SyncDomain.SETTINGS to legacy), setOf(SyncDomain.SETTINGS)).reader.horizontalMargin)
         val group = WebDavProjection.library(remote, includeDevicePreferences = true).getValue(SyncDomain.SETTINGS).getValue("@reader").getValue("devicePreferences") as JsonObject
-        WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "devicePreferences", JsonObject(group - setOf("showWideToc", "tapZoneMap")))
+        WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "devicePreferences", JsonObject(group - setOf("showWideToc", "tapZoneMap", "orientation")))
+        assertThrows(IllegalArgumentException::class.java) {
+            WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "devicePreferences", JsonObject(group + ("orientation" to JsonPrimitive("invalid"))))
+        }
         assertThrows(IllegalArgumentException::class.java) { WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "horizontalMargin", JsonPrimitive(65)) }
     }
 }

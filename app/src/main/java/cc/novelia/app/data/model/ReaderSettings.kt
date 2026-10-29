@@ -54,17 +54,20 @@ import kotlinx.serialization.Serializable
     val fontFamily: String = "system",
     val customFont: ReaderCustomFont? = null,
     val horizontalMargin: Float = 24f, val verticalMargin: Float = 16f,
-    val showWideToc: Boolean = true
+    val showWideToc: Boolean = true,
+    val orientation: String = "system"
 ) {
     companion object {
         const val MIN_LINE_HEIGHT = .5f
         val LINE_HEIGHT_RANGE = MIN_LINE_HEIGHT..2.6f
         val THEMES = listOf("system", "paper", "light", "dark", "monochrome", "custom")
+        val ORIENTATIONS = listOf("system", "portrait", "landscape")
     }
 
     val resolvedParagraphSpacing get() = if(paragraphSpacing.isFinite()) paragraphSpacing.coerceIn(0f, 32f) else 8f
     val resolvedHorizontalMargin get() = if(horizontalMargin.isFinite()) horizontalMargin.coerceIn(0f, 64f) else 24f
     val resolvedVerticalMargin get() = if(verticalMargin.isFinite()) verticalMargin.coerceIn(0f, 64f) else 16f
+    val resolvedOrientation get() = orientation.takeIf { it in ORIENTATIONS } ?: "system"
     val resolvedToolbarTransparency get() = if(toolbarTransparency.isFinite()) toolbarTransparency.coerceIn(0f, 1f) else .25f
     // 兼容黑白模式尚未成为主题选项之前保存的设置。
     val resolvedTheme get() = if(monochrome) "monochrome" else theme

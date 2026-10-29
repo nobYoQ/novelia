@@ -364,11 +364,14 @@ import kotlinx.serialization.encodeToString
         // 恢复定位或重新分页期间的中间画面不能覆盖真实进度。两种模式统一保存正文下标 + 1，
         // 因为滚动列表的第 0 项是章标题；字符偏移支持重排，像素偏移用于恢复原滚动布局。
         fun savePosition() {
-            if(leaving || seekTarget != null || !positionState.initialAnchorRestored || positionState.restoringAnchor || positionState.previousPagination != settings.staticPagination ||
+            if(leaving || readingLifecycle.lifecycle.currentState == Lifecycle.State.DESTROYED || seekTarget != null || !positionState.initialAnchorRestored || positionState.restoringAnchor || positionState.pendingScrollRestore != null || positionState.previousLayoutGeneration !== layoutGeneration || positionState.previousPagination != settings.staticPagination ||
                 (if(settings.staticPagination) !eInk.ready || eInk.pages.isEmpty() else scroll.layoutInfo.totalItemsCount == 0 || scroll.layoutInfo.visibleItemsInfo.isEmpty())) return
             val visible = if(settings.staticPagination) Position(chapterId, eInk.paragraph + 1, 0, chapter.title, textOffset = eInk.textOffset)
                 else {
                     val paragraph = paragraphs.getOrNull(scroll.firstVisibleItemIndex - 1)
+                    // 页面销毁时文字测量可能已经卸载，不能把缺失几何当作字符 0 写回。
+                    if(paragraph != null && paragraph.imageUrl == null && paragraph.localImageId == null &&
+                        scrollLayouts[paragraph.index]?.parts?.size != paragraph.parts.size) return
                     val textOffset = positionLayout.scrollTextOffset(paragraph?.index)
                     Position(chapterId, scroll.firstVisibleItemIndex, scroll.firstVisibleItemScrollOffset, chapter.title, textOffset = textOffset)
                 }

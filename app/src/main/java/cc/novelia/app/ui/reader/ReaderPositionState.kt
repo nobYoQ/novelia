@@ -29,6 +29,7 @@ internal class ReaderPositionState(position: Position?, paragraphs: List<Reading
         paragraphs.getOrNull((position?.index ?: 1) - 1)?.index))
     var previousAnchorSource by mutableStateOf(WebDavProjection.anchorSource(settings))
     var previousFont by mutableStateOf<Any?>(null)
+    var previousLayoutGeneration by mutableStateOf<Any?>(null)
 }
 
 internal class ReaderPositionLayout(
@@ -105,9 +106,9 @@ internal class ReaderPositionLayout(
             // 重排时等待新行数据，不能用空布局把已经捕获的字符锚点清零。
             val waitingForText = paragraph != null && paragraph.imageUrl == null && paragraph.localImageId == null &&
                 scrollLayouts[paragraph.index]?.parts?.size != paragraph.parts.size
-            if(state.previousFont != null && state.previousFont != layout.fontKey || scroll.firstVisibleItemIndex > 0 && waitingForText) null
+            if(state.previousLayoutGeneration !== layoutGeneration || state.previousFont != null && state.previousFont != layout.fontKey || scroll.firstVisibleItemIndex > 0 && waitingForText) null
             else Triple(index, layout.scrollTextOffset(source), source)
-        }.collect { if(it != null && !state.restoringAnchor) state.scrollAnchor = it }
+        }.collect { if(it != null && !state.restoringAnchor && state.pendingScrollRestore == null) state.scrollAnchor = it }
     }
     // 模式切换使用字符锚点衔接，语言过滤变化时先按原始段落编号重新找投影下标。
     // LazyColumn 需要先挂载目标项、等待文字测量，再转换字符位置为可滚动的像素位置。
@@ -115,6 +116,7 @@ internal class ReaderPositionLayout(
         val changed = state.previousPagination != settings.staticPagination
         val sourceChanged = state.previousAnchorSource != WebDavProjection.anchorSource(settings)
         val fontChanged = state.previousFont != null && state.previousFont != layout.fontKey
+        val layoutChanged = state.previousLayoutGeneration != null && state.previousLayoutGeneration !== layoutGeneration
         state.restoringAnchor = true
         try {
             if(settings.staticPagination && (changed || sourceChanged)) {
@@ -124,8 +126,9 @@ internal class ReaderPositionLayout(
             } else if(!settings.staticPagination) {
                 if(state.pendingScrollRestore == null) state.pendingScrollRestore = if(changed && eInk.pages.isNotEmpty()) ReadingRestoreAnchor(eInk.paragraph, eInk.sourceIndex, if(sourceChanged) 0 else eInk.textOffset)
                     else if(sourceChanged) ReadingRestoreAnchor(state.scrollAnchor.first, state.scrollAnchor.third, 0)
-                    else if(fontChanged && scroll.firstVisibleItemIndex > 0) ReadingRestoreAnchor(state.scrollAnchor.first, state.scrollAnchor.third, state.scrollAnchor.second)
-                    else position?.takeIf { !state.initialAnchorRestored && it.textOffset > 0 && it.offset == 0 }?.let { ReadingRestoreAnchor((it.index - 1).coerceAtLeast(0), it.sourceParagraph, it.textOffset) }
+                    else if((fontChanged || layoutChanged) && scroll.firstVisibleItemIndex > 0) ReadingRestoreAnchor(state.scrollAnchor.first, state.scrollAnchor.third, state.scrollAnchor.second)
+                    // 新组合可能来自横竖屏重建；旧像素偏移不再对应同一行，始终优先恢复字符锚点。
+                    else position?.takeIf { !state.initialAnchorRestored && it.textOffset > 0 }?.let { ReadingRestoreAnchor((it.index - 1).coerceAtLeast(0), it.sourceParagraph, it.textOffset) }
                 val target = state.pendingScrollRestore
                 if(target != null) {
                     val index = (target.sourceIndex?.let { source -> paragraphs.indexOfFirst { it.index >= source }.takeIf { it >= 0 } }
@@ -146,6 +149,7 @@ internal class ReaderPositionLayout(
             state.previousPagination = settings.staticPagination
             state.previousAnchorSource = WebDavProjection.anchorSource(settings)
             state.previousFont = layout.fontKey
+            state.previousLayoutGeneration = layoutGeneration
             state.initialAnchorRestored = true
         } finally { state.restoringAnchor = false }
         latestSavePosition()
