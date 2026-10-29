@@ -45,7 +45,8 @@ object WebDavProjection {
     val libraryDomains = SyncDomain.entries.toSet() - SyncDomain.KEYWORDS
     private val json = Json { encodeDefaults = true; explicitNulls = true }
     fun anchorSource(settings: ReaderSettings): String =
-        "${settings.mode}:${settings.engines.joinToString(",")}:${settings.parallel}:${settings.traditional}:${settings.indent}"
+        "${settings.mode}:${settings.engines.joinToString(",")}:${settings.parallel}:${settings.traditional}:${settings.indent}" +
+            settings.activeTextReplacements.takeIf { it.isNotEmpty() }?.let { ":replace:${it.hashCode()}" }.orEmpty()
 
     /** 避免阅读器每次保存位置时编码书架、设置和笔记的完整快照。 */
     fun affectedLibraryDomains(before: LibraryState, after: LibraryState): Set<SyncDomain> = buildSet {

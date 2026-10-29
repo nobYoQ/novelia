@@ -57,7 +57,8 @@ import kotlinx.serialization.Serializable
     val showWideToc: Boolean = true,
     val orientation: String = "system",
     // 自动阅读仅记住速度；运行状态属于当前前台阅读会话，不随备份或重启恢复。
-    val autoReadSpeed: Float = 20f, val autoReadIntervalSeconds: Int = 15
+    val autoReadSpeed: Float = 20f, val autoReadIntervalSeconds: Int = 15,
+    val textReplacements: Map<String, String> = emptyMap(), val textReplacementsEnabled: Boolean = true
 ) {
     companion object {
         const val MIN_LINE_HEIGHT = .5f
@@ -73,6 +74,8 @@ import kotlinx.serialization.Serializable
     val resolvedAutoReadSpeed get() = if(autoReadSpeed.isFinite()) autoReadSpeed.coerceIn(5f, 80f) else 20f
     val resolvedAutoReadIntervalSeconds get() = autoReadIntervalSeconds.coerceIn(5, 120)
     val validAutoRead get() = autoReadSpeed in 5f..80f && autoReadIntervalSeconds in 5..120
+    val validTextReplacements get() = validReaderTextReplacements(textReplacements)
+    val activeTextReplacements get() = textReplacements.takeIf { textReplacementsEnabled && validTextReplacements }.orEmpty()
     val resolvedToolbarTransparency get() = if(toolbarTransparency.isFinite()) toolbarTransparency.coerceIn(0f, 1f) else .25f
     // 兼容黑白模式尚未成为主题选项之前保存的设置。
     val resolvedTheme get() = if(monochrome) "monochrome" else theme

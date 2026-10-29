@@ -50,6 +50,7 @@ import kotlin.math.roundToInt
     headerActions: @Composable RowScope.() -> Unit = {}, livePreview: Boolean = false,
     defaultSettings: ReaderSettings? = null,
     onEditTapZones: (() -> Unit)? = null, onShowTapTutorial: (() -> Unit)? = null,
+    onTextReplacements: (() -> Unit)? = null,
     onChange: (ReaderSettings) -> Unit) {
     val reducedMotion = appReducedMotion()
     val defaults = defaultSettings.takeIf { perBook == true }
@@ -147,6 +148,7 @@ import kotlin.math.roundToInt
                     }
                     else -> {
                         var expanded by state.expandedGroup
+                        if(onTextReplacements != null) AppTextButton(onClick = onTextReplacements, modifier = Modifier.padding(horizontal = 20.dp)) { Text("本书文字替换 · ${value.textReplacements.size} 条") }
                         ReaderPreferenceGroup("离线预读", "提前缓存后续章节与网络限制", expanded == "offline", { expanded = if(expanded == "offline") "" else "offline" }) {
                             ChoiceRow("自动预读后续章节", listOf("关闭", "1 章", "3 章", "5 章"), listOf(0, 1, 3, 5).indexOf(value.prefetchChapters).coerceAtLeast(0),
                                 defaultSelected = defaults?.let { listOf(0, 1, 3, 5).indexOf(it.prefetchChapters) }) { onChange(value.copy(prefetchChapters = listOf(0, 1, 3, 5)[it])) }

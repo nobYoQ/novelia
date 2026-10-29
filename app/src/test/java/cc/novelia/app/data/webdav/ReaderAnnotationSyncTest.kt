@@ -10,6 +10,19 @@ class ReaderAnnotationSyncTest {
     private fun documents(state: LibraryState, devices: Boolean = false) = SyncReplica(deviceId = "reader-test")
         .track(emptyMap(), WebDavProjection.library(state, includeDevicePreferences = devices)).bind("dataset").documents
 
+    @Test fun replacementRulesSyncAndOldRecordsPreserveLocalRules() {
+        val settings = ReaderSettings(textReplacements = mapOf("原译名" to "新译名"))
+        val docs = documents(LibraryState(bookSettings = mapOf(key to settings)))
+        docs.values.forEach { WebDavProjection.validateRecords(it) }
+        assertEquals(settings, WebDavProjection.applyLibrary(LibraryState(), docs, setOf(SyncDomain.SETTINGS)).bookSettings.getValue(key))
+        val legacy = docs.getValue(SyncDomain.SETTINGS).let { doc -> doc.copy(records = doc.records.mapValues { (_, record) ->
+            record.copy(fields = record.fields - setOf("textReplacements", "textReplacementsEnabled"))
+        }) }
+        WebDavProjection.validateRecords(legacy)
+        assertEquals(settings, WebDavProjection.applyLibrary(LibraryState(bookSettings = mapOf(key to settings)), mapOf(SyncDomain.SETTINGS to legacy), setOf(SyncDomain.SETTINGS)).bookSettings.getValue(key))
+        assertThrows(IllegalArgumentException::class.java) { WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "textReplacements", buildJsonObject { put("", "bad") }) }
+    }
+
     @Test fun autoReadPaceSyncsWithoutAnyRunningStateAndLegacyRecordsKeepLocalValues() {
         val settings = ReaderSettings(autoReadSpeed = 45f, autoReadIntervalSeconds = 25)
         val docs = documents(LibraryState(reader = settings, bookSettings = mapOf(key to settings.copy(autoReadSpeed = 10f))))

@@ -131,6 +131,7 @@ import kotlinx.serialization.encodeToString
     var preferences by remember { mutableStateOf(false) }; var toc by remember { mutableStateOf(false) }; var search by remember { mutableStateOf(false) }; var query by rememberSaveable { mutableStateOf("") }; var version by remember { mutableIntStateOf(0) }
     var speechSheet by remember { mutableStateOf(false) }
     var autoReadSheet by remember { mutableStateOf(false) }
+    var replacementsSheet by rememberSaveable { mutableStateOf(false) }
     var autoReading by remember(ref, chapterId) {
         mutableStateOf(readerEntry?.savedStateHandle?.remove<Boolean>("readerAutoReading") ?: false)
     }
@@ -200,7 +201,7 @@ import kotlinx.serialization.encodeToString
         // 只有内容和语言选择会改变投影；字号、段距等变化只触发后续重新排版。
         // 在计算线程完成繁体转换，避免滚动重组重复处理整章文本。
         var prepared by remember(ref, chapterId, chapter) { mutableStateOf<List<ReadingParagraph>?>(null) }
-        LaunchedEffect(chapter, settings.mode, settings.engines, settings.parallel, settings.traditional) {
+        LaunchedEffect(chapter, settings.mode, settings.engines, settings.parallel, settings.traditional, settings.textReplacements, settings.textReplacementsEnabled) {
             prepared = withContext(Dispatchers.Default) {
                 val jobContext = currentCoroutineContext()
                 prepareReadingParagraphs(chapter, settings) { jobContext.ensureActive() }
@@ -317,9 +318,18 @@ import kotlinx.serialization.encodeToString
             onDispose { seekGeneration++; seekJob?.cancel(); seekJob = null; seekTarget = null }
         }
         val hasFallback = remember(paragraphs) { paragraphs.any { it.fallback } }
+        val replacementsSkipped = remember(paragraphs) { paragraphs.any { it.replacementsSkipped } }
+        LaunchedEffect(replacementsSkipped) { if(replacementsSkipped) c.message("部分段落替换后过长，已保留替换前的正文") }
+        val replacementSample by produceState("", replacementsSheet, chapter, firstParagraph, settings.mode, settings.traditional) {
+            if(replacementsSheet) value = withContext(Dispatchers.Default) {
+                val jobContext = currentCoroutineContext()
+                prepareReadingParagraphs(chapter, settings.copy(textReplacementsEnabled = false)) { jobContext.ensureActive() }
+                    .getOrNull(firstParagraph)?.parts?.firstOrNull()?.text.orEmpty().take(800)
+            }
+        }
         var selected by remember { mutableStateOf<ReadingParagraph?>(null) }
         var versions by remember { mutableStateOf<ReadingParagraph?>(null) }
-        LaunchedEffect(selected, chapter, settings.traditional) {
+        LaunchedEffect(selected, chapter, settings.traditional, settings.textReplacements, settings.textReplacementsEnabled) {
             versions = null
             selected?.let { paragraph ->
                 versions = withContext(Dispatchers.Default) {
@@ -465,7 +475,7 @@ import kotlinx.serialization.encodeToString
             readingLifecycle.lifecycle.addObserver(observer)
             onDispose { readingLifecycle.lifecycle.removeObserver(observer) }
         }
-        val panelsClosed = !preferences && !editingTapZones && !search && (!toc || wide) && !speechSheet && !autoReadSheet && !bookSearch && !nextVolumePrompt && selected == null && note == null
+        val panelsClosed = !preferences && !editingTapZones && !search && (!toc || wide) && !speechSheet && !autoReadSheet && !replacementsSheet && !bookSearch && !nextVolumePrompt && selected == null && note == null
         val showTapTutorial = settings.tapPageTurn && !local.readerTapTutorialSeen && panelsClosed && !leaving &&
             !chapterLoad.loading && chapterLoad.error == null && positionState.initialAnchorRestored && !positionState.restoringAnchor && seekTarget == null &&
             (!settings.staticPagination || eInk.ready)
@@ -746,6 +756,7 @@ import kotlinx.serialization.encodeToString
                         Spacer(Modifier.height(12.dp))
                         Text(if(ref.isLocal) "本地小说" else (providers[ref.provider].orEmpty() + " · " + if(settings.mode == "jp") "日文原文" else "机翻阅读"), style = MaterialTheme.typography.labelMedium, color = foreground.copy(alpha = .65f))
                         if(hasFallback) Text("部分段落暂无所选译文，显示原文。", style = MaterialTheme.typography.labelMedium, color = foreground.copy(alpha = .7f))
+                        if(replacementsSkipped) Text("部分段落替换后过长，已保留替换前的正文。", style = MaterialTheme.typography.labelMedium, color = foreground.copy(alpha = .7f))
                     }
                 }
                 itemsIndexed(paragraphs, key = { _, p -> "paragraph-${p.index}" }, contentType = { _, p -> if(p.imageUrl != null || p.localImageId != null) "image" else "paragraph" }) { paragraphIndex, paragraph ->
@@ -884,6 +895,13 @@ import kotlinx.serialization.encodeToString
                 ReadAloudService.pauseForAutomaticReading(context)
                 autoReadSheet = false; menu = false; autoReading = true
             })
+        if(replacementsSheet) ReaderReplacementsSheet(settings,
+            sample = replacementSample,
+            onDismiss = { replacementsSheet = false; preferences = true }, onChange = { value ->
+                pauseReadingAutomation()
+                ReadAloudService.pauseForAutomaticReading(context)
+                c.store.update { it.copy(bookSettings = it.bookSettings + (ref.key to value)) }
+            })
         if(speechSheet) ReaderSpeechSheet(settings, speechStatus, onDismiss = { speechSheet = false },
             onStart = {
                 menu = false
@@ -960,6 +978,7 @@ import kotlinx.serialization.encodeToString
             ReaderPreferences(settings, local.bookSettings.containsKey(ref.key), { perBook -> c.store.update { it.copy(bookSettings = if(perBook) it.bookSettings + (ref.key to settings) else it.bookSettings - ref.key) } },
                 state = preferenceState, modifier = Modifier.fillMaxSize(), livePreview = true, defaultSettings = local.reader,
                 onEditTapZones = { preferences = false; editingTapZones = true },
+                onTextReplacements = { preferences = false; replacementsSheet = true; pauseReadingAutomation() },
                 onShowTapTutorial = { preferences = false; c.store.update { it.copy(readerTapTutorialSeen = false) } }, headerActions = {
                     AppIconButton(onClick = { onExpandedChange(!expanded) }) {
                         ReaderSheetExpandIcon(expanded)

@@ -23,7 +23,7 @@ internal object WebDavSchema {
     val portableReaderFields = setOf("mode", "engines", "parallel", "fontSize", "lineHeight", "weight", "width",
         "indent", "theme", "secondaryAlpha", "underline", "speechRate", "speechMinutes", "traditional", "speechLanguage",
         "toolbarTransparency", "paragraphSpacing", "showScrollPageButtons", "showProgressBar", "showReadingStatusBar", "speechContinueChapters", "customColors",
-        "horizontalMargin", "verticalMargin", "autoReadSpeed", "autoReadIntervalSeconds")
+        "horizontalMargin", "verticalMargin", "autoReadSpeed", "autoReadIntervalSeconds", "textReplacements", "textReplacementsEnabled")
     // fontFamily/customFont 依赖本机字体文件，两种同步模式均保留接收端的字体选择。
     val deviceReaderFields = setOf("keepScreenOn", "volumeKeys", "paged", "eInkMode", "monochrome", "scrollPageTurn",
         "horizontalPageTurn", "brightness", "paginationMode", "showPageButtons", "beforeEInk", "eInkPreferences", "prefetchChapters",

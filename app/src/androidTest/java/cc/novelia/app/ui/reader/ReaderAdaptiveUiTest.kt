@@ -36,6 +36,25 @@ import org.junit.Test
 class ReaderAdaptiveUiTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun perBookReplacementsApplyToScrollAndPagesWithoutChangingDefaults() = withReader(390.dp) { app, ref, _ ->
+        compose.onNodeWithContentDescription("阅读设置").performClick()
+        compose.onNodeWithText("更多").performClick()
+        compose.onNodeWithText("本书文字替换", substring = true).performScrollTo().performClick()
+        compose.onNodeWithText("添加规则").performClick()
+        compose.onNodeWithTag("reader-replacement-source").performTextInput("森林小路")
+        compose.onNodeWithTag("reader-replacement-target").performTextInput("石板街道")
+        compose.onNodeWithText("保存到本书").performClick()
+        compose.onNodeWithText("完成").performClick()
+        compose.onNodeWithText("关闭面板").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodes(hasText("石板街道", substring = true)).fetchSemanticsNodes().isNotEmpty() }
+        compose.runOnIdle {
+            assertTrue(app.store.state.value.reader.textReplacements.isEmpty())
+            app.store.update { it.copy(bookSettings = it.bookSettings + (ref.key to it.bookSettings.getValue(ref.key).withPaginationMode("auto"))) }
+        }
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("reader-page").fetchSemanticsNodes().isNotEmpty() &&
+            compose.onAllNodes(hasText("石板街道", substring = true)).fetchSemanticsNodes().isNotEmpty() }
+    }
+
     @Test fun automaticScrollingAdvancesAndTouchPausesIt() = withReader(390.dp) { app, _, _ ->
         compose.runOnIdle { app.store.update { it.copy(reader = it.reader.copy(autoReadSpeed = 80f)) } }
         val before = scrollPosition()

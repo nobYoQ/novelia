@@ -7,7 +7,8 @@ import com.ibm.icu.text.Transliterator
 /** 同一原始段落的一种显示文本；source 标明日文或翻译引擎，secondary 控制辅文本样式。 */
 data class TextPart(val text: String, val source: String, val secondary: Boolean = false)
 /** index 保留原始段落编号；过滤空段后，它不一定等于投影结果的列表下标。 */
-data class ReadingParagraph(val index: Int, val parts: List<TextPart>, val fallback: Boolean = false, val imageUrl: String? = null, val localImageId: String? = null)
+data class ReadingParagraph(val index: Int, val parts: List<TextPart>, val fallback: Boolean = false, val imageUrl: String? = null, val localImageId: String? = null,
+    val replacementsSkipped: Boolean = false)
 
 private val localImageMarker = Regex("novelia-image:([a-f0-9]{64})")
 
@@ -64,10 +65,13 @@ fun projectParagraphs(chapter: Chapter, settings: ReaderSettings, checkCancelled
 fun prepareReadingParagraphs(chapter: Chapter, settings: ReaderSettings, checkCancelled: () -> Unit = {}): List<ReadingParagraph> {
     // ICU 转换器可变，每轮正文准备独享实例，避免跨线程共享。
     val converter by lazy { Transliterator.getInstance("Simplified-Traditional") }
+    val replacer = ReaderTextReplacer(settings.activeTextReplacements)
     return projectParagraphs(chapter, settings, checkCancelled).map { paragraph ->
         checkCancelled()
         if(paragraph.imageUrl != null || paragraph.localImageId != null) paragraph
-        else paragraph.copy(parts = paragraph.parts.map { part ->
+        else {
+        var skipped = false
+        val parts = paragraph.parts.map { part ->
             checkCancelled()
             val text = part.text.trim()
             val prepared = if(settings.traditional && part.source != "日文" && !part.source.startsWith("原文")) {
@@ -83,8 +87,12 @@ fun prepareReadingParagraphs(chapter: Chapter, settings: ReaderSettings, checkCa
                     }
                 }
             } else text
-            part.copy(text = prepared)
-        })
+            val replaced = replacer.replace(prepared, checkCancelled = checkCancelled)
+            if(replaced == null) skipped = true
+            part.copy(text = replaced ?: prepared)
+        }
+        paragraph.copy(parts = parts, replacementsSkipped = skipped)
+        }
     }
 }
 
