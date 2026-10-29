@@ -100,7 +100,7 @@ import kotlinx.serialization.encodeToString
     CompositionLocalProvider(LocalScreenPageButtons provides settings.showEInkScreenButtons) {
     AppInteractionMode(appEInk, LocalReducedMotion.current || eInk) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
-            ReaderContent(c, ref, chapterId, wide = maxWidth >= 840.dp)
+            ReaderContent(c, ref, chapterId, wide = maxWidth >= 840.dp, availableWidth = maxWidth)
         }
     }
     }
@@ -111,7 +111,7 @@ import kotlinx.serialization.encodeToString
  * 滚动和静态分页共享段落/字符锚点，恢复、拖动预览或重新测量期间不提交中间位置。
  * 已读状态独立于屏顶位置保存，工具栏、搜索框和键盘以浮层叠加，不参与正文分页。
  */
-@Composable private fun ReaderContent(c: AppController, ref: BookRef, chapterId: String, wide: Boolean) {
+@Composable private fun ReaderContent(c: AppController, ref: BookRef, chapterId: String, wide: Boolean, availableWidth: androidx.compose.ui.unit.Dp) {
     val local by c.store.state.collectAsStateWithLifecycle()
     val settings = local.bookSettings[ref.key] ?: local.reader
     val readerFont = rememberReaderFont(settings)
@@ -378,9 +378,14 @@ import kotlinx.serialization.encodeToString
         var topOverlayHeight by remember { mutableIntStateOf(0) }
         var bottomOverlayHeight by remember { mutableIntStateOf(0) }
         val density = LocalDensity.current
-        // 两种模式都为启用的底栏预留固定空间，不随工具栏或按钮显隐变化。
-        val readingStatusBarHeight = if(settings.showReadingStatusBar) with(density) { 16.sp.toDp() } + 12.dp else 0.dp
         val safeInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
+        val direction = androidx.compose.ui.platform.LocalLayoutDirection.current
+        val statusWidth = availableWidth - (if(wide && settings.showWideToc) 293.dp else 0.dp) -
+            with(density) { (safeInsets.getLeft(this, direction) + safeInsets.getRight(this, direction)).toDp() }
+        val statusColumns = cc.novelia.app.data.model.ReaderStatusItems.columns(statusWidth.value, density.fontScale)
+        val statusRows = cc.novelia.app.data.model.ReaderStatusItems.rows(settings.visibleReadingStatusItems.size, statusColumns)
+        // 预留空间只跟随配置、宽度和系统字体变化；时间与进度更新不会重新分页。
+        val readingStatusBarHeight = if(statusRows > 0) with(density) { 16.sp.toDp() } * statusRows + 12.dp + 4.dp * (statusRows - 1) else 0.dp
         // 隐藏状态栏时正文延伸到顶部，避免屏幕缺口仍留出整条空白；
         // 保留横屏两侧和底部安全区，目录与引导控件仍避让全部系统区域。
         val readingInsets = if(settings.hideStatusBar) safeInsets.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom) else safeInsets
@@ -827,7 +832,7 @@ import kotlinx.serialization.encodeToString
                     pageIndex = eInk.pageIndex, chapterTitle = chapter.title, wide = wide, cached = cached,
                 ),
                 settings = settings, menu = menu, reducedMotion = reducedMotion, toolbarBackground = toolbarBackground,
-                foreground = foreground, readingStatusBarHeight = readingStatusBarHeight, modifier = Modifier.align(Alignment.BottomCenter),
+                foreground = foreground, readingStatusBarHeight = readingStatusBarHeight, statusColumns = statusColumns, modifier = Modifier.align(Alignment.BottomCenter),
                 onHeightChanged = { bottomOverlayHeight = it }, onPage = { page(it) }, onSeek = { seekChapter(it) },
                 onSeekFocusChanged = { seekFocused = it }, onPreviousChapter = { chapter.prevId?.let { openChapter(it) } },
                 onNextChapter = { if(chapter.nextId != null) openChapter(chapter.nextId) else nextVolumePrompt = true },

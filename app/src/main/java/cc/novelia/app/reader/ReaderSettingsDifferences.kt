@@ -27,6 +27,7 @@ internal fun readerSettingsDifferences(book: ReaderSettings, defaults: ReaderSet
         "左右翻页" to horizontalPageTurn.label(), "点击区域翻页" to tapPageTurn.label(), "翻页按钮" to showPageButtons.label(),
         "章节末尾按钮" to showScrollPageButtons.label(), "阅读进度条" to showProgressBar.label(),
         "底部阅读信息" to showReadingStatusBar.label(),
+        "底栏内容顺序" to resolvedReadingStatusItems.joinToString(" → ") { cc.novelia.app.data.model.ReaderStatusItems.labels.getValue(it) }.ifEmpty { "无" },
         "列表与面板翻屏按钮" to showEInkScreenButtons.label(), "阅读时隐藏状态栏" to hideStatusBar.label(),
         "屏幕亮度" to if(brightness < 0) "跟随系统" else "${(brightness * 100).toInt()}%",
         "工具栏透明度" to "${(resolvedToolbarTransparency * 100).toInt()}%", "繁体显示" to traditional.label(),

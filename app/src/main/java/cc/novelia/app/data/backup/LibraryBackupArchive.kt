@@ -139,6 +139,7 @@ internal object LibraryBackupArchive {
             require(settings.orientation in ReaderSettings.ORIENTATIONS) { "备份阅读方向无效" }
             require(settings.validAutoRead) { "备份自动阅读速度无效" }
             require(settings.validTextReplacements) { "备份文字替换规则无效" }
+            require(settings.validReadingStatusItems) { "备份阅读底栏配置无效" }
             require(settings.fontSize in 10f..60f && settings.lineHeight in ReaderSettings.MIN_LINE_HEIGHT..4f && settings.width in 200f..2000f &&
                 settings.engines.size == 3 && settings.engines.toSet() == setOf("sakura", "gpt", "youdao") && settings.speechRate in .1f..5f &&
                 settings.secondaryAlpha in 0f..1f && (settings.brightness == -1f || settings.brightness in 0f..1f)) { "备份阅读设置无效" }

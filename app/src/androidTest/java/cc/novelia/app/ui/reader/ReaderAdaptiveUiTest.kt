@@ -34,6 +34,26 @@ import org.junit.Rule
 import org.junit.Test
 
 class ReaderAdaptiveUiTest {
+    @Test fun configurableFooterKeepsDefaultSettingsAndWorksInBothReadingModes() = withReader(390.dp) { app, ref, _ ->
+        compose.onNodeWithContentDescription("阅读设置").performClick()
+        compose.onNodeWithText("仅应用于这本书").performClick()
+        compose.onNodeWithText("翻页").performClick()
+        compose.onNodeWithText("底栏内容与顺序").performScrollTo().performClick()
+        compose.onNodeWithTag("reader-status-option-battery").performScrollTo().performClick()
+        compose.onNodeWithTag("reader-status-option-time").performScrollTo().performClick()
+        compose.onNodeWithText("关闭面板").performClick()
+        compose.onNodeWithTag("reader-status-clock").assertDoesNotExist()
+        compose.onNodeWithTag("reader-status-battery").assertIsDisplayed()
+        compose.runOnIdle {
+            val library = app.store.state.value
+            assertFalse("battery" in library.reader.readingStatusItems)
+            assertTrue("battery" in library.bookSettings.getValue(ref.key).readingStatusItems)
+            app.store.update { it.copy(bookSettings = it.bookSettings + (ref.key to it.bookSettings.getValue(ref.key).copy(paginationMode = "auto"))) }
+        }
+        compose.waitUntil(15_000) { compose.onAllNodesWithTag("reader-page-counter").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("reader-status-battery").assertIsDisplayed()
+        compose.onNodeWithTag("reader-status-clock").assertDoesNotExist()
+    }
     @Test fun readingTimePausesForPreferencesAndRespectsPausedHistory() = withReader(390.dp) { app, _, _ ->
         compose.runOnIdle { app.store.update { it.copy(readingStatistics = cc.novelia.app.data.model.ReadingStatistics(revision = it.readingStatistics.revision + 1)) } }
         compose.waitForIdle()
