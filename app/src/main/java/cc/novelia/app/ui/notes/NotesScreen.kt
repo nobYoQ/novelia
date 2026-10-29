@@ -34,6 +34,8 @@ import cc.novelia.app.ui.navigation.AppController
     var query by rememberSaveable { mutableStateOf("") }
     var bookKey by rememberSaveable { mutableStateOf(c.nav.currentBackStackEntry?.savedStateHandle?.remove<String>("notesBookKey")) }
     var choosingBook by remember { mutableStateOf(false) }
+    var exporting by remember { mutableStateOf(false) }
+    val export = rememberNoteExport(c)
     val settledQuery = rememberDebouncedQuery(query)
     val allNotes = remember(state.notes, state.books, state.positions) { presentNotes(state) }
     val bookChoices = remember(allNotes) { allNotes.distinctBy { it.note.key }.sortedBy { it.bookTitle } }
@@ -51,6 +53,7 @@ import cc.novelia.app.ui.navigation.AppController
                 AppSelectionChip(selected = bookKey != null, onClick = { choosingBook = true }, label = { Text(bookChoices.firstOrNull { it.note.key == bookKey }?.bookTitle ?: "全部书籍", maxLines = 1) }, leadingIcon = { Icon(Icons.Outlined.FilterList, null, Modifier.size(18.dp)) })
                 if(bookKey != null || query.isNotBlank()) AppTextButton(onClick = { bookKey = null; query = "" }) { Text("清空筛选") }
                 Text("${notes.size} 条", Modifier.padding(vertical = 12.dp), style = MaterialTheme.typography.labelMedium)
+                AppTextButton(onClick = { exporting = true }, enabled = notes.isNotEmpty() && !export.busy) { Text(if(export.busy) "正在导出…" else "导出筛选结果") }
             }
         }
         if(allNotes.isEmpty()) item { ProfileEmptyState("记下喜欢的句子", "在阅读器长按段落，或点击书签按钮保存。", Icons.Outlined.EditNote) }
@@ -84,6 +87,14 @@ import cc.novelia.app.ui.navigation.AppController
             item { Text("按书籍查看", Modifier.padding(20.dp), style = MaterialTheme.typography.titleLarge) }
             item { MenuRow("全部书籍", "${allNotes.size} 条笔记", Icons.Outlined.LibraryBooks, { bookKey = null; choosingBook = false }) }
             items(bookChoices, key = { it.note.key }) { item -> MenuRow(item.bookTitle, "${bookCounts[item.note.key] ?: 0} 条笔记", Icons.Outlined.MenuBook, { bookKey = item.note.key; choosingBook = false }) }
+        }
+    }
+    if(exporting) AppSheet(onDismissRequest = { exporting = false }) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("导出书签与批注", style = MaterialTheme.typography.titleLarge)
+            Text("导出当前书籍与搜索筛选下的 ${notes.size} 条记录，包含摘录、批注和章节位置。")
+            AppTextButton(onClick = { exporting = false; export.export(notes, NoteExportFormat.Markdown) }, enabled = notes.isNotEmpty()) { Text("Markdown（.md）") }
+            AppTextButton(onClick = { exporting = false; export.export(notes, NoteExportFormat.Text) }, enabled = notes.isNotEmpty()) { Text("纯文本（.txt）") }
         }
     }
     editing?.let { note -> NoteEditorDialog(note, { editing = null }) { value -> c.store.update { it.copy(notes = it.notes.map { n -> if(n.id == note.id) n.copy(text = value) else n }.filter { it.bookmarked || it.text.isNotBlank() || it.selection != null }) } } }
