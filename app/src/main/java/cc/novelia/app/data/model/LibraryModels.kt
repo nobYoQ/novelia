@@ -93,7 +93,8 @@ fun legacyFolderId(name: String): String = if(name == DEFAULT_FOLDER) DEFAULT_FO
     // 本机只提示一次，不随单书设置或翻页模式切换重复展示。
     val readerTapTutorialSeen: Boolean = false,
     val syncReplica: SyncReplica = SyncReplica(),
-    val forumRulesReminderDismissed: Boolean = false
+    val forumRulesReminderDismissed: Boolean = false,
+    val readingStatistics: ReadingStatistics = ReadingStatistics()
 )
 
 /** 收藏夹名称仅用于显示；改名时 ID 及所有本地分卷仍保持原关系。 */

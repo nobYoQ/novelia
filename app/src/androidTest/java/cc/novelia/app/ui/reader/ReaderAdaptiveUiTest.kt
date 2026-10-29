@@ -34,6 +34,30 @@ import org.junit.Rule
 import org.junit.Test
 
 class ReaderAdaptiveUiTest {
+    @Test fun readingTimePausesForPreferencesAndRespectsPausedHistory() = withReader(390.dp) { app, _, _ ->
+        compose.runOnIdle { app.store.update { it.copy(readingStatistics = cc.novelia.app.data.model.ReadingStatistics(revision = it.readingStatistics.revision + 1)) } }
+        compose.waitForIdle()
+        android.os.SystemClock.sleep(1_100)
+        compose.onNodeWithContentDescription("阅读设置").performClick()
+        compose.waitForIdle()
+        val first = app.store.state.value.readingStatistics.totalMillis
+        assertTrue("前台正文应该累计时长", first >= 1_000)
+        android.os.SystemClock.sleep(1_100)
+        compose.runOnIdle { assertEquals(first, app.store.state.value.readingStatistics.totalMillis) }
+        compose.onNodeWithText("关闭面板").performClick()
+        compose.waitForIdle()
+        android.os.SystemClock.sleep(1_100)
+        compose.onNodeWithContentDescription("阅读设置").performClick()
+        compose.waitForIdle()
+        val second = app.store.state.value.readingStatistics.totalMillis
+        assertTrue(second > first)
+        compose.runOnIdle { app.store.update { it.copy(historyPaused = true) } }
+        compose.onNodeWithText("关闭面板").performClick()
+        compose.waitForIdle()
+        android.os.SystemClock.sleep(1_100)
+        compose.onNodeWithContentDescription("阅读设置").performClick()
+        compose.runOnIdle { assertEquals(second, app.store.state.value.readingStatistics.totalMillis) }
+    }
     @get:Rule val compose = createComposeRule()
 
     @Test fun perBookReplacementsApplyToScrollAndPagesWithoutChangingDefaults() = withReader(390.dp) { app, ref, _ ->

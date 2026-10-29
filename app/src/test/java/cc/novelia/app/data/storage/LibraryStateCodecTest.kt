@@ -12,6 +12,21 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LibraryStateCodecTest {
+    @Test fun readingStatisticsUseReadingPartitionAndSurviveRestart() {
+        val directory = Files.createTempDirectory("reading-statistics").toFile()
+        try {
+            fun codec() = LibraryStateCodec(directory, { it.readText() }, { file, text -> file.writeText(text) })
+            val running = codec()
+            val original = LibraryState()
+            val first = running.encode(original)
+            val state = original.copy(readingStatistics = cc.novelia.app.data.model.ReadingStatistics(days = mapOf(
+                "2026-10-30" to mapOf("local/a" to cc.novelia.app.data.model.ReadingTimeEntry("书 A", 60_000)))))
+            val second = running.encode(state)
+            assertEquals(state, codec().decode(second))
+            assertEquals(parts(first).filterKeys { it != "reading" }, parts(second).filterKeys { it != "reading" })
+            assertNotEquals(parts(first)["reading"], parts(second)["reading"])
+        } finally { directory.deleteRecursively() }
+    }
     @Test fun restoringTheSameLoadedStateRepairsDeletedAndCorruptPayloads() {
         listOf(false, true).forEach { corrupt ->
             val directory = Files.createTempDirectory("library-repair").toFile()

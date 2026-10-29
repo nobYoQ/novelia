@@ -483,6 +483,13 @@ import kotlinx.serialization.encodeToString
             blocked = !panelsClosed || showTapTutorial || leaving || !positionState.initialAnchorRestored,
             top = if(menu) topOverlayHeight else 0, bottom = bottomOverlayHeight)
         val volumeKeysActive = panelsClosed && !showTapTutorial
+        val recordReadingInteraction = rememberReaderReadingTime(c, ref.key,
+            local.books.firstOrNull { it.book.ref == ref }?.book?.title ?: chapter.novelTitleZh?.takeIf(String::isNotBlank) ?: chapter.novelTitleJp.orEmpty(),
+            local.readingStatistics.revision,
+            eligible = local.readingStatistics.enabled && !local.historyPaused && panelsClosed && !showTapTutorial && !leaving &&
+                !chapterLoad.loading && chapterLoad.error == null && positionState.initialAnchorRestored && !positionState.restoringAnchor &&
+                seekTarget == null && (!settings.staticPagination || eInk.ready) && c.nav.currentBackStackEntry == readerEntry,
+            automatic = autoReading || (speechPlayback?.bookKey == ref.key && speechPlayback?.playing == true))
         LaunchedEffect(volumeKeysActive) { if(volumeKeysActive) runCatching { focus.requestFocus() } }
         fun openChapter(id: String, startAtEnd: Boolean = false, match: ReadingTextMatch? = null, inline: Boolean = false,
             restore: ReadingReturnPoint? = null, followingSpeech: Boolean = false, automatic: Boolean = false) {
@@ -557,6 +564,7 @@ import kotlinx.serialization.encodeToString
             }
         }
         fun page(direction: Int) {
+            recordReadingInteraction()
             pauseReadingAutomation()
             if(chapterLoad.loading || leaving) return
             seekGeneration++; seekJob?.cancel(); seekTarget = null
@@ -574,6 +582,7 @@ import kotlinx.serialization.encodeToString
             scope.launch(Dispatchers.Main.immediate) { if(reducedMotion) scroll.scrollBy(distance * direction) else scroll.animateScrollBy(distance * direction, tween(AppMotion.Standard)) }
         }
         fun seekChapter(progress: Float) {
+            recordReadingInteraction()
             pauseReadingAutomation()
             if(leaving || chapterLoad.loading || positionState.restoringAnchor || !positionState.initialAnchorRestored ||
                 (settings.staticPagination && !eInk.ready)) return
@@ -712,7 +721,7 @@ import kotlinx.serialization.encodeToString
             }
             VerticalDivider(Modifier.fillMaxHeight())
         }
-        Box(Modifier.weight(1f).fillMaxHeight().background(background).then(readerInteractionModifier { pauseReadingAutomation() }).focusRequester(focus).onPreviewKeyEvent { event ->
+        Box(Modifier.weight(1f).fillMaxHeight().background(background).then(readerInteractionModifier { recordReadingInteraction(); pauseReadingAutomation() }).focusRequester(focus).onPreviewKeyEvent { event ->
             val direction = readerKeyDirection(event.nativeKeyEvent.keyCode, settings.volumeKeys)
             if(volumeKeysActive && !seekFocused && direction != 0) {
                 if(event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) page(direction)
@@ -979,6 +988,7 @@ import kotlinx.serialization.encodeToString
                 state = preferenceState, modifier = Modifier.fillMaxSize(), livePreview = true, defaultSettings = local.reader,
                 onEditTapZones = { preferences = false; editingTapZones = true },
                 onTextReplacements = { preferences = false; replacementsSheet = true; pauseReadingAutomation() },
+                onReadingStatistics = { preferences = false; pauseReadingAutomation(); c.go("reading-stats?book=${android.net.Uri.encode(ref.key)}") },
                 onShowTapTutorial = { preferences = false; c.store.update { it.copy(readerTapTutorialSeen = false) } }, headerActions = {
                     AppIconButton(onClick = { onExpandedChange(!expanded) }) {
                         ReaderSheetExpandIcon(expanded)

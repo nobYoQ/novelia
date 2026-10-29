@@ -66,6 +66,7 @@ import cc.novelia.app.ui.shelf.AdaptiveLibraryScreen
 import cc.novelia.app.ui.shelf.BookUpdatesScreen
 import cc.novelia.app.ui.shelf.FavoriteSheet
 import cc.novelia.app.ui.shelf.HistoryScreen
+import cc.novelia.app.ui.shelf.ReadingStatisticsScreen
 import cc.novelia.app.ui.theme.AppInteractionMode
 import cc.novelia.app.ui.theme.appPageEnterTransition
 import cc.novelia.app.ui.theme.appPageExitTransition
@@ -284,6 +285,7 @@ class MainActivity : ComponentActivity() {
                             composable("notes") { NotesScreen(controller) }
                             composable("blocked") { BlockedScreen(controller) }
                             composable("history") { HistoryScreen(controller) }
+                            composable("reading-stats?book={book}") { ReadingStatisticsScreen(controller, it.arguments?.getString("book")) }
                             composable("glossary/{provider}/{id}") { GlossaryScreen(controller, BookRef(it.arguments!!.getString("provider")!!, it.arguments!!.getString("id")!!)) }
                             composable("edit/{provider}/{id}") { EditBookScreen(controller, BookRef(it.arguments!!.getString("provider")!!, it.arguments!!.getString("id")!!)) }
                             composable("about") { AboutScreen(controller) }
