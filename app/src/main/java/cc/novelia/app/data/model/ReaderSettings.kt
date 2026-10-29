@@ -52,7 +52,8 @@ import kotlinx.serialization.Serializable
     val customColors: ReaderCustomColors = ReaderCustomColors(),
     // 字体文件仅保存在本机；切换系统字体时保留已导入字体，便于切回。
     val fontFamily: String = "system",
-    val customFont: ReaderCustomFont? = null
+    val customFont: ReaderCustomFont? = null,
+    val horizontalMargin: Float = 24f, val verticalMargin: Float = 16f
 ) {
     companion object {
         const val MIN_LINE_HEIGHT = .5f
@@ -61,6 +62,8 @@ import kotlinx.serialization.Serializable
     }
 
     val resolvedParagraphSpacing get() = if(paragraphSpacing.isFinite()) paragraphSpacing.coerceIn(0f, 32f) else 8f
+    val resolvedHorizontalMargin get() = if(horizontalMargin.isFinite()) horizontalMargin.coerceIn(0f, 64f) else 24f
+    val resolvedVerticalMargin get() = if(verticalMargin.isFinite()) verticalMargin.coerceIn(0f, 64f) else 16f
     val resolvedToolbarTransparency get() = if(toolbarTransparency.isFinite()) toolbarTransparency.coerceIn(0f, 1f) else .25f
     // 兼容黑白模式尚未成为主题选项之前保存的设置。
     val resolvedTheme get() = if(monochrome) "monochrome" else theme

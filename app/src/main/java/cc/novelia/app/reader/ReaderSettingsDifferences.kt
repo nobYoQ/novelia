@@ -14,6 +14,7 @@ internal fun readerSettingsDifferences(book: ReaderSettings, defaults: ReaderSet
         "阅读字体" to fontLabel,
         "字号" to "$fontSize sp", "行距" to "$lineHeight 倍", "段距" to "$resolvedParagraphSpacing dp",
         "加粗文字" to weight.label(), "内容宽度" to "$width dp", "首行缩进" to indent.label(),
+        "左右页边距" to "$resolvedHorizontalMargin dp", "上下页边距" to "$resolvedVerticalMargin dp",
         "阅读主题" to when(resolvedTheme) { "paper" -> "纸张"; "light" -> "浅色"; "dark" -> "深色"; "monochrome" -> "黑白"; "custom" -> "自定义"; else -> "跟随应用" },
         "自定义配色" to if(resolvedTheme == "custom") resolvedCustomColors.let { "文字 #${"%06X".format(it.text)}；背景 #${"%06X".format(it.background)}；工具栏 #${"%06X".format(it.toolbar)}" } else "未启用",
         "辅文本不透明度" to "${(secondaryAlpha * 100).toInt()}%", "辅文本下划线" to underline.label(),

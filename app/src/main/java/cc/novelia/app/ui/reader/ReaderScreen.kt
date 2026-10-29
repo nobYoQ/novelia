@@ -611,7 +611,7 @@ import kotlinx.serialization.encodeToString
                 imageModel = { it.imageUrl ?: it.localImageId?.takeIf { ref.isLocal }?.let { id -> c.store.documentImage(ref.id, id) } },
                 onToggleMenu = { menu = !menu }, onSelect = { selected = it }, onPage = { page(it) },
                 background = background, foreground = foreground, activeMatch = activeMatch,
-                interactionEnabled = bodyInputEnabled, contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp), onNavigate = openToc)
+                interactionEnabled = bodyInputEnabled, contentPadding = PaddingValues(horizontal = settings.resolvedHorizontalMargin.dp, vertical = settings.resolvedVerticalMargin.dp), onNavigate = openToc)
             else LazyColumn(state = scroll, overscrollEffect = null, modifier = Modifier.testTag("reader-scroll").align(Alignment.TopCenter).fillMaxHeight()
                 .windowInsetsPadding(readingInsets).padding(bottom = readingStatusBarHeight).widthIn(max = settings.width.dp).fillMaxWidth()
                 .onSizeChanged { size ->
@@ -626,7 +626,7 @@ import kotlinx.serialization.encodeToString
                     chapter.nextId?.let { openChapter(it, inline = true) }
                 }
                 .graphicsLayer { translationY = -chapterPullOffset }
-                , contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(settings.resolvedParagraphSpacing.dp)) {
+                , contentPadding = PaddingValues(horizontal = settings.resolvedHorizontalMargin.dp, vertical = settings.resolvedVerticalMargin.dp), verticalArrangement = Arrangement.spacedBy(settings.resolvedParagraphSpacing.dp)) {
                 item("title", contentType = "title") {
                     Column(Modifier.fillMaxWidth().clickable(
                         interactionSource = remember { MutableInteractionSource() }, indication = null,

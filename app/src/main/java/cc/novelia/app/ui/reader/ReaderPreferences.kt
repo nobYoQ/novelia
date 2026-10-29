@@ -154,6 +154,10 @@ import kotlin.math.roundToInt
                         }
                         ReaderPreferenceGroup("进阶排版", "内容宽度、粗体、缩进与双语样式", expanded == "layout", { expanded = if(expanded == "layout") "" else "layout" }) {
                             ReaderSlider("内容宽度 ${value.width.toInt()} dp", value.width, 300f..900f, defaultValue = defaults?.width) { onChange(value.copy(width = it)) }
+                            ReaderSlider("左右页边距 ${value.resolvedHorizontalMargin.toInt()} dp", value.resolvedHorizontalMargin, 0f..64f,
+                                modifier = Modifier.testTag("reader-horizontal-margin"), defaultValue = defaults?.resolvedHorizontalMargin) { onChange(value.copy(horizontalMargin = it)) }
+                            ReaderSlider("上下页边距 ${value.resolvedVerticalMargin.toInt()} dp", value.resolvedVerticalMargin, 0f..64f,
+                                modifier = Modifier.testTag("reader-vertical-margin"), defaultValue = defaults?.resolvedVerticalMargin) { onChange(value.copy(verticalMargin = it)) }
                             ReaderSlider("辅文本不透明度 ${(value.secondaryAlpha * 100).toInt()}%", value.secondaryAlpha, .45f..1f, defaultValue = defaults?.secondaryAlpha) { onChange(value.copy(secondaryAlpha = it)) }
                             TogglePreference("加粗文字", "两种阅读模式使用一致的粗体", value.weight, defaultValue = defaults?.weight) { onChange(value.copy(weight = it)) }
                             TogglePreference("首行缩进", "统一为两个全角空格", value.indent, defaultValue = defaults?.indent) { onChange(value.copy(indent = it)) }

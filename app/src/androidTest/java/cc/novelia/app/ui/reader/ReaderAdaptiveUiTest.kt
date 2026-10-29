@@ -36,6 +36,34 @@ import org.junit.Test
 class ReaderAdaptiveUiTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun marginChangesPreserveTheCharacterAnchorInBothReadingModes() = withReader(390.dp) { app, ref, _ ->
+        compose.onNodeWithTag("reader-scroll").performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 800f) }
+        compose.waitUntil(10_000) { (app.store.state.value.positions[ref.key]?.textOffset ?: 0) > 0 }
+        val before = app.store.state.value.positions.getValue(ref.key)
+        compose.runOnIdle { app.store.update { it.copy(reader = it.reader.copy(horizontalMargin = 48f, verticalMargin = 36f)) } }
+        compose.waitForIdle()
+        compose.runOnIdle {
+            val after = app.store.state.value.positions.getValue(ref.key)
+            assertEquals(before.sourceParagraph, after.sourceParagraph)
+            assertEquals(before.textOffset, after.textOffset)
+            app.store.update { it.copy(reader = it.reader.withPaginationMode("auto")) }
+        }
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("正在分页…").fetchSemanticsNodes().isEmpty() }
+        compose.waitForIdle()
+        compose.runOnIdle { app.store.update { it.copy(reader = it.reader.copy(horizontalMargin = 8f, verticalMargin = 0f)) } }
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("正在分页…").fetchSemanticsNodes().isEmpty() }
+        compose.waitForIdle()
+        compose.runOnIdle {
+            val after = app.store.state.value.positions.getValue(ref.key)
+            assertEquals(before.sourceParagraph, after.sourceParagraph)
+            assertTrue(after.textOffset <= before.textOffset)
+        }
+        val visible = compose.onNode(hasText("第1段", substring = true)).fetchSemanticsNode().config[SemanticsProperties.Text].sumOf { it.text.length }
+        assertTrue(app.store.state.value.positions.getValue(ref.key).textOffset + visible >= before.textOffset)
+    }
+
+
+
     @Test fun nextChapterAndLayoutChangesReuseTheLoadedDirectory() = verifyDirectoryReuse(eInk = false)
 
     @Test fun eInkNextChapterAndLayoutChangesReuseTheLoadedDirectory() = verifyDirectoryReuse(eInk = true)
