@@ -160,6 +160,9 @@ import kotlinx.serialization.encodeToString
     val enteredBookCacheGeneration = remember(ref, chapterId) { bookCacheGeneration }
     val readingLifecycle = LocalLifecycleOwner.current
     val speechStatus by ReadAloudService.status.collectAsStateWithLifecycle()
+    val speechPlayback by ReadAloudService.playback.collectAsStateWithLifecycle()
+    val lifecycleState by readingLifecycle.lifecycle.currentStateFlow.collectAsState()
+    fun pauseSpeechFollowing() { if(speechPlayback?.bookKey == ref.key) ReadAloudService.follow(false) }
     val context = LocalContext.current; val activity = context.activityOrNull()
     val colors = readerColors(settings, MaterialTheme.colorScheme)
     val reducedMotion = appReducedMotion()
@@ -227,6 +230,9 @@ import kotlinx.serialization.encodeToString
         val annotations = remember(chapterNotes, paragraphs) {
             val bySource = chapterNotes.groupBy { it.paragraph }
             paragraphs.withIndex().flatMap { (index, paragraph) -> bySource[paragraph.index].orEmpty().mapNotNull { noteMatch(it, paragraph, index) } }
+        }
+        val spokenMatch = remember(speechPlayback, paragraphs, ref, chapterId) {
+            speechPlayback?.takeIf { it.bookKey == ref.key && it.chapterId == chapterId }?.segment?.match(paragraphs)
         }
         val searchArrival = remember(ref, chapterId) { readerEntry?.savedStateHandle?.remove<Int>("readerSearchParagraph") }
         val arrivalMatch = remember(ref, chapterId) {
@@ -448,13 +454,15 @@ import kotlinx.serialization.encodeToString
         val volumeKeysActive = panelsClosed && !showTapTutorial
         LaunchedEffect(volumeKeysActive) { if(volumeKeysActive) runCatching { focus.requestFocus() } }
         fun openChapter(id: String, startAtEnd: Boolean = false, match: ReadingTextMatch? = null, inline: Boolean = false,
-            restore: ReadingReturnPoint? = null) {
+            restore: ReadingReturnPoint? = null, followingSpeech: Boolean = false) {
             if(leaving || id == chapterId) return
+            if(!followingSpeech) pauseSpeechFollowing()
             seekGeneration++; seekJob?.cancel(); seekTarget = null
             inlineChapterLoad = inline
             chapterLoad.request(ReaderChapterTarget(id, startAtEnd, match, restore))
         }
         fun returnToReadingPlace() {
+            pauseSpeechFollowing()
             val target = returnPoint ?: return
             searchGeneration++; searchJob?.cancel(); finding = false; activeMatch = null
             search = false; bookSearch = false; toc = false; focusManager.clearFocus()
@@ -485,6 +493,7 @@ import kotlinx.serialization.encodeToString
             }
         }
         fun refreshChapter() {
+            pauseSpeechFollowing()
             seekGeneration++; seekJob?.cancel(); seekTarget = null
             chapterLoad.cancel()
             refreshAnchor = if(settings.staticPagination) ReadingRestoreAnchor(eInk.paragraph, eInk.sourceIndex, eInk.textOffset,
@@ -517,6 +526,7 @@ import kotlinx.serialization.encodeToString
             }
         }
         fun page(direction: Int) {
+            pauseSpeechFollowing()
             if(chapterLoad.loading || leaving) return
             seekGeneration++; seekJob?.cancel(); seekTarget = null
             if(settings.staticPagination) {
@@ -533,6 +543,7 @@ import kotlinx.serialization.encodeToString
             scope.launch(Dispatchers.Main.immediate) { if(reducedMotion) scroll.scrollBy(distance * direction) else scroll.animateScrollBy(distance * direction, tween(AppMotion.Standard)) }
         }
         fun seekChapter(progress: Float) {
+            pauseSpeechFollowing()
             if(leaving || chapterLoad.loading || positionState.restoringAnchor || !positionState.initialAnchorRestored ||
                 (settings.staticPagination && !eInk.ready)) return
             val generation = ++seekGeneration
@@ -552,10 +563,10 @@ import kotlinx.serialization.encodeToString
                 }
             }
         }
-        suspend fun revealMatch(match: ReadingTextMatch) = withContext(Dispatchers.Main.immediate) {
+        suspend fun revealMatch(match: ReadingTextMatch, markSearch: Boolean = true) = withContext(Dispatchers.Main.immediate) {
             val paragraph = paragraphs.getOrNull(match.paragraph) ?: return@withContext
             val textOffset = match.textOffset(paragraph, settings)
-            activeMatch = match
+            if(markSearch) activeMatch = match
             if(settings.staticPagination) { eInk.find(match.paragraph, textOffset); savePosition() }
             else {
                 // 先挂载惰性列表项，再使用该语言片段已测量的行几何定位。
@@ -567,7 +578,16 @@ import kotlinx.serialization.encodeToString
                 savePosition()
             }
         }
+        LaunchedEffect(speechPlayback, lifecycleState, panelsClosed, showTapTutorial, chapterLoad.loading, chapterLoad.error, layoutGeneration, seekTarget) {
+            val current = speechPlayback ?: return@LaunchedEffect
+            if(!current.canFollow(ref.key, lifecycleState.isAtLeast(Lifecycle.State.RESUMED),
+                    !panelsClosed || showTapTutorial || leaving || chapterLoad.loading || chapterLoad.error != null || seekTarget != null) || c.nav.currentBackStackEntry != readerEntry) return@LaunchedEffect
+            snapshotFlow { positionState.initialAnchorRestored && !positionState.restoringAnchor && (!settings.staticPagination || eInk.ready) }.first { it }
+            if(current.chapterId != chapterId) openChapter(requireNotNull(current.chapterId), followingSpeech = true)
+            else spokenMatch?.let { revealMatch(it, markSearch = false) }
+        }
         fun findNext(direction: Int = 1) {
+            pauseSpeechFollowing()
             if(query.isBlank() || finding) return
             val term = query.trim()
             focusManager.clearFocus()
@@ -625,7 +645,7 @@ import kotlinx.serialization.encodeToString
             }
             VerticalDivider(Modifier.fillMaxHeight())
         }
-        Box(Modifier.weight(1f).fillMaxHeight().background(background).focusRequester(focus).onPreviewKeyEvent { event ->
+        Box(Modifier.weight(1f).fillMaxHeight().background(background).then(readerInteractionModifier { pauseSpeechFollowing() }).focusRequester(focus).onPreviewKeyEvent { event ->
             val direction = readerKeyDirection(event.nativeKeyEvent.keyCode, settings.volumeKeys)
             if(volumeKeysActive && !seekFocused && direction != 0) {
                 if(event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) page(direction)
@@ -644,7 +664,7 @@ import kotlinx.serialization.encodeToString
                     .widthIn(max = settings.width.dp).fillMaxWidth(),
                 imageModel = { it.imageUrl ?: it.localImageId?.takeIf { ref.isLocal }?.let { id -> c.store.documentImage(ref.id, id) } },
                 onToggleMenu = { menu = !menu }, onSelect = { selected = it }, onPage = { page(it) },
-                background = background, foreground = foreground, activeMatch = activeMatch, annotations = annotations,
+                background = background, foreground = foreground, activeMatch = if(search) activeMatch else spokenMatch ?: activeMatch, annotations = annotations,
                 interactionEnabled = bodyInputEnabled, contentPadding = PaddingValues(horizontal = settings.resolvedHorizontalMargin.dp, vertical = settings.resolvedVerticalMargin.dp), onNavigate = openToc)
             else LazyColumn(state = scroll, overscrollEffect = null, modifier = Modifier.testTag("reader-scroll").align(Alignment.TopCenter).fillMaxHeight()
                 .windowInsetsPadding(readingInsets).padding(bottom = readingStatusBarHeight).widthIn(max = settings.width.dp).fillMaxWidth()
@@ -679,7 +699,7 @@ import kotlinx.serialization.encodeToString
                         paragraph.imageUrl ?: paragraph.localImageId?.takeIf { ref.isLocal }?.let { c.store.documentImage(ref.id, it) }
                     }
                     if(image != null) ReaderIllustration(image, foreground, tapNavigation::click)
-                    else ReaderTextParagraph(paragraph, settings, layoutGeneration, foreground, tapNavigation::click, { selected = paragraph }, activeMatch?.takeIf { it.paragraph == paragraphIndex }, fontFamily = readerFont.family,
+                    else ReaderTextParagraph(paragraph, settings, layoutGeneration, foreground, tapNavigation::click, { selected = paragraph }, (if(search) activeMatch else spokenMatch ?: activeMatch)?.takeIf { it.paragraph == paragraphIndex }, fontFamily = readerFont.family,
                         annotations = annotations.filter { it.paragraph == paragraphIndex }) { part, lines ->
                         val existing = scrollLayouts[paragraph.index] ?: ParagraphScrollLayout()
                         if(existing.parts[part] != lines) scrollLayouts[paragraph.index] = existing.copy(parts = existing.parts + (part to lines))
@@ -792,13 +812,14 @@ import kotlinx.serialization.encodeToString
         }
         if(speechSheet) ReaderSpeechSheet(settings, speechStatus, onDismiss = { speechSheet = false },
             onStart = {
+                menu = false
                 val first = firstParagraph
                 val originalIndex = paragraphs.getOrNull(first)?.index ?: 0
                 scope.launch {
                     try {
                         val jobContext = currentCoroutineContext()
                         ReadAloudService.start(context, chapter.title, settings, ref, chapterId, chapter.nextId) {
-                            speechParagraphs(chapter, settings, originalIndex) { jobContext.ensureActive() }
+                            speechSegments(chapter, settings, originalIndex) { jobContext.ensureActive() }
                         }
                     } catch(e: CancellationException) { throw e }
                     catch(e: Exception) { c.message(e.friendlyMessage()) }
@@ -808,10 +829,27 @@ import kotlinx.serialization.encodeToString
             onResume = { context.startService(Intent(context, ReadAloudService::class.java).setAction("resume")) },
             onStop = { context.startService(Intent(context, ReadAloudService::class.java).setAction("stop")) },
             onSettings = { speechSheet = false; preferences = true },
+            playback = speechPlayback,
+            onPrevious = { context.startService(Intent(context, ReadAloudService::class.java).setAction("previous")) },
+            onNext = { context.startService(Intent(context, ReadAloudService::class.java).setAction("next")) },
+            onFollow = ReadAloudService::follow,
         )
         selected?.let { paragraph -> ReaderParagraphSheet(paragraph, versions, chapterNotes.filter { it.paragraph == paragraph.index }, onDismiss = { selected = null },
             onCopy = { text -> context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("选文", text)); c.message("选文已复制") },
             onShare = c::share, onLookup = { lookupReaderText(context, it, c::message) },
+            onSpeak = { quote, selection ->
+                selected = null; menu = false; speechSheet = true
+                val japanese = selection.source == "original" && (!ref.isLocal || quote.any { it in '\u3040'..'\u30ff' })
+                scope.launch {
+                    try {
+                        val job = currentCoroutineContext()
+                        ReadAloudService.start(context, "选文朗读 · ${chapter.title}", settings.copy(speechContinueChapters = false, speechLanguage = if(japanese) "jp" else "zh"), ref, chapterId) {
+                            speechSelection(quote, paragraph.index, selection.source, selection.occurrence, selection.start) { job.ensureActive() }
+                        }
+                    } catch(e: CancellationException) { throw e }
+                    catch(e: Exception) { c.message(e.friendlyMessage()) }
+                }
+            },
             onBookmark = { saveBookmark(paragraph); selected = null },
             onAnnotate = { quote, selection, edit ->
                 val existing = chapterNotes.firstOrNull { it.paragraph == paragraph.index && it.selection == selection && it.quote == quote }

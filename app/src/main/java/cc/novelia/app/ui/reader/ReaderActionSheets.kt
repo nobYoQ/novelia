@@ -3,6 +3,7 @@ package cc.novelia.app.ui.reader
 
 import cc.novelia.app.ui.components.base.AppButton
 import cc.novelia.app.ui.components.base.AppTextButton
+import cc.novelia.app.ui.components.base.TogglePreference
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -29,6 +30,7 @@ import cc.novelia.app.ui.feedback.StickerAccent
     settings: ReaderSettings, speechStatus: String, onDismiss: () -> Unit,
     onStart: () -> Unit, onPause: () -> Unit, onResume: () -> Unit,
     onStop: () -> Unit, onSettings: () -> Unit,
+    playback: SpeechPlayback? = null, onPrevious: () -> Unit = {}, onNext: () -> Unit = {}, onFollow: (Boolean) -> Unit = {},
 ) {
     ReaderSheet(onDismissRequest = onDismiss) {
         AppScrollColumn(contentModifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -38,13 +40,23 @@ import cc.novelia.app.ui.feedback.StickerAccent
                 Text(speechStatus.ifBlank { if(settings.speechContinueChapters) "从当前段落开始，自动连续朗读后续章节。语音由系统提供。" else "从当前段落朗读至本章结束。语音由系统提供。" }, style = MaterialTheme.typography.bodyMedium)
             }
             Text("${settings.speechRate}× · ${settings.speechMinutes} 分钟后停止", style = MaterialTheme.typography.labelLarge)
-            if(settings.speechContinueChapters) Text(if(settings.speechNetworkContinuation) "连续听书 · 优先本地与缓存，未缓存章节自动联网加载" else "连续听书 · 仅本地与缓存章节", style = MaterialTheme.typography.bodySmall)
+            if(playback == null && settings.speechContinueChapters) Text(if(settings.speechNetworkContinuation) "连续听书 · 优先本地与缓存，未缓存章节自动联网加载" else "连续听书 · 仅本地与缓存章节", style = MaterialTheme.typography.bodySmall)
+            playback?.takeIf { it.count > 0 }?.let { current ->
+                Text("第 ${(current.index + 1).coerceAtMost(current.count)} / ${current.count} 句", Modifier.testTag("reader-speech-sentence"))
+                current.segment?.let { Text(it.text, maxLines = 3, style = MaterialTheme.typography.bodyMedium) }
+                TogglePreference("跟随朗读位置", "高亮当前句并滚动或翻页跟随；手动操作正文会暂停跟随", current.following, onFollow)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    AppTextButton(onClick = onPrevious, enabled = current.index in 1 until current.count) { Text("上一句") }
+                    AppTextButton(onClick = onNext, enabled = current.index + 1 < current.count) { Text("下一句") }
+                }
+            }
             AppButton(onClick = onStart, Modifier.fillMaxWidth(), enabled = speechStatus != "正在准备朗读…") { Text(if(speechStatus == "正在准备朗读…") "正在准备朗读…" else "从这里开始朗读") }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 AppTextButton(onClick = onPause, enabled = speechStatus.startsWith("正在朗读") || speechStatus == "正在准备下一章…") { Text("暂停") }
                 AppTextButton(onClick = onResume, enabled = speechStatus == "朗读已暂停" || speechStatus.startsWith("续章已暂停")) { Text("继续") }
                 AppTextButton(onClick = onStop) { Text("停止") }
                 AppTextButton(onClick = onSettings) { Text("设置") }
+                if(playback != null) AppTextButton(onClick = onDismiss) { Text("边听边读") }
             }
         }
     }
@@ -56,6 +68,7 @@ import cc.novelia.app.ui.feedback.StickerAccent
     onBookmark: () -> Unit, onAnnotate: (String, NoteSelection, Boolean) -> Unit,
     onEditNote: (Note) -> Unit, onDeleteNote: (Note) -> Unit,
     onNotes: () -> Unit,
+    onSpeak: ((String, NoteSelection) -> Unit)? = null,
 ) {
     val content = versions ?: paragraph
     var selectedPart by remember(content) { mutableIntStateOf(content.parts.indexOfFirst {
@@ -92,6 +105,7 @@ import cc.novelia.app.ui.feedback.StickerAccent
                     AppTextButton(onClick = { onLookup(quote) }, enabled = selection != null && quote.length <= 2000) { Text("查词 / 翻译") }
                     AppTextButton(onClick = { selection?.let { onAnnotate(quote, it, false) } }, enabled = selection != null && quote.length <= 100_000) { Text("划线") }
                     AppTextButton(onClick = { selection?.let { onAnnotate(quote, it, true) } }, enabled = selection != null && quote.length <= 100_000) { Text("写批注") }
+                    if(onSpeak != null) AppTextButton(onClick = { selection?.let { onSpeak(quote, it) } }, enabled = selection != null && quote.length <= 100_000) { Text("朗读选文") }
                 }
                 if(quote.length > 2000) Text("查词请选取不超过 2000 字的文字。", style = MaterialTheme.typography.bodySmall)
             } }

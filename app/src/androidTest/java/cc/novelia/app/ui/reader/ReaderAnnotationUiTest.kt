@@ -20,11 +20,12 @@ class ReaderAnnotationUiTest {
         val all = visible.copy(parts = listOf(TextPart("日本語の原文", "日文")) + visible.parts)
         var shared = ""
         var lookup = ""
+        var spoken: Pair<String, NoteSelection>? = null
         var saved: Pair<String, NoteSelection>? = null
         compose.setContent {
             NoveliaTheme("light") { AppInteractionMode(false, true) {
                 ReaderParagraphSheet(visible, all, emptyList(), {}, {}, { shared = it }, { lookup = it }, {},
-                    { quote, range, _ -> saved = quote to range }, {}, {}, {})
+                    { quote, range, _ -> saved = quote to range }, {}, {}, {}, onSpeak = { quote, range -> spoken = quote to range })
             } }
         }
         compose.onNodeWithText("划线").assertIsNotEnabled()
@@ -32,10 +33,12 @@ class ReaderAnnotationUiTest {
         compose.onNodeWithText("分享选文").performScrollTo().performClick()
         compose.onNodeWithText("查词 / 翻译").performScrollTo().performClick()
         compose.onNodeWithText("划线").performScrollTo().performClick()
+        compose.onNodeWithText("朗读选文").performScrollTo().performClick()
         compose.runOnIdle {
             assertEquals("喜欢的句子", shared)
             assertEquals(shared, lookup)
             assertEquals(shared to NoteSelection("gpt", start = 3, end = 8), saved)
+            assertEquals(saved, spoken)
         }
         val instrumentation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
         val screenshot = java.io.File(instrumentation.targetContext.getExternalFilesDir("reader-screenshots"), "selection-panel.png")

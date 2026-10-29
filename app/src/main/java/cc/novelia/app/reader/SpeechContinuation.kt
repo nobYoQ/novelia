@@ -15,10 +15,11 @@ import kotlinx.serialization.Serializable
     val chapterId: String? = null,
     val nextId: String? = null,
     val account: String? = null,
-    val sessionGeneration: Long = 0
+    val sessionGeneration: Long = 0,
+    val segments: List<SpeechSegment> = emptyList()
 )
 
-internal data class SpeechChapter(val id: String, val title: String, val paragraphs: List<String>)
+internal data class SpeechChapter(val id: String, val title: String, val paragraphs: List<String>, val segments: List<SpeechSegment> = emptyList())
 
 /** 与 UI 生命周期无关的续章策略：本地文件、章节缓存、允许时联网，依序短路。 */
 internal suspend fun resolveSpeechChapter(ref: BookRef, id: String, allowNetwork: Boolean,
@@ -56,10 +57,11 @@ internal class SpeechChapterSequence(
             check(id !in visited) { "章节顺序异常，请从目录重新开始朗读" }
             val chapter = load(id)
             val jobContext = currentCoroutineContext()
-            val queue = speechParagraphs(chapter, settings) { jobContext.ensureActive() }
+            val segments = speechSegments(chapter, settings) { jobContext.ensureActive() }
+            val queue = segments.map { it.text }
             visited += id
             nextId = chapter.nextId
-            if(queue.isNotEmpty()) return SpeechChapter(id, chapter.title, queue)
+            if(queue.isNotEmpty()) return SpeechChapter(id, chapter.title, queue, segments)
         }
     }
 }

@@ -36,6 +36,39 @@ import org.junit.Test
 class ReaderAdaptiveUiTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun spokenSentenceFollowsInScrollModeAndManualTouchStopsFollowing() = verifySpeechFollowing(false)
+    @Test fun spokenSentenceFollowsInPagesAndManualTouchStopsFollowing() = verifySpeechFollowing(true)
+
+    private fun verifySpeechFollowing(paged: Boolean) = withReader(390.dp) { app, ref, _ ->
+        val service = cc.novelia.app.reader.ReadAloudService
+        val previous = service.playback.value
+        try {
+            if(paged) {
+                compose.runOnIdle { app.store.update { it.copy(reader = it.reader.withPaginationMode("auto")) } }
+                compose.waitUntil(10_000) { compose.onAllNodesWithText("正在分页…").fetchSemanticsNodes().isEmpty() }
+            }
+            val tag = if(paged) "reader-page" else "reader-scroll"
+            compose.onNodeWithTag(tag).performTouchInput { click(center) }
+            compose.runOnIdle {
+                service.playback.value = cc.novelia.app.reader.SpeechPlayback("test", ref.key, "first",
+                    cc.novelia.app.reader.SpeechSegment("第5段，沿着森林小路走向远处的小镇。", 4, "original"), 0, 2, true)
+            }
+            compose.waitUntil(10_000) {
+                (app.store.state.value.positions[ref.key]?.sourceParagraph ?: 0) > 0 &&
+                    compose.onAllNodes(hasText("第5段", substring = true)).fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.onNodeWithTag(tag).performTouchInput { click(center) }
+            compose.waitUntil(5_000) { service.playback.value?.following == false }
+            val position = app.store.state.value.positions.getValue(ref.key)
+            compose.runOnIdle {
+                service.playback.value = service.playback.value?.copy(index = 1,
+                    segment = cc.novelia.app.reader.SpeechSegment("第9段，沿着森林小路走向远处的小镇。", 8, "original"))
+            }
+            compose.waitForIdle()
+            compose.runOnIdle { assertEquals(position.sourceParagraph, app.store.state.value.positions.getValue(ref.key).sourceParagraph) }
+        } finally { service.playback.value = previous }
+    }
+
     @Test fun wideDirectoryCanCollapseAndReopenWithoutLosingItsSession() = withReader(1024.dp) { app, ref, _ ->
         val initial = app.store.state.value.positions.getValue(ref.key)
         compose.onNodeWithTag("reader-hide-wide-toc").performClick()
