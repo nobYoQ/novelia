@@ -36,6 +36,21 @@ import org.junit.Test
 class ReaderAdaptiveUiTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun wideDirectoryCanCollapseAndReopenWithoutLosingItsSession() = withReader(1024.dp) { app, ref, _ ->
+        val initial = app.store.state.value.positions.getValue(ref.key)
+        compose.onNodeWithTag("reader-hide-wide-toc").performClick()
+        compose.onNodeWithTag("reader-toc-pane").assertDoesNotExist()
+        compose.runOnIdle {
+            assertFalse(app.store.state.value.reader.showWideToc)
+            assertEquals(initial.sourceParagraph, app.store.state.value.positions.getValue(ref.key).sourceParagraph)
+        }
+        compose.onNodeWithText("目录", substring = true).performClick()
+        compose.onNodeWithTag("reader-toc-pane").assertExists()
+        compose.runOnIdle { assertTrue(app.store.state.value.reader.showWideToc) }
+    }
+
+
+
     @Test fun marginChangesPreserveTheCharacterAnchorInBothReadingModes() = withReader(390.dp) { app, ref, _ ->
         compose.onNodeWithTag("reader-scroll").performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 800f) }
         compose.waitUntil(10_000) { (app.store.state.value.positions[ref.key]?.textOffset ?: 0) > 0 }

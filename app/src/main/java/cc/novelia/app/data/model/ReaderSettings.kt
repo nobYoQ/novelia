@@ -53,7 +53,8 @@ import kotlinx.serialization.Serializable
     // 字体文件仅保存在本机；切换系统字体时保留已导入字体，便于切回。
     val fontFamily: String = "system",
     val customFont: ReaderCustomFont? = null,
-    val horizontalMargin: Float = 24f, val verticalMargin: Float = 16f
+    val horizontalMargin: Float = 24f, val verticalMargin: Float = 16f,
+    val showWideToc: Boolean = true
 ) {
     companion object {
         const val MIN_LINE_HEIGHT = .5f

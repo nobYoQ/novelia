@@ -151,7 +151,7 @@ internal data class ReaderBottomToolbarState(
                         foreground = foreground, onSeek = onSeek, modifier = Modifier.padding(top = 8.dp).onFocusChanged { onSeekFocusChanged(it.hasFocus) })
                     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         AppIconButton(onClick = onPreviousChapter, enabled = state.previousChapterEnabled) { Icon(Icons.Outlined.SkipPrevious, "上一章") }
-                        AppTextButton(onClick = onToc, colors = ButtonDefaults.textButtonColors(contentColor = foreground)) { Icon(Icons.Outlined.FormatListBulleted, null, Modifier.size(18.dp)); Text(if(state.wide) " 定位目录" else " 目录") }
+                        AppTextButton(onClick = onToc, colors = ButtonDefaults.textButtonColors(contentColor = foreground)) { Icon(Icons.Outlined.FormatListBulleted, null, Modifier.size(18.dp)); Text(if(state.wide && settings.showWideToc) " 收起目录" else " 目录") }
                         AppIconButton(onClick = onBookmark, enabled = state.bookmarkEnabled, modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp)) {
                             Icon(if(state.bookmarked) Icons.Outlined.BookmarkAdded else Icons.Outlined.BookmarkAdd, if(state.bookmarked) "已保存书签" else "保存书签")
                         }

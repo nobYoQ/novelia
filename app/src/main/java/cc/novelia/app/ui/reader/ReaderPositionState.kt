@@ -57,10 +57,10 @@ internal class ReaderPositionLayout(
     val state = remember { ReaderPositionState(position, paragraphs, settings) }
     val generation = remember(paragraphs, settings.fontSize, settings.lineHeight, settings.paragraphSpacing,
         settings.width, settings.indent, settings.parallel, settings.weight, settings.staticPagination, state.viewportWidth, fontKey,
-        settings.horizontalMargin, settings.verticalMargin) { Any() }
+        settings.horizontalMargin, settings.verticalMargin, settings.showWideToc) { Any() }
     val layouts = remember(generation) { mutableStateMapOf<Int, ParagraphScrollLayout>() }
     return ReaderPositionLayout(state, position, paragraphs, settings, scroll, eInk, generation, layouts,
-        listOf(fontKey, settings.resolvedHorizontalMargin, settings.resolvedVerticalMargin))
+        listOf(fontKey, settings.resolvedHorizontalMargin, settings.resolvedVerticalMargin, settings.showWideToc))
 }
 
 /** 保留原有 effect keys、保存时机和字符锚点恢复顺序；页面提供最新的保存回调。 */

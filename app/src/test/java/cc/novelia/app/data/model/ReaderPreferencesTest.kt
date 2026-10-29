@@ -6,11 +6,12 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ReaderPreferencesTest {
-    @Test fun marginsPreserveLegacyLayoutAndSurvivePerBookBackupsAndEInk() {
+    @Test fun marginsAndSidebarPreserveLegacyLayoutAndSurvivePerBookBackupsAndEInk() {
         val old = appJson.decodeFromString<ReaderSettings>("{}")
         assertEquals(24f, old.horizontalMargin)
         assertEquals(16f, old.verticalMargin)
-        val custom = old.copy(horizontalMargin = 0f, verticalMargin = 48f)
+        assertTrue(old.showWideToc)
+        val custom = old.copy(horizontalMargin = 0f, verticalMargin = 48f, showWideToc = false)
         val state = LibraryState(reader = old, bookSettings = mapOf("local/book" to custom))
         assertEquals(state, appJson.decodeFromString<LibraryState>(appJson.encodeToString(state)))
         assertEquals(SettingsBackup(reader = custom), appJson.decodeFromString<SettingsBackup>(appJson.encodeToString(SettingsBackup(reader = custom))))

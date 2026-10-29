@@ -158,6 +158,8 @@ import kotlin.math.roundToInt
                                 modifier = Modifier.testTag("reader-horizontal-margin"), defaultValue = defaults?.resolvedHorizontalMargin) { onChange(value.copy(horizontalMargin = it)) }
                             ReaderSlider("上下页边距 ${value.resolvedVerticalMargin.toInt()} dp", value.resolvedVerticalMargin, 0f..64f,
                                 modifier = Modifier.testTag("reader-vertical-margin"), defaultValue = defaults?.resolvedVerticalMargin) { onChange(value.copy(verticalMargin = it)) }
+                            TogglePreference("宽屏显示目录", "平板和横屏时在正文旁显示目录，可随时收起", value.showWideToc,
+                                defaultValue = defaults?.showWideToc) { onChange(value.copy(showWideToc = it)) }
                             ReaderSlider("辅文本不透明度 ${(value.secondaryAlpha * 100).toInt()}%", value.secondaryAlpha, .45f..1f, defaultValue = defaults?.secondaryAlpha) { onChange(value.copy(secondaryAlpha = it)) }
                             TogglePreference("加粗文字", "两种阅读模式使用一致的粗体", value.weight, defaultValue = defaults?.weight) { onChange(value.copy(weight = it)) }
                             TogglePreference("首行缩进", "统一为两个全角空格", value.indent, defaultValue = defaults?.indent) { onChange(value.copy(indent = it)) }

@@ -112,6 +112,13 @@ import kotlinx.serialization.encodeToString
     val local by c.store.state.collectAsStateWithLifecycle()
     val settings = local.bookSettings[ref.key] ?: local.reader
     val readerFont = rememberReaderFont(settings)
+    fun setWideToc(show: Boolean) {
+        c.store.update { state ->
+            val book = state.bookSettings[ref.key]
+            if(book != null) state.copy(bookSettings = state.bookSettings + (ref.key to book.copy(showWideToc = show)))
+            else state.copy(reader = state.reader.copy(showWideToc = show))
+        }
+    }
     // 导航过渡期间，离开的阅读器仍可能处于组合中；此时完成的刷新
     // 不得消费新阅读器的搜索定位或章末跳转标记。
     val readerEntry = remember(ref, chapterId) { c.nav.currentBackStackEntry }
@@ -585,9 +592,12 @@ import kotlinx.serialization.encodeToString
         // 阅读器专用颜色仅作用于正文页面，所有设置弹层继承应用主题。
         ReaderPageTheme(settings.resolvedTheme == "monochrome") {
         Row(Modifier.fillMaxSize().background(background).testTag(if(wide) "reader-wide-layout" else "reader-compact-layout")) {
-        if(wide) {
+        if(wide && settings.showWideToc) {
             Surface(Modifier.width(292.dp).fillMaxHeight().windowInsetsPadding(safeInsets), color = MaterialTheme.colorScheme.surface) {
+                Column {
+                AppTextButton(onClick = { setWideToc(false) }, modifier = Modifier.align(Alignment.End).testTag("reader-hide-wide-toc")) { Text("收起目录") }
                 ReaderTocPane(c, ref, tocState, { scope.launch { tocState.ensureLoaded(chapterId, knownChapterCount, refresh = true) } }, chapterId, tocScroll, tocQuery, { tocQuery = it }, tocReversed, { tocReversed = it }, tocLocateRequest, { tocLocateRequest = 0; tocLocated = true }, { if(it != chapterId) rememberReadingPlace(); openChapter(it) })
+                }
             }
             VerticalDivider(Modifier.fillMaxHeight())
         }
@@ -602,7 +612,7 @@ import kotlinx.serialization.encodeToString
             // 两种模式均使用固定正文视口；工具栏是同级浮层，
             // 不得给正文布局增加内边距或尺寸约束。
             val bodyInputEnabled = volumeKeysActive && !leaving && !chapterLoad.loading && !positionState.restoringAnchor && positionState.initialAnchorRestored && seekTarget == null
-            val openToc: () -> Unit = { if(wide) { tocQuery = ""; tocLocateRequest++ } else toc = true }
+            val openToc: () -> Unit = { if(wide) { setWideToc(true); tocQuery = ""; tocLocateRequest++ } else toc = true }
             val tapNavigation = rememberReaderTapNavigation(settings.tapPageTurn, bodyInputEnabled, { menu = !menu }, { page(it) }, settings.resolvedTapZoneMap, openToc)
             if(settings.staticPagination) EInkPage(paragraphs, settings, eInk,
                 Modifier.testTag("reader-page").align(Alignment.TopCenter).fillMaxHeight().windowInsetsPadding(readingInsets)
@@ -615,7 +625,7 @@ import kotlinx.serialization.encodeToString
             else LazyColumn(state = scroll, overscrollEffect = null, modifier = Modifier.testTag("reader-scroll").align(Alignment.TopCenter).fillMaxHeight()
                 .windowInsetsPadding(readingInsets).padding(bottom = readingStatusBarHeight).widthIn(max = settings.width.dp).fillMaxWidth()
                 .onSizeChanged { size ->
-                    if(positionState.viewportWidth != 0 && positionState.viewportWidth != size.width)
+                    if(positionState.viewportWidth != 0 && positionState.viewportWidth != size.width && scroll.firstVisibleItemIndex > 0)
                         positionState.pendingScrollRestore = ReadingRestoreAnchor(positionState.scrollAnchor.first, positionState.scrollAnchor.third, positionState.scrollAnchor.second)
                     positionState.viewportWidth = size.width
                 }
@@ -658,7 +668,7 @@ import kotlinx.serialization.encodeToString
                         if(settings.showScrollPageButtons) {
                             if(chapter.nextId != null) AppButton(onClick = { openChapter(chapter.nextId, inline = true) }, modifier = Modifier.heightIn(min = 48.dp), enabled = !leaving && !chapterLoad.loading) { Text("阅读下一章") }
                             else if(nextVolume != null) { Text("下一分卷：${nextVolume.book.title}", color = foreground, modifier = Modifier.padding(bottom = 12.dp)); AppButton(onClick = { nextVolumePrompt = true }, modifier = Modifier.heightIn(min = 48.dp), enabled = !leaving) { Text("阅读下一分卷") } }
-                            else AppOutlinedButton(onClick = { if(wide) { tocQuery = ""; tocLocateRequest++ } else toc = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text("返回目录") }
+                            else AppOutlinedButton(onClick = openToc, modifier = Modifier.heightIn(min = 48.dp)) { Text("返回目录") }
                         }
                         // 章末留白让同一提示句位于控件上方，
                         // 不会改变正文视口高度或使章节重新分页。
@@ -698,7 +708,7 @@ import kotlinx.serialization.encodeToString
                 onHeightChanged = { bottomOverlayHeight = it }, onPage = { page(it) }, onSeek = { seekChapter(it) },
                 onSeekFocusChanged = { seekFocused = it }, onPreviousChapter = { chapter.prevId?.let { openChapter(it) } },
                 onNextChapter = { if(chapter.nextId != null) openChapter(chapter.nextId) else nextVolumePrompt = true },
-                onToc = { if(wide) { tocQuery = ""; tocLocateRequest++ } else toc = true },
+                onToc = { if(wide) { setWideToc(!settings.showWideToc); if(!settings.showWideToc) tocLocateRequest++ } else toc = true },
                 onBookmark = { paragraphs.getOrNull(firstParagraph)?.let { saveBookmark(it) } }, onPreferences = { preferences = true },
             )
             if((chapterLoad.loading && (!inlineChapterLoad || settings.staticPagination)) || chapterLoad.error != null) Surface(
