@@ -20,10 +20,11 @@ import (
 // Client owns reusable TLS connections and DNS/ECH caches. All protected calls
 // require accepted ECH; there is no automatic plaintext-SNI fallback.
 type Client struct {
-	core      *core.Client
-	probe     *core.Client
-	transport *http.Transport
-	do        func(*http.Request) (*http.Response, error)
+	transportMu sync.RWMutex
+	core        *core.Client
+	probe       *core.Client
+	transport   *http.Transport
+	do          func(*http.Request) (*http.Response, error)
 }
 
 func NewClient() *Client {
@@ -49,10 +50,19 @@ func NewClient() *Client {
 	if err != nil {
 		panic("invalid built-in ECH probe configuration")
 	}
-	transport := newHTTPTransport(c)
-	httpClient := &http.Client{Transport: transport,
+	client := &Client{core: c, probe: p, transport: newHTTPTransport(c)}
+	client.do = client.doCurrent
+	return client
+}
+
+// New requests use the current pool; active responses retain their previous transport.
+func (c *Client) doCurrent(request *http.Request) (*http.Response, error) {
+	c.transportMu.RLock()
+	transport := c.transport
+	c.transportMu.RUnlock()
+	client := &http.Client{Transport: transport,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	return &Client{core: c, probe: p, transport: transport, do: httpClient.Do}
+	return client.Do(request)
 }
 
 func protectedURL(raw string) bool {
@@ -334,9 +344,13 @@ func (c *Client) Probe(host string) string {
 }
 
 func (c *Client) ResetNetworkState() {
+	c.transportMu.Lock()
+	defer c.transportMu.Unlock()
 	c.core.ResetNetworkState()
 	c.probe.ResetNetworkState()
-	c.transport.CloseIdleConnections()
+	previous := c.transport
+	c.transport = newHTTPTransport(c.core)
+	previous.CloseIdleConnections()
 }
 
 // Map diagnostics to fixed labels; never display local addresses or raw errors.

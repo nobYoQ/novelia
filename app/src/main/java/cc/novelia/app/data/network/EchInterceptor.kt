@@ -24,7 +24,7 @@ import okio.buffer
 internal val echHosts = setOf("n.novelia.cc", "auth.novelia.cc", "forum.novelia.cc")
 
 /** Only fixed local diagnostic labels are allowed in user-visible messages. */
-internal class EchIOException(message: String) : IOException(message)
+internal class EchIOException(message: String, val retryableNetworkFailure: Boolean = true) : IOException(message)
 
 internal interface EchEngine {
     fun open(request: Request, timeouts: EchTimeouts): EchExchange
@@ -100,8 +100,8 @@ internal class EchInterceptor(
             chain.connectTimeoutMillis().toLong(), chain.readTimeoutMillis().toLong(), chain.writeTimeoutMillis().toLong()
         )
         val exchange = try { engine.open(request, timeouts) }
-        catch (_: LinkageError) { throw EchIOException("当前设备无法加载 ECH 本地库，可在设置中关闭 ECH") }
-        catch (_: Exception) { throw EchIOException("ECH 初始化失败，请运行连接诊断") }
+        catch (_: LinkageError) { throw EchIOException("当前设备无法加载 ECH 本地库，可在设置中关闭 ECH", false) }
+        catch (_: Exception) { throw EchIOException("ECH 初始化失败，请运行连接诊断", false) }
         val closed = AtomicBoolean(false)
         val monitor = AtomicReference<ScheduledFuture<*>?>()
         fun finishExchange() {

@@ -17,6 +17,8 @@ import cc.novelia.app.data.network.BookSources
 import cc.novelia.app.data.network.BookSourceInterceptor
 import cc.novelia.app.data.network.echRedirects
 import cc.novelia.app.data.network.echCallTimeout
+import cc.novelia.app.data.network.newNetworkCall
+import cc.novelia.app.data.appupdate.AppReleaseClient
 import cc.novelia.app.data.storage.LocalStore
 import cc.novelia.app.data.sync.CloudSyncWorker
 import cc.novelia.app.data.webdav.WebDavConfigStore
@@ -83,9 +85,10 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
     internal val clipboardLinkHistory = ClipboardLinkHistory()
     val metadataCache get() = store.metadataCache
     internal val uiResults = cc.novelia.app.data.cache.UiResultStore()
-    val appUpdates by lazy { cc.novelia.app.data.appupdate.AppUpdateChecker(this,
+    private val appReleaseClient by lazy { AppReleaseClient(ech.publicClient()) }
+    val appUpdates by lazy { cc.novelia.app.data.appupdate.AppUpdateChecker(this, load = appReleaseClient::latest,
         automaticChecksEnabled = { store.state.value.autoCheckAppUpdates }) }
-    val appReleaseDownloads by lazy { cc.novelia.app.data.appupdate.AppReleaseDownloader(this) }
+    val appReleaseDownloads by lazy { cc.novelia.app.data.appupdate.AppReleaseDownloader(this, appReleaseClient) }
     private var appUpdateCheck: Job? = null
     val api by lazy { NoveliaApi(session, transport = httpTransport, onResourceMutation = ::novelChanged, onKeywords = { tags -> keywords.enqueueObservation(tags) }) }
     private val mutableForumBlacklistRevision = MutableStateFlow(0L)
@@ -269,7 +272,12 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
     }
 
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
-        .okHttpClient { api.transport.newBuilder().echRedirects(true).build() }
+        .callFactory {
+            val client = api.transport.newBuilder().echRedirects(true).build()
+            object : okhttp3.Call.Factory {
+                override fun newCall(request: okhttp3.Request) = client.newNetworkCall(request)
+            }
+        }
         .memoryCache { MemoryCache.Builder(this).maxSizePercent(0.15).build() }
         .diskCache { DiskCache.Builder().directory(File(cacheDir, "images")).maxSizeBytes(128L * 1024 * 1024).build() }
         .build()

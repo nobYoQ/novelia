@@ -77,7 +77,8 @@ internal fun decodeEchResponseHeaders(json: String): Headers = Headers.Builder()
 private fun connectionFailure(reason: String?, fallback: String = "连接失败"): EchIOException {
     val safeReason = reason?.takeIf { it in setOf("连接超时", "请求发送超时", "响应读取超时", "连接被中断",
         "证书验证未通过", "服务器拒绝 ECH 配置", "TLS 协商未完成") } ?: fallback
-    return EchIOException("ECH $safeReason，请在设置中运行连接诊断")
+    return EchIOException("ECH $safeReason，请在设置中运行连接诊断",
+        safeReason !in setOf("证书验证未通过", "服务器拒绝 ECH 配置", "TLS 协商未完成"))
 }
 
 /** At most 64 KiB buffered per upload; request data never needs a temporary file. */

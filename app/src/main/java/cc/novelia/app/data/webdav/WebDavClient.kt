@@ -1,5 +1,8 @@
 package cc.novelia.app.data.webdav
 
+import cc.novelia.app.data.network.NetworkGenerationInterceptor
+import cc.novelia.app.data.network.newNetworkCall
+
 import cc.novelia.app.data.network.awaitBody
 import java.io.ByteArrayOutputStream
 import java.io.IOException
@@ -73,7 +76,7 @@ class WebDavClient(config: WebDavConfig, password: String, transport: OkHttpClie
         .retryOnConnectionFailure(false)
         .connectTimeout(15, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS).callTimeout(60, TimeUnit.SECONDS)
-        .apply { interceptors().clear(); networkInterceptors().clear() }.build()
+        .apply { interceptors().removeAll { it !is NetworkGenerationInterceptor }; networkInterceptors().clear() }.build()
 
     suspend fun ensureDirectory() {
         var parent = endpoint
@@ -283,7 +286,7 @@ class WebDavClient(config: WebDavConfig, password: String, transport: OkHttpClie
                 .header("Accept-Encoding", "identity")
                 .apply { headers.forEach { (key, value) -> header(key, value) } }
                 .method(method, when { body != null -> body.toRequestBody(if(method == "PROPFIND") "application/xml; charset=utf-8".toMediaType() else "application/octet-stream".toMediaType()); method == "PUT" -> ByteArray(0).toRequestBody(); else -> null }).build()
-            val reply = try { client.newCall(request).awaitBody { response ->
+            val reply = try { client.newNetworkCall(request).awaitBody { response ->
                 val data = boundedBody(response)
                 val limited = response.code == 429 || response.code == 503 &&
                     data.toString(Charsets.UTF_8).let {

@@ -1,9 +1,6 @@
 package cc.novelia.app.data.network
 
 import android.content.Context
-import android.net.ConnectivityManager
-import android.net.Network
-import android.net.LinkProperties
 import java.io.File
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
@@ -39,33 +36,35 @@ class EchTransport(context: Context) {
     private var diagnosisJob: Job? = null
     // Running diagnostics must not reset the connections used by active API calls or downloads.
     private val diagnosticEngine = EchNativeEngine(applicationContext)
+    private val connections = NetworkConnections(resetNative = {
+        engine.resetNetworkState()
+        diagnosticEngine.resetNetworkState()
+    })
+    private val networkChanges = NetworkChanges(scope, connections::pending, apply = { snapshot ->
+        connections.update(snapshot)
+        recorder.system("network", if (snapshot.ready) "ready" else "unavailable", networkGeneration = connections.generation())
+    })
+    private val networkMonitor = AndroidNetworkMonitor(applicationContext, networkChanges)
     private val diagnosticEchClient by lazy { diagnosticClient(true) }
     private val diagnosticDirectClient by lazy { diagnosticClient(false) }
+    // Separate pool and no account, source routing, ECH or request logging for public services/WebDAV.
+    private val publicHttpClient by lazy { OkHttpClient.Builder()
+        .addInterceptor(NetworkGenerationInterceptor(connections)).callTimeout(15, TimeUnit.SECONDS).build() }
     private val httpClient by lazy {
         recorder.attach(OkHttpClient.Builder()) { state.value }
             .connectTimeout(8, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
             .writeTimeout(60, TimeUnit.SECONDS)
             .followRedirects(false)
+            .addInterceptor(NetworkGenerationInterceptor(connections))
             .addInterceptor(EchInterceptor(engine, { state.value }))
             .echCallTimeout()
             .build()
     }
 
     init {
-        applicationContext.getSystemService(ConnectivityManager::class.java)
-            ?.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
-                override fun onAvailable(network: Network) { recorder.system("network", "available"); networkChanged() }
-                override fun onLost(network: Network) { recorder.system("network", "lost"); networkChanged() }
-                override fun onLinkPropertiesChanged(network: Network, properties: LinkProperties) {
-                    recorder.system("network", "properties_changed", environment())
-                }
-            })
-    }
-
-    private fun networkChanged() {
-        engine.resetNetworkState()
-        diagnosticEngine.resetNetworkState()
+        networkMonitor.start()
+        connections.watch(scope)
     }
 
     fun setEnabled(value: Boolean) {
@@ -76,10 +75,12 @@ class EchTransport(context: Context) {
 
     /** Reuse for novel/forum APIs and their sessions; derive download/image clients from this one. */
     fun client(): OkHttpClient = httpClient
+    internal fun publicClient(): OkHttpClient = publicHttpClient
 
     private fun diagnosticClient(ech: Boolean) = recorder.attach(OkHttpClient.Builder()) { ech }
         .connectTimeout(8, TimeUnit.SECONDS).readTimeout(20, TimeUnit.SECONDS)
         .writeTimeout(20, TimeUnit.SECONDS).callTimeout(35, TimeUnit.SECONDS)
+        .addInterceptor(NetworkGenerationInterceptor(connections))
         .followRedirects(false).apply { if (ech) addInterceptor(EchInterceptor(diagnosticEngine, { true })) }
         .echCallTimeout().build()
 
@@ -108,7 +109,7 @@ class EchTransport(context: Context) {
             try {
                 // Both clients are isolated from the business connection pool and account session.
                 diagnosticEngine.resetNetworkState()
-                diagnosticDirectClient.connectionPool.evictAll()
+                connections.resetClient(diagnosticDirectClient)
                 val report = withTimeoutOrNull(180_000) {
                     EchDiagnostics(diagnosticEchClient, diagnosticDirectClient).run { report, completed, total ->
                         diagnosisState.value = NetworkDiagnosisState(true, completed, total, report)
@@ -145,7 +146,7 @@ class EchTransport(context: Context) {
         diagnosisState.value = NetworkDiagnosisState()
     }
 
-    suspend fun resetConnections() = withContext(Dispatchers.IO) { networkChanged() }
+    suspend fun resetConnections() = withContext(Dispatchers.IO) { connections.reset() }
 }
 
 internal data class NetworkDiagnosisState(val running: Boolean = false, val completed: Int = 0, val total: Int = 14, val report: String = "")

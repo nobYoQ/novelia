@@ -17,6 +17,8 @@ import java.io.File
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -48,10 +50,18 @@ class NoveliaApi(val session: AuthenticationSession?, val baseUrl: String = "htt
     fun url(path: String, params: List<Pair<String, String>> = emptyList()): String = baseUrl.toHttpUrl().newBuilder().addEncodedPathSegments(path.trimStart('/')).apply { params.forEach { (k, v) -> addQueryParameter(k, v) } }.build().toString()
     suspend fun request(method: String, path: String, body: String? = null, params: Map<String, String> = emptyMap(), contentType: String = "application/json", binding: SessionBinding? = session?.capture(), errorMessage: ((Response) -> String?)? = null): String = withContext(Dispatchers.IO) {
         val request = Request.Builder().url(url(path, params.toList())).header("Accept", "application/json")
-            .method(method, if (method in listOf("GET", "HEAD")) null else (body ?: "").toRequestBody(contentType.toMediaType())).build()
-        val text = withAuthenticatedResponse(request, binding) { response ->
+            .method(method, if (method in listOf("GET", "HEAD")) null else (body ?: "").toRequestBody(contentType.toMediaType()))
+            .apply { if (method in listOf("GET", "HEAD")) tag(RecoverableNetworkRead::class.java, RecoverableNetworkRead) }.build()
+        suspend fun read() = withAuthenticatedResponse(request, binding) { response ->
             if (!response.isSuccessful) throw errorMessage?.invoke(response)?.let { ApiException(response.code, it) } ?: apiError(response.code)
             response.body?.string().orEmpty()
+        }
+        // One replacement only, after an observed network change. No streaming callback or write is replayed.
+        val text = try { read() } catch (error: NetworkChangedException) {
+            currentCoroutineContext().ensureActive()
+            if (!error.connections.awaitReplacement(error.generation)) throw error
+            currentCoroutineContext().ensureActive()
+            read()
         }
         if (method !in listOf("GET", "HEAD")) recordMutation(method, path, binding)
         text
@@ -71,7 +81,7 @@ class NoveliaApi(val session: AuthenticationSession?, val baseUrl: String = "htt
             val authorized = request.newBuilder().removeHeader("Authorization").apply { token?.let { header("Authorization", "Bearer $it") } }.build()
             val authenticated = bound?.let { session?.bindRequest(authorized, it) } ?: authorized
             val result = try {
-                client.newCall(authenticated).awaitBody { response ->
+                client.newNetworkCall(authenticated).awaitBody { response ->
                     ensureCurrent()
                     if (response.code == 401 && retry) AuthResponse.Unauthorized
                     else AuthResponse.Value(readResponse(response))

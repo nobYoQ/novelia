@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.web
 
+import cc.novelia.app.data.network.newNetworkCall
+
 import cc.novelia.app.ui.components.base.AppLinearProgressIndicator
 import cc.novelia.app.ui.components.base.AppTextButton
 import android.annotation.SuppressLint
@@ -67,7 +69,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
                     request.requestHeaders.filterKeys { it.lowercase() in setOf("accept", "accept-language", "user-agent", "range") }
                         .forEach { (name, value) -> builder.header(name, value) }
                     c.session.tokenFor(binding)?.let { builder.header("Authorization", "Bearer $it") }
-                    val response = pageClient.newCall(c.session.bindRequest(builder.build(), binding)).execute()
+                    val response = pageClient.newNetworkCall(c.session.bindRequest(builder.build(), binding)).execute()
                     if(response.code !in 200..299) {
                         response.close()
                         throw java.io.IOException("Page unavailable")

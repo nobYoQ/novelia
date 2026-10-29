@@ -1,5 +1,7 @@
 package cc.novelia.app.data.auth
 
+import cc.novelia.app.data.network.newNetworkCall
+
 import android.content.Context
 import android.util.Base64
 import android.webkit.CookieManager
@@ -122,7 +124,7 @@ class Session(context: Context, private val client: OkHttpClient = OkHttpClient.
                 .post(ByteArray(0).toRequestBody()).build() to borrowedCookies
         } ?: return false
         val (request, borrowedCookies) = refresh
-        return client.newCall(request).awaitBody { response ->
+        return client.newNetworkCall(request).awaitBody { response ->
             context.ensureActive()
             ensureCurrent(binding)
             if(!response.isSuccessful) {
@@ -224,7 +226,7 @@ class Session(context: Context, private val client: OkHttpClient = OkHttpClient.
                 .post(payload.toString().toRequestBody("application/json".toMediaType())).build()
         }
         val context = currentCoroutineContext()
-        return client.newCall(request).awaitBody { response ->
+        return client.newNetworkCall(request).awaitBody { response ->
             context.ensureActive()
             current(binding) {
                 if(!response.isSuccessful) throw ApiException(response.code, when(response.code) {

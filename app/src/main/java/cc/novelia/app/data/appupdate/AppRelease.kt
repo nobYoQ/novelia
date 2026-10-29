@@ -1,5 +1,7 @@
 package cc.novelia.app.data.appupdate
 
+import cc.novelia.app.data.network.newNetworkCall
+
 import cc.novelia.app.data.network.awaitText
 import cc.novelia.app.data.storage.appJson
 import java.math.BigInteger
@@ -138,7 +140,7 @@ class AppReleaseClient(
             return AppDownloadCandidate(channel, release.tag.removePrefix("v").removePrefix("V"), apk)
         val info = release.assets.singleOrNull { it.name == "Novelia-preview-build-info.txt" && it.isOfficialFor(release.tag) }
             ?: throw AppReleaseException("预览包缺少构建信息，暂时无法检查版本")
-        val response = client.newCall(Request.Builder().url(info.downloadUrl).build()).awaitText()
+        val response = client.newNetworkCall(Request.Builder().url(info.downloadUrl).build()).awaitText()
         if(response.code !in 200..299 || response.text.length > 16_384)
             throw AppReleaseException("获取预览构建信息失败，请稍后重试")
         return parsePreviewCandidate(apk, response.text)
@@ -147,7 +149,7 @@ class AppReleaseClient(
     private suspend fun fetch(url: String): AppRelease? {
         val request = Request.Builder().url(url).header("Accept", "application/vnd.github+json")
             .header("X-GitHub-Api-Version", "2022-11-28").header("User-Agent", "Novelia-Android").build()
-        val response = client.newCall(request).awaitText()
+        val response = client.newNetworkCall(request).awaitText()
         if(response.code == 404) return null
         if(response.code !in 200..299) throw AppReleaseException("获取发行版失败（HTTP ${response.code}），请稍后重试")
         return appJson.decodeFromString<AppRelease>(response.text)
