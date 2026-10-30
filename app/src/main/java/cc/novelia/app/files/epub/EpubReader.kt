@@ -16,7 +16,7 @@ internal data class EpubContents(val chapters: List<LocalChapter>, val cover: St
  * 按 EPUB OPF 的 spine 顺序读取正文；ZIP 随机访问使内存中只需保留当前 XHTML 的解析树。
  * 首先校验条目路径、数量和声明总大小，再在读取时校验实际字节，限制异常压缩包的开销。
  * 图片按哈希交给 imageSink 流式保存，正文只保留 novelia-image 标记；不会请求远程资源。
- * DOM 以块级元素和换行切段，删除脚本、样式、导航及注音节点，保留正文中的插图顺序。
+ * DOM 以块级元素和换行切段；行内样式、注音和书内脚注保存为正文之外的元数据。
  */
 internal fun readEpubFile(
     file: File,
@@ -95,6 +95,7 @@ internal fun readEpubFile(
     val coverHref = opf.getElementsByTag("item").firstOrNull { it.attr("properties").split(' ').contains("cover-image") }?.attr("href") ?: manifest[coverId]
     val cover = if (chapterId == null) coverHref?.let { image(resource(directory, it)) } else null
     var textCharacters = 0L
+    val notes = EpubNotes(::text, checkCancelled)
     val chapters = opf.getElementsByTag("itemref").mapNotNull { item ->
         checkCancelled()
         if (chapterId != null && item.attr("idref") != chapterId) return@mapNotNull null
@@ -106,7 +107,7 @@ internal fun readEpubFile(
             checkCancelled = checkCancelled, onText = { paragraph ->
                 textCharacters += paragraph.length
                 require(textCharacters <= 16 * 1024 * 1024) { "EPUB 正文过长，请先拆分" }
-            })
+            }, note = { href, explicit -> notes.resolve(path, href, explicit) })
     }
     EpubContents(chapters, cover)
 }

@@ -1,17 +1,19 @@
 package cc.novelia.app.files.epub
 
 /** 普通 HTML 空白折叠；中日文之间的源码换行不生成空格，显式空格和全角空格仍保留。 */
-internal fun normalizeEpubWhitespace(text: String, checkCancelled: () -> Unit = {}): String {
+internal fun normalizeEpubWhitespace(text: String, checkCancelled: () -> Unit = {}, offsets: IntArray? = null): String {
     val result = StringBuilder(text.length)
     var index = 0
     while (index < text.length) {
         if (index % 4096 == 0) checkCancelled()
         if (!text[index].isHtmlWhitespace()) {
+            offsets?.set(index, result.length)
             result.append(text[index++])
             continue
         }
         var lineBreak = false
         while (index < text.length && text[index].isHtmlWhitespace()) {
+            offsets?.set(index, result.length)
             if (index % 4096 == 0) checkCancelled()
             lineBreak = lineBreak || text[index] == '\n' || text[index] == '\r'
             index++
@@ -21,7 +23,12 @@ internal fun normalizeEpubWhitespace(text: String, checkCancelled: () -> Unit = 
             text.codePointAt(index).isEastAsianText()
         if (!joinsEastAsianText) result.append(' ')
     }
-    return result.toString().trim()
+    offsets?.set(text.length, result.length)
+    val untrimmed = result.toString()
+    val leading = untrimmed.indexOfFirst { !it.isWhitespace() }.let { if (it < 0) untrimmed.length else it }
+    val trimmed = untrimmed.trim()
+    offsets?.indices?.forEach { offsets[it] = (offsets[it] - leading).coerceIn(0, trimmed.length) }
+    return trimmed
 }
 
 private fun Char.isHtmlWhitespace() = this == ' ' || this == '\t' || this == '\r' || this == '\n' || this == '\u000C'

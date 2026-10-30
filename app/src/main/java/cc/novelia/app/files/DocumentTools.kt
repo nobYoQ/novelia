@@ -14,6 +14,7 @@ import org.jsoup.parser.Parser
 import cc.novelia.app.files.epub.EpubContents
 import cc.novelia.app.files.epub.parseEpubChapter
 import cc.novelia.app.files.epub.readEpubFile
+import cc.novelia.app.files.epub.EpubNotes
 
 /**
  * EPUB、TXT、SRT 的解析与转换工具，统一限制输入大小和压缩内容展开体积。
@@ -161,13 +162,15 @@ object DocumentTools {
         val coverId = opf.getElementsByTag("meta").firstOrNull { it.attr("name") == "cover" }?.attr("content")
         val coverHref = opf.getElementsByTag("item").firstOrNull { it.attr("properties").split(' ').contains("cover-image") }?.attr("href") ?: manifest[coverId]
         cover(coverHref?.let { image(resource(directory, it)) })
+        val notes = EpubNotes({ path -> files[path]?.takeIf { it.size <= 8 * 1024 * 1024 }?.toString(Charsets.UTF_8) })
         return opf.getElementsByTag("itemref").mapNotNull { item ->
             val href = manifest[item.attr("idref")] ?: return@mapNotNull null
             val decoded = java.net.URLDecoder.decode(href.replace("+", "%2B"), "UTF-8")
             val path = normalize(if(directory.isBlank()) decoded else "$directory/$decoded") ?: return@mapNotNull null
             val html = files[path]?.toString(Charsets.UTF_8) ?: return@mapNotNull null
             parseEpubChapter(item.attr("idref"), html, downloadMode,
-                image = { source -> image(resource(path.substringBeforeLast('/', ""), source)) })
+                image = { source -> image(resource(path.substringBeforeLast('/', ""), source)) },
+                note = { href, explicit -> notes.resolve(path, href, explicit) })
         }
     }
     fun epubToTxt(bytes: ByteArray) = parseEpub(bytes).joinToString("\n\n") { it.title + "\n\n" + it.paragraphs.filterNot { p -> p.startsWith("novelia-image:") }.joinToString("\n\n") }

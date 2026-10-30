@@ -483,7 +483,9 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
 private fun textWeight(text: String?): Long = if (text == null) 0 else 40L + text.length * 2L
 private fun paragraphsWeight(paragraphs: List<String>?): Long = paragraphs?.sumOf { 8 + textWeight(it) } ?: 0
 private fun localContentWeight(content: LocalReadingContent?): Long = if (content == null) 0 else
-    64L + content.secondary.size * 24L + content.groups.sumOf { group ->
+    64L + content.inline.values.sumOf { marks -> 32L + marks.sumOf { 48L + textWeight(it.value) } } +
+    content.notes.entries.sumOf { 48L + textWeight(it.key) + textWeight(it.value) } +
+    content.secondary.size * 24L + content.groups.sumOf { group ->
         96L + group.original.size * 24L + group.translations.sumOf { 32L + it.size * 24L }
     }
 private fun chapterWeight(chapter: Chapter): Long = 128 + textWeight(chapter.titleJp) + textWeight(chapter.titleZh) +

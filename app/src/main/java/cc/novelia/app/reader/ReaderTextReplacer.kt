@@ -13,7 +13,8 @@ internal class ReaderTextReplacer(rules: Map<String, String>) {
     }
 
     /** 返回 null 时保留原段，并由阅读器提示未应用；不截断正文或图片标记。 */
-    fun replace(text: String, maxCharacters: Int = 2_000_000, checkCancelled: () -> Unit = {}): String? {
+    fun replace(text: String, maxCharacters: Int = 2_000_000,
+        onReplacement: (Int, Int, String) -> Unit = { _, _, _ -> }, checkCancelled: () -> Unit = {}): String? {
         if(root.children.isEmpty()) return text
         if(text.length > maxCharacters) return null
         val result = StringBuilder(text.length)
@@ -33,7 +34,7 @@ internal class ReaderTextReplacer(rules: Map<String, String>) {
             val target = replacement
             if(result.length + (target?.length ?: 1) > maxCharacters) return null
             if(target == null) result.append(text[start++])
-            else { result.append(target); start = matchedEnd }
+            else { onReplacement(start, matchedEnd, target); result.append(target); start = matchedEnd }
         }
         checkCancelled()
         return result.toString()

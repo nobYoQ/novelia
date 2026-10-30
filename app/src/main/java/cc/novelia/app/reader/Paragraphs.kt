@@ -2,10 +2,11 @@ package cc.novelia.app.reader
 
 import cc.novelia.app.data.model.Chapter
 import cc.novelia.app.data.model.ReaderSettings
+import cc.novelia.app.data.model.InlineContent
 import com.ibm.icu.text.Transliterator
 
 /** 同一原始段落的一种显示文本；source 标明日文或翻译引擎，secondary 控制辅文本样式。 */
-data class TextPart(val text: String, val source: String, val secondary: Boolean = false)
+data class TextPart(val text: String, val source: String, val secondary: Boolean = false, val inline: List<InlineContent> = emptyList())
 /** index 保留原始段落编号；过滤空段后，它不一定等于投影结果的列表下标。 */
 data class ReadingParagraph(val index: Int, val parts: List<TextPart>, val fallback: Boolean = false, val imageUrl: String? = null, val localImageId: String? = null,
     val replacementsSkipped: Boolean = false)
@@ -73,6 +74,11 @@ fun prepareReadingParagraphs(chapter: Chapter, settings: ReaderSettings, checkCa
         var skipped = false
         val parts = paragraph.parts.map { part ->
             checkCancelled()
+            if (part.inline.isNotEmpty()) {
+                val preparedPart = prepareInlinePart(part, settings, replacer, { converter }, checkCancelled)
+                if (preparedPart.second) skipped = true
+                return@map preparedPart.first
+            }
             val text = part.text.trim()
             val prepared = if(settings.traditional && part.source != "日文" && !part.source.startsWith("原文")) {
                 // 限制单次 ICU 转换规模，离开超长章节时也能及时响应取消。
