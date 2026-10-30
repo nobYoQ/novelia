@@ -107,7 +107,7 @@ class Session(context: Context, private val client: OkHttpClient = OkHttpClient.
             val url = "${selected.source.authOrigin}/api/v1/auth/refresh?app=${target.appId}"
             val ownCookie = cookie(selected.source, url)
             // 镜像 SSO Cookie 不进 WebView。仅从仍有效的同线路小说会话复用，
-            // 成功后独立保存到论坛；退出小说不会破坏已有论坛续期。
+            // 成功后独立保存到论坛，供论坛令牌续期使用。
             val borrowedCookies = if(ownCookie == null && selected.source == BookSource.XKVI) sharedAuth?.let { (main, mainBinding) ->
                 main.current(mainBinding) { mainSelection ->
                     if(mainSelection.source == selected.source) main.stored(selected.source, "cookies") else null
@@ -157,7 +157,7 @@ class Session(context: Context, private val client: OkHttpClient = OkHttpClient.
             }
         }
     }
-    /** 自动复用同线路已登录小说账号的认证；显式登录可复用 Cookie，并解除主动退出状态。 */
+    /** 仅复用同线路已登录小说账号的认证；显式登录可解除论坛主动退出状态。 */
     suspend fun loginFromSharedAuth(main: Session, explicit: Boolean = false): Boolean {
         require(target == AuthTarget.FORUM && main.target == AuthTarget.NOVEL)
         val binding = capture()
@@ -165,8 +165,9 @@ class Session(context: Context, private val client: OkHttpClient = OkHttpClient.
         return withContext(Dispatchers.IO) { refreshLock.withLock {
             if(tokenFor(binding) != null) return@withLock true
             val selected = sources.capture()
-            if(!explicit && (preferences.getValue(selected.source).getBoolean(AUTO_LOGIN_DISABLED, false) ||
-                    mainBinding.source != selected.source.id || mainBinding.account == null)) return@withLock false
+            // 点击登录也不能仅凭残留 Cookie 恢复上一个账号；小说游客必须使用登录表单。
+            if(mainBinding.source != selected.source.id || mainBinding.account == null) return@withLock false
+            if(!explicit && preferences.getValue(selected.source).getBoolean(AUTO_LOGIN_DISABLED, false)) return@withLock false
             main.ensureCurrent(mainBinding)
             refreshRequest(binding, allowAccountChange = true, sharedAuth = main to mainBinding)
         } }
@@ -247,8 +248,17 @@ class Session(context: Context, private val client: OkHttpClient = OkHttpClient.
             }
         }
     }
-    // 服务端只提供全局 SSO 退出；本地退出保留另一应用的访问令牌和刷新 Cookie，
-    // 后续显式登录仍可复用 SSO。clear 会立即使当前会话的旧刷新失效。
+    /** 主站退出同时清除同线路论坛会话，使用共同线路锁防止清理途中切换来源。 */
+    suspend fun logoutWithForum(forum: Session) {
+        require(target == AuthTarget.NOVEL && forum.target == AuthTarget.FORUM && sources === forum.sources)
+        val binding = capture()
+        withContext(Dispatchers.IO) { current(binding) {
+            clear()
+            forum.clear()
+        } }
+    }
+    // 单独退出论坛仍保留小说会话；共享 Cookie 只有在同线路小说已登录时才能用于论坛登录。
+    // clear 会立即使当前会话的旧登录、刷新请求失效。
     suspend fun logout() = withContext(Dispatchers.IO) { clear() }
     fun clear() { val selected = sources.capture(); sources.withSelection(selected) { state.clear {
         preferences.getValue(selected.source).edit().clear()

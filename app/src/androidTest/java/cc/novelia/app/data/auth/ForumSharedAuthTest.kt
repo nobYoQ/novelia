@@ -135,17 +135,71 @@ class ForumSharedAuthTest {
         val calls = AtomicInteger()
         val client = client { request -> calls.incrementAndGet(); reply(request, jwt("original-user", "forum")) }
         val forum = Session(context, AuthTarget.FORUM, client)
-        assertFalse(forum.loginFromSharedAuth(Session(context)))
+        val guest = Session(context)
+        assertFalse(forum.loginFromSharedAuth(guest))
+        assertFalse(forum.loginFromSharedAuth(guest, explicit = true))
         seedMain(context)
         context.getSharedPreferences("session-xkvi", Context.MODE_PRIVATE).edit()
             .putString("value", DeviceCipher("novelia.session").encrypt(jwt("mirror-user", "mirror"))).commit()
         val mirror = Session(context, sources = BookSources(BookSource.XKVI, "test-gateway-only"))
         assertFalse(forum.loginFromSharedAuth(mirror))
         assertEquals(0, calls.get())
-        // 主动论坛登录可复用原站 Cookie，不发送镜像凭据。
-        assertTrue(forum.loginFromSharedAuth(mirror, explicit = true))
-        assertEquals("original-user", forum.profile.value?.username)
+        // 主动登录也不能跨线路复用原站残留 Cookie。
+        assertFalse(forum.loginFromSharedAuth(mirror, explicit = true))
+        assertEquals(0, calls.get())
+        assertNull(forum.profile.value)
         assertEquals("mirror-user", mirror.profile.value?.username)
+    }
+
+    @Test fun mainLogoutClearsBothOriginalSessionsAndExplicitLoginCannotReuseStaleCookies() = withSharedAuth { context, _ ->
+        seedMain(context)
+        val sources = BookSources()
+        val main = Session(context, sources = sources)
+        val calls = AtomicInteger()
+        val client = client { request -> calls.incrementAndGet(); reply(request, jwt("original-user", "forum")) }
+        val forum = Session(context, client, sources, AuthTarget.FORUM)
+        assertTrue(forum.loginFromSharedAuth(main))
+        val mainBinding = main.capture()
+        val forumBinding = forum.capture()
+        compose.setContent {
+            ObserveForumLogin(main, forum)
+            val profile by forum.profile.collectAsState()
+            Text(profile?.username ?: "论坛游客")
+        }
+        compose.onNodeWithText("original-user").assertIsDisplayed()
+        main.logoutWithForum(forum)
+        compose.onNodeWithText("论坛游客").assertIsDisplayed()
+        assertNull(main.token)
+        assertNull(forum.token)
+        assertThrows(SessionChangedException::class.java) { main.tokenFor(mainBinding) }
+        assertThrows(SessionChangedException::class.java) { forum.tokenFor(forumBinding) }
+        assertFalse(forum.loginFromSharedAuth(main, explicit = true))
+        val restoredMain = Session(context, sources = sources)
+        val restoredForum = Session(context, client, sources, AuthTarget.FORUM)
+        assertNull(restoredMain.token)
+        assertNull(restoredForum.token)
+        assertFalse(restoredForum.loginFromSharedAuth(restoredMain))
+        assertFalse(restoredForum.loginFromSharedAuth(restoredMain, explicit = true))
+        assertEquals(1, calls.get())
+    }
+
+    @Test fun mainLogoutRejectsAnInFlightForumRefresh() = withSharedAuth { context, _ ->
+        seedMain(context)
+        val sources = BookSources()
+        val main = Session(context, sources = sources)
+        var loggingOut = false
+        lateinit var forum: Session
+        forum = Session(context, client { request ->
+            if(loggingOut) runBlocking { main.logoutWithForum(forum) }
+            reply(request, jwt("original-user", "forum"))
+        }, sources, AuthTarget.FORUM)
+        assertTrue(forum.loginFromSharedAuth(main))
+        loggingOut = true
+        assertTrue(runCatching { forum.refresh() }.exceptionOrNull() is SessionChangedException)
+        assertNull(main.token)
+        assertNull(forum.token)
+        assertNull(Session(context, sources = sources).token)
+        assertNull(Session(context, sources = sources, target = AuthTarget.FORUM).token)
     }
 
     @Test fun expiredSharedAuthenticationLeavesTheForumAnonymousAndCanBeRetried() = withSharedAuth { context, _ ->

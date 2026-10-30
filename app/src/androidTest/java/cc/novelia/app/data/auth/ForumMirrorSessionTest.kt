@@ -148,12 +148,16 @@ class ForumMirrorSessionTest {
         assertEquals(originalForum, forum.token)
     }
 
-    @Test fun sharedMirrorCookieGetsAppFTokenAndSurvivesNovelLogoutWithoutSigningBackInAfterForumLogout() = runBlocking {
+    @Test fun mainLogoutClearsBothMirrorSessionsAndCookiesWithoutAffectingOriginalSessions() = runBlocking {
         val context = context()
         val sources = BookSources(BookSource.XKVI, "test-gateway-only")
         val novelToken = jwt("shared-user", "n")
         val forumToken = jwt("shared-user", "f")
         seed(context, AuthTarget.NOVEL, BookSource.XKVI, novelToken, cookie = true)
+        val originalNovel = jwt("original-user", "n")
+        val originalForum = jwt("original-user", "f")
+        seed(context, AuthTarget.NOVEL, BookSource.ORIGINAL, originalNovel)
+        seed(context, AuthTarget.FORUM, BookSource.ORIGINAL, originalForum)
         var calls = 0
         val client = client(sources) { request ->
             calls++
@@ -169,17 +173,37 @@ class ForumMirrorSessionTest {
         assertTrue(forum.loginFromSharedAuth(main))
         assertEquals(forumToken, forum.token); assertEquals(novelToken, main.token)
         assertEquals(forumToken, Session(context, client, sources, AuthTarget.FORUM).token)
-        main.logout()
-        assertTrue(forum.refresh())
-        assertEquals(2, calls)
+        val mainBinding = main.capture()
+        val forumBinding = forum.capture()
+        main.logoutWithForum(forum)
+        assertNull(main.token)
+        assertNull(forum.token)
+        assertThrows(SessionChangedException::class.java) { main.tokenFor(mainBinding) }
+        assertThrows(SessionChangedException::class.java) { forum.tokenFor(forumBinding) }
+        assertFalse(context.getSharedPreferences("session-xkvi", 0).contains("cookies"))
+        assertFalse(context.getSharedPreferences("forum-session-xkvi", 0).contains("cookies"))
+        assertFalse(forum.refresh())
+        val guestMain = Session(context, client, sources)
+        val guestForum = Session(context, client, sources, AuthTarget.FORUM)
+        assertNull(guestMain.token)
+        assertNull(guestForum.token)
+        assertFalse(guestForum.loginFromSharedAuth(guestMain))
+        assertFalse(guestForum.loginFromSharedAuth(guestMain, explicit = true))
+        assertEquals(1, calls)
+        sources.select(BookSource.ORIGINAL)
+        assertEquals(originalNovel, main.token)
+        assertEquals(originalForum, forum.token)
+        sources.select(BookSource.XKVI)
+        assertNull(main.token)
+        assertNull(forum.token)
         seed(context, AuthTarget.NOVEL, BookSource.XKVI, novelToken, cookie = true)
         val restoredMain = Session(context, client, sources)
         forum.logout()
         val restoredForum = Session(context, client, sources, AuthTarget.FORUM)
         assertFalse(restoredForum.loginFromSharedAuth(restoredMain))
-        assertEquals(2, calls)
+        assertEquals(1, calls)
         assertTrue(restoredForum.loginFromSharedAuth(restoredMain, explicit = true))
-        assertEquals(3, calls)
+        assertEquals(2, calls)
         assertEquals(forumToken, restoredForum.token)
     }
 

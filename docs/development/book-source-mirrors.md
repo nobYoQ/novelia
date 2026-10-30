@@ -52,7 +52,7 @@ Debug、本地 Release 和正式发行均使用相同注入逻辑。入口口令
 | `password/reset` | `email`、`password`、`otp`；成功后返回登录表单 |
 | `refresh?app=n` / `refresh?app=f` | 空请求体，携带该来源认证 Cookie；响应为 JWT 文本 |
 
-登录/注册成功后接收认证 Cookie；响应直接包含符合原站字段的 JWT 时立即保存，否则携带 Cookie 请求刷新获取 JWT。入口口令不会被当作账号令牌。镜像小说 JWT 与刷新 Cookie 在 `session-xkvi` 中加密保存，镜像论坛使用独立密钥和 `forum-session-xkvi`；原站沿用 `session` / `forum-session`。同线路小说已登录时，论坛可复用其 SSO Cookie 换取 `app=f` 令牌，核对账号一致后独立保存 Cookie；退出小说不会破坏已有论坛续期。密码和验证码只保留于当前表单内存，不进入恢复状态、备份和日志。服务器业务错误只显示固定提示，不回显原始响应内容。
+登录/注册成功后接收认证 Cookie；响应直接包含符合原站字段的 JWT 时立即保存，否则携带 Cookie 请求刷新获取 JWT。入口口令不会被当作账号令牌。镜像小说 JWT 与刷新 Cookie 在 `session-xkvi` 中加密保存，镜像论坛使用独立密钥和 `forum-session-xkvi`；原站沿用 `session` / `forum-session`。同线路小说已登录时，论坛可复用其 SSO Cookie 换取 `app=f` 令牌，核对账号一致后独立保存 Cookie；主站退出同时清除该线路的小说、论坛会话和镜像认证 Cookie，之后点击论坛登录会显示原生表单。密码和验证码只保留于当前表单内存，不进入恢复状态、备份和日志。服务器业务错误只显示固定提示，不回显原始响应内容。
 
 实测镜像会将部分原站 4xx 包装为 502。对于明确带 `WWW-Authenticate: Bearer …` 的镜像 502，网络层恢复为 401，使正常的单次续期规则仍可执行；其他 502 不推测为鉴权错误，不因此重放写操作。空表单的字段校验也可能返回 502，不能单凭该状态判断认证服务不可用。
 

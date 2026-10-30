@@ -59,7 +59,9 @@ import cc.novelia.app.ui.theme.appReducedMotion
             state.pending.count { it.account == profile?.username },
             onNavigate = { c.go(it) }, onLogout = { logout = true }, modifier = Modifier.padding(padding))
     }
-    if(logout) ConfirmDialog("退出主站登录？", "本地小说、下载和笔记仍保留在此设备。", { logout = false }, confirmLabel = "退出主站登录") { c.action("已退出主站登录") { c.session.logout() } }
+    if(logout) ConfirmDialog("退出登录？", "将同时退出当前线路的主站和论坛登录。本地小说、下载和笔记仍保留在此设备。", { logout = false }, confirmLabel = "退出登录") {
+        c.action("已退出主站和论坛登录") { c.session.logoutWithForum(c.forumSession) }
+    }
 }
 
 @Composable internal fun ProfileAccountCard(profile: Profile?, companionVisible: Boolean,
