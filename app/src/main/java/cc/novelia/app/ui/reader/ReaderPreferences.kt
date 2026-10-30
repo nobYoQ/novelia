@@ -172,6 +172,11 @@ import kotlin.math.roundToInt
                     }
                     else -> {
                         var expanded by state.expandedGroup
+                        ReaderPreferenceGroup("EPUB 附加显示", "假名注音、脚注弹窗与原书强调样式", expanded == "epub", { expanded = if (expanded == "epub") "" else "epub" }) {
+                            TogglePreference("显示假名注音", "在汉字上方显示原书提供的读音", value.showEpubRuby, defaultValue = defaults?.showEpubRuby) { onChange(value.copy(showEpubRuby = it)) }
+                            TogglePreference("点击脚注弹窗", "点击脚注引用查看说明；关闭后仍保留脚注文字", value.epubFootnotePopup, defaultValue = defaults?.epubFootnotePopup) { onChange(value.copy(epubFootnotePopup = it)) }
+                            TogglePreference("显示原书强调样式", "保留加粗、斜体、下划线和删除线", value.showEpubStyles, defaultValue = defaults?.showEpubStyles) { onChange(value.copy(showEpubStyles = it)) }
+                        }
                         if(onTextReplacements != null) Surface(onClick = onTextReplacements,
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
                             shape = appRoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.secondaryContainer) {

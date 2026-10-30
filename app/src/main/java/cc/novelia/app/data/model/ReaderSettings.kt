@@ -59,7 +59,11 @@ import kotlinx.serialization.Serializable
     // 自动阅读仅记住速度；运行状态属于当前前台阅读会话，不随备份或重启恢复。
     val autoReadSpeed: Float = 20f, val autoReadIntervalSeconds: Int = 15,
     val textReplacements: Map<String, String> = emptyMap(), val textReplacementsEnabled: Boolean = true,
-    val readingStatusItems: List<String> = ReaderStatusItems.defaults
+    val readingStatusItems: List<String> = ReaderStatusItems.defaults,
+    // 只影响附加显示；导入元数据、底文与阅读锚点始终保留。
+    val showEpubRuby: Boolean = true,
+    val epubFootnotePopup: Boolean = true,
+    val showEpubStyles: Boolean = true
 ) {
     companion object {
         const val MIN_LINE_HEIGHT = .5f

@@ -10,6 +10,21 @@ class ReaderAnnotationSyncTest {
     private fun documents(state: LibraryState, devices: Boolean = false) = SyncReplica(deviceId = "reader-test")
         .track(emptyMap(), WebDavProjection.library(state, includeDevicePreferences = devices)).bind("dataset").documents
 
+    @Test fun epubDisplaySwitchesSyncAndLegacyRecordsPreserveLocalChoices() {
+        val custom = ReaderSettings(showEpubRuby = false, epubFootnotePopup = false, showEpubStyles = false)
+        val remote = LibraryState(reader = custom, bookSettings = mapOf(key to custom.copy(showEpubRuby = true)))
+        val docs = documents(remote)
+        docs.values.forEach { WebDavProjection.validateRecords(it) }
+        val restored = WebDavProjection.applyLibrary(LibraryState(), docs, setOf(SyncDomain.SETTINGS))
+        assertEquals(custom, restored.reader)
+        assertEquals(remote.bookSettings, restored.bookSettings)
+        val fields = setOf("showEpubRuby", "epubFootnotePopup", "showEpubStyles")
+        val legacy = docs.getValue(SyncDomain.SETTINGS).let { doc -> doc.copy(records = doc.records.mapValues { (_, record) -> record.copy(fields = record.fields - fields) }) }
+        WebDavProjection.validateRecords(legacy)
+        assertEquals(custom, WebDavProjection.applyLibrary(LibraryState(reader = custom), mapOf(SyncDomain.SETTINGS to legacy), setOf(SyncDomain.SETTINGS)).reader)
+        fields.forEach { field -> assertThrows(IllegalArgumentException::class.java) { WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", field, JsonPrimitive("false")) } }
+    }
+
     @Test fun replacementRulesSyncAndOldRecordsPreserveLocalRules() {
         val settings = ReaderSettings(textReplacements = mapOf("原译名" to "新译名"))
         val docs = documents(LibraryState(bookSettings = mapOf(key to settings)))

@@ -16,6 +16,7 @@ internal fun readerSettingsDifferences(book: ReaderSettings, defaults: ReaderSet
         "加粗文字" to weight.label(), "内容宽度" to "$width dp", "首行缩进" to indent.label(),
         "左右页边距" to "$resolvedHorizontalMargin dp", "上下页边距" to "$resolvedVerticalMargin dp",
         "宽屏目录" to showWideToc.label(),
+        "显示假名注音" to showEpubRuby.label(), "点击脚注弹窗" to epubFootnotePopup.label(), "显示原书强调样式" to showEpubStyles.label(),
         "文字替换" to "${if(textReplacementsEnabled) "开启" else "关闭"} · ${textReplacements.size} 条规则",
         "自动阅读速度" to "$resolvedAutoReadSpeed dp/秒", "自动翻页停留" to "$resolvedAutoReadIntervalSeconds 秒",
         "阅读方向" to when(resolvedOrientation) { "portrait" -> "竖屏"; "landscape" -> "横屏"; else -> "跟随系统" },

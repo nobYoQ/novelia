@@ -6,6 +6,16 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class InlinePreparationTest {
+    @Test fun displayPreferencesNeverMutateMetadataOrText() {
+        val part = TextPart("東京1", "日文", inline = listOf(InlineContent(0, 2, InlineKind.Ruby, "とうきょう"),
+            InlineContent(0, 2, InlineKind.Bold), InlineContent(2, 3, InlineKind.Note, "说明")))
+        val hidden = part.withInlinePreferences(ReaderSettings(showEpubRuby = false, epubFootnotePopup = false, showEpubStyles = false))
+        assertEquals(part.text, hidden.text)
+        assertTrue(hidden.inline.isEmpty())
+        assertEquals(3, part.inline.size)
+        assertEquals(part, part.withInlinePreferences(ReaderSettings()))
+        assertEquals(setOf(InlineKind.Bold, InlineKind.Note), part.withInlinePreferences(ReaderSettings(showEpubRuby = false)).inline.map { it.kind }.toSet())
+    }
     @Test fun joinedBilingualPartsKeepTheirOwnOffsetsAndNoteBodies() {
         val chapter = parseEpubChapter("c", "<p lang='ja'><b>日本</b><br/><ruby>語<rt>ご</rt></ruby></p><p lang='zh'>中文</p>", null, { null })!!
         val paragraph = prepareReadingParagraphs(chapter.toReaderChapter(), ReaderSettings(mode = "zh-jp")).single()

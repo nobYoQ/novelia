@@ -37,6 +37,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.text
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
@@ -105,6 +107,8 @@ import androidx.compose.runtime.mutableFloatStateOf
         ready = true
     }
     fun invalidate() { ready = false }
+    /** 极快的纯插图测量可能早于上一帧的失效副作用完成；只确认当前显示的同一份页表。 */
+    fun confirm(pages: List<StaticPage>) { if (this.pages === pages) ready = true }
     fun move(direction: Int) {
         if (ready && pages.isNotEmpty()) {
             pageIndex = (pageIndex + direction).coerceIn(0, pages.lastIndex)
@@ -152,7 +156,9 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
                 if (settings.parallel && part.source in listOf("sakura", "gpt", "youdao")) text.append(part.source.uppercase()).append("\n")
                 val start = text.length
                 if (settings.indent) text.append("　　")
+                val bodyStart = text.length
                 text.append(part.text)
+                text.addReaderInline(part.withInlinePreferences(settings), bodyStart, width)
                 if (part.secondary) {
                     text.setSpan(SecondaryOpacity(settings.secondaryAlpha), start, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                     text.setSpan(AbsoluteSizeSpan((readerPartFontSize(settings, true) * density * fontScale).toInt()), start, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
@@ -165,9 +171,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
                 color = android.graphics.Color.BLACK
                 typeface = Typeface.create(readerTypeface, if (settings.weight) Typeface.BOLD else Typeface.NORMAL)
             }
-            val layout = StaticLayout.Builder.obtain(text, 0, text.length, paint, width)
-                .setAlignment(Layout.Alignment.ALIGN_NORMAL).setIncludePad(false)
-                .setLineSpacing(0f, settings.lineHeight).build()
+            val layout = readerNativeLayout(text, paint, width, settings.lineHeight)
             layouts[index] = layout
             for (line in 0 until layout.lineCount) {
                 if (line % 32 == 0) checkCancelled()
@@ -194,6 +198,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
     annotations: List<ReadingTextMatch> = emptyList(),
     highlightLayers: List<ReaderHighlightLayer> = listOfNotNull(activeMatch?.let { ReaderHighlightLayer(it, 1f) }),
     interactionEnabled: Boolean = true, contentPadding: PaddingValues = PaddingValues(0.dp), onNavigate: () -> Unit = {},
+    onNote: (String) -> Unit = {},
 ) {
     val density = LocalDensity.current
     val context = LocalContext.current
@@ -314,7 +319,8 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
     ) {
         val width = constraints.maxWidth.coerceAtLeast(1)
         val height = constraints.maxHeight.coerceAtLeast(1)
-        val typography = listOf(settings.fontSize, settings.lineHeight, settings.paragraphSpacing, settings.weight, settings.indent, settings.parallel, settings.underline, settings.secondaryAlpha, font.typeface, font.loading)
+        val typography = listOf(settings.fontSize, settings.lineHeight, settings.paragraphSpacing, settings.weight, settings.indent, settings.parallel, settings.underline, settings.secondaryAlpha, font.typeface, font.loading,
+            settings.showEpubRuby, settings.epubFootnotePopup, settings.showEpubStyles)
         val input = EInkMeasureInput(paragraphs, typography, width, height, density.density, density.fontScale)
         val measured by produceState<EInkMeasurement?>(null, input) {
             if(value != null) delay(120)
@@ -328,7 +334,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
             }
         }
         val chapter = measured?.takeIf { it.input == input && state.pages === it.chapter.pages }?.chapter
-        SideEffect { if(chapter == null) state.invalidate() }
+        SideEffect { if(chapter == null) state.invalidate() else state.confirm(chapter.pages) }
         if (chapter == null) Text("正在分页…", Modifier.align(Alignment.Center), color = foreground)
         else {
             val page = state.current
@@ -339,6 +345,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
                 @Composable fun body(content: StaticPage?, offset: Float) {
                     PageBody(content, chapter, settings, foreground, highlightLayers, annotations, density, context,
                         tapNavigation, onSelect, imageModel, { expandedImage = it }, constraints.maxHeight,
+                        { if (canInteract) { tapNavigation.cancel(); onNote(it) } },
                         Modifier.fillMaxSize().graphicsLayer {
                             translationX = if(dragAxis == 0) offset else 0f
                             translationY = if(dragAxis == 1) offset else 0f
@@ -382,6 +389,7 @@ private fun PageBody(
     imageModel: (ReadingParagraph) -> Any?,
     onExpandImage: (Any?) -> Unit,
     viewportHeight: Int,
+    onNote: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
 
@@ -419,11 +427,18 @@ private fun PageBody(
                 val drawScale = (viewportHeight.toFloat() / sliceHeight).coerceAtMost(1f)
                 val visibleText = layout.text.subSequence(lines.first().start, lines.last().end).toString()
                 Canvas(Modifier.fillMaxWidth().height(with(density) { (sliceHeight * drawScale).toDp() }).clipToBounds()
-                    .semantics { text = AnnotatedString(visibleText) }
-                    .combinedClickable(
-                        interactionSource = remember { MutableInteractionSource() }, indication = null,
-                        onClickLabel = "显示或收起阅读工具栏", onClick = tapNavigation::click,
-                        onLongClickLabel = "选择段落、分享或添加笔记", onLongClick = { onSelect(paragraph) })) {
+                    .semantics {
+                        text = AnnotatedString(visibleText)
+                        val marked = layout.text as? Spanned
+                        customActions = marked?.getSpans(lines.first().start, lines.last().end, ReaderNoteSpan::class.java).orEmpty().map { note ->
+                            val label = marked!!.subSequence(marked.getSpanStart(note), marked.getSpanEnd(note))
+                            CustomAccessibilityAction("查看脚注 $label") { onNote(note.body); true }
+                        }
+                    }
+                    .readerInlineActions({ position ->
+                        val note = position?.let { layout.noteAt(it.x / drawScale, it.y / drawScale + top) }
+                        if (note != null) onNote(note) else tapNavigation.click()
+                    }, { onSelect(paragraph) })) {
                     drawIntoCanvas { canvas ->
                         val native = canvas.nativeCanvas
                         native.save()
@@ -435,7 +450,7 @@ private fun PageBody(
                             val start = match.textOffset(paragraph, settings).coerceIn(0, layout.text.length)
                             val end = (start + match.end - match.start).coerceIn(start, layout.text.length)
                             val path = android.graphics.Path()
-                            layout.getSelectionPath(start, end, path)
+                            layout.readerSelectionPath(start, end, path)
                             native.drawPath(path, android.graphics.Paint().apply { color = foreground.copy(alpha = .1f).toArgb() })
                             if(spannable != null) UnderlineSpan().also {
                                 spannable.setSpan(it, start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE); annotationSpans += it

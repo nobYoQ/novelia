@@ -360,6 +360,8 @@ import kotlinx.serialization.encodeToString
             }
         }
         var selected by remember { mutableStateOf<ReadingParagraph?>(null) }
+        var epubNote by remember(ref, chapterId) { mutableStateOf<String?>(null) }
+        LaunchedEffect(settings.epubFootnotePopup) { if (!settings.epubFootnotePopup) epubNote = null }
         var versions by remember { mutableStateOf<ReadingParagraph?>(null) }
         LaunchedEffect(selected, chapter, settings.traditional, settings.textReplacements, settings.textReplacementsEnabled) {
             versions = null
@@ -515,7 +517,7 @@ import kotlinx.serialization.encodeToString
             onDispose { readingLifecycle.lifecycle.removeObserver(observer) }
         }
         val contentPanelsClosed = !preferences && !editingTapZones && !search && (!toc || wide) && !autoReadSheet && !replacementsSheet && !bookSearch && !nextVolumePrompt && selected == null && note == null
-        val panelsClosed = contentPanelsClosed && !speechSheet
+        val panelsClosed = contentPanelsClosed && !speechSheet && epubNote == null
         val showTapTutorial = settings.tapPageTurn && !local.readerTapTutorialSeen && panelsClosed && !leaving &&
             !chapterLoad.loading && chapterLoad.error == null && positionState.initialAnchorRestored && !positionState.restoringAnchor && seekTarget == null &&
             (!settings.staticPagination || eInk.ready)
@@ -782,7 +784,8 @@ import kotlinx.serialization.encodeToString
                 onToggleMenu = { menu = !menu }, onSelect = { selected = it }, onPage = { page(it) },
                 background = background, foreground = foreground, activeMatch = if(search) activeMatch else spokenMatch ?: activeMatch, annotations = annotations,
                 highlightLayers = highlightLayers,
-                interactionEnabled = bodyInputEnabled, contentPadding = PaddingValues(horizontal = settings.resolvedHorizontalMargin.dp, vertical = settings.resolvedVerticalMargin.dp), onNavigate = openToc)
+                interactionEnabled = bodyInputEnabled, contentPadding = PaddingValues(horizontal = settings.resolvedHorizontalMargin.dp, vertical = settings.resolvedVerticalMargin.dp), onNavigate = openToc,
+                onNote = { pauseReadingAutomation(); epubNote = it })
             else LazyColumn(state = scroll, overscrollEffect = null, modifier = Modifier.testTag("reader-scroll")
                 .then(readerInteractionModifier { recordReadingInteraction(); pauseReadingAutomation() }).align(Alignment.TopCenter).fillMaxHeight()
                 .windowInsetsPadding(readingInsets).padding(bottom = persistentBottomHeight).widthIn(max = settings.width.dp).fillMaxWidth()
@@ -820,6 +823,7 @@ import kotlinx.serialization.encodeToString
                     if(image != null) ReaderIllustration(image, foreground, tapNavigation::click)
                     else ReaderTextParagraph(paragraph, settings, layoutGeneration, foreground, tapNavigation::click, { selected = paragraph }, (if(search) activeMatch else spokenMatch ?: activeMatch)?.takeIf { it.paragraph == paragraphIndex }, fontFamily = readerFont.family,
                         annotations = annotations.filter { it.paragraph == paragraphIndex },
+                        onNote = { if (bodyInputEnabled) { tapNavigation.cancel(); pauseReadingAutomation(); epubNote = it } },
                         highlightLayers = highlightLayers.filter { it.match.paragraph == paragraphIndex }) { part, lines ->
                         val existing = scrollLayouts[paragraph.index] ?: ParagraphScrollLayout()
                         if(existing.parts[part] != lines) scrollLayouts[paragraph.index] = existing.copy(parts = existing.parts + (part to lines))
@@ -993,6 +997,7 @@ import kotlinx.serialization.encodeToString
                 if(bookSpeech != null) context.startService(Intent(context, ReadAloudService::class.java).setAction("timer").putExtra("minutes", minutes))
             },
         )
+        epubNote?.let { body -> ReaderFootnoteDialog(body) { epubNote = null } }
         selected?.let { paragraph -> ReaderParagraphSheet(paragraph, versions, chapterNotes.filter { it.paragraph == paragraph.index }, onDismiss = { selected = null },
             onCopy = { text -> context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("选文", text)); c.message("选文已复制") },
             onShare = c::share, onLookup = { lookupReaderText(context, it, c::message) },

@@ -28,6 +28,7 @@ import kotlin.math.roundToInt
     fontFamily: FontFamily = rememberReaderFont(settings).family,
     annotations: List<ReadingTextMatch> = emptyList(),
     highlightLayers: List<ReaderHighlightLayer> = listOfNotNull(activeMatch?.let { ReaderHighlightLayer(it, 1f) }),
+    onNote: (String) -> Unit = {},
     onLayout: (Int, List<ReadingAnchorLine>) -> Unit) {
     val starts = remember(paragraph, settings.indent, settings.parallel) { paragraphPartStarts(paragraph, settings) }
     val latestLayout by rememberUpdatedState(onLayout)
@@ -49,6 +50,16 @@ import kotlin.math.roundToInt
                 })
             }
             if(settings.parallel && (part.source == "sakura" || part.source == "gpt" || part.source == "youdao")) Text(part.source.uppercase(), style = MaterialTheme.typography.labelSmall, color = foreground.copy(alpha = .65f))
+            val styledPart = remember(part, settings.showEpubRuby, settings.epubFootnotePopup, settings.showEpubStyles) { part.withInlinePreferences(settings) }
+            if (styledPart.inline.isNotEmpty()) {
+                ReaderInlineText(styledPart, settings, foreground, onToggleMenu, onSelect, onNote,
+                    annotations.filter { it.part == partIndex }, highlightLayers.filter { it.match.part == partIndex }) { layout, top ->
+                    latestLayout(partIndex, (0 until layout.lineCount).map { line ->
+                        ReadingAnchorLine(starts[partIndex] + layout.getLineStart(line), starts[partIndex] + layout.getLineEnd(line), top + layout.getLineTop(line))
+                    })
+                }
+                return@forEachIndexed
+            }
             val highlighted = buildAnnotatedString {
                 val indent = if(settings.indent) "　　" else ""
                 append(indent); append(part.text)
