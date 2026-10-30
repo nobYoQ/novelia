@@ -104,7 +104,7 @@ class StickerFeaturesTest {
             screenshot("v2-settings")
             compose.onNodeWithContentDescription("返回").performClick()
             openMenu("帮助与关于")
-            repeat(5) { compose.onNodeWithText("Android ${BuildConfig.VERSION_NAME} · 非官方客户端").performClick() }
+            repeat(5) { compose.onNodeWithText("Android ${BuildConfig.VERSION_NAME}").performClick() }
             compose.onNodeWithContentDescription("小绿向你招手").assertIsDisplayed()
             screenshot("v2-about-wave")
             compose.onNodeWithContentDescription("返回").performClick()

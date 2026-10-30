@@ -2,7 +2,7 @@
 
 仓库文件无法代替 GitHub 后台设置；此清单不表示相关功能已经启用。由有管理权限的维护者在首次公开和发行前逐项核对。
 
-- [ ] About 填写非官方 Android 客户端定位；添加 `android`、`kotlin`、`jetpack-compose`、`reader` 等相关主题。
+- [ ] About 填写 Android 客户端定位；添加 `android`、`kotlin`、`jetpack-compose`、`reader` 等相关主题。
 - [ ] 开启 Issues；确认默认分支为 `main`，贡献指南、安全政策和模板在默认分支可见。
 - [ ] 限制 `main` 的强制推送和删除；外部贡献通过 PR 合并。多人维护后启用至少一位审批者和必要的 CODEOWNERS 审查；只有一位维护者时不要配置无人可满足的审批规则。
 - [ ] 允许 GitHub Actions 运行 [Preview APK](workflows/preview-apk.yml) 及其依赖的 Actions；允许发布任务使用 `contents: write`。确认默认分支推送后会创建或更新 `preview` Pre-release，其他分支仍有 Actions 下载产物；合并前按照 CONTRIBUTING.md 手动复验。

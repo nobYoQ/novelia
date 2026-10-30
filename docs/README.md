@@ -1,6 +1,6 @@
 # Novelia 开发文档
 
-Novelia 是轻小说机翻机器人的非官方 Android 客户端，使用 Kotlin 和 Jetpack Compose。它把在线小说、本地文件、阅读器和社区放在一个应用里；翻译生成和内容服务由原站提供，本仓库不包含服务端。
+Novelia 是轻小说机翻机器人的 Android 客户端，使用 Kotlin 和 Jetpack Compose。它把在线小说、本地文件、阅读器和社区放在一个应用里；翻译生成和内容服务由原站提供，本仓库不包含服务端。
 
 这里面向需要修改和维护客户端的开发者。产品介绍和下载见[项目首页](../README.md)，构建版本以 [version.properties](../version.properties) 为准。
 
