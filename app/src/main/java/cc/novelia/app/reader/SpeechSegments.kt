@@ -45,6 +45,7 @@ internal data class SpeechPlayback(
     val session: String, val bookKey: String?, val chapterId: String?, val segment: SpeechSegment?,
     val index: Int, val count: Int, val playing: Boolean, val following: Boolean = true,
 ) {
-    fun canFollow(book: String, resumed: Boolean, blocked: Boolean) = playing && following &&
+    // 暂停时也允许切句定位；不依赖系统语音引擎的 onStart 回调才翻页。
+    fun canFollow(book: String, resumed: Boolean, blocked: Boolean) = (playing || segment != null) && following &&
         bookKey == book && chapterId != null && resumed && !blocked
 }

@@ -21,6 +21,7 @@ import cc.novelia.app.data.auth.SessionBinding
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.Chapter
 import cc.novelia.app.data.model.ReaderSettings
+import cc.novelia.app.data.model.toReaderChapter
 import cc.novelia.app.data.storage.appJson
 import java.io.File
 import java.util.Locale
@@ -74,6 +75,18 @@ class ReadAloudService : Service() {
             "pause" -> pause()
             "previous" -> step(-1)
             "next" -> step(1)
+            "rate" -> {
+                rate = intent.getFloatExtra("rate", rate).coerceIn(.5f, 2f)
+                engine?.setSpeechRate(rate)
+            }
+            "timer" -> {
+                if(activeRequest.isNotEmpty()) {
+                    val duration = intent.getIntExtra("minutes", 30).coerceIn(1, 180) * 60_000L
+                    stopAt = SystemClock.elapsedRealtime() + duration
+                    handler.removeCallbacks(stopTimer)
+                    handler.postDelayed(stopTimer, duration)
+                }
+            }
             "resume" -> {
                 paused = false
                 if(loading) {
@@ -158,9 +171,8 @@ class ReadAloudService : Service() {
             val chapterIndex = document.chapters.indexOfFirst { it.id == chapterId }
             check(chapterIndex >= 0) { "下一章已不存在，请从目录重新开始朗读" }
             val chapter = app.store.documentChapter(ref.id, chapterId)
-            Chapter(chapter.title, chapter.title, document.name, document.name,
-                document.chapters.getOrNull(chapterIndex - 1)?.id, document.chapters.getOrNull(chapterIndex + 1)?.id,
-                chapter.paragraphs, chapter.paragraphs)
+            chapter.toReaderChapter(document.name, document.chapters.getOrNull(chapterIndex - 1)?.id,
+                document.chapters.getOrNull(chapterIndex + 1)?.id)
         }, cached = { app.store.cachedChapter(ref, it) }, network = {
             app.store.chapterRequests.load(app.api, app.session, binding, app.store.chapterGeneration(ref), ref, it)
         })

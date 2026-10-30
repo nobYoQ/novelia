@@ -136,9 +136,11 @@ internal data class ReaderBottomToolbarState(
     onPage: (Int) -> Unit, onSeek: (Float) -> Unit, onSeekFocusChanged: (Boolean) -> Unit,
     onPreviousChapter: () -> Unit, onNextChapter: () -> Unit, onToc: () -> Unit,
     onBookmark: () -> Unit, onPreferences: () -> Unit,
+    speechControls: (@Composable () -> Unit)? = null, onSpeechHeightChanged: (Int) -> Unit = {},
 ) {
     Column(modifier.testTag("reader-bottom-toolbar").onSizeChanged { onHeightChanged(it.height) }) {
-        val persistentControls = settings.showPageButtons || settings.visibleReadingStatusItems.isNotEmpty()
+        val persistentControls = speechControls != null || settings.showPageButtons || settings.visibleReadingStatusItems.isNotEmpty()
+        Box(Modifier.fillMaxWidth().onSizeChanged { onSpeechHeightChanged(it.height) }) { speechControls?.invoke() }
         if(settings.showPageButtons) Row(Modifier.fillMaxWidth().background(toolbarBackground).padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
             AppOutlinedButton(onClick = { onPage(-1) }, colors = ButtonDefaults.outlinedButtonColors(contentColor = foreground, disabledContentColor = foreground.copy(alpha = .38f)), enabled = state.previousPageEnabled) { Text(if(settings.staticPagination) "上一页" else "上一屏") }
             AppOutlinedButton(onClick = { onPage(1) }, colors = ButtonDefaults.outlinedButtonColors(contentColor = foreground, disabledContentColor = foreground.copy(alpha = .38f)), enabled = state.nextPageEnabled) { Text(if(settings.staticPagination) "下一页" else "下一屏") }

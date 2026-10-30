@@ -108,7 +108,7 @@ import kotlinx.coroutines.isActive
             Text(formatReadingTime(stats.dayMillis(today)), Modifier.testTag("reading-statistics-today")
                 .clearAndSetSemantics { contentDescription = "今日 · ${formatReadingTime(stats.dayMillis(today))}" },
                 style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.SemiBold)
-            Text(if(stats.streak(today) > 0) "连续阅读 ${stats.streak(today)} 天" else "从今天开始，积累一点阅读时光", style = MaterialTheme.typography.bodyMedium)
+            Text(if(stats.streak(today) > 0) "连续阅读 ${stats.streak(today)} 天" else "从今天开始阅读吧", style = MaterialTheme.typography.bodyMedium)
             HorizontalDivider(color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = .15f))
             val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
             BoxWithConstraints(Modifier.fillMaxWidth()) {

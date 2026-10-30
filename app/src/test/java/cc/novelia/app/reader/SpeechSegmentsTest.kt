@@ -2,12 +2,22 @@ package cc.novelia.app.reader
 
 import cc.novelia.app.data.model.Chapter
 import cc.novelia.app.data.model.ReaderSettings
+import cc.novelia.app.data.model.LocalChapter
+import cc.novelia.app.data.model.toReaderChapter
 import cc.novelia.app.data.storage.appJson
 import kotlinx.serialization.encodeToString
 import org.junit.Assert.*
 import org.junit.Test
 
 class SpeechSegmentsTest {
+    @Test fun localContinuationUsesTheSameSourceIdentityAsTheVisibleReader() {
+        val chapter = LocalChapter("next", "下一章", listOf("山间的旅人。", "走进图书馆。")).toReaderChapter()
+        val settings = ReaderSettings(mode = "zh", speechLanguage = "zh")
+        val shown = prepareReadingParagraphs(chapter, settings)
+        val spoken = speechSegments(chapter, settings)
+        assertEquals(listOf("original", "original"), spoken.map { it.source })
+        assertEquals(listOf(0, 1), spoken.map { it.match(shown)?.paragraph })
+    }
     @Test fun repeatedSentencesKeepTheirOwnOffsetsAcrossLanguageOrderChanges() {
         val chapter = Chapter(paragraphs = listOf("原文。原文。"), gptParagraphs = listOf("译文。译文。"))
         val settings = ReaderSettings(mode = "jp-zh", speechLanguage = "zh", engines = listOf("gpt", "sakura", "youdao"))
@@ -46,6 +56,9 @@ class SpeechSegmentsTest {
         assertFalse(playing.canFollow("local/book", false, false))
         assertFalse(playing.canFollow("local/book", true, true))
         assertFalse(playing.copy(playing = false).canFollow("local/book", true, false))
+        val pausedSentence = playing.copy(playing = false, segment = SpeechSegment("暂停时定位。", 0, "original"))
+        assertTrue(pausedSentence.canFollow("local/book", true, false))
+        assertFalse(pausedSentence.copy(following = false).canFollow("local/book", true, false))
         assertFalse(playing.copy(following = false).canFollow("local/book", true, false))
     }
 }

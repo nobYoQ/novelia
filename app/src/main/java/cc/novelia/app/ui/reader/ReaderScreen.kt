@@ -130,13 +130,23 @@ import kotlinx.serialization.encodeToString
     }
     var preferences by remember { mutableStateOf(false) }; var toc by remember { mutableStateOf(false) }; var search by remember { mutableStateOf(false) }; var query by rememberSaveable { mutableStateOf("") }; var version by remember { mutableIntStateOf(0) }
     var speechSheet by remember { mutableStateOf(false) }
+    var speechRequestPending by remember { mutableStateOf(false) }
+    var speechPreferencesRequested by remember { mutableStateOf(false) }
     var autoReadSheet by remember { mutableStateOf(false) }
     var replacementsSheet by rememberSaveable { mutableStateOf(false) }
+    var replacementSelection by rememberSaveable { mutableStateOf<String?>(null) }
     var autoReading by remember(ref, chapterId) {
         mutableStateOf(readerEntry?.savedStateHandle?.remove<Boolean>("readerAutoReading") ?: false)
     }
     var editingTapZones by remember { mutableStateOf(false) }
     val preferenceState = rememberReaderPreferencesState(preferences)
+    LaunchedEffect(preferences) {
+        if(preferences && speechPreferencesRequested) {
+            preferenceState.tab.intValue = 3
+            preferenceState.expandedGroup.value = "speech"
+            speechPreferencesRequested = false
+        }
+    }
     var tocQuery by rememberSaveable(ref.key) { mutableStateOf(readerEntry?.savedStateHandle?.remove<String>("readerTocQuery").orEmpty()) }
     var tocReversed by rememberSaveable(ref.key) { mutableStateOf(readerEntry?.savedStateHandle?.remove<Boolean>("readerTocReversed") ?: false) }
     var tocLocated by rememberSaveable(ref.key) { mutableStateOf(readerEntry?.savedStateHandle?.remove<Boolean>("readerTocLocated") ?: false) }
@@ -167,12 +177,34 @@ import kotlinx.serialization.encodeToString
     val readingLifecycle = LocalLifecycleOwner.current
     val speechStatus by ReadAloudService.status.collectAsStateWithLifecycle()
     val speechPlayback by ReadAloudService.playback.collectAsStateWithLifecycle()
+    val bookSpeech = speechPlayback?.takeIf { it.bookKey == ref.key && it.count > 0 }
+    LaunchedEffect(speechStatus, bookSpeech) {
+        if(bookSpeech?.playing == true) speechRequestPending = false
+        else if(bookSpeech == null && speechRequestPending && speechStatus.isNotBlank() && speechStatus != "正在准备朗读…") {
+            speechRequestPending = false; speechSheet = true
+        }
+    }
     val lifecycleState by readingLifecycle.lifecycle.currentStateFlow.collectAsState()
     fun pauseReadingAutomation() {
         autoReading = false
         if(speechPlayback?.bookKey == ref.key) ReadAloudService.follow(false)
     }
     val context = LocalContext.current; val activity = context.activityOrNull()
+    fun speechAction(action: String) {
+        if(action == "stop") speechRequestPending = false
+        context.startService(Intent(context, ReadAloudService::class.java).setAction(action))
+    }
+    fun stepSpeech(action: String) {
+        autoReading = false; speechSheet = false; menu = false
+        ReadAloudService.follow(true)
+        speechAction(action)
+    }
+    fun updateSpeechSettings(value: cc.novelia.app.data.model.ReaderSettings) {
+        c.store.update { state ->
+            if(state.bookSettings.containsKey(ref.key)) state.copy(bookSettings = state.bookSettings + (ref.key to value))
+            else state.copy(reader = value)
+        }
+    }
     val colors = readerColors(settings, MaterialTheme.colorScheme)
     val reducedMotion = appReducedMotion()
     val focusManager = LocalFocusManager.current
@@ -377,6 +409,7 @@ import kotlinx.serialization.encodeToString
         }
         var topOverlayHeight by remember { mutableIntStateOf(0) }
         var bottomOverlayHeight by remember { mutableIntStateOf(0) }
+        var speechControlsHeight by remember { mutableIntStateOf(0) }
         val density = LocalDensity.current
         val safeInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
         val direction = androidx.compose.ui.platform.LocalLayoutDirection.current
@@ -386,6 +419,7 @@ import kotlinx.serialization.encodeToString
         val statusRows = cc.novelia.app.data.model.ReaderStatusItems.rows(settings.visibleReadingStatusItems.size, statusColumns)
         // 预留空间只跟随配置、宽度和系统字体变化；时间与进度更新不会重新分页。
         val readingStatusBarHeight = if(statusRows > 0) with(density) { 16.sp.toDp() } * statusRows + 12.dp + 4.dp * (statusRows - 1) else 0.dp
+        val persistentBottomHeight = readingStatusBarHeight + with(density) { if(bookSpeech != null) speechControlsHeight.toDp() else 0.dp }
         // 隐藏状态栏时正文延伸到顶部，避免屏幕缺口仍留出整条空白；
         // 保留横屏两侧和底部安全区，目录与引导控件仍避让全部系统区域。
         val readingInsets = if(settings.hideStatusBar) safeInsets.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom) else safeInsets
@@ -480,7 +514,8 @@ import kotlinx.serialization.encodeToString
             readingLifecycle.lifecycle.addObserver(observer)
             onDispose { readingLifecycle.lifecycle.removeObserver(observer) }
         }
-        val panelsClosed = !preferences && !editingTapZones && !search && (!toc || wide) && !speechSheet && !autoReadSheet && !replacementsSheet && !bookSearch && !nextVolumePrompt && selected == null && note == null
+        val contentPanelsClosed = !preferences && !editingTapZones && !search && (!toc || wide) && !autoReadSheet && !replacementsSheet && !bookSearch && !nextVolumePrompt && selected == null && note == null
+        val panelsClosed = contentPanelsClosed && !speechSheet
         val showTapTutorial = settings.tapPageTurn && !local.readerTapTutorialSeen && panelsClosed && !leaving &&
             !chapterLoad.loading && chapterLoad.error == null && positionState.initialAnchorRestored && !positionState.restoringAnchor && seekTarget == null &&
             (!settings.staticPagination || eInk.ready)
@@ -620,10 +655,10 @@ import kotlinx.serialization.encodeToString
                 savePosition()
             }
         }
-        LaunchedEffect(speechPlayback, lifecycleState, panelsClosed, showTapTutorial, chapterLoad.loading, chapterLoad.error, layoutGeneration, seekTarget, reducedMotion) {
+        LaunchedEffect(speechPlayback, lifecycleState, contentPanelsClosed, showTapTutorial, chapterLoad.loading, chapterLoad.error, layoutGeneration, seekTarget, reducedMotion) {
             val current = speechPlayback ?: return@LaunchedEffect
             if(!current.canFollow(ref.key, lifecycleState.isAtLeast(Lifecycle.State.RESUMED),
-                    !panelsClosed || showTapTutorial || leaving || chapterLoad.loading || chapterLoad.error != null || seekTarget != null) || c.nav.currentBackStackEntry != readerEntry) return@LaunchedEffect
+                    !contentPanelsClosed || showTapTutorial || leaving || chapterLoad.loading || chapterLoad.error != null || seekTarget != null) || c.nav.currentBackStackEntry != readerEntry) return@LaunchedEffect
             snapshotFlow { positionState.initialAnchorRestored && !positionState.restoringAnchor && (!settings.staticPagination || eInk.ready) }.first { it }
             if(current.chapterId != chapterId) openChapter(requireNotNull(current.chapterId), followingSpeech = true)
             else spokenMatch?.let { revealMatch(it, markSearch = false) }
@@ -725,7 +760,7 @@ import kotlinx.serialization.encodeToString
             }
             VerticalDivider(Modifier.fillMaxHeight())
         }
-        Box(Modifier.weight(1f).fillMaxHeight().background(background).then(readerInteractionModifier { recordReadingInteraction(); pauseReadingAutomation() }).focusRequester(focus).onPreviewKeyEvent { event ->
+        Box(Modifier.weight(1f).fillMaxHeight().background(background).focusRequester(focus).onPreviewKeyEvent { event ->
             val direction = readerKeyDirection(event.nativeKeyEvent.keyCode, settings.volumeKeys)
             if(volumeKeysActive && !seekFocused && direction != 0) {
                 if(event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) page(direction)
@@ -739,16 +774,18 @@ import kotlinx.serialization.encodeToString
             val openToc: () -> Unit = { if(wide) { setWideToc(true); tocQuery = ""; tocLocateRequest++ } else toc = true }
             val tapNavigation = rememberReaderTapNavigation(settings.tapPageTurn, bodyInputEnabled, { menu = !menu }, { page(it) }, settings.resolvedTapZoneMap, openToc)
             if(settings.staticPagination) EInkPage(paragraphs, settings, eInk,
-                Modifier.testTag("reader-page").align(Alignment.TopCenter).fillMaxHeight().windowInsetsPadding(readingInsets)
-                    .padding(bottom = readingStatusBarHeight)
+                Modifier.testTag("reader-page").then(readerInteractionModifier { recordReadingInteraction(); pauseReadingAutomation() })
+                    .align(Alignment.TopCenter).fillMaxHeight().windowInsetsPadding(readingInsets)
+                    .padding(bottom = persistentBottomHeight)
                     .widthIn(max = settings.width.dp).fillMaxWidth(),
                 imageModel = { it.imageUrl ?: it.localImageId?.takeIf { ref.isLocal }?.let { id -> c.store.documentImage(ref.id, id) } },
                 onToggleMenu = { menu = !menu }, onSelect = { selected = it }, onPage = { page(it) },
                 background = background, foreground = foreground, activeMatch = if(search) activeMatch else spokenMatch ?: activeMatch, annotations = annotations,
                 highlightLayers = highlightLayers,
                 interactionEnabled = bodyInputEnabled, contentPadding = PaddingValues(horizontal = settings.resolvedHorizontalMargin.dp, vertical = settings.resolvedVerticalMargin.dp), onNavigate = openToc)
-            else LazyColumn(state = scroll, overscrollEffect = null, modifier = Modifier.testTag("reader-scroll").align(Alignment.TopCenter).fillMaxHeight()
-                .windowInsetsPadding(readingInsets).padding(bottom = readingStatusBarHeight).widthIn(max = settings.width.dp).fillMaxWidth()
+            else LazyColumn(state = scroll, overscrollEffect = null, modifier = Modifier.testTag("reader-scroll")
+                .then(readerInteractionModifier { recordReadingInteraction(); pauseReadingAutomation() }).align(Alignment.TopCenter).fillMaxHeight()
+                .windowInsetsPadding(readingInsets).padding(bottom = persistentBottomHeight).widthIn(max = settings.width.dp).fillMaxWidth()
                 .onSizeChanged { size ->
                     if(positionState.viewportWidth != 0 && positionState.viewportWidth != size.width && scroll.firstVisibleItemIndex > 0)
                         positionState.pendingScrollRestore = ReadingRestoreAnchor(positionState.scrollAnchor.first, positionState.scrollAnchor.third, positionState.scrollAnchor.second)
@@ -801,7 +838,7 @@ import kotlinx.serialization.encodeToString
                         // 章末留白让同一提示句位于控件上方，
                         // 不会改变正文视口高度或使章节重新分页。
                         Spacer(Modifier.height(with(density) { (bottomOverlayHeight - readingInsets.getBottom(density)).coerceAtLeast(0).toDp() }
-                            .minus(readingStatusBarHeight).coerceAtLeast(0.dp)))
+                            .minus(persistentBottomHeight).coerceAtLeast(0.dp)))
                     }
                 }
             }
@@ -839,6 +876,15 @@ import kotlinx.serialization.encodeToString
                 onNextChapter = { if(chapter.nextId != null) openChapter(chapter.nextId) else nextVolumePrompt = true },
                 onToc = { if(wide) { setWideToc(!settings.showWideToc); if(!settings.showWideToc) tocLocateRequest++ } else toc = true },
                 onBookmark = { paragraphs.getOrNull(firstParagraph)?.let { saveBookmark(it) } }, onPreferences = { preferences = true },
+                onSpeechHeightChanged = { speechControlsHeight = it },
+                speechControls = if(bookSpeech == null) null else { {
+                    ReaderSpeechDock(bookSpeech, speechStatus,
+                        onPrevious = { stepSpeech("previous") }, onNext = { stepSpeech("next") },
+                        onPause = { speechAction("pause") }, onResume = { speechAction("resume") },
+                        onStop = { speechAction("stop") }, onFollow = ReadAloudService::follow,
+                        onExpand = { speechSheet = true }, containerColor = toolbarBackground.copy(alpha = 1f), contentColor = foreground,
+                        modifier = Modifier.windowInsetsPadding(safeInsets.only(WindowInsetsSides.Horizontal)))
+                } },
             )
             if(autoReading) Surface(Modifier.align(Alignment.TopEnd).windowInsetsPadding(readingInsets).padding(12.dp)
                 .testTag("reader-auto-reading").clickable { autoReading = false },
@@ -863,7 +909,7 @@ import kotlinx.serialization.encodeToString
             }
             }
             if(showTapTutorial) ReaderTapTutorial(settings.staticPagination, settings.eInkMode || eInkInteraction,
-                readingInsets, settings.width, readingStatusBarHeight, Modifier.matchParentSize(), map = settings.resolvedTapZoneMap) {
+                readingInsets, settings.width, persistentBottomHeight, Modifier.matchParentSize(), map = settings.resolvedTapZoneMap) {
                 c.store.update { it.copy(readerTapTutorialSeen = true) }
             }
             if(editingTapZones) ReaderTapZoneEditor(settings.resolvedTapZoneMap, onSave = { map ->
@@ -875,7 +921,7 @@ import kotlinx.serialization.encodeToString
                 editingTapZones = false
             }, onDismiss = { editingTapZones = false },
                 modifier = Modifier.align(Alignment.TopCenter).fillMaxHeight().windowInsetsPadding(readingInsets)
-                    .padding(bottom = readingStatusBarHeight).widthIn(max = settings.width.dp).fillMaxWidth(),
+                    .padding(bottom = persistentBottomHeight).widthIn(max = settings.width.dp).fillMaxWidth(),
                 staticPagination = settings.staticPagination, eInk = settings.eInkMode || eInkInteraction)
         }
         }
@@ -912,14 +958,15 @@ import kotlinx.serialization.encodeToString
             })
         if(replacementsSheet) ReaderReplacementsSheet(settings,
             sample = replacementSample,
-            onDismiss = { replacementsSheet = false; preferences = true }, onChange = { value ->
+            initialSource = replacementSelection,
+            onDismiss = { replacementsSheet = false; if(replacementSelection == null) preferences = true; replacementSelection = null }, onChange = { value ->
                 pauseReadingAutomation()
                 ReadAloudService.pauseForAutomaticReading(context)
                 c.store.update { it.copy(bookSettings = it.bookSettings + (ref.key to value)) }
             })
         if(speechSheet) ReaderSpeechSheet(settings, speechStatus, onDismiss = { speechSheet = false },
             onStart = {
-                menu = false
+                menu = false; speechSheet = false; speechRequestPending = true
                 val first = firstParagraph
                 val originalIndex = paragraphs.getOrNull(first)?.index ?: 0
                 scope.launch {
@@ -932,20 +979,25 @@ import kotlinx.serialization.encodeToString
                     catch(e: Exception) { c.message(e.friendlyMessage()) }
                 }
             },
-            onPause = { context.startService(Intent(context, ReadAloudService::class.java).setAction("pause")) },
-            onResume = { context.startService(Intent(context, ReadAloudService::class.java).setAction("resume")) },
-            onStop = { context.startService(Intent(context, ReadAloudService::class.java).setAction("stop")) },
-            onSettings = { speechSheet = false; preferences = true },
-            playback = speechPlayback,
-            onPrevious = { context.startService(Intent(context, ReadAloudService::class.java).setAction("previous")) },
-            onNext = { context.startService(Intent(context, ReadAloudService::class.java).setAction("next")) },
+            onPause = { speechAction("pause") }, onResume = { speechAction("resume") }, onStop = { speechAction("stop") },
+            onSettings = { speechSheet = false; speechPreferencesRequested = true; preferences = true },
+            playback = bookSpeech, sample = paragraphs.getOrNull(firstParagraph)?.parts?.firstOrNull()?.text.orEmpty(),
+            onPrevious = { stepSpeech("previous") }, onNext = { stepSpeech("next") },
             onFollow = ReadAloudService::follow,
+            onRate = { rate ->
+                updateSpeechSettings(settings.copy(speechRate = rate))
+                if(bookSpeech != null) context.startService(Intent(context, ReadAloudService::class.java).setAction("rate").putExtra("rate", rate))
+            },
+            onTimer = { minutes ->
+                updateSpeechSettings(settings.copy(speechMinutes = minutes))
+                if(bookSpeech != null) context.startService(Intent(context, ReadAloudService::class.java).setAction("timer").putExtra("minutes", minutes))
+            },
         )
         selected?.let { paragraph -> ReaderParagraphSheet(paragraph, versions, chapterNotes.filter { it.paragraph == paragraph.index }, onDismiss = { selected = null },
             onCopy = { text -> context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("选文", text)); c.message("选文已复制") },
             onShare = c::share, onLookup = { lookupReaderText(context, it, c::message) },
             onSpeak = { quote, selection ->
-                selected = null; menu = false; speechSheet = true
+                selected = null; menu = false; speechSheet = false; speechRequestPending = true
                 val japanese = selection.source == "original" && (!ref.isLocal || quote.any { it in '\u3040'..'\u30ff' })
                 scope.launch {
                     try {
@@ -956,6 +1008,9 @@ import kotlinx.serialization.encodeToString
                     } catch(e: CancellationException) { throw e }
                     catch(e: Exception) { c.message(e.friendlyMessage()) }
                 }
+            },
+            onReplace = { quote ->
+                replacementSelection = quote; selected = null; replacementsSheet = true; pauseReadingAutomation()
             },
             onBookmark = { saveBookmark(paragraph); selected = null },
             onAnnotate = { quote, selection, edit ->

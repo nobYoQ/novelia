@@ -23,6 +23,11 @@ import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.LocalChapter
 import cc.novelia.app.data.model.LocalDocument
 import cc.novelia.app.data.model.ReaderSettings
+import cc.novelia.app.data.model.toReaderChapter
+import cc.novelia.app.reader.ReadAloudService
+import cc.novelia.app.reader.SpeechPlayback
+import cc.novelia.app.reader.speechSegments
+import cc.novelia.app.ui.saveTestScreenshot
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.reader.ReaderScreen
 import cc.novelia.app.ui.theme.AppInteractionMode
@@ -34,6 +39,74 @@ import org.junit.Rule
 import org.junit.Test
 
 class ReaderAdaptiveUiTest {
+    @Test fun speechFollowsAutoPagesWithOptionsOpenAndWhilePaused() = withReader(390.dp) { app, ref, _ ->
+        val oldPlayback = ReadAloudService.playback.value
+        val oldStatus = ReadAloudService.status.value
+        try {
+            compose.runOnIdle { app.store.update { it.copy(reader = it.reader.withPaginationMode("auto"), readerTapTutorialSeen = true) } }
+            compose.waitUntil(15_000) { compose.onAllNodesWithText("正在分页…").fetchSemanticsNodes().isEmpty() && compose.onAllNodesWithTag("reader-page").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithTag("reader-page").performTouchInput { click(center) }
+            val settings = app.store.state.value.reader
+            val queue = speechSegments(app.store.documentChapter(ref.id, "first").toReaderChapter(), settings)
+            fun playback(index: Int, playing: Boolean = true) = SpeechPlayback("ui-test", ref.key, "first", queue[index], index, queue.size, playing)
+            compose.runOnIdle { ReadAloudService.playback.value = playback(0); ReadAloudService.status.value = "正在朗读：第一章 林间" }
+            compose.waitUntil(10_000) { compose.onAllNodesWithTag("reader-speech-dock").fetchSemanticsNodes().isNotEmpty() }
+            compose.waitForIdle()
+            val dock = compose.onNodeWithTag("reader-speech-dock").getUnclippedBoundsInRoot()
+            val status = compose.onNodeWithTag("reader-reading-status-bar").getUnclippedBoundsInRoot()
+            assertTrue("朗读控制必须在阅读信息底栏上方", dock.bottom <= status.top)
+            compose.onNodeWithContentDescription("朗读选项").performTouchInput { click() }
+            compose.runOnIdle { assertTrue("点开朗读选项不能关闭跟随", ReadAloudService.playback.value!!.following) }
+            val fifth = queue.indexOfFirst { it.paragraph == 4 }
+            compose.runOnIdle { ReadAloudService.playback.value = playback(fifth) }
+            compose.waitUntil(10_000) { app.store.state.value.positions[ref.key]?.sourceParagraph in 3..4 }
+            compose.onNodeWithText("边听边读").performScrollTo().performClick()
+            compose.onNodeWithTag("reader-speech-panel").assertDoesNotExist()
+            val ninth = queue.indexOfFirst { it.paragraph == 8 }
+            compose.runOnIdle { ReadAloudService.playback.value = playback(ninth, playing = false) }
+            compose.waitUntil(10_000) {
+                app.store.state.value.positions[ref.key]?.sourceParagraph in 7..8 &&
+                    compose.onAllNodes(hasText("第9段", substring = true) and hasAnyAncestor(hasTestTag("reader-page"))).fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.waitForIdle()
+            val sentence = compose.onAllNodes(hasText("第9段", substring = true) and hasAnyAncestor(hasTestTag("reader-page"))).onFirst().getUnclippedBoundsInRoot()
+            assertTrue("朗读控制不能遮住当前句", sentence.bottom <= compose.onNodeWithTag("reader-speech-dock").getUnclippedBoundsInRoot().top)
+            saveTestScreenshot("speech-reader-auto-page.png")
+            // 连续听书进入下一章时，新的 reader 也要承接同一会话和正文来源。
+            val nextQueue = speechSegments(app.store.documentChapter(ref.id, "second").toReaderChapter(), settings)
+            compose.runOnIdle { ReadAloudService.playback.value = SpeechPlayback("ui-test", ref.key, "second", nextQueue.first(), 0, nextQueue.size, true) }
+            compose.waitUntil(15_000) { app.store.state.value.positions[ref.key]?.chapterId == "second" }
+            compose.onNodeWithTag("reader-speech-dock").assertIsDisplayed()
+        } finally {
+            compose.runOnIdle { ReadAloudService.playback.value = oldPlayback; ReadAloudService.status.value = oldStatus }
+        }
+    }
+
+    @Test fun touchingBodyPausesSpeechFollowButOpeningOptionsDoesNot() = withReader(390.dp) { app, ref, _ ->
+        val oldPlayback = ReadAloudService.playback.value
+        val oldStatus = ReadAloudService.status.value
+        try {
+            val queue = speechSegments(app.store.documentChapter(ref.id, "first").toReaderChapter(), app.store.state.value.reader)
+            compose.runOnIdle { ReadAloudService.playback.value = SpeechPlayback("ui-test", ref.key, "first", queue.first(), 0, queue.size, true) }
+            compose.waitUntil(10_000) { compose.onAllNodesWithTag("reader-speech-dock").fetchSemanticsNodes().isNotEmpty() }
+            compose.waitForIdle()
+            val dock = compose.onNodeWithTag("reader-speech-dock").getUnclippedBoundsInRoot()
+            val preferences = compose.onNodeWithContentDescription("阅读设置").getUnclippedBoundsInRoot()
+            assertTrue("展开工具栏时，朗读控制也必须在底部操作区上方", dock.bottom <= preferences.top)
+            saveTestScreenshot("speech-reader-toolbar-open.png")
+            compose.onNodeWithContentDescription("朗读选项").performTouchInput { click() }
+            compose.runOnIdle { assertTrue(ReadAloudService.playback.value!!.following) }
+            compose.onNodeWithText("边听边读").performScrollTo().performClick()
+            compose.onNodeWithTag("reader-scroll").performTouchInput { click(center) }
+            compose.runOnIdle { assertFalse(ReadAloudService.playback.value!!.following) }
+            compose.onNodeWithText("恢复跟随").performTouchInput { click() }
+            compose.runOnIdle { assertTrue(ReadAloudService.playback.value!!.following) }
+            saveTestScreenshot("speech-reader-scroll.png")
+        } finally {
+            compose.runOnIdle { ReadAloudService.playback.value = oldPlayback; ReadAloudService.status.value = oldStatus }
+        }
+    }
+
     @Test fun configurableFooterKeepsDefaultSettingsAndWorksInBothReadingModes() = withReader(390.dp) { app, ref, _ ->
         compose.onNodeWithContentDescription("阅读设置").performClick()
         compose.onNodeWithText("仅应用于这本书").performClick()
