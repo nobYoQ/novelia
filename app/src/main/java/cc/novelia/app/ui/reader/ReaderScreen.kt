@@ -614,16 +614,13 @@ import kotlinx.serialization.encodeToString
             if(markSearch) activeMatch = match
             if(settings.staticPagination) { eInk.find(match.paragraph, textOffset); savePosition() }
             else {
-                // 先挂载惰性列表项，再使用该语言片段已测量的行几何定位。
-                scroll.scrollToItem(match.paragraph + 1)
-                val layout = snapshotFlow { scrollLayouts[paragraph.index] }
-                    .first { it != null && it.parts.size == paragraph.parts.size }!!
                 val overlay = if(menu) (topOverlayHeight - safeTop).coerceAtLeast(0) else 0
-                scroll.scrollToItem(match.paragraph + 1, layout.scrollOffsetAt(textOffset) - overlay)
+                scroll.revealReadingLine(match.paragraph + 1, textOffset, paragraph.parts.size,
+                    animate = !markSearch && !reducedMotion, overlay = overlay) { scrollLayouts[paragraph.index] }
                 savePosition()
             }
         }
-        LaunchedEffect(speechPlayback, lifecycleState, panelsClosed, showTapTutorial, chapterLoad.loading, chapterLoad.error, layoutGeneration, seekTarget) {
+        LaunchedEffect(speechPlayback, lifecycleState, panelsClosed, showTapTutorial, chapterLoad.loading, chapterLoad.error, layoutGeneration, seekTarget, reducedMotion) {
             val current = speechPlayback ?: return@LaunchedEffect
             if(!current.canFollow(ref.key, lifecycleState.isAtLeast(Lifecycle.State.RESUMED),
                     !panelsClosed || showTapTutorial || leaving || chapterLoad.loading || chapterLoad.error != null || seekTarget != null) || c.nav.currentBackStackEntry != readerEntry) return@LaunchedEffect
@@ -716,6 +713,8 @@ import kotlinx.serialization.encodeToString
         }
         // 阅读器专用颜色仅作用于正文页面，所有设置弹层继承应用主题。
         ReaderPageTheme(settings.resolvedTheme == "monochrome") {
+        val highlightLayers = rememberReaderHighlightLayers(if(search) activeMatch else spokenMatch ?: activeMatch,
+            animate = !reducedMotion && !search)
         Row(Modifier.fillMaxSize().background(background).testTag(if(wide) "reader-wide-layout" else "reader-compact-layout")) {
         if(wide && settings.showWideToc) {
             Surface(Modifier.width(292.dp).fillMaxHeight().windowInsetsPadding(safeInsets), color = MaterialTheme.colorScheme.surface) {
@@ -746,6 +745,7 @@ import kotlinx.serialization.encodeToString
                 imageModel = { it.imageUrl ?: it.localImageId?.takeIf { ref.isLocal }?.let { id -> c.store.documentImage(ref.id, id) } },
                 onToggleMenu = { menu = !menu }, onSelect = { selected = it }, onPage = { page(it) },
                 background = background, foreground = foreground, activeMatch = if(search) activeMatch else spokenMatch ?: activeMatch, annotations = annotations,
+                highlightLayers = highlightLayers,
                 interactionEnabled = bodyInputEnabled, contentPadding = PaddingValues(horizontal = settings.resolvedHorizontalMargin.dp, vertical = settings.resolvedVerticalMargin.dp), onNavigate = openToc)
             else LazyColumn(state = scroll, overscrollEffect = null, modifier = Modifier.testTag("reader-scroll").align(Alignment.TopCenter).fillMaxHeight()
                 .windowInsetsPadding(readingInsets).padding(bottom = readingStatusBarHeight).widthIn(max = settings.width.dp).fillMaxWidth()
@@ -782,7 +782,8 @@ import kotlinx.serialization.encodeToString
                     }
                     if(image != null) ReaderIllustration(image, foreground, tapNavigation::click)
                     else ReaderTextParagraph(paragraph, settings, layoutGeneration, foreground, tapNavigation::click, { selected = paragraph }, (if(search) activeMatch else spokenMatch ?: activeMatch)?.takeIf { it.paragraph == paragraphIndex }, fontFamily = readerFont.family,
-                        annotations = annotations.filter { it.paragraph == paragraphIndex }) { part, lines ->
+                        annotations = annotations.filter { it.paragraph == paragraphIndex },
+                        highlightLayers = highlightLayers.filter { it.match.paragraph == paragraphIndex }) { part, lines ->
                         val existing = scrollLayouts[paragraph.index] ?: ParagraphScrollLayout()
                         if(existing.parts[part] != lines) scrollLayouts[paragraph.index] = existing.copy(parts = existing.parts + (part to lines))
                     }
@@ -993,7 +994,6 @@ import kotlinx.serialization.encodeToString
                 state = preferenceState, modifier = Modifier.fillMaxSize(), livePreview = true, defaultSettings = local.reader,
                 onEditTapZones = { preferences = false; editingTapZones = true },
                 onTextReplacements = { preferences = false; replacementsSheet = true; pauseReadingAutomation() },
-                onReadingStatistics = { preferences = false; pauseReadingAutomation(); c.go("reading-stats?book=${android.net.Uri.encode(ref.key)}") },
                 onShowTapTutorial = { preferences = false; c.store.update { it.copy(readerTapTutorialSeen = false) } }, headerActions = {
                     AppIconButton(onClick = { onExpandedChange(!expanded) }) {
                         ReaderSheetExpandIcon(expanded)

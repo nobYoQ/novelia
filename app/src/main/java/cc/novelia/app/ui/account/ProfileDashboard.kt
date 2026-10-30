@@ -192,6 +192,7 @@ import cc.novelia.app.ui.theme.LocalAmoledBlack
             ProfilePreferenceRow("设置", "阅读、外观与下载", Icons.Outlined.Tune, "settings", onNavigate,
                 appRoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomStart = 6.dp, bottomEnd = 6.dp), minHeight = minRowHeight)
             ProfilePreferenceRow("屏蔽管理", "作品与标签", Icons.Outlined.Block, "blocked", onNavigate, appRoundedCornerShape(6.dp), minHeight = minRowHeight)
+            ProfilePreferenceRow("阅读统计", "阅读时长、每日趋势与书籍排行", Icons.Outlined.BarChart, "reading-stats", onNavigate, appRoundedCornerShape(6.dp), minHeight = minRowHeight)
             ProfilePreferenceRow("网络与同步", if(pendingCount > 0) "$pendingCount 项待处理" else "账号同步、WebDAV 与网络",
                 Icons.Outlined.Sync, "sync", onNavigate, appRoundedCornerShape(6.dp), minHeight = minRowHeight)
             ProfilePreferenceRow("阅读资料备份", "书架、进度与本地资料", Icons.Outlined.Backup, "backup", onNavigate,

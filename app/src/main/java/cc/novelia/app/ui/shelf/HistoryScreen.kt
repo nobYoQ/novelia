@@ -45,7 +45,6 @@ import cc.novelia.app.ui.navigation.AppController
     fun pauseHistory(value: Boolean) { c.store.update { it.copy(historyPaused = value) }; if(profile != null) c.action { c.api.request(if(value) "PUT" else "DELETE", "user/read-history/paused") } }
     ProfileDetailScreen("阅读历史", c::back, actions = { AppIconButton(onClick = { clear = true }) { Icon(Icons.Outlined.DeleteSweep, "清空历史") } }) { padding -> ProfileDetailList(Modifier.padding(padding), state = scroll) {
         item { ProfileChoiceRow("历史来源", listOf("此设备", "原站云端"), tab) { tab = it } }
-        item { AppTextButton(onClick = { c.go("reading-stats") }) { Text("查看阅读时长统计") } }
         item { ProfileToggle("暂停阅读历史", "时长统计同时暂停，续读位置仍会保存", state.historyPaused, onChange = ::pauseHistory) }
         if(tab == 0) {
             if(history.isEmpty()) item { ProfileEmptyState("还没有阅读记录", "打开一本小说，最近阅读记录就会出现在这里。") }

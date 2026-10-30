@@ -109,6 +109,22 @@ class ReaderPageTurnFrameTest {
         checkCommittedFrames(paragraphs, "")
     }
 
+    @Test fun programmaticTurnsPassThroughIntermediateFrames() {
+        fixture()
+        val before = screenshot("programmatic-before")
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.runOnIdle { state.move(1) }
+            compose.mainClock.advanceTimeBy(80)
+            val middle = screenshot("programmatic-middle")
+            compose.mainClock.advanceTimeBy(500)
+            val after = screenshot("programmatic-after")
+            assertEquals(1, state.pageIndex)
+            assertTrue("自动翻页应经过中间帧", difference(middle, before, true) > .005)
+            assertTrue("中间帧不能直接显示最终页面", difference(middle, after, true) > .005)
+        } finally { compose.mainClock.autoAdvance = true }
+    }
+
     @Test fun changingParagraphNodeCountsDoesNotFlashAfterCommit() {
         val mixed = paragraphs.take(8) + ReadingParagraph(8,
             listOf(TextPart("长段落跨页测试：山间的旅人继续向远处的城镇行进。".repeat(160), "gpt"))) + paragraphs.drop(9)

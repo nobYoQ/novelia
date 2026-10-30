@@ -192,6 +192,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
     background: Color = Color.White, foreground: Color = Color.Black,
     activeMatch: ReadingTextMatch? = null,
     annotations: List<ReadingTextMatch> = emptyList(),
+    highlightLayers: List<ReaderHighlightLayer> = listOfNotNull(activeMatch?.let { ReaderHighlightLayer(it, 1f) }),
     interactionEnabled: Boolean = true, contentPadding: PaddingValues = PaddingValues(0.dp), onNavigate: () -> Unit = {},
 ) {
     val density = LocalDensity.current
@@ -203,13 +204,34 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
     var dragAxis by remember { mutableIntStateOf(0) }
     var viewport by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
     var transitionJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    var previousPageIndex by remember(state.pages) { mutableIntStateOf(state.pageIndex) }
+    var incomingOffset by remember { mutableFloatStateOf(0f) }
+    var outgoingPageIndex by remember { mutableStateOf<Int?>(null) }
+    var gestureTarget by remember { mutableStateOf<Int?>(null) }
     val dragScope = rememberCoroutineScope()
     val latestPage by rememberUpdatedState(onPage)
     val canInteract = interactionEnabled && expandedImage == null
     // 页码、排版或交互状态改变后，不允许旧动画继续提交到新页面。
     LaunchedEffect(state.pages, state.pageIndex, animate, canInteract) {
+        val from = previousPageIndex
+        val direction = (state.pageIndex - from).coerceIn(-1, 1)
+        val gestureCommitted = gestureTarget == state.pageIndex
+        gestureTarget = null
+        previousPageIndex = state.pageIndex
         transitionJob?.cancel()
         pageOffset = 0f
+        outgoingPageIndex = null
+        incomingOffset = 0f
+        // 朗读、音量键和翻页按钮直接改变页码时，也走与手势一致的页面过渡。
+        if(animate && canInteract && !gestureCommitted && abs(state.pageIndex - from) == 1 && state.pages.getOrNull(from) != null) {
+            dragAxis = if(settings.scrollPageTurn) 1 else 0
+            incomingOffset = direction.toFloat()
+            outgoingPageIndex = from
+            try {
+                androidx.compose.animation.core.animate(direction.toFloat(), 0f,
+                    animationSpec = tween(AppMotion.Standard, easing = FastOutSlowInEasing)) { value, _ -> incomingOffset = value }
+            } finally { outgoingPageIndex = null; incomingOffset = 0f }
+        }
     }
     val settle: (Int) -> Unit = { direction ->
         transitionJob?.cancel()
@@ -224,7 +246,10 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
                 androidx.compose.animation.core.animate(start, target,
                     animationSpec = tween(if(direction == 0) AppMotion.Quick else AppMotion.Standard,
                         easing = FastOutSlowInEasing)) { value, _ -> pageOffset = value }
-                if(direction != 0) latestPage(direction)
+                if(direction != 0) {
+                    gestureTarget = state.pageIndex + direction
+                    latestPage(direction)
+                }
                 pageOffset = 0f
             }
         }
@@ -312,17 +337,24 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
                 val shift = if(animate) pageOffset * extent else 0f
                 val direction = when { shift < 0 -> 1; shift > 0 -> -1; else -> 0 }
                 @Composable fun body(content: StaticPage?, offset: Float) {
-                    PageBody(content, chapter, settings, foreground, activeMatch, annotations, density, context,
+                    PageBody(content, chapter, settings, foreground, highlightLayers, annotations, density, context,
                         tapNavigation, onSelect, imageModel, { expandedImage = it }, constraints.maxHeight,
                         Modifier.fillMaxSize().graphicsLayer {
                             translationX = if(dragAxis == 0) offset else 0f
                             translationY = if(dragAxis == 1) offset else 0f
                         }.background(background))
                 }
-                if(direction != 0) chapter.pages.getOrNull(state.pageIndex + direction)?.let {
-                    body(it, shift + direction * extent)
+                val outgoing = outgoingPageIndex
+                if(animate && outgoing != null) {
+                    val pageDirection = (state.pageIndex - outgoing).coerceIn(-1, 1)
+                    body(chapter.pages.getOrNull(outgoing), (incomingOffset - pageDirection) * extent)
+                    body(page, incomingOffset * extent)
+                } else {
+                    if(direction != 0) chapter.pages.getOrNull(state.pageIndex + direction)?.let {
+                        body(it, shift + direction * extent)
+                    }
+                    body(page, shift)
                 }
-                body(page, shift)
             }
         }
     }
@@ -341,7 +373,7 @@ private fun PageBody(
     chapter: MeasuredEInkChapter,
     settings: ReaderSettings,
     foreground: Color,
-    activeMatch: ReadingTextMatch?,
+    highlightLayers: List<ReaderHighlightLayer>,
     annotations: List<ReadingTextMatch>,
     density: Density,
     context: android.content.Context,
@@ -409,12 +441,13 @@ private fun PageBody(
                                 spannable.setSpan(it, start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE); annotationSpans += it
                             }
                         }
-                        activeMatch?.takeIf { it.paragraph == index && it.end > it.start }?.let { match ->
+                        highlightLayers.filter { it.match.paragraph == index && it.match.end > it.match.start }.forEach { layer ->
+                            val match = layer.match
                             val start = match.textOffset(paragraph, settings).coerceIn(0, layout.text.length)
                             val end = (start + match.end - match.start).coerceIn(start, layout.text.length)
                             val path = android.graphics.Path()
                             layout.getSelectionPath(start, end, path)
-                            native.drawPath(path, android.graphics.Paint().apply { color = foreground.copy(alpha = .2f).toArgb() })
+                            native.drawPath(path, android.graphics.Paint().apply { color = foreground.copy(alpha = .2f * layer.alpha).toArgb() })
                         }
                         layout.paint.color = foreground.toArgb()
                         try { layout.draw(native) } finally { annotationSpans.forEach { spannable?.removeSpan(it) } }

@@ -27,6 +27,7 @@ import kotlin.math.roundToInt
 @Composable internal fun ReaderTextParagraph(paragraph: ReadingParagraph, settings: ReaderSettings, layoutGeneration: Any, foreground: Color, onToggleMenu: () -> Unit, onSelect: () -> Unit, activeMatch: ReadingTextMatch?,
     fontFamily: FontFamily = rememberReaderFont(settings).family,
     annotations: List<ReadingTextMatch> = emptyList(),
+    highlightLayers: List<ReaderHighlightLayer> = listOfNotNull(activeMatch?.let { ReaderHighlightLayer(it, 1f) }),
     onLayout: (Int, List<ReadingAnchorLine>) -> Unit) {
     val starts = remember(paragraph, settings.indent, settings.parallel) { paragraphPartStarts(paragraph, settings) }
     val latestLayout by rememberUpdatedState(onLayout)
@@ -56,10 +57,11 @@ import kotlin.math.roundToInt
                     val end = (indent.length + it.end).coerceIn(start, length)
                     addStyle(SpanStyle(textDecoration = TextDecoration.Underline, background = foreground.copy(alpha = .1f)), start, end)
                 }
-                activeMatch?.takeIf { it.part == partIndex && it.end > it.start }?.let {
+                highlightLayers.filter { it.match.part == partIndex && it.match.end > it.match.start }.forEach { layer ->
+                    val it = layer.match
                     val start = (indent.length + it.start).coerceIn(0, length)
                     val end = (indent.length + it.end).coerceIn(start, length)
-                    addStyle(SpanStyle(background = foreground.copy(alpha = .2f), textDecoration = TextDecoration.Underline), start, end)
+                    addStyle(SpanStyle(background = foreground.copy(alpha = .2f * layer.alpha)), start, end)
                 }
             }
             Text(highlighted,
