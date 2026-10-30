@@ -170,8 +170,8 @@ class MainActivity : ComponentActivity() {
                 }
                 val entry by nav.currentBackStackEntryAsState(); val route = entry?.destination?.route
                 val readingKey = "${entry?.arguments?.getString("provider")}/${entry?.arguments?.getString("id")}"
-                cc.novelia.app.ui.reader.ReadingStatusBar(route?.startsWith("reader/") == true &&
-                    (appearance.bookStatusBars[readingKey] ?: appearance.hideStatusBar))
+                cc.novelia.app.ui.reader.ReadingSystemBars(reading = route?.startsWith("reader/") == true,
+                    hideStatusBar = appearance.bookStatusBars[readingKey] ?: appearance.hideStatusBar)
                 cc.novelia.app.ui.reader.ReaderOrientation(route?.startsWith("reader/") == true,
                     appearance.bookOrientations[readingKey] ?: appearance.readerOrientation)
                 ObserveDownloadCelebrations(controller, route)

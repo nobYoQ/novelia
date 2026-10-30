@@ -11,20 +11,22 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import cc.novelia.app.ui.theme.activityOrNull
 
-/** 由根导航唯一控制，避免跨章过渡时旧阅读器销毁把新阅读器的状态栏重新显示。 */
-@Composable internal fun ReadingStatusBar(hidden: Boolean) {
+/** 由根导航唯一控制，避免跨章过渡时旧阅读器销毁把新阅读器的系统栏重新显示。 */
+@Composable internal fun ReadingSystemBars(reading: Boolean, hideStatusBar: Boolean) {
     val activity = LocalContext.current.activityOrNull()
     val owner = LocalLifecycleOwner.current
-    DisposableEffect(activity, owner, hidden) {
+    DisposableEffect(activity, owner, reading, hideStatusBar) {
         val window = activity?.window
         val controller = window?.let { WindowCompat.getInsetsController(it, it.decorView) }
         val previousBehavior = controller?.systemBarsBehavior
         fun apply() {
             controller?.apply {
-                if(hidden) {
+                if(reading) {
                     systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                    hide(WindowInsetsCompat.Type.statusBars())
-                } else show(WindowInsetsCompat.Type.statusBars())
+                    hide(WindowInsetsCompat.Type.navigationBars())
+                } else show(WindowInsetsCompat.Type.navigationBars())
+                if(reading && hideStatusBar) hide(WindowInsetsCompat.Type.statusBars())
+                else show(WindowInsetsCompat.Type.statusBars())
             }
         }
         apply()
@@ -32,7 +34,7 @@ import cc.novelia.app.ui.theme.activityOrNull
         owner.lifecycle.addObserver(observer)
         onDispose {
             owner.lifecycle.removeObserver(observer)
-            controller?.show(WindowInsetsCompat.Type.statusBars())
+            controller?.show(WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.navigationBars())
             if(previousBehavior != null) controller?.systemBarsBehavior = previousBehavior
         }
     }

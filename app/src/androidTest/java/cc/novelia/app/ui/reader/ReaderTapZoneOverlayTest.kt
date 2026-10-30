@@ -83,7 +83,7 @@ class ReaderTapZoneOverlayTest {
             MaterialTheme {
                 Box(Modifier.fillMaxSize().background(Color(0xFFF8F4E9))) {
                     Text("阅读正文\n\n" + "溪水沿着山路流淌，白云慢慢经过天空。\n\n".repeat(30), Modifier.padding(24.dp))
-                    ReaderTapTutorial(true, false, WindowInsets(0, 0, 0, 0), 900f, 0.dp,
+                    ReaderTapTutorial(true, false, WindowInsets(0, 0, 0, 0), 0.dp,
                         Modifier.fillMaxSize(), map) {}
                 }
             }

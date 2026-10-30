@@ -315,7 +315,10 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
                         }
                     }
                 }
-            }.padding(contentPadding).clipToBounds()
+            }
+            // 手势覆盖整个阅读区；限宽只作用于居中的正文和分页测量。
+            .wrapContentWidth(Alignment.CenterHorizontally).widthIn(max = settings.width.dp).fillMaxWidth()
+            .padding(contentPadding).clipToBounds()
     ) {
         val width = constraints.maxWidth.coerceAtLeast(1)
         val height = constraints.maxHeight.coerceAtLeast(1)

@@ -151,7 +151,7 @@ class ReaderTapFeedbackTest {
         compose.setContent {
             MaterialTheme {
                 CompositionLocalProvider(LocalDensity provides Density(1f, 2f)) {
-                    ReaderTapTutorial(true, false, WindowInsets(0, 0, 0, 0), 720f, 28.dp,
+                    ReaderTapTutorial(true, false, WindowInsets(0, 0, 0, 0), 28.dp,
                         Modifier.size(720.dp, 240.dp)) { dismissed = true }
                 }
             }

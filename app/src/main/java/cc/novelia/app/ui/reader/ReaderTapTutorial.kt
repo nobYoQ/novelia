@@ -25,7 +25,7 @@ import cc.novelia.app.ui.components.base.AppTextButton
 /** 使用当前配置覆盖正文，分区位置、合并结果与真实命中范围一致。 */
 @Composable internal fun ReaderTapTutorial(
     staticPagination: Boolean, eInk: Boolean, readingInsets: WindowInsets,
-    bodyWidth: Float, readingStatusBarHeight: androidx.compose.ui.unit.Dp,
+    readingStatusBarHeight: androidx.compose.ui.unit.Dp,
     modifier: Modifier = Modifier, map: ReaderTapZoneMap = ReaderTapZoneMap.Default, onDismiss: () -> Unit,
 ) {
     var double by remember { mutableStateOf(false) }
@@ -39,7 +39,7 @@ import cc.novelia.app.ui.components.base.AppTextButton
         .pointerInput(Unit) { detectTapGestures {} }) {
         val compact = maxHeight < 400.dp
         Box(Modifier.align(Alignment.TopCenter).fillMaxHeight().windowInsetsPadding(readingInsets)
-            .padding(bottom = readingStatusBarHeight).widthIn(max = bodyWidth.dp).fillMaxWidth()) {
+            .padding(bottom = readingStatusBarHeight).fillMaxWidth()) {
             ReaderTapZoneGrid(map, double, staticPagination = staticPagination, eInk = eInk, modifier = Modifier.fillMaxSize(),
                 topClearance = if(controlsVisible) topControlsHeight else 0.dp,
                 bottomClearance = if(controlsVisible) bottomControlsHeight else 0.dp)

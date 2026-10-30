@@ -332,13 +332,18 @@ class ReaderToolbarOverlayTest {
             LocalChapter("second", "第二章 归来", listOf("星光照亮归途。".repeat(100)))
         )
     ) { app, ref ->
-        fun awaitStatusBar(visible: Boolean) {
+        fun awaitSystemBars(statusVisible: Boolean, navigationVisible: Boolean = false) {
             compose.waitUntil(10_000) {
-                androidx.core.view.ViewCompat.getRootWindowInsets(compose.activity.window.decorView)
-                    ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.statusBars()) == visible
+                val insets = androidx.core.view.ViewCompat.getRootWindowInsets(compose.activity.window.decorView)
+                insets?.isVisible(androidx.core.view.WindowInsetsCompat.Type.statusBars()) == statusVisible &&
+                    insets.isVisible(androidx.core.view.WindowInsetsCompat.Type.navigationBars()) == navigationVisible
             }
         }
-        awaitStatusBar(true)
+        awaitSystemBars(true)
+        compose.waitForIdle()
+        assertEquals("导航栏隐藏后底栏不能留下额外安全区空白",
+            compose.onNodeWithTag("reader-bottom-toolbar").fetchSemanticsNode().boundsInRoot.bottom,
+            compose.onNodeWithTag("reader-reading-status-bar").fetchSemanticsNode().boundsInRoot.bottom, 1f)
         compose.onNodeWithContentDescription("阅读设置").performClick()
         compose.onNodeWithText("仅应用于这本书").performClick()
         compose.onNodeWithText("翻页").performClick()
@@ -350,12 +355,15 @@ class ReaderToolbarOverlayTest {
         compose.onNodeWithText("阅读时隐藏状态栏").performScrollTo().performClick()
         screenshot("reader-display-preferences")
         compose.onNodeWithText("关闭面板").performClick()
-        awaitStatusBar(false)
+        awaitSystemBars(false)
         compose.onNodeWithText("上一页").assertDoesNotExist()
         compose.onNodeWithText("下一页").assertDoesNotExist()
         compose.onNodeWithContentDescription("下一章").performClick()
         waitForChapter(app, ref, "second")
-        awaitStatusBar(false)
+        awaitSystemBars(false)
+        compose.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
+        compose.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+        awaitSystemBars(false)
         screenshot("reader-hidden-status-bar")
         runBlocking { app.store.flush() }
         val saved = LocalStore(compose.activity).state.value
@@ -366,10 +374,10 @@ class ReaderToolbarOverlayTest {
         assertFalse(saved.bookSettings.getValue(ref.key).showEInkScreenButtons)
         assertTrue(saved.bookSettings.getValue(ref.key).hideStatusBar)
         compose.onNodeWithContentDescription("返回").performClick()
-        awaitStatusBar(true)
+        awaitSystemBars(true, navigationVisible = true)
         compose.onNodeWithText("工具栏覆盖测试").performClick()
         compose.waitUntil(15_000) { compose.onAllNodesWithTag("reader-page-counter").fetchSemanticsNodes().isNotEmpty() }
-        awaitStatusBar(false)
+        awaitSystemBars(false)
     }
 
     @Test fun scrollingSeekReachesLongParagraphsAndChapterBoundariesWithoutTurningChapters() = withReader(

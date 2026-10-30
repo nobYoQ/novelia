@@ -417,6 +417,8 @@ import kotlinx.serialization.encodeToString
         val direction = androidx.compose.ui.platform.LocalLayoutDirection.current
         val statusWidth = availableWidth - (if(wide && settings.showWideToc) 293.dp else 0.dp) -
             with(density) { (safeInsets.getLeft(this, direction) + safeInsets.getRight(this, direction)).toDp() }
+        // 限制文字宽度而非手势视口，宽屏两侧留白也交给同一个列表处理拖动。
+        val bodyHorizontalPadding = ((statusWidth - settings.width.dp) / 2).coerceAtLeast(0.dp) + settings.resolvedHorizontalMargin.dp
         val statusColumns = cc.novelia.app.data.model.ReaderStatusItems.columns(statusWidth.value, density.fontScale)
         val statusRows = cc.novelia.app.data.model.ReaderStatusItems.rows(settings.visibleReadingStatusItems.size, statusColumns)
         // 预留空间只跟随配置、宽度和系统字体变化；时间与进度更新不会重新分页。
@@ -779,7 +781,7 @@ import kotlinx.serialization.encodeToString
                 Modifier.testTag("reader-page").then(readerInteractionModifier { recordReadingInteraction(); pauseReadingAutomation() })
                     .align(Alignment.TopCenter).fillMaxHeight().windowInsetsPadding(readingInsets)
                     .padding(bottom = persistentBottomHeight)
-                    .widthIn(max = settings.width.dp).fillMaxWidth(),
+                    .fillMaxWidth(),
                 imageModel = { it.imageUrl ?: it.localImageId?.takeIf { ref.isLocal }?.let { id -> c.store.documentImage(ref.id, id) } },
                 onToggleMenu = { menu = !menu }, onSelect = { selected = it }, onPage = { page(it) },
                 background = background, foreground = foreground, activeMatch = if(search) activeMatch else spokenMatch ?: activeMatch, annotations = annotations,
@@ -788,7 +790,7 @@ import kotlinx.serialization.encodeToString
                 onNote = { pauseReadingAutomation(); epubNote = it })
             else LazyColumn(state = scroll, overscrollEffect = null, modifier = Modifier.testTag("reader-scroll")
                 .then(readerInteractionModifier { recordReadingInteraction(); pauseReadingAutomation() }).align(Alignment.TopCenter).fillMaxHeight()
-                .windowInsetsPadding(readingInsets).padding(bottom = persistentBottomHeight).widthIn(max = settings.width.dp).fillMaxWidth()
+                .windowInsetsPadding(readingInsets).padding(bottom = persistentBottomHeight).fillMaxWidth()
                 .onSizeChanged { size ->
                     if(positionState.viewportWidth != 0 && positionState.viewportWidth != size.width && scroll.firstVisibleItemIndex > 0)
                         positionState.pendingScrollRestore = ReadingRestoreAnchor(positionState.scrollAnchor.first, positionState.scrollAnchor.third, positionState.scrollAnchor.second)
@@ -801,7 +803,7 @@ import kotlinx.serialization.encodeToString
                     chapter.nextId?.let { openChapter(it, inline = true) }
                 }
                 .graphicsLayer { translationY = -chapterPullOffset }
-                , contentPadding = PaddingValues(horizontal = settings.resolvedHorizontalMargin.dp, vertical = settings.resolvedVerticalMargin.dp), verticalArrangement = Arrangement.spacedBy(settings.resolvedParagraphSpacing.dp)) {
+                , contentPadding = PaddingValues(horizontal = bodyHorizontalPadding, vertical = settings.resolvedVerticalMargin.dp), verticalArrangement = Arrangement.spacedBy(settings.resolvedParagraphSpacing.dp)) {
                 item("title", contentType = "title") {
                     Column(Modifier.fillMaxWidth().clickable(
                         interactionSource = remember { MutableInteractionSource() }, indication = null,
@@ -913,7 +915,7 @@ import kotlinx.serialization.encodeToString
             }
             }
             if(showTapTutorial) ReaderTapTutorial(settings.staticPagination, settings.eInkMode || eInkInteraction,
-                readingInsets, settings.width, persistentBottomHeight, Modifier.matchParentSize(), map = settings.resolvedTapZoneMap) {
+                readingInsets, persistentBottomHeight, Modifier.matchParentSize(), map = settings.resolvedTapZoneMap) {
                 c.store.update { it.copy(readerTapTutorialSeen = true) }
             }
             if(editingTapZones) ReaderTapZoneEditor(settings.resolvedTapZoneMap, onSave = { map ->
@@ -925,7 +927,7 @@ import kotlinx.serialization.encodeToString
                 editingTapZones = false
             }, onDismiss = { editingTapZones = false },
                 modifier = Modifier.align(Alignment.TopCenter).fillMaxHeight().windowInsetsPadding(readingInsets)
-                    .padding(bottom = persistentBottomHeight).widthIn(max = settings.width.dp).fillMaxWidth(),
+                    .padding(bottom = persistentBottomHeight).fillMaxWidth(),
                 staticPagination = settings.staticPagination, eInk = settings.eInkMode || eInkInteraction)
         }
         }

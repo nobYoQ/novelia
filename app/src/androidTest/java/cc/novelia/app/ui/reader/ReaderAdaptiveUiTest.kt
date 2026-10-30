@@ -274,6 +274,54 @@ class ReaderAdaptiveUiTest {
         compose.runOnIdle { assertTrue(app.store.state.value.reader.showWideToc) }
     }
 
+    @Test fun sideMarginsHandleScrollingPagingAndTaps() = verifySideMarginGestures(false)
+
+    @Test fun sideMarginsHandleScrollingPagingAndTapsOnEInk() = verifySideMarginGestures(true)
+
+    @Test fun wideMarginsRemainInteractiveWithDirectoryOpenAndClosed() = withReader(1024.dp) { app, _, _ ->
+        compose.runOnIdle { app.store.update { it.copy(reader = it.reader.copy(width = 400f), readerTapTutorialSeen = true) } }
+        compose.onNodeWithTag("reader-scroll").performTouchInput { click(center) }
+        val readingArea = compose.onNodeWithTag("reader-wide-layout")
+        for(directoryOpen in listOf(true, false)) {
+            if(!directoryOpen) compose.onNodeWithTag("reader-hide-wide-toc").performClick()
+            for(x in listOf(if(directoryOpen) .32f else .04f, .96f)) {
+                val before = scrollPosition()
+                readingArea.performTouchInput { swipe(Offset(width * x, height * .65f), Offset(width * x, height * .4f), 500) }
+                compose.waitUntil(5_000) { scrollPosition() > before + .05f }
+            }
+        }
+    }
+
+    private fun verifySideMarginGestures(eInk: Boolean) = withReader(390.dp, eInk) { app, _, _ ->
+        // 缩窄正文在手机测试视口中复现宽屏留白，触摸从阅读区边缘发出，不能相对正文定位。
+        compose.runOnIdle { app.store.update { it.copy(reader = it.reader.copy(width = 320f), readerTapTutorialSeen = true) } }
+        val readingArea = compose.onNodeWithTag("reader-compact-layout")
+        compose.onNodeWithTag("reader-scroll").performTouchInput { click(center) }
+        for(x in listOf(.04f, .96f)) {
+            val before = scrollPosition()
+            readingArea.performTouchInput { swipe(Offset(width * x, height * .65f), Offset(width * x, height * .4f), 500) }
+            compose.waitUntil(5_000) { scrollPosition() > before + .05f }
+        }
+        compose.runOnIdle { app.store.update { it.copy(reader = it.reader.copy(paginationMode = "auto",
+            horizontalPageTurn = true, scrollPageTurn = true, tapPageTurn = true)) } }
+        compose.waitUntil(15_000) { compose.onAllNodesWithTag("reader-page").fetchSemanticsNodes().isNotEmpty() &&
+            compose.onAllNodesWithText("正在分页…").fetchSemanticsNodes().isEmpty() }
+        fun pageCounter() = compose.onNodeWithTag("reader-page-counter").fetchSemanticsNode()
+            .config[SemanticsProperties.Text].single().text.substringBefore('/').trim().toInt()
+        var before = pageCounter()
+        readingArea.performTouchInput { swipe(Offset(width * .04f, height * .65f), Offset(width * .04f, height * .4f), 500) }
+        compose.waitUntil(5_000) { pageCounter() == before + 1 }
+        before = pageCounter()
+        readingArea.performTouchInput { swipe(Offset(width * .96f, centerY), Offset(width * .5f, centerY), 500) }
+        compose.waitUntil(5_000) { pageCounter() == before + 1 }
+        before = pageCounter()
+        readingArea.performTouchInput { click(Offset(width * .96f, centerY)) }
+        compose.waitUntil(5_000) { pageCounter() == before + 1 }
+        readingArea.performTouchInput { click(Offset(width * .04f, centerY)) }
+        compose.waitUntil(5_000) { pageCounter() == before }
+        compose.onNodeWithContentDescription("阅读设置").assertDoesNotExist()
+    }
+
     @Test fun marginChangesPreserveTheCharacterAnchorInBothReadingModes() = withReader(390.dp) { app, ref, _ ->
         compose.onNodeWithTag("reader-scroll").performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 800f) }
         compose.waitUntil(10_000) { (app.store.state.value.positions[ref.key]?.textOffset ?: 0) > 0 }
