@@ -186,7 +186,7 @@ class Session(context: Context, private val client: OkHttpClient = OkHttpClient.
         require(username.isNotBlank() && password.isNotEmpty()) { "请填写用户名或邮箱和密码" }
         val binding = capture()
         return withContext(Dispatchers.IO) { refreshLock.withLock {
-            val value = authenticate(binding, if(email == null) "login" else "register", buildJsonObject {
+            val value = authenticate(binding, if(email == null) AuthOperation.LOGIN else AuthOperation.REGISTER, buildJsonObject {
                 put("app", target.appId); put("username", username.trim()); put("password", password)
                 if(email != null) { put("email", email.trim()); put("otp", otp.orEmpty().trim()) }
             })
@@ -203,7 +203,7 @@ class Session(context: Context, private val client: OkHttpClient = OkHttpClient.
         require(email.isNotBlank()) { "请填写邮箱" }
         val binding = capture()
         withContext(Dispatchers.IO) {
-            authenticate(binding, "otp/request", buildJsonObject {
+            authenticate(binding, if(resetPassword) AuthOperation.RESET_OTP else AuthOperation.REGISTER_OTP, buildJsonObject {
                 put("email", email.trim()); put("type", if(resetPassword) "reset_password" else "verify")
             })
         }
@@ -212,14 +212,14 @@ class Session(context: Context, private val client: OkHttpClient = OkHttpClient.
         require(email.isNotBlank() && password.isNotEmpty() && otp.isNotBlank()) { "请填写邮箱、新密码和验证码" }
         val binding = capture()
         withContext(Dispatchers.IO) {
-            authenticate(binding, "password/reset", buildJsonObject {
+            authenticate(binding, AuthOperation.RESET_PASSWORD, buildJsonObject {
                 put("email", email.trim()); put("password", password); put("otp", otp.trim())
             })
         }
     }
-    private suspend fun authenticate(binding: SessionBinding, path: String, payload: JsonObject): String {
+    private suspend fun authenticate(binding: SessionBinding, operation: AuthOperation, payload: JsonObject): String {
         val request = current(binding) { selected ->
-            val url = "${selected.source.authOrigin}/api/v1/auth/$path"
+            val url = "${selected.source.authOrigin}/api/v1/auth/${operation.path}"
             Request.Builder().url(url)
                 .apply { if(followsBookSources) tag(SourceSelection::class.java, selected) }
                 .header("Origin", if(selected.source == BookSource.ORIGINAL) target.origin else selected.source.origin)
@@ -229,16 +229,12 @@ class Session(context: Context, private val client: OkHttpClient = OkHttpClient.
         val context = currentCoroutineContext()
         return client.newNetworkCall(request).awaitBody { response ->
             context.ensureActive()
-            current(binding) {
-                if(!response.isSuccessful) throw ApiException(response.code, when(response.code) {
-                    400, 422 -> "填写的信息不正确，请检查用户名、邮箱或验证码"
-                    401 -> "登录失败，请检查账号和密码"
-                    403 -> "认证服务拒绝访问，请稍后重试或切换书源"
-                    409 -> "用户名或邮箱已被使用，请直接登录"
-                    429 -> "操作过于频繁，请稍后重试"
-                    502 -> "认证未完成，请检查填写的信息或稍后重试（502）"
-                    else -> "认证服务暂不可用（${response.code}），请稍后重试"
-                })
+            ensureCurrent(binding)
+            if(!response.isSuccessful) {
+                // 响应读取在会话锁外；读取期间换号、切线或取消后不能显示旧错误。
+                val error = authenticationError(operation, response)
+                context.ensureActive()
+                current(binding) { throw error }
             }
             val value = response.body?.string()?.trim().orEmpty()
             context.ensureActive()

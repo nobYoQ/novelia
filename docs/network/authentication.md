@@ -15,6 +15,8 @@
 
 所有入口共用 [LoginForm.kt](../../app/src/main/java/cc/novelia/app/ui/account/LoginForm.kt)，支持登录、注册、邮箱验证码和找回密码。顶部按钮可直接切换原站／镜像，无需先进入设置；切换同时作用于小说和论坛，清空当前表单并取消旧请求。未配置镜像的安装包禁用镜像按钮。
 
+认证失败由 [AuthErrors.kt](../../app/src/main/java/cc/novelia/app/data/auth/AuthErrors.kt) 按操作、状态码和已知业务原因生成固定提示。上游 `404 用户不存在` 在登录时提示核对用户名或注册邮箱，在找回密码时提示使用已注册邮箱；无法识别的 404 保留状态码并提示核对账号或切换线路，不直接认定为账号不存在或服务故障。密码错误、无效验证码、账号封禁、注册／找回密码关闭、用户名／邮箱占用分别提示处理方法。仅识别长度受限的 `text/plain` 响应中的已知原因，不回显原始响应；HTML、未知及过长内容使用通用提示，502 仍保留镜像可能包装字段校验失败的语义。
+
 登录不再创建 WebView。登录、注册、验证码、重置密码和刷新全部复用应用 HTTP 客户端：开启 ECH 时原站认证通过 ECH，失败不静默降级；镜像沿用 HTTPS 直连。服务端直接返回有效 JWT 时保存，否则携带所选线路的认证 Cookie 刷新；**只有拿到有效访问令牌才完成登录**。重置密码成功后回到登录表单，不自行登录。接口字段依据[上游公开登录 API](https://github.com/auto-novel/auth/blob/632ea746d409e0115eb02f48e0b9ddd08ce54071/apps/login/src/data/api.ts)，另见[书源线路](../development/book-source-mirrors.md)。
 
 ## 进入论坛自动登录
@@ -74,8 +76,10 @@ JWT 字段用于展示用户名、角色和有效期，客户端解析不等于�
 | --- | --- |
 | 认证成功但未取得会话 | 认证响应、Cookie 和刷新结果 |
 | 反复 401 | 原绑定是否有效、刷新是否成功，而非无限重试 |
+| 登录提示账号不存在 | 核对用户名或注册邮箱；上游以 404 表示查不到账号 |
+| 未识别的认证 404 | 核对账号信息、所选原站／镜像和应用版本，不能仅凭状态码认定账号不存在 |
 | 403 | 服务端权限，不用旧缓存掩盖 |
 | “账号或书源已变化” | 请求是否跨越退出、重登或线路切换 |
 | 退出后仍显示本地书籍 | 这是设备资料保留，检查会话状态即可 |
 
-回归入口：JVM `SessionIsolationTest`、`ApiContractTest`、`EchApiContractTest`，设备 `NativeLoginSessionTest`、`MirrorSessionTest`、`ForumMirrorSessionTest`、`ForumSessionIsolationTest`、`ForumSharedAuthTest`；原生表单与书源切换见 `AuthPageTest`、`ForumMirrorLoginTest` 和 `BookSourceNavigationTest`。这些测试不提交真实账号或发送邮件，命令见[测试指南](../quality/testing.md)。不要在日志或夹具里保存真实 Cookie、密码和令牌。
+回归入口：JVM `AuthErrorsTest`、`SessionIsolationTest`、`ApiContractTest`、`EchApiContractTest`，设备 `NativeLoginSessionTest`、`MirrorSessionTest`、`ForumMirrorSessionTest`、`ForumSessionIsolationTest`、`ForumSharedAuthTest`；原生表单与书源切换见 `AuthPageTest`、`ForumMirrorLoginTest` 和 `BookSourceNavigationTest`。这些测试不提交真实账号或发送邮件，命令见[测试指南](../quality/testing.md)。不要在日志或夹具里保存真实 Cookie、密码和令牌。
