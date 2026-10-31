@@ -35,7 +35,7 @@ import javax.crypto.SecretKey
 @RunWith(AndroidJUnit4::class)
 class ForumSessionIsolationTest {
     @Test fun signingOutForumPreservesMainAndSharedCookies() = verifyIsolation(AuthTarget.FORUM)
-    @Test fun signingOutMainPreservesForumAndSharedCookies() = verifyIsolation(AuthTarget.NOVEL)
+    @Test fun signingOutMainClearsForumAndPreservesUnrelatedCookies() = verifyIsolation(AuthTarget.NOVEL)
 
     @Test fun standaloneForumSessionIgnoresUnrelatedBookSourceChanges() = runBlocking {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
@@ -114,8 +114,9 @@ class ForumSessionIsolationTest {
         try {
             seedSession(context, AuthTarget.NOVEL, "main-test")
             seedSession(context, AuthTarget.FORUM, "forum-test")
-            val main = Session(context)
-            val forum = Session(context, AuthTarget.FORUM)
+            val sources = BookSources()
+            val main = Session(context, sources = sources)
+            val forum = Session(context, sources = sources, target = AuthTarget.FORUM)
             assertEquals("main-test", main.profile.value?.username)
             assertEquals("forum-test", forum.profile.value?.username)
             val leaving = if(target == AuthTarget.FORUM) forum else main
@@ -124,12 +125,19 @@ class ForumSessionIsolationTest {
             val previousBinding = leaving.capture()
             val preserved = remaining.token
             val preservedBinding = remaining.capture()
-            leaving.logout()
+            if(target == AuthTarget.NOVEL) main.logoutWithForum(forum) else forum.logout()
             assertNull(leaving.token)
             assertNull(leaving.profile.value)
-            assertEquals(preserved, remaining.token)
-            assertEquals(preservedBinding, remaining.capture())
-            assertEquals(preserved, Session(context, remaining.target).token)
+            if(target == AuthTarget.FORUM) {
+                assertEquals(preserved, remaining.token)
+                assertEquals(preservedBinding, remaining.capture())
+                assertEquals(preserved, Session(context, remaining.target).token)
+            } else {
+                assertNull(remaining.token)
+                assertNull(remaining.profile.value)
+                assertNull(Session(context, remaining.target).token)
+                assertThrows(SessionChangedException::class.java) { remaining.tokenFor(preservedBinding) }
+            }
             assertNull(Session(context, target).token)
             assertTrue(CookieManager.getInstance().getCookie(cookieUrl).contains("synthetic=retained"))
             assertTrue(runCatching { leaving.refreshIfCurrent(previousBinding, previous) }.exceptionOrNull() is SessionChangedException)

@@ -41,6 +41,8 @@ import cc.novelia.app.ui.components.base.friendlyMessage
     var request by remember(requestKey) { mutableIntStateOf(0) }
     var loading by remember(requestKey) { mutableStateOf(result == null) }
     var error by remember(requestKey) { mutableStateOf<String?>(null) }
+    var failure by remember(requestKey) { mutableStateOf<Throwable?>(null) }
+    cc.novelia.app.ui.components.base.NetworkRecoveryEffect(if (loading) null else failure) { request++ }
     var forceNetwork by remember(requestKey) { mutableStateOf(initial?.fresh == false) }
     var observedRevision by remember(requestKey) { mutableLongStateOf(revision) }
     var observedRefresh by remember(requestKey) { mutableIntStateOf(refreshKey) }
@@ -55,6 +57,7 @@ import cc.novelia.app.ui.components.base.friendlyMessage
         if(request == 0 && result != null && !reloading) return@LaunchedEffect
         loading = true
         error = null
+        failure = null
         try {
             val before = if(reloading) FilteredNovelBatch() else result ?: FilteredNovelBatch()
             val cacheRevision = cache.revision.value
@@ -70,7 +73,7 @@ import cc.novelia.app.ui.components.base.friendlyMessage
             publish(batch)
             reloading = false
         } catch(e: CancellationException) { throw e }
-          catch(e: Exception) { error = e.friendlyMessage() }
+          catch(e: Exception) { failure = e; error = e.friendlyMessage() }
         finally { loading = false; forceNetwork = false }
     }
     val scroll = rememberCachedListState(cache, requestKey)

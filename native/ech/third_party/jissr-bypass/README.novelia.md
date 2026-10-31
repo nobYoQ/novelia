@@ -14,6 +14,8 @@ Novelia changes:
   cache expiry respects selected record and CNAME TTLs, capped by ResolutionTTL.
 - Resolution snapshots support conditional cache invalidation and authenticated
   ECH retry configuration updates without extending DNS lifetime.
+- An injected resolver HTTP transport applies Android's proxy selection to both
+  wire and JSON DoH; redirects cannot downgrade encrypted resolution to HTTP.
 
 Novelia's own transport performs staggered multi-address TLS/ECH dialing and is
 also used for probes. Upstream HTTP convenience APIs are retained for source

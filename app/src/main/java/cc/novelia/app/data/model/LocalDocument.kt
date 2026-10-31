@@ -8,6 +8,8 @@ import kotlinx.serialization.Serializable
 @Serializable data class LocalReadingContent(
     val groups: List<LocalBilingualGroup> = emptyList(),
     val secondary: List<Int> = emptyList(),
+    val inline: Map<Int, List<InlineContent>> = emptyMap(),
+    val notes: Map<String, String> = emptyMap(),
 )
 
 @Serializable data class LocalChapter(val id: String, val title: String, val paragraphs: List<String>,

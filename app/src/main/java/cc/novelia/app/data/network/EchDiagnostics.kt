@@ -42,7 +42,7 @@ internal class EchDiagnostics(private val echClient: OkHttpClient, private val d
         val result = try {
             val request = Request.Builder().url(check.url).header("Accept", if (check.parse != null) "application/json" else "text/plain")
                 .tag(DiagnosticRequestTag::class.java, DiagnosticRequestTag(run, route)).get().build()
-            client.newCall(request).awaitBody { response ->
+            client.newNetworkCall(request).awaitBody { response ->
                 stage = "HTTP ${response.code}，读取响应正文"
                 val source = response.body?.source() ?: throw IOException("Missing body")
                 if (source.request(MAX_BODY_BYTES + 1)) return@awaitBody "HTTP ${response.code}，响应超过检测大小限制"

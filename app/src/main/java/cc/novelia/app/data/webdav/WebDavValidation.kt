@@ -12,6 +12,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 
 import cc.novelia.app.data.webdav.WebDavSchema.FOLDER
@@ -113,6 +114,14 @@ internal object WebDavValidation {
                     "createdAt" -> nonnegativeLong(value)
                     "quote" -> text(value, 100_000)
                     "text" -> text(value, 1_000_000)
+                    "selection" -> if(value != JsonNull) {
+                        require(value is JsonObject && value.keys == setOf("source", "occurrence", "start", "end")) { "批注选区不完整" }
+                        text(value.getValue("source"), 80, false)
+                        nonnegativeInt(value.getValue("occurrence"), 1000)
+                        nonnegativeInt(value.getValue("start"), 10_000_000)
+                        nonnegativeInt(value.getValue("end"), 10_000_000)
+                        require(value.getValue("end").jsonPrimitive.intOrNull!! > value.getValue("start").jsonPrimitive.intOrNull!!) { "批注选区无效" }
+                    }
                     else -> text(value, 2_000)
                 }
             }
@@ -170,16 +179,20 @@ internal object WebDavValidation {
         document.records.forEach { (key, record) ->
             if(WebDavMerge.winner(record.existence, existence = true)?.deleted != false) return@forEach
             val required = when (document.domain) {
-                SyncDomain.SETTINGS -> if (key == GLOBAL) portableGlobalFields else if (key.startsWith(BLOCKED)) setOf("kind", "value") else portableReaderFields - setOf("customColors", "showReadingStatusBar")
+                SyncDomain.SETTINGS -> if (key == GLOBAL) portableGlobalFields else if (key.startsWith(BLOCKED)) setOf("kind", "value") else portableReaderFields - setOf("customColors", "showReadingStatusBar", "horizontalMargin", "verticalMargin", "autoReadSpeed", "autoReadIntervalSeconds", "textReplacements", "textReplacementsEnabled", "readingStatusItems", "showEpubRuby", "epubFootnotePopup", "showEpubStyles")
                 SyncDomain.FAVORITES -> if (key == ORDER) setOf("ids") else if (key.startsWith(FOLDER)) setOf("name") else setOf("book", "folderId", "pinned", "status", "addedAt")
                 SyncDomain.KEYWORDS -> if (key == ORDER) orderFields else if (key.startsWith(CATEGORY)) categoryFields else keywordEntryFields
                 SyncDomain.PROGRESS -> setOf("position")
-                SyncDomain.BOOKMARKS -> annotationFields
-                SyncDomain.NOTES -> annotationFields + "text"
+                SyncDomain.BOOKMARKS -> annotationFields - "selection"
+                SyncDomain.NOTES -> (annotationFields - "selection") + "text"
                 SyncDomain.HISTORY -> historyFields
             }
             // 老版同步快照可能缺少新增偏好，保留本机选择；字段存在时仍完整校验。
-            val optional = if (document.domain == SyncDomain.SETTINGS && (key == READER || key.startsWith(BOOK_SETTING))) setOf("devicePreferences", "customColors", "showReadingStatusBar") else emptySet()
+            val optional = when {
+                document.domain == SyncDomain.SETTINGS && (key == READER || key.startsWith(BOOK_SETTING)) -> setOf("devicePreferences", "customColors", "showReadingStatusBar", "horizontalMargin", "verticalMargin", "autoReadSpeed", "autoReadIntervalSeconds", "textReplacements", "textReplacementsEnabled", "readingStatusItems", "showEpubRuby", "epubFootnotePopup", "showEpubStyles")
+                document.domain == SyncDomain.NOTES || document.domain == SyncDomain.BOOKMARKS -> setOf("selection")
+                else -> emptySet()
+            }
             require(required.all { field -> record.fields[field]?.let { WebDavMerge.winner(it)?.deleted == false } == true } &&
                 record.fields.all { (field, cell) -> WebDavMerge.winner(cell)?.deleted != false || field in required || field in optional }) {
                 "同步记录字段不完整，请恢复有效的远端数据"
@@ -189,7 +202,7 @@ internal object WebDavValidation {
 
     private fun readerField(field: String, value: JsonElement) {
         if (field == "devicePreferences") {
-            require(value is JsonObject && (value.keys == deviceReaderFields || value.keys == deviceReaderFields - "tapZoneMap")) { "设备偏好原子组字段不完整" }
+            require(value is JsonObject && value.keys.containsAll(deviceReaderFields - setOf("tapZoneMap", "showWideToc", "orientation")) && value.keys.all { it in deviceReaderFields }) { "设备偏好原子组字段不完整" }
             value.forEach { (deviceField, deviceValue) -> deviceReaderField(deviceField, deviceValue) }
             return
         }
@@ -209,8 +222,16 @@ internal object WebDavValidation {
             "speechRate" -> number(value, 0.5, 2.0)
             "speechMinutes" -> positiveInt(value, 1_440)
             "speechLanguage" -> enumText(value, setOf("auto", "zh", "jp"))
+            "readingStatusItems" -> require(cc.novelia.app.data.model.ReaderStatusItems.valid(arrayStrings(value))) { "阅读底栏配置无效" }
+            "textReplacements" -> {
+                require(value is JsonObject && value.values.all { it is JsonPrimitive && it.isString }) { "文字替换规则格式无效" }
+                require(cc.novelia.app.data.model.validReaderTextReplacements(value.mapValues { it.value.jsonPrimitive.content })) { "文字替换规则超出范围" }
+            }
             "toolbarTransparency" -> number(value, 0.0, 1.0)
             "paragraphSpacing" -> number(value, 0.0, 32.0)
+            "autoReadSpeed" -> number(value, 5.0, 80.0)
+            "autoReadIntervalSeconds" -> positiveInt(value, 120).also { require(value.jsonPrimitive.intOrNull!! >= 5) { "自动翻页停留时间过短" } }
+            "horizontalMargin", "verticalMargin" -> number(value, 0.0, 64.0)
             else -> boolean(value)
         }
     }
@@ -219,6 +240,7 @@ internal object WebDavValidation {
         when (field) {
             "brightness" -> number(value, -1.0, 1.0)
             "paginationMode" -> enumText(value, setOf("scroll", "auto"))
+            "orientation" -> enumText(value, ReaderSettings.ORIENTATIONS.toSet())
             "prefetchChapters" -> nonnegativeInt(value, 20)
             // 点击分区方案的编码串：限长避免同步文件被塞入超大数据，内容本身在解析时再校验。
             "tapZoneMap" -> text(value, 2_048, true)

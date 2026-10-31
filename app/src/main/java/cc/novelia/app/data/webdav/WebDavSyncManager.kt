@@ -263,6 +263,7 @@ class WebDavSyncManager(private val app: NoveliaApplication) {
     private fun client(binding: WebDavConfig): WebDavClient {
         val account = webDavAccountKey(binding)
         return WebDavClient(binding, app.webDavConfig.password(binding),
+            transport = app.ech.publicClient(),
             beforeRequest = { requestCooldown.check(account) },
             onRateLimit = { requestCooldown.record(account, it) })
     }

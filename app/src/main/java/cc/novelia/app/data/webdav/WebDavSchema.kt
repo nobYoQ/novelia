@@ -22,18 +22,20 @@ internal object WebDavSchema {
     val orderFields = setOf("ids")
     val portableReaderFields = setOf("mode", "engines", "parallel", "fontSize", "lineHeight", "weight", "width",
         "indent", "theme", "secondaryAlpha", "underline", "speechRate", "speechMinutes", "traditional", "speechLanguage",
-        "toolbarTransparency", "paragraphSpacing", "showScrollPageButtons", "showProgressBar", "showReadingStatusBar", "speechContinueChapters", "customColors")
+        "toolbarTransparency", "paragraphSpacing", "showScrollPageButtons", "showProgressBar", "showReadingStatusBar", "speechContinueChapters", "customColors",
+        "horizontalMargin", "verticalMargin", "autoReadSpeed", "autoReadIntervalSeconds", "textReplacements", "textReplacementsEnabled", "readingStatusItems",
+        "showEpubRuby", "epubFootnotePopup", "showEpubStyles")
     // fontFamily/customFont 依赖本机字体文件，两种同步模式均保留接收端的字体选择。
     val deviceReaderFields = setOf("keepScreenOn", "volumeKeys", "paged", "eInkMode", "monochrome", "scrollPageTurn",
         "horizontalPageTurn", "brightness", "paginationMode", "showPageButtons", "beforeEInk", "eInkPreferences", "prefetchChapters",
-        "prefetchWifiOnly", "speechNetworkContinuation", "showEInkScreenButtons", "hideStatusBar", "tapPageTurn", "tapZoneMap")
+        "prefetchWifiOnly", "speechNetworkContinuation", "showEInkScreenButtons", "hideStatusBar", "tapPageTurn", "tapZoneMap", "showWideToc", "orientation")
     val portableGlobalFields = setOf("theme", "reducedMotion", "historyPaused", "hideNovelComments",
         "autoCollapseCloudFilters", "autoSaveCloudFavoritesLocally", "clipboardLinkHints", "keywordLimit")
     val portableBookFields = setOf("ref", "title", "originalTitle", "cover", "subtitle", "tags", "translated", "total",
         "updateAt", "translations", "volumeIds", "authors", "novelType", "attentions", "totalCharacters")
     val positionFields = setOf("chapterId", "sourceParagraph", "textOffset", "title", "updatedAt", "anchorSource", "chapterIndex",
         "chapterCount", "paragraphCount", "chapterCompleted", "anchorTextHash")
-    val annotationFields = setOf("key", "chapterId", "paragraph", "quote", "createdAt", "bookTitle", "chapterTitle")
+    val annotationFields = setOf("key", "chapterId", "paragraph", "quote", "createdAt", "bookTitle", "chapterTitle", "selection")
     val historyFields = setOf("bookKey", "bookTitle", "chapterId", "chapterTitle", "lastReadAt")
 
     fun isNetworkKey(key: String): Boolean {

@@ -60,11 +60,13 @@ import cc.novelia.app.ui.settings.WebDavSyncScreen
 import cc.novelia.app.ui.settings.WebDavServerScreen
 import cc.novelia.app.ui.settings.LibraryBackupScreen
 import cc.novelia.app.ui.settings.SettingsScreen
+import cc.novelia.app.ui.settings.ChapterCacheScreen
 import cc.novelia.app.ui.discover.KeywordLibraryScreen
 import cc.novelia.app.ui.shelf.AdaptiveLibraryScreen
 import cc.novelia.app.ui.shelf.BookUpdatesScreen
 import cc.novelia.app.ui.shelf.FavoriteSheet
 import cc.novelia.app.ui.shelf.HistoryScreen
+import cc.novelia.app.ui.shelf.ReadingStatisticsScreen
 import cc.novelia.app.ui.theme.AppInteractionMode
 import cc.novelia.app.ui.theme.appPageEnterTransition
 import cc.novelia.app.ui.theme.appPageExitTransition
@@ -84,9 +86,11 @@ import kotlinx.coroutines.delay
 import cc.novelia.app.startup.StartupScreen
 
 private data class AppAppearance(val theme: String, val amoledBlack: Boolean, val squareCorners: Boolean, val reducedMotion: Boolean, val eInk: Boolean, val eInkBooks: Set<String>,
-    val screenButtons: Boolean, val hideStatusBar: Boolean, val bookStatusBars: Map<String, Boolean>)
+    val screenButtons: Boolean, val hideStatusBar: Boolean, val bookStatusBars: Map<String, Boolean>,
+    val readerOrientation: String, val bookOrientations: Map<String, String>)
 private fun LibraryState.appearance() = AppAppearance(theme, amoledBlack, squareCorners, reducedMotion || reader.eInkMode, reader.eInkMode,
-    bookSettings.filterValues { it.eInkMode }.keys, reader.showEInkScreenButtons, reader.hideStatusBar, bookSettings.mapValues { it.value.hideStatusBar })
+    bookSettings.filterValues { it.eInkMode }.keys, reader.showEInkScreenButtons, reader.hideStatusBar, bookSettings.mapValues { it.value.hideStatusBar },
+    reader.resolvedOrientation, bookSettings.mapValues { it.value.resolvedOrientation })
 
 /**
  * Android 生命周期与 Compose 界面的连接点：等待应用初始化，装配主题、控制器和导航图。
@@ -166,8 +170,10 @@ class MainActivity : ComponentActivity() {
                 }
                 val entry by nav.currentBackStackEntryAsState(); val route = entry?.destination?.route
                 val readingKey = "${entry?.arguments?.getString("provider")}/${entry?.arguments?.getString("id")}"
-                cc.novelia.app.ui.reader.ReadingStatusBar(route?.startsWith("reader/") == true &&
-                    (appearance.bookStatusBars[readingKey] ?: appearance.hideStatusBar))
+                cc.novelia.app.ui.reader.ReadingSystemBars(reading = route?.startsWith("reader/") == true,
+                    hideStatusBar = appearance.bookStatusBars[readingKey] ?: appearance.hideStatusBar)
+                cc.novelia.app.ui.reader.ReaderOrientation(route?.startsWith("reader/") == true,
+                    appearance.bookOrientations[readingKey] ?: appearance.readerOrientation)
                 ObserveDownloadCelebrations(controller, route)
                 cc.novelia.app.ui.feedback.ObserveAppUpdates(controller, show = route?.startsWith("reader/") != true)
                 ObserveClipboardLinks(controller, externalLinkPending = link != null || sharedDocuments.isNotEmpty())
@@ -261,6 +267,7 @@ class MainActivity : ComponentActivity() {
                             composable("edge-toolbar") { EdgeToolbarSettingsScreen(controller) }
                             composable("edge-toolbar-edit") { EdgeToolbarEditorScreen(controller) }
                             composable("backup") { LibraryBackupScreen(controller) }
+                            composable("chapter-cache") { ChapterCacheScreen(controller) }
                             composable("keywords") { KeywordLibraryScreen(controller) }
                             composable("sync") { NetworkSyncScreen(controller) }
                             // 外层已留出导航栏空间；同步页面本身也可独立处理系统边距。
@@ -278,6 +285,7 @@ class MainActivity : ComponentActivity() {
                             composable("notes") { NotesScreen(controller) }
                             composable("blocked") { BlockedScreen(controller) }
                             composable("history") { HistoryScreen(controller) }
+                            composable("reading-stats?book={book}") { ReadingStatisticsScreen(controller, it.arguments?.getString("book")) }
                             composable("glossary/{provider}/{id}") { GlossaryScreen(controller, BookRef(it.arguments!!.getString("provider")!!, it.arguments!!.getString("id")!!)) }
                             composable("edit/{provider}/{id}") { EditBookScreen(controller, BookRef(it.arguments!!.getString("provider")!!, it.arguments!!.getString("id")!!)) }
                             composable("about") { AboutScreen(controller) }

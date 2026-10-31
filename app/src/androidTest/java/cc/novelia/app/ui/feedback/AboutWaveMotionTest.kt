@@ -61,7 +61,7 @@ class AboutWaveMotionTest {
         compose.waitForIdle()
         compose.mainClock.autoAdvance = false
         repeat(5) {
-            compose.onNodeWithText("Android ${BuildConfig.VERSION_NAME} · 非官方客户端").performClick()
+            compose.onNodeWithText("Android ${BuildConfig.VERSION_NAME}").performClick()
             compose.mainClock.advanceTimeByFrame()
         }
         compose.mainClock.advanceTimeBy(64)

@@ -26,6 +26,9 @@ import kotlin.math.roundToInt
 
 @Composable internal fun ReaderTextParagraph(paragraph: ReadingParagraph, settings: ReaderSettings, layoutGeneration: Any, foreground: Color, onToggleMenu: () -> Unit, onSelect: () -> Unit, activeMatch: ReadingTextMatch?,
     fontFamily: FontFamily = rememberReaderFont(settings).family,
+    annotations: List<ReadingTextMatch> = emptyList(),
+    highlightLayers: List<ReaderHighlightLayer> = listOfNotNull(activeMatch?.let { ReaderHighlightLayer(it, 1f) }),
+    onNote: (String) -> Unit = {},
     onLayout: (Int, List<ReadingAnchorLine>) -> Unit) {
     val starts = remember(paragraph, settings.indent, settings.parallel) { paragraphPartStarts(paragraph, settings) }
     val latestLayout by rememberUpdatedState(onLayout)
@@ -47,13 +50,29 @@ import kotlin.math.roundToInt
                 })
             }
             if(settings.parallel && (part.source == "sakura" || part.source == "gpt" || part.source == "youdao")) Text(part.source.uppercase(), style = MaterialTheme.typography.labelSmall, color = foreground.copy(alpha = .65f))
+            val styledPart = remember(part, settings.showEpubRuby, settings.epubFootnotePopup, settings.showEpubStyles) { part.withInlinePreferences(settings) }
+            if (styledPart.inline.isNotEmpty()) {
+                ReaderInlineText(styledPart, settings, foreground, onToggleMenu, onSelect, onNote,
+                    annotations.filter { it.part == partIndex }, highlightLayers.filter { it.match.part == partIndex }) { layout, top ->
+                    latestLayout(partIndex, (0 until layout.lineCount).map { line ->
+                        ReadingAnchorLine(starts[partIndex] + layout.getLineStart(line), starts[partIndex] + layout.getLineEnd(line), top + layout.getLineTop(line))
+                    })
+                }
+                return@forEachIndexed
+            }
             val highlighted = buildAnnotatedString {
                 val indent = if(settings.indent) "　　" else ""
                 append(indent); append(part.text)
-                activeMatch?.takeIf { it.part == partIndex && it.end > it.start }?.let {
+                annotations.filter { it.part == partIndex }.forEach {
                     val start = (indent.length + it.start).coerceIn(0, length)
                     val end = (indent.length + it.end).coerceIn(start, length)
-                    addStyle(SpanStyle(background = foreground.copy(alpha = .2f), textDecoration = TextDecoration.Underline), start, end)
+                    addStyle(SpanStyle(textDecoration = TextDecoration.Underline, background = foreground.copy(alpha = .1f)), start, end)
+                }
+                highlightLayers.filter { it.match.part == partIndex && it.match.end > it.match.start }.forEach { layer ->
+                    val it = layer.match
+                    val start = (indent.length + it.start).coerceIn(0, length)
+                    val end = (indent.length + it.end).coerceIn(start, length)
+                    addStyle(SpanStyle(background = foreground.copy(alpha = .2f * layer.alpha)), start, end)
                 }
             }
             Text(highlighted,

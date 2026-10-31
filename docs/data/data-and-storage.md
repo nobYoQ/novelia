@@ -36,6 +36,7 @@
 | `documents/<id>.epub / .txt / .srt` | 可用时保留的导入原件 |
 | `documents/source-index.json` | 源文件哈希索引，用于导入去重 |
 | `chapters/`、`chapter-freshness.json` | 网络正文缓存及获取时间 |
+| `chapter-cache-index.json` | 网络章节文件与书籍的归属，用于按书统计和清理；不含正文 |
 | `metadata/` | 详情缓存和持久失效时间 |
 | `downloads/`、`exports/` | 下载文件、导出临时文件 |
 | `backup-staging/<UUID>/` | 备份解包与预览暂存 |
@@ -107,7 +108,7 @@ LocalStore.update
 
 预算实现见 [LocalCache](../../app/src/main/java/cc/novelia/app/data/cache/LocalCache.kt)、[MetadataCache](../../app/src/main/java/cc/novelia/app/data/cache/MetadataCache.kt) 和 [Application](../../app/src/main/java/cc/novelia/app/NoveliaApplication.kt)。内存权重是估算，不是精确堆占用。
 
-章节文件修改时间用于近似访问时间，译文获取时间单独保存；不能用前者判断译文新鲜度。清缓存递增 `cacheGeneration` 并取消旧章节请求，写回也检查代次。它保留本地文档、书架和下载成品。
+章节文件修改时间用于近似访问时间，译文获取时间单独保存；不能用前者判断译文新鲜度。清空全部缓存递增 `cacheGeneration`，单书清理只递增该书的章节代次；请求共享、缓存写回和阅读交接同时检查这两级代次。本书的内存正文、磁盘正文和获取时间一起移除，目录根据修订号更新离线标记。它保留本地文档、阅读进度、书架和下载成品。
 
 ## 修改模型时需要一起检查
 

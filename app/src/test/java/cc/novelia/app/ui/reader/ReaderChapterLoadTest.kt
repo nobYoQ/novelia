@@ -13,6 +13,20 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ReaderChapterLoadTest {
+    @Test fun failedAutomaticContinuationCanRetryWithoutRestartingAutoReading() = runTest {
+        var fail = true
+        var automatic: Boolean? = null
+        val loader = ReaderChapterLoad(this, { if(fail) throw IOException("离线") else "正文" },
+            { target, _ -> automatic = target.automatic }, { it.message.orEmpty() }, StandardTestDispatcher(testScheduler))
+        loader.request(ReaderChapterTarget("next", automatic = true))
+        runCurrent()
+        assertFalse(requireNotNull(loader.target).automatic)
+        fail = false
+        loader.retry()
+        runCurrent()
+        assertEquals(false, automatic)
+    }
+
     @Test fun failedChapterDoesNotNavigateAndRetryKeepsItsOriginalTarget() = runTest {
         var fail = true
         val opened = mutableListOf<String>()

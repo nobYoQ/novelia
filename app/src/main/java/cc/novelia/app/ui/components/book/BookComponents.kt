@@ -36,7 +36,7 @@ import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.appReducedMotion
 import cc.novelia.app.ui.theme.motionClickable
-import coil.compose.AsyncImage
+import cc.novelia.app.ui.components.media.RecoveringAsyncImage as AsyncImage
 import coil.decode.DataSource
 import cc.novelia.app.ui.components.base.AppChipFlowRow
 import cc.novelia.app.ui.components.base.AppSelectionChip

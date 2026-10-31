@@ -62,7 +62,7 @@ internal data class ReaderChapterSearchState(
     menu: Boolean, reducedMotion: Boolean, toolbarBackground: Color, foreground: Color,
     modifier: Modifier, onHeightChanged: (Int) -> Unit,
     onBack: () -> Unit, onRefresh: () -> Unit, onToggleSearch: () -> Unit,
-    onSpeech: () -> Unit, onReturnToReading: () -> Unit,
+    onSpeech: () -> Unit, onAutoRead: () -> Unit, onReturnToReading: () -> Unit,
     onQueryChange: (String) -> Unit, onFind: (Int) -> Unit, onBookSearch: () -> Unit,
 ) {
     ReaderOverlayVisibility(menu, modifier, enter = if(reducedMotion) EnterTransition.None else fadeIn(tween(AppMotion.Quick)) + slideInVertically(tween(AppMotion.Standard)) { -it }, exit = if(reducedMotion) ExitTransition.None else fadeOut(tween(AppMotion.Exit)) + slideOutVertically(tween(AppMotion.Release)) { -it }) {
@@ -74,6 +74,7 @@ internal data class ReaderChapterSearchState(
             }, actions = {
                 if(!state.localBook) AppIconButton(onClick = onRefresh, enabled = !state.leaving) { Icon(Icons.Outlined.Refresh, "刷新本章译文") }
                 AppIconButton(onClick = onToggleSearch) { Icon(Icons.Outlined.Search, "搜索本章") }
+                AppIconButton(onClick = onAutoRead) { Icon(Icons.Outlined.PlayArrow, "自动阅读") }
                 AppIconButton(onClick = onSpeech) {
                     if(state.speechStatus == ReadAloudService.SLEEP_TIMER_FINISHED) StickerAccent(MidoriSticker.Sleep, state.speechStatus, Modifier.size(40.dp).semantics { contentDescription = "朗读定时已结束，打开朗读设置" })
                     else Icon(Icons.Outlined.VolumeUp, "朗读本章")
@@ -130,14 +131,16 @@ internal data class ReaderBottomToolbarState(
 
 @Composable internal fun ReaderBottomToolbar(
     state: ReaderBottomToolbarState, settings: ReaderSettings, menu: Boolean, reducedMotion: Boolean,
-    toolbarBackground: Color, foreground: Color, readingStatusBarHeight: androidx.compose.ui.unit.Dp,
+    toolbarBackground: Color, foreground: Color, readingStatusBarHeight: androidx.compose.ui.unit.Dp, statusColumns: Int,
     modifier: Modifier, onHeightChanged: (Int) -> Unit,
     onPage: (Int) -> Unit, onSeek: (Float) -> Unit, onSeekFocusChanged: (Boolean) -> Unit,
     onPreviousChapter: () -> Unit, onNextChapter: () -> Unit, onToc: () -> Unit,
     onBookmark: () -> Unit, onPreferences: () -> Unit,
+    speechControls: (@Composable () -> Unit)? = null, onSpeechHeightChanged: (Int) -> Unit = {},
 ) {
     Column(modifier.testTag("reader-bottom-toolbar").onSizeChanged { onHeightChanged(it.height) }) {
-        val persistentControls = settings.showPageButtons || settings.showReadingStatusBar
+        val persistentControls = speechControls != null || settings.showPageButtons || settings.visibleReadingStatusItems.isNotEmpty()
+        Box(Modifier.fillMaxWidth().onSizeChanged { onSpeechHeightChanged(it.height) }) { speechControls?.invoke() }
         if(settings.showPageButtons) Row(Modifier.fillMaxWidth().background(toolbarBackground).padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
             AppOutlinedButton(onClick = { onPage(-1) }, colors = ButtonDefaults.outlinedButtonColors(contentColor = foreground, disabledContentColor = foreground.copy(alpha = .38f)), enabled = state.previousPageEnabled) { Text(if(settings.staticPagination) "上一页" else "上一屏") }
             AppOutlinedButton(onClick = { onPage(1) }, colors = ButtonDefaults.outlinedButtonColors(contentColor = foreground, disabledContentColor = foreground.copy(alpha = .38f)), enabled = state.nextPageEnabled) { Text(if(settings.staticPagination) "下一页" else "下一屏") }
@@ -151,7 +154,7 @@ internal data class ReaderBottomToolbarState(
                         foreground = foreground, onSeek = onSeek, modifier = Modifier.padding(top = 8.dp).onFocusChanged { onSeekFocusChanged(it.hasFocus) })
                     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         AppIconButton(onClick = onPreviousChapter, enabled = state.previousChapterEnabled) { Icon(Icons.Outlined.SkipPrevious, "上一章") }
-                        AppTextButton(onClick = onToc, colors = ButtonDefaults.textButtonColors(contentColor = foreground)) { Icon(Icons.Outlined.FormatListBulleted, null, Modifier.size(18.dp)); Text(if(state.wide) " 定位目录" else " 目录") }
+                        AppTextButton(onClick = onToc, colors = ButtonDefaults.textButtonColors(contentColor = foreground)) { Icon(Icons.Outlined.FormatListBulleted, null, Modifier.size(18.dp)); Text(if(state.wide && settings.showWideToc) " 收起目录" else " 目录") }
                         AppIconButton(onClick = onBookmark, enabled = state.bookmarkEnabled, modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp)) {
                             Icon(if(state.bookmarked) Icons.Outlined.BookmarkAdded else Icons.Outlined.BookmarkAdd, if(state.bookmarked) "已保存书签" else "保存书签")
                         }
@@ -163,7 +166,7 @@ internal data class ReaderBottomToolbarState(
                 }
             }
         }
-        if(settings.showReadingStatusBar) ReaderReadingStatusBar(state, settings.staticPagination, foreground,
+        if(settings.visibleReadingStatusItems.isNotEmpty()) ReaderReadingStatusBar(state, settings, statusColumns, foreground,
             Modifier.fillMaxWidth().background(toolbarBackground)
                 .windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout).only(WindowInsetsSides.Horizontal))
                 .height(readingStatusBarHeight))

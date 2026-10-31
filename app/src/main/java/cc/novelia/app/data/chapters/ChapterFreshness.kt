@@ -34,3 +34,11 @@ fun recordChapterFreshness(store: LocalStore, ref: BookRef, id: String, fetchedA
 }
 
 fun clearChapterFreshness(store: LocalStore) = synchronized(chapterFreshnessLock) { freshnessFile(store).delete() }
+
+fun clearChapterFreshness(store: LocalStore, names: Set<String>) = synchronized(chapterFreshnessLock) {
+    val next = readFreshness(store).filterKeys { it !in names }
+    val atomic = freshnessFile(store)
+    val stream = atomic.startWrite()
+    try { stream.write(appJson.encodeToString(next).toByteArray(Charsets.UTF_8)); atomic.finishWrite(stream) }
+    catch(e: Exception) { atomic.failWrite(stream); throw e }
+}

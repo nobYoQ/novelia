@@ -31,7 +31,13 @@ import kotlinx.serialization.Serializable
     val sourceVolumeId: String? = null, val siteVolumeOrderDescending: Boolean = false)
 
 /** key 为 BookRef.key；text 可为空，此时仍是一条保留章节和段落位置的书签。 */
-@Serializable data class Note(val id: String, val key: String, val chapterId: String, val paragraph: Int, val quote: String, val text: String, val createdAt: Long = System.currentTimeMillis(), val bookTitle: String = "", val chapterTitle: String = "", val bookmarked: Boolean = true)
+@Serializable data class Note(val id: String, val key: String, val chapterId: String, val paragraph: Int, val quote: String, val text: String, val createdAt: Long = System.currentTimeMillis(), val bookTitle: String = "", val chapterTitle: String = "", val bookmarked: Boolean = true,
+    val selection: NoteSelection? = null)
+
+/** 字符范围相对于某一份正文，不包含缩进、译源标签；同源译文以 occurrence 区分。 */
+@Serializable data class NoteSelection(val source: String, val occurrence: Int = 0, val start: Int, val end: Int) {
+    val valid get() = source.isNotBlank() && source.length <= 80 && occurrence in 0..1000 && start >= 0 && end > start && end <= 10_000_000
+}
 
 /** 阅读历史是独立的书目摘要；删除历史不会影响续读位置。 */
 @Serializable data class ReadingHistoryEntry(val bookKey: String, val bookTitle: String, val chapterId: String,
@@ -87,7 +93,8 @@ fun legacyFolderId(name: String): String = if(name == DEFAULT_FOLDER) DEFAULT_FO
     // 本机只提示一次，不随单书设置或翻页模式切换重复展示。
     val readerTapTutorialSeen: Boolean = false,
     val syncReplica: SyncReplica = SyncReplica(),
-    val forumRulesReminderDismissed: Boolean = false
+    val forumRulesReminderDismissed: Boolean = false,
+    val readingStatistics: ReadingStatistics = ReadingStatistics()
 )
 
 /** 收藏夹名称仅用于显示；改名时 ID 及所有本地分卷仍保持原关系。 */

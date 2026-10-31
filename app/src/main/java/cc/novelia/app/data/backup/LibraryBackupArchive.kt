@@ -7,6 +7,7 @@ import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.LocalDocument
 import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.data.model.validFont
+import cc.novelia.app.data.model.mergeDays
 import cc.novelia.app.data.storage.appJson
 import cc.novelia.app.data.webdav.SyncReplica
 import cc.novelia.app.data.library.withMigratedReadingHistory
@@ -134,11 +135,18 @@ internal object LibraryBackupArchive {
         (listOf(state.reader) + state.bookSettings.values).forEach { settings ->
             require(settings.theme in ReaderSettings.THEMES && settings.customColors.valid) { "备份阅读配色无效" }
             require(settings.validFont) { "备份阅读字体设置无效" }
+            require(settings.horizontalMargin in 0f..64f && settings.verticalMargin in 0f..64f) { "备份页边距无效" }
+            require(settings.orientation in ReaderSettings.ORIENTATIONS) { "备份阅读方向无效" }
+            require(settings.validAutoRead) { "备份自动阅读速度无效" }
+            require(settings.validTextReplacements) { "备份文字替换规则无效" }
+            require(settings.validReadingStatusItems) { "备份阅读底栏配置无效" }
             require(settings.fontSize in 10f..60f && settings.lineHeight in ReaderSettings.MIN_LINE_HEIGHT..4f && settings.width in 200f..2000f &&
                 settings.engines.size == 3 && settings.engines.toSet() == setOf("sakura", "gpt", "youdao") && settings.speechRate in .1f..5f &&
                 settings.secondaryAlpha in 0f..1f && (settings.brightness == -1f || settings.brightness in 0f..1f)) { "备份阅读设置无效" }
         }
         require(state.positions.values.all { it.index >= 0 && it.offset >= 0 && it.textOffset >= 0 }) { "备份阅读进度无效" }
+        state.readingStatistics.requireValid()
+        require(state.notes.all { note -> note.selection?.let { it.valid && it.end - it.start == note.quote.length } != false }) { "备份批注选区无效" }
         require(localDocumentIds(state).all { it in documentIds || it in missing }) { "备份包含未列入索引的本地文档" }
         val books = state.books.associateBy { it.book.ref.key }
         state.books.forEach { book ->
@@ -188,7 +196,7 @@ internal fun LibraryBackupManifest.keywordLibrary(): KeywordLibrary = keywordCat
     ?: KeywordLibrary.fromLegacy(keywords, addDefaults = false)
 
 internal fun localDocumentIds(state: LibraryState): Set<String> = (
-    state.books.map { it.book.ref.key } + state.positions.keys + state.readingHistory.keys + state.notes.map { it.key } + state.bookSettings.keys + state.personalGlossaries.keys + state.downloadLinks.map { it.localBook.key }
+    state.books.map { it.book.ref.key } + state.positions.keys + state.readingHistory.keys + state.notes.map { it.key } + state.bookSettings.keys + state.personalGlossaries.keys + state.downloadLinks.map { it.localBook.key } + state.readingStatistics.days.values.flatMap { it.keys }
 ).filter { it.startsWith("local/") }.map { it.removePrefix("local/") }.toSet()
 
 internal fun LibraryState.forBackup(): LibraryState = copy(pending = emptyList(), downloads = emptyList(), syncStatus = emptyMap(), syncReplica = SyncReplica(deviceId = ""))
@@ -210,6 +218,7 @@ internal fun mergeLibraryBackup(current: LibraryState, incoming: LibraryState): 
         readingHistory = (current.readingHistory.keys + imported.readingHistory.keys).associateWith { key ->
             listOfNotNull(current.readingHistory[key], imported.readingHistory[key]).maxBy { it.lastReadAt } },
         historyMigrated = current.historyMigrated || imported.historyMigrated,
+        readingStatistics = base.readingStatistics.copy(days = current.readingStatistics.days, revision = current.readingStatistics.revision).mergeDays(imported.readingStatistics),
         folderIds = imported.folderIds + current.folderIds,
         notes = current.notes + imported.notes.filter { note -> current.notes.none { it.id == note.id } },
         downloadLinks = (current.downloadLinks + imported.downloadLinks).distinct(),

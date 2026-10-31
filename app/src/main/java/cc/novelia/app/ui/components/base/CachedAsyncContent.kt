@@ -17,6 +17,7 @@ import cc.novelia.app.data.network.ApiException
     onLoaded: (T) -> Unit = {}, revealContent: Boolean = false,
     pullToRefreshEnabled: Boolean = false, observeInvalidation: Boolean = true,
     validate: () -> Unit = {},
+    showRefreshIndicator: Boolean = true,
     content: @Composable (T, () -> Unit) -> Unit,
 ) {
     val revision by cache.revision.collectAsStateWithLifecycle()
@@ -42,6 +43,7 @@ import cc.novelia.app.data.network.ApiException
         initialResult = snapshot?.value, refreshOnEnter = snapshot?.fresh != true,
         discardContentOnError = discard,
         onLoaded = onLoaded, revealContent = revealContent, pullToRefreshEnabled = pullToRefreshEnabled,
+        showRefreshIndicator = showRefreshIndicator,
         content = content)
 }
 

@@ -45,6 +45,7 @@ type Config struct {
 	NativeFirst          bool
 	UserAgent            string
 	EventHandler         EventHandler
+	ResolverTransport    http.RoundTripper
 }
 
 // DefaultConfig returns conservative defaults suitable for mobile and desktop.

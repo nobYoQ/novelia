@@ -6,6 +6,42 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ReaderPreferencesTest {
+    @Test fun epubDisplaySwitchesPersistIndependentlyInDefaultsBookOverridesAndBackups() {
+        val defaults = appJson.decodeFromString<ReaderSettings>("{}")
+        assertTrue(defaults.showEpubRuby && defaults.epubFootnotePopup && defaults.showEpubStyles)
+        val custom = defaults.copy(showEpubRuby = false, epubFootnotePopup = false, showEpubStyles = false)
+        val state = LibraryState(reader = defaults, bookSettings = mapOf("local/book" to custom))
+        assertEquals(state, appJson.decodeFromString<LibraryState>(appJson.encodeToString(state)))
+        val backup = SettingsBackup(reader = custom)
+        assertEquals(backup, appJson.decodeFromString<SettingsBackup>(appJson.encodeToString(backup)))
+        val restored = custom.withEInkMode(true).withEInkMode(false)
+        assertFalse(restored.showEpubRuby || restored.epubFootnotePopup || restored.showEpubStyles)
+        assertEquals(setOf("显示假名注音", "点击脚注弹窗", "显示原书强调样式"),
+            cc.novelia.app.reader.readerSettingsDifferences(custom, defaults).map { it.label }.toSet())
+        assertEquals(cc.novelia.app.data.webdav.WebDavProjection.anchorSource(defaults),
+            cc.novelia.app.data.webdav.WebDavProjection.anchorSource(custom))
+    }
+    @Test fun orientationDefaultsToSystemAndSurvivesBookOverridesBackupAndEInk() {
+        assertEquals("system", appJson.decodeFromString<ReaderSettings>("{}").orientation)
+        val settings = ReaderSettings(orientation = "landscape")
+        val state = LibraryState(bookSettings = mapOf("local/book" to settings))
+        assertEquals(state, appJson.decodeFromString<LibraryState>(appJson.encodeToString(state)))
+        assertEquals("landscape", settings.withEInkMode(true).withEInkMode(false).orientation)
+        assertEquals("system", settings.copy(orientation = "invalid").resolvedOrientation)
+    }
+    @Test fun marginsAndSidebarPreserveLegacyLayoutAndSurvivePerBookBackupsAndEInk() {
+        val old = appJson.decodeFromString<ReaderSettings>("{}")
+        assertEquals(24f, old.horizontalMargin)
+        assertEquals(16f, old.verticalMargin)
+        assertTrue(old.showWideToc)
+        val custom = old.copy(horizontalMargin = 0f, verticalMargin = 48f, showWideToc = false)
+        val state = LibraryState(reader = old, bookSettings = mapOf("local/book" to custom))
+        assertEquals(state, appJson.decodeFromString<LibraryState>(appJson.encodeToString(state)))
+        assertEquals(SettingsBackup(reader = custom), appJson.decodeFromString<SettingsBackup>(appJson.encodeToString(SettingsBackup(reader = custom))))
+        assertEquals(custom, custom.withEInkMode(true).withEInkMode(false).copy(beforeEInk = custom.beforeEInk, eInkPreferences = custom.eInkPreferences))
+        assertEquals(24f, custom.copy(horizontalMargin = Float.NaN).resolvedHorizontalMargin)
+        assertEquals(64f, custom.copy(verticalMargin = 100f).resolvedVerticalMargin)
+    }
     @Test fun readingStatusBarDefaultsOnAndPersistsIndependentlyAcrossProfilesAndBackups() {
         assertTrue(appJson.decodeFromString<ReaderSettings>("{}").showReadingStatusBar)
         assertTrue(appJson.decodeFromString<ReaderSettings>("""{"paginationMode":"auto"}""").showReadingStatusBar)

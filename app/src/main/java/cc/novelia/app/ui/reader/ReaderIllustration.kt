@@ -20,7 +20,7 @@ import cc.novelia.app.reader.*
 import cc.novelia.app.ui.components.media.IllustrationViewer
 import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.appReducedMotion
-import coil.compose.AsyncImage
+import cc.novelia.app.ui.components.media.RecoveringAsyncImage as AsyncImage
 import coil.request.ImageRequest
 
 @Composable internal fun ReaderIllustration(model: Any, foreground: Color, onToggleMenu: () -> Unit) {

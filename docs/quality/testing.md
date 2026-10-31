@@ -41,6 +41,9 @@ Release 报告对应替换变体名。警告、失败和跳过分别记录。
 | --- | --- |
 | 请求、账号和书源 | `data.network.ApiContractTest`、`data.auth.SessionIsolationTest`、`data.network.BookSourceTest` |
 | ECH 和日志 | `data.network.EchInterceptorTest`、`EchApiContractTest`、`EchDiagnosticsTest`、`NetworkLoggingTest`（后三者也在 data.network） |
+| 网络切换与请求代次 | `data.network.NetworkChangesTest`、`NetworkConnectionsTest`；Go `network_test.go` |
+| 网络恢复、预算和代理 | `data.network.RequestRecoveryTest`、`RequestRecoveryApiTest`、`SystemEchProxyTest`；Go `proxy_test.go`、`connect_test.go`、解析器 `resolver_transport_test.go` |
+| 下载中断与范围校验 | `files.downloads.ResumableDownloadTest`、`DownloadFilesTest` |
 | 论坛协议与回复 | `data.community.ForumApiContractTest`、`ForumAccountApiTest`、`ForumBlacklistApiTest`、`ForumCommunityRulesTest`、`ForumRulesTest`、`ForumReplyPageCacheTest`（均在 data.community） |
 | 原站队列 | `data.sync.CloudMutationQueueTest`、`CloudSyncPolicyTest`、`BoundCloudSyncTest`（均在 data.sync） |
 | WebDAV | `data.webdav.WebDavMergeTest`、`WebDavProjectionTest`、`WebDavExchangeTest`、`WebDavClientTest`（均在 data.webdav） |
@@ -48,6 +51,7 @@ Release 报告对应替换变体名。警告、失败和跳过分别记录。
 | 边缘工具栏偏好、同步与定位 | `ui.toolbar.EdgeToolbarSettingsTest`、`ui.toolbar.EdgeToolbarGeometryTest` |
 | 导入、下载、导出 | `files.FileImportRegressionTest`、`files.importing.DocumentImportBatchTest`、`files.importing.DocumentImportNameTest`、`files.downloads.DownloadFilesTest`、`files.exporting.PendingExportFilesTest` |
 | 阅读投影、分页、定位 | `reader.ReaderProjectionTest`、`reader.ReaderExactSearchTest`、`reader.StaticPaginationTest`、`ui.reader.ReaderChapterLoadTest` |
+| EPUB 注音、强调、脚注与文字范围 | `files.EpubInlineTest`、`reader.InlinePreparationTest`、`data.storage.LocalEpubReadingTest` |
 | 位置、历史、更新 | `data.library.ReadingProgressUpdatesTest`、`data.storage.LocalReadingProgressTest`、`data.updates.BookUpdateStateTest` |
 | 应用版本与下载 | `data.appupdate.AppReleaseTest`、`AppReleaseDownloadCoordinatorTest`、`AppUpdateSettingsTest`（均在 data.appupdate） |
 | 搜索和标签 | `data.catalog.SearchExpressionBoundaryTest`、`NovelLocalFilterTest`、`KeywordLibraryTest`、`SavedSearchPresetTest`（均在 data.catalog） |
@@ -79,6 +83,7 @@ $env:ANDROID_SERIAL = '<专用测试设备序列号>'
 - 文件/恢复：`BookExportUiTest`、`LibraryBackupFlowTest`、`files.downloads.BookFileActionsTest`、`files.importing.DownloadImportCleanupTest`；书架移除时的持久化清理仍由 `data.storage.ShelfCopyCleanupTest` 覆盖。
 - 系统文件分享：`files.importing.SharedDocumentIntentsTest` 检查分享菜单的类型匹配和附件读取；`ui.shelf.SharedDocumentImportTest` 检查冷启动、运行中再次分享、ClipData 多文件、旋转恢复、重复文件和不支持格式。可以使用 `-PisolatedLibraryTests=true` 构建独立测试包。
 - 静态交互：`EInkReaderFlowTest`、`ReducedMotionSheetTest`、`PanelSessionTest`。`EInkReaderFlowTest` 同时覆盖物理按键、滚动/分页锚点互换、搜索与重新进入阅读；离开阅读器后按现有“阅读与朗读”“外观与操作”分类检查设置。
+- EPUB 富文本：`ReaderEpubInlineTest` 检查三个独立开关及重开保留、不同字号下的注音行高、分页底文完整性、脚注坐标命中、两种模式中点击脚注不翻页、关闭脚注恢复普通点击及长按选择，输出 `epub-preferences.png`、`epub-inline-*.png` 和 `epub-footnote-*.png` 供视觉验收。
 - 设置分类转场：`SettingsMotionTest` 覆盖六个分类的进入/返回中间帧、快速系统返回、电子纸与减少动效直接切换、途中关闭动画及保留滚动位置；`SettingsCategoriesTest` 验证分类与重建恢复。
 
 直接使用 instrumentation 时 runner 为 `cc.novelia.app.test/androidx.test.runner.AndroidJUnitRunner`。测试中止、`INSTRUMENTATION_FAILED` 和跳过都不能记作通过。

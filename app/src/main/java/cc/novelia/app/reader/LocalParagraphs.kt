@@ -3,6 +3,7 @@ package cc.novelia.app.reader
 import cc.novelia.app.data.model.Chapter
 import cc.novelia.app.data.model.LocalBilingualGroup
 import cc.novelia.app.data.model.ReaderSettings
+import cc.novelia.app.data.model.InlineKind
 
 /** 备份和本地 JSON 同样是外部输入；坏配对不能隐藏、重复或越界读取正文。 */
 internal fun validLocalGroups(chapter: Chapter, checkCancelled: () -> Unit = {}): List<LocalBilingualGroup> {
@@ -36,14 +37,26 @@ internal fun projectLocalParagraphs(chapter: Chapter, settings: ReaderSettings, 
     val secondary = chapter.localContent!!.secondary.toSet()
     // 复用普通投影的空段和插图校验，但不传入任何虚构的译文数组。
     val original = projectParagraphs(Chapter(paragraphs = chapter.paragraphs), settings.copy(mode = "jp"), checkCancelled)
-    fun text(indices: List<Int>) = indices.joinToString("\n") { chapter.paragraphs[it] }
+    fun part(indices: List<Int>, source: String, secondary: Boolean = false): TextPart {
+        var offset = 0
+        val marks = indices.flatMap { index ->
+            val text = chapter.paragraphs[index]
+            val mapped = chapter.localContent.inline[index].orEmpty().filter { it.validFor(text) }.mapNotNull { mark ->
+                val value = if (mark.kind == InlineKind.Note) chapter.localContent.notes[mark.value] ?: return@mapNotNull null else mark.value
+                mark.copy(start = mark.start + offset, end = mark.end + offset, value = value)
+            }
+            offset += text.length + 1
+            mapped
+        }
+        return TextPart(indices.joinToString("\n") { chapter.paragraphs[it] }, source, secondary, marks)
+    }
     return buildList {
         for (paragraph in original) {
             checkCancelled()
             val group = starts[paragraph.index]
             if (group != null) {
-                val jp = TextPart(text(group.original), "日文", settings.mode in setOf("jp-zh", "zh-jp"))
-                val translations = group.translations.map { TextPart(text(it), "译文") }
+                val jp = part(group.original, "日文", settings.mode in setOf("jp-zh", "zh-jp"))
+                val translations = group.translations.map { part(it, "译文") }
                 val parts = when (settings.mode) {
                     "jp" -> listOf(jp)
                     "jp-zh" -> listOf(jp) + translations
@@ -53,8 +66,8 @@ internal fun projectLocalParagraphs(chapter: Chapter, settings: ReaderSettings, 
                 add(ReadingParagraph(paragraph.index, parts))
             } else if (!consumed[paragraph.index]) {
                 add(paragraph.copy(parts = paragraph.parts.map {
-                    it.copy(source = if (paragraph.index in secondary || settings.mode == "jp") "原文" else "本地正文",
-                        secondary = paragraph.index in secondary)
+                    part(listOf(paragraph.index), if (paragraph.index in secondary || settings.mode == "jp") "原文" else "本地正文",
+                        paragraph.index in secondary)
                 }))
             }
         }

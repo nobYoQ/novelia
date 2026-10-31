@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"time"
 
 	core "github.com/inqadh/jissr-bypass"
@@ -37,7 +38,11 @@ func connectionContext(ctx context.Context) (context.Context, context.CancelFunc
 // Keep the upstream encrypted resolver, but own the custom TLS dial so its
 // deadline actually applies. net/http detaches in-flight dials from request
 // cancellation; a request timer alone would leave stalled TLS dials running.
-func newHTTPTransport(resolver *core.Client) *http.Transport {
+func newHTTPTransport(resolver *core.Client, proxies ...ProxyResolver) *http.Transport {
+	var proxy ProxyResolver
+	if len(proxies) > 0 {
+		proxy = proxies[0]
+	}
 	return &http.Transport{
 		DialTLSContext: func(ctx context.Context, network, address string) (net.Conn, error) {
 			ctx, cancel := connectionContext(ctx)
@@ -46,7 +51,7 @@ func newHTTPTransport(resolver *core.Client) *http.Transport {
 			if err != nil || port != "443" || !protectedURL("https://"+host+"/") {
 				return nil, errors.New("invalid ECH destination")
 			}
-			return dialResolvedECH(ctx, resolver, network, host)
+			return dialResolvedECH(ctx, resolver, network, host, proxy)
 		},
 		ForceAttemptHTTP2: true,
 		MaxIdleConns:      64, MaxIdleConnsPerHost: 8,
@@ -54,7 +59,20 @@ func newHTTPTransport(resolver *core.Client) *http.Transport {
 	}
 }
 
-func dialResolvedECH(ctx context.Context, resolver *core.Client, network, host string) (net.Conn, error) {
+func dialResolvedECH(ctx context.Context, resolver *core.Client, network, host string, proxies ...ProxyResolver) (net.Conn, error) {
+	var provider ProxyResolver
+	if len(proxies) > 0 {
+		provider = proxies[0]
+	}
+	proxy, err := selectedProxy(provider, "https://"+host+"/")
+	if err != nil {
+		return nil, err
+	}
+	proxyOutcome := "direct"
+	if proxy != nil {
+		proxyOutcome = "http_connect"
+	}
+	diagnostic(ctx, diagnosticEvent{Stage: "proxy", Outcome: proxyOutcome})
 	resolved := diagnosticPhase(ctx, "doh_ech")
 	resolution, err := resolver.Resolve(ctx, host)
 	resolved(err)
@@ -70,7 +88,7 @@ func dialResolvedECH(ctx context.Context, resolver *core.Client, network, host s
 		func(ctx context.Context, ip string) (net.Conn, error) {
 			return dialECHAddress(ctx, network, host, ip, resolution.ECH, func(config []byte) {
 				resolver.UpdateCachedECH(host, resolution, config)
-			})
+			}, proxy)
 		})
 	if err != nil {
 		resolver.InvalidateResolution(host, resolution)
@@ -85,10 +103,14 @@ func dialResolvedECH(ctx context.Context, resolver *core.Client, network, host s
 	return connection, nil
 }
 
-func dialECHAddress(ctx context.Context, network, host, ip string, config []byte, onAcceptedRetry func([]byte)) (net.Conn, error) {
+func dialECHAddress(ctx context.Context, network, host, ip string, config []byte, onAcceptedRetry func([]byte), proxies ...*url.URL) (net.Conn, error) {
+	var proxy *url.URL
+	if len(proxies) > 0 {
+		proxy = proxies[0]
+	}
 	for attempt := 0; attempt < 2; attempt++ {
 		tcpDone := diagnosticPhase(ctx, "tcp")
-		raw, err := (&net.Dialer{KeepAlive: 30 * time.Second}).DialContext(ctx, network, net.JoinHostPort(ip, "443"))
+		raw, err := dialECHSocket(ctx, network, net.JoinHostPort(ip, "443"), proxy)
 		tcpDone(err)
 		if err != nil {
 			return nil, fmt.Errorf("tcp: %w", err)

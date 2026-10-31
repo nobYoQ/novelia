@@ -10,6 +10,22 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class WebDavProjectionTest {
+    @Test fun statusItemOrderSyncsAndOldRecordsKeepCurrentChoices() {
+        val custom = ReaderSettings(readingStatusItems = listOf("battery", "time"))
+        val docs = documents(LibraryState(reader = custom, bookSettings = mapOf(web.key to custom)))
+        val settings = docs.getValue(SyncDomain.SETTINGS)
+        WebDavProjection.validateRecords(settings)
+        val local = LibraryState(reader = ReaderSettings(readingStatusItems = listOf("chapter")))
+        val restored = WebDavProjection.applyLibrary(local, docs, setOf(SyncDomain.SETTINGS))
+        assertEquals(custom.readingStatusItems, restored.reader.readingStatusItems)
+        assertEquals(custom.readingStatusItems, restored.bookSettings.getValue(web.key).readingStatusItems)
+        val legacy = settings.copy(records = settings.records.mapValues { (_, record) -> record.copy(fields = record.fields - "readingStatusItems") })
+        WebDavProjection.validateRecords(legacy)
+        assertEquals(local.reader.readingStatusItems, WebDavProjection.applyLibrary(local, mapOf(SyncDomain.SETTINGS to legacy), setOf(SyncDomain.SETTINGS)).reader.readingStatusItems)
+        listOf("[\"time\",\"time\"]", "[\"unknown\"]", "[1]").forEach { invalid ->
+            assertThrows(IllegalArgumentException::class.java) { WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "readingStatusItems", Json.parseToJsonElement(invalid)) }
+        }
+    }
     @Test fun legacyDevicePreferencesCanOmitTapZonesButNotExistingFields() {
         val group = WebDavProjection.library(LibraryState(), includeDevicePreferences = true)
             .getValue(SyncDomain.SETTINGS).getValue("@reader").getValue("devicePreferences") as JsonObject

@@ -38,6 +38,8 @@ open class ApiException(val status: Int, override val message: String) : IOExcep
 class NoveliaApi(val session: AuthenticationSession?, val baseUrl: String = "https://n.novelia.cc/api/", val transport: OkHttpClient = OkHttpClient.Builder().connectTimeout(20, TimeUnit.SECONDS).readTimeout(60, TimeUnit.SECONDS).followRedirects(false).build(), private val onMutation: (Long) -> Unit = {}, private val onKeywords: (Collection<String>) -> Unit = {}, private val onResourceMutation: (MetadataMutation) -> Unit = {}) {
     val cloudMutations = CloudMutationQueue()
     internal val downloadTransport by lazy { transport.forDownloads() }
+    private val uploadTransport by lazy { transport.newBuilder().callTimeout(0, TimeUnit.MILLISECONDS)
+        .retryOnConnectionFailure(false).writeTimeout(120, TimeUnit.SECONDS).build() }
     @Volatile var lastMutationAt: Long = 0L
         private set
     @Volatile var catalogMutationAt: Long = 0L
@@ -48,10 +50,17 @@ class NoveliaApi(val session: AuthenticationSession?, val baseUrl: String = "htt
     fun url(path: String, params: List<Pair<String, String>> = emptyList()): String = baseUrl.toHttpUrl().newBuilder().addEncodedPathSegments(path.trimStart('/')).apply { params.forEach { (k, v) -> addQueryParameter(k, v) } }.build().toString()
     suspend fun request(method: String, path: String, body: String? = null, params: Map<String, String> = emptyMap(), contentType: String = "application/json", binding: SessionBinding? = session?.capture(), errorMessage: ((Response) -> String?)? = null): String = withContext(Dispatchers.IO) {
         val request = Request.Builder().url(url(path, params.toList())).header("Accept", "application/json")
-            .method(method, if (method in listOf("GET", "HEAD")) null else (body ?: "").toRequestBody(contentType.toMediaType())).build()
-        val text = withAuthenticatedResponse(request, binding) { response ->
+            .method(method, if (method in listOf("GET", "HEAD")) null else (body ?: "").toRequestBody(contentType.toMediaType()))
+            .apply { if (method in listOf("GET", "HEAD")) {
+                tag(RecoverableNetworkRead::class.java, RecoverableNetworkRead)
+                tag(ManagedConnectAttempts::class.java, ManagedConnectAttempts)
+            } }.build()
+        suspend fun read() = withAuthenticatedResponse(request, binding) { response ->
             if (!response.isSuccessful) throw errorMessage?.invoke(response)?.let { ApiException(response.code, it) } ?: apiError(response.code)
             response.body?.string().orEmpty()
+        }
+        val text = withRequestBudget(transport.foregroundBudget()) {
+            if (method in listOf("GET", "HEAD")) recoverRead(transport.networkConnections(), ::read) else read()
         }
         if (method !in listOf("GET", "HEAD")) recordMutation(method, path, binding)
         text
@@ -71,7 +80,7 @@ class NoveliaApi(val session: AuthenticationSession?, val baseUrl: String = "htt
             val authorized = request.newBuilder().removeHeader("Authorization").apply { token?.let { header("Authorization", "Bearer $it") } }.build()
             val authenticated = bound?.let { session?.bindRequest(authorized, it) } ?: authorized
             val result = try {
-                client.newCall(authenticated).awaitBody { response ->
+                client.newNetworkCall(authenticated).awaitBody { response ->
                     ensureCurrent()
                     if (response.code == 401 && retry) AuthResponse.Unauthorized
                     else AuthResponse.Value(readResponse(response))
@@ -127,7 +136,7 @@ class NoveliaApi(val session: AuthenticationSession?, val baseUrl: String = "htt
         val request = Request.Builder().url(url("wenku/${ref.id}/volume/${encodeSegment(name)}"))
             .post(MultipartBody.Builder().setType(MultipartBody.FORM).addFormDataPart("jp", name, file.asRequestBody("application/octet-stream".toMediaType())).build())
             .build()
-        withAuthenticatedResponse(request, binding) { response ->
+        withAuthenticatedResponse(request, binding, uploadTransport) { response ->
             if (!response.isSuccessful) throw ApiException(response.code, "上传失败（${response.code}），请检查账号权限和文件格式")
         }
         recordMutation("POST", "wenku/${ref.id}/volume/${encodeSegment(name)}", binding)

@@ -21,7 +21,8 @@ internal data class ReaderChapterTarget(
     val id: String,
     val startAtEnd: Boolean = false,
     val searchMatch: ReadingTextMatch? = null,
-    val returnPoint: ReadingReturnPoint? = null
+    val returnPoint: ReadingReturnPoint? = null,
+    val automatic: Boolean = false
 )
 
 /**
@@ -42,6 +43,8 @@ internal class ReaderChapterLoad<T>(
         private set
     var error by mutableStateOf<String?>(null)
         private set
+    var failure by mutableStateOf<Throwable?>(null)
+        private set
     private var job: Job? = null
     private var generation = 0
 
@@ -59,7 +62,11 @@ internal class ReaderChapterLoad<T>(
                 if(generation == requestGeneration) onLoaded(next, result)
             } catch(e: CancellationException) { throw e }
             catch(e: Exception) {
-                if(generation == requestGeneration) error = errorMessage(e)
+                if(generation == requestGeneration) {
+                    failure = e; error = errorMessage(e)
+                    // 自动续章失败后重试属于用户的新操作，只打开章节，不恢复自动阅读。
+                    target = next.copy(automatic = false)
+                }
             } finally {
                 if(generation == requestGeneration) {
                     loading = false
@@ -78,5 +85,6 @@ internal class ReaderChapterLoad<T>(
         target = null
         loading = false
         error = null
+        failure = null
     }
 }

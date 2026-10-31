@@ -25,6 +25,7 @@ class ProfileSecondaryNavigationTest {
                 Triple("updates", "书架更新", "检查更新"),
                 Triple("notes", "书签与笔记", "全部书籍"),
                 Triple("tools", "文件工具", "个人术语表"),
+                Triple("reading-stats", "阅读统计", "记录阅读时长"),
                 Triple("blocked", "屏蔽管理", "添加用户"),
                 Triple("backup", "阅读资料备份", "导出备份"),
                 Triple("about", "帮助与关于", "Novelia"),

@@ -1,5 +1,7 @@
 package cc.novelia.app.data.auth
 
+import cc.novelia.app.data.network.newNetworkCall
+
 import android.content.Context
 import android.util.Base64
 import android.webkit.CookieManager
@@ -105,7 +107,7 @@ class Session(context: Context, private val client: OkHttpClient = OkHttpClient.
             val url = "${selected.source.authOrigin}/api/v1/auth/refresh?app=${target.appId}"
             val ownCookie = cookie(selected.source, url)
             // 镜像 SSO Cookie 不进 WebView。仅从仍有效的同线路小说会话复用，
-            // 成功后独立保存到论坛；退出小说不会破坏已有论坛续期。
+            // 成功后独立保存到论坛，供论坛令牌续期使用。
             val borrowedCookies = if(ownCookie == null && selected.source == BookSource.XKVI) sharedAuth?.let { (main, mainBinding) ->
                 main.current(mainBinding) { mainSelection ->
                     if(mainSelection.source == selected.source) main.stored(selected.source, "cookies") else null
@@ -122,7 +124,7 @@ class Session(context: Context, private val client: OkHttpClient = OkHttpClient.
                 .post(ByteArray(0).toRequestBody()).build() to borrowedCookies
         } ?: return false
         val (request, borrowedCookies) = refresh
-        return client.newCall(request).awaitBody { response ->
+        return client.newNetworkCall(request).awaitBody { response ->
             context.ensureActive()
             ensureCurrent(binding)
             if(!response.isSuccessful) {
@@ -155,7 +157,7 @@ class Session(context: Context, private val client: OkHttpClient = OkHttpClient.
             }
         }
     }
-    /** 自动复用同线路已登录小说账号的认证；显式登录可复用 Cookie，并解除主动退出状态。 */
+    /** 仅复用同线路已登录小说账号的认证；显式登录可解除论坛主动退出状态。 */
     suspend fun loginFromSharedAuth(main: Session, explicit: Boolean = false): Boolean {
         require(target == AuthTarget.FORUM && main.target == AuthTarget.NOVEL)
         val binding = capture()
@@ -163,8 +165,9 @@ class Session(context: Context, private val client: OkHttpClient = OkHttpClient.
         return withContext(Dispatchers.IO) { refreshLock.withLock {
             if(tokenFor(binding) != null) return@withLock true
             val selected = sources.capture()
-            if(!explicit && (preferences.getValue(selected.source).getBoolean(AUTO_LOGIN_DISABLED, false) ||
-                    mainBinding.source != selected.source.id || mainBinding.account == null)) return@withLock false
+            // 点击登录也不能仅凭残留 Cookie 恢复上一个账号；小说游客必须使用登录表单。
+            if(mainBinding.source != selected.source.id || mainBinding.account == null) return@withLock false
+            if(!explicit && preferences.getValue(selected.source).getBoolean(AUTO_LOGIN_DISABLED, false)) return@withLock false
             main.ensureCurrent(mainBinding)
             refreshRequest(binding, allowAccountChange = true, sharedAuth = main to mainBinding)
         } }
@@ -183,7 +186,7 @@ class Session(context: Context, private val client: OkHttpClient = OkHttpClient.
         require(username.isNotBlank() && password.isNotEmpty()) { "请填写用户名或邮箱和密码" }
         val binding = capture()
         return withContext(Dispatchers.IO) { refreshLock.withLock {
-            val value = authenticate(binding, if(email == null) "login" else "register", buildJsonObject {
+            val value = authenticate(binding, if(email == null) AuthOperation.LOGIN else AuthOperation.REGISTER, buildJsonObject {
                 put("app", target.appId); put("username", username.trim()); put("password", password)
                 if(email != null) { put("email", email.trim()); put("otp", otp.orEmpty().trim()) }
             })
@@ -196,27 +199,31 @@ class Session(context: Context, private val client: OkHttpClient = OkHttpClient.
             } else refreshRequest(binding, allowAccountChange = true)
         } }
     }
-    suspend fun requestOtp(email: String, resetPassword: Boolean = false) {
+    /** 人机验证令牌仅用于本次发码；认证请求仍复用所选线路的原生网络层。 */
+    suspend fun requestOtp(email: String, turnstileToken: String, resetPassword: Boolean = false) {
         require(email.isNotBlank()) { "请填写邮箱" }
+        require(turnstileToken.isNotBlank() && turnstileToken.length <= 2048) { "请先完成人机验证" }
         val binding = capture()
         withContext(Dispatchers.IO) {
-            authenticate(binding, "otp/request", buildJsonObject {
+            authenticate(binding, if(resetPassword) AuthOperation.RESET_OTP else AuthOperation.REGISTER_OTP, buildJsonObject {
                 put("email", email.trim()); put("type", if(resetPassword) "reset_password" else "verify")
+                put("turnstileToken", turnstileToken)
             })
         }
     }
     suspend fun resetPassword(email: String, password: String, otp: String) {
         require(email.isNotBlank() && password.isNotEmpty() && otp.isNotBlank()) { "请填写邮箱、新密码和验证码" }
+        require(otp.trim().length == 26) { "找回密码验证码应为 26 位字符，请完整复制邮件中的验证码" }
         val binding = capture()
         withContext(Dispatchers.IO) {
-            authenticate(binding, "password/reset", buildJsonObject {
+            authenticate(binding, AuthOperation.RESET_PASSWORD, buildJsonObject {
                 put("email", email.trim()); put("password", password); put("otp", otp.trim())
             })
         }
     }
-    private suspend fun authenticate(binding: SessionBinding, path: String, payload: JsonObject): String {
+    private suspend fun authenticate(binding: SessionBinding, operation: AuthOperation, payload: JsonObject): String {
         val request = current(binding) { selected ->
-            val url = "${selected.source.authOrigin}/api/v1/auth/$path"
+            val url = "${selected.source.authOrigin}/api/v1/auth/${operation.path}"
             Request.Builder().url(url)
                 .apply { if(followsBookSources) tag(SourceSelection::class.java, selected) }
                 .header("Origin", if(selected.source == BookSource.ORIGINAL) target.origin else selected.source.origin)
@@ -224,18 +231,14 @@ class Session(context: Context, private val client: OkHttpClient = OkHttpClient.
                 .post(payload.toString().toRequestBody("application/json".toMediaType())).build()
         }
         val context = currentCoroutineContext()
-        return client.newCall(request).awaitBody { response ->
+        return client.newNetworkCall(request).awaitBody { response ->
             context.ensureActive()
-            current(binding) {
-                if(!response.isSuccessful) throw ApiException(response.code, when(response.code) {
-                    400, 422 -> "填写的信息不正确，请检查用户名、邮箱或验证码"
-                    401 -> "登录失败，请检查账号和密码"
-                    403 -> "认证服务拒绝访问，请稍后重试或切换书源"
-                    409 -> "用户名或邮箱已被使用，请直接登录"
-                    429 -> "操作过于频繁，请稍后重试"
-                    502 -> "认证未完成，请检查填写的信息或稍后重试（502）"
-                    else -> "认证服务暂不可用（${response.code}），请稍后重试"
-                })
+            ensureCurrent(binding)
+            if(!response.isSuccessful) {
+                // 响应读取在会话锁外；读取期间换号、切线或取消后不能显示旧错误。
+                val error = authenticationError(operation, response)
+                context.ensureActive()
+                current(binding) { throw error }
             }
             val value = response.body?.string()?.trim().orEmpty()
             context.ensureActive()
@@ -245,8 +248,17 @@ class Session(context: Context, private val client: OkHttpClient = OkHttpClient.
             }
         }
     }
-    // 服务端只提供全局 SSO 退出；本地退出保留另一应用的访问令牌和刷新 Cookie，
-    // 后续显式登录仍可复用 SSO。clear 会立即使当前会话的旧刷新失效。
+    /** 主站退出同时清除同线路论坛会话，使用共同线路锁防止清理途中切换来源。 */
+    suspend fun logoutWithForum(forum: Session) {
+        require(target == AuthTarget.NOVEL && forum.target == AuthTarget.FORUM && sources === forum.sources)
+        val binding = capture()
+        withContext(Dispatchers.IO) { current(binding) {
+            clear()
+            forum.clear()
+        } }
+    }
+    // 单独退出论坛仍保留小说会话；共享 Cookie 只有在同线路小说已登录时才能用于论坛登录。
+    // clear 会立即使当前会话的旧登录、刷新请求失效。
     suspend fun logout() = withContext(Dispatchers.IO) { clear() }
     fun clear() { val selected = sources.capture(); sources.withSelection(selected) { state.clear {
         preferences.getValue(selected.source).edit().clear()

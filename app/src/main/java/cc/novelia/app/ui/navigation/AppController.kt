@@ -19,6 +19,7 @@ import cc.novelia.app.data.catalog.NovelFilterDetails
 import cc.novelia.app.data.catalog.NovelFilterMetadataCache
 import cc.novelia.app.data.catalog.NovelFilterPageCache
 import cc.novelia.app.data.cache.MetadataCache
+import cc.novelia.app.data.cache.ChapterCacheGeneration
 import cc.novelia.app.data.cache.WeightedMemoryCache
 import cc.novelia.app.data.community.ForumCategory
 import cc.novelia.app.data.community.ForumPage
@@ -157,7 +158,7 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
         }
     }
     /** 一次性正文交接，附带账号绑定和缓存代次，避免跨章导航后再次请求或接收过期内容。 */
-    internal data class ReaderHandoff(val ref: BookRef, val id: String, val value: Pair<Chapter, Boolean>, val binding: SessionBinding, val generation: Long)
+    internal data class ReaderHandoff(val ref: BookRef, val id: String, val value: Pair<Chapter, Boolean>, val binding: SessionBinding, val generation: ChapterCacheGeneration)
     private var readerHandoff: ReaderHandoff? = null
     private data class ReaderTocKey(val ref: BookRef, val binding: SessionBinding, val generation: Long)
     private var readerToc: Pair<ReaderTocKey, ReaderTocState>? = null
@@ -207,7 +208,7 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
     private fun goReader(ref: BookRef, chapter: String) = go("reader/${ref.provider}/${ref.id}/${Uri.encode(chapter)}")
     internal suspend fun prepareReaderChapter(ref: BookRef, id: String): ReaderHandoff {
         val binding = session.capture()
-        val generation = store.cacheGeneration.value
+        val generation = store.chapterGeneration(ref)
         val value = chapter(ref, id)
         session.ensureCurrent(binding)
         return ReaderHandoff(ref, id, value, binding, generation)
@@ -215,7 +216,7 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
     /** 离开当前阅读器前先校验目标章，已加载正文只交接一次，避免重复请求。 */
     internal fun readPreparedChapter(prepared: ReaderHandoff) {
         session.ensureCurrent(prepared.binding)
-        check(prepared.generation == store.cacheGeneration.value) { "缓存已更新，请重新加载章节" }
+        check(prepared.generation == store.chapterGeneration(prepared.ref)) { "缓存已更新，请重新加载章节" }
         synchronized(this) { readerHandoff = prepared }
         nav.popBackStack()
         goReader(prepared.ref, prepared.id)
@@ -330,7 +331,7 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
         val handoff = synchronized(this@AppController) {
             readerHandoff?.takeIf { it.ref == ref && it.id == id }?.also { readerHandoff = null }
         }
-        if(!forceNetwork && handoff != null && handoff.binding == session.capture() && handoff.generation == store.cacheGeneration.value)
+        if(!forceNetwork && handoff != null && handoff.binding == session.capture() && handoff.generation == store.chapterGeneration(ref))
             return@withContext handoff.value
         if(ref.isLocal) {
             val doc = store.documentIndex(ref.id); val index = doc.chapters.indexOfFirst { it.id == id }.coerceAtLeast(0)
@@ -338,7 +339,7 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
             c.toReaderChapter(doc.name, doc.chapters.getOrNull(index - 1)?.id, doc.chapters.getOrNull(index + 1)?.id) to true
         } else {
             val binding = session.capture()
-            val generation = store.cacheGeneration.value
+            val generation = store.chapterGeneration(ref)
             val cached = store.cachedChapter(ref, id)
             if(cached != null && !forceNetwork) return@withContext cached to true
             try {

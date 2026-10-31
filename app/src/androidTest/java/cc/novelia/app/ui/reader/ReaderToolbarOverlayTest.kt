@@ -32,6 +32,45 @@ import org.junit.runner.RunWith
 class ReaderToolbarOverlayTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
 
+    @Test fun automaticReadingPausesInBackgroundAndDoesNotRestartAfterRecreation() = withReader(ReaderSettings()) { _, _ ->
+        compose.onNodeWithContentDescription("自动阅读").performClick()
+        compose.onNodeWithText("开始自动阅读").performScrollTo().performClick()
+        compose.onNodeWithTag("reader-auto-reading").assertExists()
+        compose.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
+        compose.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+        compose.waitForIdle()
+        compose.onNodeWithTag("reader-auto-reading").assertDoesNotExist()
+        compose.onNodeWithTag("reader-scroll").performTouchInput { click(center) }
+        compose.onNodeWithContentDescription("自动阅读").performClick()
+        compose.onNodeWithText("开始自动阅读").performScrollTo().performClick()
+        compose.onNodeWithTag("reader-auto-reading").assertExists()
+        compose.activityRule.scenario.recreate()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("reader-scroll").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("reader-auto-reading").assertDoesNotExist()
+        compose.runOnIdle {
+            assertEquals(0, compose.activity.window.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
+    @Test fun orientationAppliesPerBookAndRestoresAfterReaderExit() = withReader(ReaderSettings(orientation = "portrait")) { app, ref ->
+        compose.waitUntil(10_000) { compose.activity.requestedOrientation == android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT }
+        compose.onNodeWithTag("reader-scroll").performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 800f) }
+        compose.waitUntil(10_000) { (app.store.state.value.positions[ref.key]?.textOffset ?: 0) > 0 }
+        val before = app.store.state.value.positions.getValue(ref.key)
+        compose.runOnIdle { app.store.update { it.copy(bookSettings = it.bookSettings + (ref.key to it.reader.copy(orientation = "landscape"))) } }
+        compose.waitUntil(15_000) { compose.activity.requestedOrientation == android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE &&
+            compose.activity.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE &&
+            compose.onAllNodesWithTag("reader-scroll").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitForIdle()
+        compose.runOnIdle {
+            val after = app.store.state.value.positions.getValue(ref.key)
+            assertEquals(before.sourceParagraph, after.sourceParagraph)
+            assertEquals(before.textOffset, after.textOffset)
+        }
+        compose.onNode(hasContentDescription("返回") and hasAnyAncestor(hasTestTag("reader-top-toolbar"))).performClick()
+        compose.waitUntil(10_000) { compose.activity.requestedOrientation == android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
+    }
+
     @Test fun automaticPagesKeepExactTextPageCountAndAnchorUnderOverlays() = verifyOverlay("auto")
 
     @Test fun continuousScrollingKeepsTextCoordinatesAndPositionUnderOverlays() = verifyOverlay("scroll")
@@ -48,7 +87,8 @@ class ReaderToolbarOverlayTest {
         compose.onNode(hasContentDescription("朗读本章") and hasAnyAncestor(hasTestTag("reader-top-toolbar")))
             .assertIsDisplayed().performClick()
         compose.onNodeWithText("系统朗读").assertIsDisplayed()
-        compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }
+        // 弹层拥有独立窗口，系统返回键应先交给弹层，而不是直接调用底下 Activity 的回调。
+        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
         compose.onNode(hasContentDescription("阅读设置") and hasAnyAncestor(hasTestTag("reader-bottom-toolbar")))
             .assertIsDisplayed().performClick()
         compose.onNodeWithText("阅读偏好").assertIsDisplayed()
@@ -98,7 +138,7 @@ class ReaderToolbarOverlayTest {
         compose.onNodeWithTag("reader-reading-status-bar").assertIsDisplayed()
         compose.onNodeWithContentDescription("阅读设置").performClick()
         compose.onNodeWithText("仅应用于这本书").performClick()
-        compose.onNodeWithText("翻页").performClick()
+        compose.onNodeWithText("界面").performClick()
         compose.onNodeWithText("底部阅读信息").performScrollTo().performClick()
         compose.onNodeWithText("关闭面板").performClick()
         compose.onNodeWithTag("reader-reading-status-bar").assertDoesNotExist()
@@ -292,13 +332,18 @@ class ReaderToolbarOverlayTest {
             LocalChapter("second", "第二章 归来", listOf("星光照亮归途。".repeat(100)))
         )
     ) { app, ref ->
-        fun awaitStatusBar(visible: Boolean) {
+        fun awaitSystemBars(statusVisible: Boolean, navigationVisible: Boolean = false) {
             compose.waitUntil(10_000) {
-                androidx.core.view.ViewCompat.getRootWindowInsets(compose.activity.window.decorView)
-                    ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.statusBars()) == visible
+                val insets = androidx.core.view.ViewCompat.getRootWindowInsets(compose.activity.window.decorView)
+                insets?.isVisible(androidx.core.view.WindowInsetsCompat.Type.statusBars()) == statusVisible &&
+                    insets.isVisible(androidx.core.view.WindowInsetsCompat.Type.navigationBars()) == navigationVisible
             }
         }
-        awaitStatusBar(true)
+        awaitSystemBars(true)
+        compose.waitForIdle()
+        assertEquals("导航栏隐藏后底栏不能留下额外安全区空白",
+            compose.onNodeWithTag("reader-bottom-toolbar").fetchSemanticsNode().boundsInRoot.bottom,
+            compose.onNodeWithTag("reader-reading-status-bar").fetchSemanticsNode().boundsInRoot.bottom, 1f)
         compose.onNodeWithContentDescription("阅读设置").performClick()
         compose.onNodeWithText("仅应用于这本书").performClick()
         compose.onNodeWithText("翻页").performClick()
@@ -306,15 +351,19 @@ class ReaderToolbarOverlayTest {
         compose.onNodeWithText("列表与面板翻屏按钮").performScrollTo().performClick()
         compose.onNodeWithText("上一屏").assertDoesNotExist()
         compose.onNodeWithText("下一屏").assertDoesNotExist()
+        compose.onNodeWithText("界面").performClick()
         compose.onNodeWithText("阅读时隐藏状态栏").performScrollTo().performClick()
         screenshot("reader-display-preferences")
         compose.onNodeWithText("关闭面板").performClick()
-        awaitStatusBar(false)
+        awaitSystemBars(false)
         compose.onNodeWithText("上一页").assertDoesNotExist()
         compose.onNodeWithText("下一页").assertDoesNotExist()
         compose.onNodeWithContentDescription("下一章").performClick()
         waitForChapter(app, ref, "second")
-        awaitStatusBar(false)
+        awaitSystemBars(false)
+        compose.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
+        compose.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+        awaitSystemBars(false)
         screenshot("reader-hidden-status-bar")
         runBlocking { app.store.flush() }
         val saved = LocalStore(compose.activity).state.value
@@ -325,10 +374,10 @@ class ReaderToolbarOverlayTest {
         assertFalse(saved.bookSettings.getValue(ref.key).showEInkScreenButtons)
         assertTrue(saved.bookSettings.getValue(ref.key).hideStatusBar)
         compose.onNodeWithContentDescription("返回").performClick()
-        awaitStatusBar(true)
+        awaitSystemBars(true, navigationVisible = true)
         compose.onNodeWithText("工具栏覆盖测试").performClick()
         compose.waitUntil(15_000) { compose.onAllNodesWithTag("reader-page-counter").fetchSemanticsNodes().isNotEmpty() }
-        awaitStatusBar(false)
+        awaitSystemBars(false)
     }
 
     @Test fun scrollingSeekReachesLongParagraphsAndChapterBoundariesWithoutTurningChapters() = withReader(
@@ -420,7 +469,7 @@ class ReaderToolbarOverlayTest {
         val counter = pageCounter()
         compose.onNodeWithContentDescription("阅读设置").performClick()
         compose.onNodeWithText("仅应用于这本书").performClick()
-        compose.onNodeWithText("翻页").performClick()
+        compose.onNodeWithText("界面").performClick()
         compose.onNodeWithText("阅读进度条").performScrollTo().performClick()
         screenshot("reader-progress-preference")
         compose.onNodeWithText("关闭面板").performClick()
@@ -561,19 +610,19 @@ class ReaderToolbarOverlayTest {
         }
         assertChapterUnchanged(app, ref, "first")
         scrollToChapterEnd()
-        val footerTop = compose.onNodeWithText("本章完").fetchSemanticsNode().boundsInRoot.top
+        val footerTop = compose.onNodeWithText("本章完", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.top
         compose.onNodeWithTag("reader-scroll").performTouchInput {
             down(center)
             moveBy(Offset(0f, -32f * density), delayMillis = 100)
         }
         compose.onNodeWithText("继续上拉加载下一章").assertExists()
-        compose.onAllNodesWithTag("reader-chapter-pull-hint").assertCountEquals(1)
+        compose.onAllNodesWithTag("reader-chapter-pull-hint", useUnmergedTree = true).assertCountEquals(1)
         compose.onNodeWithText("上拉加载下一章").assertDoesNotExist()
         compose.onNodeWithTag("reader-next-chapter-pull").assertDoesNotExist()
         compose.runOnIdle { assertEquals("first", app.store.state.value.positions[ref.key]?.chapterId) }
         compose.onNodeWithTag("reader-scroll").performTouchInput { moveBy(Offset(0f, -48f * density), delayMillis = 150) }
         compose.onNodeWithText("松手加载下一章").assertIsDisplayed()
-        val pulledFooterTop = compose.onNodeWithText("本章完").fetchSemanticsNode().boundsInRoot.top
+        val pulledFooterTop = compose.onNodeWithText("本章完", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.top
         assertTrue("短距离上拉时正文应跟随手指移动", footerTop - pulledFooterTop > 30f * density)
         compose.runOnIdle { assertEquals("达到阈值但未松手不能切章", "first", app.store.state.value.positions[ref.key]?.chapterId) }
         screenshot("reader-pull-ready")
@@ -590,7 +639,8 @@ class ReaderToolbarOverlayTest {
             LocalChapter("second", "第二章 终章", listOf("故事到这里结束。"))
         )
     ) { app, ref ->
-        compose.onNodeWithText("短章正文。", substring = true).performClick()
+        // 使用菜单语义动作；短章的屏幕中央可能落在“阅读下一章”按钮上。
+        compose.onNodeWithTag("reader-scroll").performSemanticsAction(SemanticsActions.OnClick)
         assertToolbarHidden()
         scrollToChapterEnd()
         assertChapterUnchanged(app, ref, "first")
@@ -665,10 +715,10 @@ class ReaderToolbarOverlayTest {
         scrollToChapterEnd()
         val density = compose.activity.resources.displayMetrics.density
         val body = compose.onNodeWithTag("reader-scroll")
-        val restingTop = compose.onNodeWithText("本章完").fetchSemanticsNode().boundsInRoot.top
+        val restingTop = compose.onNodeWithText("本章完", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.top
         body.performTouchInput { down(center); moveBy(Offset(0f, -80f * density), delayMillis = 200) }
         compose.onNodeWithText("松手加载下一章").assertIsDisplayed()
-        assertEquals("电子纸上拉反馈不连续移动正文", restingTop, compose.onNodeWithText("本章完").fetchSemanticsNode().boundsInRoot.top, .5f)
+        assertEquals("电子纸上拉反馈不连续移动正文", restingTop, compose.onNodeWithText("本章完", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.top, .5f)
         compose.runOnIdle { assertEquals("first", app.store.state.value.positions[ref.key]?.chapterId) }
         body.performTouchInput { cancel() }
         compose.onNodeWithTag("reader-next-chapter-pull").assertDoesNotExist()
@@ -692,24 +742,24 @@ class ReaderToolbarOverlayTest {
         for(disableMotion in listOf(true, false)) {
             compose.runOnIdle { app.store.update { it.copy(reducedMotion = false) } }
             compose.waitForIdle()
-            val restingTop = compose.onNodeWithText("本章完").fetchSemanticsNode().boundsInRoot.top
+            val restingTop = compose.onNodeWithText("本章完", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.top
             compose.mainClock.autoAdvance = false
             try {
                 body.performTouchInput { down(center); moveBy(Offset(0f, -80f * density), delayMillis = 200) }
                 compose.mainClock.advanceTimeBy(64)
                 body.performTouchInput { cancel() }
                 compose.mainClock.advanceTimeBy(64)
-                val returningTop = compose.onNodeWithText("本章完").fetchSemanticsNode().boundsInRoot.top
+                val returningTop = compose.onNodeWithText("本章完", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.top
                 assertTrue("应在回弹尚未完成时改变交互状态", restingTop - returningTop > density)
                 if(disableMotion) compose.runOnIdle { app.store.update { it.copy(reducedMotion = true) } }
                 else body.performTouchInput { down(center) }
                 compose.mainClock.advanceTimeBy(32)
                 compose.onNodeWithTag("reader-next-chapter-pull").assertDoesNotExist()
                 assertEquals("关闭动画或再次按下应立即结束旧回弹", restingTop,
-                    compose.onNodeWithText("本章完").fetchSemanticsNode().boundsInRoot.top, .5f)
+                    compose.onNodeWithText("本章完", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.top, .5f)
                 if(!disableMotion) body.performTouchInput { cancel() }
                 compose.mainClock.advanceTimeBy(300)
-                assertEquals(restingTop, compose.onNodeWithText("本章完").fetchSemanticsNode().boundsInRoot.top, .5f)
+                assertEquals(restingTop, compose.onNodeWithText("本章完", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.top, .5f)
             } finally { compose.mainClock.autoAdvance = true }
         }
         assertChapterUnchanged(app, ref, "first")
@@ -850,7 +900,7 @@ class ReaderToolbarOverlayTest {
             val counter = pageCounter()
             compose.onNodeWithContentDescription("阅读设置").performClick()
             compose.onNodeWithText("仅应用于这本书").performClick()
-            compose.onNodeWithText("翻页").performClick()
+            compose.onNodeWithText("界面").performClick()
             val slider = compose.onNodeWithTag("reader-toolbar-transparency")
             slider.performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) { it(.6f) }
             compose.onNodeWithText("工具栏透明度 60%").assertIsDisplayed()
@@ -871,7 +921,7 @@ class ReaderToolbarOverlayTest {
             assertEquals(before, snapshot("reader-page"))
             assertEquals(counter, pageCounter())
             compose.onNodeWithContentDescription("阅读设置").performClick()
-            compose.onNodeWithText("翻页").performClick()
+            compose.onNodeWithText("界面").performClick()
             compose.onNodeWithTag("reader-toolbar-transparency").performScrollTo()
                 .assertRangeInfoEquals(androidx.compose.ui.semantics.ProgressBarRangeInfo(.6f, 0f..1f))
             compose.onNodeWithText("仅应用于这本书").performScrollTo().performClick()

@@ -30,6 +30,9 @@ import kotlinx.serialization.Serializable
     // 通过默认值迁移旧版隐式分页模式和始终显示的静态翻页按钮。
     val paginationMode: String = if(eInkMode || scrollPageTurn || horizontalPageTurn) "auto" else "scroll",
     val showPageButtons: Boolean = paged || paginationMode == "auto",
+    // 行带翻页（可选实现）：开启后静态分页走 RowPagedReader，
+    // 关闭则回落到官方页表翻页，上游对 EInkPage 的改动原样生效。
+    val rowPaging: Boolean = true,
     val beforeEInk: ReaderPagingState? = null, val eInkPreferences: ReaderPagingState? = null,
     val toolbarTransparency: Float = .25f,
     val prefetchChapters: Int = 3, val prefetchWifiOnly: Boolean = true,
@@ -52,15 +55,38 @@ import kotlinx.serialization.Serializable
     val customColors: ReaderCustomColors = ReaderCustomColors(),
     // 字体文件仅保存在本机；切换系统字体时保留已导入字体，便于切回。
     val fontFamily: String = "system",
-    val customFont: ReaderCustomFont? = null
+    val customFont: ReaderCustomFont? = null,
+    val horizontalMargin: Float = 24f, val verticalMargin: Float = 16f,
+    val showWideToc: Boolean = true,
+    val orientation: String = "system",
+    // 自动阅读仅记住速度；运行状态属于当前前台阅读会话，不随备份或重启恢复。
+    val autoReadSpeed: Float = 20f, val autoReadIntervalSeconds: Int = 15,
+    val textReplacements: Map<String, String> = emptyMap(), val textReplacementsEnabled: Boolean = true,
+    val readingStatusItems: List<String> = ReaderStatusItems.defaults,
+    // 只影响附加显示；导入元数据、底文与阅读锚点始终保留。
+    val showEpubRuby: Boolean = true,
+    val epubFootnotePopup: Boolean = true,
+    val showEpubStyles: Boolean = true
 ) {
     companion object {
         const val MIN_LINE_HEIGHT = .5f
         val LINE_HEIGHT_RANGE = MIN_LINE_HEIGHT..2.6f
         val THEMES = listOf("system", "paper", "light", "dark", "monochrome", "custom")
+        val ORIENTATIONS = listOf("system", "portrait", "landscape")
     }
 
     val resolvedParagraphSpacing get() = if(paragraphSpacing.isFinite()) paragraphSpacing.coerceIn(0f, 32f) else 8f
+    val resolvedHorizontalMargin get() = if(horizontalMargin.isFinite()) horizontalMargin.coerceIn(0f, 64f) else 24f
+    val resolvedVerticalMargin get() = if(verticalMargin.isFinite()) verticalMargin.coerceIn(0f, 64f) else 16f
+    val resolvedOrientation get() = orientation.takeIf { it in ORIENTATIONS } ?: "system"
+    val resolvedAutoReadSpeed get() = if(autoReadSpeed.isFinite()) autoReadSpeed.coerceIn(5f, 80f) else 20f
+    val resolvedAutoReadIntervalSeconds get() = autoReadIntervalSeconds.coerceIn(5, 120)
+    val validAutoRead get() = autoReadSpeed in 5f..80f && autoReadIntervalSeconds in 5..120
+    val validTextReplacements get() = validReaderTextReplacements(textReplacements)
+    val validReadingStatusItems get() = ReaderStatusItems.valid(readingStatusItems)
+    val resolvedReadingStatusItems get() = readingStatusItems.takeIf { validReadingStatusItems } ?: ReaderStatusItems.defaults
+    val visibleReadingStatusItems get() = if(showReadingStatusBar) resolvedReadingStatusItems.filter { it != "pages" || staticPagination } else emptyList()
+    val activeTextReplacements get() = textReplacements.takeIf { textReplacementsEnabled && validTextReplacements }.orEmpty()
     val resolvedToolbarTransparency get() = if(toolbarTransparency.isFinite()) toolbarTransparency.coerceIn(0f, 1f) else .25f
     // 兼容黑白模式尚未成为主题选项之前保存的设置。
     val resolvedTheme get() = if(monochrome) "monochrome" else theme

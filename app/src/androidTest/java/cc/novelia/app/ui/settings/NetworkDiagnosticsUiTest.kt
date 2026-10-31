@@ -39,6 +39,7 @@ class NetworkDiagnosticsUiTest {
             AppInteractionMode(false, true) { NoveliaTheme("light") { EchSettings(app.ech) {} } }
         }
         compose.onNodeWithText("网络诊断与日志").assertIsDisplayed()
+        compose.onNodeWithText("问题日志").performClick()
         compose.onNodeWithText("记录问题复现过程").performScrollTo().performClick()
         compose.waitUntil(3000) { app.ech.recording.value }
         compose.onNodeWithText("导出网络日志").performScrollTo().assertIsDisplayed()
@@ -84,9 +85,11 @@ class NetworkDiagnosticsUiTest {
             }
         }
         try {
+            compose.onNodeWithText("问题日志").performClick()
             compose.onNodeWithText("导出网络日志").performScrollTo().performClick()
             compose.waitUntil(5000) { registry.pendingCode != null }
             restoration.emulateSavedInstanceStateRestore()
+            compose.onNodeWithText("正在导出…").performScrollTo().assertIsDisplayed()
             val uri = FileProvider.getUriForFile(app, "${app.packageName}.files", target)
             compose.runOnIdle { registry.dispatchResult(registry.pendingCode!!, Activity.RESULT_OK, Intent().setData(uri)) }
             compose.waitUntil(5000) { target.length() > 0 }

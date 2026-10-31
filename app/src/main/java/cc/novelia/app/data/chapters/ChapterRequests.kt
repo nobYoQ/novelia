@@ -2,6 +2,7 @@ package cc.novelia.app.data.chapters
 
 import cc.novelia.app.data.auth.AuthenticationSession
 import cc.novelia.app.data.auth.SessionBinding
+import cc.novelia.app.data.cache.ChapterCacheGeneration
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.Chapter
 import cc.novelia.app.data.network.NoveliaApi
@@ -19,23 +20,24 @@ import kotlinx.coroutines.ensureActive
  * 读取磁盘缓存的优先级由调用方决定，本类负责真正发起网络读取。
  */
 class ChapterRequests(private val store: LocalStore) {
-    private data class Key(val api: NoveliaApi, val binding: SessionBinding, val generation: Long, val book: BookRef, val chapter: String)
+    private data class Key(val api: NoveliaApi, val binding: SessionBinding, val generation: ChapterCacheGeneration, val book: BookRef, val chapter: String)
     private val requests = SharedRequest<Key, Chapter>()
 
-    fun invalidateBefore(generation: Long) { requests.cancelWhere { it.generation < generation } }
+    fun invalidateBefore(generation: Long) { requests.cancelWhere { it.generation.all < generation } }
+    fun invalidateBook(ref: BookRef) { requests.cancelWhere { it.book == ref } }
 
     suspend fun load(api: NoveliaApi, session: AuthenticationSession, binding: SessionBinding,
-        generation: Long, ref: BookRef, id: String): Chapter {
+        generation: ChapterCacheGeneration, ref: BookRef, id: String): Chapter {
         session.ensureCurrent(binding)
-        if (generation != store.cacheGeneration.value) throw CancellationException("缓存已清理")
+        if (generation != store.chapterGeneration(ref)) throw CancellationException("缓存已清理")
         val chapter = requests.await(Key(api, binding, generation, ref, id)) {
             session.ensureCurrent(binding)
-            if (generation != store.cacheGeneration.value) throw CancellationException("缓存已清理")
+            if (generation != store.chapterGeneration(ref)) throw CancellationException("缓存已清理")
             val fetched = appJson.decodeFromString<Chapter>(api.request("GET", "novel/${ref.key}/chapter/${encodeSegment(id)}", binding = binding))
             currentCoroutineContext().ensureActive()
             session.ensureCurrent(binding)
             // 缓存写入失败不妨碍前台阅读已成功返回的正文。
-            store.withCacheGeneration(generation) {
+            store.withChapterCacheGeneration(ref, generation) {
                 runCatching { store.cacheChapter(ref, id, fetched); recordChapterFreshness(store, ref, id) }
             } ?: throw CancellationException("缓存已清理")
             fetched
@@ -43,7 +45,7 @@ class ChapterRequests(private val store: LocalStore) {
         // 共享任务完成后，每个订阅者还需重新检查自己的取消状态和当前环境。
         currentCoroutineContext().ensureActive()
         session.ensureCurrent(binding)
-        if (generation != store.cacheGeneration.value) throw CancellationException("缓存已清理")
+        if (generation != store.chapterGeneration(ref)) throw CancellationException("缓存已清理")
         return chapter
     }
 }

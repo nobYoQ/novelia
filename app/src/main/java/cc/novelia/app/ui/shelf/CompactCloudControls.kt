@@ -21,6 +21,7 @@ import cc.novelia.app.data.catalog.providers
 import cc.novelia.app.data.model.Folder
 import cc.novelia.app.data.network.CloudWebFilter
 import cc.novelia.app.ui.components.base.*
+import cc.novelia.app.ui.components.book.WebSourceOptions
 
 @Composable internal fun CompactCloudControls(
     folders: List<Folder>, current: Folder?, onFolder: (String) -> Unit, sort: String, onSort: (String) -> Unit,
@@ -98,30 +99,16 @@ import cc.novelia.app.ui.components.base.*
         var draftType by rememberSaveable { mutableIntStateOf(filter.type) }
         var draftLevel by rememberSaveable { mutableIntStateOf(filter.level) }
         var draftTranslate by rememberSaveable { mutableIntStateOf(filter.translate) }
-        var sourcesExpanded by rememberSaveable { mutableStateOf(false) }
         ShelfFilterSheet("筛选云端收藏", "cloud", maxHeight,
             onDismiss = { onExpanded(false) },
-            onReset = { draftKind = 0; draftSource = providers.keys.joinToString(","); draftType = 0; draftLevel = 0; draftTranslate = 0; sourcesExpanded = false },
+            onReset = { draftKind = 0; draftSource = providers.keys.joinToString(","); draftType = 0; draftLevel = 0; draftTranslate = 0 },
             onApply = { focus.clearFocus(); onApply(draftKind, filter.copy(source = draftSource, type = draftType, level = draftLevel, translate = draftTranslate)); onExpanded(false) }) {
             ShelfFilterOptions("小说类型", listOf("网络小说", "文库小说"), setOf(draftKind), "cloud-novel-kind", 2) { draftKind = it }
             if(draftKind == 0) {
                 val selectedSources = draftSource.split(',').filter(String::isNotBlank).toSet()
-                val providerIds = providers.keys.toList()
-                AppTextButton({ sourcesExpanded = !sourcesExpanded }, Modifier.fillMaxWidth().padding(top = 8.dp).testTag("cloud-source-toggle"),
-                    shape = MaterialTheme.shapes.small, contentPadding = PaddingValues(horizontal = 0.dp)) {
-                    Text("书源", Modifier.weight(1f), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(if(selectedSources.size == providers.size) "全部书源" else "已选 ${selectedSources.size} 个", style = MaterialTheme.typography.labelMedium)
-                    Spacer(Modifier.width(4.dp)); Icon(if(sourcesExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, null, Modifier.size(18.dp))
-                }
-                if(sourcesExpanded) {
-                    ShelfFilterOptions("可多选", providers.values.toList(), providerIds.indices.filter { providerIds[it] in selectedSources }.toSet(),
-                        "cloud-sources", 3, multiple = true) { index ->
-                        val id = providerIds[index]
-                        draftSource = selectedSources.toMutableSet().apply { if(!add(id)) remove(id) }.joinToString(",")
-                    }
-                    AppTextButton({ draftSource = providerIds.filterNot { it in selectedSources }.joinToString(",") },
-                        Modifier.align(Alignment.End).testTag("cloud-invert-sources"), contentPadding = PaddingValues(horizontal = 0.dp)) { Text("反选书源", style = MaterialTheme.typography.labelMedium) }
-                }
+                WebSourceOptions(selectedSources, onChange = { selected ->
+                    draftSource = providers.keys.filter { it in selected }.joinToString(",")
+                }, modifier = Modifier.testTag("cloud-sources"), allowEmptySelection = true, tagPrefix = "cloud-source")
                 ShelfFilterOptions("连载状态", typeLabels, setOf(draftType), "cloud-type") { draftType = it }
                 ShelfFilterOptions("作品分级", levelLabels, setOf(draftLevel), "cloud-level", 3) { draftLevel = it }
                 ShelfFilterOptions("翻译来源", translateLabels, setOf(draftTranslate), "cloud-translate", 3) { draftTranslate = it }

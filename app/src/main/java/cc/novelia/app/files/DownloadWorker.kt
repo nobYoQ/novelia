@@ -16,6 +16,8 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import cc.novelia.app.files.downloads.DownloadFiles
 import cc.novelia.app.files.downloads.downloadFile
+import cc.novelia.app.files.downloads.resumableDownload
+import cc.novelia.app.data.network.networkConnections
 
 /**
  * 后台文件下载任务，业务下载 ID 与本轮 WorkManager workId 共同确定写入所有权。
@@ -48,29 +50,20 @@ class DownloadWorker(context: Context, parameters: WorkerParameters) : Coroutine
                 parsed.host in setOf("n.novelia.cc", "book.xkvi.top"))
             val request = Request.Builder().url(parsed).build()
             val workContext = coroutineContext
-            app.api.withAuthenticatedResponse(request, binding, client) { response ->
-                if(!response.isSuccessful) error("下载失败（${response.code}），请检查译文是否完整或重新登录")
-                val body = response.body ?: error("服务器没有返回文件")
-                require(!body.contentType().toString().startsWith("text/html")) { "服务器返回了网页，请稍后重试" }
-                val expected = body.contentLength(); require(expected <= 512L * 1024 * 1024) { "文件超过 512 MB" }
-                var total = 0L; var previousProgress = -1; var lastProgressAt = 0L
-                partial.outputStream().use { output -> body.byteStream().use { input ->
-                    val buffer = ByteArray(65536)
-                    while(true) {
-                        workContext.ensureActive()
-                        app.session.ensureCurrent(binding)
-                        if(isStopped) throw CancellationException("Download stopped")
-                        val count = input.read(buffer); if(count < 0) break
-                        total += count; require(total <= 512L * 1024 * 1024) { "文件超过 512 MB" }; output.write(buffer, 0, count)
-                        val progress = if(expected > 0) (total * 100 / expected).toInt() else 0
-                        val now = android.os.SystemClock.elapsedRealtime()
-                        // 每次进度变化会触发书库快照持久化；每秒最多发布一次，完成状态另行立即提交。
-                        if(progress != previousProgress && now - lastProgressAt >= 1_000) { previousProgress = progress; lastProgressAt = now; update(app, id, "下载中", progress, active = { workContext[kotlinx.coroutines.Job]?.isActive == true }) }
-                    }
-                } }
-                if(expected >= 0 && total != expected) error("下载不完整，请重试")
-                if(total == 0L) error("下载内容为空")
-            }
+            var previousProgress = -1
+            var lastProgressAt = 0L
+            resumableDownload(request, partial, client.networkConnections(), ensureCurrent = {
+                workContext.ensureActive()
+                app.session.ensureCurrent(binding)
+                if (isStopped) throw CancellationException("Download stopped")
+            }, onProgress = { total, expected ->
+                val progress = if (expected > 0) (total * 100 / expected).toInt() else 0
+                val now = android.os.SystemClock.elapsedRealtime()
+                if (progress != previousProgress && now - lastProgressAt >= 1_000) {
+                    previousProgress = progress; lastProgressAt = now
+                    update(app, id, "下载中", progress, active = { workContext[kotlinx.coroutines.Job]?.isActive == true })
+                }
+            }) { next, consume -> app.api.withAuthenticatedResponse(next, binding, client, consume) }
             val committed = DownloadFiles.commit(app.store.downloadsDir, id, partial, destination, {
                 ensureActive()
                 app.session.ensureCurrent(binding)

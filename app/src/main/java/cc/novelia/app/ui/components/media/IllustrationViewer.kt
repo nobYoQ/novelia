@@ -35,7 +35,7 @@ import cc.novelia.app.reader.IllustrationTransform
 import cc.novelia.app.reader.transformIllustration
 import cc.novelia.app.ui.theme.LocalEInkMode
 import cc.novelia.app.ui.theme.appReducedMotion
-import coil.compose.AsyncImage
+import cc.novelia.app.ui.components.media.RecoveringAsyncImage as AsyncImage
 import coil.request.ImageRequest
 import kotlin.math.roundToInt
 import cc.novelia.app.ui.components.base.AppDialog

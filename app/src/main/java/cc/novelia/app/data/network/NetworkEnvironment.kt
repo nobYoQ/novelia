@@ -16,8 +16,9 @@ internal fun networkEnvironment(context: Context, echEnabled: Boolean, recording
         "androidApi" to Build.VERSION.SDK_INT.toString(), "androidVersion" to Build.VERSION.RELEASE,
         "manufacturer" to Build.MANUFACTURER, "model" to Build.MODEL, "abis" to Build.SUPPORTED_ABIS.joinToString(","),
         "echEnabled" to echEnabled.toString(), "recording" to recording.toString(),
-        "echAddressPolicy" to "IPv4-only", "echSystemHttpProxy" to "not_used",
-        "echConnectAttemptMs" to "8000", "echReadOnlyConnectAttempts" to "3"
+        "echAddressPolicy" to "dual_stack", "echSystemHttpProxy" to "system_selector",
+        "echConnectAttemptMs" to "8000", "echReadOnlyConnectAttempts" to "3",
+        "managedReadConnectAttempts" to "1", "foregroundRequestBudgetMs" to FOREGROUND_REQUEST_MILLIS.toString()
     )
     try {
         val manager = context.getSystemService(ConnectivityManager::class.java)

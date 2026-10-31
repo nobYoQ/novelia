@@ -107,7 +107,7 @@ internal fun AboutIdentity() {
             lastTap = now
             if(taps >= 5) { taps = 0; wave++ }
         }, contentAlignment = Alignment.CenterStart) {
-            Text("Android ${BuildConfig.VERSION_NAME} · 非官方客户端", style = MaterialTheme.typography.labelMedium)
+            Text("Android ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.labelMedium)
         }
     }
 }

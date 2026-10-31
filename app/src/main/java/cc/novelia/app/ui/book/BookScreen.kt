@@ -56,6 +56,7 @@ import cc.novelia.app.ui.components.base.displayDate
 import cc.novelia.app.ui.components.documents.readDocument
 import cc.novelia.app.ui.components.base.rememberDebouncedQuery
 import cc.novelia.app.ui.components.book.rememberCachedChapterIds
+import cc.novelia.app.ui.components.book.rememberChapterCacheActions
 import cc.novelia.app.ui.downloads.DownloadSheet
 import cc.novelia.app.ui.markdown.format
 import cc.novelia.app.ui.navigation.AppController
@@ -84,6 +85,7 @@ import kotlinx.coroutines.withContext
     val state by c.store.state.collectAsStateWithLifecycle(); val profile by c.session.profile.collectAsStateWithLifecycle()
     val localSaved = remember(state.books, ref) { state.books.any { it.book.ref == ref } }
     val cacheGeneration by c.store.cacheGeneration.collectAsStateWithLifecycle()
+    val cacheActions = rememberChapterCacheActions(c)
     val detailKey = c.detailKey(if(ref.isWenku) "wenku/${ref.id}" else "novel/${ref.key}").copy(generation = cacheGeneration)
     val refreshKey = version
     LaunchedEffect(ref, profile?.username) { favorite = null }
@@ -94,6 +96,8 @@ import kotlinx.coroutines.withContext
         AppIconButton(onClick = { c.share(ref.url) }) { Icon(Icons.Outlined.Share, "分享作品") }
         Box { AppIconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "更多操作") }; AppDropdownMenu(menu, { menu = false }) {
             DropdownMenuItem({ Text("刷新资料") }, { version++; menu = false }, leadingIcon = { Icon(Icons.Outlined.Refresh, null) })
+            if(!ref.isWenku) DropdownMenuItem({ Text("清理本书章节缓存") }, { menu = false; cacheActions.request(ref) },
+                enabled = !cacheActions.busy, leadingIcon = { Icon(Icons.Outlined.DeleteOutline, null) })
             DropdownMenuItem({ Text("术语表") }, { c.go("glossary/${ref.key}"); menu = false }, leadingIcon = { Icon(Icons.Outlined.Translate, null) })
             DropdownMenuItem({ Text("编辑书籍信息") }, { c.requireLogin { c.go("edit/${ref.key}") }; menu = false }, leadingIcon = { Icon(Icons.Outlined.Edit, null) })
             DropdownMenuItem({ Text("在原站打开") }, { c.external(ref.url); menu = false }, leadingIcon = { Icon(Icons.Outlined.OpenInNew, null) })
@@ -106,6 +110,12 @@ import kotlinx.coroutines.withContext
             modifier = Modifier.padding(padding), validate = { c.session.ensureCurrent(detailKey.binding) }, revealContent = true) { detail, _ ->
             val book = remember(detail, ref) { detail.card(ref) }
             val favoriteState = bookFavoriteState(ref, localSaved, detail.favored, profile?.username, state.pending)
+            val relatedWebRefs = remember(detail.webIds) {
+                detail.webIds.map { BookRef.fromKey(it.trim()) }
+                    .filter { it.provider.isNotBlank() && it.id.isNotBlank() && !it.isWenku && !it.isLocal }
+                    .distinct()
+            }
+            var relatedWeb by rememberSaveable(ref.key) { mutableStateOf(false) }
             val refresh: () -> Unit = { version++ }
             var tab by rememberSaveable(ref.key) { mutableIntStateOf(0) }
             val tabState = rememberSaveableStateHolder()
@@ -113,7 +123,8 @@ import kotlinx.coroutines.withContext
                     when(panel) {
                         0 -> AppLazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
                             item { BookHero(book, "${detail.level} · ${detail.volumes.size} 卷") {
-                                BookFavoriteActions(favoriteState, { favorite = book to false }, { favorite = book to true })
+                                BookFavoriteActions(favoriteState, { favorite = book to false }, { favorite = book to true },
+                                    onRelatedWeb = if(relatedWebRefs.isEmpty()) null else ({ relatedWeb = true }))
                             } }
                             detail.latestPublishAt?.takeIf { it > 0 }?.let { item { MetaParagraph("最近出版", displayDate(it)) } }
                             item { MetaParagraph("简介", detail.introduction) }
@@ -126,7 +137,6 @@ import kotlinx.coroutines.withContext
                                 })
                             } }
                             if(detail.volumeJp.isNotEmpty() || detail.volumeZh.isNotEmpty()) item { MetaParagraph("译文情况", "中文文件 ${detail.volumeZh.size} 卷 · 日文分卷 ${detail.volumeJp.size} 卷\nSakura ${detail.volumeJp.sumOf { it.sakura }} · GPT ${detail.volumeJp.sumOf { it.gpt }} · 有道 ${detail.volumeJp.sumOf { it.youdao }} / ${detail.volumeJp.sumOf { it.total }}") }
-                            if(detail.webIds.isNotEmpty()) item { SectionTitle("关联网络版"); detail.webIds.forEach { id -> AppTextButton(onClick = { c.book(BookRef.fromKey(id)) }, Modifier.padding(horizontal = 12.dp)) { Text(id) } } }
                         }
                         1 -> WenkuVolumesPanel(c, book, detail, uploadBusy,
                             onUpload = uploader.launch, onRefresh = refresh,
@@ -134,12 +144,22 @@ import kotlinx.coroutines.withContext
                         2 -> NovelCommentsPanel(c, "wenku-${ref.id}")
                     }
             }
+            if(relatedWeb && relatedWebRefs.isNotEmpty()) RelatedWebNovelsSheet(
+                refs = relatedWebRefs, requestKey = detailKey,
+                loadTitle = { webRef ->
+                    c.session.ensureCurrent(detailKey.binding)
+                    c.detail<WebDetail>("novel/${webRef.key}").title.also { c.session.ensureCurrent(detailKey.binding) }
+                },
+                onOpen = { webRef -> relatedWeb = false; c.book(webRef) },
+                onDismiss = { relatedWeb = false },
+            )
         } else CachedAsyncContent(c.uiResults.webDetails, detailKey, refreshKey = refreshKey,
             load = { c.detail<WebDetail>("novel/${ref.key}", forceNetwork = version > 0 || c.uiResults.webDetails.snapshot(detailKey) != null) },
             modifier = Modifier.padding(padding), validate = { c.session.ensureCurrent(detailKey.binding) }, revealContent = true) { detail, _ ->
             val book = remember(detail, ref, profile?.username) { detail.card(ref, profile?.username) }
             LaunchedEffect(book) {
                 c.store.update { it.withCloudReadingMetadata(listOf(book), c.session.profile.value?.username) }
+                withContext(Dispatchers.IO) { runCatching { c.store.registerCachedChapters(ref, book.title, detail.toc.mapNotNull { it.chapterId }) } }
             }
             val favoriteState = bookFavoriteState(ref, localSaved, detail.favored, profile?.username, state.pending)
             val chapterCount = remember(detail.toc) { detail.toc.count { it.chapterId != null } }
@@ -300,6 +320,7 @@ import kotlinx.coroutines.withContext
 @Composable fun TocPanel(c: AppController, ref: BookRef, toc: List<TocItem>, current: String?, onRead: (String) -> Unit) {
     var search by rememberSaveable(ref.key) { mutableStateOf("") }; var reversed by rememberSaveable(ref.key) { mutableStateOf(false) }
     var cacheDialog by remember(ref.key) { mutableStateOf(false) }
+    val cacheActions = rememberChapterCacheActions(c)
     val cachedIds = rememberCachedChapterIds(c.store, ref, toc)
     val settledSearch = rememberDebouncedQuery(search)
     val indexedToc = remember(toc) { toc.withIndex().toList() }
@@ -312,10 +333,12 @@ import kotlinx.coroutines.withContext
     val scroll = rememberLazyListState(); val scope = rememberCoroutineScope()
     Column {
         OutlinedTextField(search, { search = it }, label = { Text("搜索章节") }, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), singleLine = true, leadingIcon = { Icon(Icons.Outlined.Search, null) })
-        Row(Modifier.padding(horizontal = 12.dp)) {
+        FlowRow(Modifier.padding(horizontal = 12.dp)) {
             AppTextButton(onClick = { reversed = !reversed }) { Text(if(reversed) "倒序" else "正序") }
             AppTextButton(onClick = { scope.launch { if(reducedMotion || abs(currentIndex - scroll.firstVisibleItemIndex) > 100) scroll.scrollToItem(currentIndex) else scroll.animateScrollToItem(currentIndex) } }, enabled = currentIndex >= 0) { Text("定位当前") }
             if(!ref.isLocal) AppTextButton(onClick = { cacheDialog = true }, enabled = hasChapters) { Text("缓存章节") }
+            if(!ref.isLocal && !ref.isWenku) AppTextButton(onClick = { cacheActions.request(ref) },
+                enabled = cachedIds.isNotEmpty() && !cacheActions.busy) { Text("清理缓存") }
         }
         if(!ref.isLocal) Text(remember(toc, cachedIds) { offlineRangeLabel(toc, cachedIds) }, Modifier.padding(horizontal = 20.dp, vertical = 4.dp), style = MaterialTheme.typography.labelMedium)
         AppLazyColumn(state = scroll, modifier = Modifier.weight(1f)) {

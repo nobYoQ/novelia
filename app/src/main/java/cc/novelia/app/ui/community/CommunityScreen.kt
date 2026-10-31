@@ -50,7 +50,8 @@ import cc.novelia.app.ui.theme.motionClickable
     val cacheGeneration by c.store.cacheGeneration.collectAsStateWithLifecycle()
     val source = c.forumSession.capture()
     val categoriesKey = listOf("forum-categories", source.source, source.sourceRevision, cacheGeneration)
-    CachedAsyncContent(c.uiResults.categories, categoriesKey, load = {
+    // 分类是辅助数据，缓存更新时只由帖子列表显示刷新圆圈，避免重复提示。
+    CachedAsyncContent(c.uiResults.categories, categoriesKey, showRefreshIndicator = false, load = {
         // 分类是公开元数据。初次加载碰到自动登录时重取一次，保留已显示的社区导航状态。
         try { c.forumApi.categories() }
         catch(_: SessionChangedException) { c.forumApi.categories() }

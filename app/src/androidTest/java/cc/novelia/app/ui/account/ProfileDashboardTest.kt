@@ -31,7 +31,7 @@ import java.io.File
 
 class ProfileDashboardTest {
     @get:Rule val compose = createComposeRule()
-    private val destinations = listOf("history", "downloads", "updates", "notes", "tools", "settings", "blocked", "sync", "backup", "about")
+    private val destinations = listOf("history", "downloads", "updates", "notes", "tools", "settings", "blocked", "reading-stats", "sync", "backup", "about")
 
     @Test fun guestKeepsEveryDestinationAndIndependentCompanion() {
         val visits = mutableListOf<String>()

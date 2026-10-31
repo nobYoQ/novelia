@@ -53,7 +53,7 @@ class ForumMirrorLoginTest {
             compose.waitUntil(10_000) { compose.onAllNodesWithText("正在恢复登录状态…").fetchSemanticsNodes().isEmpty() }
             compose.onNodeWithText("没有账号，注册").performScrollTo().performClick()
             compose.onNodeWithText("注册 Novelia 账号").assertIsDisplayed()
-            compose.onNodeWithText("邮箱验证码").performScrollTo().assertIsDisplayed()
+            compose.onNodeWithTag("login-otp").performScrollTo().assertIsDisplayed()
         } finally { app.bookSources.select(previous) }
     }
 }

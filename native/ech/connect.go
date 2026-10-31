@@ -13,10 +13,13 @@ import (
 // Only restart bodyless reads, and only before GotConn: at that point no HTTP
 // request bytes have been sent. Never replay uploads, HTTP errors or body reads.
 // The core uses DialTLSContext, so Transport.TLSHandshakeTimeout is ignored.
-func doWithConnectRetry(do func(*http.Request) (*http.Response, error), request *http.Request, budget time.Duration) (*http.Response, error) {
+func doWithConnectRetry(do func(*http.Request) (*http.Response, error), request *http.Request, budget time.Duration, limit ...int) (*http.Response, error) {
 	attempts := 1
 	if request.Body == nil && (request.Method == http.MethodGet || request.Method == http.MethodHead) {
 		attempts = 3
+	}
+	if len(limit) > 0 && limit[0] > 0 && limit[0] < attempts {
+		attempts = limit[0]
 	}
 	var last error
 	for attempt := 0; attempt < attempts; attempt++ {

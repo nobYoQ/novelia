@@ -3,13 +3,15 @@ package cc.novelia.app.files.epub
 import cc.novelia.app.data.model.LocalBilingualGroup
 import cc.novelia.app.data.model.LocalChapter
 import cc.novelia.app.data.model.LocalReadingContent
+import cc.novelia.app.data.model.InlineContent
+import cc.novelia.app.data.model.InlineKind
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.Node
 import org.jsoup.nodes.TextNode
 import org.jsoup.select.NodeVisitor
 
-internal const val EPUB_CONTENT_VERSION = 2
+internal const val EPUB_CONTENT_VERSION = 3
 private val epubBlocks = setOf("h1", "h2", "h3", "h4", "p", "li", "blockquote", "pre", "div", "section", "br")
 private val opacityStyle = Regex("(?:^|;)\\s*opacity\\s*:\\s*(0?\\.\\d+|1(?:\\.0+)?)\\s*(?:!important\\s*)?(?:;|$)", RegexOption.IGNORE_CASE)
 
@@ -17,10 +19,17 @@ private val opacityStyle = Regex("(?:^|;)\\s*opacity\\s*:\\s*(0?\\.\\d+|1(?:\\.0
 internal fun parseEpubChapter(
     id: String, html: String, downloadMode: String?, image: (String) -> String?,
     checkCancelled: () -> Unit = {}, onText: (String) -> Unit = {},
+    note: (String, Boolean) -> Pair<String, String>? = { _, _ -> null },
 ): LocalChapter? {
     val doc = Jsoup.parse(html)
-    doc.select("script,style,nav,rt,rp").remove()
+    doc.select("script,style,nav").remove()
+    val ruby = prepareEpubRuby(doc, checkCancelled)
     val paragraphs = mutableListOf<String>()
+    val inline = linkedMapOf<Int, List<InlineContent>>()
+    val notes = linkedMapOf<String, String>()
+    var noteCharacters = 0
+    val active = linkedMapOf<Element, List<InlineContent>>()
+    val completed = mutableListOf<InlineContent>()
     val owners = mutableListOf<Element?>()
     val buffer = StringBuilder()
     var owner: Element? = null
@@ -28,13 +37,17 @@ internal fun parseEpubChapter(
     var preformatted = 0
     fun flush() {
         val raw = buffer.toString()
-        val text = if (preformatted > 0) raw.trim() else normalizeEpubWhitespace(raw, checkCancelled)
+        val ranges = completed + active.values.flatten().map { it.copy(end = raw.length) }
+        val (text, marks) = normalizeEpubInline(raw, ranges, preformatted > 0, checkCancelled)
         if (text.isNotEmpty()) {
             onText(text)
+            if (marks.isNotEmpty()) inline[paragraphs.size] = marks
             paragraphs += text
             owners += owner
         }
         buffer.clear()
+        completed.clear()
+        active.replaceAll { _, marks -> marks.map { it.copy(start = 0) } }
         owner = null
     }
     doc.body().traverse(object : NodeVisitor {
@@ -49,6 +62,18 @@ internal fun parseEpubChapter(
                     if (node.tagName() in epubBlocks) flush()
                     if (node.tagName() == "pre") preformatted++
                     if (node.tagName() == "p") current = node
+                    val marks = node.epubStyles().map { InlineContent(buffer.length, buffer.length, it) }.toMutableList()
+                    ruby[node]?.let { marks += InlineContent(buffer.length, buffer.length, InlineKind.Ruby, it) }
+                    if (node.normalName() == "a" && node.hasAttr("href")) {
+                        val explicit = "noteref" in node.epubTypes() || node.attr("role").split(' ').contains("doc-noteref")
+                        note(node.attr("href"), explicit)?.let { (target, body) ->
+                            if (target in notes || noteCharacters + body.length <= 2 * 1024 * 1024) {
+                                if (notes.putIfAbsent(target, body) == null) noteCharacters += body.length
+                                marks += InlineContent(buffer.length, buffer.length, InlineKind.Note, target)
+                            }
+                        }
+                    }
+                    if (marks.isNotEmpty()) active[node] = marks
                     if (node.tagName() in setOf("img", "image")) {
                         flush()
                         val source = node.attr("src").ifBlank { node.attr("xlink:href").ifBlank { node.attr("href") } }
@@ -58,6 +83,7 @@ internal fun parseEpubChapter(
             }
         }
         override fun tail(node: Node, depth: Int) {
+            if (node is Element) active.remove(node)?.let { marks -> completed += marks.map { it.copy(end = buffer.length) } }
             if (node is Element && node.tagName() in epubBlocks) flush()
             if (node is Element && node.tagName() == "pre") preformatted--
             if (node is Element && node.tagName() == "p") current = null
@@ -104,5 +130,5 @@ internal fun parseEpubChapter(
     }
     val secondary = indices.filterKeys { it.opacity()?.let { opacity -> opacity < 1f } == true }.values.flatten()
     val title = doc.selectFirst("h1,h2,h3,title")?.text()?.takeIf(String::isNotBlank) ?: "章节"
-    return LocalChapter(id, title, paragraphs, LocalReadingContent(groups, secondary), EPUB_CONTENT_VERSION, downloadMode)
+    return LocalChapter(id, title, paragraphs, LocalReadingContent(groups, secondary, inline, notes), EPUB_CONTENT_VERSION, downloadMode)
 }

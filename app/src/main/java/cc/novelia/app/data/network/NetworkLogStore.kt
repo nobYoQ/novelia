@@ -14,6 +14,7 @@ import kotlinx.serialization.encodeToString
     val id: String = "",
     val scope: String = "system",
     val run: String? = null,
+    val networkGeneration: Long? = null,
     val route: String = "",
     val host: String = "",
     val target: String = "",

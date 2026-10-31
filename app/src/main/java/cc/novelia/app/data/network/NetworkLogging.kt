@@ -56,8 +56,9 @@ internal class NetworkRecorder(private val store: NetworkLogStore, private val e
         catch (_: Exception) { lost.incrementAndGet() }
     }
 
-    fun system(stage: String, outcome: String, environment: String? = null) = write {
-        store.append(NetworkLogEvent(stage = stage, outcome = outcome, environment = environment?.let { appJson.decodeFromString<Map<String, String>>(it) }))
+    fun system(stage: String, outcome: String, environment: String? = null, networkGeneration: Long? = null) = write {
+        store.append(NetworkLogEvent(stage = stage, outcome = outcome, networkGeneration = networkGeneration,
+            environment = environment?.let { appJson.decodeFromString<Map<String, String>>(it) }))
     }
     fun saveReport(report: String) = write { store.saveReport(report) }
 
@@ -121,6 +122,7 @@ internal class NetworkRequestTrace(request: Request, private val route: String, 
     private val base = NetworkLogEvent(
         id = UUID.randomUUID().toString(), scope = if (request.tag(DiagnosticRequestTag::class.java) == null) "business" else "diagnostic",
         run = request.tag(DiagnosticRequestTag::class.java)?.run,
+        networkGeneration = request.tag(NetworkRequestGeneration::class.java)?.value,
         route = route, host = request.url.host.takeIf { it in echHosts } ?: "external",
         target = networkTarget(request), method = request.method.takeIf { it in setOf("GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS") } ?: "OTHER",
         stage = "", outcome = ""

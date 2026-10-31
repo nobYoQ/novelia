@@ -10,7 +10,7 @@ Copyright (C) 2026 Novelia Android contributors.
 
 ## 原站与接口
 
-本项目是面向 Novelia 的非官方 Android 客户端，与原站没有官方客户端或品牌授权关系。
+本项目是面向 Novelia 的 Android 客户端。
 
 接口合约依据 [auto-novel/auto-novel](https://github.com/auto-novel/auto-novel) 公开源码（GNU GPL v3）和原站页面核对。原生页面、存储、阅读器和文件处理使用 Kotlin / Android API 实现。`.reference/` 仅供本机核对接口，不是构建输入。后续引入或改编上游实现时，必须记录来源、版本、修改内容并保留原有版权声明。
 

@@ -22,7 +22,8 @@ internal class LibraryStateCodec(
     @Serializable private data class LongText(val drafts: Map<String, String>)
     @Serializable private data class Shelf(val books: List<SavedBook>, val folders: List<String>, val folderIds: Map<String, String>)
     @Serializable private data class Reading(val positions: Map<String, Position>,
-        val readingHistory: Map<String, ReadingHistoryEntry>, val historyMigrated: Boolean)
+        val readingHistory: Map<String, ReadingHistoryEntry>, val historyMigrated: Boolean,
+        val readingStatistics: ReadingStatistics = ReadingStatistics())
 
     private inner class Part<T>(private val serializer: KSerializer<T>) {
         private var previous: T? = null
@@ -58,7 +59,7 @@ internal class LibraryStateCodec(
     fun encode(state: LibraryState, forcePayloadWrite: Boolean = false): String {
         val parts = linkedMapOf(
             "shelf" to shelf.encode(Shelf(state.books, state.folders, state.folderIds), forcePayloadWrite),
-            "reading" to reading.encode(Reading(state.positions, state.readingHistory, state.historyMigrated), forcePayloadWrite),
+            "reading" to reading.encode(Reading(state.positions, state.readingHistory, state.historyMigrated, state.readingStatistics), forcePayloadWrite),
             "notes" to notes.encode(state.notes, forcePayloadWrite),
             "sync" to sync.encode(state.syncReplica, forcePayloadWrite),
             "core" to core.encode(coreState(state), forcePayloadWrite),
@@ -87,10 +88,11 @@ internal class LibraryStateCodec(
         val c = core.decode(hash("core"))
         val d = drafts.decode(hash("drafts"))
         val state = c.copy(books = s.books, folders = s.folders, folderIds = s.folderIds,
-            positions = r.positions, readingHistory = r.readingHistory, historyMigrated = r.historyMigrated,
+            positions = r.positions, readingHistory = r.readingHistory, historyMigrated = r.historyMigrated, readingStatistics = r.readingStatistics,
             notes = n, syncReplica = replica, drafts = d.drafts)
             .let { it.copy(edgeToolbar = it.edgeToolbar.normalized()) }
         state.syncReplica.validate()
+        state.readingStatistics.requireValid()
         // 整份快照校验成功后才更新缓存，失败主文件不能污染备用副本的加载。
         shelf.accept(s, hash("shelf")); reading.accept(r, hash("reading")); notes.accept(n, hash("notes"))
         sync.accept(replica, hash("sync")); core.accept(c, hash("core")); drafts.accept(d, hash("drafts"))
@@ -101,6 +103,7 @@ internal class LibraryStateCodec(
     private fun decodeLegacy(json: JsonObject): LibraryState {
         val state = appJson.decodeFromJsonElement(LibraryState.serializer(), json)
             .let { it.copy(edgeToolbar = it.edgeToolbar.normalized()) }.also { it.syncReplica.validate() }
+        state.readingStatistics.requireValid()
         val hash = json[LEGACY_PAYLOAD]?.jsonPrimitive?.content
         val result = if(hash == null) state else state.copy(drafts = drafts.decode(hash).drafts)
         // 旧草稿可能夹带已废弃文章字段；下次保存重编码，保留旧文件供回退。
@@ -134,7 +137,7 @@ internal class LibraryStateCodec(
     }
 
     private fun coreState(state: LibraryState) = state.copy(books = emptyList(), folders = emptyList(), folderIds = emptyMap(),
-        positions = emptyMap(), readingHistory = emptyMap(), historyMigrated = false, notes = emptyList(),
+        positions = emptyMap(), readingHistory = emptyMap(), historyMigrated = false, readingStatistics = ReadingStatistics(), notes = emptyList(),
         drafts = emptyMap(), syncReplica = EMPTY_REPLICA)
 
     private companion object {

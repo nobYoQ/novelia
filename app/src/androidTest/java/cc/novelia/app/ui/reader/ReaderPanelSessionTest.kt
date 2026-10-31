@@ -57,11 +57,11 @@ class ReaderPanelSessionTest {
                 }
             }
         }
-        compose.onNodeWithText("翻页").performClick()
+        compose.onNodeWithText("界面").performClick()
         compose.onNodeWithTag("reader-toolbar-transparency").performScrollTo()
-        compose.runOnIdle { assertTrue(state.scrollStates[1].value > 0) }
+        compose.runOnIdle { assertTrue(state.scrollStates[2].value > 0) }
         compose.onNodeWithText("更多").performClick()
-        compose.onNodeWithText("屏幕与朗读").performScrollTo().performClick()
+        compose.onNodeWithText("朗读").performScrollTo().performClick()
         compose.onNodeWithText("关闭面板").performClick()
         compose.runOnIdle { open = true }
         compose.runOnIdle {
@@ -129,7 +129,7 @@ class ReaderPanelSessionTest {
         fun height() = compose.onNodeWithTag("reader-preferences-panel").getUnclippedBoundsInRoot().let { (it.bottom - it.top).value }
         fun drag(distanceDp: Float) {
             val distance = with(compose.density) { distanceDp.dp.toPx() }
-            val target = if(reduced) compose.onNodeWithText("阅读偏好") else compose.onNodeWithTag("reader-preferences-drag-handle")
+            val target = if(reduced) compose.onNodeWithText("阅读偏好") else compose.onNodeWithTag("reader-preferences-drag-handle", useUnmergedTree = true)
             target.performTouchInput { swipe(center, center + Offset(0f, distance), durationMillis = 300) }
             compose.waitForIdle()
         }
@@ -152,9 +152,9 @@ class ReaderPanelSessionTest {
         assertEquals(halfHeight, height(), 1f)
 
         // 列表与滑条仍优先消费自己的手势。
-        compose.onNodeWithText("翻页").performClick()
+        compose.onNodeWithText("界面").performClick()
         compose.onNodeWithTag("reader-toolbar-transparency").performScrollTo()
-        compose.runOnIdle { assertTrue(state.scrollStates[1].value > 0) }
+        compose.runOnIdle { assertTrue(state.scrollStates[2].value > 0) }
         assertEquals(halfHeight, height(), 1f)
         compose.onNodeWithTag("reader-toolbar-transparency").performTouchInput {
             swipe(Offset(width * .25f, centerY), Offset(width * .8f, centerY), durationMillis = 300)
@@ -166,7 +166,7 @@ class ReaderPanelSessionTest {
         compose.onNodeWithText("展开面板").performClick()
         assertEquals(largeHeight, height(), 1f)
         drag(40f)
-        compose.onNodeWithText("翻页").assertIsSelected()
+        compose.onNodeWithText("界面").assertIsSelected()
         assertEquals(halfHeight, height(), 1f)
         compose.runOnIdle { assertTrue(settings.resolvedToolbarTransparency > .25f) }
         drag(100f)
