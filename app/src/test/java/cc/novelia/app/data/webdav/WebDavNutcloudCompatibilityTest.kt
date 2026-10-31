@@ -174,13 +174,39 @@ class WebDavNutcloudCompatibilityTest {
     }
 
     @Test fun ignoredMoveOverwriteOrStaleUpdateIsRejectedAndProbeIsCleaned() = runBlocking {
-        for(service in listOf(Service(ignoreOverwrite = true), Service(ignoreIfMatch = true))) {
+        for((service, method, code) in listOf(Triple(Service(ignoreOverwrite = true), "MOVE", 201), Triple(Service(ignoreIfMatch = true), "PUT", 204))) {
             MockWebServer().use { server ->
                 service.files["/dav/novelia-sync/keep.json"] = "existing-user-data" to "\"keep\""
                 server.dispatcher = service
                 server.start()
                 try { client(server).testConnection(); fail("Expected rejected concurrency protection") }
-                catch(error: WebDavException) { assertEquals(WebDavFailure.UNSUPPORTED, error.failure) }
+                catch(error: WebDavException) {
+                    assertEquals(WebDavFailure.UNSUPPORTED, error.failure)
+                    assertEquals(code, error.statusCode)
+                    assertTrue(error.message!!.contains("$method $code"))
+                    assertTrue(error.message!!.contains("不支持安全防覆盖"))
+                }
+                assertEquals(mapOf("/dav/novelia-sync/keep.json" to ("existing-user-data" to "\"keep\"")), service.files)
+            }
+        }
+    }
+
+    @Test fun duplicateMoveErrorsKeepTheirHttpFailureAndCleanProbeFiles() = runBlocking {
+        for((code, expected) in listOf(401 to WebDavFailure.AUTHENTICATION, 403 to WebDavFailure.PERMISSION,
+            500 to WebDavFailure.SERVER, 502 to WebDavFailure.SERVER, 503 to WebDavFailure.SERVER)) {
+            MockWebServer().use { server ->
+                val service = Service(duplicateMoveStatus = code)
+                service.files["/dav/novelia-sync/keep.json"] = "existing-user-data" to "\"keep\""
+                server.dispatcher = service
+                server.start()
+                try { client(server).testConnection(); fail("Expected duplicate MOVE failure: $code") }
+                catch(error: WebDavException) {
+                    assertEquals(expected, error.failure)
+                    assertEquals(code, error.statusCode)
+                    assertTrue(error.message!!.contains("MOVE $code"))
+                    assertFalse(error.message!!.contains("防覆盖"))
+                }
+                assertEquals(2, service.requests.count { it.method == "MOVE" })
                 assertEquals(mapOf("/dav/novelia-sync/keep.json" to ("existing-user-data" to "\"keep\"")), service.files)
             }
         }
@@ -424,14 +450,19 @@ class WebDavNutcloudCompatibilityTest {
         }
     }
 
-    @Test fun rejection409CannotHideAnOverwrittenOriginalDuringProbe() = runBlocking {
-        MockWebServer().use { server ->
-            val service = Service(duplicateMoveStatus = 409, overwriteBeforeRejecting = true)
+    @Test fun rejectionCannotHideAnOverwrittenOriginalDuringProbe() = runBlocking {
+        for(code in listOf(409, 412)) MockWebServer().use { server ->
+            val service = Service(duplicateMoveStatus = code, overwriteBeforeRejecting = true)
             service.files["/dav/novelia-sync/keep.json"] = "keep" to "\"v0\""
             server.dispatcher = service
             server.start()
             try { client(server).testConnection(); fail("Expected fake rejection detected") }
-            catch(error: WebDavException) { assertEquals(WebDavFailure.UNSUPPORTED, error.failure) }
+            catch(error: WebDavException) {
+                assertEquals(WebDavFailure.UNSUPPORTED, error.failure)
+                assertEquals(code, error.statusCode)
+                assertTrue(error.message!!.contains("MOVE $code"))
+                assertTrue(error.message!!.contains("原文件仍发生变化"))
+            }
             assertEquals(mapOf("/dav/novelia-sync/keep.json" to ("keep" to "\"v0\"")), service.files)
         }
     }

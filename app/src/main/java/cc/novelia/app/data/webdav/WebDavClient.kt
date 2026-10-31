@@ -114,7 +114,7 @@ class WebDavClient(config: WebDavConfig, password: String, transport: OkHttpClie
     suspend fun put(name: String, data: ByteArray, etag: String? = null, createOnly: Boolean = false): String {
         require(data.size <= MAX_RESPONSE_BYTES) { "同步数据过大" }
         require(createOnly.xor(etag != null)) { "上传需要指定当前版本或仅创建新文件" }
-        if(createOnly && isNutcloud) return createByMove(name, data)
+        if(createOnly && isNutcloud) return createByMove(name, data).etag
         val headers = if(createOnly) mapOf("If-None-Match" to "*") else mapOf("If-Match" to conditionalEtag(etag!!))
         val response = request(file(name), "PUT", headers, data)
         if(response.code !in setOf(200, 201, 204)) fail(response.code, "PUT")
@@ -143,13 +143,15 @@ class WebDavClient(config: WebDavConfig, password: String, transport: OkHttpClie
         if(rejected.code != 412) {
             if(rejected.code == 404) throw WebDavException(WebDavFailure.CONFLICT, "读取期间远端文件已变化，请重试", 404)
             if(rejected.code !in setOf(200, 304)) fail(rejected.code, "GET")
-            throw WebDavException(WebDavFailure.UNSUPPORTED, "当前服务无法按文件版本安全读取，已保留本机资料")
+            throw WebDavException(WebDavFailure.UNSUPPORTED, "当前服务无法按文件版本安全读取（GET ${rejected.code}），已保留本机资料", rejected.code)
         }
         return WebDavResource(checked.body, version)
     }
 
+    private data class MoveResult(val etag: String, val statusCode: Int)
+
     /** 随机临时文件只属于本次操作，目标始终使用 Overwrite:F，避免空目录下两台设备相互覆盖。 */
-    private suspend fun createByMove(name: String, data: ByteArray, onCreated: () -> Unit = {}): String {
+    private suspend fun createByMove(name: String, data: ByteArray, onCreated: () -> Unit = {}): MoveResult {
         // 与常用 WebDAV 客户端一致，使用非隐藏的普通暂存文件；不使用 .tmp 后缀。
         val temporary = file("novelia-upload-${UUID.randomUUID()}.cache")
         var created = false
@@ -177,7 +179,7 @@ class WebDavClient(config: WebDavConfig, password: String, transport: OkHttpClie
             onCreated()
             val saved = get(name) ?: throw WebDavException(WebDavFailure.INVALID_DATA, "创建后的同步文件无法读取，请重试")
             if(!saved.data.contentEquals(data)) throw WebDavException(WebDavFailure.CONFLICT, "远端数据已被其他设备修改，请重试")
-            return requireStrongEtag(saved.etag)
+            return MoveResult(requireStrongEtag(saved.etag), moved.code)
         } finally {
             if(created) try { request(temporary, "DELETE") }
             catch(cancelled: CancellationException) { throw cancelled }
@@ -223,29 +225,31 @@ class WebDavClient(config: WebDavConfig, password: String, transport: OkHttpClie
             if(!read.data.contentEquals(first)) throw WebDavException(WebDavFailure.UNSUPPORTED, "服务返回的测试内容不一致")
             val old = requireStrongEtag(read.etag)
             knownEtag = old
-            if(isNutcloud) {
+            val duplicateCode = if(isNutcloud) {
                 try {
-                    createByMove(name, "duplicate".toByteArray())
-                    throw WebDavException(WebDavFailure.UNSUPPORTED, "当前服务未执行禁止覆盖的文件创建，已停止同步")
+                    val duplicate = createByMove(name, "duplicate".toByteArray())
+                    failProtection(duplicate.statusCode, "MOVE", "未拒绝重复创建")
                 } catch(error: WebDavException) {
                     if(error.failure != WebDavFailure.CONFLICT || error.statusCode !in setOf(409, 412)) throw error
+                    requireNotNull(error.statusCode)
                 }
             } else {
                 val duplicate = request(file(name), "PUT", mapOf("If-None-Match" to "*"), "duplicate".toByteArray())
-                if(duplicate.code != 412) throw WebDavException(WebDavFailure.UNSUPPORTED, "当前服务未执行禁止覆盖的文件创建，已停止同步")
+                checkRejectedWrite(duplicate.code, "未拒绝重复创建")
+                duplicate.code
             }
             // 拒绝状态不足以证明没有覆盖：包括坚果云非标准 409，均需读回原正文和版本。
             val unchanged = get(name)
             if(unchanged == null || !unchanged.data.contentEquals(first) || unchanged.etag != old) {
-                throw WebDavException(WebDavFailure.UNSUPPORTED, "当前服务在拒绝重复创建时仍改变了原文件，已停止同步")
+                failProtection(duplicateCode, if(isNutcloud) "MOVE" else "PUT", "拒绝重复创建后原文件仍发生变化")
             }
             val second = "novelia-probe-${UUID.randomUUID()}".toByteArray()
             knownEtag = put(name, second, old)
             if(knownEtag == old) throw WebDavException(WebDavFailure.UNSUPPORTED, "当前服务更新文件后未更新版本标识，已停止同步")
             val stale = request(file(name), "PUT", mapOf("If-Match" to conditionalEtag(old)), "stale".toByteArray())
-            if(stale.code != 412) throw WebDavException(WebDavFailure.UNSUPPORTED, "当前服务未阻止过期版本覆盖，已停止同步")
+            checkRejectedWrite(stale.code, "未拒绝过期版本覆盖")
             val current = get(name)
-            if(current == null || !current.data.contentEquals(second)) throw WebDavException(WebDavFailure.UNSUPPORTED, "服务未正确保护已有数据，暂不支持双向同步")
+            if(current == null || !current.data.contentEquals(second)) failProtection(stale.code, "PUT", "拒绝过期版本覆盖后原文件仍发生变化")
             requireStrongEtag(current.etag)
         } finally {
             if(created) {
@@ -260,6 +264,18 @@ class WebDavClient(config: WebDavConfig, password: String, transport: OkHttpClie
             }
         }
     }
+
+    private fun checkRejectedWrite(code: Int, reason: String) {
+        when(code) {
+            412 -> Unit
+            in 200..299 -> failProtection(code, "PUT", reason)
+            // 权限、服务故障等响应不能证明防覆盖失效，保留实际错误分类和状态码。
+            else -> fail(code, "PUT")
+        }
+    }
+
+    private fun failProtection(code: Int, method: String, reason: String): Nothing =
+        throw WebDavException(WebDavFailure.UNSUPPORTED, "当前服务不支持安全防覆盖（$method $code）：$reason，已停止同步", code)
 
     /** 内部版本保持标准强 ETag；仅坚果云官方端点按其实测的裸值条件格式发送。 */
     private fun conditionalEtag(value: String): String {

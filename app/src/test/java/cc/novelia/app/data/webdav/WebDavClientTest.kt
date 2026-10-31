@@ -72,7 +72,7 @@ class WebDavClientTest {
     }
 
     @Test fun serversIgnoringEitherWriteConditionAreRejected() = runBlocking {
-        for(ignoredHeader in listOf("If-None-Match", "If-Match")) {
+        for(ignoredHeader in listOf("If-None-Match", "If-Match")) for(code in listOf(200, 201, 204)) {
             MockWebServer().use { server ->
                 var data: String? = null
                 var version = 0
@@ -84,7 +84,7 @@ class WebDavClientTest {
                             val rejectCreate = ignoredHeader != "If-None-Match" && request.getHeader("If-None-Match") == "*" && data != null
                             val rejectStale = ignoredHeader != "If-Match" && request.getHeader("If-Match")?.let { it != "\"v$version\"" } == true
                             if(rejectCreate || rejectStale) MockResponse().setResponseCode(412)
-                            else { data = request.body.readUtf8(); version++; MockResponse().setResponseCode(201).setHeader("ETag", "\"v$version\"") }
+                            else { data = request.body.readUtf8(); version++; MockResponse().setResponseCode(code).setHeader("ETag", "\"v$version\"") }
                         }
                         "DELETE" -> { data = null; MockResponse().setResponseCode(204) }
                         else -> MockResponse().setResponseCode(405)
@@ -92,8 +92,85 @@ class WebDavClientTest {
                 }
                 server.start()
                 try { client(server).testConnection(); fail("Expected rejected write condition") }
-                catch(error: WebDavException) { assertEquals(WebDavFailure.UNSUPPORTED, error.failure) }
+                catch(error: WebDavException) {
+                    assertEquals(WebDavFailure.UNSUPPORTED, error.failure)
+                    assertEquals(code, error.statusCode)
+                    assertTrue(error.message!!.contains("PUT $code"))
+                    assertTrue(error.message!!.contains("不支持安全防覆盖"))
+                    assertTrue(error.message!!.contains(if(ignoredHeader == "If-None-Match") "重复创建" else "过期版本"))
+                }
                 assertNull(data)
+            }
+        }
+    }
+
+    @Test fun rejectedProbeRequestsKeepTheirHttpFailureInsteadOfReportingUnsafeOverwrite() = runBlocking {
+        val cases = listOf(
+            Triple(401, WebDavFailure.AUTHENTICATION, "用户名或密码"),
+            Triple(403, WebDavFailure.PERMISSION, "权限"),
+            Triple(404, WebDavFailure.NOT_FOUND, "上传目录"),
+            Triple(405, WebDavFailure.UNSUPPORTED, "不支持需要的 WebDAV 操作"),
+            Triple(408, WebDavFailure.NETWORK, "超时"),
+            Triple(409, WebDavFailure.NOT_FOUND, "上传目录"),
+            Triple(422, WebDavFailure.INVALID_DATA, "拒绝同步请求"),
+            Triple(423, WebDavFailure.CONFLICT, "锁定"),
+            Triple(429, WebDavFailure.RATE_LIMITED, "过于频繁"),
+            Triple(500, WebDavFailure.SERVER, "服务暂时不可用"),
+            Triple(501, WebDavFailure.UNSUPPORTED, "不支持需要的 WebDAV 操作"),
+            Triple(502, WebDavFailure.SERVER, "服务暂时不可用"),
+            Triple(503, WebDavFailure.SERVER, "服务暂时不可用"),
+            Triple(507, WebDavFailure.STORAGE, "空间不足")
+        )
+        for(failingHeader in listOf("If-None-Match", "If-Match")) for((code, expected, hint) in cases) {
+            MockWebServer().use { server ->
+                var data: String? = null
+                var version = 0
+                var failed = false
+                val afterFailure = mutableListOf<String?>()
+                server.dispatcher = object : Dispatcher() {
+                    override fun dispatch(request: RecordedRequest): MockResponse {
+                        if(failed) afterFailure += request.method
+                        return when(request.method) {
+                            "MKCOL" -> MockResponse().setResponseCode(201)
+                            "GET" -> data?.let { MockResponse().setBody(it).setHeader("ETag", "\"v$version\"") }
+                                ?: MockResponse().setResponseCode(404)
+                            "PUT" -> {
+                                val condition = when {
+                                    request.getHeader("If-None-Match") == "*" && data != null -> "If-None-Match"
+                                    request.getHeader("If-Match")?.let { it != "\"v$version\"" } == true -> "If-Match"
+                                    else -> null
+                                }
+                                when(condition) {
+                                    failingHeader -> { failed = true; MockResponse().setResponseCode(code).setBody("private server diagnostic") }
+                                    null -> {
+                                        data = request.body.readUtf8()
+                                        version++
+                                        MockResponse().setResponseCode(201).setHeader("ETag", "\"v$version\"")
+                                    }
+                                    else -> MockResponse().setResponseCode(412)
+                                }
+                            }
+                            "DELETE" -> { data = null; MockResponse().setResponseCode(204) }
+                            else -> MockResponse().setResponseCode(405)
+                        }
+                    }
+                }
+                server.start()
+                try { client(server).testConnection(); fail("Expected $failingHeader probe failure: $code") }
+                catch(error: WebDavException) {
+                    assertEquals(expected, error.failure)
+                    assertEquals(code, error.statusCode)
+                    assertTrue(error.message!!, error.message!!.contains(code.toString()))
+                    assertTrue(error.message!!, error.message!!.contains(hint))
+                    assertFalse(error.message!!.contains("防覆盖"))
+                    assertFalse(error.message!!.contains("private server diagnostic"))
+                }
+                assertTrue(failed)
+                if(expected == WebDavFailure.RATE_LIMITED) assertTrue(afterFailure.isEmpty())
+                else {
+                    assertEquals(listOf("GET", "DELETE"), afterFailure)
+                    assertNull(data)
+                }
             }
         }
     }
