@@ -13,11 +13,23 @@
 | XKVI 小说镜像 | 统一原生表单 | 镜像同源认证 API，`app=n` |
 | XKVI 论坛镜像 | 同线路小说已登录时尝试 SSO，否则显示原生表单 | 镜像同源认证 API，`app=f` |
 
-所有入口共用 [LoginForm.kt](../../app/src/main/java/cc/novelia/app/ui/account/LoginForm.kt)，支持登录、注册、邮箱验证码和找回密码。顶部按钮可直接切换原站／镜像，无需先进入设置；切换同时作用于小说和论坛，清空当前表单并取消旧请求。未配置镜像的安装包禁用镜像按钮。
+所有入口共用 [LoginForm.kt](../../app/src/main/java/cc/novelia/app/ui/account/LoginForm.kt)，支持原生登录、注册、邮件验证码和找回密码。顶部按钮可直接切换原站／镜像，无需先进入设置；切换同时作用于小说和论坛，清空当前表单并取消旧请求。未配置镜像的安装包禁用镜像按钮。
 
 认证失败由 [AuthErrors.kt](../../app/src/main/java/cc/novelia/app/data/auth/AuthErrors.kt) 按操作、状态码和已知业务原因生成固定提示。上游 `404 用户不存在` 在登录时提示核对用户名或注册邮箱，在找回密码时提示使用已注册邮箱；无法识别的 404 保留状态码并提示核对账号或切换线路，不直接认定为账号不存在或服务故障。密码错误、无效验证码、账号封禁、注册／找回密码关闭、用户名／邮箱占用分别提示处理方法。仅识别长度受限的 `text/plain` 响应中的已知原因，不回显原始响应；HTML、未知及过长内容使用通用提示，502 仍保留镜像可能包装字段校验失败的语义。
 
-登录不再创建 WebView。登录、注册、验证码、重置密码和刷新全部复用应用 HTTP 客户端：开启 ECH 时原站认证通过 ECH，失败不静默降级；镜像沿用 HTTPS 直连。服务端直接返回有效 JWT 时保存，否则携带所选线路的认证 Cookie 刷新；**只有拿到有效访问令牌才完成登录**。重置密码成功后回到登录表单，不自行登录。接口字段依据[上游公开登录 API](https://github.com/auto-novel/auth/blob/632ea746d409e0115eb02f48e0b9ddd08ce54071/apps/login/src/data/api.ts)，另见[书源线路](../development/book-source-mirrors.md)。
+账号密码登录不创建 WebView，也不打开外部浏览器。登录、发码、注册提交、重置密码和刷新复用应用 HTTP 客户端：开启 ECH 时原站认证通过 ECH，失败不静默降级；镜像沿用 HTTPS 直连。服务端直接返回有效 JWT 时保存，否则携带所选线路的认证 Cookie 刷新；**只有拿到有效访问令牌才完成登录**。重置密码成功后回到登录表单，不自行登录。另见[书源线路](../development/book-source-mirrors.md)。
+
+### 当前线上认证流程与限制
+
+2026-10-31 核对实际部署的 [Novelia](https://n.novelia.cc/) 及[统一认证站](https://auth.novelia.cc/)：
+
+- 邮件发码接口要求 `email`、`type`、`turnstileToken`；`type` 分为注册 `verify` 和找回密码 `reset_password`。Session 要求调用方提供非空人机验证令牌，令牌仅用于该次请求，不保存、不记录。
+- 注册邮件验证码仍为 6 位数字；找回密码验证码为 26 位字符。原生表单按用途校验，找回密码输入框允许字母，不能沿用数字键盘和 6 位规则。
+- Turnstile [需要浏览器环境](https://developers.cloudflare.com/turnstile/get-started/mobile-implementation/)，没有可直接替换为原生控件的验证流程。Android WebView 的请求拦截 API 不提供 POST 请求体，现有 GET 转发不能覆盖整个验证过程；现有 ECH 引擎也不会自动接管 WebView 流量。
+
+发码时先弹出仅包含人机验证区域的 WebView。真实认证页面及 `/assets/` 下的静态资源由 App 的 ECH 客户端加载，复用线上页面的 Turnstile 配置、用途和回调，不硬编码站点公钥、不伪造网页来源。只允许 `https://challenges.cloudflare.com` 的验证资源通过 WebView 自己的网络连接；这是明确允许的 ECH 例外。账号、密码和邮箱不传入 WebView；认证 API 的 GET/POST 和其他网络目标被拦截，不通过 WebView 发码。
+
+验证通过后，从认证主页读取当前验证结果，立即交给原生 Session 发起邮件验证码请求，随后销毁验证 WebView。取消、重试和页面销毁时取消页面资源请求；没有 `addJavascriptInterface` 或面向所有 iframe 的原生桥。发码成功才开始 60 秒冷却，失败需重新验证。失败、过期或线上页面结构变化时提示重新加载，不静默退回网页认证。验证区域依赖线上页面的 `form [aria-busy] > .leading-0` 结构，后续上游改版需要同步检查。
 
 ## 进入论坛自动登录
 

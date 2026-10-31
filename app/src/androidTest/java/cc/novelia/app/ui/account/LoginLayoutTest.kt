@@ -1,7 +1,6 @@
 package cc.novelia.app.ui.account
 
 import android.graphics.Bitmap
-import android.view.KeyEvent
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -9,6 +8,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -42,11 +42,14 @@ class LoginLayoutTest {
     private var reducedMotion by mutableStateOf(true)
     private var eInk by mutableStateOf(false)
     private var square by mutableStateOf(false)
+    private var hideKeyboard: () -> Unit = {}
 
     private fun showLogin() {
         val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
         runBlocking { app.initialization.await() }
         compose.setContent {
+            val keyboard = LocalSoftwareKeyboardController.current
+            SideEffect { hideKeyboard = { keyboard?.hide() } }
             CompositionLocalProvider(LocalDensity provides Density(1f, fontScale)) {
                 AppInteractionMode(eInk = eInk, reducedMotion = reducedMotion) {
                     NoveliaTheme(theme, squareCorners = square) {
@@ -93,17 +96,27 @@ class LoginLayoutTest {
         compose.onNodeWithTag("login-password").assertTextEquals("密码", "")
         compose.onNodeWithTag("login-password").assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Password))
         compose.onNodeWithTag("login-otp").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("login-otp").assertTextEquals("邮箱验证码（6 位数字）", "")
+        compose.onNodeWithTag("login-send-otp").performScrollTo().assertIsNotEnabled()
         capture("login-register")
         compose.onNodeWithTag("login-username").performScrollTo().performTextInput("reader")
         compose.onNodeWithTag("login-password").performScrollTo().performTextInput("short")
         dismissKeyboard()
         compose.onNodeWithTag("login-submit").performScrollTo().performClick()
-        compose.onNodeWithText("请检查密码（8–100 字符）、邮箱和 6 位验证码").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("密码应为 8–100 个字符").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("已有账号，去登录").performScrollTo().performClick()
         compose.onNodeWithText("忘记密码？").performScrollTo().performClick()
         compose.onNodeWithTag("login-username").assertDoesNotExist()
         compose.onNodeWithTag("login-password").assertTextEquals("新密码", "")
         compose.onNodeWithTag("login-otp").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("login-otp").assertTextEquals("邮箱验证码（26 位字符）", "")
+        compose.onNodeWithTag("login-send-otp").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithTag("login-password").performScrollTo().performTextInput("synthetic-password")
+        compose.onNodeWithTag("login-email").performScrollTo().performTextInput("reader@example.invalid")
+        compose.onNodeWithTag("login-otp").performScrollTo().performTextInput("123456")
+        dismissKeyboard()
+        compose.onNodeWithTag("login-submit").performScrollTo().performClick()
+        compose.onNodeWithText("找回密码验证码应为 26 位字符，请完整复制邮件中的验证码").performScrollTo().assertIsDisplayed()
         capture("login-reset")
     }
 
@@ -143,7 +156,8 @@ class LoginLayoutTest {
     }
 
     private fun dismissKeyboard() {
-        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+        // No-op when the IME is already hidden; a back key would finish the test Activity.
+        compose.runOnIdle { hideKeyboard() }
         compose.waitForIdle()
     }
 

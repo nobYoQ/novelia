@@ -1,5 +1,6 @@
 package cc.novelia.app.ui.account
 
+import android.os.SystemClock
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -8,6 +9,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
@@ -49,20 +51,29 @@ private enum class LoginMode { LOGIN, REGISTER, RESET_PASSWORD }
     var otp by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var sending by remember { mutableStateOf(false) }
+    var verifying by remember { mutableStateOf(false) }
+    var cooldownUntil by rememberSaveable { mutableLongStateOf(0L) }
+    var now by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
     var switching by remember { mutableStateOf(false) }
     var restoring by remember { mutableStateOf(forum) }
-    var cooldown by remember { mutableIntStateOf(0) }
     var error by remember { mutableStateOf<String?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val register = mode == LoginMode.REGISTER
     val resetting = mode == LoginMode.RESET_PASSWORD
-    val enabled = !busy && !sending && !switching && !restoring
+    val enabled = !busy && !sending && !verifying && !switching && !restoring
+    val cooldown = ((cooldownUntil - now + 999) / 1000).coerceIn(0, 60)
     val canSubmit = enabled && (if(resetting) email.isNotBlank() else username.isNotBlank()) && password.isNotEmpty()
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
 
-    LaunchedEffect(cooldown) { if(cooldown > 0) { delay(1000); cooldown-- } }
+    LaunchedEffect(cooldownUntil) {
+        do {
+            now = SystemClock.elapsedRealtime()
+            if(now >= cooldownUntil) break
+            delay(1000)
+        } while(true)
+    }
     LaunchedEffect(session, selected) {
         if(forum) {
             val signedIn = try { session.loginFromSharedAuth(c.session, explicit = true) }
@@ -86,9 +97,15 @@ private enum class LoginMode { LOGIN, REGISTER, RESET_PASSWORD }
     }
     fun submit() {
         if(!canSubmit) return
-        if((register || resetting) && (password.length !in 8..100 ||
-                !android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches() || !otp.trim().matches(Regex("[0-9]{6}")))) {
-            error = "请检查密码（8–100 字符）、邮箱和 6 位验证码"; return
+        if(register || resetting) {
+            if(password.length !in 8..100) { error = "密码应为 8–100 个字符"; return }
+            if(!android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) { error = "请填写有效的邮箱"; return }
+            if(resetting && otp.trim().length != 26) {
+                error = "找回密码验证码应为 26 位字符，请完整复制邮件中的验证码"; return
+            }
+            if(register && !otp.trim().matches(Regex("[0-9]{6}"))) {
+                error = "注册验证码应为 6 位数字，请检查邮件中的验证码"; return
+            }
         }
         if(register && username.trim().length !in 2..16) { error = "用户名应为 2–16 字符"; return }
         keyboard?.hide()
@@ -107,6 +124,24 @@ private enum class LoginMode { LOGIN, REGISTER, RESET_PASSWORD }
             finally { busy = false }
         }
     }
+
+    if(verifying) TurnstileDialog(c.app.ech.client(), session.target, resetting,
+        onDismiss = { verifying = false }, onVerified = { token ->
+            verifying = false
+            sending = true; error = null; notice = null
+            val destination = email.trim()
+            val passwordReset = resetting
+            scope.launch {
+                try {
+                    session.requestOtp(destination, token, resetPassword = passwordReset)
+                    notice = "验证码已发送，请检查邮箱及垃圾箱"
+                    now = SystemClock.elapsedRealtime()
+                    cooldownUntil = now + 60_000
+                } catch(cancelled: CancellationException) { throw cancelled }
+                catch(e: Exception) { error = e.friendlyMessage() }
+                finally { sending = false }
+            }
+        })
 
     Screen(if(register) "注册 Novelia 账号" else if(resetting) "找回密码" else if(forum) "登录 Novelia 论坛" else "登录 Novelia", c::back) { padding ->
         LoginPageLayout(register, resetting, forum, Modifier.padding(padding).consumeWindowInsets(padding), source = {
@@ -145,23 +180,24 @@ private enum class LoginMode { LOGIN, REGISTER, RESET_PASSWORD }
                 if(register || resetting) {
                     LoginField(email, { email = it }, "邮箱", Icons.Outlined.AlternateEmail, "login-email", enabled,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next), keyboardActions = next)
-                    LoginField(otp, { otp = it }, "邮箱验证码", Icons.Outlined.MarkEmailRead, "login-otp", enabled, last = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                    LoginField(otp, { otp = it }, if(resetting) "邮箱验证码（26 位字符）" else "邮箱验证码（6 位数字）",
+                        Icons.Outlined.MarkEmailRead, "login-otp", enabled, last = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = if(resetting) KeyboardType.Ascii else KeyboardType.Number,
+                            autoCorrectEnabled = false, imeAction = ImeAction.Done),
                         keyboardActions = KeyboardActions(onDone = { submit() }))
                 }
             }
             if(register || resetting) {
-                AppTextButton(enabled = enabled && cooldown == 0 && email.isNotBlank(),
-                    modifier = Modifier.align(Alignment.End).heightIn(min = 48.dp), onClick = {
-                    if(!android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) { error = "请填写有效的邮箱"; return@AppTextButton }
-                    sending = true; error = null; notice = null
-                    scope.launch {
-                        try { session.requestOtp(email, resetPassword = resetting); notice = "验证码已发送，请检查邮箱及垃圾箱"; cooldown = 60 }
-                        catch(cancelled: CancellationException) { throw cancelled }
-                        catch(e: Exception) { error = e.friendlyMessage(); cooldown = 60 }
-                        finally { sending = false }
-                    }
-                }) { Text(if(sending) "正在发送…" else if(cooldown > 0) "${cooldown} 秒后重试" else "发送邮箱验证码") }
+                AppTextButton(enabled = enabled && cooldown == 0L && email.isNotBlank(),
+                    modifier = Modifier.align(Alignment.End).heightIn(min = 48.dp).testTag("login-send-otp"),
+                    onClick = {
+                        if(!android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) {
+                            error = "请填写有效的邮箱"; return@AppTextButton
+                        }
+                        keyboard?.hide()
+                        focusManager.clearFocus()
+                        error = null; notice = null; verifying = true
+                    }) { Text(if(sending) "正在发送…" else if(cooldown > 0) "${cooldown} 秒后重试" else "发送邮箱验证码") }
             }
             error?.let { LoginStatus(it, error = true) }
             notice?.let { LoginStatus(it) }

@@ -103,6 +103,7 @@ class MirrorSessionTest {
                 "/api/v1/auth/otp/request" -> {
                     assertEquals("verify", payload(request).getValue("type").jsonPrimitive.content)
                     assertEquals("test@example.invalid", payload(request).getValue("email").jsonPrimitive.content)
+                    assertEquals("synthetic-verification", payload(request).getValue("turnstileToken").jsonPrimitive.content)
                     reply(request)
                 }
                 "/api/v1/auth/register" -> {
@@ -114,7 +115,7 @@ class MirrorSessionTest {
             }
         }.build()
         val session = Session(context(), client, sources)
-        session.requestOtp("test@example.invalid")
+        session.requestOtp("test@example.invalid", "synthetic-verification")
         assertTrue(session.login("test-user", "test-password", "test@example.invalid", "123456"))
         assertEquals(listOf("/api/v1/auth/otp/request", "/api/v1/auth/register", "/api/v1/auth/refresh"), paths)
     }

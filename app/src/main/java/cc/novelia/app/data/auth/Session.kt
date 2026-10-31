@@ -199,17 +199,21 @@ class Session(context: Context, private val client: OkHttpClient = OkHttpClient.
             } else refreshRequest(binding, allowAccountChange = true)
         } }
     }
-    suspend fun requestOtp(email: String, resetPassword: Boolean = false) {
+    /** 人机验证令牌仅用于本次发码；认证请求仍复用所选线路的原生网络层。 */
+    suspend fun requestOtp(email: String, turnstileToken: String, resetPassword: Boolean = false) {
         require(email.isNotBlank()) { "请填写邮箱" }
+        require(turnstileToken.isNotBlank() && turnstileToken.length <= 2048) { "请先完成人机验证" }
         val binding = capture()
         withContext(Dispatchers.IO) {
             authenticate(binding, if(resetPassword) AuthOperation.RESET_OTP else AuthOperation.REGISTER_OTP, buildJsonObject {
                 put("email", email.trim()); put("type", if(resetPassword) "reset_password" else "verify")
+                put("turnstileToken", turnstileToken)
             })
         }
     }
     suspend fun resetPassword(email: String, password: String, otp: String) {
         require(email.isNotBlank() && password.isNotEmpty() && otp.isNotBlank()) { "请填写邮箱、新密码和验证码" }
+        require(otp.trim().length == 26) { "找回密码验证码应为 26 位字符，请完整复制邮件中的验证码" }
         val binding = capture()
         withContext(Dispatchers.IO) {
             authenticate(binding, AuthOperation.RESET_PASSWORD, buildJsonObject {

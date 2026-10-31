@@ -57,6 +57,9 @@ class AuthErrorsTest {
         assertTrue(failure(AuthOperation.LOGIN, 401, "密码错误").message.startsWith("密码错误"))
         assertTrue(failure(AuthOperation.REGISTER, 400, "无效验证码").message.contains("验证码错误或已失效"))
         assertFalse(failure(AuthOperation.REGISTER_OTP, 404, "用户不存在").message.contains("邮箱未关联账号"))
+        assertTrue(failure(AuthOperation.RESET_PASSWORD, 400, "验证码长度必须是26个字符").message.contains("26 位字符"))
+        assertTrue(failure(AuthOperation.REGISTER, 400, "验证码长度必须是6个字符").message.contains("6 位数字"))
+        assertFalse(failure(AuthOperation.RESET_PASSWORD, 400, "验证码长度必须是6个字符").message.contains("6 位数字"))
     }
 
     @Test fun accountRestrictionsAndClosedFeaturesHaveActionableMessages() {
@@ -94,7 +97,8 @@ class AuthErrorsTest {
         assertEquals(failure(AuthOperation.REGISTER, 400).message,
             failure(AuthOperation.REGISTER, 400, "密码不能包含空格：synthetic-private-details").message)
         assertTrue(failure(AuthOperation.REGISTER, 400, "密码不能包含空格").message.startsWith("密码不能包含空格"))
-        assertTrue(failure(AuthOperation.RESET_OTP, 400, "人机验证失败，请重试").message.contains("前往网页"))
+        assertEquals("人机验证未通过，未能发送邮箱验证码",
+            failure(AuthOperation.RESET_OTP, 400, "人机验证失败，请重试").message)
     }
 
     @Test fun serviceFailuresKeepStatusAndDoNotBorrowAccountErrorReasons() {

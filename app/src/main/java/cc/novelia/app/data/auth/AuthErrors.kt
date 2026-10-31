@@ -60,9 +60,12 @@ private fun knownAuthError(operation: AuthOperation, status: Int, reason: String
         "密码长度必须至少为8个字符", "密码长度不能超过100个字符" -> "密码应为 8–100 个字符"
         "密码只能包含可打印字符" -> "密码包含不可见字符，请重新输入"
         "密码不能包含空格" -> "密码不能包含空格，请检查后重试"
-        "验证码必须是一个有效的数值", "验证码长度必须是6个字符" -> "验证码应为 6 位数字，请检查邮件中的验证码"
+        "验证码必须是一个有效的数值", "验证码长度必须是6个字符" -> if(operation == AuthOperation.REGISTER)
+            "注册验证码应为 6 位数字，请检查邮件中的验证码" else null
+        "验证码长度必须是26个字符" -> if(operation == AuthOperation.RESET_PASSWORD)
+            "找回密码验证码应为 26 位字符，请完整复制邮件中的验证码" else null
         "人机验证失败，请重试" -> if(operation == AuthOperation.REGISTER_OTP || operation == AuthOperation.RESET_OTP)
-            "人机验证未通过，请前往网页完成注册或找回密码" else null
+            "人机验证未通过，未能发送邮箱验证码" else null
         else -> null
     }
     401 -> when {

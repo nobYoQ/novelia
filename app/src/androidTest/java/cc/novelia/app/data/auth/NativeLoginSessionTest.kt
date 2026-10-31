@@ -81,6 +81,8 @@ class NativeLoginSessionTest {
             when(request.url.encodedPath) {
                 "/api/v1/auth/otp/request" -> {
                     assertEquals(if(paths.size == 1) "verify" else "reset_password", payload(request).getValue("type").jsonPrimitive.content)
+                    assertEquals(setOf("email", "type", "turnstileToken"), payload(request).keys)
+                    assertEquals("synthetic-verification", payload(request).getValue("turnstileToken").jsonPrimitive.content)
                     reply()
                 }
                 "/api/v1/auth/register" -> {
@@ -94,22 +96,37 @@ class NativeLoginSessionTest {
                 }
                 "/api/v1/auth/password/reset" -> {
                     assertEquals(setOf("email", "password", "otp"), payload(request).keys)
-                    assertEquals("654321", payload(request).getValue("otp").jsonPrimitive.content)
+                    assertEquals("0123456789ABCDEFGHIJKLMNOP", payload(request).getValue("otp").jsonPrimitive.content)
                     reply()
                 }
                 else -> error("Unexpected synthetic endpoint")
             }
         }, sources)
         try {
-            session.requestOtp("test@example.invalid")
+            session.requestOtp("test@example.invalid", "synthetic-verification")
             assertTrue(session.login("native-user", "synthetic-password", "test@example.invalid", "123456"))
-            session.requestOtp("test@example.invalid", resetPassword = true)
-            session.resetPassword("test@example.invalid", "synthetic-new-password", "654321")
+            session.requestOtp("test@example.invalid", "synthetic-verification", resetPassword = true)
+            session.resetPassword("test@example.invalid", "synthetic-new-password", "0123456789ABCDEFGHIJKLMNOP")
             assertEquals(listOf("otp/request", "register", "refresh", "otp/request", "password/reset"), paths.map { it.removePrefix("/api/v1/auth/") })
         } finally {
             CookieManager.getInstance().setCookie("${Session.AUTH_URL}/api/v1/auth", "$cookieName=; Max-Age=0; Secure; Path=/api/v1/auth")
             CookieManager.getInstance().flush()
         }
+    }
+
+    @Test fun missingHumanVerificationAndOldResetCodeAreRejectedBeforeNetwork() = runBlocking {
+        val sources = BookSources()
+        var calls = 0
+        val session = Session(context(), client(sources) { calls++; reply() }, sources)
+        val verification = runCatching { session.requestOtp("test@example.invalid", " ") }.exceptionOrNull()
+        assertTrue(verification is IllegalArgumentException)
+        assertEquals("请先完成人机验证", verification?.message)
+        assertTrue(runCatching { session.requestOtp("test@example.invalid", "a".repeat(2049)) }.exceptionOrNull() is IllegalArgumentException)
+        val reset = runCatching { session.resetPassword("test@example.invalid", "synthetic-password", "123456") }.exceptionOrNull()
+        assertTrue(reset is IllegalArgumentException)
+        assertTrue(reset?.message.orEmpty().contains("26 位字符"))
+        assertEquals(0, calls)
+        assertNull(session.profile.value)
     }
 
     @Test fun lateOriginalLoginCannotWriteCookiesOrTokensAfterSwitchingAwayAndBack() = runBlocking {

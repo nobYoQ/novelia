@@ -252,6 +252,7 @@ class ForumMirrorSessionTest {
             when(request.url.encodedPath) {
                 "/api/v1/auth/otp/request" -> {
                     assertEquals("verify", payload(request).getValue("type").jsonPrimitive.content)
+                    assertEquals("synthetic-verification", payload(request).getValue("turnstileToken").jsonPrimitive.content)
                     reply(request)
                 }
                 "/api/v1/auth/register" -> {
@@ -268,7 +269,7 @@ class ForumMirrorSessionTest {
             }
         }
         val forum = Session(context, client, sources, AuthTarget.FORUM)
-        forum.requestOtp("test@example.invalid")
+        forum.requestOtp("test@example.invalid", "synthetic-verification")
         assertTrue(forum.login("registered-user", "test-password", "test@example.invalid", "123456"))
         assertEquals(listOf("/api/v1/auth/otp/request", "/api/v1/auth/register", "/api/v1/auth/refresh"), paths)
         assertEquals("registered-user", forum.profile.value?.username)

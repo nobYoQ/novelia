@@ -42,14 +42,14 @@ Debug、本地 Release 和正式发行均使用相同注入逻辑。入口口令
 
 `BookSources` 保存来源及变更代次；`BookSourceInterceptor` 在 ECH 之前改写目标地址，路径、重复查询参数和百分号编码保持不变。小说、论坛 API、认证、封面、上传、下载和后台同步复用此网络层。外部图片/CDN 地址保持原样；入口 Cookie 只附在镜像标准 HTTPS 来源，认证 POST 除外。下载、图片的重定向由统一入口跟随，跨来源剥离 Cookie、Authorization 和 Proxy-Authorization。
 
-原站仍使用 WebView 认证。镜像使用原生登录/注册表单，字段与原站公开前端一致：
+原站和镜像共用原生登录／注册表单。发码前的人机验证使用独立小窗，只有 Cloudflare 验证资源允许通过 WebView 网络连接，认证业务请求仍走所选线路的原生客户端，详见[账号与会话](../network/authentication.md)。接口字段如下：
 
 | POST 路径 | JSON 字段 |
 | --- | --- |
 | `login` | `app: "n"`（小说）或 `"f"`（论坛）、`username`、`password` |
 | `register` | 上述字段加 `email`、`otp` |
-| `otp/request` | `email`、`type: "verify"`（注册）或 `"reset_password"`（找回密码） |
-| `password/reset` | `email`、`password`、`otp`；成功后返回登录表单 |
+| `otp/request` | `email`、`type: "verify"`（注册）或 `"reset_password"`（找回密码）、`turnstileToken` |
+| `password/reset` | `email`、`password`、26 位字符的 `otp`；成功后返回登录表单 |
 | `refresh?app=n` / `refresh?app=f` | 空请求体，携带该来源认证 Cookie；响应为 JWT 文本 |
 
 登录/注册成功后接收认证 Cookie；响应直接包含符合原站字段的 JWT 时立即保存，否则携带 Cookie 请求刷新获取 JWT。入口口令不会被当作账号令牌。镜像小说 JWT 与刷新 Cookie 在 `session-xkvi` 中加密保存，镜像论坛使用独立密钥和 `forum-session-xkvi`；原站沿用 `session` / `forum-session`。同线路小说已登录时，论坛可复用其 SSO Cookie 换取 `app=f` 令牌，核对账号一致后独立保存 Cookie；主站退出同时清除该线路的小说、论坛会话和镜像认证 Cookie，之后点击论坛登录会显示原生表单。密码和验证码只保留于当前表单内存，不进入恢复状态、备份和日志。服务器业务错误只显示固定提示，不回显原始响应内容。
