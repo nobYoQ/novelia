@@ -2,27 +2,17 @@
 
 package cc.novelia.app.ui.settings
 
-import cc.novelia.app.ui.components.base.AppButton
-import cc.novelia.app.ui.components.base.AppTextButton
-import cc.novelia.app.ui.components.base.AppOutlinedButton
 import android.content.ClipData
 import android.content.ClipboardManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.network.EchTransport
 import cc.novelia.app.files.exporting.PendingExportFiles
 import cc.novelia.app.ui.components.base.AppSheet
-import cc.novelia.app.ui.components.base.TogglePreference
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -33,10 +23,10 @@ import java.util.Date
 import java.util.Locale
 
 @Composable internal fun EchSettings(transport: EchTransport, onDismiss: () -> Unit) {
-    val enabled by transport.enabled.collectAsStateWithLifecycle()
     val recording by transport.recording.collectAsStateWithLifecycle()
     val diagnosis by transport.diagnosis.collectAsStateWithLifecycle()
     var exporting by remember { mutableStateOf(false) }
+    var clearing by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -60,21 +50,25 @@ import java.util.Locale
             finally { exporting = false }
         }
     }
+    // 放在 AppSheet 外，切换减少动效模式时仍保留页签和展开状态。
+    val panelState = rememberNetworkDiagnosticsPanelState(recording)
     AppSheet(onDismissRequest = onDismiss) {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("网络诊断与日志", style = MaterialTheme.typography.titleLarge)
-            TogglePreference("启用 ECH", "对原站小说、论坛和认证接口使用加密握手；镜像线路使用普通 HTTPS", enabled, transport::setEnabled)
-            Text("ECH 和加密 DNS 遵循系统 HTTP 代理及其绕过规则；VPN 是否接管流量由 VPN 设置决定。代理不可用时不会自动改走直连。", style = MaterialTheme.typography.bodySmall)
-            Text("检测针对原站，对照直连和 ECH 的实际接口请求，最长约 3 分钟。关闭此面板后仍会继续，可返回查看结果。", style = MaterialTheme.typography.bodyMedium)
-            AppButton(enabled = !diagnosis.running, onClick = transport::startDiagnostics) { Text("运行网络诊断") }
-            if (diagnosis.running) {
-                Text("正在检测 ${diagnosis.completed}/${diagnosis.total}")
-                AppTextButton(onClick = transport::cancelDiagnostics) { Text("取消诊断") }
-            }
-            HorizontalDivider()
-            TogglePreference("记录问题复现过程", "开启后返回出错页面重试，再回来导出；30 分钟后自动停止", recording, transport::setRecording)
-            Text("日志最多约 1 MiB，仅含连接阶段、耗时、接口类别、服务器地址和设备网络概况，不含账号、令牌、Cookie、搜索词及正文；不会自动上传。", style = MaterialTheme.typography.bodySmall)
-            AppOutlinedButton(enabled = !exporting && pendingExportId == null, onClick = {
+        NetworkDiagnosticsPanel(
+            state = panelState,
+            recording = recording,
+            diagnosis = diagnosis,
+            exporting = exporting || pendingExportId != null,
+            clearing = clearing,
+            notice = notice,
+            onRecordingChange = transport::setRecording,
+            onStart = transport::startDiagnostics,
+            onCancel = transport::cancelDiagnostics,
+            onDismiss = onDismiss,
+            onCopy = {
+                context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("网络诊断", diagnosis.report))
+                notice = "诊断结果已复制"
+            },
+            onExport = {
                 exporting = true; notice = ""
                 scope.launch {
                     try {
@@ -93,21 +87,20 @@ import java.util.Locale
                     }
                     finally { exporting = false }
                 }
-            }) { Text(if (exporting) "正在导出…" else "导出网络日志") }
-            AppTextButton(enabled = !diagnosis.running && !exporting, onClick = {
+            },
+            onClear = {
+                clearing = true
                 scope.launch {
-                    try { transport.clearNetworkLogs(); notice = "网络日志已清空" }
+                    try {
+                        transport.clearNetworkLogs()
+                        panelState.hasRecorded.value = false
+                        notice = "网络日志已清空"
+                    }
                     catch (cancelled: CancellationException) { throw cancelled }
                     catch (_: Exception) { notice = "清空失败，请稍后重试" }
+                    finally { clearing = false }
                 }
-            }) { Text("清空网络日志") }
-            if (notice.isNotEmpty()) Text(notice, style = MaterialTheme.typography.bodyMedium)
-            if (diagnosis.report.isNotEmpty()) {
-                AppTextButton(onClick = {
-                    context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("网络诊断", diagnosis.report))
-                }) { Text("复制诊断结果") }
-                Text(diagnosis.report, style = MaterialTheme.typography.bodyMedium)
-            }
-        }
+            },
+        )
     }
 }

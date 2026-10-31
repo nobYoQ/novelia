@@ -36,6 +36,7 @@ import cc.novelia.app.ui.navigation.AppController
     var busy by remember(account) { mutableStateOf(false) }
     var removing by remember(account) { mutableStateOf<Pair<PendingAction, SessionBinding>?>(null) }
     var echSettings by remember { mutableStateOf(false) }
+    val echEnabled by c.app.ech.enabled.collectAsStateWithLifecycle()
     val webDavConfig by c.app.webDavConfig.config.collectAsStateWithLifecycle()
     val webDavStatus by c.app.webDav.status.collectAsStateWithLifecycle()
     ProfileDetailScreen("网络与同步", onBack) { padding ->
@@ -90,7 +91,11 @@ import cc.novelia.app.ui.navigation.AppController
                 else -> "最近成功：${syncTime(webDavStatus.lastSuccessAt)}"
             }, Icons.Outlined.Devices, { c.go("webdav") }) }
             item(key = "book-source") { BookSourcePreference(c) }
-            item(key = "network-diagnostics") { ProfileMenuRow("网络诊断与日志", "ECH、连接检测与日志导出", Icons.Outlined.Wifi, { echSettings = true }) }
+            item(key = "ech") {
+                ProfileToggle("启用 ECH", "加密原站小说、论坛和认证连接的握手信息；镜像线路使用普通 HTTPS", echEnabled,
+                    onChange = c.app.ech::setEnabled)
+            }
+            item(key = "network-diagnostics") { ProfileMenuRow("网络诊断与日志", "检查连接、复现问题并导出日志", Icons.Outlined.Wifi, { echSettings = true }) }
             item { ProfileSectionTitle("应用更新") }
             item(key = "app-updates") { ProfileToggle("启动时检查应用更新", "关闭后仍可在帮助与关于中手动检查", state.autoCheckAppUpdates) { value -> c.store.update { it.copy(autoCheckAppUpdates = value) } } }
             if(account != null && pending.isNotEmpty()) {
