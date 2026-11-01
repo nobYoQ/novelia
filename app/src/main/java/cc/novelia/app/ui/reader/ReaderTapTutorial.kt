@@ -33,6 +33,7 @@ import cc.novelia.app.ui.components.base.AppTextButton
     val density = LocalDensity.current
     var topControlsHeight by remember { mutableStateOf(48.dp) }
     var bottomControlsHeight by remember { mutableStateOf(56.dp) }
+    val controlsColor = MaterialTheme.colorScheme.surface.copy(alpha = if(eInk) 1f else .96f)
     BackHandler(onBack = onDismiss)
     BoxWithConstraints(modifier.background(if(eInk) Color.White.copy(alpha = .85f) else Color.Black.copy(alpha = .12f))
         .testTag("reader-tap-tutorial").semantics { paneTitle = "点击区域翻页引导" }
@@ -43,18 +44,18 @@ import cc.novelia.app.ui.components.base.AppTextButton
             ReaderTapZoneGrid(map, double, staticPagination = staticPagination, eInk = eInk, modifier = Modifier.fillMaxSize(),
                 topClearance = if(controlsVisible) topControlsHeight else 0.dp,
                 bottomClearance = if(controlsVisible) bottomControlsHeight else 0.dp)
-            if(!controlsVisible) Surface(Modifier.align(Alignment.TopCenter), color = MaterialTheme.colorScheme.surface.copy(alpha = .96f)) {
+            if(!controlsVisible) Surface(Modifier.align(Alignment.TopCenter), color = controlsColor) {
                 AppTextButton(onClick = { controlsVisible = true }) { Text("显示教程控件") }
             }
             if(controlsVisible) Surface(Modifier.align(Alignment.TopCenter).fillMaxWidth()
-                .onSizeChanged { topControlsHeight = with(density) { it.height.toDp() } }, color = MaterialTheme.colorScheme.surface.copy(alpha = .96f)) {
+                .onSizeChanged { topControlsHeight = with(density) { it.height.toDp() } }, color = controlsColor) {
                 Row(Modifier.padding(start = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("点击区域翻页", Modifier.weight(1f).semantics { heading() }, style = MaterialTheme.typography.titleMedium)
                     AppIconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) { Icon(Icons.Outlined.Close, "关闭点击翻页引导") }
                 }
             }
             if(controlsVisible) Surface(Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                .onSizeChanged { bottomControlsHeight = with(density) { it.height.toDp() } }, color = MaterialTheme.colorScheme.surface.copy(alpha = .96f)) {
+                .onSizeChanged { bottomControlsHeight = with(density) { it.height.toDp() } }, color = controlsColor) {
                 Column(Modifier.padding(horizontal = 12.dp)) {
                     if(!compact) Text("这里展示你当前设置的区域。相同动作的邻格合并显示；可在阅读设置中拖动分界线调整大小。",
                         Modifier.padding(vertical = 8.dp), style = MaterialTheme.typography.bodySmall)

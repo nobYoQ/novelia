@@ -85,6 +85,7 @@ $env:ANDROID_SERIAL = '<专用测试设备序列号>'
 - 静态交互：`EInkReaderFlowTest`、`ReducedMotionSheetTest`、`PanelSessionTest`。`EInkReaderFlowTest` 同时覆盖物理按键、滚动/分页锚点互换、搜索与重新进入阅读；离开阅读器后按现有“阅读与朗读”“外观与操作”分类检查设置。
 - 收藏夹列表：`ShelfBatchUiTest` 使用 40 个自建收藏夹检查普通滚动和电子纸翻屏。
 - 独立阅读配置：`ReaderPreferencesTest` 检查两套完整阅读配置的切换、旧数据兼容和备份恢复；`WebDavProjectionTest` 检查模式配置同步、冲突处理及本机字体保留。
+- 点击分区浮层：`ReaderToolbarOverlayTest` 检查普通分页、电子纸分页和连续滚动下，分区编辑与教程不叠显阅读控件，关闭后恢复布局及位置。
 - EPUB 富文本：`ReaderEpubInlineTest` 检查三个独立开关及重开保留、不同字号下的注音行高、分页底文完整性、脚注坐标命中、两种模式中点击脚注不翻页、关闭脚注恢复普通点击及长按选择，输出 `epub-preferences.png`、`epub-inline-*.png` 和 `epub-footnote-*.png` 供视觉验收。
 - 设置分类转场：`SettingsMotionTest` 覆盖六个分类的进入/返回中间帧、快速系统返回、电子纸与减少动效直接切换、途中关闭动画及保留滚动位置；`SettingsCategoriesTest` 验证分类与重建恢复。
 

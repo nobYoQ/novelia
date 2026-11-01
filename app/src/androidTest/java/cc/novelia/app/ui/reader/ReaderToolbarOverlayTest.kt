@@ -260,11 +260,12 @@ class ReaderToolbarOverlayTest {
     ) { app, ref ->
         compose.onNodeWithTag("reader-tap-tutorial").assertIsDisplayed()
         val before = app.store.state.value.positions.getValue(ref.key)
-        val counter = pageCounter()
+        val body = snapshot("reader-page")
+        assertReadingControlsAbsent()
         screenshot("reader-tap-tutorial-eink")
         compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }
         compose.onNodeWithTag("reader-tap-tutorial").assertDoesNotExist()
-        assertEquals(counter, pageCounter())
+        assertEquals(body, snapshot("reader-page"))
         assertAnchorEquals(before, app.store.state.value.positions.getValue(ref.key))
         assertTrue(app.store.state.value.readerTapTutorialSeen)
         compose.onNodeWithTag("reader-page").performTouchInput { click(Offset(width * .85f, centerY)) }
@@ -931,7 +932,19 @@ class ReaderToolbarOverlayTest {
         }
 
     @Test fun tapZoneOverlayPersistsPerBookAndTutorialUsesSavedGeometryWithoutMovingText() =
-        withReader(ReaderSettings(paginationMode = "auto", tapPageTurn = true, showPageButtons = true)) { app, ref ->
+        verifyTapZoneOverlay(ReaderSettings(paginationMode = "auto", tapPageTurn = true, showPageButtons = true))
+
+    @Test fun eInkTapZoneOverlayHidesReadingControlsWithoutMovingText() =
+        verifyTapZoneOverlay(ReaderSettings(tapPageTurn = true).withEInkMode(true))
+
+    private fun assertReadingControlsAbsent() {
+        listOf("reader-top-toolbar", "reader-bottom-toolbar", "reader-seek-bar", "reader-reading-status-bar")
+            .forEach { compose.onNodeWithTag(it, useUnmergedTree = true).assertDoesNotExist() }
+        compose.onNodeWithContentDescription("阅读设置").assertDoesNotExist()
+    }
+
+    private fun verifyTapZoneOverlay(settings: ReaderSettings) =
+        withReader(settings) { app, ref ->
             compose.onNodeWithText("下一页").performClick()
             compose.waitUntil(10_000) { (app.store.state.value.positions[ref.key]?.textOffset ?: 0) > 0 }
             val before = snapshot("reader-page")
@@ -943,6 +956,7 @@ class ReaderToolbarOverlayTest {
             compose.onNodeWithText("翻页").performClick()
             compose.onNodeWithTag("tap-zone-open-editor").performScrollTo().performClick()
             compose.onNodeWithTag("tap-zone-editor").assertIsDisplayed()
+            assertReadingControlsAbsent()
             compose.onNodeWithTag("tap-zone-column-1").performSemanticsAction(SemanticsActions.SetProgress) { it(.2f) }
             compose.onNodeWithTag("tap-zone-region-4").performClick()
             compose.onNodeWithTag("tap-zone-option-Navigate").performClick()
@@ -961,6 +975,7 @@ class ReaderToolbarOverlayTest {
             compose.onNodeWithText("翻页").performClick()
             compose.onNodeWithText("查看点击分区教程").performScrollTo().performClick()
             compose.onNodeWithTag("tap-zone-region-4").assertTextContains("目录")
+            assertReadingControlsAbsent()
             screenshot("pr2-zones-reader-tutorial")
             compose.onNodeWithText("开始阅读").performClick()
             assertEquals(before, snapshot("reader-page"))
@@ -973,6 +988,26 @@ class ReaderToolbarOverlayTest {
             compose.onNodeWithTag("tap-zone-column-1").performSemanticsAction(SemanticsActions.SetProgress) { it(.3f) }
             compose.onNodeWithText("取消").performClick()
             assertEquals(map, app.store.state.value.bookSettings.getValue(ref.key).resolvedTapZoneMap)
+        }
+
+    @Test fun scrollingTapZoneEditorHidesPageButtonsAndRestoresControlsOnCancel() =
+        withReader(ReaderSettings(tapPageTurn = true, showPageButtons = true, showScrollPageButtons = true)) { app, ref ->
+            val before = snapshot("reader-scroll")
+            val position = app.store.state.value.positions.getValue(ref.key)
+            compose.onNodeWithText("下一屏").assertIsDisplayed()
+            compose.onNodeWithContentDescription("阅读设置").performClick()
+            compose.onNodeWithText("翻页").performClick()
+            compose.onNodeWithTag("tap-zone-open-editor").performScrollTo().performClick()
+            compose.onNodeWithTag("tap-zone-editor").assertIsDisplayed()
+            assertReadingControlsAbsent()
+            compose.onNodeWithContentDescription("隐藏配置控件以编辑边缘区域").performClick()
+            assertReadingControlsAbsent()
+            compose.onNodeWithText("显示配置控件").performClick()
+            compose.onNodeWithText("取消").performClick()
+            compose.onNodeWithText("下一屏").assertIsDisplayed()
+            compose.onNodeWithTag("reader-seek-bar").assertIsDisplayed()
+            assertEquals(before, snapshot("reader-scroll"))
+            assertAnchorEquals(position, app.store.state.value.positions.getValue(ref.key))
         }
 
     private fun withReader(settings: ReaderSettings, chapters: List<LocalChapter> = listOf(

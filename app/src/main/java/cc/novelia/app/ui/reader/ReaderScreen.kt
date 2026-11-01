@@ -523,6 +523,7 @@ import kotlinx.serialization.encodeToString
         val showTapTutorial = settings.tapPageTurn && !local.readerTapTutorialSeen && panelsClosed && !leaving &&
             !chapterLoad.loading && chapterLoad.error == null && positionState.initialAnchorRestored && !positionState.restoringAnchor && seekTarget == null &&
             (!settings.staticPagination || eInk.ready)
+        val tapOverlayVisible = editingTapZones || showTapTutorial
         cc.novelia.app.ui.toolbar.ReportEdgeToolbarReaderState(readerEntry?.id, menu,
             blocked = !panelsClosed || showTapTutorial || leaving || !positionState.initialAnchorRestored,
             top = if(menu) topOverlayHeight else 0, bottom = bottomOverlayHeight)
@@ -771,7 +772,7 @@ import kotlinx.serialization.encodeToString
                 true
             } else false
         }.focusable()) {
-            Box(Modifier.matchParentSize().semantics { if(showTapTutorial || editingTapZones) hideFromAccessibility() }) {
+            Box(Modifier.matchParentSize().semantics { if(tapOverlayVisible) hideFromAccessibility() }) {
             // 两种模式均使用固定正文视口；工具栏是同级浮层，
             // 不得给正文布局增加内边距或尺寸约束。
             val bodyInputEnabled = volumeKeysActive && !leaving && !chapterLoad.loading && !positionState.restoringAnchor && positionState.initialAnchorRestored && seekTarget == null
@@ -832,7 +833,7 @@ import kotlinx.serialization.encodeToString
                     }
                 }
                 item("end", contentType = "footer") {
-                    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Column(Modifier.fillMaxWidth().graphicsLayer { alpha = if(tapOverlayVisible) 0f else 1f }, horizontalAlignment = Alignment.CenterHorizontally) {
                         HorizontalDivider(Modifier.padding(vertical = 24.dp)); Text("本章完", color = foreground.copy(alpha = .65f)); Spacer(Modifier.height(20.dp))
                         if(chapter.nextId != null) ReaderChapterPullHint(chapterPull.progress, chapterPull.active, chapterPull.ready,
                             inlineChapterLoad && chapterLoad.loading, foreground, Modifier.padding(bottom = 8.dp))
@@ -848,6 +849,9 @@ import kotlinx.serialization.encodeToString
                     }
                 }
             }
+            // 分区配置和教程只叠在正文上；暂时移除工具栏、翻页、朗读和进度浮层。
+            // 保留已测得的高度，避免进出配置时改变正文视口或章末留白。
+            if(!tapOverlayVisible) {
             ReaderTopToolbar(
                 state = ReaderTopToolbarState(chapter.title, ref.isLocal, leaving, translationUpdate != null,
                     returnPoint != null, !leaving && !chapterLoad.loading && !positionState.restoringAnchor && positionState.initialAnchorRestored, speechStatus),
@@ -912,6 +916,7 @@ import kotlinx.serialization.encodeToString
                         AppTextButton(onClick = chapterLoad::cancel) { Text(if(chapterLoad.loading) "取消加载" else "继续阅读") }
                     }
                 }
+            }
             }
             }
             if(showTapTutorial) ReaderTapTutorial(settings.staticPagination, settings.eInkMode || eInkInteraction,

@@ -57,6 +57,7 @@ import kotlin.math.roundToInt
     var topControlsHeight by remember { mutableStateOf(72.dp) }
     var bottomControlsHeight by remember { mutableStateOf(100.dp) }
     val latestDraft by rememberUpdatedState(draft)
+    val controlsColor = MaterialTheme.colorScheme.surface.copy(alpha = if(eInk) 1f else .94f)
     BackHandler(onBack = onDismiss)
     BoxWithConstraints(modifier.fillMaxSize().testTag("tap-zone-editor").semantics { paneTitle = "点击分区配置" }
         .pointerInput(Unit) { detectTapGestures {} }) {
@@ -106,11 +107,11 @@ import kotlin.math.roundToInt
             }.size(40.dp, 24.dp).testTag("tap-zone-row-$index")) { draft = draft.withRowBoundary(index, it) }
         }
         if(!controlsVisible) Surface(Modifier.align(Alignment.TopCenter), shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surface.copy(alpha = .96f)) {
+            color = controlsColor) {
             AppTextButton(onClick = { controlsVisible = true }) { Text("显示配置控件") }
         }
         if(controlsVisible) Surface(Modifier.align(Alignment.TopCenter).fillMaxWidth()
-            .onSizeChanged { topControlsHeight = with(density) { it.height.toDp() } }, color = MaterialTheme.colorScheme.surface.copy(alpha = .94f)) {
+            .onSizeChanged { topControlsHeight = with(density) { it.height.toDp() } }, color = controlsColor) {
             Column {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     AppTextButton(onClick = onDismiss) { Text("取消") }
@@ -122,7 +123,7 @@ import kotlin.math.roundToInt
             }
         }
         if(controlsVisible) Surface(Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-            .onSizeChanged { bottomControlsHeight = with(density) { it.height.toDp() } }, color = MaterialTheme.colorScheme.surface.copy(alpha = .94f)) {
+            .onSizeChanged { bottomControlsHeight = with(density) { it.height.toDp() } }, color = controlsColor) {
             Column(Modifier.padding(horizontal = 8.dp)) {
                 FlowRow(Modifier.fillMaxWidth(), itemVerticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     FilterChip(!double, { double = false }, label = { Text("单击") }, modifier = Modifier.testTag("tap-zone-single"))
