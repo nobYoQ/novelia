@@ -10,6 +10,18 @@ class ReaderAnnotationSyncTest {
     private fun documents(state: LibraryState, devices: Boolean = false) = SyncReplica(deviceId = "reader-test")
         .track(emptyMap(), WebDavProjection.library(state, includeDevicePreferences = devices)).bind("dataset").documents
 
+    @Test fun unlimitedTimerSyncsInDefaultAndBookPreferences() {
+        val custom = ReaderSettings(speechMinutes = 0)
+        val docs = documents(LibraryState(reader = custom, bookSettings = mapOf(key to custom)))
+        docs.values.forEach { WebDavProjection.validateRecords(it) }
+        val restored = WebDavProjection.applyLibrary(LibraryState(), docs, setOf(SyncDomain.SETTINGS))
+        assertEquals(custom, restored.reader)
+        assertEquals(custom, restored.bookSettings.getValue(key))
+        assertThrows(IllegalArgumentException::class.java) {
+            WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "speechMinutes", JsonPrimitive(-1))
+        }
+    }
+
     @Test fun epubDisplaySwitchesSyncAndLegacyRecordsPreserveLocalChoices() {
         val custom = ReaderSettings(showEpubRuby = false, epubFootnotePopup = false, showEpubStyles = false)
         val remote = LibraryState(reader = custom, bookSettings = mapOf(key to custom.copy(showEpubRuby = true)))

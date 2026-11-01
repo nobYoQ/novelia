@@ -67,10 +67,10 @@ import cc.novelia.app.ui.theme.appRoundedCornerShape
                     }
                 }
             }
-            SpeechOptionCard("定时停止", if(playback == null) "从开始朗读时计时" else "选择后从现在重新计时") {
+            SpeechOptionCard("定时停止", if(settings.resolvedSpeechMinutes == 0) "不限时，读完或手动停止时结束" else if(playback == null) "从开始朗读时计时" else "选择时长后重新计时，选不限时可取消定时") {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(15, 30, 60).forEach { minutes ->
-                        AppSelectionChip(settings.speechMinutes == minutes, { onTimer(minutes) }, label = { Text("$minutes 分钟") })
+                    ReaderSettings.SPEECH_TIMER_OPTIONS.forEach { minutes ->
+                        AppSelectionChip(settings.resolvedSpeechMinutes == minutes, { onTimer(minutes) }, label = { Text(ReaderSettings.speechTimerLabel(minutes)) })
                     }
                 }
             }

@@ -1066,7 +1066,12 @@ import kotlinx.serialization.encodeToString
                         ReaderSheetExpandIcon(expanded)
                     }
                     AppTextButton(onClick = { preferences = false }) { Text("关闭面板") }
-                }) { value -> c.store.update { if(it.bookSettings.containsKey(ref.key)) it.copy(bookSettings = it.bookSettings + (ref.key to value)) else it.copy(reader = value) } }
+                }) { value ->
+                    updateSpeechSettings(value)
+                    if(bookSpeech != null && value.speechMinutes != settings.speechMinutes) {
+                        context.startService(Intent(context, ReadAloudService::class.java).setAction("timer").putExtra("minutes", value.speechMinutes))
+                    }
+                }
         }
     }
 }

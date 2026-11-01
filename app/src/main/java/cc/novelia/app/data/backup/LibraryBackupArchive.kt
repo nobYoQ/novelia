@@ -138,6 +138,7 @@ internal object LibraryBackupArchive {
             require(settings.horizontalMargin in 0f..64f && settings.verticalMargin in 0f..64f) { "备份页边距无效" }
             require(settings.orientation in ReaderSettings.ORIENTATIONS) { "备份阅读方向无效" }
             require(settings.validAutoRead) { "备份自动阅读速度无效" }
+            require(settings.validSpeechTimer) { "备份朗读时长无效" }
             require(settings.validTextReplacements) { "备份文字替换规则无效" }
             require(settings.validReadingStatusItems) { "备份阅读底栏配置无效" }
             require(settings.validToolbarTransparency) { "备份工具栏透明度无效" }

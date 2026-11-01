@@ -31,7 +31,7 @@ internal fun readerSettingsDifferences(book: ReaderSettings, defaults: ReaderSet
         "列表与面板翻屏按钮" to showEInkScreenButtons.label(), "阅读时隐藏状态栏" to hideStatusBar.label(),
         "屏幕亮度" to if(brightness < 0) "跟随系统" else "${(brightness * 100).toInt()}%",
         "工具栏透明度" to "${(resolvedToolbarTransparency * 100).toInt()}%", "繁体显示" to traditional.label(),
-        "朗读速度" to "$speechRate×", "朗读定时停止" to "$speechMinutes 分钟",
+        "朗读速度" to "$speechRate×", "朗读定时停止" to ReaderSettings.speechTimerLabel(resolvedSpeechMinutes),
         "朗读语言" to when(speechLanguage) { "jp" -> "日文"; "zh" -> "中文"; else -> "随显示模式" },
         "连续听书" to speechContinueChapters.label(), "联网续章" to speechNetworkContinuation.label(),
         "自动预读后续章节" to "$prefetchChapters 章", "仅 Wi-Fi 自动预读" to prefetchWifiOnly.label()

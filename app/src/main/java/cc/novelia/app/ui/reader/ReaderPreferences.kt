@@ -212,8 +212,8 @@ import kotlin.math.roundToInt
                             ReaderSlider("朗读速度 ${"%.1f".format(value.speechRate)}×", value.speechRate, .5f..2f, defaultValue = defaults?.speechRate) { onChange(value.copy(speechRate = it)) }
                             ChoiceRow("朗读语言", listOf("随显示模式", "中文", "日文"), listOf("auto", "zh", "jp").indexOf(value.speechLanguage),
                                 defaultSelected = defaults?.let { listOf("auto", "zh", "jp").indexOf(it.speechLanguage) }) { onChange(value.copy(speechLanguage = listOf("auto", "zh", "jp")[it])) }
-                            ChoiceRow("朗读定时停止", listOf("15 分钟", "30 分钟", "60 分钟"), listOf(15, 30, 60).indexOf(value.speechMinutes),
-                                defaultSelected = defaults?.let { listOf(15, 30, 60).indexOf(it.speechMinutes) }) { onChange(value.copy(speechMinutes = listOf(15, 30, 60)[it])) }
+                            ChoiceRow("朗读定时停止", ReaderSettings.SPEECH_TIMER_OPTIONS.map { ReaderSettings.speechTimerLabel(it) }, ReaderSettings.SPEECH_TIMER_OPTIONS.indexOf(value.resolvedSpeechMinutes),
+                                defaultSelected = defaults?.let { ReaderSettings.SPEECH_TIMER_OPTIONS.indexOf(it.resolvedSpeechMinutes) }) { onChange(value.copy(speechMinutes = ReaderSettings.SPEECH_TIMER_OPTIONS[it])) }
                             TogglePreference("连续听书", "本章结束后自动进入下一章，定时停止不会重新计时", value.speechContinueChapters, defaultValue = defaults?.speechContinueChapters) { onChange(value.copy(speechContinueChapters = it)) }
                             if(value.speechContinueChapters) TogglePreference("允许联网续章", "优先读取本地和缓存；关闭后遇到未缓存章节暂停", value.speechNetworkContinuation, defaultValue = defaults?.speechNetworkContinuation) { onChange(value.copy(speechNetworkContinuation = it)) }
                         }

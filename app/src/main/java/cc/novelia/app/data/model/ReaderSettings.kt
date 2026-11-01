@@ -117,8 +117,14 @@ import kotlinx.serialization.Serializable
         val LINE_HEIGHT_RANGE = MIN_LINE_HEIGHT..2.6f
         val THEMES = listOf("system", "paper", "light", "dark", "monochrome", "custom")
         val ORIENTATIONS = listOf("system", "portrait", "landscape")
+        val SPEECH_TIMER_OPTIONS = listOf(0, 15, 30, 60)
+        const val MAX_SPEECH_MINUTES = 1_440
+        fun speechTimerLabel(minutes: Int) = if(minutes == 0) "不限时" else "$minutes 分钟"
     }
 
+    // 0 是明确的不限时选择；损坏的负数配置仍回退到默认定时。
+    val resolvedSpeechMinutes get() = if(speechMinutes < 0) 30 else speechMinutes.coerceAtMost(MAX_SPEECH_MINUTES)
+    val validSpeechTimer get() = speechMinutes in 0..MAX_SPEECH_MINUTES
     val resolvedParagraphSpacing get() = if(paragraphSpacing.isFinite()) paragraphSpacing.coerceIn(0f, 32f) else 8f
     val resolvedHorizontalMargin get() = if(horizontalMargin.isFinite()) horizontalMargin.coerceIn(0f, 64f) else 24f
     val resolvedVerticalMargin get() = if(verticalMargin.isFinite()) verticalMargin.coerceIn(0f, 64f) else 16f

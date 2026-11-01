@@ -220,7 +220,7 @@ internal object WebDavValidation {
             "width" -> number(value, 300.0, 900.0)
             "secondaryAlpha" -> number(value, 0.0, 1.0)
             "speechRate" -> number(value, 0.5, 2.0)
-            "speechMinutes" -> positiveInt(value, 1_440)
+            "speechMinutes" -> nonnegativeInt(value, ReaderSettings.MAX_SPEECH_MINUTES)
             "speechLanguage" -> enumText(value, setOf("auto", "zh", "jp"))
             "readingStatusItems" -> require(cc.novelia.app.data.model.ReaderStatusItems.valid(arrayStrings(value))) { "阅读底栏配置无效" }
             "textReplacements" -> {
