@@ -495,7 +495,7 @@ import kotlinx.coroutines.withContext
             }
         }
     }
-    if(bulkMove) AppAlertDialog(onDismissRequest = { bulkMove = false }, title = { Text("移入收藏夹") }, text = { Column {
+    if(bulkMove) AppAlertDialog(onDismissRequest = { bulkMove = false }, title = { Text("移入收藏夹") }, text = { AppScrollColumn {
         if(state.books.any { it.book.ref.key in selection && it.parentWenkuKey != null && it.parentWenkuKey !in selection }) Text("单独移动分卷会取消其挂载；同时移动所属文库可保留挂载。", style = MaterialTheme.typography.bodySmall)
         state.folders.forEach { target -> AppTextButton(onClick = { c.store.update { it.moveShelfBooks(selection, target) }; bulkMove = false; managing = false; selection = emptySet() }) { Text(target) } }
     } }, confirmButton = {})

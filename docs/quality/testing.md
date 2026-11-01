@@ -83,6 +83,7 @@ $env:ANDROID_SERIAL = '<专用测试设备序列号>'
 - 文件/恢复：`BookExportUiTest`、`LibraryBackupFlowTest`、`files.downloads.BookFileActionsTest`、`files.importing.DownloadImportCleanupTest`；书架移除时的持久化清理仍由 `data.storage.ShelfCopyCleanupTest` 覆盖。
 - 系统文件分享：`files.importing.SharedDocumentIntentsTest` 检查分享菜单的类型匹配和附件读取；`ui.shelf.SharedDocumentImportTest` 检查冷启动、运行中再次分享、ClipData 多文件、旋转恢复、重复文件和不支持格式。可以使用 `-PisolatedLibraryTests=true` 构建独立测试包。
 - 静态交互：`EInkReaderFlowTest`、`ReducedMotionSheetTest`、`PanelSessionTest`。`EInkReaderFlowTest` 同时覆盖物理按键、滚动/分页锚点互换、搜索与重新进入阅读；离开阅读器后按现有“阅读与朗读”“外观与操作”分类检查设置。
+- 收藏夹列表：`ShelfBatchUiTest` 使用 40 个自建收藏夹检查普通滚动和电子纸翻屏。
 - EPUB 富文本：`ReaderEpubInlineTest` 检查三个独立开关及重开保留、不同字号下的注音行高、分页底文完整性、脚注坐标命中、两种模式中点击脚注不翻页、关闭脚注恢复普通点击及长按选择，输出 `epub-preferences.png`、`epub-inline-*.png` 和 `epub-footnote-*.png` 供视觉验收。
 - 设置分类转场：`SettingsMotionTest` 覆盖六个分类的进入/返回中间帧、快速系统返回、电子纸与减少动效直接切换、途中关闭动画及保留滚动位置；`SettingsCategoriesTest` 验证分类与重建恢复。
 

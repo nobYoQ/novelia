@@ -25,6 +25,38 @@ import org.junit.Test
 class ShelfBatchUiTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun movingBooksCanScrollPastFourteenFolders() = verifyManyFolders(false)
+
+    @Test fun movingBooksCanPagePastFourteenFoldersOnEInk() = verifyManyFolders(true)
+
+    private fun verifyManyFolders(eInk: Boolean) {
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
+        runBlocking { app.initialization.await() }
+        val previous = app.store.state.value
+        val book = BookCard(BookRef("local", "many-folders-${UUID.randomUUID()}"), "收藏夹滚动测试")
+        val folders = listOf(DEFAULT_FOLDER) + (1..40).map { "测试收藏夹 $it" }
+        try {
+            app.store.update { it.copy(books = listOf(SavedBook(book)), folders = folders) }
+            compose.setContent { AppInteractionMode(eInk, true) { NoveliaTheme("light") {
+                val controller = AppController(app, rememberNavController(), rememberCoroutineScope(), remember { SnackbarHostState() })
+                ShelfScreen(controller)
+            } } }
+            compose.onNodeWithTag("shelf-book-${book.ref.key}").performTouchInput { longClick() }
+            compose.onNodeWithTag("local-selection-move").performClick()
+            compose.onNodeWithText("移入收藏夹").assertIsDisplayed()
+            val target = compose.onNode(hasText(folders.last()) and hasAnyAncestor(isDialog()))
+            repeat(20) {
+                if(!target.isDisplayed()) {
+                    if(eInk) compose.onNode(hasText("下一屏") and hasAnyAncestor(isDialog())).performClick()
+                    else compose.onNode(hasScrollAction() and hasAnyAncestor(isDialog())).performTouchInput { swipeUp() }
+                }
+            }
+            target.assertIsDisplayed().performClick()
+            compose.runOnIdle { assertEquals(folders.last(), app.store.state.value.books.single().folder) }
+            compose.onNodeWithText("移入收藏夹").assertDoesNotExist()
+        } finally { app.store.update { previous }; runBlocking { app.store.flush() } }
+    }
+
     @Test fun selectedShelfBooksCanBeRemovedAndUndoneAndFilesHaveSeparateDeleteConfirmation() {
         val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
         runBlocking { app.initialization.await() }
