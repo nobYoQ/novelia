@@ -249,7 +249,8 @@ private fun drawStrip(canvas: android.graphics.Canvas, fromRow: Int, toRow: Int,
         } else {
             val layout = chapter.layouts[line.paragraph] ?: continue
             val drawScale = (heightPx.toFloat() / line.height).coerceAtMost(1f)
-            val lt = layout.getLineTop(layout.getLineForOffset(line.start))
+            val lineIndex = layout.getLineForOffset(line.start)
+            val lt = layout.getLineTop(lineIndex)
             val save = canvas.save()
             canvas.scale(drawScale, drawScale)
             canvas.translate(0f, y / drawScale - lt)
@@ -261,6 +262,11 @@ private fun drawStrip(canvas: android.graphics.Canvas, fromRow: Int, toRow: Int,
                 canvas.drawPath(path, Paint().apply { color = (foregroundArgb and 0x00FFFFFF) or (51 shl 24) })
             }
             layout.paint.color = foregroundArgb
+            // 只本行：layout.draw 会画出整段所有行，超出视口的部分会被 clipToBounds
+            // 拦腰截断，看起来就是底部「半截字」。使用行级裁剪保证每行只占自己的行带。
+            val lineTop = layout.getLineTop(lineIndex)
+            val lineBottom = layout.getLineBottom(lineIndex)
+            canvas.clipRect(0f, lineTop.toFloat(), canvas.width.toFloat(), lineBottom.toFloat())
             layout.draw(canvas)
             canvas.restoreToCount(save)
         }
