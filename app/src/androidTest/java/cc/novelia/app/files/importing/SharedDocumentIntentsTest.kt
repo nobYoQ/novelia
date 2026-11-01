@@ -43,7 +43,7 @@ class SharedDocumentIntentsTest {
         assertEquals(listOf(first, second), share.sharedDocumentUris())
         assertTrue(Intent(Intent.ACTION_SEND).apply { clipData = ClipData.newPlainText("链接", "https://n.novelia.cc/novel/test/1") }
             .sharedDocumentUris().isEmpty())
-        assertTrue(Intent(Intent.ACTION_VIEW, first).sharedDocumentUris().isEmpty())
+        assertEquals(listOf(first), Intent(Intent.ACTION_VIEW, first).sharedDocumentUris())
         assertEquals(listOf(first), Intent(Intent.ACTION_SEND).setDataAndType(first, "application/epub+zip").sharedDocumentUris())
     }
 
@@ -55,5 +55,26 @@ class SharedDocumentIntentsTest {
         assertEquals(listOf(first), share.sharedDocumentUris())
         assertTrue(Intent(Intent.ACTION_SEND_MULTIPLE).putStringArrayListExtra(Intent.EXTRA_STREAM, arrayListOf("not a Uri"))
             .sharedDocumentUris().isEmpty())
+    }
+
+    @Test fun supportedDocumentsAppearInOpenWithWithoutClaimingWebOrImageLinks() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        fun matches(uri: Uri, mime: String?) = context.packageManager.queryIntentActivities(
+            Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime).setPackage(context.packageName), PackageManager.MATCH_DEFAULT_ONLY)
+        for(type in listOf("application/epub+zip", "text/plain", "application/x-subrip", "application/srt", "text/srt", "application/octet-stream", "*/*")) {
+            assertTrue("Missing open target for $type", matches(first, type).any { it.activityInfo.name == "cc.novelia.app.MainActivity" })
+        }
+        assertTrue(matches(first, "image/png").isEmpty())
+        assertTrue(matches(Uri.parse("https://example.com/book.epub"), "application/epub+zip").isEmpty())
+        assertTrue(matches(Uri.parse("https://n.novelia.cc/novel/test/1"), null).isNotEmpty())
+    }
+
+    @Test fun openWithUsesOnlyTheDocumentDataAndLeavesWebLinksToNavigation() {
+        val open = Intent(Intent.ACTION_VIEW).setDataAndType(first, "application/epub+zip")
+            .putExtra(Intent.EXTRA_STREAM, second).apply { clipData = ClipData.newRawUri("其他文件", second) }
+        assertEquals(listOf(first), open.sharedDocumentUris())
+        assertTrue(Intent(Intent.ACTION_VIEW, Uri.parse("https://n.novelia.cc/novel/test/1")).sharedDocumentUris().isEmpty())
+        assertTrue(Intent(Intent.ACTION_VIEW, Uri.parse("file:///data/private.txt")).sharedDocumentUris().isEmpty())
+        assertTrue(Intent(Intent.ACTION_VIEW).sharedDocumentUris().isEmpty())
     }
 }

@@ -81,7 +81,7 @@ $env:ANDROID_SERIAL = '<专用测试设备序列号>'
 - 会话：`NativeLoginSessionTest`、`MirrorSessionTest`、`ForumMirrorSessionTest`、`ForumSessionIsolationTest`、`ForumSharedAuthTest`；原生登录界面另见 `integration.AuthPageTest`、`ui.account.ForumMirrorLoginTest` 和 `ui.settings.BookSourceNavigationTest`。
 - Android 平台解析：`ForumCommunityRulesParserAndroidTest`。
 - 文件/恢复：`BookExportUiTest`、`LibraryBackupFlowTest`、`files.downloads.BookFileActionsTest`、`files.importing.DownloadImportCleanupTest`；书架移除时的持久化清理仍由 `data.storage.ShelfCopyCleanupTest` 覆盖。
-- 系统文件分享：`files.importing.SharedDocumentIntentsTest` 检查分享菜单的类型匹配和附件读取；`ui.shelf.SharedDocumentImportTest` 检查冷启动、运行中再次分享、ClipData 多文件、旋转恢复、重复文件和不支持格式。可以使用 `-PisolatedLibraryTests=true` 构建独立测试包。
+- 系统文件打开与分享：`files.importing.SharedDocumentIntentsTest` 检查“打开方式”、分享菜单的类型匹配、网页深链隔离和附件读取；`ui.shelf.SharedDocumentImportTest` 检查冷启动、运行中再次打开或分享、ClipData 多文件、旋转恢复、重复文件和不支持格式。可以使用 `-PisolatedLibraryTests=true` 构建独立测试包。
 - 不限时朗读：`SpeechSleepTimerTest` 验证定时切换、旧设置兼容与备份恢复，`ReaderAnnotationSyncTest` 验证设置同步。设备测试 `ReaderSpeechControlsTest` 检查“不限时”入口，真实 TTS 的长时间播放仍需设备验收。
 - 自定义缩进：`ReaderIndentTest` 验证自定义格数的搜索/进度锚点、旧设置兼容与备份恢复，`ReaderAnnotationSyncTest` 验证设置同步。设备测试 `ReaderIndentPreferenceTest` 检查输入校验和分页文本。
 - 静态交互：`EInkReaderFlowTest`、`ReducedMotionSheetTest`、`PanelSessionTest`。`EInkReaderFlowTest` 同时覆盖物理按键、滚动/分页锚点互换、搜索与重新进入阅读；离开阅读器后按现有“阅读与朗读”“外观与操作”分类检查设置。

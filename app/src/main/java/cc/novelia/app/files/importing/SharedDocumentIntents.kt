@@ -4,8 +4,10 @@ import android.content.Intent
 import android.net.Uri
 import androidx.core.content.IntentCompat
 
-/** 附件优先于 EXTRA_TEXT；部分文件管理器只通过 ClipData 传递文件。 */
+/** 打开方式读取 data；分享附件优先于 EXTRA_TEXT，兼容仅传 ClipData 的文件管理器。 */
 internal fun Intent.sharedDocumentUris(): List<Uri> {
+    // 只接收文档提供器授权的文件，网页深链继续交给路由处理。
+    if (action == Intent.ACTION_VIEW) return listOfNotNull(data?.takeIf { it.scheme == "content" })
     if (action != Intent.ACTION_SEND && action != Intent.ACTION_SEND_MULTIPLE) return emptyList()
     val streams = runCatching {
         if (action == Intent.ACTION_SEND_MULTIPLE) {

@@ -52,6 +52,31 @@ class SharedDocumentImportTest {
         }
     }
 
+    @Test fun openWithImportsOnColdAndWarmLaunchAndKeepsDuplicatesOut() {
+        val text = fixture("txt", "打开方式正文 $prefix")
+        val epub = epubFixture()
+        fun open(uri: Uri, type: String) = Intent(Intent.ACTION_VIEW).setDataAndType(uri, type).setPackage(app.packageName)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        ActivityScenario.launch<MainActivity>(open(text, "text/plain")).use { scenario ->
+            awaitBooks(1)
+            scenario.recreate()
+            assertEquals(1, importedCount())
+            lateinit var original: Intent
+            scenario.onActivity { original = Intent(it.intent) }
+            try {
+                scenario.onActivity { it.startActivity(open(text, "application/octet-stream")) }
+                compose.waitForIdle()
+                scenario.onActivity { it.startActivity(open(epub, "application/epub+zip")) }
+                awaitBooks(2)
+                scenario.onActivity { assertEquals(Intent.ACTION_VIEW, it.intent.action) }
+                compose.onNodeWithTag("import-results").performClick()
+                compose.onAllNodesWithText("开始阅读").onFirst().performClick()
+                compose.waitUntil(10_000) { compose.onAllNodesWithText(prefix, substring = true).fetchSemanticsNodes().isNotEmpty() }
+                assertEquals(2, importedCount())
+            } finally { scenario.onActivity { it.intent = original } }
+        }
+    }
+
     @Test fun warmClipShareImportsBooksAndReportsUnsupportedFiles() {
         val epub = epubFixture()
         val srt = fixture("srt", "1\n00:00:01,000 --> 00:00:02,000\n字幕正文 $prefix")
