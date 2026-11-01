@@ -309,6 +309,10 @@ private class PageTurn(val dir: Int, val from: Bitmap, val to: Bitmap, val goalT
 
     // 纸带像素游标（章内绝对位置，0 = 章首行顶）。
     var viewportTop by remember { mutableFloatStateOf(0f) }
+    // 前进翻页时记录下来的真实屏起点（行号）。往回翻优先回到这些位置，
+    // 而不是用「当前屏行数」反推——反推会因段距/末行裁剪而错位，
+    // 前后反复翻时表现为顶部行来回跳。
+    val pagingHistory = remember { mutableStateListOf<Int>() }
     // 翻页快照：非空即处于拖动/动画中（屏幕画位图）；turnShift 为当前位移。
     var turn by remember { mutableStateOf<PageTurn?>(null) }
     var turnShift by remember { mutableFloatStateOf(0f) }
@@ -391,6 +395,7 @@ private class PageTurn(val dir: Int, val from: Bitmap, val to: Bitmap, val goalT
                 turnShift = 0f
                 frozen = null
                 frozenTop = -1f
+                pagingHistory.clear()
                 viewportTop = (pageStartY(state.pageIndex) ?: 0f).coerceAtMost(maxTop)
             }
             // 已注释：页码只是「游标落在哪一页」的标签，不是真相源。
@@ -477,12 +482,20 @@ private class PageTurn(val dir: Int, val from: Bitmap, val to: Bitmap, val goalT
             fun goalRowFor(dir: Int): Int? {
                 // 容差 +0.5px：viewportTop 是浮点累积行顶，直接 rowAt 可能因误差
                 // 退到上一行，导致每次翻页错一行、反复翻叠成「顶部行漂移」。
-                val (fromRow, toRow) = screenRows(metrics.rowAt(viewportTop + 0.5f))
-                return if (dir > 0) {
-                    if (toRow >= lines.size) null else toRow
-                } else {
-                    if (fromRow == 0) null else (fromRow - (toRow - fromRow)).coerceAtLeast(0)
+                val fromRow = metrics.rowAt(viewportTop + 0.5f)
+                if (dir > 0) {
+                    val (_, toRow) = screenRows(fromRow)
+                    return if (toRow >= lines.size) null else toRow
                 }
+                // 往回翻必须精确回到「上一屏的起点」，不能拿当前屏行数反推：
+                // 当前屏若因段距/末行裁剪而少装一行，反推出来的起点就与上一屏错位，
+                // 前后反复翻时顶部行会在相邻行之间来回跳。
+                // 优先用前进时记录的真实起点；没有记录（如刚纵滑过）才按行数反推。
+                val previousStart = pagingHistory.lastOrNull { it < fromRow }
+                if (previousStart != null) return previousStart
+                if (fromRow == 0) return null
+                val (_, toRow) = screenRows(fromRow)
+                return (fromRow - (toRow - fromRow)).coerceAtLeast(0)
             }
 
             /** 目标行的纸带游标（绝对像素），供 bake / 动画使用。 */
@@ -522,7 +535,13 @@ private class PageTurn(val dir: Int, val from: Bitmap, val to: Bitmap, val goalT
                         val settled = turn
                         val g = settled?.goalTop
                         if (settled != null && g != null) {
+                            val fromTop = viewportTop
                             Snapshot.withMutableSnapshot {
+                                // 前进时记录真实起点，供往回翻精确对齐。
+                                if (dir > 0 && abs(g - fromTop) > 0.5f) {
+                                    val startRow = metrics.rowAt(fromTop + 0.5f)
+                                    if (pagingHistory.none { abs(metrics.yTop(it) - fromTop) < 0.5f }) pagingHistory.add(startRow)
+                                }
                                 viewportTop = g
                                 state.seek(pageAtRow(metrics.rowAt(g + viewportH * 0.4f)))
                                 // 冻结终点位图：下一次清快照时静态分支画的就是它，像素一致
@@ -639,6 +658,9 @@ private class PageTurn(val dir: Int, val from: Bitmap, val to: Bitmap, val goalT
                                         val y1 = metrics.yTop(r + 1)
                                         val pos = (if (viewportTop - y0 <= (y1 - y0) / 2f) y0 else y1).coerceIn(0f, maxTop)
                                         viewportTop = pos
+                                        // 纵滑改变了屏起点，旧的前进历史不再对应真实边界，
+                                        // 继续用会让往回翻跳到错误的行，这里整段丢弃。
+                                        pagingHistory.clear()
                                         // 纵向落定也烘一张位图并冻结：静止画面统一由位图提供，
                                         // 与横向翻页的提交帧同源，杜绝「位图↔实时」切换差。
                                         frozen = bakeInto(2, pos)
