@@ -27,10 +27,15 @@ class ReaderIndentPreferenceTest {
         } }
         val input = compose.onNodeWithTag("reader-indent-input")
         val apply = compose.onNodeWithTag("reader-indent-apply")
+        val setting = compose.onNodeWithTag("reader-indent-setting")
+        input.assertDoesNotExist()
+        setting.assertTextContains("2 格").performClick()
         input.performTextReplacement("7")
         compose.runOnIdle { assertEquals(2, selected) }
         apply.performClick()
         compose.runOnIdle { assertEquals(7, selected) }
+        input.assertDoesNotExist()
+        setting.assertTextContains("7 格").performClick()
         for(invalid in listOf("", "-1", "21", "1.5", "abc", "999999999999")) {
             input.performTextReplacement(invalid)
             apply.assertIsNotEnabled()
@@ -39,9 +44,17 @@ class ReaderIndentPreferenceTest {
         input.performTextReplacement("0")
         input.performImeAction()
         compose.runOnIdle { assertEquals(0, selected) }
+        input.assertDoesNotExist()
+        setting.assertTextContains("不缩进").performClick()
+        input.performTextReplacement("9")
+        compose.onNodeWithTag("reader-indent-cancel").performClick()
+        compose.runOnIdle { assertEquals(0, selected) }
+        setting.performClick()
+        input.assertTextContains("0")
         compose.onNodeWithTag("reader-indent-default").performClick()
         compose.runOnIdle { assertEquals(1, selected) }
-        input.assertTextContains("1")
+        input.assertDoesNotExist()
+        setting.assertTextContains("1 格")
     }
 
     @Test fun pagedTextUsesCustomIndentForEveryLanguagePart() {
