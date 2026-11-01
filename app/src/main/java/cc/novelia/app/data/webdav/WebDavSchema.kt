@@ -21,7 +21,7 @@ internal object WebDavSchema {
     val categoryFields = setOf("name")
     val orderFields = setOf("ids")
     val portableReaderFields = setOf("mode", "engines", "parallel", "fontSize", "lineHeight", "weight", "width",
-        "indent", "theme", "secondaryAlpha", "underline", "speechRate", "speechMinutes", "traditional", "speechLanguage",
+        "indent", "indentSize", "theme", "secondaryAlpha", "underline", "speechRate", "speechMinutes", "traditional", "speechLanguage",
         "toolbarTransparency", "paragraphSpacing", "showScrollPageButtons", "showProgressBar", "showReadingStatusBar", "speechContinueChapters", "customColors",
         "horizontalMargin", "verticalMargin", "autoReadSpeed", "autoReadIntervalSeconds", "textReplacements", "textReplacementsEnabled", "readingStatusItems",
         "showEpubRuby", "epubFootnotePopup", "showEpubStyles")

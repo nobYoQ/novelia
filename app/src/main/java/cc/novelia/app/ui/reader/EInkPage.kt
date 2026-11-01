@@ -155,7 +155,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
                 if (partIndex > 0) text.append(READING_PART_SEPARATOR)
                 if (settings.parallel && part.source in listOf("sakura", "gpt", "youdao")) text.append(part.source.uppercase()).append("\n")
                 val start = text.length
-                if (settings.indent) text.append("　　")
+                text.append(settings.indentText)
                 val bodyStart = text.length
                 text.append(part.text)
                 text.addReaderInline(part.withInlinePreferences(settings), bodyStart, width)
@@ -322,7 +322,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
     ) {
         val width = constraints.maxWidth.coerceAtLeast(1)
         val height = constraints.maxHeight.coerceAtLeast(1)
-        val typography = listOf(settings.fontSize, settings.lineHeight, settings.paragraphSpacing, settings.weight, settings.indent, settings.parallel, settings.underline, settings.secondaryAlpha, font.typeface, font.loading,
+        val typography = listOf(settings.fontSize, settings.lineHeight, settings.paragraphSpacing, settings.weight, settings.resolvedIndentSize, settings.parallel, settings.underline, settings.secondaryAlpha, font.typeface, font.loading,
             settings.showEpubRuby, settings.epubFootnotePopup, settings.showEpubStyles)
         val input = EInkMeasureInput(paragraphs, typography, width, height, density.density, density.fontScale)
         val measured by produceState<EInkMeasurement?>(null, input) {

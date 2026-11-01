@@ -12,7 +12,7 @@ data class ReadingTextMatch(val paragraph: Int, val part: Int, val start: Int, v
 internal const val READING_PART_SEPARATOR = "\n"
 
 internal fun ReadingTextMatch.textOffset(paragraph: ReadingParagraph, settings: ReaderSettings): Int =
-    paragraphPartStarts(paragraph, settings).getOrElse(part) { 0 } + (if(settings.indent) 2 else 0) + start
+    paragraphPartStarts(paragraph, settings).getOrElse(part) { 0 } + settings.resolvedIndentSize + start
 
 internal fun readerPartFontSize(settings: ReaderSettings, secondary: Boolean): Float = settings.fontSize - if(secondary) 1f else 0f
 internal fun readerPartLineHeight(settings: ReaderSettings, secondary: Boolean): Float = readerPartFontSize(settings, secondary) * settings.lineHeight
@@ -66,7 +66,7 @@ internal fun paragraphPartStarts(paragraph: ReadingParagraph, settings: ReaderSe
         if(index > 0) length += READING_PART_SEPARATOR.length
         if(settings.parallel && part.source in listOf("sakura", "gpt", "youdao")) length += part.source.uppercase().length + 1
         val start = length
-        length += (if(settings.indent) 2 else 0) + part.text.length
+        length += settings.resolvedIndentSize + part.text.length
         start
     }
 }

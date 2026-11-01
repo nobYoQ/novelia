@@ -12,7 +12,7 @@ internal fun readerSettingsDifferences(book: ReaderSettings, defaults: ReaderSet
         "译文优先顺序" to engines.joinToString(" → "), "并列展示译文" to parallel.label(),
         "阅读字体" to fontLabel,
         "字号" to "$fontSize sp", "行距" to "$lineHeight 倍", "段距" to "$resolvedParagraphSpacing dp",
-        "加粗文字" to weight.label(), "内容宽度" to "$width dp", "首行缩进" to indent.label(),
+        "加粗文字" to weight.label(), "内容宽度" to "$width dp", "首行缩进" to "$resolvedIndentSize 格",
         "左右页边距" to "$resolvedHorizontalMargin dp", "上下页边距" to "$resolvedVerticalMargin dp",
         "宽屏目录" to showWideToc.label(),
         "显示假名注音" to showEpubRuby.label(), "点击脚注弹窗" to epubFootnotePopup.label(), "显示原书强调样式" to showEpubStyles.label(),

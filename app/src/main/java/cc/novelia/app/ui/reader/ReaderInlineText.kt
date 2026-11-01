@@ -65,7 +65,7 @@ import kotlin.math.roundToInt
     var top by remember { mutableIntStateOf(0) }
     val latestLayout by rememberUpdatedState(onLayout)
     BoxWithConstraints(Modifier.fillMaxWidth().onGloballyPositioned { top = it.positionInParent().y.roundToInt() }) {
-        val indent = if (settings.indent) "　　" else ""
+        val indent = settings.indentText
         val layout = remember(part, settings.fontSize, settings.lineHeight, settings.weight, indent, font.typeface, constraints.maxWidth, density) {
             val text = SpannableStringBuilder(indent + part.text)
             text.addReaderInline(part, indent.length, constraints.maxWidth)

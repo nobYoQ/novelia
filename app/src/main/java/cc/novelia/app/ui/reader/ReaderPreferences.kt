@@ -205,7 +205,9 @@ import kotlin.math.roundToInt
                                 modifier = Modifier.testTag("reader-vertical-margin"), defaultValue = defaults?.resolvedVerticalMargin) { onChange(value.copy(verticalMargin = it)) }
                             ReaderSlider("辅文本不透明度 ${(value.secondaryAlpha * 100).toInt()}%", value.secondaryAlpha, .45f..1f, defaultValue = defaults?.secondaryAlpha) { onChange(value.copy(secondaryAlpha = it)) }
                             TogglePreference("加粗文字", "两种阅读模式使用一致的粗体", value.weight, defaultValue = defaults?.weight) { onChange(value.copy(weight = it)) }
-                            TogglePreference("首行缩进", "统一为两个全角空格", value.indent, defaultValue = defaults?.indent) { onChange(value.copy(indent = it)) }
+                            ReaderIndentPreference(value.resolvedIndentSize, defaults?.resolvedIndentSize ?: 2) {
+                                onChange(value.copy(indent = it > 0, indentSize = it))
+                            }
                             TogglePreference("辅文本下划线", "用于双语对照", value.underline, defaultValue = defaults?.underline) { onChange(value.copy(underline = it)) }
                         }
                         ReaderPreferenceGroup("朗读", "语速、语言、定时停止与连续听书", expanded == "speech", { expanded = if(expanded == "speech") "" else "speech" }) {

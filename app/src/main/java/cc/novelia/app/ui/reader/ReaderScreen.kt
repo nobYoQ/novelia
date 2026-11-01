@@ -331,7 +331,7 @@ import kotlinx.serialization.encodeToString
         val firstParagraph by remember(settings.staticPagination, eInk, scroll) { derivedStateOf {
             if(settings.staticPagination) eInk.paragraph else (scroll.firstVisibleItemIndex - 1).coerceAtLeast(0)
         } }
-        val seekIndex = remember(paragraphs, settings.indent, settings.parallel) { ChapterSeekIndex(paragraphs, settings) }
+        val seekIndex = remember(paragraphs, settings.resolvedIndentSize, settings.parallel) { ChapterSeekIndex(paragraphs, settings) }
         var seekJob by remember { mutableStateOf<Job?>(null) }
         var seekGeneration by remember { mutableIntStateOf(0) }
         var seekTarget by remember { mutableStateOf<Float?>(null) }

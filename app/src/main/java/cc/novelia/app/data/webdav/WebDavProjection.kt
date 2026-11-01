@@ -46,6 +46,8 @@ object WebDavProjection {
     private val json = Json { encodeDefaults = true; explicitNulls = true }
     fun anchorSource(settings: ReaderSettings): String =
         "${settings.mode}:${settings.engines.joinToString(",")}:${settings.parallel}:${settings.traditional}:${settings.indent}" +
+            // 默认两格和旧版关闭缩进的锚点保持兼容；自定义格数必须使旧字符偏移失效。
+            (if(settings.indent && settings.resolvedIndentSize != 2) ":indent:${settings.resolvedIndentSize}" else "") +
             settings.activeTextReplacements.takeIf { it.isNotEmpty() }?.let { ":replace:${it.hashCode()}" }.orEmpty()
 
     /** 避免阅读器每次保存位置时编码书架、设置和笔记的完整快照。 */

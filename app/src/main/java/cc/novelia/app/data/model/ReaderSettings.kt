@@ -21,6 +21,7 @@ import kotlinx.serialization.Serializable
     val weight: Boolean? = null,
     val width: Float? = null,
     val indent: Boolean? = null,
+    val indentSize: Int? = null,
     val theme: String? = null,
     val secondaryAlpha: Float? = null,
     val underline: Boolean? = null,
@@ -110,18 +111,24 @@ import kotlinx.serialization.Serializable
     // 只影响附加显示；导入元数据、底文与阅读锚点始终保留。
     val showEpubRuby: Boolean = true,
     val epubFootnotePopup: Boolean = true,
-    val showEpubStyles: Boolean = true
+    val showEpubStyles: Boolean = true,
+    // 保留旧开关，缺失格数的历史设置仍为两格；0 表示不缩进。
+    val indentSize: Int = 2
 ) {
     companion object {
         const val MIN_LINE_HEIGHT = .5f
         val LINE_HEIGHT_RANGE = MIN_LINE_HEIGHT..2.6f
         val THEMES = listOf("system", "paper", "light", "dark", "monochrome", "custom")
         val ORIENTATIONS = listOf("system", "portrait", "landscape")
+        val INDENT_SIZE_RANGE = 0..20
         val SPEECH_TIMER_OPTIONS = listOf(0, 15, 30, 60)
         const val MAX_SPEECH_MINUTES = 1_440
         fun speechTimerLabel(minutes: Int) = if(minutes == 0) "不限时" else "$minutes 分钟"
     }
 
+    val resolvedIndentSize get() = if(indent) indentSize.coerceIn(INDENT_SIZE_RANGE) else 0
+    val indentText get() = "　".repeat(resolvedIndentSize)
+    val validIndentSize get() = indentSize in INDENT_SIZE_RANGE
     // 0 是明确的不限时选择；损坏的负数配置仍回退到默认定时。
     val resolvedSpeechMinutes get() = if(speechMinutes < 0) 30 else speechMinutes.coerceAtMost(MAX_SPEECH_MINUTES)
     val validSpeechTimer get() = speechMinutes in 0..MAX_SPEECH_MINUTES
@@ -166,6 +173,7 @@ import kotlinx.serialization.Serializable
         weight = weight,
         width = width,
         indent = indent,
+        indentSize = indentSize,
         theme = theme,
         secondaryAlpha = secondaryAlpha,
         underline = underline,
@@ -220,6 +228,7 @@ import kotlinx.serialization.Serializable
         weight = state.weight ?: weight,
         width = state.width ?: width,
         indent = state.indent ?: indent,
+        indentSize = state.indentSize ?: indentSize,
         theme = state.theme ?: theme,
         secondaryAlpha = state.secondaryAlpha ?: secondaryAlpha,
         underline = state.underline ?: underline,
