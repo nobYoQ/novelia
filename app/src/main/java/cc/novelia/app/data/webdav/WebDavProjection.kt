@@ -104,7 +104,13 @@ object WebDavProjection {
     private fun reader(settings: ReaderSettings, includeDevicePreferences: Boolean = false): JsonObject {
         val encoded = json.encodeToJsonElement(ReaderSettings.serializer(), settings).jsonObject
         val portable = encoded.filterKeys { it in portableReaderFields }
-        return JsonObject(if (includeDevicePreferences) portable + ("devicePreferences" to JsonObject(encoded.filterKeys { it in deviceReaderFields })) else portable)
+        val device = encoded.filterKeys { it in deviceReaderFields }.mapValues { (field, value) ->
+            if(field in setOf("beforeEInk", "eInkPreferences") && value is JsonObject)
+                JsonObject(value.filterKeys { it in WebDavSchema.readerModeFields }) else value
+        }
+        // 模式开关与该模式的当前配置一起参与冲突选择，避免普通模式收到另一端电子纸的透明度或字号。
+        val activeMode = JsonObject(encoded.filterKeys { it in WebDavSchema.readerModeFields })
+        return JsonObject(if (includeDevicePreferences) portable + ("devicePreferences" to JsonObject(device + ("activeModeSettings" to activeMode))) else portable)
     }
 
     private fun favorites(state: LibraryState): Map<String, JsonObject> = buildMap {
@@ -242,9 +248,21 @@ object WebDavProjection {
     }
 
     private fun applyReader(local: ReaderSettings, remote: JsonObject, includeDevicePreferences: Boolean): ReaderSettings {
-        val preferences = if (includeDevicePreferences) remote["devicePreferences"]?.jsonObject.orEmpty() else emptyMap()
+        val encodedLocal = json.encodeToJsonElement(ReaderSettings.serializer(), local).jsonObject
+        val device = if (includeDevicePreferences) remote["devicePreferences"]?.jsonObject.orEmpty() else emptyMap()
+        val activeMode = (device["activeModeSettings"] as? JsonObject).orEmpty().filterKeys { it in WebDavSchema.readerModeFields }
+        val preferences = device.filterKeys { it in deviceReaderFields }
+            .mapValues { (field, value) ->
+                // 模式快照也保留接收端的本机字体；旧同步资料缺少的新字段沿用本机快照。
+                if(field in setOf("beforeEInk", "eInkPreferences") && value is JsonObject) {
+                    val previous = (encodedLocal[field] as? JsonObject).orEmpty()
+                    val fontSource = previous.takeIf { it["fontFamily"] != null && it["fontFamily"] != JsonNull } ?: encodedLocal
+                    val localFont = fontSource.filterKeys { it == "fontFamily" || it == "customFont" }
+                    JsonObject(previous + value.filterKeys { it in WebDavSchema.readerModeFields } + localFont)
+                } else value
+            }
         return json.decodeFromJsonElement(ReaderSettings.serializer(), JsonObject(
-            json.encodeToJsonElement(ReaderSettings.serializer(), local).jsonObject + remote.filterKeys { it in portableReaderFields } + preferences))
+            encodedLocal + remote.filterKeys { it in portableReaderFields } + preferences + activeMode))
     }
 
     private fun applyFavorites(state: LibraryState, records: Map<String, JsonObject>): LibraryState {

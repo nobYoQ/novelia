@@ -109,7 +109,9 @@ import kotlin.math.roundToInt
                     }
                     1 -> {
                         ReaderPreferenceSection("阅读模式", "选择适合屏幕的阅读方式", Icons.Outlined.AutoStories) {
-                            TogglePreference("电子纸阅读模式", if(perBook == true) "仅影响当前阅读器；首次开启使用自动分页" else "全应用按屏翻动；首次开启使用自动分页，关闭后恢复原有交互", value.eInkMode, defaultValue = defaults?.eInkMode) { onChange(value.withEInkMode(it)) }
+                            TogglePreference("电子纸阅读模式", if(perBook == true) "仅影响当前阅读器；与普通模式分别保存阅读配置" else "全应用按屏翻动；与普通模式分别保存阅读配置", value.eInkMode, defaultValue = defaults?.eInkMode) { onChange(value.withEInkMode(it)) }
+                            Text("首次开启继承当前配置，并使用自动分页、不透明工具栏；再次切换恢复该模式的设置。",
+                                Modifier.padding(horizontal = 20.dp, vertical = 4.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         ReaderPreferenceSection("正文翻页", "分页、手势与快捷操作", Icons.Outlined.Swipe) {
                             ChoiceRow("分页模式", listOf("连续滚动", "自动分页"), if(value.staticPagination) 1 else 0, defaultSelected = defaults?.let { if(it.staticPagination) 1 else 0 }) { onChange(value.withPaginationMode(if(it == 1) "auto" else "scroll")) }

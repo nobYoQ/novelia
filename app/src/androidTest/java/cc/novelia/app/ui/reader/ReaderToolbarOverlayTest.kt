@@ -909,7 +909,7 @@ class ReaderToolbarOverlayTest {
             assertEquals(before, snapshot("reader-page"))
             assertEquals(counter, pageCounter())
             compose.runOnIdle {
-                assertEquals(.25f, app.store.state.value.reader.toolbarTransparency, 0f)
+                assertEquals(0f, app.store.state.value.reader.toolbarTransparency, 0f)
                 assertEquals(.6f, app.store.state.value.bookSettings.getValue(ref.key).toolbarTransparency, .001f)
             }
             runBlocking { app.store.flush() }
@@ -926,7 +926,7 @@ class ReaderToolbarOverlayTest {
                 .assertRangeInfoEquals(androidx.compose.ui.semantics.ProgressBarRangeInfo(.6f, 0f..1f))
             compose.onNodeWithText("仅应用于这本书").performScrollTo().performClick()
             compose.onNodeWithTag("reader-toolbar-transparency").performScrollTo()
-                .assertRangeInfoEquals(androidx.compose.ui.semantics.ProgressBarRangeInfo(.25f, 0f..1f))
+                .assertRangeInfoEquals(androidx.compose.ui.semantics.ProgressBarRangeInfo(0f, 0f..1f))
             compose.onNodeWithText("关闭面板").performClick()
         }
 

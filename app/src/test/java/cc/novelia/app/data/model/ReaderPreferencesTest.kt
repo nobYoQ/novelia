@@ -6,6 +6,65 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ReaderPreferencesTest {
+    @Test fun readingModesRestoreIndependentConfigurationsAfterBackupAndRepeatedSwitches() {
+        val normal = ReaderSettings(fontSize = 21f, theme = "dark", toolbarTransparency = .6f,
+            fontFamily = "serif", lineHeight = 1.4f, tapPageTurn = true, hideStatusBar = true)
+        val firstEInk = normal.withEInkMode(true)
+        assertEquals(0f, firstEInk.toolbarTransparency, 0f)
+        assertEquals(normal.fontSize, firstEInk.fontSize, 0f)
+        val ink = firstEInk.copy(mode = "jp", engines = normal.engines.reversed(), parallel = true,
+            fontSize = 26f, lineHeight = 2f, weight = true, width = 500f, indent = false,
+            theme = "custom", secondaryAlpha = .8f, underline = true, keepScreenOn = true,
+            volumeKeys = false, paged = true, monochrome = true, scrollPageTurn = false,
+            horizontalPageTurn = false, brightness = .5f, speechRate = 1.5f, speechMinutes = 60,
+            traditional = true, speechLanguage = "jp", paginationMode = "scroll", showPageButtons = false,
+            toolbarTransparency = .1f, prefetchChapters = 5, prefetchWifiOnly = false,
+            paragraphSpacing = 16f, showScrollPageButtons = false, showProgressBar = false,
+            showReadingStatusBar = false, speechContinueChapters = false, speechNetworkContinuation = false,
+            showEInkScreenButtons = false, hideStatusBar = false, tapPageTurn = false, tapZoneMap = "custom-test-map",
+            customColors = ReaderCustomColors(0x111111, 0xEEEEEE, 0xCCCCCC), fontFamily = "custom",
+            customFont = ReaderCustomFont("a".repeat(64), "测试字体"), horizontalMargin = 32f, verticalMargin = 24f,
+            showWideToc = false, orientation = "portrait", autoReadSpeed = 30f, autoReadIntervalSeconds = 25,
+            textReplacements = mapOf("原文" to "替换"), textReplacementsEnabled = false,
+            readingStatusItems = listOf("time"), showEpubRuby = false, epubFootnotePopup = false, showEpubStyles = false)
+        fun ReaderSettings.active() = copy(beforeEInk = null, eInkPreferences = null)
+        val saved = LibraryState(reader = ink, bookSettings = mapOf("local/book" to normal.withEInkMode(true).copy(fontSize = 30f)))
+        val restored = appJson.decodeFromString<LibraryState>(appJson.encodeToString(saved))
+        var regular = restored.reader.withEInkMode(false)
+        assertEquals(normal, regular.active())
+        repeat(3) {
+            val eInk = regular.withEInkMode(true)
+            assertEquals(ink.active(), eInk.active())
+            regular = eInk.withEInkMode(false)
+            assertEquals(normal, regular.active())
+        }
+        val changedNormal = regular.copy(fontSize = 17f, theme = "light", toolbarTransparency = .8f)
+        assertEquals(ink.active(), changedNormal.withEInkMode(true).active())
+        assertEquals(changedNormal.active(), changedNormal.withEInkMode(true).withEInkMode(false).active())
+        assertEquals(30f, restored.bookSettings.getValue("local/book").fontSize, 0f)
+        assertEquals(normal.fontSize, restored.bookSettings.getValue("local/book").withEInkMode(false).fontSize, 0f)
+    }
+
+    @Test fun legacyModesInheritUnrecordedPreferencesAndDefaultToOpaqueEInkToolbars() {
+        assertEquals(0f, appJson.decodeFromString<ReaderSettings>("""{"eInkMode":true}""").toolbarTransparency, 0f)
+        assertEquals(.6f, appJson.decodeFromString<ReaderSettings>("""{"eInkMode":true,"toolbarTransparency":0.6}""").toolbarTransparency, 0f)
+        val legacy = appJson.decodeFromString<ReaderSettings>("""{"fontSize":23,"theme":"dark","toolbarTransparency":0.6,"eInkPreferences":{"paginationMode":"auto","showPageButtons":true}}""")
+        val ink = legacy.withEInkMode(true)
+        assertEquals(23f, ink.fontSize, 0f)
+        assertEquals("dark", ink.theme)
+        assertEquals(0f, ink.toolbarTransparency, 0f)
+        assertEquals(.6f, ink.withEInkMode(false).toolbarTransparency, 0f)
+        assertFalse(ink.copy(beforeEInk = ink.beforeEInk?.copy(toolbarTransparency = 2f)).validToolbarTransparency)
+    }
+
+    @Test fun perBookDifferencesIncludeIndependentlySavedInactiveMode() {
+        val defaults = ReaderSettings().withEInkMode(true).withEInkMode(false)
+        val book = defaults.withEInkMode(true).copy(fontSize = 27f).withEInkMode(false)
+        val differences = cc.novelia.app.reader.readerSettingsDifferences(book, defaults)
+        assertEquals("电子纸模式 · 字号", differences.single().label)
+        assertEquals("27.0 sp", differences.single().book)
+    }
+
     @Test fun epubDisplaySwitchesPersistIndependentlyInDefaultsBookOverridesAndBackups() {
         val defaults = appJson.decodeFromString<ReaderSettings>("{}")
         assertTrue(defaults.showEpubRuby && defaults.epubFootnotePopup && defaults.showEpubStyles)
@@ -76,7 +135,7 @@ class ReaderPreferencesTest {
         assertFalse(paged.horizontalPageTurn)
         assertTrue(paged.withPaginationMode("scroll").tapPageTurn)
         assertTrue(settings.withEInkMode(true).withEInkMode(false).tapPageTurn)
-        assertFalse(settings.withEInkMode(true).copy(tapPageTurn = false).withEInkMode(false).tapPageTurn)
+        assertTrue(settings.withEInkMode(true).copy(tapPageTurn = false).withEInkMode(false).tapPageTurn)
         val backup = SettingsBackup(reader = settings)
         assertEquals(backup, appJson.decodeFromString<SettingsBackup>(appJson.encodeToString(backup)))
         val library = LibraryState(reader = ReaderSettings(), bookSettings = mapOf("local/book" to settings))
@@ -179,8 +238,8 @@ class ReaderPreferencesTest {
         assertEquals(normal.horizontalPageTurn, restored.horizontalPageTurn)
         assertEquals(normal.showPageButtons, restored.showPageButtons)
         assertEquals(normal.volumeKeys, restored.volumeKeys)
-        assertEquals("dark", restored.theme)
-        assertEquals(24f, restored.fontSize, 0f)
+        assertEquals(normal.theme, restored.theme)
+        assertEquals(normal.fontSize, restored.fontSize, 0f)
         assertNull(restored.beforeEInk)
         val secondNormal = restored.copy(paginationMode = "auto", showPageButtons = true, volumeKeys = true)
         val reenabled = secondNormal.withEInkMode(true)

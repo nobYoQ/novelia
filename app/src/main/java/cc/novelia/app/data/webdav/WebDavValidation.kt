@@ -202,7 +202,7 @@ internal object WebDavValidation {
 
     private fun readerField(field: String, value: JsonElement) {
         if (field == "devicePreferences") {
-            require(value is JsonObject && value.keys.containsAll(deviceReaderFields - setOf("tapZoneMap", "showWideToc", "orientation")) && value.keys.all { it in deviceReaderFields }) { "设备偏好原子组字段不完整" }
+            require(value is JsonObject && value.keys.containsAll(deviceReaderFields - setOf("tapZoneMap", "showWideToc", "orientation")) && value.keys.all { it in WebDavSchema.devicePreferenceFields }) { "设备偏好原子组字段不完整" }
             value.forEach { (deviceField, deviceValue) -> deviceReaderField(deviceField, deviceValue) }
             return
         }
@@ -238,6 +238,13 @@ internal object WebDavValidation {
 
     private fun deviceReaderField(field: String, value: JsonElement) {
         when (field) {
+            "activeModeSettings" -> {
+                require(value is JsonObject && value.keys == WebDavSchema.readerModeFields) { "当前阅读模式配置不完整" }
+                value.forEach { (property, propertyValue) ->
+                    if(property in portableReaderFields) readerField(property, propertyValue)
+                    else deviceReaderField(property, propertyValue)
+                }
+            }
             "brightness" -> number(value, -1.0, 1.0)
             "paginationMode" -> enumText(value, setOf("scroll", "auto"))
             "orientation" -> enumText(value, ReaderSettings.ORIENTATIONS.toSet())
@@ -246,8 +253,13 @@ internal object WebDavValidation {
             "tapZoneMap" -> text(value, 2_048, true)
             "beforeEInk", "eInkPreferences" -> if (value != JsonNull) {
                 val fields = setOf("paginationMode", "scrollPageTurn", "horizontalPageTurn", "showPageButtons", "volumeKeys")
-                require(value is JsonObject && value.keys == fields) { "设备翻页偏好组无效" }
-                value.forEach { (property, propertyValue) -> if (property == "paginationMode") enumText(propertyValue, setOf("scroll", "auto")) else boolean(propertyValue) }
+                require(value is JsonObject && value.keys.containsAll(fields) && value.keys.all { it in WebDavSchema.readerModeFields }) { "阅读模式偏好组无效" }
+                value.forEach { (property, propertyValue) ->
+                    if(property in fields || propertyValue != JsonNull) {
+                        if(property in portableReaderFields) readerField(property, propertyValue)
+                        else deviceReaderField(property, propertyValue)
+                    }
+                }
             }
             else -> boolean(value)
         }

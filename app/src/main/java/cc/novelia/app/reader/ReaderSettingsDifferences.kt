@@ -1,6 +1,5 @@
 package cc.novelia.app.reader
 
-import cc.novelia.app.data.model.ReaderPagingState
 import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.data.model.fontLabel
 
@@ -35,14 +34,20 @@ internal fun readerSettingsDifferences(book: ReaderSettings, defaults: ReaderSet
         "朗读速度" to "$speechRate×", "朗读定时停止" to "$speechMinutes 分钟",
         "朗读语言" to when(speechLanguage) { "jp" -> "日文"; "zh" -> "中文"; else -> "随显示模式" },
         "连续听书" to speechContinueChapters.label(), "联网续章" to speechNetworkContinuation.label(),
-        "自动预读后续章节" to "$prefetchChapters 章", "仅 Wi-Fi 自动预读" to prefetchWifiOnly.label(),
-        "普通模式翻页预设" to beforeEInk.label(), "电子纸翻页预设" to eInkPreferences.label()
+        "自动预读后续章节" to "$prefetchChapters 章", "仅 Wi-Fi 自动预读" to prefetchWifiOnly.label()
     )
-    val global = defaults.values()
-    return book.values().mapNotNull { (label, value) -> global.getValue(label).takeIf { it != value }?.let { ReaderSettingDifference(label, value, it) } }
+    fun differences(bookValues: Map<String, String>, defaultValues: Map<String, String>, prefix: String = "") =
+        bookValues.mapNotNull { (label, value) -> defaultValues.getValue(label).takeIf { it != value }
+            ?.let { ReaderSettingDifference(prefix + label, value, it) } }
+    val current = differences(book.values(), defaults.values())
+    val hasInactive = if(book.eInkMode) book.beforeEInk != null || defaults.beforeEInk != null
+        else book.eInkPreferences != null || defaults.eInkPreferences != null
+    val inactive = if(book.eInkMode == defaults.eInkMode && hasInactive) {
+        val mode = !book.eInkMode
+        differences(book.withEInkMode(mode).values(), defaults.withEInkMode(mode).values(),
+            if(mode) "电子纸模式 · " else "普通模式 · ")
+    } else emptyList()
+    return current + inactive
 }
 
 private fun Boolean.label() = if(this) "开启" else "关闭"
-private fun ReaderPagingState?.label(): String = this?.let {
-    "${if(it.paginationMode == "auto") "自动分页" else "连续滚动"}；滚动 ${it.scrollPageTurn.label()}；左右 ${it.horizontalPageTurn.label()}；按钮 ${it.showPageButtons.label()}；音量键 ${it.volumeKeys.label()}"
-} ?: "未单独保存"
