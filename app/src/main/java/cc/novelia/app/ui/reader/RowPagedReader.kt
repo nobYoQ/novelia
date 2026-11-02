@@ -22,6 +22,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.model.ReaderSettings
@@ -61,6 +62,7 @@ private data class RowMeasurement(val input: RowMeasureInput, val chapter: Measu
     onSavePosition: () -> Unit = {},
 ) {
     val density = LocalDensity.current
+    val layoutDirection = LocalLayoutDirection.current
     val context = LocalContext.current
     val font = rememberReaderFont(settings)
     var expandedImage by remember { mutableStateOf<Any?>(null) }
@@ -79,11 +81,17 @@ private data class RowMeasurement(val input: RowMeasureInput, val chapter: Measu
 
     BoxWithConstraints(modifier.background(background).clipToBounds()
         .readerTapFeedback(navigation, foreground, settings.eInkMode || LocalEInkMode.current)
-        .readerTapNavigation(navigation)
-        .wrapContentWidth(Alignment.CenterHorizontally).widthIn(max = settings.width.dp).fillMaxWidth()
-        .padding(contentPadding).clipToBounds()) {
-        val width = constraints.maxWidth.coerceAtLeast(1)
-        val height = constraints.maxHeight.coerceAtLeast(1)
+        .readerTapNavigation(navigation)) {
+        val horizontalPadding = with(density) {
+            contentPadding.calculateLeftPadding(layoutDirection).roundToPx() + contentPadding.calculateRightPadding(layoutDirection).roundToPx()
+        }
+        val verticalPadding = with(density) {
+            contentPadding.calculateTopPadding().roundToPx() + contentPadding.calculateBottomPadding().roundToPx()
+        }
+        val width = if(constraints.hasBoundedWidth) {
+            (minOf(constraints.maxWidth, with(density) { settings.width.dp.roundToPx() }) - horizontalPadding).coerceAtLeast(1)
+        } else Constraints.Infinity
+        val height = if(constraints.hasBoundedHeight) (constraints.maxHeight - verticalPadding).coerceAtLeast(1) else Constraints.Infinity
         val gap = with(density) { settings.resolvedParagraphSpacing.dp.toPx() }.roundToInt()
         val typography = listOf(settings.fontSize, settings.lineHeight, settings.paragraphSpacing, settings.weight,
             settings.resolvedIndentSize, settings.parallel, settings.underline, settings.secondaryAlpha, font.typeface, font.loading,
@@ -214,7 +222,10 @@ private data class RowMeasurement(val input: RowMeasureInput, val chapter: Measu
                             dragOffset = (total.x * if(state.targetRow(direction) == null) .15f else 1f).coerceIn(-width.toFloat(), width.toFloat())
                         }
                     }
-                }) {
+                }
+                // 点击区域覆盖留白，手势也应从同一视口接收触摸；排版仍使用扣除留白后的尺寸。
+                .wrapContentWidth(Alignment.CenterHorizontally).widthIn(max = settings.width.dp).fillMaxWidth()
+                .padding(contentPadding).clipToBounds()) {
                 @Composable fun body(top: Float, x: Float, scrolling: Boolean = false) {
                     val slice = remember(geometry, top, scrolling) { geometry.slice(top, scrolling) }
                     val y = if(scrolling) geometry.top(geometry.rowAt(top)) - top else 0f
