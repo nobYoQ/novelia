@@ -86,12 +86,12 @@ internal class RowPaginationLayout(val lines: List<PageLine>, val height: Int, v
         return if(row < lines.lastIndex && top - this.top(row) > this.top(row + 1) - top) row + 1 else row
     }
 
-    /** 拖动中包含首尾的局部行；静止时只显示完整行。 */
-    fun slice(top: Float, scrolling: Boolean): StaticPage {
+    /** 显示切片可以包含首尾局部行；固定页表仍以完整行统计翻页起点。 */
+    fun slice(top: Float, includePartialLines: Boolean): StaticPage {
         if(lines.isEmpty()) return StaticPage(emptyList())
         val from = rowAt(top)
         var end = screenEnd(from)
-        if(scrolling) {
+        if(includePartialLines) {
             end = from + 1
             while(end < lines.size && this.top(end) < top + height) end++
         }

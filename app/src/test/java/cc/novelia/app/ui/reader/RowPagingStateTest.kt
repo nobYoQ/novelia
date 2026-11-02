@@ -127,4 +127,28 @@ class RowPagingStateTest {
         assertEquals(20f, geometry.maxScrollTop, 0f)
         assertEquals(1, geometry.nearestRow(6f))
     }
+
+    @Test fun settlingMovesContinuouslyAndCannotOverwriteAnExternalFind() {
+        val state = state()
+        state.beginScroll()
+        state.scrollBy(53.5f)
+        assertEquals(60f, state.scrollTarget, 0f)
+        state.settleScroll(56.25f)
+        assertTrue(state.scrolling)
+        assertEquals(56.25f, state.viewportTop, 0f)
+        state.find(0, 175, 7)
+        state.settleScroll(60f)
+        state.scrollBy(10f)
+        assertEquals(340f, state.viewportTop, 0f)
+        assertEquals(175, state.anchor.textOffset)
+    }
+
+    @Test fun visibleStripKeepsThePartiallyVisibleBottomRowWhilePageTurnsRepeatItInFull() {
+        val geometry = RowPaginationLayout(lines(30, height = 30), 200, 0)
+        assertEquals(6, geometry.screenEnd(0))
+        val visible = geometry.slice(0f, true)
+        assertEquals(7, visible.lines.size)
+        assertEquals(60, visible.lines.last().start)
+        assertEquals(60, geometry.pages[1].lines.first().start)
+    }
 }

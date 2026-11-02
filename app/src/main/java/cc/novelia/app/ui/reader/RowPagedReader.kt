@@ -9,6 +9,8 @@ import androidx.compose.animation.core.exponentialDecay
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -19,6 +21,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -159,12 +162,67 @@ private data class RowMeasurement(val input: RowMeasureInput, val chapter: Measu
                 }
             }
             val latestSettle by rememberUpdatedState(::settleHorizontal)
+
+            fun settleVertical(velocity: Float = 0f) {
+                if(!state.scrolling) return
+                gestureJob?.cancel()
+                if(!animate) {
+                    state.finishScroll()
+                    latestSave()
+                    return
+                }
+                gestureJob = scope.launch {
+                    if(abs(velocity) >= with(density) { 150.dp.toPx() }) {
+                        var previous = 0f
+                        AnimationState(0f, velocity).animateDecay(exponentialDecay()) {
+                            val delta = value - previous
+                            previous = value
+                            if(abs(state.scrollBy(delta) - delta) > .5f) cancelAnimation()
+                        }
+                    }
+                    if(state.layout !== geometry || !state.scrolling) return@launch
+                    val from = state.viewportTop
+                    val target = state.scrollTarget
+                    // 惯性结束后继续沿同一像素游标吸附，首尾局部行始终保留。
+                    // 取消时保留当前帧，不能在 finally 中强制跳到整行。
+                    if(abs(target - from) > .01f) {
+                        animate(from, target, animationSpec = tween(AppMotion.Standard, easing = FastOutSlowInEasing)) { value, _ ->
+                            state.settleScroll(value)
+                        }
+                    }
+                    if(state.layout === geometry && state.scrolling) {
+                        state.finishScroll()
+                        latestSave()
+                    }
+                }
+            }
+            val latestVerticalSettle by rememberUpdatedState(::settleVertical)
+            val velocity = remember(geometry) { VelocityTracker() }
             Box(Modifier.fillMaxSize().clipToBounds()
+                .pointerInput(geometry, canInteract) {
+                    if(!canInteract) return@pointerInput
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                        velocity.resetTracking()
+                        velocity.addPosition(down.uptimeMillis, down.position)
+                        // 再次按住即可停止惯性/吸附，不等待触摸越过拖动阈值。
+                        if(state.scrolling) gestureJob?.cancel()
+                        while(true) {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            event.changes.firstOrNull { it.id == down.id }?.let { velocity.addPosition(it.uptimeMillis, it.position) }
+                            if(event.changes.none { it.pressed }) {
+                                // 抬手时间也参与测速；按住停顿后松手不能沿用之前的滑动速度。
+                                awaitPointerEvent(PointerEventPass.Final)
+                                break
+                            }
+                        }
+                        if(state.scrolling && gestureJob?.isActive != true) latestVerticalSettle(0f)
+                    }
+                }
                 .pointerInput(geometry, canInteract, animate, settings.horizontalPageTurn) {
                     if(!canInteract) return@pointerInput
                     var axis = -1
                     var total = Offset.Zero
-                    val velocity = VelocityTracker()
                     detectDragGestures(
                         onDragStart = {
                             gestureJob?.cancel()
@@ -173,15 +231,14 @@ private data class RowMeasurement(val input: RowMeasureInput, val chapter: Measu
                             dragOffset = 0f
                             total = Offset.Zero
                             axis = -1
-                            velocity.resetTracking()
                         },
                         onDragCancel = {
-                            if(axis == 1) { state.finishScroll(); latestSave() }
+                            if(axis == 1) latestVerticalSettle(0f)
                             else latestSettle(0)
                         },
                         onDragEnd = end@ {
                             if(!navigation.canSwipe) {
-                                if(axis == 1) { state.finishScroll(); latestSave() } else latestSettle(0)
+                                if(axis == 1) latestVerticalSettle(0f) else latestSettle(0)
                                 return@end
                             }
                             val speed = velocity.calculateVelocity()
@@ -190,20 +247,7 @@ private data class RowMeasurement(val input: RowMeasureInput, val chapter: Measu
                                 val passed = abs(total.x) >= 40.dp.toPx() || fling
                                 latestSettle(if(passed) if((if(fling) speed.x else total.x) < 0) 1 else -1 else 0)
                             } else if(axis == 1) {
-                                gestureJob = scope.launch {
-                                    try {
-                                        if(animate && abs(speed.y) >= 150.dp.toPx()) {
-                                            var previous = 0f
-                                            AnimationState(0f, -speed.y).animateDecay(exponentialDecay()) {
-                                                val delta = value - previous
-                                                previous = value
-                                                if(abs(state.scrollBy(delta) - delta) > .5f) cancelAnimation()
-                                            }
-                                        }
-                                    } finally {
-                                        if(state.layout === geometry && state.scrolling) { state.finishScroll(); latestSave() }
-                                    }
-                                }
+                                latestVerticalSettle(-speed.y)
                             }
                         }
                     ) { change, amount ->
@@ -215,7 +259,6 @@ private data class RowMeasurement(val input: RowMeasureInput, val chapter: Measu
                         if(axis == 0 && !settings.horizontalPageTurn) return@detectDragGestures
                         change.consume()
                         total += amount
-                        velocity.addPosition(change.uptimeMillis, change.position)
                         if(axis == 1) state.scrollBy(-amount.y)
                         else if(animate) {
                             val direction = if(total.x < 0f) 1 else -1
@@ -226,9 +269,10 @@ private data class RowMeasurement(val input: RowMeasureInput, val chapter: Measu
                 // 点击区域覆盖留白，手势也应从同一视口接收触摸；排版仍使用扣除留白后的尺寸。
                 .wrapContentWidth(Alignment.CenterHorizontally).widthIn(max = settings.width.dp).fillMaxWidth()
                 .padding(contentPadding).clipToBounds()) {
-                @Composable fun body(top: Float, x: Float, scrolling: Boolean = false) {
-                    val slice = remember(geometry, top, scrolling) { geometry.slice(top, scrolling) }
-                    val y = if(scrolling) geometry.top(geometry.rowAt(top)) - top else 0f
+                @Composable fun body(top: Float, x: Float) {
+                    // 静止、滚动、吸附与横翻使用同一切片，底部半行不会在停下时被抽掉。
+                    val slice = remember(geometry, top) { geometry.slice(top, true) }
+                    val y = geometry.top(geometry.rowAt(top)) - top
                     Box(Modifier.fillMaxSize().graphicsLayer { translationX = x }.background(background).clipToBounds()) {
                         PageBody(slice, chapter, settings, foreground, highlightLayers, annotations, density, context,
                             navigation, { if(canInteract) { navigation.cancel(); onSelect(it) } }, imageModel,
@@ -246,7 +290,7 @@ private data class RowMeasurement(val input: RowMeasureInput, val chapter: Measu
                     val shift = if(animate) dragOffset else 0f
                     val direction = if(shift < 0) 1 else -1
                     if(shift != 0f) state.targetRow(direction)?.let { body(geometry.top(it), shift + direction * width) }
-                    body(state.viewportTop, shift, state.scrolling)
+                    body(state.viewportTop, shift)
                 }
             }
         }

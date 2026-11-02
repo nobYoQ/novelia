@@ -105,7 +105,7 @@ import cc.novelia.app.reader.*
     fun beginScroll() { history.clear(); scrolling = true; transitionFrom = null }
     fun scrollBy(delta: Float): Float {
         val geometry = layout ?: return 0f
-        if(!ready) return 0f
+        if(!ready || !scrolling) return 0f
         val before = viewportTop
         // 横向末屏可以短于一屏，开始纵滑时不能把它突然拉回上一屏。
         viewportTop = (before + delta).coerceIn(0f, maxOf(before, geometry.maxScrollTop))
@@ -116,6 +116,16 @@ import cc.novelia.app.reader.*
         val geometry = layout ?: return
         viewportTop = geometry.top(geometry.nearestRow(viewportTop))
         scrolling = false
+        captureAnchor()
+    }
+
+    val scrollTarget get() = layout?.let { it.top(it.nearestRow(viewportTop)) } ?: viewportTop
+
+    /** 吸附动画沿同一像素游标推进；外部定位已结束滚动时，旧动画不能覆盖新位置。 */
+    fun settleScroll(top: Float) {
+        val geometry = layout ?: return
+        if(!ready || !scrolling) return
+        viewportTop = top.coerceIn(0f, geometry.top(geometry.lines.lastIndex.coerceAtLeast(0)))
         captureAnchor()
     }
 }
