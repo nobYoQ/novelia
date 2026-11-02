@@ -4,6 +4,7 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 
 internal const val SHOW_SHELF_LIST = "showShelfList"
+internal const val DISCOVER_ROUTE = "discover?query={query}&category={category}"
 
 internal fun NavHostController.switchRootTab(target: String) {
     if (target == "shelf") {

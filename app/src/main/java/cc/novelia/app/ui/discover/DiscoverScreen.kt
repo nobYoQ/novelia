@@ -60,11 +60,12 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 
-@Composable fun DiscoverScreen(c: AppController, initialQuery: String) {
+@Composable fun DiscoverScreen(c: AppController, initialQuery: String, initialCategory: Int? = null) {
     var query by rememberSaveable(initialQuery) { mutableStateOf(initialQuery) }
     var submitted by rememberSaveable(initialQuery) { mutableStateOf(initialQuery) }
     var searchEditing by rememberSaveable(initialQuery) { mutableStateOf(false) }
-    val pager = rememberPagerState(initialPage = if(initialQuery.isNotBlank()) 1 else 0) { 3 }
+    val pager = rememberPagerState(initialPage = initialCategory?.takeIf { it in 0..2 }
+        ?: if(initialQuery.isNotBlank()) 1 else 0) { 3 }
     val category = pager.currentPage
     var pageNumbers by rememberSaveable { mutableStateOf(listOf(0, 0, 0)) }
     var searchRevision by rememberSaveable { mutableIntStateOf(0) }

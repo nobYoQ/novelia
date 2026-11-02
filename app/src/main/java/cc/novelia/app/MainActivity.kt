@@ -49,6 +49,7 @@ import cc.novelia.app.ui.downloads.DownloadsScreen
 import cc.novelia.app.ui.feedback.ObserveDownloadCelebrations
 import cc.novelia.app.ui.feedback.StickerSnackbarHost
 import cc.novelia.app.ui.navigation.AppController
+import cc.novelia.app.ui.navigation.DISCOVER_ROUTE
 import cc.novelia.app.ui.navigation.RootDestinationLayout
 import cc.novelia.app.ui.navigation.switchRootTab
 import cc.novelia.app.ui.navigation.ObserveClipboardLinks
@@ -177,7 +178,7 @@ class MainActivity : ComponentActivity() {
                 ObserveDownloadCelebrations(controller, route)
                 cc.novelia.app.ui.feedback.ObserveAppUpdates(controller, show = route?.startsWith("reader/") != true)
                 ObserveClipboardLinks(controller, externalLinkPending = link != null || sharedDocuments.isNotEmpty())
-                val roots = listOf("shelf", "discover?query={query}", "community", "profile")
+                val roots = listOf("shelf", DISCOVER_ROUTE, "community", "profile")
                 fun switchTab(target: String) { nav.switchRootTab(target) }
                 var navigationBarHeight by remember { mutableStateOf(0.dp) }
                 var navigationRailWidth by remember { mutableStateOf(0.dp) }
@@ -231,11 +232,12 @@ class MainActivity : ComponentActivity() {
                                         onCompactDetailChanged = { compactShelfDetail = it })
                                 }
                             }
-                            composable("discover?query={query}") { entry ->
+                            composable(DISCOVER_ROUTE) { entry ->
                                 RootDestinationLayout("discover", ::switchTab,
                                     onNavigationRailWidthChanged = reportNavigationRailWidth("discover"),
                                     onNavigationBarHeightChanged = reportNavigationBarHeight("discover")) {
-                                    DiscoverScreen(controller, entry.arguments?.getString("query").orEmpty())
+                                    DiscoverScreen(controller, entry.arguments?.getString("query").orEmpty(),
+                                        initialCategory = entry.arguments?.getString("category")?.toIntOrNull())
                                 }
                             }
                             composable("rank") { RankScreen(controller) }

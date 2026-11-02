@@ -1,5 +1,6 @@
 package cc.novelia.app.ui.navigation
 
+import android.net.Uri
 import androidx.compose.material3.Text
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.navigation.NavHostController
@@ -17,12 +18,19 @@ class RootNavigationTest {
             nav = rememberNavController()
             NavHost(nav, startDestination = "shelf") {
                 composable("shelf") { Text("书架") }
-                composable("discover?query={query}") { Text("搜索") }
+                composable(DISCOVER_ROUTE) { Text("搜索") }
                 composable("community") { Text("社区") }
             }
         }
-        repeat(2) {
-            compose.runOnIdle { nav.navigate("discover?query=tag") }
+        val author = "作者 A&B / 100% + 新作"
+        for(category in listOf(null, "2")) {
+            compose.runOnIdle {
+                nav.navigate("discover?query=${Uri.encode(author)}" + if(category == null) "" else "&category=$category")
+            }
+            compose.runOnIdle {
+                assertEquals(author, nav.currentBackStackEntry?.arguments?.getString("query"))
+                assertEquals(category, nav.currentBackStackEntry?.arguments?.getString("category"))
+            }
             compose.runOnIdle { nav.switchRootTab("shelf") }
             compose.runOnIdle {
                 assertEquals("shelf", nav.currentDestination?.route)

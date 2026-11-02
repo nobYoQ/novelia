@@ -192,4 +192,61 @@ class RowPagingStateTest {
         state.seekPage(0)
         assertEquals(0f, state.viewportTop, 0f)
     }
+
+    @Test fun verticalEndDoesNotLeaveTheUnusedPartOfTheLastPageBelowTheFooter() {
+        val state = state(23)
+        state.updateEndContentHeight(73)
+        val geometry = state.layout!!
+        assertEquals(400f, geometry.maxScrollTop, 0f)
+        state.beginScroll()
+        state.scrollBy(Float.MAX_VALUE)
+        state.finishScroll()
+        assertEquals(333f, state.viewportTop, 0f)
+        assertEquals(geometry.height.toFloat(), geometry.totalHeight + state.endContentHeight - state.viewportTop, 0f)
+        assertEquals(state.pages.lastIndex, state.pageIndex)
+        assertFalse(state.canScrollForward || state.canGoForward)
+        assertNull(state.targetRow(1))
+        state.beginScroll()
+        state.scrollBy(-1f)
+        // 最近的整行起点在 340px，吸附也不能越过实际 333px 的章末。
+        state.settleScroll(state.scrollTarget)
+        state.finishScroll()
+        assertEquals(333f, state.viewportTop, 0f)
+    }
+
+    @Test fun aPartialLeadingLineAtTheEndStillCountsAsTheLastPage() {
+        val state = RowPagingState(null)
+        state.install(paginateLines(lines(3, height = 120), 200, 0), content, 200, 0)
+        state.updateEndContentHeight(40)
+        state.beginScroll()
+        state.scrollBy(Float.MAX_VALUE)
+        state.finishScroll()
+        assertEquals(200f, state.viewportTop, 0f)
+        assertEquals(1, state.row)
+        assertEquals(2, state.pageIndex)
+        assertFalse(state.canGoForward)
+        assertNull(state.targetRow(1))
+        state.move(1)
+        assertEquals(200f, state.viewportTop, 0f)
+    }
+
+    @Test fun shrinkingTheFooterAfterVerticalScrollingRetractsItsBlankSpace() {
+        val state = state(23)
+        state.updateEndContentHeight(240)
+        state.beginScroll()
+        state.scrollBy(Float.MAX_VALUE)
+        state.finishScroll()
+        assertEquals(500f, state.viewportTop, 0f)
+        state.updateEndContentHeight(60)
+        assertEquals(320f, state.viewportTop, 0f)
+        assertEquals(160, state.anchor.textOffset)
+        assertEquals(state.pages.lastIndex, state.pageIndex)
+        assertFalse(state.canScrollForward)
+        // 横向定位仍保留原来末页的完整行；纵滑落定后才按内容收底。
+        state.seekPage(state.pages.lastIndex)
+        assertEquals(400f, state.viewportTop, 0f)
+        state.beginScroll()
+        state.finishScroll()
+        assertEquals(320f, state.viewportTop, 0f)
+    }
 }

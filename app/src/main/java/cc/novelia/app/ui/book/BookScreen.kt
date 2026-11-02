@@ -130,7 +130,10 @@ import kotlinx.coroutines.withContext
                             item { MetaParagraph("简介", detail.introduction) }
                             item { TagList(detail.keywords, c) }
                             if(state.books.any { it.parentWenkuKey == ref.key }) item { WenkuSiteOrderActions(c, ref.key) }
-                            item { MetaParagraph("出版信息", listOfNotNull(detail.authors.takeIf { it.isNotEmpty() }?.joinToString(prefix = "作者："), detail.artists.takeIf { it.isNotEmpty() }?.joinToString(prefix = "插画："), detail.publisher, detail.imprint).joinToString("\n")) }
+                            item { WenkuPublicationInfo(detail) { name ->
+                                c.store.rememberSearch(name)
+                                c.go("discover?query=${android.net.Uri.encode(name)}&category=2")
+                            } }
                             detail.authors.filter(String::isNotBlank).forEach { author -> item {
                                 MenuRow("屏蔽作者：$author", "在发现列表中隐藏这位作者的作品", Icons.Outlined.PersonOff, {
                                     c.store.update { it.copy(blockedAuthors = it.blockedAuthors + author.trim()) }; c.message("已屏蔽作者 $author")

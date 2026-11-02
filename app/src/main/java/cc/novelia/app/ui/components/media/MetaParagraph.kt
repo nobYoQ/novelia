@@ -7,7 +7,10 @@ import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.ui.components.base.SectionTitle
 
-@Composable fun MetaParagraph(label: String, text: String) { if(text.isNotBlank()) { SectionTitle(label); SelectionContainer { Text(text, Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = MaterialTheme.typography.bodyLarge) } } }
+@Composable fun MetaParagraph(label: String, text: String) = MetaParagraph(label, AnnotatedString(text))
+
+@Composable fun MetaParagraph(label: String, text: AnnotatedString) { if(text.isNotBlank()) { SectionTitle(label); SelectionContainer { Text(text, Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = MaterialTheme.typography.bodyLarge) } } }

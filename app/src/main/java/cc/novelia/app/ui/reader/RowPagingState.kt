@@ -24,20 +24,32 @@ import cc.novelia.app.reader.*
     private var content = emptyList<ReadingParagraph>()
     private var measuredPages: List<StaticPage>? = null
     private val history = mutableListOf<Int>()
+    private var verticallyPositioned by mutableStateOf(false)
     override val pages get() = layout?.pages.orEmpty()
     val row get() = layout?.rowAt(viewportTop) ?: 0
-    override val pageIndex get() = layout?.pageAt(row) ?: 0
+    override val pageIndex get() = if(atVerticalEnd) pages.lastIndex else layout?.pageAt(row) ?: 0
     override val paragraph get() = layout?.lines?.getOrNull(row)?.paragraph ?: requested.paragraph
     override val textOffset get() = layout?.lines?.getOrNull(row)?.start ?: requested.textOffset
     override val sourceIndex get() = content.getOrNull(paragraph)?.index
     override val anchor get() = requested
     override val canGoBack get() = row > 0
-    override val canGoForward get() = layout?.let { it.screenEnd(row) < it.lines.size } ?: false
-    private val maxScrollTop get() = layout?.let { maxOf(it.maxScrollTop, it.totalHeight + endContentHeight - it.height) } ?: 0f
+    override val canGoForward get() = !atVerticalEnd && (layout?.let { it.screenEnd(row) < it.lines.size } ?: false)
+    private val maxScrollTop get() = layout?.let {
+        // 纵向章末按实际内容收底；横向末页起点可能高出它半屏，不能用来扩展滚动范围。
+        if(endContentHeight > 0) (it.totalHeight + endContentHeight - it.height).coerceAtLeast(0f) else it.maxScrollTop
+    } ?: 0f
+    private val atVerticalEnd get() = verticallyPositioned && endContentHeight > 0 && layout != null && viewportTop >= maxScrollTop - .01f
     val canScrollForward get() = ready && viewportTop < maxScrollTop - .01f
 
     /** 章末控件只扩展纵向滚动范围，不进入正文行表、页码或阅读锚点。 */
-    fun updateEndContentHeight(height: Int) { endContentHeight = height.coerceAtLeast(0) }
+    fun updateEndContentHeight(height: Int) {
+        endContentHeight = height.coerceAtLeast(0)
+        // 工具栏收起后同步收回其章末避让空间，保留横向翻页的独立行起点。
+        if(verticallyPositioned && endContentHeight > 0 && viewportTop > maxScrollTop) {
+            viewportTop = maxScrollTop
+            captureAnchor()
+        }
+    }
 
     fun install(next: List<StaticPage>, paragraphs: List<ReadingParagraph>, height: Int, gap: Int) {
         val previous = content.getOrNull(requested.paragraph)
@@ -53,6 +65,7 @@ import cc.novelia.app.reader.*
         val target = if(paragraph > (geometry.lines.lastOrNull()?.paragraph ?: 0)) geometry.pageStarts.lastOrNull() ?: 0
             else geometry.rowFor(paragraph, offset)
         viewportTop = geometry.top(target)
+        if(verticallyPositioned && endContentHeight > 0) viewportTop = viewportTop.coerceAtMost(maxScrollTop)
         if(geometry.lines.none { it.paragraph == paragraph }) captureAnchor()
         scrolling = false
         history.clear()
@@ -69,7 +82,7 @@ import cc.novelia.app.reader.*
 
     fun targetRow(direction: Int): Int? {
         val geometry = layout ?: return null
-        return if(direction > 0) geometry.screenEnd(row).takeIf { it < geometry.lines.size }
+        return if(direction > 0) geometry.screenEnd(row).takeIf { !atVerticalEnd && it < geometry.lines.size }
         else if(row == 0) null else history.lastOrNull { it < row } ?: geometry.previousStart(row)
     }
 
@@ -79,6 +92,7 @@ import cc.novelia.app.reader.*
         val from = viewportTop
         repeat(kotlin.math.abs(direction).coerceAtMost(geometry.lines.size)) {
             val target = targetRow(direction) ?: return@repeat
+            verticallyPositioned = false
             if(direction > 0) { if(history.lastOrNull() != row) history += row }
             else history.removeAll { it >= target }
             viewportTop = geometry.top(target)
@@ -92,6 +106,7 @@ import cc.novelia.app.reader.*
     override fun seekPage(index: Int) {
         val geometry = layout ?: return
         if(!ready) return
+        verticallyPositioned = false
         history.clear()
         viewportTop = geometry.top(geometry.pageStarts.getOrNull(index.coerceIn(0, pages.lastIndex.coerceAtLeast(0))) ?: 0)
         scrolling = false
@@ -101,6 +116,7 @@ import cc.novelia.app.reader.*
     }
 
     override fun find(paragraph: Int, offset: Int, source: Int?) {
+        verticallyPositioned = false
         requested = ReadingRestoreAnchor(paragraph, source ?: content.getOrNull(paragraph)?.index, offset.coerceAtLeast(0))
         layout?.let { viewportTop = it.top(it.rowFor(paragraph, offset)) }
         history.clear()
@@ -109,7 +125,7 @@ import cc.novelia.app.reader.*
         navigationRevision++
     }
 
-    fun beginScroll() { history.clear(); scrolling = true; transitionFrom = null }
+    fun beginScroll() { history.clear(); scrolling = true; verticallyPositioned = true; transitionFrom = null }
     fun scrollBy(delta: Float): Float {
         if(layout == null) return 0f
         if(!ready || !scrolling) return 0f
@@ -127,8 +143,10 @@ import cc.novelia.app.reader.*
     }
 
     val scrollTarget get() = layout?.let {
-        if(endContentHeight > 0 && viewportTop >= it.maxScrollTop) viewportTop.coerceAtMost(maxScrollTop)
-        else it.top(it.nearestRow(viewportTop))
+        if(endContentHeight > 0) {
+            if(viewportTop >= minOf(it.maxScrollTop, maxScrollTop)) viewportTop.coerceAtMost(maxScrollTop)
+            else it.top(it.nearestRow(viewportTop)).coerceAtMost(maxScrollTop)
+        } else it.top(it.nearestRow(viewportTop))
     } ?: viewportTop
 
     /** 吸附动画沿同一像素游标推进；外部定位已结束滚动时，旧动画不能覆盖新位置。 */
