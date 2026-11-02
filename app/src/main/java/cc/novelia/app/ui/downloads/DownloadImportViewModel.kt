@@ -37,6 +37,10 @@ internal class DownloadImportViewModel(private val app: NoveliaApplication) : Vi
     fun resume() = run(false)
     fun pause() { task?.cancel() }
 
+    fun dismissResults() {
+        if(!state.value.running) mutable.value = DownloadImportState()
+    }
+
     private fun run(failedOnly: Boolean) {
         if(state.value.running || state.value.items.isEmpty()) return
         mutable.value = state.value.copy(running = true)

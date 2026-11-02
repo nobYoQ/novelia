@@ -52,6 +52,34 @@ class SharedDocumentImportTest {
         }
     }
 
+    @Test fun dismissedImportStaysClosedAfterRecreationAndNextBatchCanBeShown() {
+        val uri = fixture("txt", "关闭提示后仍保留正文 $prefix")
+        ActivityScenario.launch<MainActivity>(share(listOf(uri), "text/plain")).use { scenario ->
+            awaitBooks(1)
+            compose.onNodeWithText("已准备好阅读").assertDoesNotExist()
+            compose.onNodeWithContentDescription("关闭导入结果").performClick()
+            compose.onNodeWithTag("import-status").assertDoesNotExist()
+            scenario.recreate()
+            compose.onNodeWithTag("import-status").assertDoesNotExist()
+            compose.onNodeWithTag("shelf-tab-0").performClick()
+            compose.onNodeWithTag("shelf-tab-1").performClick()
+            compose.onNodeWithTag("import-status").assertDoesNotExist()
+            assertEquals(1, importedCount())
+
+            // 同一文件的新批次也应显示；关闭提示不会删除书籍或破坏去重。
+            lateinit var original: Intent
+            scenario.onActivity { original = Intent(it.intent) }
+            try {
+                scenario.onActivity { it.startActivity(share(listOf(uri), "text/plain")) }
+                compose.waitUntil(10_000) { compose.onAllNodesWithText("文件已在书架中").fetchSemanticsNodes().isNotEmpty() }
+                compose.onNodeWithText("阅读").assertIsDisplayed()
+                compose.onNodeWithContentDescription("关闭导入结果").performClick()
+                compose.onNodeWithTag("import-status").assertDoesNotExist()
+                assertEquals(1, importedCount())
+            } finally { scenario.onActivity { it.intent = original } }
+        }
+    }
+
     @Test fun openWithImportsOnColdAndWarmLaunchAndKeepsDuplicatesOut() {
         val text = fixture("txt", "打开方式正文 $prefix")
         val epub = epubFixture()
@@ -112,7 +140,8 @@ class SharedDocumentImportTest {
         var locked = true
         try {
             ActivityScenario.launch<MainActivity>(share(listOf(first), "text/plain")).use { scenario ->
-                compose.waitUntil(10_000) { compose.onAllNodesWithText("正在导入 0/1 · 查看结果").fetchSemanticsNodes().isNotEmpty() }
+                compose.waitUntil(10_000) { compose.onAllNodesWithText("正在导入 0/1").fetchSemanticsNodes().isNotEmpty() }
+                compose.onNodeWithContentDescription("关闭导入结果").assertDoesNotExist()
                 scenario.onActivity { it.startActivity(share(listOf(second), "text/plain")) }
                 compose.waitForIdle()
                 scenario.recreate()

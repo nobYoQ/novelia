@@ -23,10 +23,7 @@ import cc.novelia.app.files.importing.ImportStatus
 import cc.novelia.app.files.importing.importDocumentUri
 import cc.novelia.app.files.importing.runDocumentImportBatch
 
-internal data class DocumentImportState(val items: List<ImportItem> = emptyList(), val running: Boolean = false, val error: String? = null) {
-    val completed get() = items.count { it.status in setOf(ImportStatus.Success, ImportStatus.Duplicate, ImportStatus.Failed) }
-    val bookKeys get() = items.mapNotNull { it.bookKey }.distinct()
-}
+internal data class DocumentImportState(val items: List<ImportItem> = emptyList(), val running: Boolean = false, val error: String? = null)
 
 /** ViewModel 保留批次和任务，屏幕旋转不会中断导入或丢失失败项。 */
 internal class DocumentImportViewModel(private val store: LocalStore) : ViewModel() {
@@ -46,8 +43,13 @@ internal class DocumentImportViewModel(private val store: LocalStore) : ViewMode
     fun resume() = run(false)
     fun pause() { task?.cancel() }
 
+    // 关闭时清掉批次提示的来源，返回书架或重建页面后也不会再次显示；书籍仍留在书库。
+    fun dismissResults() {
+        if(!state.value.running) mutable.value = DocumentImportState()
+    }
+
     private fun run(failedOnly: Boolean) {
-        if (state.value.running) return
+        if (state.value.running || state.value.items.isEmpty()) return
         mutable.value = state.value.copy(running = true)
         task = viewModelScope.launch {
             var latestItems = state.value.items
@@ -105,6 +107,6 @@ internal class DocumentImportViewModel(private val store: LocalStore) : ViewMode
 
 @Composable internal fun DocumentImportPanel(model: DocumentImportViewModel, onRead: (BookRef) -> Unit) {
     val state by model.state.collectAsStateWithLifecycle()
-    ImportResultsPanel(state.items, state.running, model::pause, model::retryFailed, model::resume, onRead)
-    state.error?.let { androidx.compose.material3.Text(it, color = androidx.compose.material3.MaterialTheme.colorScheme.error) }
+    ImportResultsPanel(state.items, state.running, model::pause, model::retryFailed, model::resume, onRead,
+        onDismiss = model::dismissResults, error = state.error)
 }

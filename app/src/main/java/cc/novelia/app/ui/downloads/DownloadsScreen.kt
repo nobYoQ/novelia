@@ -244,7 +244,8 @@ import cc.novelia.app.files.importing.importDownloadedDocument
         if(selecting) Text(when { preparingArchive -> "正在处理文件…"; pendingArchiveId != null || exportId != null -> "等待选择导出位置…";
             else -> "导入、导出和分享仅处理已完成文件；删除可处理所有选中任务。" }, Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        ImportResultsPanel(batch.items, batch.running, importer::pause, { if(!operating) importer.retryFailed() }, { if(!operating) importer.resume() }, c::book)
+        ImportResultsPanel(batch.items, batch.running, importer::pause, { if(!operating) importer.retryFailed() }, { if(!operating) importer.resume() }, c::book,
+            onDismiss = importer::dismissResults)
         ProfileDetailList(Modifier.weight(1f).testTag("downloads-list"), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         if(state.downloads.isEmpty()) item { ProfileEmptyState("还没有下载任务", "在作品详情或文库分卷中下载小说，完成后可以导出或导入阅读。", Icons.Outlined.Download) }
         items(state.downloads, key = { it.id }, contentType = { "download" }) { entry ->

@@ -93,7 +93,7 @@ class DownloadBatchImportTest {
         val volume = app.store.state.value.books.single { it.book.ref.isLocal }
         assertEquals(entries[1].title, volume.book.title)
         assertEquals(parent.book.ref.key, volume.parentWenkuKey)
-        compose.onNodeWithTag("downloads-list").performScrollToNode(hasTestTag("download-read-${entries[1].id}"))
+        downloadsList().performScrollToNode(hasTestTag("download-read-${entries[1].id}"))
         compose.onNodeWithTag("download-read-${entries[1].id}").performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithText("阅读测试页").fetchSemanticsNodes().isNotEmpty() }
         compose.runOnIdle {
@@ -101,6 +101,20 @@ class DownloadBatchImportTest {
             assertEquals(volume.book.ref.id, controller.nav.currentBackStackEntry?.arguments?.getString("id"))
             assertEquals(parent.book.ref.key, app.store.state.value.books.single { it.book.ref == volume.book.ref }.parentWenkuKey)
         }
+    }
+
+    @Test fun closingImportResultSurvivesRestorationAndKeepsImportedBook() = withDownloads { app, _, entries ->
+        val restore = showDownloads(app)
+        compose.onNodeWithText("批量操作").performClick()
+        selectRow(entries[1]).performClick()
+        compose.onNodeWithTag("download-batch-import").performClick()
+        waitForSummary("成功 1 · 重复 0 · 失败 0 · 尚未处理 0")
+        val imported = app.store.state.value.books.single { it.book.ref.isLocal }
+        compose.onNodeWithContentDescription("关闭导入结果").performClick()
+        compose.onNodeWithTag("import-status").assertDoesNotExist()
+        restore.emulateSavedInstanceStateRestore()
+        compose.onNodeWithTag("import-status").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(imported, app.store.state.value.books.single { it.book.ref.isLocal }) }
     }
 
     @Test fun batchDeleteConfirmsMixedStatusesAndPreservesImportedBookAndUnselectedDownloads() = withDownloads { app, _, entries ->
@@ -152,13 +166,19 @@ class DownloadBatchImportTest {
     }
 
     private fun selectRow(entry: DownloadEntry): SemanticsNodeInteraction {
-        compose.onNodeWithTag("downloads-list").performScrollToNode(hasTestTag("download-select-${entry.id}"))
+        downloadsList().performScrollToNode(hasTestTag("download-select-${entry.id}"))
         return compose.onNodeWithTag("download-select-${entry.id}")
     }
 
+    // 标签位于 AppLazyColumn 的外层容器，滚动操作须定位到内部 LazyColumn。
+    private fun downloadsList() = compose.onNode(hasScrollAction() and hasAnyAncestor(hasTestTag("downloads-list")))
+
     private fun waitForSummary(text: String) {
+        compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("关闭导入结果").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("import-results").performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText(text).assertIsDisplayed()
+        compose.onNodeWithContentDescription("收起导入详情").performClick()
     }
 
     private fun showDownloads(app: NoveliaApplication): StateRestorationTester = StateRestorationTester(compose).also { restore ->

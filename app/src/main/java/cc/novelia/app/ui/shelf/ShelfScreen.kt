@@ -4,7 +4,6 @@ package cc.novelia.app.ui.shelf
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import cc.novelia.app.ui.components.base.AppCheckbox
-import cc.novelia.app.ui.components.base.AppButton
 import cc.novelia.app.ui.components.base.AppTextButton
 import cc.novelia.app.ui.components.base.AppIconButton
 import cc.novelia.app.data.updates.withAcknowledgedBookUpdates
@@ -116,7 +115,6 @@ import kotlinx.coroutines.withContext
     DisposableEffect(rootSelectionMode) { onDispose { rootSelectionMode(false) } }
     BackHandler(enabled = managing) { if(!batchWorking) { managing = false; selection = emptySet() } }
     var renamingDocument by remember { mutableStateOf<SavedBook?>(null) }
-    var importedKeys by rememberSaveable { mutableStateOf(emptyList<String>()) }
     val sourceExporter = rememberLauncherForActivityResult(CreateBookDocument()) { uri ->
         val pendingId = localExportId
         val original = localExportOriginal
@@ -139,7 +137,6 @@ import kotlinx.coroutines.withContext
             onSharedDocumentsConsumed(sharedDocuments)
         }
     }
-    LaunchedEffect(importState.bookKeys) { importedKeys = importState.bookKeys }
     val importer = rememberOpenMultipleDocumentsPicker(DocumentPickerTypes.Books) { uris ->
         importModel.start(uris)
     }
@@ -148,12 +145,6 @@ import kotlinx.coroutines.withContext
     }
     val recent = remember(state.books, state.positions) {
         state.books.asSequence().filter { state.positions.containsKey(it.book.ref.key) }.maxByOrNull { state.positions.getValue(it.book.ref.key).updatedAt }
-    }
-    val importedBooks = remember(state.books, importedKeys) {
-        if(importedKeys.isEmpty()) emptyList() else {
-            val byKey = state.books.associateBy { it.book.ref.key }
-            importedKeys.mapNotNull(byKey::get)
-        }
     }
     val settledQuery = rememberDebouncedQuery(query)
     var collapsedSearchGroups by remember(settledQuery, readingStatus) { mutableStateOf(setOf<String>()) }
@@ -243,8 +234,7 @@ import kotlinx.coroutines.withContext
                 }
                 val pageManaging = active && managing && volumeSheetKey == null
                 val layout = rememberShelfLayoutState(grid, rows.map { it.saved.book.ref.key }, groups.map { it.saved.book.ref.key }, columns,
-                    parents = rows.mapNotNull { row -> row.parent?.let { row.saved.book.ref.key to it.book.ref.key } }.toMap(),
-                    leadingItems = if(importedBooks.isNotEmpty()) 1 else 0)
+                    parents = rows.mapNotNull { row -> row.parent?.let { row.saved.book.ref.key to it.book.ref.key } }.toMap())
                 val listState = layout.current(grid)
                 val continueBook = recent?.takeIf { page == 0 && active && !pageManaging && volumeSheetKey == null }
                 val density = LocalDensity.current
@@ -299,21 +289,6 @@ import kotlinx.coroutines.withContext
                             verticalArrangement = Arrangement.spacedBy(if(showGrid) 14.dp else 0.dp),
                             contentPadding = PaddingValues(top = if(showGrid) 8.dp else 0.dp, bottom = if(continueBook != null)
                                 with(density) { continueHeight.toDp() } + 32.dp else 0.dp)) {
-                            if(importedBooks.isNotEmpty()) item(key = "imported-books", contentType = "hero") {
-                                Card(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
-                                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text("已准备好阅读", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                                            AppIconButton(onClick = { importedKeys = emptyList() }) { Icon(Icons.Outlined.Close, "关闭导入结果") }
-                                        }
-                                        importedBooks.take(3).forEach { saved ->
-                                            Text(saved.book.title, maxLines = 2)
-                                            AppButton(onClick = { c.book(saved.book.ref) }, modifier = Modifier.fillMaxWidth()) { Text("开始阅读") }
-                                        }
-                                        if(importedBooks.size > 3) Text("另有 ${importedBooks.size - 3} 本小说已加入书架。", style = MaterialTheme.typography.bodySmall)
-                                    }
-                                }
-                            }
                             if(books.isEmpty()) item {
                                 if(query.isNotBlank() || folder != "全部" || readingStatus != "全部" || (if(page == 0) bookType else fileType) != ShelfBookType.All)
                                     EmptyState("没有符合条件的小说", if(filterCharacters) "可以放宽字数范围、包含未知作品或继续补全字数。" else "试试其他书名、作者、类型或阅读状态。", action = "清除筛选", onAction = { query = ""; folder = "全部"; readingStatus = "全部"; bookType = ShelfBookType.All; fileType = ShelfBookType.All; characterFilter = CharacterCountFilter() })
