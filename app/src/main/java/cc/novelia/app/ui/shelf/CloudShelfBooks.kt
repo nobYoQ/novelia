@@ -27,8 +27,6 @@ import cc.novelia.app.ui.components.book.bookRowStatus
     managing: Boolean, onManaging: (Boolean) -> Unit, selection: Map<String, BookCard>, onSelection: (Map<String, BookCard>) -> Unit,
     busy: Boolean, progress: Int, active: Boolean, controlsHeight: Int, selectedBookKey: String?,
     onOpenBook: (BookRef) -> Unit, onLocal: () -> Unit, onRemove: () -> Unit, onRetry: () -> Unit,
-    /** 列表视图里点卡片非封面区域：直接续读（有阅读记录时）。网格视图整卡＝封面，仍走详情。 */
-    onReadBook: ((BookRef, String) -> Unit)? = null,
     grid: Boolean = false,
     gridState: LazyListState? = null,
     metadata: @Composable (BookCard) -> BookCard = { it }, actions: @Composable (BookCard, () -> Boolean) -> Unit = { _, _ -> },
@@ -91,15 +89,7 @@ import cc.novelia.app.ui.components.book.bookRowStatus
                         if(active && !busy) onLongClick("选择${book.title}") { dragSelection.selectOne(book.ref.key); true }
                     }.then(if(chosen) Modifier.background(MaterialTheme.colorScheme.secondaryContainer) else Modifier),
                     status = bookRowStatus(displayed, local.books.firstOrNull { it.book.ref == book.ref }, local.positions[book.ref.key], local.bookUpdates[book.ref.key], account, preferCloud = true),
-                    compactMetadata = true,
-                    onRead = onReadBook?.let { read ->
-                        {
-                            val position = local.positions[book.ref.key]
-                            if(position != null && !managing && !dragSelection.dragging && !busy) read(book.ref, position.chapterId)
-                            else open()
-                        }
-                    },
-                    trailing = {
+                    compactMetadata = true, trailing = {
                         if(managing) AppCheckbox(book.ref.key in selection, { toggle(displayed) }, enabled = !busy,
                             modifier = Modifier.semantics { contentDescription = "选择${book.title}" })
                         else actions(displayed) { !dragSelection.dragging && !busy }

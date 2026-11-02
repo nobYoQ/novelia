@@ -108,9 +108,7 @@ import cc.novelia.app.ui.components.keywords.KeywordEditorDialog
     }
 }
 @OptIn(ExperimentalLayoutApi::class)
-@Composable internal fun BookRow(book: BookCard, onClick: () -> Unit, modifier: Modifier = Modifier, status: BookRowStatus? = null, showReadingProgress: Boolean = true, showBookMetadata: Boolean = true, showCharacterCount: Boolean = false, compactMetadata: Boolean = false, trailing: @Composable (() -> Unit)? = null,
-    /** 非封面区域点击：直接继续阅读。为空时退回 onClick（详情）。 */
-    onRead: (() -> Unit)? = null) {
+@Composable internal fun BookRow(book: BookCard, onClick: () -> Unit, modifier: Modifier = Modifier, status: BookRowStatus? = null, showReadingProgress: Boolean = true, showBookMetadata: Boolean = true, showCharacterCount: Boolean = false, compactMetadata: Boolean = false, trailing: @Composable (() -> Unit)? = null) {
     val presentation = LocalBookListPresentation.current
     val saved = presentation.books[book.ref.key]
     val reading = status ?: bookRowStatus(book, saved, presentation.positions[book.ref.key], presentation.updates[book.ref.key], presentation.account)
@@ -132,15 +130,9 @@ import cc.novelia.app.ui.components.keywords.KeywordEditorDialog
             subtitle.takeUnless { it == metadata || it == "${book.novelType.orEmpty()} · ${book.total} 章" }.orEmpty()
         }
     val fontScale = LocalDensity.current.fontScale
-    // 移植 EhViewer 的列表交互：点封面进详情，点卡片其余区域直接续读。
-    // 子元素 clickable 会先消费事件，所以封面点击不会连带触发整行点击。
-    Row(modifier.fillMaxWidth().motionClickable(onClick = onRead ?: onClick).padding(horizontal = 20.dp, vertical = if(compactMetadata) 10.dp else 12.dp),
+    Row(modifier.fillMaxWidth().motionClickable(onClick = onClick).padding(horizontal = 20.dp, vertical = if(compactMetadata) 10.dp else 12.dp),
         horizontalArrangement = Arrangement.spacedBy(if(compactMetadata) 12.dp else 16.dp), verticalAlignment = Alignment.CenterVertically) {
-        if(onRead == null) {
-            BookCover(book)
-        } else {
-            BookCover(book, Modifier.motionClickable(onClick = onClick))
-        }
+        BookCover(book)
         BoxWithConstraints(Modifier.weight(1f)) {
             val showDate = showBookMetadata && updated != null
             // 分屏列表远窄于整屏，日期应换行显示而非直接隐藏。

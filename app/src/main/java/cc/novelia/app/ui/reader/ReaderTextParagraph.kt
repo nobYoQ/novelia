@@ -30,7 +30,7 @@ import kotlin.math.roundToInt
     highlightLayers: List<ReaderHighlightLayer> = listOfNotNull(activeMatch?.let { ReaderHighlightLayer(it, 1f) }),
     onNote: (String) -> Unit = {},
     onLayout: (Int, List<ReadingAnchorLine>) -> Unit) {
-    val starts = remember(paragraph, settings.indent, settings.parallel) { paragraphPartStarts(paragraph, settings) }
+    val starts = remember(paragraph, settings.resolvedIndentSize, settings.parallel) { paragraphPartStarts(paragraph, settings) }
     val latestLayout by rememberUpdatedState(onLayout)
     Column(Modifier.fillMaxWidth().combinedClickable(
         interactionSource = remember { MutableInteractionSource() }, indication = null,
@@ -61,7 +61,7 @@ import kotlin.math.roundToInt
                 return@forEachIndexed
             }
             val highlighted = buildAnnotatedString {
-                val indent = if(settings.indent) "　　" else ""
+                val indent = settings.indentText
                 append(indent); append(part.text)
                 annotations.filter { it.part == partIndex }.forEach {
                     val start = (indent.length + it.start).coerceIn(0, length)

@@ -126,7 +126,7 @@ class ReaderTapZoneOverlayTest {
         compose.waitForIdle()
         compose.mainClock.autoAdvance = false
         try {
-            page.performTouchInput { swipeUp() }
+            page.performTouchInput { swipeLeft() }
             compose.runOnIdle { assertEquals(2, state.pageIndex) }
         } finally { compose.mainClock.autoAdvance = true }
     }

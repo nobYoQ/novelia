@@ -1,4 +1,3 @@
-@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.reader
 
 import androidx.compose.foundation.layout.*
@@ -61,16 +60,16 @@ import cc.novelia.app.ui.theme.appRoundedCornerShape
                 Text(if(preparing) "正在准备朗读…" else "从这里开始朗读")
             }
             SpeechOptionCard("语速", "调整朗读速度，并保存为阅读偏好") {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                AppChipFlowRow(Modifier.fillMaxWidth()) {
                     listOf(.75f, 1f, 1.25f, 1.5f, 2f).forEach { rate ->
                         AppSelectionChip(settings.speechRate == rate, { onRate(rate) }, label = { Text("${rate}×") })
                     }
                 }
             }
-            SpeechOptionCard("定时停止", if(playback == null) "从开始朗读时计时" else "选择后从现在重新计时") {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(15, 30, 60).forEach { minutes ->
-                        AppSelectionChip(settings.speechMinutes == minutes, { onTimer(minutes) }, label = { Text("$minutes 分钟") })
+            SpeechOptionCard("定时停止", if(settings.resolvedSpeechMinutes == 0) "不限时，读完或手动停止时结束" else if(playback == null) "从开始朗读时计时" else "选择时长后重新计时，选不限时可取消定时") {
+                AppChipFlowRow(Modifier.fillMaxWidth()) {
+                    ReaderSettings.SPEECH_TIMER_OPTIONS.forEach { minutes ->
+                        AppSelectionChip(settings.resolvedSpeechMinutes == minutes, { onTimer(minutes) }, label = { Text(ReaderSettings.speechTimerLabel(minutes)) })
                     }
                 }
             }
@@ -85,9 +84,11 @@ import cc.novelia.app.ui.theme.appRoundedCornerShape
 }
 
 @Composable private fun SpeechOptionCard(title: String, detail: String, content: @Composable () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(title, style = MaterialTheme.typography.titleSmall)
-        Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(title, style = MaterialTheme.typography.titleSmall)
+            Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         content()
     }
 }

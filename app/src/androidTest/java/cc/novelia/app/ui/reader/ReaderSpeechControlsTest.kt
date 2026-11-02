@@ -44,6 +44,9 @@ class ReaderSpeechControlsTest {
         compose.onNodeWithText("1.25×").performScrollTo().performClick()
         compose.onNodeWithText("15 分钟").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(1.25f, settings.speechRate); assertEquals(15, settings.speechMinutes) }
+        compose.onNodeWithText("不限时").performScrollTo().performClick().assertIsSelected()
+        compose.runOnIdle { assertEquals(0, settings.speechMinutes) }
+        compose.onNodeWithText("不限时，读完或手动停止时结束").assertExists()
     }
 
     @Test fun dockKeepsSentenceControlsOutsideTheBodyAtLargeFontSizes() {

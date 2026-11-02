@@ -179,7 +179,7 @@ internal object WebDavValidation {
         document.records.forEach { (key, record) ->
             if(WebDavMerge.winner(record.existence, existence = true)?.deleted != false) return@forEach
             val required = when (document.domain) {
-                SyncDomain.SETTINGS -> if (key == GLOBAL) portableGlobalFields else if (key.startsWith(BLOCKED)) setOf("kind", "value") else portableReaderFields - setOf("customColors", "showReadingStatusBar", "horizontalMargin", "verticalMargin", "autoReadSpeed", "autoReadIntervalSeconds", "textReplacements", "textReplacementsEnabled", "readingStatusItems", "showEpubRuby", "epubFootnotePopup", "showEpubStyles")
+                SyncDomain.SETTINGS -> if (key == GLOBAL) portableGlobalFields else if (key.startsWith(BLOCKED)) setOf("kind", "value") else portableReaderFields - setOf("customColors", "showReadingStatusBar", "horizontalMargin", "verticalMargin", "autoReadSpeed", "autoReadIntervalSeconds", "textReplacements", "textReplacementsEnabled", "readingStatusItems", "showEpubRuby", "epubFootnotePopup", "showEpubStyles", "indentSize")
                 SyncDomain.FAVORITES -> if (key == ORDER) setOf("ids") else if (key.startsWith(FOLDER)) setOf("name") else setOf("book", "folderId", "pinned", "status", "addedAt")
                 SyncDomain.KEYWORDS -> if (key == ORDER) orderFields else if (key.startsWith(CATEGORY)) categoryFields else keywordEntryFields
                 SyncDomain.PROGRESS -> setOf("position")
@@ -189,7 +189,7 @@ internal object WebDavValidation {
             }
             // 老版同步快照可能缺少新增偏好，保留本机选择；字段存在时仍完整校验。
             val optional = when {
-                document.domain == SyncDomain.SETTINGS && (key == READER || key.startsWith(BOOK_SETTING)) -> setOf("devicePreferences", "customColors", "showReadingStatusBar", "horizontalMargin", "verticalMargin", "autoReadSpeed", "autoReadIntervalSeconds", "textReplacements", "textReplacementsEnabled", "readingStatusItems", "showEpubRuby", "epubFootnotePopup", "showEpubStyles")
+                document.domain == SyncDomain.SETTINGS && (key == READER || key.startsWith(BOOK_SETTING)) -> setOf("devicePreferences", "customColors", "showReadingStatusBar", "horizontalMargin", "verticalMargin", "autoReadSpeed", "autoReadIntervalSeconds", "textReplacements", "textReplacementsEnabled", "readingStatusItems", "showEpubRuby", "epubFootnotePopup", "showEpubStyles", "indentSize")
                 document.domain == SyncDomain.NOTES || document.domain == SyncDomain.BOOKMARKS -> setOf("selection")
                 else -> emptySet()
             }
@@ -202,7 +202,7 @@ internal object WebDavValidation {
 
     private fun readerField(field: String, value: JsonElement) {
         if (field == "devicePreferences") {
-            require(value is JsonObject && value.keys.containsAll(deviceReaderFields - setOf("tapZoneMap", "showWideToc", "orientation")) && value.keys.all { it in deviceReaderFields }) { "设备偏好原子组字段不完整" }
+            require(value is JsonObject && value.keys.containsAll(deviceReaderFields - setOf("tapZoneMap", "showWideToc", "orientation")) && value.keys.all { it in WebDavSchema.devicePreferenceFields }) { "设备偏好原子组字段不完整" }
             value.forEach { (deviceField, deviceValue) -> deviceReaderField(deviceField, deviceValue) }
             return
         }
@@ -220,7 +220,8 @@ internal object WebDavValidation {
             "width" -> number(value, 300.0, 900.0)
             "secondaryAlpha" -> number(value, 0.0, 1.0)
             "speechRate" -> number(value, 0.5, 2.0)
-            "speechMinutes" -> positiveInt(value, 1_440)
+            "speechMinutes" -> nonnegativeInt(value, ReaderSettings.MAX_SPEECH_MINUTES)
+            "indentSize" -> nonnegativeInt(value, ReaderSettings.INDENT_SIZE_RANGE.last)
             "speechLanguage" -> enumText(value, setOf("auto", "zh", "jp"))
             "readingStatusItems" -> require(cc.novelia.app.data.model.ReaderStatusItems.valid(arrayStrings(value))) { "阅读底栏配置无效" }
             "textReplacements" -> {
@@ -238,16 +239,29 @@ internal object WebDavValidation {
 
     private fun deviceReaderField(field: String, value: JsonElement) {
         when (field) {
+            "activeModeSettings" -> {
+                require(value is JsonObject && value.keys.containsAll(WebDavSchema.readerModeFields - "indentSize") &&
+                    value.keys.all { it in WebDavSchema.readerModeFields }) { "当前阅读模式配置不完整" }
+                value.forEach { (property, propertyValue) ->
+                    if(property in portableReaderFields) readerField(property, propertyValue)
+                    else deviceReaderField(property, propertyValue)
+                }
+            }
             "brightness" -> number(value, -1.0, 1.0)
-            "paginationMode" -> enumText(value, setOf("scroll", "auto"))
+            "paginationMode" -> enumText(value, ReaderSettings.PAGINATION_MODES.toSet())
             "orientation" -> enumText(value, ReaderSettings.ORIENTATIONS.toSet())
             "prefetchChapters" -> nonnegativeInt(value, 20)
             // 点击分区方案的编码串：限长避免同步文件被塞入超大数据，内容本身在解析时再校验。
             "tapZoneMap" -> text(value, 2_048, true)
             "beforeEInk", "eInkPreferences" -> if (value != JsonNull) {
                 val fields = setOf("paginationMode", "scrollPageTurn", "horizontalPageTurn", "showPageButtons", "volumeKeys")
-                require(value is JsonObject && value.keys == fields) { "设备翻页偏好组无效" }
-                value.forEach { (property, propertyValue) -> if (property == "paginationMode") enumText(propertyValue, setOf("scroll", "auto")) else boolean(propertyValue) }
+                require(value is JsonObject && value.keys.containsAll(fields) && value.keys.all { it in WebDavSchema.readerModeFields }) { "阅读模式偏好组无效" }
+                value.forEach { (property, propertyValue) ->
+                    if(property in fields || propertyValue != JsonNull) {
+                        if(property in portableReaderFields) readerField(property, propertyValue)
+                        else deviceReaderField(property, propertyValue)
+                    }
+                }
             }
             else -> boolean(value)
         }

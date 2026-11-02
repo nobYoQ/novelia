@@ -81,6 +81,8 @@ class ReaderTapNavigationTest {
         page.performTouchInput { swipeLeft() }
         compose.runOnIdle { assertEquals(1, state.pageIndex); settings = settings.copy(tapPageTurn = true, eInkMode = true) }
         page.performTouchInput { swipeUp() }
+        compose.runOnIdle { assertEquals(1, state.pageIndex) }
+        page.performTouchInput { swipeLeft() }
         compose.runOnIdle { assertEquals(2, state.pageIndex) }
         page.performTouchInput { click(Offset(width * .85f, centerY)) }
         compose.runOnIdle { assertEquals(3, state.pageIndex); assertEquals(3, menus); assertEquals(5, turns.size) }

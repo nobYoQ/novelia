@@ -5,6 +5,13 @@ object ReaderStatusItems {
     val defaults = listOf("time", "chapter", "pages", "progress")
     fun valid(items: List<String>) = items.size <= labels.size && items.distinct().size == items.size && items.all { it in labels }
     /** 固定每格最小宽度，时钟或页数变化不触发正文重新分页。 */
-    fun columns(widthDp: Float, fontScale: Float): Int = ((widthDp - 32f) / (80f * fontScale.coerceAtLeast(1f))).toInt().coerceIn(1, 5)
-    fun rows(count: Int, columns: Int): Int = if(count == 0) 0 else (count + columns - 1) / columns
+    fun columns(widthDp: Float, fontScale: Float): Int = ((widthDp - 32f + 8f) / (80f * fontScale.coerceAtLeast(1f) + 8f)).toInt().coerceIn(1, 6)
+
+    /** 章节名至少预留两格；拥挤时独占首行，其余项目保留用户指定的相对顺序。 */
+    fun layout(items: List<String>, columns: Int): List<List<String>> {
+        val capacity = columns.coerceAtLeast(1)
+        if("chapter" !in items) return items.chunked(capacity)
+        if(items.size + 1 <= capacity || items.size == 1) return listOf(items)
+        return listOf(listOf("chapter")) + items.filterNot { it == "chapter" }.chunked(capacity)
+    }
 }

@@ -14,7 +14,7 @@ internal interface ReaderPager {
     val pageIndex: Int
     val ready: Boolean
 
-    /** 视口首行所属的段落下标（保存阅读位置用）。 */
+    /** 视口首行所属的段落下标。 */
     val paragraph: Int
 
     /** 视口首行的字符偏移（保存阅读位置用）。 */
@@ -23,10 +23,15 @@ internal interface ReaderPager {
     /** 章节内原始段落下标，供跨模式恢复阅读位置。 */
     val sourceIndex: Int?
 
+    /** 请求的字符锚点，重排和模式切换不能用临时页首覆盖它。 */
+    val anchor: ReadingRestoreAnchor
+
     val canGoBack: Boolean
     val canGoForward: Boolean
 
     fun move(direction: Int)
+    /** 进度条的绝对定位，不应被解释成从当前行连续翻多屏。 */
+    fun seekPage(index: Int) { move(index - pageIndex) }
     fun invalidate()
 
     /** 定位到指定段落/字符偏移，按需记录来源段落下标。 */

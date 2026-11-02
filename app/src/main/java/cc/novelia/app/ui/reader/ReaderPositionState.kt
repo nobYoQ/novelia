@@ -21,12 +21,13 @@ import kotlinx.coroutines.flow.first
 internal class ReaderPositionState(position: Position?, paragraphs: List<ReadingParagraph>, settings: ReaderSettings) {
     var viewportWidth by mutableIntStateOf(0)
     var previousPagination by mutableStateOf(settings.staticPagination)
+    var previousPager: ReaderPager? = null
     var restoringAnchor by mutableStateOf(false)
     var initialAnchorRestored by mutableStateOf(false)
     var pendingScrollRestore by mutableStateOf<ReadingRestoreAnchor?>(null)
     var restoredScrollAnchor by mutableStateOf<RestoredScrollAnchor?>(null)
-    var scrollAnchor by mutableStateOf(Triple((position?.index ?: 1) - 1, position?.textOffset ?: 0,
-        paragraphs.getOrNull((position?.index ?: 1) - 1)?.index))
+    var scrollAnchor by mutableStateOf(Triple((position?.index ?: 0) - 1, position?.textOffset ?: 0,
+        paragraphs.getOrNull((position?.index ?: 0) - 1)?.index))
     var previousAnchorSource by mutableStateOf(WebDavProjection.anchorSource(settings))
     var previousFont by mutableStateOf<Any?>(null)
     var previousLayoutGeneration by mutableStateOf<Any?>(null)
@@ -57,7 +58,7 @@ internal class ReaderPositionLayout(
 ): ReaderPositionLayout {
     val state = remember { ReaderPositionState(position, paragraphs, settings) }
     val generation = remember(paragraphs, settings.fontSize, settings.lineHeight, settings.paragraphSpacing,
-        settings.width, settings.indent, settings.parallel, settings.weight, settings.staticPagination, state.viewportWidth, fontKey,
+        settings.width, settings.resolvedIndentSize, settings.parallel, settings.weight, settings.paginationMode, state.viewportWidth, fontKey,
         settings.horizontalMargin, settings.verticalMargin, settings.showWideToc,
         settings.showEpubRuby, settings.epubFootnotePopup, settings.showEpubStyles) { Any() }
     val layouts = remember(generation) { mutableStateMapOf<Int, ParagraphScrollLayout>() }
@@ -101,7 +102,7 @@ internal class ReaderPositionLayout(
     // 不能等布局销毁后再尝试读取。
     LaunchedEffect(scroll, scrollLayouts, settings.staticPagination) {
         if(!settings.staticPagination) snapshotFlow {
-            val index = (scroll.firstVisibleItemIndex - 1).coerceAtLeast(0)
+            val index = scroll.firstVisibleItemIndex - 1
             val paragraph = paragraphs.getOrNull(index)
             val source = paragraph?.index
             // 重排时等待新行数据，不能用空布局把已经捕获的字符锚点清零。
@@ -113,27 +114,29 @@ internal class ReaderPositionLayout(
     }
     // 模式切换使用字符锚点衔接，语言过滤变化时先按原始段落编号重新找投影下标。
     // LazyColumn 需要先挂载目标项、等待文字测量，再转换字符位置为可滚动的像素位置。
-    LaunchedEffect(settings.staticPagination, layoutGeneration) {
+    LaunchedEffect(settings.paginationMode, layoutGeneration) {
         val changed = state.previousPagination != settings.staticPagination
+        val previousPager = state.previousPager ?: eInk
+        val pagerChanged = previousPager !== eInk
         val sourceChanged = state.previousAnchorSource != WebDavProjection.anchorSource(settings)
         val fontChanged = state.previousFont != null && state.previousFont != layout.fontKey
         val layoutChanged = state.previousLayoutGeneration != null && state.previousLayoutGeneration !== layoutGeneration
         state.restoringAnchor = true
         try {
-            if(settings.staticPagination && (changed || sourceChanged)) {
-                val anchor = if(state.previousPagination) Triple(eInk.paragraph, eInk.textOffset, eInk.sourceIndex) else state.scrollAnchor
+            if(settings.staticPagination && (changed || sourceChanged || pagerChanged)) {
+                val anchor = if(state.previousPagination) previousPager.anchor.let { Triple(it.paragraph, it.textOffset, it.sourceIndex) } else state.scrollAnchor
                 eInk.find(anchor.first, if(sourceChanged) 0 else anchor.second, anchor.third)
                 state.pendingScrollRestore = null
             } else if(!settings.staticPagination) {
-                if(state.pendingScrollRestore == null) state.pendingScrollRestore = if(changed && eInk.pages.isNotEmpty()) ReadingRestoreAnchor(eInk.paragraph, eInk.sourceIndex, if(sourceChanged) 0 else eInk.textOffset)
+                if(state.pendingScrollRestore == null) state.pendingScrollRestore = if(changed && previousPager.pages.isNotEmpty()) previousPager.anchor.let { if(sourceChanged) it.copy(textOffset = 0) else it }
                     else if(sourceChanged) ReadingRestoreAnchor(state.scrollAnchor.first, state.scrollAnchor.third, 0)
                     else if((fontChanged || layoutChanged) && scroll.firstVisibleItemIndex > 0) ReadingRestoreAnchor(state.scrollAnchor.first, state.scrollAnchor.third, state.scrollAnchor.second)
                     // 新组合可能来自横竖屏重建；旧像素偏移不再对应同一行，始终优先恢复字符锚点。
-                    else position?.takeIf { !state.initialAnchorRestored && it.textOffset > 0 }?.let { ReadingRestoreAnchor((it.index - 1).coerceAtLeast(0), it.sourceParagraph, it.textOffset) }
+                    else position?.takeIf { !state.initialAnchorRestored && it.textOffset > 0 }?.let { ReadingRestoreAnchor(it.index - 1, it.sourceParagraph, it.textOffset) }
                 val target = state.pendingScrollRestore
                 if(target != null) {
                     val index = (target.sourceIndex?.let { source -> paragraphs.indexOfFirst { it.index >= source }.takeIf { it >= 0 } }
-                        ?: target.paragraph).coerceIn(0, paragraphs.lastIndex.coerceAtLeast(0))
+                        ?: target.paragraph).coerceIn(CHAPTER_HEADING_PARAGRAPH, paragraphs.lastIndex.coerceAtLeast(0))
                     scroll.scrollToItem(index + 1)
                     val paragraph = paragraphs.getOrNull(index)
                     if(target.textOffset > 0 && paragraph != null && paragraph.imageUrl == null && paragraph.localImageId == null) {
@@ -148,6 +151,7 @@ internal class ReaderPositionLayout(
                 }
             }
             state.previousPagination = settings.staticPagination
+            state.previousPager = eInk
             state.previousAnchorSource = WebDavProjection.anchorSource(settings)
             state.previousFont = layout.fontKey
             state.previousLayoutGeneration = layoutGeneration

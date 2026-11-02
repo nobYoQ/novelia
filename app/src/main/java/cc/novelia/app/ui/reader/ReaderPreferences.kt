@@ -109,11 +109,18 @@ import kotlin.math.roundToInt
                     }
                     1 -> {
                         ReaderPreferenceSection("阅读模式", "选择适合屏幕的阅读方式", Icons.Outlined.AutoStories) {
-                            TogglePreference("电子纸阅读模式", if(perBook == true) "仅影响当前阅读器；首次开启使用自动分页" else "全应用按屏翻动；首次开启使用自动分页，关闭后恢复原有交互", value.eInkMode, defaultValue = defaults?.eInkMode) { onChange(value.withEInkMode(it)) }
+                            TogglePreference("电子纸阅读模式", if(perBook == true) "仅影响当前阅读器；与普通模式分别保存阅读配置" else "全应用按屏翻动；与普通模式分别保存阅读配置", value.eInkMode, defaultValue = defaults?.eInkMode) { onChange(value.withEInkMode(it)) }
+                            Text("首次开启继承当前配置，并使用横向分页、不透明工具栏；再次切换恢复该模式的设置。",
+                                Modifier.padding(horizontal = 20.dp, vertical = 4.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         ReaderPreferenceSection("正文翻页", "分页、手势与快捷操作", Icons.Outlined.Swipe) {
-                            ChoiceRow("分页模式", listOf("连续滚动", "自动分页"), if(value.staticPagination) 1 else 0, defaultSelected = defaults?.let { if(it.staticPagination) 1 else 0 }) { onChange(value.withPaginationMode(if(it == 1) "auto" else "scroll")) }
-                            Text(if(value.staticPagination) "按屏幕大小提前排成独立页面，每次翻动一页。" else "整章连续排列，上下滑动浏览，不提前拆成独立页面。",
+                            ChoiceRow("分页模式", ReaderSettings.PAGINATION_LABELS, ReaderSettings.PAGINATION_MODES.indexOf(value.paginationMode).coerceAtLeast(0),
+                                defaultSelected = defaults?.let { ReaderSettings.PAGINATION_MODES.indexOf(it.paginationMode).coerceAtLeast(0) }) { onChange(value.withPaginationMode(ReaderSettings.PAGINATION_MODES[it])) }
+                            Text(when {
+                                value.rowPagination -> "上下自由滑动，松手对齐文字行；左右从当前屏继续翻页，往回翻可回到上一屏起点。"
+                                value.staticPagination -> "按屏幕大小排成固定页面，仅左右滑动翻页；上下滑动不移动正文。"
+                                else -> "整章连续排列，上下滑动浏览，不提前拆成独立页面。"
+                            },
                                 Modifier.padding(horizontal = 20.dp, vertical = 4.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             TogglePreference("点击区域翻页", if(value.tapPageTurn) "在正文覆盖层调整区域大小，分别设置单击和双击动作" else "开启后可配置区域大小，以及翻页、目录和工具栏等点击动作",
                                 value.tapPageTurn, defaultValue = defaults?.tapPageTurn) { onChange(value.copy(tapPageTurn = it)) }
@@ -129,7 +136,6 @@ import kotlin.math.roundToInt
                                     modifier = Modifier.padding(horizontal = 12.dp)) { Text("查看点击分区教程") }
                             }
                             if(value.staticPagination) {
-                                TogglePreference("滚动翻页", "向上滑动下一页，向下滑动上一页", value.scrollPageTurn, defaultValue = defaults?.scrollPageTurn) { onChange(value.copy(scrollPageTurn = it)) }
                                 TogglePreference("左右翻页", "向左滑动下一页，向右滑动上一页", value.horizontalPageTurn, defaultValue = defaults?.horizontalPageTurn) { onChange(value.copy(horizontalPageTurn = it)) }
                             }
                             TogglePreference("显示翻页按钮", if(value.staticPagination) "显示上一页、下一页按钮" else "显示上一屏、下一屏，每次移动约一屏正文", value.showPageButtons, defaultValue = defaults?.showPageButtons) { onChange(value.copy(showPageButtons = it)) }
@@ -203,15 +209,17 @@ import kotlin.math.roundToInt
                                 modifier = Modifier.testTag("reader-vertical-margin"), defaultValue = defaults?.resolvedVerticalMargin) { onChange(value.copy(verticalMargin = it)) }
                             ReaderSlider("辅文本不透明度 ${(value.secondaryAlpha * 100).toInt()}%", value.secondaryAlpha, .45f..1f, defaultValue = defaults?.secondaryAlpha) { onChange(value.copy(secondaryAlpha = it)) }
                             TogglePreference("加粗文字", "两种阅读模式使用一致的粗体", value.weight, defaultValue = defaults?.weight) { onChange(value.copy(weight = it)) }
-                            TogglePreference("首行缩进", "统一为两个全角空格", value.indent, defaultValue = defaults?.indent) { onChange(value.copy(indent = it)) }
+                            ReaderIndentPreference(value.resolvedIndentSize, defaults?.resolvedIndentSize ?: 2) {
+                                onChange(value.copy(indent = it > 0, indentSize = it))
+                            }
                             TogglePreference("辅文本下划线", "用于双语对照", value.underline, defaultValue = defaults?.underline) { onChange(value.copy(underline = it)) }
                         }
                         ReaderPreferenceGroup("朗读", "语速、语言、定时停止与连续听书", expanded == "speech", { expanded = if(expanded == "speech") "" else "speech" }) {
                             ReaderSlider("朗读速度 ${"%.1f".format(value.speechRate)}×", value.speechRate, .5f..2f, defaultValue = defaults?.speechRate) { onChange(value.copy(speechRate = it)) }
                             ChoiceRow("朗读语言", listOf("随显示模式", "中文", "日文"), listOf("auto", "zh", "jp").indexOf(value.speechLanguage),
                                 defaultSelected = defaults?.let { listOf("auto", "zh", "jp").indexOf(it.speechLanguage) }) { onChange(value.copy(speechLanguage = listOf("auto", "zh", "jp")[it])) }
-                            ChoiceRow("朗读定时停止", listOf("15 分钟", "30 分钟", "60 分钟"), listOf(15, 30, 60).indexOf(value.speechMinutes),
-                                defaultSelected = defaults?.let { listOf(15, 30, 60).indexOf(it.speechMinutes) }) { onChange(value.copy(speechMinutes = listOf(15, 30, 60)[it])) }
+                            ChoiceRow("朗读定时停止", ReaderSettings.SPEECH_TIMER_OPTIONS.map { ReaderSettings.speechTimerLabel(it) }, ReaderSettings.SPEECH_TIMER_OPTIONS.indexOf(value.resolvedSpeechMinutes),
+                                defaultSelected = defaults?.let { ReaderSettings.SPEECH_TIMER_OPTIONS.indexOf(it.resolvedSpeechMinutes) }) { onChange(value.copy(speechMinutes = ReaderSettings.SPEECH_TIMER_OPTIONS[it])) }
                             TogglePreference("连续听书", "本章结束后自动进入下一章，定时停止不会重新计时", value.speechContinueChapters, defaultValue = defaults?.speechContinueChapters) { onChange(value.copy(speechContinueChapters = it)) }
                             if(value.speechContinueChapters) TogglePreference("允许联网续章", "优先读取本地和缓存；关闭后遇到未缓存章节暂停", value.speechNetworkContinuation, defaultValue = defaults?.speechNetworkContinuation) { onChange(value.copy(speechNetworkContinuation = it)) }
                         }

@@ -138,9 +138,7 @@ import cc.novelia.app.ui.navigation.AppController
                             managing, { managing = it; if(it) { expanded = false; focus.clearFocus() } }, selection, { selection = it },
                             bulkBusy, bulkProgress, active, controlsHeight, selectedBookKey,
                             onOpenBook = { expanded = false; onOpenBook(it) }, onLocal = { bulkLocal = selection.values.toList() },
-                            onRemove = { bulkRemoval = current.id to selection.values.toList() }, onRetry = retry,
-                            onReadBook = { ref, chapter -> c.read(ref, chapter) },
-                            grid = local.cloudShelfGrid, gridState = gridState,
+                            onRemove = { bulkRemoval = current.id to selection.values.toList() }, onRetry = retry, grid = local.cloudShelfGrid, gridState = gridState,
                             metadata = { rememberCloudBookMetadata(c, it, account, refreshKey) }, actions = { displayed, canAct ->
                                 val book = displayed
                                 val cancelling = pendingFavoriteAction(local.pending, account, book.ref)?.method == "DELETE"

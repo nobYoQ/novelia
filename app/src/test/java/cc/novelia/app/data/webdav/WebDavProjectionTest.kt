@@ -10,6 +10,14 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class WebDavProjectionTest {
+    @Test fun rowPaginationIsValidInDevicePreferencesAndModeSnapshots() {
+        val row = ReaderSettings().withPaginationMode("row")
+        val reader = row.withEInkMode(true).withPaginationMode("row")
+        val group = WebDavProjection.library(LibraryState(reader = reader), includeDevicePreferences = true)
+            .getValue(SyncDomain.SETTINGS).getValue("@reader").getValue("devicePreferences") as JsonObject
+        WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "devicePreferences", group)
+        assertEquals(JsonPrimitive("row"), group["paginationMode"])
+    }
     @Test fun statusItemOrderSyncsAndOldRecordsKeepCurrentChoices() {
         val custom = ReaderSettings(readingStatusItems = listOf("battery", "time"))
         val docs = documents(LibraryState(reader = custom, bookSettings = mapOf(web.key to custom)))
@@ -313,6 +321,32 @@ class WebDavProjectionTest {
         val selected = WebDavProjection.applyLibrary(target, documents, setOf(SyncDomain.SETTINGS), includeDevicePreferences = true)
         assertEquals(source.reader, selected.reader)
         assertFalse("devicePreferences" in WebDavProjection.library(source).getValue(SyncDomain.SETTINGS).getValue("@reader"))
+    }
+
+    @Test fun completeReaderModeSnapshotsSyncWithoutLeakingLocalFontsAndAcceptLegacySnapshots() {
+        val source = LibraryState(reader = ReaderSettings(fontSize = 21f, toolbarTransparency = .7f, fontFamily = "serif")
+            .withEInkMode(true).copy(fontSize = 27f, theme = "paper"))
+        val projection = WebDavProjection.library(source, setOf(SyncDomain.SETTINGS), includeDevicePreferences = true)
+        val docs = SyncReplica(deviceId = "a").track(emptyMap(), projection).bind("dataset").documents
+        WebDavProjection.validateRecords(docs.getValue(SyncDomain.SETTINGS))
+        val group = projection.getValue(SyncDomain.SETTINGS).getValue("@reader").getValue("devicePreferences") as JsonObject
+        val snapshot = group.getValue("beforeEInk") as JsonObject
+        assertFalse("fontFamily" in snapshot)
+        assertFalse("customFont" in snapshot)
+        val local = LibraryState(reader = ReaderSettings(fontFamily = "monospace").withEInkMode(true))
+        val restored = WebDavProjection.applyLibrary(local, docs, setOf(SyncDomain.SETTINGS), includeDevicePreferences = true)
+        assertEquals(27f, restored.reader.fontSize, 0f)
+        val normal = restored.reader.withEInkMode(false)
+        assertEquals(21f, normal.fontSize, 0f)
+        assertEquals(.7f, normal.toolbarTransparency, 0f)
+        assertEquals("monospace", normal.fontFamily)
+        val legacyFields = setOf("paginationMode", "scrollPageTurn", "horizontalPageTurn", "showPageButtons", "volumeKeys")
+        val legacy = JsonObject((group - "activeModeSettings") + ("beforeEInk" to JsonObject(snapshot.filterKeys { it in legacyFields })))
+        WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "devicePreferences", legacy)
+        val invalid = JsonObject(group + ("beforeEInk" to JsonObject(snapshot + ("toolbarTransparency" to JsonPrimitive(2f)))))
+        assertThrows(IllegalArgumentException::class.java) {
+            WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "devicePreferences", invalid)
+        }
     }
 
     @Test fun concurrentDevicePreferencesStayAsCompleteAtomicGroup() {

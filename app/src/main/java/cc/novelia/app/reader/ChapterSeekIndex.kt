@@ -18,7 +18,7 @@ internal class ChapterSeekIndex(paragraphs: List<ReadingParagraph>, settings: Re
         else {
             val starts = paragraphPartStarts(paragraph, settings)
             ((starts.lastOrNull() ?: 0) + (paragraph.parts.lastOrNull()?.text?.length ?: 0) +
-                if(settings.indent) 2 else 0).coerceAtLeast(1)
+                settings.resolvedIndentSize).coerceAtLeast(1)
         }
     }
     private val starts = LongArray(lengths.size + 1).also { sums ->

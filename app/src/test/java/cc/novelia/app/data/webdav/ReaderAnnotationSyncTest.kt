@@ -10,6 +10,58 @@ class ReaderAnnotationSyncTest {
     private fun documents(state: LibraryState, devices: Boolean = false) = SyncReplica(deviceId = "reader-test")
         .track(emptyMap(), WebDavProjection.library(state, includeDevicePreferences = devices)).bind("dataset").documents
 
+    @Test fun unlimitedTimerSyncsInDefaultAndBookPreferences() {
+        val custom = ReaderSettings(speechMinutes = 0)
+        val docs = documents(LibraryState(reader = custom, bookSettings = mapOf(key to custom)))
+        docs.values.forEach { WebDavProjection.validateRecords(it) }
+        val restored = WebDavProjection.applyLibrary(LibraryState(), docs, setOf(SyncDomain.SETTINGS))
+        assertEquals(custom, restored.reader)
+        assertEquals(custom, restored.bookSettings.getValue(key))
+        assertThrows(IllegalArgumentException::class.java) {
+            WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "speechMinutes", JsonPrimitive(-1))
+        }
+    }
+
+    @Test fun customIndentSyncsWithOptionalLegacyFields() {
+        val custom = ReaderSettings(indentSize = 7)
+        val docs = documents(LibraryState(reader = custom, bookSettings = mapOf(key to custom)))
+        docs.values.forEach { WebDavProjection.validateRecords(it) }
+        val restored = WebDavProjection.applyLibrary(LibraryState(), docs, setOf(SyncDomain.SETTINGS))
+        assertEquals(custom, restored.reader)
+        assertEquals(custom, restored.bookSettings.getValue(key))
+        val legacy = docs.getValue(SyncDomain.SETTINGS).let { doc -> doc.copy(records = doc.records.mapValues { (_, record) ->
+            record.copy(fields = record.fields - "indentSize")
+        }) }
+        WebDavProjection.validateRecords(legacy)
+        val local = LibraryState(reader = custom.copy(indentSize = 1))
+        assertEquals(1, WebDavProjection.applyLibrary(local, mapOf(SyncDomain.SETTINGS to legacy), setOf(SyncDomain.SETTINGS)).reader.indentSize)
+        for((field, value) in listOf("indentSize" to -1, "indentSize" to 21)) {
+            assertThrows(IllegalArgumentException::class.java) {
+                WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", field, JsonPrimitive(value))
+            }
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "indentSize", JsonPrimitive(1.5))
+        }
+    }
+
+    @Test fun legacyActiveAndInactiveModesWithoutIndentSizeRemainValid() {
+        val reader = ReaderSettings(indentSize = 1).withEInkMode(true).copy(indentSize = 7)
+        val projection = WebDavProjection.library(LibraryState(reader = reader), includeDevicePreferences = true)
+        val group = projection.getValue(SyncDomain.SETTINGS).getValue("@reader").getValue("devicePreferences").jsonObject
+        val legacy = JsonObject(group.mapValues { (field, value) ->
+            if(field in setOf("activeModeSettings", "beforeEInk", "eInkPreferences") && value is JsonObject) JsonObject(value - "indentSize") else value
+        })
+        WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "devicePreferences", legacy)
+        val records = projection.getValue(SyncDomain.SETTINGS).toMutableMap()
+        records["@reader"] = JsonObject((records.getValue("@reader") - "indentSize") + ("devicePreferences" to legacy))
+        val docs = SyncReplica(deviceId = "old").track(emptyMap(), mapOf(SyncDomain.SETTINGS to records)).bind("dataset").documents
+        WebDavProjection.validateRecords(docs.getValue(SyncDomain.SETTINGS))
+        val restored = WebDavProjection.applyLibrary(LibraryState(reader = reader), docs, setOf(SyncDomain.SETTINGS), includeDevicePreferences = true).reader
+        assertEquals(7, restored.indentSize)
+        assertEquals(1, restored.withEInkMode(false).indentSize)
+    }
+
     @Test fun epubDisplaySwitchesSyncAndLegacyRecordsPreserveLocalChoices() {
         val custom = ReaderSettings(showEpubRuby = false, epubFootnotePopup = false, showEpubStyles = false)
         val remote = LibraryState(reader = custom, bookSettings = mapOf(key to custom.copy(showEpubRuby = true)))

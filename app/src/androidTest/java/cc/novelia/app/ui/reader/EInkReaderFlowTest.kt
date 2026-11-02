@@ -1,6 +1,7 @@
 package cc.novelia.app.ui.reader
 
 import android.view.KeyEvent
+import android.view.accessibility.AccessibilityNodeInfo
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -50,7 +51,7 @@ class EInkReaderFlowTest {
             compose.onNodeWithText("上一屏").assertDoesNotExist()
             compose.onNodeWithContentDescription("阅读设置").performClick()
             compose.onNodeWithText("翻页").performClick()
-            compose.onNodeWithText("自动分页").performScrollTo().performClick()
+            compose.onNodeWithText("横向分页").performScrollTo().performClick()
             screenshot("pagination-preferences")
             compose.onNodeWithText("关闭面板").performClick()
             compose.onNodeWithTag("reader-page").assertExists()
@@ -65,6 +66,16 @@ class EInkReaderFlowTest {
             val anchor = app.store.state.value.positions.getValue(ref.key).let { it.index to it.textOffset }
             compose.onNodeWithText("下一页").performClick()
             compose.waitUntil(10_000) { app.store.state.value.positions.getValue(ref.key).let { it.index to it.textOffset } != anchor }
+            val fixedAnchor = app.store.state.value.positions.getValue(ref.key).let { it.index to it.textOffset }
+            compose.onNodeWithContentDescription("阅读设置").performClick()
+            compose.onNodeWithText("翻页").performClick()
+            compose.onNodeWithText("行带分页").performScrollTo().performClick()
+            compose.onNodeWithText("关闭面板").performClick()
+            compose.onNodeWithTag("reader-page").assertExists()
+            compose.waitForIdle()
+            compose.runOnIdle { assertEquals(fixedAnchor, app.store.state.value.positions.getValue(ref.key).let { it.index to it.textOffset }) }
+            compose.onNodeWithText("下一页").performClick()
+            compose.waitUntil(10_000) { app.store.state.value.positions.getValue(ref.key).let { it.index to it.textOffset } != fixedAnchor }
             compose.onNodeWithContentDescription("阅读设置").performClick()
             compose.onNodeWithText("翻页").performClick()
             compose.onNodeWithText("连续滚动").performScrollTo().performClick()
@@ -94,13 +105,27 @@ class EInkReaderFlowTest {
             compose.onNodeWithText("电子纸分页测试").performClick()
             compose.waitUntil(15_000) { compose.onAllNodesWithText("下一页").fetchSemanticsNodes().isNotEmpty() }
             compose.waitUntil(15_000) { app.store.state.value.positions[ref.key]?.chapterId == "first" }
+            // 位置可先于分页 Canvas 的下一帧写入；等待标题实际完成布局。
+            compose.waitUntil(10_000) { runCatching { compose.onNodeWithTag("reader-page-chapter-title").assertIsDisplayed() }.isSuccess }
+            compose.onNodeWithTag("reader-page-chapter-title").assertIsDisplayed().assertTextEquals("第一章 旅途")
+            compose.onNodeWithTag("reader-page").performTouchInput { click(center) }
+            compose.onNodeWithContentDescription("阅读设置").assertDoesNotExist()
+            screenshot("reader-chapter-entry")
+            compose.onNodeWithTag("reader-page").performTouchInput { click(center) }
             compose.onNodeWithText("下一页").performClick()
             compose.waitUntil(10_000) { (app.store.state.value.positions[ref.key]?.textOffset ?: 0) > 0 }
             val firstOffset = app.store.state.value.positions.getValue(ref.key).textOffset
             val instrumentation = InstrumentationRegistry.getInstrumentation()
             // 注入原生输入前，等待上一轮 Compose 触摸和焦点处理结束。
             compose.waitForIdle()
-            compose.waitUntil(10_000) { compose.activity.hasWindowFocus() }
+            compose.waitUntil(10_000) {
+                // Android 首次隐藏导航栏会显示系统引导；用同一 instrumentation 确认后再注入按键。
+                if(!compose.activity.hasWindowFocus()) {
+                    val root = instrumentation.uiAutomation.rootInActiveWindow
+                    if(root?.packageName?.toString() in setOf("android", "com.android.systemui")) dismissImmersiveHint(root!!)
+                }
+                compose.activity.hasWindowFocus()
+            }
             instrumentation.waitForIdleSync()
             instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_PAGE_DOWN)
             compose.waitForIdle()
@@ -119,7 +144,7 @@ class EInkReaderFlowTest {
             }
             compose.onNodeWithContentDescription("阅读设置").performClick()
             compose.onNodeWithText("翻页").performClick()
-            compose.onNodeWithText("自动分页").performScrollTo().performClick()
+            compose.onNodeWithText("横向分页").performScrollTo().performClick()
             compose.onNodeWithText("关闭面板").performClick()
             compose.waitUntil(10_000) { (app.store.state.value.positions[ref.key]?.textOffset ?: 0) > 0 && app.store.state.value.positions[ref.key]?.offset == 0 }
             compose.runOnIdle { assertEquals(saved.textOffset, app.store.state.value.positions.getValue(ref.key).textOffset) }
@@ -165,6 +190,12 @@ class EInkReaderFlowTest {
         } finally {
             compose.runOnIdle { app.store.update { previous } }
         }
+    }
+
+    private fun dismissImmersiveHint(node: AccessibilityNodeInfo): Boolean {
+        if(node.isClickable && node.text?.toString()?.lowercase() in setOf("got it", "知道了", "我知道了"))
+            return node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        return (0 until node.childCount).any { node.getChild(it)?.let(::dismissImmersiveHint) == true }
     }
 
     private fun screenshot(name: String) {

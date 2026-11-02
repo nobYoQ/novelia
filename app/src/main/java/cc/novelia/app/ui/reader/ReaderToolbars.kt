@@ -137,6 +137,7 @@ internal data class ReaderBottomToolbarState(
     onPreviousChapter: () -> Unit, onNextChapter: () -> Unit, onToc: () -> Unit,
     onBookmark: () -> Unit, onPreferences: () -> Unit,
     speechControls: (@Composable () -> Unit)? = null, onSpeechHeightChanged: (Int) -> Unit = {},
+    onChapterTitle: () -> Unit = {},
 ) {
     Column(modifier.testTag("reader-bottom-toolbar").onSizeChanged { onHeightChanged(it.height) }) {
         val persistentControls = speechControls != null || settings.showPageButtons || settings.visibleReadingStatusItems.isNotEmpty()
@@ -169,7 +170,7 @@ internal data class ReaderBottomToolbarState(
         if(settings.visibleReadingStatusItems.isNotEmpty()) ReaderReadingStatusBar(state, settings, statusColumns, foreground,
             Modifier.fillMaxWidth().background(toolbarBackground)
                 .windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout).only(WindowInsetsSides.Horizontal))
-                .height(readingStatusBarHeight))
+                .height(readingStatusBarHeight), onChapterTitle = onChapterTitle)
         if(persistentControls) Spacer(Modifier.fillMaxWidth().background(toolbarBackground).navigationBarsPadding())
     }
 }

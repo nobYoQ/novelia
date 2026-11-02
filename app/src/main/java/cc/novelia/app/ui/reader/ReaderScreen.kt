@@ -307,7 +307,7 @@ import kotlinx.serialization.encodeToString
             else if(returned != null) returned
             else if(searchArrival != null) Position(chapterId, searchArrival.coerceIn(0, paragraphs.lastIndex.coerceAtLeast(0)) + 1,
                 textOffset = paragraphs.getOrNull(searchArrival)?.let { arrivalMatch?.textOffset(it, settings) } ?: 0)
-            else if(anchor != null) Position(chapterId, (anchor.sourceIndex?.let { source -> paragraphs.indexOfFirst { it.index >= source }.takeIf { it >= 0 } } ?: anchor.paragraph).coerceIn(0, paragraphs.lastIndex.coerceAtLeast(0)) + 1,
+            else if(anchor != null) Position(chapterId, (anchor.sourceIndex?.let { source -> paragraphs.indexOfFirst { it.index >= source }.takeIf { it >= 0 } } ?: anchor.paragraph).coerceIn(CHAPTER_HEADING_PARAGRAPH, paragraphs.lastIndex.coerceAtLeast(0)) + 1,
                 textOffset = anchor.textOffset, sourceParagraph = anchor.sourceIndex, anchorSource = anchor.anchorSource,
                 anchorTextHash = anchor.anchorTextHash).resolvedReadingPosition(paragraphs, settings)
             else if(readerEntry?.savedStateHandle?.remove<Boolean>("readerStartAtEnd") == true) Position(chapterId, Int.MAX_VALUE)
@@ -323,19 +323,17 @@ import kotlinx.serialization.encodeToString
         }
         // 触摸状态和动画偏好在当前帧立即生效，即使旧回弹尚未结束。
         val chapterPullOffset = if(eInkInteraction) 0f else if(chapterPull.active || reducedMotion) chapterPull.offset else chapterPullReturn.value
-        val eInkState = remember { EInkPageState(position) }
-        // 行带翻页的独立状态：与官方页表状态并存。
-        val rowPagerState = remember { RowPagingState(position) }
-        // 统一门面：其余代码只认 ReaderPager，不关心当前是哪种翻页模型。
-        val eInk: ReaderPager = if(settings.rowPaging) rowPagerState else eInkState
+        val fixedPager = remember { EInkPageState(position) }
+        val rowPager = remember { RowPagingState(position) }
+        val eInk: ReaderPager = if(settings.rowPagination) rowPager else fixedPager
         val positionLayout = rememberReaderPositionLayout(position, paragraphs, settings, scroll, eInk, readerFont.typeface)
         val positionState = positionLayout.state
         val layoutGeneration = positionLayout.layoutGeneration
         val scrollLayouts = positionLayout.scrollLayouts
         val firstParagraph by remember(settings.staticPagination, eInk, scroll) { derivedStateOf {
-            if(settings.staticPagination) eInk.paragraph else (scroll.firstVisibleItemIndex - 1).coerceAtLeast(0)
+            if(settings.staticPagination) eInk.paragraph.coerceAtLeast(0) else (scroll.firstVisibleItemIndex - 1).coerceAtLeast(0)
         } }
-        val seekIndex = remember(paragraphs, settings.indent, settings.parallel) { ChapterSeekIndex(paragraphs, settings) }
+        val seekIndex = remember(paragraphs, settings.resolvedIndentSize, settings.parallel) { ChapterSeekIndex(paragraphs, settings) }
         var seekJob by remember { mutableStateOf<Job?>(null) }
         var seekGeneration by remember { mutableIntStateOf(0) }
         var seekTarget by remember { mutableStateOf<Float?>(null) }
@@ -365,6 +363,7 @@ import kotlinx.serialization.encodeToString
         }
         var selected by remember { mutableStateOf<ReadingParagraph?>(null) }
         var epubNote by remember(ref, chapterId) { mutableStateOf<String?>(null) }
+        var chapterTitleOpen by remember(ref, chapterId) { mutableStateOf(false) }
         LaunchedEffect(settings.epubFootnotePopup) { if (!settings.epubFootnotePopup) epubNote = null }
         var versions by remember { mutableStateOf<ReadingParagraph?>(null) }
         LaunchedEffect(selected, chapter, settings.traditional, settings.textReplacements, settings.textReplacementsEnabled) {
@@ -424,7 +423,7 @@ import kotlinx.serialization.encodeToString
         // 限制文字宽度而非手势视口，宽屏两侧留白也交给同一个列表处理拖动。
         val bodyHorizontalPadding = ((statusWidth - settings.width.dp) / 2).coerceAtLeast(0.dp) + settings.resolvedHorizontalMargin.dp
         val statusColumns = cc.novelia.app.data.model.ReaderStatusItems.columns(statusWidth.value, density.fontScale)
-        val statusRows = cc.novelia.app.data.model.ReaderStatusItems.rows(settings.visibleReadingStatusItems.size, statusColumns)
+        val statusRows = cc.novelia.app.data.model.ReaderStatusItems.layout(settings.visibleReadingStatusItems, statusColumns).size
         // 预留空间只跟随配置、宽度和系统字体变化；时间与进度更新不会重新分页。
         val readingStatusBarHeight = if(statusRows > 0) with(density) { 16.sp.toDp() } * statusRows + 12.dp + 4.dp * (statusRows - 1) else 0.dp
         val persistentBottomHeight = readingStatusBarHeight + with(density) { if(bookSpeech != null) speechControlsHeight.toDp() else 0.dp }
@@ -437,7 +436,7 @@ import kotlinx.serialization.encodeToString
         fun savePosition() {
             if(leaving || readingLifecycle.lifecycle.currentState == Lifecycle.State.DESTROYED || seekTarget != null || !positionState.initialAnchorRestored || positionState.restoringAnchor || positionState.pendingScrollRestore != null || positionState.previousLayoutGeneration !== layoutGeneration || positionState.previousPagination != settings.staticPagination ||
                 (if(settings.staticPagination) !eInk.ready || eInk.pages.isEmpty() else scroll.layoutInfo.totalItemsCount == 0 || scroll.layoutInfo.visibleItemsInfo.isEmpty())) return
-            val visible = if(settings.staticPagination) Position(chapterId, eInk.paragraph + 1, 0, chapter.title, textOffset = eInk.textOffset)
+            val visible = if(settings.staticPagination) eInk.anchor.let { Position(chapterId, it.paragraph + 1, 0, chapter.title, textOffset = it.textOffset) }
                 else {
                     val paragraph = paragraphs.getOrNull(scroll.firstVisibleItemIndex - 1)
                     // 页面销毁时文字测量可能已经卸载，不能把缺失几何当作字符 0 写回。
@@ -467,12 +466,12 @@ import kotlinx.serialization.encodeToString
         }
         fun rememberReadingPlace() {
             if(leaving || positionState.restoringAnchor || !positionState.initialAnchorRestored || (settings.staticPagination && !eInk.ready)) return
-            val paragraph = if(settings.staticPagination) eInk.paragraph else (scroll.firstVisibleItemIndex - 1).coerceAtLeast(0)
+            val paragraph = if(settings.staticPagination) eInk.anchor.paragraph else (scroll.firstVisibleItemIndex - 1).coerceAtLeast(0)
             val source = if(!settings.staticPagination && scroll.firstVisibleItemIndex == 0) null else paragraphs.getOrNull(paragraph)?.index
             val current = ReadingReturnPoint(Position(chapterId,
                 index = if(settings.staticPagination) paragraph + 1 else scroll.firstVisibleItemIndex,
                 offset = if(settings.staticPagination) 0 else scroll.firstVisibleItemScrollOffset,
-                title = chapter.title, textOffset = if(settings.staticPagination) eInk.textOffset else positionLayout.scrollTextOffset(source),
+                title = chapter.title, textOffset = if(settings.staticPagination) eInk.anchor.textOffset else positionLayout.scrollTextOffset(source),
                 sourceParagraph = source, anchorSource = WebDavProjection.anchorSource(settings),
                 anchorTextHash = if(source == null) null else paragraphHash(paragraphs.getOrNull(paragraph))), source)
             returnPointJson = appJson.encodeToString(retainReadingReturnPoint(returnPoint, current))
@@ -522,11 +521,12 @@ import kotlinx.serialization.encodeToString
             readingLifecycle.lifecycle.addObserver(observer)
             onDispose { readingLifecycle.lifecycle.removeObserver(observer) }
         }
-        val contentPanelsClosed = !preferences && !editingTapZones && !search && (!toc || wide) && !autoReadSheet && !replacementsSheet && !bookSearch && !nextVolumePrompt && selected == null && note == null
+        val contentPanelsClosed = !preferences && !editingTapZones && !search && (!toc || wide) && !autoReadSheet && !replacementsSheet && !bookSearch && !nextVolumePrompt && !chapterTitleOpen && selected == null && note == null
         val panelsClosed = contentPanelsClosed && !speechSheet && epubNote == null
         val showTapTutorial = settings.tapPageTurn && !local.readerTapTutorialSeen && panelsClosed && !leaving &&
             !chapterLoad.loading && chapterLoad.error == null && positionState.initialAnchorRestored && !positionState.restoringAnchor && seekTarget == null &&
             (!settings.staticPagination || eInk.ready)
+        val tapOverlayVisible = editingTapZones || showTapTutorial
         cc.novelia.app.ui.toolbar.ReportEdgeToolbarReaderState(readerEntry?.id, menu,
             blocked = !panelsClosed || showTapTutorial || leaving || !positionState.initialAnchorRestored,
             top = if(menu) topOverlayHeight else 0, bottom = bottomOverlayHeight)
@@ -582,8 +582,8 @@ import kotlinx.serialization.encodeToString
             pauseReadingAutomation()
             seekGeneration++; seekJob?.cancel(); seekTarget = null
             chapterLoad.cancel()
-            refreshAnchor = if(settings.staticPagination) ReadingRestoreAnchor(eInk.paragraph, eInk.sourceIndex, eInk.textOffset,
-                WebDavProjection.anchorSource(settings), paragraphHash(paragraphs.getOrNull(eInk.paragraph)))
+            refreshAnchor = if(settings.staticPagination) eInk.anchor.let { it.copy(
+                anchorSource = WebDavProjection.anchorSource(settings), anchorTextHash = paragraphHash(paragraphs.getOrNull(it.paragraph))) }
                 else ReadingRestoreAnchor(firstParagraph, paragraphs.getOrNull(firstParagraph)?.index,
                     positionLayout.scrollTextOffset(paragraphs.getOrNull(firstParagraph)?.index), WebDavProjection.anchorSource(settings),
                     paragraphHash(paragraphs.getOrNull(firstParagraph)))
@@ -643,7 +643,7 @@ import kotlinx.serialization.encodeToString
             seekTarget = target
             seekJob = scope.launch {
                 try {
-                    if(settings.staticPagination) eInk.move(chapterSeekPage(target, eInk.pages.size) - eInk.pageIndex)
+                    if(settings.staticPagination) eInk.seekPage(chapterSeekPage(target, eInk.pages.size))
                     else scroll.seekChapter(target, seekIndex, paragraphs, scrollLayouts, animate = !reducedMotion)
                 } finally {
                     // 已取消的预览不得覆盖新一轮拖动的待定位目标。
@@ -725,7 +725,8 @@ import kotlinx.serialization.encodeToString
                     if(matches.isEmpty()) { activeMatch = null; c.message("没有找到匹配文字") }
                     else {
                         val offset = if(settings.staticPagination) eInk.textOffset else positionLayout.scrollTextOffset(paragraphs.getOrNull(firstParagraph)?.index)
-                        val next = nextReadingMatchIndex(matches, activeMatch, direction, firstParagraph, offset) { match -> match.textOffset(paragraphs[match.paragraph], settings) }
+                        val visibleParagraph = if(settings.staticPagination) eInk.paragraph else firstParagraph
+                        val next = nextReadingMatchIndex(matches, activeMatch, direction, visibleParagraph, offset) { match -> match.textOffset(paragraphs[match.paragraph], settings) }
                         rememberReadingPlace()
                         revealMatch(matches[next])
                     }
@@ -775,38 +776,33 @@ import kotlinx.serialization.encodeToString
                 true
             } else false
         }.focusable()) {
-            Box(Modifier.matchParentSize().semantics { if(showTapTutorial || editingTapZones) hideFromAccessibility() }) {
+            Box(Modifier.matchParentSize().semantics { if(tapOverlayVisible) hideFromAccessibility() }) {
             // 两种模式均使用固定正文视口；工具栏是同级浮层，
             // 不得给正文布局增加内边距或尺寸约束。
             val bodyInputEnabled = volumeKeysActive && !leaving && !chapterLoad.loading && !positionState.restoringAnchor && positionState.initialAnchorRestored && seekTarget == null
             val openToc: () -> Unit = { if(wide) { setWideToc(true); tocQuery = ""; tocLocateRequest++ } else toc = true }
-            val tapNavigation = rememberReaderTapNavigation(settings.tapPageTurn, bodyInputEnabled, { menu = !menu }, { page(it) }, settings.resolvedTapZoneMap, openToc, menu)
+            val tapNavigation = rememberReaderTapNavigation(settings.tapPageTurn, bodyInputEnabled, { menu = !menu }, { page(it) }, settings.resolvedTapZoneMap, openToc)
             if(settings.staticPagination) {
-                // 行带翻页是可选实现（见 RowPagedReader.kt）；关闭时走官方页表翻页，
-                // 上游对 EInkPage 的改动（注音、高亮、笔记、宽屏留白）都能原样生效。
                 val bodyModifier = Modifier.testTag("reader-page").then(readerInteractionModifier { recordReadingInteraction(); pauseReadingAutomation() })
                     .align(Alignment.TopCenter).fillMaxHeight().windowInsetsPadding(readingInsets)
                     .padding(bottom = persistentBottomHeight)
                     .fillMaxWidth()
                 val imageOf: (ReadingParagraph) -> Any? = { it.imageUrl ?: it.localImageId?.takeIf { ref.isLocal }?.let { id -> c.store.documentImage(ref.id, id) } }
-                if(settings.rowPaging) RowPagedReader(paragraphs, settings, rowPagerState,
-                    bodyModifier,
-                    imageModel = imageOf,
-                    onToggleMenu = { menu = !menu }, onSelect = { selected = it }, onPage = { page(it) },
-                    background = background, foreground = foreground, activeMatch = activeMatch,
-                    interactionEnabled = bodyInputEnabled,
-                    contentPadding = PaddingValues(horizontal = settings.resolvedHorizontalMargin.dp, vertical = settings.resolvedVerticalMargin.dp),
-                    onNavigate = openToc,
-                    onSavePosition = { savePosition() }, menuOpen = menu)
-                else EInkPage(paragraphs, settings, eInkState,
-                    bodyModifier,
+                if(settings.rowPagination) RowPagedReader(paragraphs, settings, rowPager, bodyModifier,
                     imageModel = imageOf,
                     onToggleMenu = { menu = !menu }, onSelect = { selected = it }, onPage = { page(it) },
                     background = background, foreground = foreground, activeMatch = if(search) activeMatch else spokenMatch ?: activeMatch, annotations = annotations,
                     highlightLayers = highlightLayers,
-                    interactionEnabled = bodyInputEnabled,
-                    contentPadding = PaddingValues(horizontal = settings.resolvedHorizontalMargin.dp, vertical = settings.resolvedVerticalMargin.dp), onNavigate = openToc,
-                    onNote = { pauseReadingAutomation(); epubNote = it })
+                    interactionEnabled = bodyInputEnabled, contentPadding = PaddingValues(horizontal = settings.resolvedHorizontalMargin.dp, vertical = settings.resolvedVerticalMargin.dp), onNavigate = openToc,
+                    onNote = { pauseReadingAutomation(); epubNote = it }, chapterTitle = chapter.title,
+                    onSavePosition = { savePosition() })
+                else EInkPage(paragraphs, settings, fixedPager, bodyModifier,
+                imageModel = imageOf,
+                onToggleMenu = { menu = !menu }, onSelect = { selected = it }, onPage = { page(it) },
+                background = background, foreground = foreground, activeMatch = if(search) activeMatch else spokenMatch ?: activeMatch, annotations = annotations,
+                highlightLayers = highlightLayers,
+                interactionEnabled = bodyInputEnabled, contentPadding = PaddingValues(horizontal = settings.resolvedHorizontalMargin.dp, vertical = settings.resolvedVerticalMargin.dp), onNavigate = openToc,
+                onNote = { pauseReadingAutomation(); epubNote = it }, chapterTitle = chapter.title)
             } else LazyColumn(state = scroll, overscrollEffect = null, modifier = Modifier.testTag("reader-scroll")
                 .then(readerInteractionModifier { recordReadingInteraction(); pauseReadingAutomation() }).align(Alignment.TopCenter).fillMaxHeight()
                 .windowInsetsPadding(readingInsets).padding(bottom = persistentBottomHeight).fillMaxWidth()
@@ -827,8 +823,10 @@ import kotlinx.serialization.encodeToString
                     Column(Modifier.fillMaxWidth().clickable(
                         interactionSource = remember { MutableInteractionSource() }, indication = null,
                         onClickLabel = "显示或收起阅读工具栏", onClick = tapNavigation::click)) {
-                        Text(chapter.title, Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium, color = foreground, fontFamily = readerFont.family)
-                        Spacer(Modifier.height(12.dp))
+                        if(chapterHeading(chapter.title, paragraphs) != null) {
+                            Text(chapter.title, Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium, color = foreground, fontFamily = readerFont.family)
+                            Spacer(Modifier.height(12.dp))
+                        }
                         Text(if(ref.isLocal) "本地小说" else (providers[ref.provider].orEmpty() + " · " + if(settings.mode == "jp") "日文原文" else "机翻阅读"), style = MaterialTheme.typography.labelMedium, color = foreground.copy(alpha = .65f))
                         if(hasFallback) Text("部分段落暂无所选译文，显示原文。", style = MaterialTheme.typography.labelMedium, color = foreground.copy(alpha = .7f))
                         if(replacementsSkipped) Text("部分段落替换后过长，已保留替换前的正文。", style = MaterialTheme.typography.labelMedium, color = foreground.copy(alpha = .7f))
@@ -851,7 +849,7 @@ import kotlinx.serialization.encodeToString
                     }
                 }
                 item("end", contentType = "footer") {
-                    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Column(Modifier.fillMaxWidth().graphicsLayer { alpha = if(tapOverlayVisible) 0f else 1f }, horizontalAlignment = Alignment.CenterHorizontally) {
                         HorizontalDivider(Modifier.padding(vertical = 24.dp)); Text("本章完", color = foreground.copy(alpha = .65f)); Spacer(Modifier.height(20.dp))
                         if(chapter.nextId != null) ReaderChapterPullHint(chapterPull.progress, chapterPull.active, chapterPull.ready,
                             inlineChapterLoad && chapterLoad.loading, foreground, Modifier.padding(bottom = 8.dp))
@@ -867,6 +865,9 @@ import kotlinx.serialization.encodeToString
                     }
                 }
             }
+            // 分区配置和教程只叠在正文上；暂时移除工具栏、翻页、朗读和进度浮层。
+            // 保留已测得的高度，避免进出配置时改变正文视口或章末留白。
+            if(!tapOverlayVisible) {
             ReaderTopToolbar(
                 state = ReaderTopToolbarState(chapter.title, ref.isLocal, leaving, translationUpdate != null,
                     returnPoint != null, !leaving && !chapterLoad.loading && !positionState.restoringAnchor && positionState.initialAnchorRestored, speechStatus),
@@ -896,6 +897,7 @@ import kotlinx.serialization.encodeToString
                 ),
                 settings = settings, menu = menu, reducedMotion = reducedMotion, toolbarBackground = toolbarBackground,
                 foreground = foreground, readingStatusBarHeight = readingStatusBarHeight, statusColumns = statusColumns, modifier = Modifier.align(Alignment.BottomCenter),
+                onChapterTitle = { pauseReadingAutomation(); chapterTitleOpen = true },
                 onHeightChanged = { bottomOverlayHeight = it }, onPage = { page(it) }, onSeek = { seekChapter(it) },
                 onSeekFocusChanged = { seekFocused = it }, onPreviousChapter = { chapter.prevId?.let { openChapter(it) } },
                 onNextChapter = { if(chapter.nextId != null) openChapter(chapter.nextId) else nextVolumePrompt = true },
@@ -933,6 +935,7 @@ import kotlinx.serialization.encodeToString
                 }
             }
             }
+            }
             if(showTapTutorial) ReaderTapTutorial(settings.staticPagination, settings.eInkMode || eInkInteraction,
                 readingInsets, persistentBottomHeight, Modifier.matchParentSize(), map = settings.resolvedTapZoneMap) {
                 c.store.update { it.copy(readerTapTutorialSeen = true) }
@@ -951,6 +954,10 @@ import kotlinx.serialization.encodeToString
         }
         }
         }
+        if(chapterTitleOpen) ReaderChapterTitleDialog(chapter.title, onDismiss = { chapterTitleOpen = false }, onToc = {
+            chapterTitleOpen = false
+            if(wide) { setWideToc(true); tocLocateRequest++ } else toc = true
+        })
         if(nextVolumePrompt && nextVolume != null) AppAlertDialog(onDismissRequest = { nextVolumePrompt = false }, title = { Text("本卷已读完") }, text = { Column { Text("按书架中的分卷顺序接续：${nextVolume.book.title}"); volumeError?.let { Text(it, color = MaterialTheme.colorScheme.error) } } }, confirmButton = { AppTextButton(onClick = { openNextVolume() }, enabled = !openingVolume) { Text(if(openingVolume) "正在打开…" else "阅读下一分卷") } }, dismissButton = { AppTextButton(onClick = { nextVolumePrompt = false }) { Text("稍后") } })
         if(bookSearch) ReaderSheet(onDismissRequest = { bookSearch = false }) {
             BookSearchPanel(c, ref, chapterId, chapter, settings) { match ->
@@ -1080,7 +1087,12 @@ import kotlinx.serialization.encodeToString
                         ReaderSheetExpandIcon(expanded)
                     }
                     AppTextButton(onClick = { preferences = false }) { Text("关闭面板") }
-                }) { value -> c.store.update { if(it.bookSettings.containsKey(ref.key)) it.copy(bookSettings = it.bookSettings + (ref.key to value)) else it.copy(reader = value) } }
+                }) { value ->
+                    updateSpeechSettings(value)
+                    if(bookSpeech != null && value.speechMinutes != settings.speechMinutes) {
+                        context.startService(Intent(context, ReadAloudService::class.java).setAction("timer").putExtra("minutes", value.speechMinutes))
+                    }
+                }
         }
     }
 }

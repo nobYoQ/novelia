@@ -21,7 +21,7 @@ internal object WebDavSchema {
     val categoryFields = setOf("name")
     val orderFields = setOf("ids")
     val portableReaderFields = setOf("mode", "engines", "parallel", "fontSize", "lineHeight", "weight", "width",
-        "indent", "theme", "secondaryAlpha", "underline", "speechRate", "speechMinutes", "traditional", "speechLanguage",
+        "indent", "indentSize", "theme", "secondaryAlpha", "underline", "speechRate", "speechMinutes", "traditional", "speechLanguage",
         "toolbarTransparency", "paragraphSpacing", "showScrollPageButtons", "showProgressBar", "showReadingStatusBar", "speechContinueChapters", "customColors",
         "horizontalMargin", "verticalMargin", "autoReadSpeed", "autoReadIntervalSeconds", "textReplacements", "textReplacementsEnabled", "readingStatusItems",
         "showEpubRuby", "epubFootnotePopup", "showEpubStyles")
@@ -29,6 +29,8 @@ internal object WebDavSchema {
     val deviceReaderFields = setOf("keepScreenOn", "volumeKeys", "paged", "eInkMode", "monochrome", "scrollPageTurn",
         "horizontalPageTurn", "brightness", "paginationMode", "showPageButtons", "beforeEInk", "eInkPreferences", "prefetchChapters",
         "prefetchWifiOnly", "speechNetworkContinuation", "showEInkScreenButtons", "hideStatusBar", "tapPageTurn", "tapZoneMap", "showWideToc", "orientation")
+    val readerModeFields = (portableReaderFields + deviceReaderFields) - setOf("eInkMode", "beforeEInk", "eInkPreferences")
+    val devicePreferenceFields = deviceReaderFields + "activeModeSettings"
     val portableGlobalFields = setOf("theme", "reducedMotion", "historyPaused", "hideNovelComments",
         "autoCollapseCloudFilters", "autoSaveCloudFavoritesLocally", "clipboardLinkHints", "keywordLimit")
     val portableBookFields = setOf("ref", "title", "originalTitle", "cover", "subtitle", "tags", "translated", "total",

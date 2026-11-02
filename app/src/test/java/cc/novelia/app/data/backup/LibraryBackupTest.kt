@@ -43,6 +43,26 @@ class LibraryBackupTest {
         catch (expected: IllegalArgumentException) { /* 拒绝恢复时不改动当前书库。 */ }
     }
 
+    @Test fun modeSnapshotsRestoreAndRejectInvalidDormantPreferences() {
+        val root = temp()
+        try {
+            val normal = ReaderSettings(fontSize = 22f, toolbarTransparency = .7f)
+            val ink = normal.withEInkMode(true).copy(fontSize = 28f, toolbarTransparency = 0f)
+            val valid = LibraryState(reader = ink, bookSettings = mapOf("syosetu/n1" to ink.withEInkMode(false)))
+            val invalid = valid.copy(reader = ink.copy(beforeEInk = ink.beforeEInk?.copy(fontSize = 100f)))
+            listOf(valid, invalid).forEachIndexed { index, state ->
+                val bytes = archive(mapOf("manifest.json" to appJson.encodeToString(manifest(state)).toByteArray(Charsets.UTF_8)))
+                val stage = File(root, "modes-$index").apply { mkdirs() }
+                if(index == 0) {
+                    val restored = LibraryBackupArchive.extract(ByteArrayInputStream(bytes), stage).library
+                    assertEquals(valid, restored)
+                    assertEquals(22f, restored.reader.withEInkMode(false).fontSize, 0f)
+                    assertEquals(28f, restored.bookSettings.getValue("syosetu/n1").withEInkMode(true).fontSize, 0f)
+                } else fails { LibraryBackupArchive.extract(ByteArrayInputStream(bytes), stage) }
+            }
+        } finally { root.deleteRecursively() }
+    }
+
     @Test fun customPaletteRestoresForGlobalAndPerBookButOutOfRangeRgbIsRejected() {
         val root = temp()
         try {

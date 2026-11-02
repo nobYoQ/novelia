@@ -43,7 +43,7 @@ class ReadAloudService : Service() {
     private var loadJob: Job? = null
     private var continuation: SpeechChapterSequence? = null
     private var binding: SessionBinding? = null
-    private var stopAt = Long.MAX_VALUE
+    private val sleepTimer = SpeechSleepTimer()
     private var loading = false
     private var activeRequest = ""
     private var currentUtterance: String? = null
@@ -81,10 +81,7 @@ class ReadAloudService : Service() {
             }
             "timer" -> {
                 if(activeRequest.isNotEmpty()) {
-                    val duration = intent.getIntExtra("minutes", 30).coerceIn(1, 180) * 60_000L
-                    stopAt = SystemClock.elapsedRealtime() + duration
-                    handler.removeCallbacks(stopTimer)
-                    handler.postDelayed(stopTimer, duration)
+                    setSleepTimer(intent.getIntExtra("minutes", 30))
                 }
             }
             "resume" -> {
@@ -98,10 +95,8 @@ class ReadAloudService : Service() {
                 loadJob?.cancel(); continuation = null; binding = null; currentUtterance = null; engine?.stop(); paragraphs = emptyList(); segments = emptyList(); playback.value = null; loading = true
                 index = 0; title = intent.getStringExtra("title") ?: "小说朗读"; rate = intent.getFloatExtra("rate", 1f); language = if(intent.getBooleanExtra("japanese", false)) Locale.JAPAN else Locale.SIMPLIFIED_CHINESE; paused = false
                 // 按 Android 要求立即进入前台服务，再把全部 IO 放到主线程之外。
-                startForeground(100, notification()); handler.removeCallbacks(stopTimer)
-                val duration = intent.getIntExtra("minutes", 30).coerceIn(1, 180) * 60000L
-                stopAt = SystemClock.elapsedRealtime() + duration
-                handler.postDelayed(stopTimer, duration)
+                startForeground(100, notification())
+                setSleepTimer(intent.getIntExtra("minutes", 30))
                 val requestId = intent.getStringExtra("queue")
                 if(requestId == null || !QUEUE_ID.matches(requestId)) { status.value = "朗读内容不可用，请重新开始"; stopSelf(); return START_NOT_STICKY }
                 activeRequest = requestId
@@ -128,9 +123,13 @@ class ReadAloudService : Service() {
         }
         return START_NOT_STICKY
     }
+    private fun setSleepTimer(minutes: Int) {
+        handler.removeCallbacks(stopTimer)
+        sleepTimer.reset(minutes, SystemClock.elapsedRealtime())?.let { handler.postDelayed(stopTimer, it) }
+    }
     private fun configureAndSpeak() {
         if(!ready || loading || paused || activeRequest.isEmpty()) return
-        if(SystemClock.elapsedRealtime() >= stopAt) { stopPlayback(SLEEP_TIMER_FINISHED); return }
+        if(sleepTimer.expired(SystemClock.elapsedRealtime())) { stopPlayback(SLEEP_TIMER_FINISHED); return }
         val result = engine?.setLanguage(language)
         if(result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) { status.value = "缺少${if(language == Locale.JAPAN) "日文" else "中文"}语音包，请在系统文字转语音设置中安装"; stopSelf(); return }
         if(getSystemService(AudioManager::class.java).requestAudioFocus(focus) != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) { pause(); return }
@@ -150,7 +149,7 @@ class ReadAloudService : Service() {
         if(!paused) configureAndSpeak()
     }
     private fun speak() {
-        if(SystemClock.elapsedRealtime() >= stopAt) { stopPlayback(SLEEP_TIMER_FINISHED); return }
+        if(sleepTimer.expired(SystemClock.elapsedRealtime())) { stopPlayback(SLEEP_TIMER_FINISHED); return }
         if(binding?.let { it != (application as NoveliaApplication).session.capture() } == true) {
             stopPlayback("登录账号已变化，请重新开始朗读"); return
         }
@@ -192,7 +191,7 @@ class ReadAloudService : Service() {
                 val chapter = withContext(Dispatchers.IO) { sequence.next() }
                 ensureActive()
                 if(activeRequest != requestId) return@launch
-                if(SystemClock.elapsedRealtime() >= stopAt) { stopPlayback(SLEEP_TIMER_FINISHED); return@launch }
+                if(sleepTimer.expired(SystemClock.elapsedRealtime())) { stopPlayback(SLEEP_TIMER_FINISHED); return@launch }
                 if(chapter == null) { stopPlayback("朗读完成，已到末章"); return@launch }
                 paragraphs = chapter.paragraphs; segments = chapter.segments; chapterId = chapter.id; index = 0; title = chapter.title; loading = false
                 publishPlayback(false)
