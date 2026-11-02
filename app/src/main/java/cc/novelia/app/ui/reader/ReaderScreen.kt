@@ -307,7 +307,7 @@ import kotlinx.serialization.encodeToString
             else if(returned != null) returned
             else if(searchArrival != null) Position(chapterId, searchArrival.coerceIn(0, paragraphs.lastIndex.coerceAtLeast(0)) + 1,
                 textOffset = paragraphs.getOrNull(searchArrival)?.let { arrivalMatch?.textOffset(it, settings) } ?: 0)
-            else if(anchor != null) Position(chapterId, (anchor.sourceIndex?.let { source -> paragraphs.indexOfFirst { it.index >= source }.takeIf { it >= 0 } } ?: anchor.paragraph).coerceIn(0, paragraphs.lastIndex.coerceAtLeast(0)) + 1,
+            else if(anchor != null) Position(chapterId, (anchor.sourceIndex?.let { source -> paragraphs.indexOfFirst { it.index >= source }.takeIf { it >= 0 } } ?: anchor.paragraph).coerceIn(CHAPTER_HEADING_PARAGRAPH, paragraphs.lastIndex.coerceAtLeast(0)) + 1,
                 textOffset = anchor.textOffset, sourceParagraph = anchor.sourceIndex, anchorSource = anchor.anchorSource,
                 anchorTextHash = anchor.anchorTextHash).resolvedReadingPosition(paragraphs, settings)
             else if(readerEntry?.savedStateHandle?.remove<Boolean>("readerStartAtEnd") == true) Position(chapterId, Int.MAX_VALUE)
@@ -329,7 +329,7 @@ import kotlinx.serialization.encodeToString
         val layoutGeneration = positionLayout.layoutGeneration
         val scrollLayouts = positionLayout.scrollLayouts
         val firstParagraph by remember(settings.staticPagination, eInk, scroll) { derivedStateOf {
-            if(settings.staticPagination) eInk.paragraph else (scroll.firstVisibleItemIndex - 1).coerceAtLeast(0)
+            if(settings.staticPagination) eInk.paragraph.coerceAtLeast(0) else (scroll.firstVisibleItemIndex - 1).coerceAtLeast(0)
         } }
         val seekIndex = remember(paragraphs, settings.resolvedIndentSize, settings.parallel) { ChapterSeekIndex(paragraphs, settings) }
         var seekJob by remember { mutableStateOf<Job?>(null) }
@@ -433,7 +433,7 @@ import kotlinx.serialization.encodeToString
         fun savePosition() {
             if(leaving || readingLifecycle.lifecycle.currentState == Lifecycle.State.DESTROYED || seekTarget != null || !positionState.initialAnchorRestored || positionState.restoringAnchor || positionState.pendingScrollRestore != null || positionState.previousLayoutGeneration !== layoutGeneration || positionState.previousPagination != settings.staticPagination ||
                 (if(settings.staticPagination) !eInk.ready || eInk.pages.isEmpty() else scroll.layoutInfo.totalItemsCount == 0 || scroll.layoutInfo.visibleItemsInfo.isEmpty())) return
-            val visible = if(settings.staticPagination) Position(chapterId, eInk.paragraph + 1, 0, chapter.title, textOffset = eInk.textOffset)
+            val visible = if(settings.staticPagination) eInk.anchor.let { Position(chapterId, it.paragraph + 1, 0, chapter.title, textOffset = it.textOffset) }
                 else {
                     val paragraph = paragraphs.getOrNull(scroll.firstVisibleItemIndex - 1)
                     // 页面销毁时文字测量可能已经卸载，不能把缺失几何当作字符 0 写回。
@@ -463,12 +463,12 @@ import kotlinx.serialization.encodeToString
         }
         fun rememberReadingPlace() {
             if(leaving || positionState.restoringAnchor || !positionState.initialAnchorRestored || (settings.staticPagination && !eInk.ready)) return
-            val paragraph = if(settings.staticPagination) eInk.paragraph else (scroll.firstVisibleItemIndex - 1).coerceAtLeast(0)
+            val paragraph = if(settings.staticPagination) eInk.anchor.paragraph else (scroll.firstVisibleItemIndex - 1).coerceAtLeast(0)
             val source = if(!settings.staticPagination && scroll.firstVisibleItemIndex == 0) null else paragraphs.getOrNull(paragraph)?.index
             val current = ReadingReturnPoint(Position(chapterId,
                 index = if(settings.staticPagination) paragraph + 1 else scroll.firstVisibleItemIndex,
                 offset = if(settings.staticPagination) 0 else scroll.firstVisibleItemScrollOffset,
-                title = chapter.title, textOffset = if(settings.staticPagination) eInk.textOffset else positionLayout.scrollTextOffset(source),
+                title = chapter.title, textOffset = if(settings.staticPagination) eInk.anchor.textOffset else positionLayout.scrollTextOffset(source),
                 sourceParagraph = source, anchorSource = WebDavProjection.anchorSource(settings),
                 anchorTextHash = if(source == null) null else paragraphHash(paragraphs.getOrNull(paragraph))), source)
             returnPointJson = appJson.encodeToString(retainReadingReturnPoint(returnPoint, current))
@@ -579,8 +579,8 @@ import kotlinx.serialization.encodeToString
             pauseReadingAutomation()
             seekGeneration++; seekJob?.cancel(); seekTarget = null
             chapterLoad.cancel()
-            refreshAnchor = if(settings.staticPagination) ReadingRestoreAnchor(eInk.paragraph, eInk.sourceIndex, eInk.textOffset,
-                WebDavProjection.anchorSource(settings), paragraphHash(paragraphs.getOrNull(eInk.paragraph)))
+            refreshAnchor = if(settings.staticPagination) eInk.anchor.let { it.copy(
+                anchorSource = WebDavProjection.anchorSource(settings), anchorTextHash = paragraphHash(paragraphs.getOrNull(it.paragraph))) }
                 else ReadingRestoreAnchor(firstParagraph, paragraphs.getOrNull(firstParagraph)?.index,
                     positionLayout.scrollTextOffset(paragraphs.getOrNull(firstParagraph)?.index), WebDavProjection.anchorSource(settings),
                     paragraphHash(paragraphs.getOrNull(firstParagraph)))
@@ -722,7 +722,8 @@ import kotlinx.serialization.encodeToString
                     if(matches.isEmpty()) { activeMatch = null; c.message("没有找到匹配文字") }
                     else {
                         val offset = if(settings.staticPagination) eInk.textOffset else positionLayout.scrollTextOffset(paragraphs.getOrNull(firstParagraph)?.index)
-                        val next = nextReadingMatchIndex(matches, activeMatch, direction, firstParagraph, offset) { match -> match.textOffset(paragraphs[match.paragraph], settings) }
+                        val visibleParagraph = if(settings.staticPagination) eInk.paragraph else firstParagraph
+                        val next = nextReadingMatchIndex(matches, activeMatch, direction, visibleParagraph, offset) { match -> match.textOffset(paragraphs[match.paragraph], settings) }
                         rememberReadingPlace()
                         revealMatch(matches[next])
                     }
@@ -788,7 +789,7 @@ import kotlinx.serialization.encodeToString
                 background = background, foreground = foreground, activeMatch = if(search) activeMatch else spokenMatch ?: activeMatch, annotations = annotations,
                 highlightLayers = highlightLayers,
                 interactionEnabled = bodyInputEnabled, contentPadding = PaddingValues(horizontal = settings.resolvedHorizontalMargin.dp, vertical = settings.resolvedVerticalMargin.dp), onNavigate = openToc,
-                onNote = { pauseReadingAutomation(); epubNote = it })
+                onNote = { pauseReadingAutomation(); epubNote = it }, chapterTitle = chapter.title)
             else LazyColumn(state = scroll, overscrollEffect = null, modifier = Modifier.testTag("reader-scroll")
                 .then(readerInteractionModifier { recordReadingInteraction(); pauseReadingAutomation() }).align(Alignment.TopCenter).fillMaxHeight()
                 .windowInsetsPadding(readingInsets).padding(bottom = persistentBottomHeight).fillMaxWidth()
@@ -809,8 +810,10 @@ import kotlinx.serialization.encodeToString
                     Column(Modifier.fillMaxWidth().clickable(
                         interactionSource = remember { MutableInteractionSource() }, indication = null,
                         onClickLabel = "显示或收起阅读工具栏", onClick = tapNavigation::click)) {
-                        Text(chapter.title, Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium, color = foreground, fontFamily = readerFont.family)
-                        Spacer(Modifier.height(12.dp))
+                        if(chapterHeading(chapter.title, paragraphs) != null) {
+                            Text(chapter.title, Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium, color = foreground, fontFamily = readerFont.family)
+                            Spacer(Modifier.height(12.dp))
+                        }
                         Text(if(ref.isLocal) "本地小说" else (providers[ref.provider].orEmpty() + " · " + if(settings.mode == "jp") "日文原文" else "机翻阅读"), style = MaterialTheme.typography.labelMedium, color = foreground.copy(alpha = .65f))
                         if(hasFallback) Text("部分段落暂无所选译文，显示原文。", style = MaterialTheme.typography.labelMedium, color = foreground.copy(alpha = .7f))
                         if(replacementsSkipped) Text("部分段落替换后过长，已保留替换前的正文。", style = MaterialTheme.typography.labelMedium, color = foreground.copy(alpha = .7f))

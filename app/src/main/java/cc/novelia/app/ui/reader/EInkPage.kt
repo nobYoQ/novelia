@@ -16,6 +16,7 @@ import android.text.style.UpdateAppearance
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -35,6 +36,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.text
 import androidx.compose.ui.semantics.customActions
@@ -78,7 +81,7 @@ import androidx.compose.runtime.mutableFloatStateOf
         private set
     var ready by mutableStateOf(false)
         private set
-    private var anchorParagraph = ((initial?.index ?: 1) - 1).coerceAtLeast(0)
+    private var anchorParagraph = ((initial?.index ?: 0) - 1).coerceAtLeast(CHAPTER_HEADING_PARAGRAPH)
     private var anchorOffset = initial?.textOffset ?: 0
     private var sourceParagraph: Int? = null
     private var content = emptyList<ReadingParagraph>()
@@ -86,6 +89,8 @@ import androidx.compose.runtime.mutableFloatStateOf
     val paragraph get() = current?.lines?.firstOrNull()?.paragraph ?: anchorParagraph
     val textOffset get() = current?.lines?.firstOrNull()?.start ?: anchorOffset
     val sourceIndex get() = content.getOrNull(paragraph)?.index ?: sourceParagraph
+    /** 保存、切换模式和刷新使用请求的字符锚点；页首只用于当前页的显示与交互。 */
+    val anchor get() = ReadingRestoreAnchor(anchorParagraph, sourceParagraph, anchorOffset)
     val canGoBack get() = pageIndex > 0
     val canGoForward get() = pageIndex + 1 < pages.size
 
@@ -104,6 +109,14 @@ import androidx.compose.runtime.mutableFloatStateOf
         // 视口连续测量期间始终保留请求的字符位置；
         // 若每次对齐到临时页首，会逐步丢失原来的阅读位置。
         pageIndex = pageForAnchor(next, anchorParagraph, anchorOffset)
+        // 章末入口、缺失的独立标题等没有对应段落时，才回退到实际页首。
+        if(anchorParagraph !in paragraphs.indices &&
+            !(anchorParagraph == CHAPTER_HEADING_PARAGRAPH && next.firstOrNull()?.lines?.firstOrNull()?.paragraph == CHAPTER_HEADING_PARAGRAPH)) {
+            val first = current?.lines?.firstOrNull()
+            anchorParagraph = first?.paragraph ?: CHAPTER_HEADING_PARAGRAPH
+            anchorOffset = first?.start ?: 0
+            sourceParagraph = paragraphs.getOrNull(anchorParagraph)?.index
+        }
         ready = true
     }
     fun invalidate() { ready = false }
@@ -126,7 +139,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 }
 
 internal data class MeasuredEInkChapter(val paragraphs: List<ReadingParagraph>, val layouts: Map<Int, StaticLayout>, val pages: List<StaticPage>)
-private data class EInkMeasureInput(val paragraphs: List<ReadingParagraph>, val typography: List<Any>, val width: Int, val height: Int, val density: Float, val fontScale: Float)
+private data class EInkMeasureInput(val paragraphs: List<ReadingParagraph>, val title: String, val typography: List<Any>, val width: Int, val height: Int, val density: Float, val fontScale: Float)
 private data class EInkMeasurement(val input: EInkMeasureInput, val chapter: MeasuredEInkChapter)
 
 /** 在当前主题画笔上应用辅文本透明度，不保存固定颜色。 */
@@ -141,9 +154,24 @@ private class SecondaryOpacity(private val alpha: Float) : CharacterStyle(), Upd
  * 返回的段落、布局与页表属于同一测量快照，显示时不能与新一轮内容混用。
  */
 internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: ReaderSettings, width: Int, height: Int, density: Float, fontScale: Float,
-    readerTypeface: Typeface = Typeface.SANS_SERIF, checkCancelled: () -> Unit = {}): MeasuredEInkChapter {
+    readerTypeface: Typeface = Typeface.SANS_SERIF, title: String = "", checkCancelled: () -> Unit = {}): MeasuredEInkChapter {
     val layouts = mutableMapOf<Int, StaticLayout>()
     val lines = mutableListOf<PageLine>()
+    chapterHeading(title, paragraphs)?.let { heading ->
+        checkCancelled()
+        val paint = TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            textSize = settings.fontSize * 1.25f * density * fontScale
+            color = android.graphics.Color.BLACK
+            typeface = Typeface.create(readerTypeface, Typeface.BOLD)
+        }
+        val layout = readerNativeLayout(heading, paint, width, settings.lineHeight)
+        layouts[CHAPTER_HEADING_PARAGRAPH] = layout
+        for(line in 0 until layout.lineCount) {
+            checkCancelled()
+            lines += PageLine(CHAPTER_HEADING_PARAGRAPH, layout.getLineStart(line), layout.getLineEnd(line),
+                layout.getLineBottom(line) - layout.getLineTop(line))
+        }
+    }
     paragraphs.forEachIndexed { index, paragraph ->
         checkCancelled()
         if (paragraph.imageUrl != null || paragraph.localImageId != null) {
@@ -198,7 +226,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
     annotations: List<ReadingTextMatch> = emptyList(),
     highlightLayers: List<ReaderHighlightLayer> = listOfNotNull(activeMatch?.let { ReaderHighlightLayer(it, 1f) }),
     interactionEnabled: Boolean = true, contentPadding: PaddingValues = PaddingValues(0.dp), onNavigate: () -> Unit = {},
-    onNote: (String) -> Unit = {},
+    onNote: (String) -> Unit = {}, chapterTitle: String = "",
 ) {
     val density = LocalDensity.current
     val context = LocalContext.current
@@ -324,13 +352,13 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
         val height = constraints.maxHeight.coerceAtLeast(1)
         val typography = listOf(settings.fontSize, settings.lineHeight, settings.paragraphSpacing, settings.weight, settings.resolvedIndentSize, settings.parallel, settings.underline, settings.secondaryAlpha, font.typeface, font.loading,
             settings.showEpubRuby, settings.epubFootnotePopup, settings.showEpubStyles)
-        val input = EInkMeasureInput(paragraphs, typography, width, height, density.density, density.fontScale)
+        val input = EInkMeasureInput(paragraphs, chapterTitle, typography, width, height, density.density, density.fontScale)
         val measured by produceState<EInkMeasurement?>(null, input) {
             if(value != null) delay(120)
             if (!font.loading && width != Constraints.Infinity && height != Constraints.Infinity) {
                 val next = withContext(Dispatchers.Default) {
                     val jobContext = currentCoroutineContext()
-                    measureEInkChapter(paragraphs, settings, width, height, density.density, density.fontScale, font.typeface) { jobContext.ensureActive() }
+                    measureEInkChapter(paragraphs, settings, width, height, density.density, density.fontScale, font.typeface, chapterTitle) { jobContext.ensureActive() }
                 }
                 state.install(next.pages, next.paragraphs)
                 value = EInkMeasurement(input, next)
@@ -402,8 +430,8 @@ private fun PageBody(
         onClickLabel = "显示或收起阅读工具栏", onClick = tapNavigation::click)) {
         page?.lines?.groupBy { it.paragraph }?.entries?.forEachIndexed { groupIndex, (index, lines) ->
             if (groupIndex > 0) Spacer(Modifier.height(settings.resolvedParagraphSpacing.dp))
-            val paragraph = chapter.paragraphs[index]
-            if (lines.first().image) {
+            val paragraph = chapter.paragraphs.getOrNull(index)
+            if (lines.first().image && paragraph != null) {
                 val model = imageModel(paragraph)
                 var retry by remember(model) { mutableIntStateOf(0) }
                 val request = remember(context, model, retry) {
@@ -430,18 +458,22 @@ private fun PageBody(
                 val drawScale = (viewportHeight.toFloat() / sliceHeight).coerceAtMost(1f)
                 val visibleText = layout.text.subSequence(lines.first().start, lines.last().end).toString()
                 Canvas(Modifier.fillMaxWidth().height(with(density) { (sliceHeight * drawScale).toDp() }).clipToBounds()
+                    .then(if(index == CHAPTER_HEADING_PARAGRAPH) Modifier.testTag("reader-page-chapter-title") else Modifier)
                     .semantics {
                         text = AnnotatedString(visibleText)
+                        if(index == CHAPTER_HEADING_PARAGRAPH) heading()
                         val marked = layout.text as? Spanned
                         customActions = marked?.getSpans(lines.first().start, lines.last().end, ReaderNoteSpan::class.java).orEmpty().map { note ->
                             val label = marked!!.subSequence(marked.getSpanStart(note), marked.getSpanEnd(note))
                             CustomAccessibilityAction("查看脚注 $label") { onNote(note.body); true }
                         }
                     }
-                    .readerInlineActions({ position ->
+                    .then(if(paragraph == null) Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null,
+                        onClickLabel = "显示或收起阅读工具栏", onClick = tapNavigation::click)
+                    else Modifier.readerInlineActions({ position ->
                         val note = position?.let { layout.noteAt(it.x / drawScale, it.y / drawScale + top) }
                         if (note != null) onNote(note) else tapNavigation.click()
-                    }, { onSelect(paragraph) })) {
+                    }, { onSelect(paragraph) }))) {
                     drawIntoCanvas { canvas ->
                         val native = canvas.nativeCanvas
                         native.save()
@@ -449,23 +481,25 @@ private fun PageBody(
                         native.translate(0f, -top.toFloat())
                         val annotationSpans = mutableListOf<UnderlineSpan>()
                         val spannable = layout.text as? android.text.Spannable
-                        annotations.filter { it.paragraph == index }.forEach { match ->
-                            val start = match.textOffset(paragraph, settings).coerceIn(0, layout.text.length)
-                            val end = (start + match.end - match.start).coerceIn(start, layout.text.length)
-                            val path = android.graphics.Path()
-                            layout.readerSelectionPath(start, end, path)
-                            native.drawPath(path, android.graphics.Paint().apply { color = foreground.copy(alpha = .1f).toArgb() })
-                            if(spannable != null) UnderlineSpan().also {
-                                spannable.setSpan(it, start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE); annotationSpans += it
+                        if(paragraph != null) {
+                            annotations.filter { it.paragraph == index }.forEach { match ->
+                                val start = match.textOffset(paragraph, settings).coerceIn(0, layout.text.length)
+                                val end = (start + match.end - match.start).coerceIn(start, layout.text.length)
+                                val path = android.graphics.Path()
+                                layout.readerSelectionPath(start, end, path)
+                                native.drawPath(path, android.graphics.Paint().apply { color = foreground.copy(alpha = .1f).toArgb() })
+                                if(spannable != null) UnderlineSpan().also {
+                                    spannable.setSpan(it, start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE); annotationSpans += it
+                                }
                             }
-                        }
-                        highlightLayers.filter { it.match.paragraph == index && it.match.end > it.match.start }.forEach { layer ->
-                            val match = layer.match
-                            val start = match.textOffset(paragraph, settings).coerceIn(0, layout.text.length)
-                            val end = (start + match.end - match.start).coerceIn(start, layout.text.length)
-                            val path = android.graphics.Path()
-                            layout.getSelectionPath(start, end, path)
-                            native.drawPath(path, android.graphics.Paint().apply { color = foreground.copy(alpha = .2f * layer.alpha).toArgb() })
+                            highlightLayers.filter { it.match.paragraph == index && it.match.end > it.match.start }.forEach { layer ->
+                                val match = layer.match
+                                val start = match.textOffset(paragraph, settings).coerceIn(0, layout.text.length)
+                                val end = (start + match.end - match.start).coerceIn(start, layout.text.length)
+                                val path = android.graphics.Path()
+                                layout.getSelectionPath(start, end, path)
+                                native.drawPath(path, android.graphics.Paint().apply { color = foreground.copy(alpha = .2f * layer.alpha).toArgb() })
+                            }
                         }
                         layout.paint.color = foreground.toArgb()
                         try { layout.draw(native) } finally { annotationSpans.forEach { spannable?.removeSpan(it) } }
