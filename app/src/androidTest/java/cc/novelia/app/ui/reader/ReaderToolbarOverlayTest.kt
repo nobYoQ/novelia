@@ -587,6 +587,35 @@ class ReaderToolbarOverlayTest {
         compose.onNodeWithText("下一页").assertDoesNotExist()
     }
 
+    @Test fun rowPaginationPullLoadsTheNextChapterWithTheSameFooterAndKeepsToolbarsHidden() = withReader(
+        ReaderSettings(paginationMode = "row", showPageButtons = false),
+        listOf(
+            LocalChapter("first", "第一章 短章", listOf("行带短章正文。")),
+            LocalChapter("second", "第二章 终章", listOf("故事到这里结束。"))
+        )
+    ) { app, ref ->
+        compose.onNodeWithTag("reader-page").performSemanticsAction(SemanticsActions.OnClick)
+        assertToolbarHidden()
+        compose.onNodeWithText("本章完").assertIsDisplayed()
+        compose.onNodeWithText("上拉加载下一章").assertIsDisplayed()
+        compose.onNodeWithText("阅读下一章").assertIsDisplayed()
+        val count = pageCounter()
+        val density = compose.activity.resources.displayMetrics.density
+        val body = compose.onNodeWithTag("reader-page")
+        body.performTouchInput { down(center); moveBy(Offset(0f, -100f * density), delayMillis = 200) }
+        compose.onNodeWithText("松手加载下一章").assertIsDisplayed()
+        compose.onAllNodesWithTag("reader-chapter-pull-hint", useUnmergedTree = true).assertCountEquals(1)
+        assertEquals(count, pageCounter())
+        compose.runOnIdle { assertEquals("first", app.store.state.value.positions[ref.key]?.chapterId) }
+        screenshot("reader-row-pull-ready")
+        body.performTouchInput { up() }
+        waitForChapter(app, ref, "second")
+        assertToolbarHidden()
+        compose.onNodeWithText("上拉加载下一章").assertDoesNotExist()
+        body.performTouchInput { swipeUp() }
+        assertChapterUnchanged(app, ref, "second")
+    }
+
     @Test fun continuousScrollingTurnsChapterOnlyAfterReleasingAnExtraPullAtTheEnd() = withReader(
         ReaderSettings(paginationMode = "scroll", showPageButtons = false),
         listOf(

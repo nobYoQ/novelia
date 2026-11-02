@@ -1,9 +1,12 @@
 package cc.novelia.app.ui.reader
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -21,11 +24,24 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
+import cc.novelia.app.ui.theme.AppMotion
+import cc.novelia.app.ui.theme.appReducedMotion
 
 @Composable internal fun rememberReaderChapterOverscrollGesture(): ReaderChapterOverscrollGesture {
     // 上拉阈值不随视口高度变化，正文带轻微阻力跟随手指。
     val threshold = with(LocalDensity.current) { 56.dp.toPx() }
     return remember(threshold) { ReaderChapterOverscrollGesture(threshold) }
+}
+
+@Composable internal fun rememberReaderChapterPullOffset(gesture: ReaderChapterOverscrollGesture, eInk: Boolean): Float {
+    val reducedMotion = appReducedMotion()
+    val returning = remember { Animatable(0f) }
+    LaunchedEffect(gesture.offset, gesture.active, reducedMotion) {
+        if(gesture.active || reducedMotion) returning.snapTo(gesture.offset)
+        else returning.animateTo(gesture.offset, tween(AppMotion.Release))
+    }
+    // 触摸状态和动画偏好在当前帧立即生效，即使旧回弹尚未结束。
+    return if(eInk) 0f else if(gesture.active || reducedMotion) gesture.offset else returning.value
 }
 
 /** 只消费章末无法继续滚动的余量，普通滚动和文字选择仍交给列表。 */
@@ -34,10 +50,20 @@ import androidx.compose.ui.unit.dp
     gesture: ReaderChapterOverscrollGesture,
     enabled: Boolean,
     onNextChapter: () -> Unit
+): Modifier = readerChapterOverscroll(gesture, enabled,
+    atEnd = { !state.canScrollForward && state.layoutInfo.totalItemsCount > 0 }, onNextChapter)
+
+/** 列表与行带通过同一嵌套滚动协议提交余量，共用阈值、取消和松手切章行为。 */
+@Composable internal fun Modifier.readerChapterOverscroll(
+    gesture: ReaderChapterOverscrollGesture,
+    enabled: Boolean,
+    atEnd: () -> Boolean,
+    onNextChapter: () -> Unit
 ): Modifier {
     if(!enabled) return this
     val latestNextChapter by rememberUpdatedState(onNextChapter)
-    val connection = remember(state, gesture) {
+    val latestAtEnd by rememberUpdatedState(atEnd)
+    val connection = remember(gesture) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                 // 先收回已上拉的正文，再把剩余向下拖动交给正常滚动。
@@ -49,7 +75,7 @@ import androidx.compose.ui.unit.dp
             override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
                 if(source == NestedScrollSource.UserInput) {
                     // 关闭列表原生越界效果，避免它吞掉这里用于章末上拉的距离。
-                    return Offset(0f, gesture.pull(available.y, !state.canScrollForward && state.layoutInfo.totalItemsCount > 0))
+                    return Offset(0f, gesture.pull(available.y, latestAtEnd()))
                 }
                 return Offset.Zero
             }
@@ -58,7 +84,7 @@ import androidx.compose.ui.unit.dp
                 if(gesture.suppressFling) Velocity(0f, available.y) else Velocity.Zero
         }
     }
-    return nestedScroll(connection).pointerInput(state, gesture) {
+    return nestedScroll(connection).pointerInput(gesture) {
         try {
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
@@ -74,7 +100,7 @@ import androidx.compose.ui.unit.dp
                         if(!pointer.pressed) {
                             val released = pointer.previousPressed && !pointer.isConsumed
                             awaitPointerEvent(PointerEventPass.Final)
-                            if(released && gesture.release() && !state.canScrollForward) latestNextChapter()
+                            if(released && gesture.release() && latestAtEnd()) latestNextChapter()
                             break
                         }
                     }

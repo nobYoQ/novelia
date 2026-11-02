@@ -10,7 +10,6 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -316,13 +315,7 @@ import kotlinx.serialization.encodeToString
         val scroll = rememberLazyListState(position?.index ?: 0, position?.offset ?: 0); val scope = rememberCoroutineScope(); val focus = remember { FocusRequester() }
         val eInkInteraction = LocalEInkMode.current
         val chapterPull = rememberReaderChapterOverscrollGesture()
-        val chapterPullReturn = remember { Animatable(0f) }
-        LaunchedEffect(chapterPull.offset, chapterPull.active, reducedMotion) {
-            if(chapterPull.active || reducedMotion) chapterPullReturn.snapTo(chapterPull.offset)
-            else chapterPullReturn.animateTo(chapterPull.offset, tween(AppMotion.Release))
-        }
-        // 触摸状态和动画偏好在当前帧立即生效，即使旧回弹尚未结束。
-        val chapterPullOffset = if(eInkInteraction) 0f else if(chapterPull.active || reducedMotion) chapterPull.offset else chapterPullReturn.value
+        val chapterPullOffset = rememberReaderChapterPullOffset(chapterPull, eInkInteraction)
         val fixedPager = remember { EInkPageState(position) }
         val rowPager = remember { RowPagingState(position) }
         val eInk: ReaderPager = if(settings.rowPagination) rowPager else fixedPager
@@ -782,6 +775,21 @@ import kotlinx.serialization.encodeToString
             val bodyInputEnabled = volumeKeysActive && !leaving && !chapterLoad.loading && !positionState.restoringAnchor && positionState.initialAnchorRestored && seekTarget == null
             val openToc: () -> Unit = { if(wide) { setWideToc(true); tocQuery = ""; tocLocateRequest++ } else toc = true }
             val tapNavigation = rememberReaderTapNavigation(settings.tapPageTurn, bodyInputEnabled, { menu = !menu }, { page(it) }, settings.resolvedTapZoneMap, openToc)
+            val chapterEnd: @Composable () -> Unit = {
+                Column(Modifier.fillMaxWidth().graphicsLayer { alpha = if(tapOverlayVisible) 0f else 1f }, horizontalAlignment = Alignment.CenterHorizontally) {
+                    HorizontalDivider(Modifier.padding(vertical = 24.dp)); Text("本章完", color = foreground.copy(alpha = .65f)); Spacer(Modifier.height(20.dp))
+                    if(chapter.nextId != null) ReaderChapterPullHint(chapterPull.progress, chapterPull.active, chapterPull.ready,
+                        inlineChapterLoad && chapterLoad.loading, foreground, Modifier.padding(bottom = 8.dp))
+                    if(settings.showScrollPageButtons) {
+                        if(chapter.nextId != null) AppButton(onClick = { openChapter(chapter.nextId, inline = true) }, modifier = Modifier.heightIn(min = 48.dp), enabled = !leaving && !chapterLoad.loading) { Text("阅读下一章") }
+                        else if(nextVolume != null) { Text("下一分卷：${nextVolume.book.title}", color = foreground, modifier = Modifier.padding(bottom = 12.dp)); AppButton(onClick = { nextVolumePrompt = true }, modifier = Modifier.heightIn(min = 48.dp), enabled = !leaving) { Text("阅读下一分卷") } }
+                        else AppOutlinedButton(onClick = openToc, modifier = Modifier.heightIn(min = 48.dp)) { Text("返回目录") }
+                    }
+                    // 章末留白让同一提示句位于控件上方，不改变正文视口或分页。
+                    Spacer(Modifier.height(with(density) { (bottomOverlayHeight - readingInsets.getBottom(density)).coerceAtLeast(0).toDp() }
+                        .minus(persistentBottomHeight).coerceAtLeast(0.dp)))
+                }
+            }
             if(settings.staticPagination) {
                 val bodyModifier = Modifier.testTag("reader-page").then(readerInteractionModifier { recordReadingInteraction(); pauseReadingAutomation() })
                     .align(Alignment.TopCenter).fillMaxHeight().windowInsetsPadding(readingInsets)
@@ -795,7 +803,8 @@ import kotlinx.serialization.encodeToString
                     highlightLayers = highlightLayers,
                     interactionEnabled = bodyInputEnabled, contentPadding = PaddingValues(horizontal = settings.resolvedHorizontalMargin.dp, vertical = settings.resolvedVerticalMargin.dp), onNavigate = openToc,
                     onNote = { pauseReadingAutomation(); epubNote = it }, chapterTitle = chapter.title,
-                    onSavePosition = { savePosition() })
+                    onSavePosition = { savePosition() }, chapterPull = chapterPull,
+                    onNextChapter = chapter.nextId?.let { id -> { openChapter(id, inline = true) } }, chapterEnd = chapterEnd)
                 else EInkPage(paragraphs, settings, fixedPager, bodyModifier,
                 imageModel = imageOf,
                 onToggleMenu = { menu = !menu }, onSelect = { selected = it }, onPage = { page(it) },
@@ -851,22 +860,7 @@ import kotlinx.serialization.encodeToString
                         if(existing.parts[part] != lines) scrollLayouts[paragraph.index] = existing.copy(parts = existing.parts + (part to lines))
                     }
                 }
-                item("end", contentType = "footer") {
-                    Column(Modifier.fillMaxWidth().graphicsLayer { alpha = if(tapOverlayVisible) 0f else 1f }, horizontalAlignment = Alignment.CenterHorizontally) {
-                        HorizontalDivider(Modifier.padding(vertical = 24.dp)); Text("本章完", color = foreground.copy(alpha = .65f)); Spacer(Modifier.height(20.dp))
-                        if(chapter.nextId != null) ReaderChapterPullHint(chapterPull.progress, chapterPull.active, chapterPull.ready,
-                            inlineChapterLoad && chapterLoad.loading, foreground, Modifier.padding(bottom = 8.dp))
-                        if(settings.showScrollPageButtons) {
-                            if(chapter.nextId != null) AppButton(onClick = { openChapter(chapter.nextId, inline = true) }, modifier = Modifier.heightIn(min = 48.dp), enabled = !leaving && !chapterLoad.loading) { Text("阅读下一章") }
-                            else if(nextVolume != null) { Text("下一分卷：${nextVolume.book.title}", color = foreground, modifier = Modifier.padding(bottom = 12.dp)); AppButton(onClick = { nextVolumePrompt = true }, modifier = Modifier.heightIn(min = 48.dp), enabled = !leaving) { Text("阅读下一分卷") } }
-                            else AppOutlinedButton(onClick = openToc, modifier = Modifier.heightIn(min = 48.dp)) { Text("返回目录") }
-                        }
-                        // 章末留白让同一提示句位于控件上方，
-                        // 不会改变正文视口高度或使章节重新分页。
-                        Spacer(Modifier.height(with(density) { (bottomOverlayHeight - readingInsets.getBottom(density)).coerceAtLeast(0).toDp() }
-                            .minus(persistentBottomHeight).coerceAtLeast(0.dp)))
-                    }
-                }
+                item("end", contentType = "footer") { chapterEnd() }
             }
             // 分区配置和教程只叠在正文上；暂时移除工具栏、翻页、朗读和进度浮层。
             // 保留已测得的高度，避免进出配置时改变正文视口或章末留白。
@@ -921,7 +915,7 @@ import kotlinx.serialization.encodeToString
                 color = toolbarBackground.copy(alpha = 1f), contentColor = foreground, shape = MaterialTheme.shapes.small) {
                 Text("自动阅读中 · 点按暂停", Modifier.padding(horizontal = 12.dp, vertical = 8.dp), style = MaterialTheme.typography.labelMedium)
             }
-            if((chapterLoad.loading && (!inlineChapterLoad || settings.staticPagination)) || chapterLoad.error != null) Surface(
+            if((chapterLoad.loading && (!inlineChapterLoad || (settings.staticPagination && !settings.rowPagination))) || chapterLoad.error != null) Surface(
                 Modifier.align(Alignment.BottomCenter).windowInsetsPadding(readingInsets)
                     .padding(bottom = with(density) { (bottomOverlayHeight - readingInsets.getBottom(density)).coerceAtLeast(0).toDp() })
                     .padding(12.dp).widthIn(max = 560.dp).fillMaxWidth().testTag("reader-chapter-load-status"),

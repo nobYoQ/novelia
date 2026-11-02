@@ -19,10 +19,15 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollDispatcher
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.input.pointer.util.addPointerInputChange
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -64,6 +69,8 @@ private data class RowMeasurement(val input: RowMeasureInput, val chapter: Measu
     interactionEnabled: Boolean = true, contentPadding: PaddingValues = PaddingValues(0.dp),
     onNavigate: () -> Unit = {}, onNote: (String) -> Unit = {}, chapterTitle: String = "",
     onSavePosition: () -> Unit = {},
+    chapterPull: ReaderChapterOverscrollGesture = rememberReaderChapterOverscrollGesture(),
+    onNextChapter: (() -> Unit)? = null, chapterEnd: (@Composable () -> Unit)? = null,
 ) {
     val density = LocalDensity.current
     val layoutDirection = LocalLayoutDirection.current
@@ -72,6 +79,10 @@ private data class RowMeasurement(val input: RowMeasureInput, val chapter: Measu
     var expandedImage by remember { mutableStateOf<Any?>(null) }
     val animate = !settings.eInkMode && !LocalEInkMode.current && !LocalReducedMotion.current && ValueAnimator.areAnimatorsEnabled()
     val canInteract = interactionEnabled && expandedImage == null
+    val chapterPullOffset = rememberReaderChapterPullOffset(chapterPull, settings.eInkMode || LocalEInkMode.current)
+    val scrollDispatcher = remember { NestedScrollDispatcher() }
+    val scrollConnection = remember { object : NestedScrollConnection {} }
+    SideEffect { if(chapterEnd == null) state.updateEndContentHeight(0) }
     val latestPage by rememberUpdatedState(onPage)
     val latestSave by rememberUpdatedState(onSavePosition)
     val scope = rememberCoroutineScope()
@@ -86,7 +97,9 @@ private data class RowMeasurement(val input: RowMeasureInput, val chapter: Measu
 
     BoxWithConstraints(modifier.background(background).clipToBounds()
         .readerTapFeedback(navigation, foreground, settings.eInkMode || LocalEInkMode.current)
-        .readerTapNavigation(navigation)) {
+        .readerTapNavigation(navigation)
+        .readerChapterOverscroll(chapterPull, canInteract && onNextChapter != null,
+            atEnd = { state.ready && !state.canScrollForward }, onNextChapter = { onNextChapter?.invoke() })) {
         val horizontalPadding = with(density) {
             contentPadding.calculateLeftPadding(layoutDirection).roundToPx() + contentPadding.calculateRightPadding(layoutDirection).roundToPx()
         }
@@ -202,6 +215,7 @@ private data class RowMeasurement(val input: RowMeasureInput, val chapter: Measu
             val latestVerticalSettle by rememberUpdatedState(::settleVertical)
             val velocity = remember(geometry) { VelocityTracker() }
             Box(Modifier.fillMaxSize().clipToBounds()
+                .nestedScroll(scrollConnection, scrollDispatcher)
                 .pointerInput(geometry, canInteract) {
                     if(!canInteract) return@pointerInput
                     awaitEachGesture {
@@ -251,7 +265,7 @@ private data class RowMeasurement(val input: RowMeasureInput, val chapter: Measu
                                 val passed = abs(total.x) >= 40.dp.toPx() || fling
                                 latestSettle(if(passed) if((if(fling) speed.x else total.x) < 0) 1 else -1 else 0)
                             } else if(axis == 1) {
-                                latestVerticalSettle(-speed.y)
+                                latestVerticalSettle(if(chapterPull.suppressFling) 0f else -speed.y)
                             }
                         }
                     ) { change, amount ->
@@ -263,7 +277,13 @@ private data class RowMeasurement(val input: RowMeasureInput, val chapter: Measu
                         if(axis == 0 && !settings.horizontalPageTurn) return@detectDragGestures
                         change.consume()
                         total += amount
-                        if(axis == 1) state.scrollBy(-amount.y)
+                        if(axis == 1) {
+                            val available = Offset(0f, amount.y)
+                            val preConsumed = scrollDispatcher.dispatchPreScroll(available, NestedScrollSource.UserInput)
+                            val remaining = available - preConsumed
+                            val consumed = Offset(0f, -state.scrollBy(-remaining.y))
+                            scrollDispatcher.dispatchPostScroll(consumed, remaining - consumed, NestedScrollSource.UserInput)
+                        }
                         else if(animate) {
                             val direction = if(total.x < 0f) 1 else -1
                             dragOffset = (total.x * if(state.targetRow(direction) == null) .15f else 1f).coerceIn(-width.toFloat(), width.toFloat())
@@ -272,6 +292,7 @@ private data class RowMeasurement(val input: RowMeasureInput, val chapter: Measu
                 }
                 // 点击区域覆盖留白，手势也应从同一视口接收触摸；排版仍使用扣除留白后的尺寸。
                 .wrapContentWidth(Alignment.CenterHorizontally).widthIn(max = settings.width.dp).fillMaxWidth()
+                .graphicsLayer { translationY = -chapterPullOffset }
                 .padding(contentPadding).clipToBounds()) {
                 @Composable fun body(top: Float, x: Float) {
                     // 静止、滚动、吸附与横翻使用同一切片，底部半行不会在停下时被抽掉。
@@ -283,6 +304,9 @@ private data class RowMeasurement(val input: RowMeasureInput, val chapter: Measu
                             { if(canInteract) { navigation.cancel(); expandedImage = it } }, height,
                             { if(canInteract) { navigation.cancel(); onNote(it) } },
                             Modifier.fillMaxWidth().wrapContentHeight(Alignment.Top, unbounded = true).graphicsLayer { translationY = y })
+                        if(chapterEnd != null) Box(Modifier.fillMaxWidth().wrapContentHeight(Alignment.Top, unbounded = true)
+                            .onSizeChanged { state.updateEndContentHeight(it.height + gap) }
+                            .graphicsLayer { translationY = geometry.totalHeight + gap - top }) { chapterEnd() }
                     }
                 }
                 val previous = outgoingTop

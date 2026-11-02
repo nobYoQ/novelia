@@ -151,4 +151,45 @@ class RowPagingStateTest {
         assertEquals(60, visible.lines.last().start)
         assertEquals(60, geometry.pages[1].lines.first().start)
     }
+
+    @Test fun chapterFooterScrollsIntoViewWithoutAddingPagesOrLosingTheTextAnchor() {
+        val state = state()
+        val pages = state.pages
+        state.updateEndContentHeight(173)
+        state.seekPage(pages.lastIndex)
+        assertFalse(state.canGoForward)
+        assertTrue(state.canScrollForward)
+        state.beginScroll()
+        assertEquals(73f, state.scrollBy(200f), 0f)
+        assertFalse(state.canScrollForward)
+        state.finishScroll()
+        assertEquals(473f, state.viewportTop, 0f)
+        assertFalse(state.canScrollForward)
+        assertEquals(pages, state.pages)
+        assertEquals(7, state.anchor.sourceIndex)
+        assertEquals(230, state.anchor.textOffset)
+        state.beginScroll()
+        state.scrollBy(-100f)
+        state.finishScroll()
+        assertEquals(380f, state.viewportTop, 0f)
+        assertTrue(state.canScrollForward)
+    }
+
+    @Test fun oversizedFooterAndShortChaptersStillReachAnEndWithoutInventingTextRows() {
+        val state = state(2)
+        state.updateEndContentHeight(100)
+        assertFalse(state.canScrollForward)
+        state.updateEndContentHeight(400)
+        assertTrue(state.canScrollForward)
+        state.beginScroll()
+        assertEquals(240f, state.scrollBy(1000f), 0f)
+        state.settleScroll(state.scrollTarget)
+        state.finishScroll()
+        assertEquals(240f, state.viewportTop, 0f)
+        assertFalse(state.canScrollForward)
+        assertEquals(1, state.pages.size)
+        assertEquals(10, state.anchor.textOffset)
+        state.seekPage(0)
+        assertEquals(0f, state.viewportTop, 0f)
+    }
 }

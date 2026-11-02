@@ -12,6 +12,8 @@ import cc.novelia.app.reader.*
         private set
     var scrolling by mutableStateOf(false)
         private set
+    var endContentHeight by mutableIntStateOf(0)
+        private set
     override var ready by mutableStateOf(false)
         private set
     var navigationRevision by mutableIntStateOf(0)
@@ -31,6 +33,11 @@ import cc.novelia.app.reader.*
     override val anchor get() = requested
     override val canGoBack get() = row > 0
     override val canGoForward get() = layout?.let { it.screenEnd(row) < it.lines.size } ?: false
+    private val maxScrollTop get() = layout?.let { maxOf(it.maxScrollTop, it.totalHeight + endContentHeight - it.height) } ?: 0f
+    val canScrollForward get() = ready && viewportTop < maxScrollTop - .01f
+
+    /** 章末控件只扩展纵向滚动范围，不进入正文行表、页码或阅读锚点。 */
+    fun updateEndContentHeight(height: Int) { endContentHeight = height.coerceAtLeast(0) }
 
     fun install(next: List<StaticPage>, paragraphs: List<ReadingParagraph>, height: Int, gap: Int) {
         val previous = content.getOrNull(requested.paragraph)
@@ -104,28 +111,31 @@ import cc.novelia.app.reader.*
 
     fun beginScroll() { history.clear(); scrolling = true; transitionFrom = null }
     fun scrollBy(delta: Float): Float {
-        val geometry = layout ?: return 0f
+        if(layout == null) return 0f
         if(!ready || !scrolling) return 0f
         val before = viewportTop
         // 横向末屏可以短于一屏，开始纵滑时不能把它突然拉回上一屏。
-        viewportTop = (before + delta).coerceIn(0f, maxOf(before, geometry.maxScrollTop))
+        viewportTop = (before + delta).coerceIn(0f, maxOf(before, maxScrollTop))
         captureAnchor()
         return viewportTop - before
     }
     fun finishScroll() {
-        val geometry = layout ?: return
-        viewportTop = geometry.top(geometry.nearestRow(viewportTop))
+        if(layout == null) return
+        viewportTop = scrollTarget
         scrolling = false
         captureAnchor()
     }
 
-    val scrollTarget get() = layout?.let { it.top(it.nearestRow(viewportTop)) } ?: viewportTop
+    val scrollTarget get() = layout?.let {
+        if(endContentHeight > 0 && viewportTop >= it.maxScrollTop) viewportTop.coerceAtMost(maxScrollTop)
+        else it.top(it.nearestRow(viewportTop))
+    } ?: viewportTop
 
     /** 吸附动画沿同一像素游标推进；外部定位已结束滚动时，旧动画不能覆盖新位置。 */
     fun settleScroll(top: Float) {
         val geometry = layout ?: return
         if(!ready || !scrolling) return
-        viewportTop = top.coerceIn(0f, geometry.top(geometry.lines.lastIndex.coerceAtLeast(0)))
+        viewportTop = top.coerceIn(0f, maxOf(maxScrollTop, geometry.top(geometry.lines.lastIndex.coerceAtLeast(0))))
         captureAnchor()
     }
 }
