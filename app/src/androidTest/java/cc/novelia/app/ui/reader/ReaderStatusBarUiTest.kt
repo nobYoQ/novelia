@@ -13,6 +13,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.data.model.*
 import cc.novelia.app.ui.theme.AppInteractionMode
 import cc.novelia.app.ui.theme.NoveliaTheme
@@ -44,7 +45,7 @@ class ReaderStatusBarUiTest {
                 ReaderReadingStatusBar(state, settings, ReaderStatusItems.columns(320f, 2f), Color.Black, Modifier.width(320.dp))
             }
         } }
-        val tags = listOf("reader-status-clock", "reader-status-battery", "reader-status-chapter-title", "reader-page-counter", "reader-chapter-progress")
+        val tags = listOf("reader-status-chapter-title", "reader-status-clock", "reader-status-battery", "reader-page-counter", "reader-chapter-progress")
         val bar = compose.onNodeWithTag("reader-reading-status-bar").fetchSemanticsNode().boundsInRoot
         val cells = tags.map { tag -> compose.onNodeWithTag(tag).assertIsDisplayed().fetchSemanticsNode().boundsInRoot }
         cells.forEach { assertTrue(it.left >= bar.left && it.right <= bar.right && it.top >= bar.top && it.bottom <= bar.bottom) }
@@ -59,5 +60,32 @@ class ReaderStatusBarUiTest {
         compose.onNodeWithTag("reader-status-chapter-title").assertDoesNotExist()
         compose.onNodeWithTag("reader-page-counter").assertDoesNotExist()
         compose.onNodeWithTag("reader-chapter-progress").assertTextEquals("本章 50%")
+    }
+
+    @Test fun crowdedFooterUsesAFullTitleRowAndOpensTheCompleteTitle() {
+        val title = "第十二章　在漫长旅途尽头再次相逢".repeat(6)
+        val state = ReaderBottomToolbarState(false, true, true, false, true, false, true, false, .5f, true, 20, 9, title, false, true)
+        var showTitle by mutableStateOf(false)
+        var tocOpened = false
+        compose.setContent { NoveliaTheme("light") {
+            ReaderReadingStatusBar(state, ReaderSettings(paginationMode = "auto"), ReaderStatusItems.columns(360f, 1f),
+                Color.Black, Modifier.width(360.dp), onChapterTitle = { showTitle = true })
+            if(showTitle) ReaderChapterTitleDialog(title, { showTitle = false }, { tocOpened = true; showTitle = false })
+        } }
+        val heading = compose.onNodeWithTag("reader-status-chapter-title").fetchSemanticsNode().boundsInRoot
+        val clock = compose.onNodeWithTag("reader-status-clock").fetchSemanticsNode().boundsInRoot
+        assertTrue(heading.bottom <= clock.top)
+        assertTrue(heading.width > clock.width * 2)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val screenshot = java.io.File(instrumentation.targetContext.getExternalFilesDir("screenshots"), "reader-chapter-footer.png")
+        instrumentation.uiAutomation.takeScreenshot().let { bitmap ->
+            screenshot.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            bitmap.recycle()
+        }
+        compose.onNodeWithTag("reader-status-chapter-title").performClick()
+        compose.onNodeWithTag("reader-full-chapter-title").assertTextEquals(title)
+        compose.onNodeWithText("打开目录").performClick()
+        compose.runOnIdle { assertTrue(tocOpened) }
+        compose.onNodeWithTag("reader-full-chapter-title").assertDoesNotExist()
     }
 }

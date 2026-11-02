@@ -361,6 +361,7 @@ import kotlinx.serialization.encodeToString
         }
         var selected by remember { mutableStateOf<ReadingParagraph?>(null) }
         var epubNote by remember(ref, chapterId) { mutableStateOf<String?>(null) }
+        var chapterTitleOpen by remember(ref, chapterId) { mutableStateOf(false) }
         LaunchedEffect(settings.epubFootnotePopup) { if (!settings.epubFootnotePopup) epubNote = null }
         var versions by remember { mutableStateOf<ReadingParagraph?>(null) }
         LaunchedEffect(selected, chapter, settings.traditional, settings.textReplacements, settings.textReplacementsEnabled) {
@@ -420,7 +421,7 @@ import kotlinx.serialization.encodeToString
         // 限制文字宽度而非手势视口，宽屏两侧留白也交给同一个列表处理拖动。
         val bodyHorizontalPadding = ((statusWidth - settings.width.dp) / 2).coerceAtLeast(0.dp) + settings.resolvedHorizontalMargin.dp
         val statusColumns = cc.novelia.app.data.model.ReaderStatusItems.columns(statusWidth.value, density.fontScale)
-        val statusRows = cc.novelia.app.data.model.ReaderStatusItems.rows(settings.visibleReadingStatusItems.size, statusColumns)
+        val statusRows = cc.novelia.app.data.model.ReaderStatusItems.layout(settings.visibleReadingStatusItems, statusColumns).size
         // 预留空间只跟随配置、宽度和系统字体变化；时间与进度更新不会重新分页。
         val readingStatusBarHeight = if(statusRows > 0) with(density) { 16.sp.toDp() } * statusRows + 12.dp + 4.dp * (statusRows - 1) else 0.dp
         val persistentBottomHeight = readingStatusBarHeight + with(density) { if(bookSpeech != null) speechControlsHeight.toDp() else 0.dp }
@@ -518,7 +519,7 @@ import kotlinx.serialization.encodeToString
             readingLifecycle.lifecycle.addObserver(observer)
             onDispose { readingLifecycle.lifecycle.removeObserver(observer) }
         }
-        val contentPanelsClosed = !preferences && !editingTapZones && !search && (!toc || wide) && !autoReadSheet && !replacementsSheet && !bookSearch && !nextVolumePrompt && selected == null && note == null
+        val contentPanelsClosed = !preferences && !editingTapZones && !search && (!toc || wide) && !autoReadSheet && !replacementsSheet && !bookSearch && !nextVolumePrompt && !chapterTitleOpen && selected == null && note == null
         val panelsClosed = contentPanelsClosed && !speechSheet && epubNote == null
         val showTapTutorial = settings.tapPageTurn && !local.readerTapTutorialSeen && panelsClosed && !leaving &&
             !chapterLoad.loading && chapterLoad.error == null && positionState.initialAnchorRestored && !positionState.restoringAnchor && seekTarget == null &&
@@ -884,6 +885,7 @@ import kotlinx.serialization.encodeToString
                 ),
                 settings = settings, menu = menu, reducedMotion = reducedMotion, toolbarBackground = toolbarBackground,
                 foreground = foreground, readingStatusBarHeight = readingStatusBarHeight, statusColumns = statusColumns, modifier = Modifier.align(Alignment.BottomCenter),
+                onChapterTitle = { pauseReadingAutomation(); chapterTitleOpen = true },
                 onHeightChanged = { bottomOverlayHeight = it }, onPage = { page(it) }, onSeek = { seekChapter(it) },
                 onSeekFocusChanged = { seekFocused = it }, onPreviousChapter = { chapter.prevId?.let { openChapter(it) } },
                 onNextChapter = { if(chapter.nextId != null) openChapter(chapter.nextId) else nextVolumePrompt = true },
@@ -940,6 +942,10 @@ import kotlinx.serialization.encodeToString
         }
         }
         }
+        if(chapterTitleOpen) ReaderChapterTitleDialog(chapter.title, onDismiss = { chapterTitleOpen = false }, onToc = {
+            chapterTitleOpen = false
+            if(wide) { setWideToc(true); tocLocateRequest++ } else toc = true
+        })
         if(nextVolumePrompt && nextVolume != null) AppAlertDialog(onDismissRequest = { nextVolumePrompt = false }, title = { Text("本卷已读完") }, text = { Column { Text("按书架中的分卷顺序接续：${nextVolume.book.title}"); volumeError?.let { Text(it, color = MaterialTheme.colorScheme.error) } } }, confirmButton = { AppTextButton(onClick = { openNextVolume() }, enabled = !openingVolume) { Text(if(openingVolume) "正在打开…" else "阅读下一分卷") } }, dismissButton = { AppTextButton(onClick = { nextVolumePrompt = false }) { Text("稍后") } })
         if(bookSearch) ReaderSheet(onDismissRequest = { bookSearch = false }) {
             BookSearchPanel(c, ref, chapterId, chapter, settings) { match ->

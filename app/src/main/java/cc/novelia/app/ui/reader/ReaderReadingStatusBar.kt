@@ -7,6 +7,7 @@ import android.content.IntentFilter
 import android.os.BatteryManager
 import android.text.format.DateFormat
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,6 +27,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import cc.novelia.app.data.model.ReaderSettings
+import cc.novelia.app.data.model.ReaderStatusItems
 import cc.novelia.app.reader.safeFraction
 import java.util.Date
 import kotlinx.coroutines.awaitCancellation
@@ -35,20 +37,23 @@ import kotlinx.coroutines.isActive
 /** 内容顺序属于阅读偏好；分行数仅随宽度、字体及配置改变，不随时间和进度改变。 */
 @Composable internal fun ReaderReadingStatusBar(
     state: ReaderBottomToolbarState, settings: ReaderSettings, columns: Int, foreground: Color, modifier: Modifier = Modifier,
+    onChapterTitle: () -> Unit = {},
 ) {
     val items = settings.visibleReadingStatusItems
     val rowHeight = with(LocalDensity.current) { 16.sp.toDp() }
+    val compactWidth = (80f * LocalDensity.current.fontScale.coerceAtLeast(1f)).dp
     Column(modifier.testTag("reader-reading-status-bar").padding(horizontal = 16.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        items.chunked(columns.coerceAtLeast(1)).forEach { row ->
+        ReaderStatusItems.layout(items, columns).forEach { row ->
             Row(Modifier.fillMaxWidth().height(rowHeight), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 row.forEachIndexed { index, item ->
                     val align = when(index) { 0 -> TextAlign.Start; row.lastIndex -> TextAlign.End; else -> TextAlign.Center }
-                    val cell = Modifier.weight(1f)
+                    val cell = if("chapter" in row && item != "chapter") Modifier.width(compactWidth) else Modifier.weight(1f)
                     when(item) {
                         "time" -> ReaderClock(foreground, cell, align)
                         "battery" -> ReaderBattery(foreground, cell, align)
-                        "chapter" -> StatusText(state.chapterTitle, foreground, cell.testTag("reader-status-chapter-title"), align)
+                        "chapter" -> StatusText(state.chapterTitle, foreground, cell.testTag("reader-status-chapter-title")
+                            .clickable(onClickLabel = "查看完整章节名", onClick = onChapterTitle), align)
                         "pages" -> if(!state.pageReady) StatusText("正在分页…", foreground, cell, align)
                             else {
                                 val total = state.pageCount.coerceAtLeast(1)
