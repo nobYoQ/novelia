@@ -10,6 +10,14 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class WebDavProjectionTest {
+    @Test fun rowPaginationIsValidInDevicePreferencesAndModeSnapshots() {
+        val row = ReaderSettings().withPaginationMode("row")
+        val reader = row.withEInkMode(true).withPaginationMode("row")
+        val group = WebDavProjection.library(LibraryState(reader = reader), includeDevicePreferences = true)
+            .getValue(SyncDomain.SETTINGS).getValue("@reader").getValue("devicePreferences") as JsonObject
+        WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "devicePreferences", group)
+        assertEquals(JsonPrimitive("row"), group["paginationMode"])
+    }
     @Test fun statusItemOrderSyncsAndOldRecordsKeepCurrentChoices() {
         val custom = ReaderSettings(readingStatusItems = listOf("battery", "time"))
         val docs = documents(LibraryState(reader = custom, bookSettings = mapOf(web.key to custom)))

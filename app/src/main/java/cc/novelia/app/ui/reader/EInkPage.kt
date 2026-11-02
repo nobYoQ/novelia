@@ -72,27 +72,27 @@ import androidx.compose.runtime.mutableFloatStateOf
  * install 在字体/视口变化后重新找页，move 才把锚点推进到用户实际翻到的页首，
  * 避免连续多次中间测量把位置逐步向前“吸附”。ready 为 false 时禁止按旧页表翻页。
  */
-@Stable internal class EInkPageState(initial: Position?) {
+@Stable internal class EInkPageState(initial: Position?) : ReaderPager {
     // 渲染器将此列表实例绑定到已测量文本快照；即使新测量的行值相等，
     // 也须替换旧列表实例，避免关联到旧快照。
-    var pages by mutableStateOf<List<StaticPage>>(emptyList(), referentialEqualityPolicy())
+    override var pages by mutableStateOf<List<StaticPage>>(emptyList(), referentialEqualityPolicy())
         private set
-    var pageIndex by mutableIntStateOf(0)
+    override var pageIndex by mutableIntStateOf(0)
         private set
-    var ready by mutableStateOf(false)
+    override var ready by mutableStateOf(false)
         private set
     private var anchorParagraph = ((initial?.index ?: 0) - 1).coerceAtLeast(CHAPTER_HEADING_PARAGRAPH)
     private var anchorOffset = initial?.textOffset ?: 0
     private var sourceParagraph: Int? = null
     private var content = emptyList<ReadingParagraph>()
     val current get() = pages.getOrNull(pageIndex)
-    val paragraph get() = current?.lines?.firstOrNull()?.paragraph ?: anchorParagraph
-    val textOffset get() = current?.lines?.firstOrNull()?.start ?: anchorOffset
-    val sourceIndex get() = content.getOrNull(paragraph)?.index ?: sourceParagraph
+    override val paragraph get() = current?.lines?.firstOrNull()?.paragraph ?: anchorParagraph
+    override val textOffset get() = current?.lines?.firstOrNull()?.start ?: anchorOffset
+    override val sourceIndex get() = content.getOrNull(paragraph)?.index ?: sourceParagraph
     /** 保存、切换模式和刷新使用请求的字符锚点；页首只用于当前页的显示与交互。 */
-    val anchor get() = ReadingRestoreAnchor(anchorParagraph, sourceParagraph, anchorOffset)
-    val canGoBack get() = pageIndex > 0
-    val canGoForward get() = pageIndex + 1 < pages.size
+    override val anchor get() = ReadingRestoreAnchor(anchorParagraph, sourceParagraph, anchorOffset)
+    override val canGoBack get() = pageIndex > 0
+    override val canGoForward get() = pageIndex + 1 < pages.size
 
     fun install(next: List<StaticPage>, paragraphs: List<ReadingParagraph> = content) {
         val previousParagraph = content.getOrNull(anchorParagraph)
@@ -119,10 +119,10 @@ import androidx.compose.runtime.mutableFloatStateOf
         }
         ready = true
     }
-    fun invalidate() { ready = false }
+    override fun invalidate() { ready = false }
     /** 极快的纯插图测量可能早于上一帧的失效副作用完成；只确认当前显示的同一份页表。 */
     fun confirm(pages: List<StaticPage>) { if (this.pages === pages) ready = true }
-    fun move(direction: Int) {
+    override fun move(direction: Int) {
         if (ready && pages.isNotEmpty()) {
             pageIndex = (pageIndex + direction).coerceIn(0, pages.lastIndex)
             anchorParagraph = paragraph
@@ -130,7 +130,7 @@ import androidx.compose.runtime.mutableFloatStateOf
             sourceParagraph = content.getOrNull(anchorParagraph)?.index
         }
     }
-    fun find(paragraph: Int, offset: Int = 0, source: Int? = null) {
+    override fun find(paragraph: Int, offset: Int, source: Int?) {
         anchorParagraph = paragraph
         anchorOffset = offset.coerceAtLeast(0)
         sourceParagraph = source ?: content.getOrNull(paragraph)?.index
@@ -257,7 +257,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
         incomingOffset = 0f
         // 朗读、音量键和翻页按钮直接改变页码时，也走与手势一致的页面过渡。
         if(animate && canInteract && !gestureCommitted && abs(state.pageIndex - from) == 1 && state.pages.getOrNull(from) != null) {
-            dragAxis = if(settings.scrollPageTurn) 1 else 0
+            dragAxis = 0
             incomingOffset = direction.toFloat()
             outgoingPageIndex = from
             try {
@@ -299,8 +299,8 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
         modifier.background(background).clipToBounds()
             .readerTapFeedback(tapNavigation, foreground, settings.eInkMode || LocalEInkMode.current)
             .readerTapNavigation(tapNavigation)
-            .pointerInput(settings.scrollPageTurn, settings.horizontalPageTurn, animate, canInteract) {
-                if(!canInteract || (!settings.scrollPageTurn && !settings.horizontalPageTurn)) return@pointerInput
+            .pointerInput(settings.horizontalPageTurn, animate, canInteract) {
+                if(!canInteract || !settings.horizontalPageTurn) return@pointerInput
                 var total = androidx.compose.ui.geometry.Offset.Zero
                 var axisLocked = false
                 val velocity = androidx.compose.ui.input.pointer.util.VelocityTracker()
@@ -313,7 +313,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
                     },
                     onDragCancel = { latestSettle(0) },
                     onDragEnd = {
-                        val enabled = if(dragAxis == 0) settings.horizontalPageTurn else settings.scrollPageTurn
+                        val enabled = dragAxis == 0 && settings.horizontalPageTurn
                         val distance = if(dragAxis == 0) total.x else total.y
                         val speed = velocity.calculateVelocity().let { if(dragAxis == 0) it.x else it.y }
                         val fling = abs(speed) >= 750.dp.toPx() && abs(distance) >= viewConfiguration.touchSlop && speed * distance > 0f
@@ -332,7 +332,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
                     }
                     total += amount
                     velocity.addPosition(change.uptimeMillis, change.position)
-                    val enabled = if(dragAxis == 0) settings.horizontalPageTurn else settings.scrollPageTurn
+                    val enabled = dragAxis == 0 && settings.horizontalPageTurn
                     if(animate && enabled) {
                         val extent = (if(dragAxis == 0) viewport.width else viewport.height).toFloat()
                         val delta = if(dragAxis == 0) amount.x else amount.y
@@ -406,7 +406,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
  * 各自持有独立的图片重试等局部状态。
  */
 @Composable
-private fun PageBody(
+internal fun PageBody(
     page: StaticPage?,
     chapter: MeasuredEInkChapter,
     settings: ReaderSettings,
@@ -424,12 +424,24 @@ private fun PageBody(
     modifier: Modifier = Modifier,
 ) {
 
+    // 连续行带可能同时露出超大单行和相邻行；分别缩放超大行，不能把整段一起压缩。
+    val groups = remember(page, viewportHeight) {
+        val result = mutableListOf<MutableList<PageLine>>()
+        page?.lines.orEmpty().forEach { line ->
+            val last = result.lastOrNull()
+            if(last == null || last.last().paragraph != line.paragraph || last.last().height > viewportHeight || line.height > viewportHeight)
+                result += mutableListOf(line)
+            else last += line
+        }
+        result
+    }
     // 正文仅显示 readerTapFeedback 的分区提示，避免默认涟漪按容器大小给整页染色。
     Column(modifier.combinedClickable(
         interactionSource = remember { MutableInteractionSource() }, indication = null,
         onClickLabel = "显示或收起阅读工具栏", onClick = tapNavigation::click)) {
-        page?.lines?.groupBy { it.paragraph }?.entries?.forEachIndexed { groupIndex, (index, lines) ->
-            if (groupIndex > 0) Spacer(Modifier.height(settings.resolvedParagraphSpacing.dp))
+        groups.forEachIndexed { groupIndex, lines ->
+            val index = lines.first().paragraph
+            if(groupIndex > 0 && groups[groupIndex - 1].first().paragraph != index) Spacer(Modifier.height(settings.resolvedParagraphSpacing.dp))
             val paragraph = chapter.paragraphs.getOrNull(index)
             if (lines.first().image && paragraph != null) {
                 val model = imageModel(paragraph)
@@ -438,7 +450,7 @@ private fun PageBody(
                     ImageRequest.Builder(context).data(model).setParameter("readerRetry", retry).crossfade(false).build()
                 }
                 var failed by remember(model) { mutableStateOf(false) }
-                Box(Modifier.fillMaxSize().combinedClickable(
+                Box(Modifier.fillMaxWidth().height(with(density) { viewportHeight.toDp() }).combinedClickable(
                     interactionSource = remember { MutableInteractionSource() }, indication = null,
                     onClick = tapNavigation::click,
                     onLongClickLabel = "放大查看插图", onLongClick = { onExpandImage(model) }), contentAlignment = Alignment.Center) {
@@ -455,7 +467,7 @@ private fun PageBody(
                 val sliceHeight = lines.sumOf { it.height }
                 // 超大系统字号可能使一行文字高于整个横屏视口；
                 // 此时缩放适配该行，避免裁切字形。
-                val drawScale = (viewportHeight.toFloat() / sliceHeight).coerceAtMost(1f)
+                val drawScale = if(lines.size == 1) (viewportHeight.toFloat() / sliceHeight).coerceAtMost(1f) else 1f
                 val visibleText = layout.text.subSequence(lines.first().start, lines.last().end).toString()
                 Canvas(Modifier.fillMaxWidth().height(with(density) { (sliceHeight * drawScale).toDp() }).clipToBounds()
                     .then(if(index == CHAPTER_HEADING_PARAGRAPH) Modifier.testTag("reader-page-chapter-title") else Modifier)

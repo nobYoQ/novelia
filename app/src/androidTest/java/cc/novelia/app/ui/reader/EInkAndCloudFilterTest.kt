@@ -97,8 +97,10 @@ class EInkAndCloudFilterTest {
         compose.onNodeWithText("左右翻页").assertDoesNotExist()
         compose.onNodeWithText("显示翻页按钮").performScrollTo().performClick()
         compose.runOnIdle { assertTrue(settings.showPageButtons); assertFalse(settings.staticPagination) }
-        compose.onNodeWithText("自动分页").performScrollTo().performClick().assertIsSelected()
-        compose.onNodeWithText("滚动翻页").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("横向分页").performScrollTo().performClick().assertIsSelected()
+        compose.onNodeWithText("滚动翻页").assertDoesNotExist()
+        compose.onNodeWithText("行带分页").performScrollTo().performClick().assertIsSelected()
+        compose.runOnIdle { assertTrue(settings.rowPagination) }
         compose.onNodeWithText("左右翻页").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("显示翻页按钮").performScrollTo().performClick()
         compose.runOnIdle { assertFalse(settings.showPageButtons); assertTrue(settings.staticPagination) }
@@ -169,13 +171,13 @@ class EInkAndCloudFilterTest {
         compose.onNodeWithTag("page").performTouchInput { swipeLeft() }
         compose.runOnIdle { assertEquals(0, state.pageIndex) }
         compose.onNodeWithTag("page").performTouchInput { swipeUp() }
-        compose.runOnIdle { assertEquals(1, state.pageIndex); settings = settings.copy(scrollPageTurn = false, horizontalPageTurn = true) }
+        compose.runOnIdle { assertEquals(0, state.pageIndex); settings = settings.copy(scrollPageTurn = false, horizontalPageTurn = true) }
         compose.onNodeWithTag("page").performTouchInput { swipeUp() }
-        compose.runOnIdle { assertEquals(1, state.pageIndex) }
+        compose.runOnIdle { assertEquals(0, state.pageIndex) }
         compose.onNodeWithTag("page").performTouchInput { swipeLeft() }
-        compose.runOnIdle { assertEquals(2, state.pageIndex); settings = settings.copy(eInkMode = true, horizontalPageTurn = false) }
+        compose.runOnIdle { assertEquals(1, state.pageIndex); settings = settings.copy(eInkMode = true, horizontalPageTurn = false) }
         compose.onNodeWithTag("page").performTouchInput { swipeLeft(); swipeUp() }
-        compose.runOnIdle { assertEquals(2, state.pageIndex) }
+        compose.runOnIdle { assertEquals(1, state.pageIndex) }
     }
 
     @Test fun readerPreferencesKeepThemesMutuallyExclusive() {
@@ -186,9 +188,10 @@ class EInkAndCloudFilterTest {
         compose.runOnIdle {
             assertEquals("paper", settings.theme)
             assertFalse(settings.monochrome)
-            assertTrue(settings.scrollPageTurn && settings.horizontalPageTurn)
+            assertFalse(settings.scrollPageTurn)
+            assertTrue(settings.horizontalPageTurn)
         }
-        compose.onNodeWithText("滚动翻页").performScrollTo().performClick()
+        compose.onNodeWithText("滚动翻页").assertDoesNotExist()
         compose.runOnIdle { assertFalse(settings.scrollPageTurn); assertTrue(settings.horizontalPageTurn) }
         compose.onNodeWithText("黑白色调").assertDoesNotExist()
         compose.onNodeWithText("常用").performClick()
@@ -206,9 +209,9 @@ class EInkAndCloudFilterTest {
         compose.onNodeWithText("电子纸阅读模式").performScrollTo().performClick()
         compose.onNodeWithText("连续滚动").assertIsSelected()
         compose.onNodeWithText("滚动翻页").assertDoesNotExist()
-        compose.runOnIdle { assertFalse(settings.showPageButtons); assertFalse(settings.volumeKeys); assertEquals("dark", settings.resolvedTheme) }
+        compose.runOnIdle { assertFalse(settings.showPageButtons); assertFalse(settings.volumeKeys); assertEquals("paper", settings.resolvedTheme) }
         compose.onNodeWithText("电子纸阅读模式").performClick()
-        compose.onNodeWithText("自动分页").assertIsSelected()
+        compose.onNodeWithText("横向分页").assertIsSelected()
         compose.runOnIdle { assertFalse(settings.scrollPageTurn); assertTrue(settings.horizontalPageTurn); assertEquals("dark", settings.resolvedTheme) }
     }
 

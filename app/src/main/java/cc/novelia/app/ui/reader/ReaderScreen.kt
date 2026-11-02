@@ -323,7 +323,9 @@ import kotlinx.serialization.encodeToString
         }
         // 触摸状态和动画偏好在当前帧立即生效，即使旧回弹尚未结束。
         val chapterPullOffset = if(eInkInteraction) 0f else if(chapterPull.active || reducedMotion) chapterPull.offset else chapterPullReturn.value
-        val eInk = remember { EInkPageState(position) }
+        val fixedPager = remember { EInkPageState(position) }
+        val rowPager = remember { RowPagingState(position) }
+        val eInk: ReaderPager = if(settings.rowPagination) rowPager else fixedPager
         val positionLayout = rememberReaderPositionLayout(position, paragraphs, settings, scroll, eInk, readerFont.typeface)
         val positionState = positionLayout.state
         val layoutGeneration = positionLayout.layoutGeneration
@@ -641,7 +643,7 @@ import kotlinx.serialization.encodeToString
             seekTarget = target
             seekJob = scope.launch {
                 try {
-                    if(settings.staticPagination) eInk.move(chapterSeekPage(target, eInk.pages.size) - eInk.pageIndex)
+                    if(settings.staticPagination) eInk.seekPage(chapterSeekPage(target, eInk.pages.size))
                     else scroll.seekChapter(target, seekIndex, paragraphs, scrollLayouts, animate = !reducedMotion)
                 } finally {
                     // 已取消的预览不得覆盖新一轮拖动的待定位目标。
@@ -780,18 +782,28 @@ import kotlinx.serialization.encodeToString
             val bodyInputEnabled = volumeKeysActive && !leaving && !chapterLoad.loading && !positionState.restoringAnchor && positionState.initialAnchorRestored && seekTarget == null
             val openToc: () -> Unit = { if(wide) { setWideToc(true); tocQuery = ""; tocLocateRequest++ } else toc = true }
             val tapNavigation = rememberReaderTapNavigation(settings.tapPageTurn, bodyInputEnabled, { menu = !menu }, { page(it) }, settings.resolvedTapZoneMap, openToc)
-            if(settings.staticPagination) EInkPage(paragraphs, settings, eInk,
-                Modifier.testTag("reader-page").then(readerInteractionModifier { recordReadingInteraction(); pauseReadingAutomation() })
+            if(settings.staticPagination) {
+                val bodyModifier = Modifier.testTag("reader-page").then(readerInteractionModifier { recordReadingInteraction(); pauseReadingAutomation() })
                     .align(Alignment.TopCenter).fillMaxHeight().windowInsetsPadding(readingInsets)
                     .padding(bottom = persistentBottomHeight)
-                    .fillMaxWidth(),
-                imageModel = { it.imageUrl ?: it.localImageId?.takeIf { ref.isLocal }?.let { id -> c.store.documentImage(ref.id, id) } },
+                    .fillMaxWidth()
+                val imageOf: (ReadingParagraph) -> Any? = { it.imageUrl ?: it.localImageId?.takeIf { ref.isLocal }?.let { id -> c.store.documentImage(ref.id, id) } }
+                if(settings.rowPagination) RowPagedReader(paragraphs, settings, rowPager, bodyModifier,
+                    imageModel = imageOf,
+                    onToggleMenu = { menu = !menu }, onSelect = { selected = it }, onPage = { page(it) },
+                    background = background, foreground = foreground, activeMatch = if(search) activeMatch else spokenMatch ?: activeMatch, annotations = annotations,
+                    highlightLayers = highlightLayers,
+                    interactionEnabled = bodyInputEnabled, contentPadding = PaddingValues(horizontal = settings.resolvedHorizontalMargin.dp, vertical = settings.resolvedVerticalMargin.dp), onNavigate = openToc,
+                    onNote = { pauseReadingAutomation(); epubNote = it }, chapterTitle = chapter.title,
+                    onSavePosition = { savePosition() })
+                else EInkPage(paragraphs, settings, fixedPager, bodyModifier,
+                imageModel = imageOf,
                 onToggleMenu = { menu = !menu }, onSelect = { selected = it }, onPage = { page(it) },
                 background = background, foreground = foreground, activeMatch = if(search) activeMatch else spokenMatch ?: activeMatch, annotations = annotations,
                 highlightLayers = highlightLayers,
                 interactionEnabled = bodyInputEnabled, contentPadding = PaddingValues(horizontal = settings.resolvedHorizontalMargin.dp, vertical = settings.resolvedVerticalMargin.dp), onNavigate = openToc,
                 onNote = { pauseReadingAutomation(); epubNote = it }, chapterTitle = chapter.title)
-            else LazyColumn(state = scroll, overscrollEffect = null, modifier = Modifier.testTag("reader-scroll")
+            } else LazyColumn(state = scroll, overscrollEffect = null, modifier = Modifier.testTag("reader-scroll")
                 .then(readerInteractionModifier { recordReadingInteraction(); pauseReadingAutomation() }).align(Alignment.TopCenter).fillMaxHeight()
                 .windowInsetsPadding(readingInsets).padding(bottom = persistentBottomHeight).fillMaxWidth()
                 .onSizeChanged { size ->

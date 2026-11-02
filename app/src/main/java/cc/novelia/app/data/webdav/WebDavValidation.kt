@@ -248,7 +248,7 @@ internal object WebDavValidation {
                 }
             }
             "brightness" -> number(value, -1.0, 1.0)
-            "paginationMode" -> enumText(value, setOf("scroll", "auto"))
+            "paginationMode" -> enumText(value, ReaderSettings.PAGINATION_MODES.toSet())
             "orientation" -> enumText(value, ReaderSettings.ORIENTATIONS.toSet())
             "prefetchChapters" -> nonnegativeInt(value, 20)
             // 点击分区方案的编码串：限长避免同步文件被塞入超大数据，内容本身在解析时再校验。

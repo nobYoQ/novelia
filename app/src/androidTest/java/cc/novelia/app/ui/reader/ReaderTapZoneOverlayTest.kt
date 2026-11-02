@@ -126,8 +126,12 @@ class ReaderTapZoneOverlayTest {
         compose.waitForIdle()
         compose.mainClock.autoAdvance = false
         try {
-            page.performTouchInput { swipeUp() }
+            page.performTouchInput { swipeLeft() }
             compose.runOnIdle { assertEquals(2, state.pageIndex) }
-        } finally { compose.mainClock.autoAdvance = true }
+        } finally {
+            compose.mainClock.autoAdvance = true
+            // 先完成暂停时钟期间排队的页面重组，再销毁测试 Activity。
+            compose.waitForIdle()
+        }
     }
 }

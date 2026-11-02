@@ -77,7 +77,7 @@ import kotlinx.serialization.Serializable
     val brightness: Float = -1f, val speechRate: Float = 1f, val speechMinutes: Int = 30, val traditional: Boolean = false, val speechLanguage: String = "auto",
     // 通过默认值迁移旧版隐式分页模式和始终显示的静态翻页按钮。
     val paginationMode: String = if(eInkMode || scrollPageTurn || horizontalPageTurn) "auto" else "scroll",
-    val showPageButtons: Boolean = paged || paginationMode == "auto",
+    val showPageButtons: Boolean = paged || paginationMode in listOf("auto", "row"),
     val beforeEInk: ReaderPagingState? = null, val eInkPreferences: ReaderPagingState? = null,
     val toolbarTransparency: Float = if(eInkMode) 0f else .25f,
     val prefetchChapters: Int = 3, val prefetchWifiOnly: Boolean = true,
@@ -122,6 +122,8 @@ import kotlinx.serialization.Serializable
         val ORIENTATIONS = listOf("system", "portrait", "landscape")
         val INDENT_SIZE_RANGE = 0..20
         val SPEECH_TIMER_OPTIONS = listOf(0, 15, 30, 60)
+        val PAGINATION_MODES = listOf("scroll", "auto", "row")
+        val PAGINATION_LABELS = listOf("连续滚动", "横向分页", "行带分页")
         const val MAX_SPEECH_MINUTES = 1_440
         fun speechTimerLabel(minutes: Int) = if(minutes == 0) "不限时" else "$minutes 分钟"
     }
@@ -157,11 +159,13 @@ import kotlinx.serialization.Serializable
     val resolvedTapZoneMap get() = if (tapZoneMap.isBlank()) cc.novelia.app.reader.ReaderTapZoneMap.Default
         else cc.novelia.app.reader.ReaderTapZoneMap.decode(tapZoneMap)
     fun withTheme(selected: String) = copy(theme = selected, monochrome = false)
-    val staticPagination get() = paginationMode == "auto"
+    val rowPagination get() = paginationMode == "row"
+    val staticPagination get() = paginationMode == "auto" || rowPagination
     fun withPaginationMode(selected: String): ReaderSettings {
+        require(selected in PAGINATION_MODES)
         // 从滚动阅读首次切换分页时提供可用手势；之后切换模式保留已有选择。
-        val needsGestures = selected == "auto" && !staticPagination && !scrollPageTurn && !horizontalPageTurn && !showPageButtons && !tapPageTurn
-        return copy(paginationMode = selected, scrollPageTurn = scrollPageTurn || needsGestures,
+        val needsGestures = selected != "scroll" && !horizontalPageTurn && !showPageButtons && !tapPageTurn
+        return copy(paginationMode = selected, scrollPageTurn = if(selected == "auto") false else scrollPageTurn,
             horizontalPageTurn = horizontalPageTurn || needsGestures)
     }
     private fun pagingState() = ReaderPagingState(
@@ -281,7 +285,7 @@ import kotlinx.serialization.Serializable
     fun withEInkMode(enabled: Boolean): ReaderSettings {
         if(enabled == eInkMode) return this
         return if(enabled) {
-            val target = eInkPreferences ?: ReaderPagingState(paginationMode = "auto", scrollPageTurn = true,
+            val target = eInkPreferences ?: ReaderPagingState(paginationMode = "auto", scrollPageTurn = false,
                 horizontalPageTurn = true, showPageButtons = true, volumeKeys = true)
             withPagingState(target).copy(eInkMode = true, beforeEInk = pagingState(),
                 toolbarTransparency = target.toolbarTransparency ?: 0f)

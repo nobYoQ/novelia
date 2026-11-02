@@ -51,7 +51,7 @@ class EInkReaderFlowTest {
             compose.onNodeWithText("上一屏").assertDoesNotExist()
             compose.onNodeWithContentDescription("阅读设置").performClick()
             compose.onNodeWithText("翻页").performClick()
-            compose.onNodeWithText("自动分页").performScrollTo().performClick()
+            compose.onNodeWithText("横向分页").performScrollTo().performClick()
             screenshot("pagination-preferences")
             compose.onNodeWithText("关闭面板").performClick()
             compose.onNodeWithTag("reader-page").assertExists()
@@ -66,6 +66,16 @@ class EInkReaderFlowTest {
             val anchor = app.store.state.value.positions.getValue(ref.key).let { it.index to it.textOffset }
             compose.onNodeWithText("下一页").performClick()
             compose.waitUntil(10_000) { app.store.state.value.positions.getValue(ref.key).let { it.index to it.textOffset } != anchor }
+            val fixedAnchor = app.store.state.value.positions.getValue(ref.key).let { it.index to it.textOffset }
+            compose.onNodeWithContentDescription("阅读设置").performClick()
+            compose.onNodeWithText("翻页").performClick()
+            compose.onNodeWithText("行带分页").performScrollTo().performClick()
+            compose.onNodeWithText("关闭面板").performClick()
+            compose.onNodeWithTag("reader-page").assertExists()
+            compose.waitForIdle()
+            compose.runOnIdle { assertEquals(fixedAnchor, app.store.state.value.positions.getValue(ref.key).let { it.index to it.textOffset }) }
+            compose.onNodeWithText("下一页").performClick()
+            compose.waitUntil(10_000) { app.store.state.value.positions.getValue(ref.key).let { it.index to it.textOffset } != fixedAnchor }
             compose.onNodeWithContentDescription("阅读设置").performClick()
             compose.onNodeWithText("翻页").performClick()
             compose.onNodeWithText("连续滚动").performScrollTo().performClick()
@@ -134,7 +144,7 @@ class EInkReaderFlowTest {
             }
             compose.onNodeWithContentDescription("阅读设置").performClick()
             compose.onNodeWithText("翻页").performClick()
-            compose.onNodeWithText("自动分页").performScrollTo().performClick()
+            compose.onNodeWithText("横向分页").performScrollTo().performClick()
             compose.onNodeWithText("关闭面板").performClick()
             compose.waitUntil(10_000) { (app.store.state.value.positions[ref.key]?.textOffset ?: 0) > 0 && app.store.state.value.positions[ref.key]?.offset == 0 }
             compose.runOnIdle { assertEquals(saved.textOffset, app.store.state.value.positions.getValue(ref.key).textOffset) }

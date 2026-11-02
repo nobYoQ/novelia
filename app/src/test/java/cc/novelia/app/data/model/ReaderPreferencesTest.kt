@@ -287,11 +287,11 @@ class ReaderPreferencesTest {
         assertTrue(legacyOff.withEInkMode(true).showPageButtons)
     }
 
-    @Test fun enablingEInkPreservesThemeAndEnablesBothGestures() {
+    @Test fun enablingEInkPreservesThemeAndSelectsHorizontalPaging() {
         val settings = ReaderSettings(theme = "dark").withEInkMode(true)
         assertEquals("dark", settings.theme)
         assertFalse(settings.monochrome)
-        assertTrue(settings.scrollPageTurn)
+        assertFalse(settings.scrollPageTurn)
         assertTrue(settings.horizontalPageTurn)
         assertTrue(settings.staticPagination)
         assertTrue(settings.showPageButtons)
@@ -305,7 +305,8 @@ class ReaderPreferencesTest {
         assertFalse(flowing.showPageButtons)
         val automatic = flowing.withPaginationMode("auto")
         assertTrue(automatic.staticPagination)
-        assertTrue(automatic.scrollPageTurn && automatic.horizontalPageTurn)
+        assertFalse(automatic.scrollPageTurn)
+        assertTrue(automatic.horizontalPageTurn)
         assertFalse(automatic.eInkMode)
         val buttonsOnly = automatic.copy(scrollPageTurn = false, horizontalPageTurn = false, showPageButtons = true)
         assertTrue(buttonsOnly.staticPagination)
