@@ -818,7 +818,10 @@ import kotlinx.serialization.encodeToString
                     chapter.nextId?.let { openChapter(it, inline = true) }
                 }
                 .graphicsLayer { translationY = -chapterPullOffset }
-                , contentPadding = PaddingValues(horizontal = bodyHorizontalPadding, vertical = settings.resolvedVerticalMargin.dp), verticalArrangement = Arrangement.spacedBy(settings.resolvedParagraphSpacing.dp)) {
+                // 上下页边距属于视口；放在列表内容里会随章节滚走，章中正文仍会贴住屏幕边缘。
+                // 留白保留在手势范围内，只缩小、裁切正文的滚动区域。
+                .padding(vertical = settings.resolvedVerticalMargin.dp).clipToBounds()
+                , contentPadding = PaddingValues(horizontal = bodyHorizontalPadding), verticalArrangement = Arrangement.spacedBy(settings.resolvedParagraphSpacing.dp)) {
                 item("title", contentType = "title") {
                     Column(Modifier.fillMaxWidth().clickable(
                         interactionSource = remember { MutableInteractionSource() }, indication = null,

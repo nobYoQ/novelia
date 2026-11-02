@@ -142,6 +142,86 @@ class ReaderSpacingTest {
         compose.runOnIdle { assertEquals(0f, settings.paragraphSpacing, 0f) }
     }
 
+    @Test fun eInkSpacingButtonsRespondToTouchInCompactPreferences() {
+        var settings by mutableStateOf(ReaderSettings().withEInkMode(true))
+        compose.setContent { AppInteractionMode(eInk = true, reducedMotion = true) { NoveliaTheme("light") {
+            ReaderPreferencesSheet({}) { _, _ ->
+                ReaderPreferences(settings, perBook = true, defaultSettings = ReaderSettings(),
+                    modifier = Modifier.fillMaxSize()) { settings = it }
+            }
+        } } }
+        fun tap(description: String) {
+            compose.onNodeWithContentDescription(description, substring = true)
+                .performScrollTo().assertIsDisplayed().performTouchInput { click() }
+        }
+        tap("增大 段距")
+        compose.runOnIdle { assertEquals(9f, settings.paragraphSpacing, 0f) }
+        tap("减小 段距")
+        compose.runOnIdle { assertEquals(8f, settings.paragraphSpacing, 0f) }
+        compose.onNodeWithText("更多").performTouchInput { click() }
+        compose.onNodeWithText("进阶排版").performScrollTo().performTouchInput { click() }
+        tap("增大 上下页边距")
+        compose.runOnIdle { assertEquals(17f, settings.verticalMargin, 0f) }
+        tap("减小 上下页边距")
+        compose.runOnIdle { assertEquals(16f, settings.verticalMargin, 0f) }
+    }
+
+    @Test fun eInkSpacingButtonsRemainReachableWithLargeTextOnNarrowScreens() {
+        var settings by mutableStateOf(ReaderSettings().withEInkMode(true))
+        compose.setContent { AppInteractionMode(eInk = true, reducedMotion = true) { NoveliaTheme("light") {
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density, 2f)) {
+                ReaderPreferences(settings, perBook = true, defaultSettings = ReaderSettings(),
+                    modifier = Modifier.width(320.dp).fillMaxHeight()) { settings = it }
+            }
+        } } }
+        fun tap(description: String) {
+            val button = compose.onNodeWithContentDescription(description, substring = true).performScrollTo()
+            button.assertIsDisplayed().assertWidthIsAtLeast(48.dp).performTouchInput { click() }
+        }
+        tap("增大 段距")
+        compose.runOnIdle { assertEquals(9f, settings.paragraphSpacing, 0f) }
+        tap("减小 段距")
+        compose.runOnIdle { assertEquals(8f, settings.paragraphSpacing, 0f) }
+        compose.onNodeWithText("更多").performTouchInput { click() }
+        compose.onNodeWithText("进阶排版").performScrollTo().performTouchInput { click() }
+        tap("增大 上下页边距")
+        compose.runOnIdle { assertEquals(17f, settings.verticalMargin, 0f) }
+        tap("减小 上下页边距")
+        compose.runOnIdle { assertEquals(16f, settings.verticalMargin, 0f) }
+    }
+
+    @Test fun smallSpacingAndVerticalMarginChangesUpdateEvenWhenPageBreaksStayTheSame() {
+        var settings by mutableStateOf(ReaderSettings(fontSize = 14f, lineHeight = 1f,
+            paragraphSpacing = 8f, verticalMargin = 16f, indent = false).withEInkMode(true))
+        val paragraphs = (1..3).map { ReadingParagraph(it - 1, listOf(TextPart("正文第 $it 段", "sakura"))) }
+        val state = EInkPageState(null)
+        compose.setContent { NoveliaTheme("light") {
+            CompositionLocalProvider(LocalDensity provides Density(1f)) {
+                Box(Modifier.requiredWidth(327.dp).height(300.dp).testTag("spacing-viewport")) {
+                    EInkPage(paragraphs, settings, state, Modifier.fillMaxSize(), imageModel = { null },
+                        onToggleMenu = {}, onSelect = {}, onPage = state::move,
+                        contentPadding = PaddingValues(vertical = settings.resolvedVerticalMargin.dp))
+                }
+            }
+        } }
+        compose.waitUntil(10_000) { state.ready }
+        val original = state.pages
+        for((gap, margin) in listOf(9f to 17f, 0f to 0f, 32f to 64f)) {
+            val previous = state.pages
+            compose.runOnIdle { settings = settings.copy(paragraphSpacing = gap, verticalMargin = margin) }
+            compose.waitUntil(10_000) { state.ready && state.pages !== previous }
+            assertEquals("重排无需改变分页断点", original, state.pages)
+            val first = compose.onNodeWithText("正文第 1 段", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+            val second = compose.onNodeWithText("正文第 2 段", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+            val viewport = compose.onNodeWithTag("spacing-viewport").fetchSemanticsNode().boundsInRoot
+            assertEquals(margin, first.top - viewport.top, 1f)
+            assertEquals(gap, second.top - first.bottom, 1f)
+            assertTrue(compose.onNodeWithText("正文第 3 段", useUnmergedTree = true)
+                .fetchSemanticsNode().boundsInRoot.bottom <= viewport.bottom - margin)
+        }
+    }
+
     private fun capture(tag: String, name: String) {
         val bitmap = compose.onNodeWithTag(tag).captureToImage().asAndroidBitmap()
         File(InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null), name)
