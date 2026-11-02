@@ -161,9 +161,9 @@ class ReaderSpacingTest {
         compose.onNodeWithText("更多").performTouchInput { click() }
         compose.onNodeWithText("进阶排版").performScrollTo().performTouchInput { click() }
         tap("增大 上下页边距")
-        compose.runOnIdle { assertEquals(17f, settings.verticalMargin, 0f) }
+        compose.runOnIdle { assertEquals(1f, settings.verticalMargin, 0f) }
         tap("减小 上下页边距")
-        compose.runOnIdle { assertEquals(16f, settings.verticalMargin, 0f) }
+        compose.runOnIdle { assertEquals(0f, settings.verticalMargin, 0f) }
     }
 
     @Test fun eInkSpacingButtonsRemainReachableWithLargeTextOnNarrowScreens() {
@@ -186,9 +186,9 @@ class ReaderSpacingTest {
         compose.onNodeWithText("更多").performTouchInput { click() }
         compose.onNodeWithText("进阶排版").performScrollTo().performTouchInput { click() }
         tap("增大 上下页边距")
-        compose.runOnIdle { assertEquals(17f, settings.verticalMargin, 0f) }
+        compose.runOnIdle { assertEquals(1f, settings.verticalMargin, 0f) }
         tap("减小 上下页边距")
-        compose.runOnIdle { assertEquals(16f, settings.verticalMargin, 0f) }
+        compose.runOnIdle { assertEquals(0f, settings.verticalMargin, 0f) }
     }
 
     @Test fun smallSpacingAndVerticalMarginChangesUpdateEvenWhenPageBreaksStayTheSame() {

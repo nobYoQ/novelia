@@ -88,10 +88,10 @@ class ReaderPreferencesTest {
         assertEquals("landscape", settings.withEInkMode(true).withEInkMode(false).orientation)
         assertEquals("system", settings.copy(orientation = "invalid").resolvedOrientation)
     }
-    @Test fun marginsAndSidebarPreserveLegacyLayoutAndSurvivePerBookBackupsAndEInk() {
+    @Test fun marginsAndSidebarUseDefaultsAndSurvivePerBookBackupsAndEInk() {
         val old = appJson.decodeFromString<ReaderSettings>("{}")
         assertEquals(24f, old.horizontalMargin)
-        assertEquals(16f, old.verticalMargin)
+        assertEquals(0f, old.verticalMargin)
         assertTrue(old.showWideToc)
         val custom = old.copy(horizontalMargin = 0f, verticalMargin = 48f, showWideToc = false)
         val state = LibraryState(reader = old, bookSettings = mapOf("local/book" to custom))

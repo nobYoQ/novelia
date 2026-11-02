@@ -101,7 +101,7 @@ import kotlinx.serialization.Serializable
     // 字体文件仅保存在本机；切换系统字体时保留已导入字体，便于切回。
     val fontFamily: String = "system",
     val customFont: ReaderCustomFont? = null,
-    val horizontalMargin: Float = 24f, val verticalMargin: Float = 16f,
+    val horizontalMargin: Float = 24f, val verticalMargin: Float = 0f,
     val showWideToc: Boolean = true,
     val orientation: String = "system",
     // 自动阅读仅记住速度；运行状态属于当前前台阅读会话，不随备份或重启恢复。
@@ -136,7 +136,7 @@ import kotlinx.serialization.Serializable
     val validSpeechTimer get() = speechMinutes in 0..MAX_SPEECH_MINUTES
     val resolvedParagraphSpacing get() = if(paragraphSpacing.isFinite()) paragraphSpacing.coerceIn(0f, 32f) else 8f
     val resolvedHorizontalMargin get() = if(horizontalMargin.isFinite()) horizontalMargin.coerceIn(0f, 64f) else 24f
-    val resolvedVerticalMargin get() = if(verticalMargin.isFinite()) verticalMargin.coerceIn(0f, 64f) else 16f
+    val resolvedVerticalMargin get() = if(verticalMargin.isFinite()) verticalMargin.coerceIn(0f, 64f) else 0f
     val resolvedOrientation get() = orientation.takeIf { it in ORIENTATIONS } ?: "system"
     val resolvedAutoReadSpeed get() = if(autoReadSpeed.isFinite()) autoReadSpeed.coerceIn(5f, 80f) else 20f
     val resolvedAutoReadIntervalSeconds get() = autoReadIntervalSeconds.coerceIn(5, 120)
