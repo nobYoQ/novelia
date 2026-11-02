@@ -124,6 +124,24 @@ class RowScrollSettlingTest {
         assertEquals(state.scrollTarget, state.viewportTop, .01f)
     }
 
+    @Test fun pressingAgainStopsPlatformInertiaWithoutStartingASnap() {
+        show()
+        compose.mainClock.autoAdvance = false
+        page.performTouchInput { swipe(Offset(150f, 290f), Offset(150f, 50f), 80) }
+        repeat(4) { compose.mainClock.advanceTimeByFrame() }
+        val interrupted = state.viewportTop
+        assertTrue(state.scrolling)
+        page.performTouchInput { down(center) }
+        compose.mainClock.advanceTimeBy(400)
+        compose.waitForIdle()
+        assertEquals(interrupted, state.viewportTop, .01f)
+        page.performTouchInput { advanceEventTime(400); up() }
+        compose.mainClock.advanceTimeBy(400)
+        compose.waitForIdle()
+        assertFalse(state.scrolling)
+        assertEquals(state.scrollTarget, state.viewportTop, .01f)
+    }
+
     private fun pixels(): IntArray {
         val bitmap = page.captureToImage().asAndroidBitmap()
         return IntArray(bitmap.width * bitmap.height).also { bitmap.getPixels(it, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height) }

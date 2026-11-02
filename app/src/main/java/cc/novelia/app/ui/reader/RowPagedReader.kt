@@ -1,13 +1,12 @@
 package cc.novelia.app.ui.reader
 
 import android.animation.ValueAnimator
-import androidx.compose.animation.core.AnimationState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animate
-import androidx.compose.animation.core.animateDecay
-import androidx.compose.animation.core.exponentialDecay
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.ScrollScope
+import androidx.compose.foundation.gestures.ScrollableDefaults
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -23,11 +22,13 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Velocity
 import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.reader.*
 import cc.novelia.app.ui.components.media.IllustrationViewer
@@ -74,6 +75,7 @@ private data class RowMeasurement(val input: RowMeasureInput, val chapter: Measu
     val latestPage by rememberUpdatedState(onPage)
     val latestSave by rememberUpdatedState(onSavePosition)
     val scope = rememberCoroutineScope()
+    val flingBehavior = ScrollableDefaults.flingBehavior()
     var gestureJob by remember { mutableStateOf<Job?>(null) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
     var outgoingTop by remember { mutableStateOf<Float?>(null) }
@@ -172,14 +174,15 @@ private data class RowMeasurement(val input: RowMeasureInput, val chapter: Measu
                     return
                 }
                 gestureJob = scope.launch {
-                    if(abs(velocity) >= with(density) { 150.dp.toPx() }) {
-                        var previous = 0f
-                        AnimationState(0f, velocity).animateDecay(exponentialDecay()) {
-                            val delta = value - previous
-                            previous = value
-                            if(abs(state.scrollBy(delta) - delta) > .5f) cancelAnimation()
-                        }
+                    // 与连续滚动的 LazyColumn 共用平台惯性，不另设速度倍率或启动门槛。
+                    with(flingBehavior) {
+                        object : ScrollScope {
+                            override fun scrollBy(pixels: Float): Float =
+                                if(state.layout === geometry) state.scrollBy(pixels) else 0f
+                        }.performFling(velocity)
                     }
+                    // 平台惯性可能吞掉取消异常；再次按住时仍须停在当前帧，不能继续吸附。
+                    currentCoroutineContext().ensureActive()
                     if(state.layout !== geometry || !state.scrolling) return@launch
                     val from = state.viewportTop
                     val target = state.scrollTarget
@@ -204,14 +207,14 @@ private data class RowMeasurement(val input: RowMeasureInput, val chapter: Measu
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                         velocity.resetTracking()
-                        velocity.addPosition(down.uptimeMillis, down.position)
+                        velocity.addPointerInputChange(down)
                         // 再次按住即可停止惯性/吸附，不等待触摸越过拖动阈值。
                         if(state.scrolling) gestureJob?.cancel()
                         while(true) {
                             val event = awaitPointerEvent(PointerEventPass.Initial)
-                            event.changes.firstOrNull { it.id == down.id }?.let { velocity.addPosition(it.uptimeMillis, it.position) }
+                            event.changes.firstOrNull { it.id == down.id }?.let { velocity.addPointerInputChange(it) }
                             if(event.changes.none { it.pressed }) {
-                                // 抬手时间也参与测速；按住停顿后松手不能沿用之前的滑动速度。
+                                // 与列表一样保留历史采样，并在抬手时识别停顿，避免沿用旧速度。
                                 awaitPointerEvent(PointerEventPass.Final)
                                 break
                             }
@@ -241,7 +244,8 @@ private data class RowMeasurement(val input: RowMeasureInput, val chapter: Measu
                                 if(axis == 1) latestVerticalSettle(0f) else latestSettle(0)
                                 return@end
                             }
-                            val speed = velocity.calculateVelocity()
+                            val maximum = viewConfiguration.maximumFlingVelocity
+                            val speed = velocity.calculateVelocity(Velocity(maximum, maximum))
                             if(axis == 0 && settings.horizontalPageTurn) {
                                 val fling = abs(speed.x) >= 750.dp.toPx() && speed.x * total.x > 0f
                                 val passed = abs(total.x) >= 40.dp.toPx() || fling
