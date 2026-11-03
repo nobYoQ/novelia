@@ -231,9 +231,9 @@ class ReaderToolbarOverlayTest {
         compose.onNodeWithText("关闭面板").performClick()
         val guide = compose.onNodeWithTag("reader-tap-tutorial").assertIsDisplayed()
         val before = app.store.state.value.positions.getValue(ref.key)
-        compose.onNodeWithTag("tap-zone-region-3").assertIsDisplayed().assertTextContains("上一屏")
+        compose.onNodeWithTag("tap-zone-region-0").assertIsDisplayed().assertTextContains("上一屏")
         compose.onNodeWithTag("tap-zone-region-4").assertIsDisplayed().assertTextContains("工具栏")
-        compose.onNodeWithTag("tap-zone-region-5").assertIsDisplayed().assertTextContains("下一屏")
+        compose.onNodeWithTag("tap-zone-region-2").assertIsDisplayed().assertTextContains("下一屏")
         screenshot("reader-tap-tutorial-scroll")
         guide.performTouchInput { click(Offset(width * .85f, centerY)); swipeUp() }
         assertAnchorEquals(before, app.store.state.value.positions.getValue(ref.key))

@@ -6,6 +6,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
@@ -49,8 +50,13 @@ class ReaderStatusBarUiTest {
         val bar = compose.onNodeWithTag("reader-reading-status-bar").fetchSemanticsNode().boundsInRoot
         val cells = tags.map { tag -> compose.onNodeWithTag(tag).assertIsDisplayed().fetchSemanticsNode().boundsInRoot }
         cells.forEach { assertTrue(it.left >= bar.left && it.right <= bar.right && it.top >= bar.top && it.bottom <= bar.bottom) }
-        cells.zipWithNext().forEach { (a, b) -> assertTrue(a.bottom <= b.top) }
-        listOf("reader-status-clock", "reader-page-counter", "reader-chapter-progress").forEach { tag ->
+        assertTrue(cells.first().bottom <= cells[1].top)
+        cells.drop(1).chunked(2).forEach { row ->
+            assertEquals(row[0].top, row[1].top, 1f)
+            assertTrue(row[0].right <= row[1].left)
+        }
+        assertTrue(cells[1].bottom <= cells[3].top)
+        tags.drop(1).forEach { tag ->
             val layouts = mutableListOf<TextLayoutResult>()
             compose.onNodeWithTag(tag).performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
             assertFalse(layouts.single().isLineEllipsized(0))
@@ -60,6 +66,46 @@ class ReaderStatusBarUiTest {
         compose.onNodeWithTag("reader-status-chapter-title").assertDoesNotExist()
         compose.onNodeWithTag("reader-page-counter").assertDoesNotExist()
         compose.onNodeWithTag("reader-chapter-progress").assertTextEquals("本章 50%")
+    }
+
+    @Test fun allFourShortItemsFitOneRowAcrossPhoneWidthsAndProgressChanges() {
+        val shortItems = listOf("time", "battery", "pages", "progress")
+        var width by mutableStateOf(320.dp)
+        var settings by mutableStateOf(ReaderSettings(paginationMode = "auto", readingStatusItems = listOf("chapter") + shortItems))
+        var state by mutableStateOf(ReaderBottomToolbarState(false, true, true, false, true, false, true, false,
+            1f, true, 9999, 9998, "长章节标题".repeat(20), false, true))
+        compose.setContent { NoveliaTheme("light") {
+            CompositionLocalProvider(LocalDensity provides Density(1f)) {
+                ReaderReadingStatusBar(state, settings, ReaderStatusItems.columns(width.value, 1f), Color.Black, Modifier.width(width))
+            }
+        } }
+        val tags = listOf("reader-status-clock", "reader-status-battery", "reader-page-counter", "reader-chapter-progress")
+        for(size in listOf(320.dp, 360.dp, 390.dp)) {
+            compose.runOnIdle { width = size }
+            val bar = compose.onNodeWithTag("reader-reading-status-bar").fetchSemanticsNode().boundsInRoot
+            val cells = tags.map { compose.onNodeWithTag(it).assertIsDisplayed().fetchSemanticsNode().boundsInRoot }
+            cells.forEach { assertEquals(cells[0].top, it.top, 1f); assertTrue(it.left >= bar.left && it.right <= bar.right) }
+            cells.zipWithNext().forEach { (a, b) -> assertTrue(a.right <= b.left) }
+            assertTrue(compose.onNodeWithTag("reader-status-chapter-title").fetchSemanticsNode().boundsInRoot.bottom <= cells[0].top)
+            val screenshot = java.io.File(InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir("screenshots"),
+                "reader-footer-${size.value.toInt()}.png")
+            compose.onNodeWithTag("reader-reading-status-bar").captureToImage().asAndroidBitmap().let { bitmap ->
+                screenshot.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            }
+            tags.forEach { tag ->
+                val layouts = mutableListOf<TextLayoutResult>()
+                compose.onNodeWithTag(tag).performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+                val layout = layouts.single()
+                assertFalse("$tag 在 $size 不应省略：${layout.layoutInput.text.text}，可用宽度 ${layout.size.width}px",
+                    layout.isLineEllipsized(0))
+            }
+            compose.runOnIdle { state = state.copy(pageCount = 20, pageIndex = 9) }
+            assertEquals(bar.height, compose.onNodeWithTag("reader-reading-status-bar").fetchSemanticsNode().boundsInRoot.height, 1f)
+        }
+        compose.runOnIdle { settings = settings.copy(readingStatusItems = shortItems) }
+        compose.onNodeWithTag("reader-status-chapter-title").assertDoesNotExist()
+        val tops = tags.map { compose.onNodeWithTag(it).fetchSemanticsNode().boundsInRoot.top }
+        tops.forEach { assertEquals(tops[0], it, 1f) }
     }
 
     @Test fun crowdedFooterUsesAFullTitleRowAndOpensTheCompleteTitle() {

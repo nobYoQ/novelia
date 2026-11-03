@@ -92,6 +92,7 @@ class RowPagedReaderTapNavigationTest {
     }
 
     @Test fun doubleTapAndPendingSingleTapDoNotLeakIntoScrolling() {
+        settings = settings.copy(tapZoneMap = ReaderTapZoneMap.encode(ReaderTapZoneMap.Default.withAction(2, 0, true, ReaderTapAction.Navigate)))
         show()
         val page = compose.onNodeWithTag("row-page")
         page.performTouchInput { doubleClick(Offset(280f, 60f), delayMillis = 100) }

@@ -60,7 +60,7 @@ class ReaderTapZoneOverlayTest {
         compose.runOnIdle {
             assertNotNull(saved)
             assertTrue("触摸拖动应改变列宽", saved!!.columnEdges[1] < .3f)
-            assertEquals(listOf(4, 5), saved!!.regionFor(4).cells)
+            assertEquals(listOf(2, 4, 5, 7, 8), saved!!.regionFor(4).cells)
             assertFalse(dismissed)
         }
         compose.onNodeWithTag("tap-zone-individual").performClick()
@@ -79,6 +79,7 @@ class ReaderTapZoneOverlayTest {
     @Test fun tutorialUsesCustomBoundariesAndDoubleActions() {
         val map = ReaderTapZoneMap.Default.withColumnBoundary(1, .2f).withRowBoundary(2, .8f)
             .withAction(1, 1, false, ReaderTapAction.Navigate)
+            .withAction(0, 0, true, ReaderTapAction.Navigate)
         compose.setContent {
             MaterialTheme {
                 Box(Modifier.fillMaxSize().background(Color(0xFFF8F4E9))) {
@@ -91,7 +92,7 @@ class ReaderTapZoneOverlayTest {
         compose.onNodeWithTag("tap-zone-region-4").assertTextContains("目录")
         screenshot("reader-tap-tutorial", "pr2-zones-tutorial")
         compose.onNodeWithContentDescription("隐藏教程控件以查看完整分区").performClick()
-        compose.onNodeWithTag("tap-zone-region-6").assertIsDisplayed().assertTextContains("上一页")
+        compose.onNodeWithTag("tap-zone-region-1").assertIsDisplayed().assertTextContains("上一页")
         screenshot("reader-tap-tutorial", "pr2-zones-tutorial-full")
         compose.onNodeWithText("显示教程控件").performClick()
         compose.onNodeWithText("双击").performClick()

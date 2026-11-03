@@ -15,7 +15,7 @@ import cc.novelia.app.data.model.ReaderStatusItems
 import cc.novelia.app.ui.components.base.*
 
 @Composable internal fun ReaderStatusBarPreferences(items: List<String>, defaults: List<String>, onChange: (List<String>) -> Unit) {
-    Text("勾选显示内容，用箭头调整顺序。页码仅在分页阅读时显示；空间不足时章节名独占首行，其余内容按所选顺序分行。点击底栏章节名可查看完整标题。", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.bodySmall)
+    Text("勾选显示内容，用箭头调整顺序。页码仅在分页阅读时显示；空间不足时章节名独占首行，其余四项在常规字号下同排一行，大字号或更窄窗口按需分行。点击底栏章节名可查看完整标题。", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.bodySmall)
     val all = items + ReaderStatusItems.labels.keys.filterNot { it in items }
     all.forEach { item ->
         val selected = item in items

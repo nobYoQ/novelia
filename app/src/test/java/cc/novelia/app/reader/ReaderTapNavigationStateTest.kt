@@ -10,6 +10,7 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ReaderTapNavigationStateTest {
+    private val customDoubleTap = ReaderTapZoneMap.Default.withAction(0, 0, true, ReaderTapAction.Navigate)
     private class Harness(scope: CoroutineScope, var map: ReaderTapZoneMap = ReaderTapZoneMap.Default) {
         val events = mutableListOf<String>()
         val navigation = ReaderTapNavigation(scope)
@@ -31,7 +32,7 @@ class ReaderTapNavigationStateTest {
     }
 
     @Test fun doubleTapRunsOnlyTheDoubleAction() = runTest {
-        val harness = Harness(this)
+        val harness = Harness(this, customDoubleTap)
         harness.tap(0)
         advanceTimeBy(100)
         assertTrue(harness.events.isEmpty())
@@ -41,7 +42,7 @@ class ReaderTapNavigationStateTest {
     }
 
     @Test fun singleTapWaitsOnlyWhereDoubleTapIsConfigured() = runTest {
-        val harness = Harness(this)
+        val harness = Harness(this, customDoubleTap)
         harness.tap(5)
         assertEquals(listOf("page:1"), harness.events)
         harness.tap(0, 500)
@@ -69,7 +70,7 @@ class ReaderTapNavigationStateTest {
     }
 
     @Test fun disablingDraggingOrDisposingCancelsPendingActions() = runTest {
-        val harness = Harness(this)
+        val harness = Harness(this, customDoubleTap)
         harness.tap(0)
         harness.configure(false)
         advanceUntilIdle()
@@ -83,5 +84,19 @@ class ReaderTapNavigationStateTest {
         harness.navigation.dispose()
         advanceUntilIdle()
         assertTrue(harness.events.isEmpty())
+    }
+
+    @Test fun everyDefaultZoneRespondsOnReleaseWithoutWaitingEvenForRapidRepeatedTaps() = runTest {
+        val harness = Harness(this)
+        val expected = listOf("page:-1", "page:-1", "page:1", "page:-1", "menu", "page:1", "page:-1", "page:1", "page:1")
+        expected.forEachIndexed { cell, action ->
+            repeat(2) { tap ->
+                harness.tap(cell, cell * 500L + tap * 100L)
+                assertEquals(cell * 2 + tap + 1, harness.events.size)
+                assertEquals(action, harness.events.last())
+            }
+        }
+        advanceUntilIdle()
+        assertEquals(18, harness.events.size)
     }
 }

@@ -147,6 +147,8 @@ import kotlin.math.roundToInt
           AppScrollColumn(Modifier.fillMaxWidth()) {
             Text("${if(double) "双击" else "单击"} · ${if(cells.size == 1) "单个格子" else "合并区域（${cells.size} 格）"}",
                 Modifier.padding(20.dp), style = MaterialTheme.typography.titleMedium)
+            if(double) Text("设置双击动作后，该区域的单击会等待双击判断结束；选择“无响应”可恢复即时单击。",
+                Modifier.padding(horizontal = 20.dp, vertical = 4.dp), style = MaterialTheme.typography.bodySmall)
             ReaderTapAction.editable.forEach { action ->
                 ListItem(headlineContent = { Text(action.label(staticPagination)) }, supportingContent = { Text(action.actionHint()) },
                     modifier = Modifier.clickable {
