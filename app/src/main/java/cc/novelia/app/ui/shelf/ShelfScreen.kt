@@ -383,7 +383,15 @@ import kotlinx.coroutines.withContext
                                     .semantics { if(!pageManaging && saved.book.ref.key == selectedBookKey) stateDescription = "已选中" }) {
                                     BookRow(if(filterCharacters) saved.book.copy(totalCharacters = characterCounts.count(saved.book)) else saved.book, onOpen,
                                         status = bookRowStatus(saved.book, saved, state.positions[saved.book.ref.key], state.bookUpdates[saved.book.ref.key], profile?.username),
-                                        showCharacterCount = filterCharacters, compactMetadata = page == 0, trailing = trailing)
+                                        showCharacterCount = filterCharacters, compactMetadata = page == 0, trailing = trailing,
+                                        // 非封面区域：有阅读记录就直接续读，没有则仍进详情
+                                        onRead = {
+                                            val position = state.positions[saved.book.ref.key]
+                                            if(position != null && !pageManaging && !dragSelection.dragging) {
+                                                filtersExpanded = false
+                                                c.read(saved.book.ref, position.chapterId)
+                                            } else onOpen()
+                                        })
                                     if(saved.book.ref.isWenku && (!pageManaging || dragSelection.dragging)) {
                                         val rotation by animateFloatAsState(if(row.expanded) 180f else 0f, tween(if(reducedMotion) 0 else AppMotion.Standard), label = "wenku-volume-disclosure")
                                         AppTextButton(onClick = {
