@@ -249,4 +249,26 @@ class RowPagingStateTest {
         state.finishScroll()
         assertEquals(320f, state.viewportTop, 0f)
     }
+
+    @Test fun settledSliceLeavesThePartlyVisibleRowToTheNextScreen() {
+        // 视口 205、行高 20：前 10 行占满 200，第 11 行只露出 5 像素。
+        val layout = RowPaginationLayout(lines(count = 25, height = 20), 205, 0)
+        val next = layout.screenEnd(0)
+        assertEquals(10, next)
+        // 拖动中保留露头的行，手指拖到哪画到哪。
+        val dragging = layout.slice(0f, true)
+        assertEquals(next + 1, dragging.lines.size)
+        // 静止时它必须让给下一页，否则同一行会在相邻两页各出现一次。
+        val settled = layout.slice(0f, false)
+        assertEquals(next, settled.lines.size)
+        assertFalse(settled.lines.contains(layout.lines[next]))
+    }
+
+    @Test fun settledSliceToleratesAFloatCursorThatIsNotOnARowBoundary() {
+        val layout = RowPaginationLayout(lines(count = 25, height = 20), 200, 0)
+        // 章末收底会把游标停在非行首；判定按实际像素算，不能多露出下一行。
+        val slice = layout.slice(3f, false)
+        assertEquals(10, slice.lines.size)
+        assertTrue(slice.lines.last().let { it.start == layout.lines[9].start })
+    }
 }

@@ -295,8 +295,9 @@ private data class RowMeasurement(val input: RowMeasureInput, val chapter: Measu
                 .graphicsLayer { translationY = -chapterPullOffset }
                 .padding(contentPadding).clipToBounds()) {
                 @Composable fun body(top: Float, x: Float) {
-                    // 静止、滚动、吸附与横翻使用同一切片，底部半行不会在停下时被抽掉。
-                    val slice = remember(geometry, top) { geometry.slice(top, true) }
+                    // 拖动、惯性与吸附中保留首尾局部行跟手；静止后只留整行，
+                    // 底部露头的下一行归下一页，避免同一行在相邻两页各出现一次。
+                    val slice = remember(geometry, top, state.scrolling) { geometry.slice(top, state.scrolling) }
                     val y = geometry.top(geometry.rowAt(top)) - top
                     Box(Modifier.fillMaxSize().graphicsLayer { translationX = x }.background(background).clipToBounds()) {
                         PageBody(slice, chapter, settings, foreground, highlightLayers, annotations, density, context,
