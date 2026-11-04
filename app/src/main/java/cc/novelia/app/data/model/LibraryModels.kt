@@ -76,6 +76,8 @@ fun legacyFolderId(name: String): String = if(name == DEFAULT_FOLDER) DEFAULT_FO
     val discoverWenkuGrid: Boolean = true,
     // 三个书架分区分别记住布局，兼容旧书库时保留列表；不参与 WebDAV 同步。
     val shelfGrid: Boolean = false, val localFilesGrid: Boolean = false, val cloudShelfGrid: Boolean = false,
+    // 书架打开位置仅保存在本机，云端收藏夹按账号隔离；不参与 WebDAV 同步。
+    val rememberLastShelfFolder: Boolean = true, val lastShelfLocation: ShelfLocation = ShelfLocation(),
     val edgeToolbar: EdgeToolbarSettings = EdgeToolbarSettings(),
     val autoSaveCloudFavoritesLocally: Boolean = true,
     // 文件清理仅为本机偏好，默认关闭，普通设置备份会保留这两个选项。

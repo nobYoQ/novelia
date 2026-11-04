@@ -53,6 +53,7 @@ import cc.novelia.app.data.model.SavedBook
 import cc.novelia.app.data.model.createShelfFolder
 import cc.novelia.app.data.model.renameShelfFolder
 import cc.novelia.app.data.model.deleteShelfFolder
+import cc.novelia.app.data.model.restoredShelfLocation
 import cc.novelia.app.data.updates.UpdateWorker
 import cc.novelia.app.ui.components.base.AppAlertDialog
 import cc.novelia.app.ui.components.base.AppLazyColumn
@@ -88,7 +89,16 @@ import kotlinx.coroutines.withContext
     sharedDocuments: List<Uri> = emptyList(), onSharedDocumentsConsumed: (List<Uri>) -> Unit = {}) {
     val state by c.store.state.collectAsStateWithLifecycle()
     val profile by c.session.profile.collectAsStateWithLifecycle()
-    var tab by rememberSaveable { mutableIntStateOf(0) }; var query by rememberSaveable { mutableStateOf("") }; var folder by rememberSaveable { mutableStateOf("全部") }; var sort by rememberSaveable { mutableIntStateOf(0) }
+    var tab by rememberSaveable { mutableIntStateOf(state.restoredShelfLocation().tab) }
+    var folderId by rememberSaveable { mutableStateOf(state.restoredShelfLocation().localFolderId) }
+    val folder = state.folders.firstOrNull { state.folderIds[it] == folderId } ?: "全部"
+    var query by rememberSaveable { mutableStateOf("") }; var sort by rememberSaveable { mutableIntStateOf(0) }
+    LaunchedEffect(tab, folderId, state.folderIds, state.rememberLastShelfFolder) {
+        val validFolderId = folderId?.takeIf { it in state.folderIds.values }
+        folderId = validFolderId
+        c.store.update { if(it.rememberLastShelfFolder) it.copy(lastShelfLocation = it.lastShelfLocation.copy(
+            tab = tab, localFolderId = validFolderId)) else it }
+    }
     var bookType by rememberSaveable { mutableStateOf(ShelfBookType.All) }
     var fileType by rememberSaveable { mutableStateOf(ShelfBookType.All) }
     var readingStatus by rememberSaveable { mutableStateOf("全部") }
@@ -265,7 +275,7 @@ import kotlinx.coroutines.withContext
                     val filterHeight = maxHeight * .9f
                     Column(Modifier.fillMaxSize()) {
                         LocalShelfFilters(page == 1, if(page == 0) bookType else fileType, { if(page == 0) bookType = it else fileType = it },
-                            state.folders, folder, { folder = it }, sort, { sort = it }, query, { query = it }, readingStatus, { readingStatus = it },
+                            state.folders, folder, { folderId = state.folderIds[it] }, sort, { sort = it }, query, { query = it }, readingStatus, { readingStatus = it },
                             filtersExpanded, { filtersExpanded = it }, filterHeight, { createFolder = true }, { renameFolder = true }, { deleteFolder = true },
                             characters = characterFilter, onCharacters = { characterFilter = it },
                             countLabel = "${groups.size} 本" + groups.sumOf { it.volumes.size }.takeIf { it > 0 }?.let { " · $it 分卷" }.orEmpty(),
@@ -291,7 +301,7 @@ import kotlinx.coroutines.withContext
                                 with(density) { continueHeight.toDp() } + 32.dp else 0.dp)) {
                             if(books.isEmpty()) item {
                                 if(query.isNotBlank() || folder != "全部" || readingStatus != "全部" || (if(page == 0) bookType else fileType) != ShelfBookType.All)
-                                    EmptyState("没有符合条件的小说", if(filterCharacters) "可以放宽字数范围、包含未知作品或继续补全字数。" else "试试其他书名、作者、类型或阅读状态。", action = "清除筛选", onAction = { query = ""; folder = "全部"; readingStatus = "全部"; bookType = ShelfBookType.All; fileType = ShelfBookType.All; characterFilter = CharacterCountFilter() })
+                                    EmptyState("没有符合条件的小说", if(filterCharacters) "可以放宽字数范围、包含未知作品或继续补全字数。" else "试试其他书名、作者、类型或阅读状态。", action = "清除筛选", onAction = { query = ""; folderId = null; readingStatus = "全部"; bookType = ShelfBookType.All; fileType = ShelfBookType.All; characterFilter = CharacterCountFilter() })
                                 else EmptyState(if(page == 1) "把故事装进口袋" else "书架等你来填满", if(page == 1) "支持 EPUB、TXT 和 SRT，导入后即可离线阅读。" else "去发现喜欢的小说，或导入你已有的文件。", action = if(page == 1) "导入文件" else "去发现", onAction = { if(page == 1) importLocalFiles() else c.go("discover") }, sticker = MidoriSticker.Welcome)
                             }
                             if(showGrid) items(gridRows, key = { it.first().saved.book.ref.key }, contentType = { "cover-row" }) { groupRow ->
@@ -429,8 +439,8 @@ import kotlinx.coroutines.withContext
         onMount = { volumeManager = volumeGroup.saved }, onManageBook = { selected = it }, onReorder = commitVolumeOrder,
         actions = { selectionActions(false, volumeGroup.volumes.filter { it.book.ref.key in selection }) })
     if(createFolder) TextPrompt("新建收藏夹", "名称", onDismiss = { createFolder = false }) { name -> c.action { c.store.update { it.createShelfFolder(name.trim()) } } }
-    if(renameFolder) TextPrompt("重命名收藏夹", "名称", folder, { renameFolder = false }) { name -> val previous = folder; c.action { c.store.update { it.renameShelfFolder(previous, name.trim()) }; folder = name.trim() } }
-    if(deleteFolder) ConfirmDialog("删除收藏夹？", "其中的书籍会移入默认收藏，文件不会删除。", { deleteFolder = false }, confirmLabel = "删除收藏夹") { val previous = folder; c.action { c.store.update { it.deleteShelfFolder(previous) }; folder = "全部" } }
+    if(renameFolder) TextPrompt("重命名收藏夹", "名称", folder, { renameFolder = false }) { name -> val previous = folder; c.action { c.store.update { it.renameShelfFolder(previous, name.trim()) } } }
+    if(deleteFolder) ConfirmDialog("删除收藏夹？", "其中的书籍会移入默认收藏，文件不会删除。", { deleteFolder = false }, confirmLabel = "删除收藏夹") { val previous = folder; c.action { c.store.update { it.deleteShelfFolder(previous) }; folderId = null } }
     batchRemoval?.let { refs ->
         val deletesCopies = state.deleteLocalCopyOnShelfRemoval && refs.any { it.isLocal }
         ConfirmDialog("移出 ${refs.size} 本书？", if(deletesCopies) "已开启移出书架时删除本地副本：所选本地小说的导入副本会同时删除，无法撤销。原文件、下载文件和阅读记录保留。未选中的分卷会解除挂载。"
