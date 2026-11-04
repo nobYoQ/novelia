@@ -32,7 +32,7 @@ internal fun bookSyncStates(
         .mapNotNull { action -> pendingBookKey(action)?.let { it to action } }
         .groupBy({ it.first }, { it.second }).mapValues { (_, actions) ->
             val operations = actions.map { when {
-                it.path.startsWith("user/read-history/") -> "阅读进度"
+                it.path.startsWith("user/read-history/") -> if(it.method == "DELETE") "删除阅读历史" else "阅读进度"
                 it.method == "DELETE" -> "取消收藏"
                 else -> "收藏"
             } }.distinct().joinToString("、")

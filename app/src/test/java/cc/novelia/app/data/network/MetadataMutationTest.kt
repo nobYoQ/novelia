@@ -13,6 +13,27 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class MetadataMutationTest {
+    @Test fun singleHistoryDeletionUsesTheBookEndpointAndInvalidatesHistoryAndItsDetail() = runBlocking {
+        MockWebServer().use { server ->
+            val store = UiResultStore()
+            val binding = SessionBinding("reader", 1)
+            val first = DetailUiKey("novel/syosetu/n1", binding, 0, "normal")
+            val other = first.copy(path = "novel/syosetu/n2")
+            store.history.put("page", Page(1, listOf(BookCard(BookRef("syosetu", "n1"), "小说"))))
+            store.webDetails.put(first, WebDetail())
+            store.webDetails.put(other, WebDetail())
+            val api = NoveliaApi(null, server.url("/api/").toString(), onResourceMutation = store::novelChanged)
+            server.enqueue(MockResponse().setResponseCode(204))
+            api.request("DELETE", "user/read-history/syosetu/n1")
+            val request = server.takeRequest()
+            assertEquals("DELETE", request.method)
+            assertEquals("/api/user/read-history/syosetu/n1", request.path)
+            assertFalse(store.history.snapshot("page")!!.fresh)
+            assertFalse(store.webDetails.snapshot(first)!!.fresh)
+            assertTrue(store.webDetails.snapshot(other)!!.fresh)
+        }
+    }
+
     @Test fun readingHistoryInvalidatesOnlyTheReadBookWithoutExpiringCatalogMetadata() = runBlocking {
         MockWebServer().use { server ->
             val events = mutableListOf<MetadataMutation>()

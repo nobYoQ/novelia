@@ -19,6 +19,31 @@ class CloudMutationQueueTest {
     }
     private fun action(id: String, path: String = "user/read-history/syosetu/1") = PendingAction(id, "alice", "PUT", path, id)
 
+    @Test fun deletingHistoryReplacesOldProgressWithoutTouchingOtherBooksOrAccounts() = runTest {
+        val queue = CloudMutationQueue()
+        val otherBook = action("other-book", "user/read-history/syosetu/2")
+        val otherAccount = action("other-account").copy(account = "bob")
+        val store = PendingStore(listOf(action("old-progress"), otherBook, otherAccount))
+        val deletion = action("delete-history").copy(method = "DELETE", body = null)
+        assertFalse(queue.submit(deletion, store::update) { assertEquals(deletion, it) })
+        assertEquals(listOf(otherBook, otherAccount), store.pending)
+        val replayed = mutableListOf<PendingAction>()
+        queue.replay("alice", { store.pending }, store::update) { replayed += it }
+        assertEquals(listOf(otherBook), replayed)
+    }
+
+    @Test fun offlineHistoryDeletionReplaysTheDeletionInsteadOfResurrectingOldProgress() = runTest {
+        val queue = CloudMutationQueue()
+        val store = PendingStore(listOf(action("old-progress")))
+        val deletion = action("delete-history").copy(method = "DELETE", body = null)
+        assertTrue(queue.submit(deletion, store::update) { throw IOException("offline") })
+        assertEquals(listOf(deletion), store.pending)
+        val replayed = mutableListOf<PendingAction>()
+        queue.replay("alice", { store.pending }, store::update) { replayed += it }
+        assertEquals(listOf(deletion), replayed)
+        assertTrue(store.pending.isEmpty())
+    }
+
     @Test fun newerOnlineSuccessRemovesOldOfflineWriteBeforeReplay() = runTest {
         val queue = CloudMutationQueue()
         val store = PendingStore()

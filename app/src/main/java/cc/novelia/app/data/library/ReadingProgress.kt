@@ -14,6 +14,11 @@ fun LibraryState.withMigratedReadingHistory(): LibraryState {
     return copy(readingHistory = migrated + readingHistory, historyMigrated = true)
 }
 
+/** 只删除选定书目的历史摘要，保留续读位置、收藏、笔记和统计。 */
+fun LibraryState.withoutReadingHistory(ref: BookRef): LibraryState = withMigratedReadingHistory().let {
+    it.copy(readingHistory = it.readingHistory - ref.key)
+}
+
 /**
  * 保存真实阅读锚点；同一章的完成标记只增不减，回看或笔记跳转仍能更新位置。
  * historyPaused 只暂停历史，续读位置始终保存；缺少的目录计数沿用该章已知值。
