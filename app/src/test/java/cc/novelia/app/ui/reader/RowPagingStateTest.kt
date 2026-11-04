@@ -258,7 +258,7 @@ class RowPagingStateTest {
         // 拖动中保留露头的行，手指拖到哪画到哪。
         val dragging = layout.slice(0f, true)
         assertEquals(next + 1, dragging.lines.size)
-        // 静止时它必须让给下一页，否则同一行会在相邻两页各出现一次。
+        // 关闭局部行显示后，静止切片不再包含底部露头的行。
         val settled = layout.slice(0f, false)
         assertEquals(next, settled.lines.size)
         assertFalse(settled.lines.contains(layout.lines[next]))
@@ -270,5 +270,36 @@ class RowPagingStateTest {
         val slice = layout.slice(3f, false)
         assertEquals(10, slice.lines.size)
         assertTrue(slice.lines.last().let { it.start == layout.lines[9].start })
+    }
+
+    @Test fun settledSliceUsesActualBottomAtChapterEndWithoutDroppingACompleteLine() {
+        val layout = RowPaginationLayout(lines(count = 25, height = 20), 205, 0)
+        // 章末收底可能停在行内：顶部偏移 17 后，第 11 行已完整进入视口。
+        val slice = layout.slice(17f, false)
+        assertEquals(11, slice.lines.size)
+        assertEquals(layout.lines[10], slice.lines.last())
+        assertEquals(12, layout.slice(17f, true).lines.size)
+        assertEquals(10, layout.screenEnd(0))
+    }
+
+    @Test fun partialLineChoiceKeepsPageStartsHistoryAndAnchorsUnchanged() {
+        val state = RowPagingState(null).apply {
+            install(paginateLines(lines(), 205, 0), content, 205, 0)
+            beginScroll()
+            scrollBy(60f)
+            finishScroll()
+        }
+        val layout = state.layout!!
+        val anchor = state.anchor
+        val top = state.viewportTop
+        val starts = layout.pageStarts.toList()
+        assertEquals(layout.slice(top, false).lines.size + 1, layout.slice(top, true).lines.size)
+        assertEquals(anchor, state.anchor)
+        assertEquals(starts, layout.pageStarts)
+        state.move(1)
+        assertEquals(layout.lines[layout.screenEnd(3)], layout.slice(state.viewportTop, false).lines.first())
+        state.move(-1)
+        assertEquals(top, state.viewportTop, 0f)
+        assertEquals(anchor, state.anchor)
     }
 }

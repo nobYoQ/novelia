@@ -10,6 +10,51 @@ class ReaderAnnotationSyncTest {
     private fun documents(state: LibraryState, devices: Boolean = false) = SyncReplica(deviceId = "reader-test")
         .track(emptyMap(), WebDavProjection.library(state, includeDevicePreferences = devices)).bind("dataset").documents
 
+    @Test fun partialLinePreferenceSyncsAndLegacyRecordsKeepLocalChoices() {
+        val hidden = ReaderSettings(rowShowPartialLines = false)
+        val remote = LibraryState(reader = hidden, bookSettings = mapOf(key to ReaderSettings()))
+        val docs = documents(remote)
+        docs.values.forEach { WebDavProjection.validateRecords(it) }
+        val local = LibraryState(bookSettings = mapOf(key to hidden))
+        val restored = WebDavProjection.applyLibrary(local, docs, setOf(SyncDomain.SETTINGS))
+        assertFalse(restored.reader.rowShowPartialLines)
+        assertTrue(restored.bookSettings.getValue(key).rowShowPartialLines)
+        val legacy = docs.getValue(SyncDomain.SETTINGS).let { doc -> doc.copy(records = doc.records.mapValues { (_, record) ->
+            record.copy(fields = record.fields - "rowShowPartialLines")
+        }) }
+        WebDavProjection.validateRecords(legacy)
+        val legacyRestored = WebDavProjection.applyLibrary(local, mapOf(SyncDomain.SETTINGS to legacy), setOf(SyncDomain.SETTINGS))
+        assertTrue(legacyRestored.reader.rowShowPartialLines)
+        assertFalse(legacyRestored.bookSettings.getValue(key).rowShowPartialLines)
+        assertThrows(IllegalArgumentException::class.java) {
+            WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "rowShowPartialLines", JsonPrimitive("false"))
+        }
+    }
+
+    @Test fun partialLinePreferenceSyncsIndependentModesAndAcceptsLegacySnapshots() {
+        val reader = ReaderSettings(rowShowPartialLines = false).withEInkMode(true).copy(rowShowPartialLines = true)
+        val docs = documents(LibraryState(reader = reader), devices = true)
+        docs.values.forEach { WebDavProjection.validateRecords(it) }
+        val restored = WebDavProjection.applyLibrary(LibraryState(), docs, setOf(SyncDomain.SETTINGS), includeDevicePreferences = true).reader
+        assertTrue(restored.rowShowPartialLines)
+        assertFalse(restored.withEInkMode(false).rowShowPartialLines)
+
+        val projection = WebDavProjection.library(LibraryState(reader = reader), includeDevicePreferences = true)
+        val records = projection.getValue(SyncDomain.SETTINGS).toMutableMap()
+        val group = records.getValue("@reader").getValue("devicePreferences").jsonObject
+        val legacyGroup = JsonObject(group.mapValues { (field, value) ->
+            if(field in setOf("activeModeSettings", "beforeEInk", "eInkPreferences") && value is JsonObject)
+                JsonObject(value - "rowShowPartialLines") else value
+        })
+        records["@reader"] = JsonObject((records.getValue("@reader") - "rowShowPartialLines") + ("devicePreferences" to legacyGroup))
+        val legacyDocs = SyncReplica(deviceId = "old").track(emptyMap(), mapOf(SyncDomain.SETTINGS to records)).bind("dataset").documents
+        WebDavProjection.validateRecords(legacyDocs.getValue(SyncDomain.SETTINGS))
+        val local = ReaderSettings(rowShowPartialLines = true).withEInkMode(true).copy(rowShowPartialLines = false)
+        val legacyRestored = WebDavProjection.applyLibrary(LibraryState(reader = local), legacyDocs, setOf(SyncDomain.SETTINGS), includeDevicePreferences = true).reader
+        assertFalse(legacyRestored.rowShowPartialLines)
+        assertTrue(legacyRestored.withEInkMode(false).rowShowPartialLines)
+    }
+
     @Test fun unlimitedTimerSyncsInDefaultAndBookPreferences() {
         val custom = ReaderSettings(speechMinutes = 0)
         val docs = documents(LibraryState(reader = custom, bookSettings = mapOf(key to custom)))

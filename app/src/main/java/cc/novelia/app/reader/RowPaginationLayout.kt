@@ -89,10 +89,9 @@ internal class RowPaginationLayout(val lines: List<PageLine>, val height: Int, v
     /**
      * 显示切片。
      *
-     * [includePartialLines] 为 true 时（拖动、惯性、吸附中）保留首尾局部行，手指拖到哪就画到哪。
-     * 为 false 时（静止）只保留整行：底部只露出一部分的下一行留给下一页，
-     * 否则同一行会在上一页底部露出一截、又在下一页开头完整出现一次。
-     * 边界按实际像素游标判定，不假设 [top] 正好落在行首。
+     * [includePartialLines] 为 true 时保留首尾局部行，延续连续滚动的显示方式。
+     * 为 false 时隐藏底部不完整行；章末收底时顶部仍可能位于行内。
+     * 边界按实际像素游标判定，不假设 [top] 正好落在行首；翻页起点始终由 [screenEnd] 决定。
      */
     fun slice(top: Float, includePartialLines: Boolean): StaticPage {
         if(lines.isEmpty()) return StaticPage(emptyList())

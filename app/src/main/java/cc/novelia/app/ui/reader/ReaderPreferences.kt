@@ -122,6 +122,10 @@ import kotlin.math.roundToInt
                                 else -> "整章连续排列，上下滑动浏览，不提前拆成独立页面。"
                             },
                                 Modifier.padding(horizontal = 20.dp, vertical = 4.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if(value.rowPagination) {
+                                TogglePreference("显示底部不完整行", "开启时保持连续滚动的观感；关闭后静止与横向翻页只显示底部完整行，可能留有空白。上下滚动中始终显示局部行。",
+                                    value.rowShowPartialLines, defaultValue = defaults?.rowShowPartialLines) { onChange(value.copy(rowShowPartialLines = it)) }
+                            }
                             TogglePreference("点击区域翻页", if(value.tapPageTurn) "在正文覆盖层调整区域大小，分别设置单击和双击动作" else "开启后可配置区域大小，以及翻页、目录和工具栏等点击动作",
                                 value.tapPageTurn, defaultValue = defaults?.tapPageTurn) { onChange(value.copy(tapPageTurn = it)) }
                             if(value.tapPageTurn) {

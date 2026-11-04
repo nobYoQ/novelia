@@ -93,22 +93,30 @@ class EInkAndCloudFilterTest {
         compose.setContent { MaterialTheme { ReaderPreferences(settings) { settings = it } } }
         compose.onNodeWithText("翻页").performClick()
         compose.onNodeWithText("连续滚动").assertIsSelected()
+        compose.onNodeWithText("显示底部不完整行").assertDoesNotExist()
         compose.onNodeWithText("滚动翻页").assertDoesNotExist()
         compose.onNodeWithText("左右翻页").assertDoesNotExist()
         compose.onNodeWithText("显示翻页按钮").performScrollTo().performClick()
         compose.runOnIdle { assertTrue(settings.showPageButtons); assertFalse(settings.staticPagination) }
         compose.onNodeWithText("横向分页").performScrollTo().performClick().assertIsSelected()
+        compose.onNodeWithText("显示底部不完整行").assertDoesNotExist()
         compose.onNodeWithText("滚动翻页").assertDoesNotExist()
         compose.onNodeWithText("行带分页").performScrollTo().performClick().assertIsSelected()
-        compose.runOnIdle { assertTrue(settings.rowPagination) }
+        compose.runOnIdle { assertTrue(settings.rowPagination); assertTrue(settings.rowShowPartialLines) }
+        compose.onNodeWithText("显示底部不完整行").performScrollTo().assertIsDisplayed().performClick()
+        compose.runOnIdle { assertFalse(settings.rowShowPartialLines) }
         compose.onNodeWithText("左右翻页").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("显示翻页按钮").performScrollTo().performClick()
         compose.runOnIdle { assertFalse(settings.showPageButtons); assertTrue(settings.staticPagination) }
         compose.onNodeWithText("连续滚动").performScrollTo().performClick().assertIsSelected()
+        compose.onNodeWithText("显示底部不完整行").assertDoesNotExist()
         compose.onNodeWithText("滚动翻页").assertDoesNotExist()
         compose.onNodeWithText("左右翻页").assertDoesNotExist()
         compose.onNodeWithText("显示翻页按钮").performScrollTo().assertIsDisplayed()
         compose.runOnIdle { assertFalse(settings.showPageButtons); assertFalse(settings.staticPagination) }
+        compose.onNodeWithText("行带分页").performScrollTo().performClick()
+        compose.onNodeWithText("显示底部不完整行").performScrollTo().assertIsDisplayed()
+        compose.runOnIdle { assertFalse(settings.rowShowPartialLines) }
     }
 
     @Test fun filterAnimationResizesGraduallyAndReducedMotionFinishesImmediately() {
