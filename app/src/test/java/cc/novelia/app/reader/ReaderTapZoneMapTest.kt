@@ -78,7 +78,7 @@ class ReaderTapZoneMapTest {
     }
 
     @Test fun doubleTapActionsAreSeparateFromSingleTap() {
-        val map = ReaderTapZoneMap.Default
+        val map = ReaderTapZoneMap.Default.withAction(0, 0, true, ReaderTapAction.Navigate)
         assertEquals(ReaderTapAction.PreviousPage, actionAt(map, 0, 0, ReaderTapKind.SingleNotDoubleTap))
         assertEquals(ReaderTapAction.Navigate, actionAt(map, 0, 0, ReaderTapKind.DoubleTap))
     }
@@ -149,9 +149,10 @@ class ReaderTapZoneMapTest {
     }
 
     @Test fun onlyOrthogonallyAdjacentMatchingActionPairsMerge() {
-        val map = ReaderTapZoneMap.Default
+        val map = ReaderTapZoneMap.Default.withAction(0, 0, true, ReaderTapAction.Navigate)
+            .withAction(1, 0, true, ReaderTapAction.Navigate)
         assertEquals(listOf(0, 1), map.regionFor(0).cells)
-        assertEquals(listOf(3), map.regionFor(3).cells) // 单击相同，双击不同。
+        assertEquals(listOf(3, 6), map.regionFor(3).cells) // 单击相同，双击不同。
         val diagonal = ReaderTapZoneMap().withAction(0, 0, false, ReaderTapAction.Menu)
             .withAction(1, 1, false, ReaderTapAction.Menu)
         assertEquals(listOf(0), diagonal.regionFor(0).cells)
@@ -162,7 +163,7 @@ class ReaderTapZoneMapTest {
 
     @Test fun editingOneCellCanSplitAMergedRegion() {
         val map = ReaderTapZoneMap.Default.withAction(1, 0, false, ReaderTapAction.None)
-        assertEquals(listOf(0), map.regionFor(0).cells)
+        assertEquals(listOf(0, 3, 6), map.regionFor(0).cells)
         assertEquals(listOf(1), map.regionFor(1).cells)
         assertEquals(ReaderTapAction.None, map.singleAt(1, 0))
     }
@@ -180,6 +181,21 @@ class ReaderTapZoneMapTest {
         assertEquals(ReaderTapZoneMap.Default, options.resolvedTapZoneMap)
         assertEquals(1f, options.animationFraction, 0f)
         assertEquals(0f, ReaderPageTurningOptions(animationSpeed = 1).animationFraction, 0f)
+    }
+
+    @Test fun oldDefaultsBecomeImmediateButCustomDoubleActionsAndGeometryArePreserved() {
+        val legacy = ReaderTapZoneMap.Default.copy(doubleActions = mapOf(
+            0 to ReaderTapAction.Navigate, 1 to ReaderTapAction.Navigate, 2 to ReaderTapAction.Navigate,
+            6 to ReaderTapAction.Menu, 7 to ReaderTapAction.Menu, 8 to ReaderTapAction.Menu,
+        ))
+        assertTrue(ReaderTapZoneMap.Default.doubleActions.isEmpty())
+        assertEquals(ReaderTapZoneMap.Default, ReaderTapZoneMap.decode(ReaderTapZoneMap.encode(legacy)))
+        val oldFiveParts = ReaderTapZoneMap.encode(legacy.withAction(1, 1, false, ReaderTapAction.None)).split('|').take(5).joinToString("|")
+        assertEquals(ReaderTapZoneMap.Default, ReaderTapZoneMap.decode(oldFiveParts))
+        for(custom in listOf(legacy.withColumnBoundary(1, .2f), legacy.withAction(1, 1, false, ReaderTapAction.None),
+            legacy.withAction(0, 0, true, ReaderTapAction.Menu))) {
+            assertEquals(custom, ReaderTapZoneMap.decode(ReaderTapZoneMap.encode(custom)))
+        }
     }
 
     @Test fun fingerScrollingCapabilitiesMatchTheirNames() {

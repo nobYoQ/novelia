@@ -102,7 +102,7 @@ import cc.novelia.app.ui.navigation.AppController
                 item { ProfileSectionTitle("待同步操作 · ${pending.size}") }
                 items(pending, key = { "pending-${it.id}" }) { action ->
                     val book = state.books.firstOrNull { it.book.ref.key == pendingBookKey(action) }
-                    val operation = when { action.path.startsWith("user/read-history/") -> "阅读进度"; action.method == "DELETE" -> "移除云端收藏"; else -> "保存云端收藏" }
+                    val operation = when { action.path.startsWith("user/read-history/") -> if(action.method == "DELETE") "删除阅读历史" else "阅读进度"; action.method == "DELETE" -> "移除云端收藏"; else -> "保存云端收藏" }
                     ProfileDetailCard(Modifier.testTag("pending-sync-${action.id}")) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(book?.book?.title ?: "作品操作", style = MaterialTheme.typography.titleMedium)

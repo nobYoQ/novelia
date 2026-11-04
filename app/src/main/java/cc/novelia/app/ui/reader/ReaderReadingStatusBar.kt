@@ -41,14 +41,22 @@ import kotlinx.coroutines.isActive
 ) {
     val items = settings.visibleReadingStatusItems
     val rowHeight = with(LocalDensity.current) { 16.sp.toDp() }
-    val compactWidth = (80f * LocalDensity.current.fontScale.coerceAtLeast(1f)).dp
+    val compactWidth = (ReaderStatusItems.compactWidthDp * LocalDensity.current.fontScale.coerceAtLeast(1f)).dp
     Column(modifier.testTag("reader-reading-status-bar").padding(horizontal = 16.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)) {
         ReaderStatusItems.layout(items, columns).forEach { row ->
-            Row(Modifier.fillMaxWidth().height(rowHeight), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            val hasChapter = "chapter" in row
+            Row(Modifier.fillMaxWidth().height(rowHeight),
+                horizontalArrangement = if(hasChapter) Arrangement.spacedBy(8.dp) else Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically) {
                 row.forEachIndexed { index, item ->
                     val align = when(index) { 0 -> TextAlign.Start; row.lastIndex -> TextAlign.End; else -> TextAlign.Center }
-                    val cell = if("chapter" in row && item != "chapter") Modifier.width(compactWidth) else Modifier.weight(1f)
+                    // 短信息独占一行时按实际内容宽度排布，把时钟省下的空间留给长页码。
+                    val cell = when {
+                        item == "chapter" -> Modifier.weight(1f)
+                        hasChapter -> Modifier.width(compactWidth)
+                        else -> Modifier
+                    }
                     when(item) {
                         "time" -> ReaderClock(foreground, cell, align)
                         "battery" -> ReaderBattery(foreground, cell, align)
@@ -78,7 +86,7 @@ import kotlinx.coroutines.isActive
 }
 
 @Composable private fun StatusText(text: String, foreground: Color, modifier: Modifier, align: TextAlign) {
-    Text(text, modifier, color = foreground, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 1,
+    Text(text, modifier, color = foreground, fontSize = 12.sp, lineHeight = 16.sp, letterSpacing = 0.sp, maxLines = 1,
         overflow = TextOverflow.Ellipsis, textAlign = align)
 }
 

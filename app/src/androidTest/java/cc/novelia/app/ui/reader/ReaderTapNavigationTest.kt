@@ -52,6 +52,7 @@ class ReaderTapNavigationTest {
     }
 
     @Test fun realDoubleTapOpensDirectoryOnceAndNoneDoesNotToggleMenu() {
+        settings = settings.copy(tapZoneMap = ReaderTapZoneMap.encode(ReaderTapZoneMap.Default.withAction(2, 0, true, ReaderTapAction.Navigate)))
         paged()
         val page = compose.onNodeWithTag("page")
         page.performTouchInput { doubleClick(Offset(width * .85f, height * .15f), delayMillis = 100) }
@@ -64,6 +65,27 @@ class ReaderTapNavigationTest {
         }
         page.performTouchInput { click(center) }
         compose.runOnIdle { assertEquals(0, menus); assertEquals(1, navigations); assertEquals(listOf(1), turns) }
+    }
+
+    @Test fun allDefaultPageZonesRespondBeforeAnyDoubleTapTimeout() {
+        paged()
+        val page = compose.onNodeWithTag("page")
+        compose.mainClock.autoAdvance = false
+        try {
+            listOf(2, 0, 8, 6, 7, 1, 5, 3).forEachIndexed { index, cell ->
+                page.performTouchInput { click(Offset(width * (cell % 3 + .5f) / 3, height * (cell / 3 + .5f) / 3)) }
+                compose.runOnIdle {
+                    assertEquals("区域 $cell 应松手即翻页", index + 1, turns.size)
+                    assertEquals(if(index % 2 == 0) 1 else -1, turns.last())
+                    assertEquals(0, navigations)
+                    assertEquals(0, menus)
+                }
+                compose.mainClock.advanceTimeByFrame()
+            }
+        } finally {
+            compose.mainClock.autoAdvance = true
+            compose.waitForIdle()
+        }
     }
 
     @Test fun zonesIncludeMarginsAndKeepSwipesAndSemanticMenuActionsIndependent() {

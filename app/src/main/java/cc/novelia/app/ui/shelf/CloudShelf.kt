@@ -24,6 +24,8 @@ import cc.novelia.app.data.library.withCloudReadingMetadata
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.CloudFolders
+import cc.novelia.app.data.model.CloudShelfLocation
+import cc.novelia.app.data.model.restoredCloudShelfLocation
 import cc.novelia.app.data.model.Folder
 import cc.novelia.app.data.network.ALL_CLOUD_FAVORITES
 import cc.novelia.app.data.network.CloudWebFilter
@@ -52,8 +54,8 @@ import cc.novelia.app.ui.navigation.AppController
     val local by c.store.state.collectAsStateWithLifecycle()
     val cacheGeneration by c.store.cacheGeneration.collectAsStateWithLifecycle()
     val binding = c.session.capture()
-    var kind by rememberSaveable { mutableIntStateOf(0) }
-    var folderId by rememberSaveable { mutableStateOf("") }
+    var kind by rememberSaveable { mutableIntStateOf(local.restoredCloudShelfLocation(account).kind) }
+    var folderId by rememberSaveable { mutableStateOf(local.restoredCloudShelfLocation(account).folderId) }
     var page by rememberSaveable { mutableIntStateOf(0) }
     var version by rememberSaveable { mutableIntStateOf(0) }
     var create by remember { mutableStateOf(false) }
@@ -96,7 +98,15 @@ import cc.novelia.app.ui.navigation.AppController
             observeInvalidation = !bulkBusy, validate = { c.session.ensureCurrent(binding) }, showRefreshIndicator = false) { folders, _ ->
             val realFolders = if (kind == 0) folders.favoredWeb else folders.favoredWenku
             val choices = cloudFolderChoices(realFolders)
-            val current = choices.find { it.id == folderId } ?: choices.firstOrNull()
+            val current = CloudShelfLocation(kind, folderId).resolveFolder(choices)
+            // 分页器会预组合邻页，只有实际打开云端书架时才保存选择。
+            LaunchedEffect(active, kind, current?.id, local.rememberLastShelfFolder) {
+                if(active && current != null) {
+                    folderId = current.id
+                    c.store.update { if(it.rememberLastShelfFolder) it.copy(lastShelfLocation = it.lastShelfLocation.copy(
+                        cloud = it.lastShelfLocation.cloud + (account to CloudShelfLocation(kind, current.id)))) else it }
+                }
+            }
             LaunchedEffect(kind, current?.id, sort, filter) {
                 managing = false; selection = emptyMap(); bulkLocal = null; bulkRemoval = null
             }

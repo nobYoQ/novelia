@@ -239,7 +239,7 @@ data class ReaderTapZoneMap(
          * 四个角同时属于一条列和一条行，这里归给横向（与 FBReader 一致：
          * 角格只承载一个动作，避免同一格出现两个冲突的翻页方向）。
          *
-         * 双击在顶部三格跳目录、底部三格收工具栏，给常用操作留了快捷键。
+         * 默认不绑定双击，所有单击区域都在松手时立即响应；双击由用户主动配置。
          */
         val Default: ReaderTapZoneMap = map(
             single = mapOf(
@@ -250,11 +250,12 @@ data class ReaderTapZoneMap(
                 // 中列上下：纵向翻页，正中：工具栏
                 (1 to 0) to ReaderTapAction.PreviousPage, (1 to 1) to ReaderTapAction.Menu, (1 to 2) to ReaderTapAction.NextPage,
             ),
-            double = mapOf(
-                (0 to 0) to ReaderTapAction.Navigate, (1 to 0) to ReaderTapAction.Navigate, (2 to 0) to ReaderTapAction.Navigate,
-                (0 to 2) to ReaderTapAction.Menu, (1 to 2) to ReaderTapAction.Menu, (2 to 2) to ReaderTapAction.Menu,
-            ),
         )
+
+        private val legacyDefault = Default.copy(doubleActions = mapOf(
+            0 to ReaderTapAction.Navigate, 1 to ReaderTapAction.Navigate, 2 to ReaderTapAction.Navigate,
+            6 to ReaderTapAction.Menu, 7 to ReaderTapAction.Menu, 8 to ReaderTapAction.Menu,
+        ))
 
         /**
          * 把方案编码成一行字符串，用于随阅读设置持久化。
@@ -299,8 +300,13 @@ data class ReaderTapZoneMap(
                 val x = stops(parts.getOrElse(5) { "" }, columns) ?: return Default
                 val y = stops(parts.getOrElse(6) { "" }, rows) ?: return Default
                 val result = ReaderTapZoneMap(parts[0].ifBlank { DEFAULT_NAME }, columns, rows, single, double, x, y)
-                // 旧默认方案把中央工具栏写作 None；仅迁移完整的旧默认方案，不改用户的禁用区域。
-                if (parts.size == 5 && result == Default.withAction(1, 1, false, ReaderTapAction.None)) Default else result
+                // 仅迁移完整的旧默认方案；自定义动作、分区大小及显式禁用区域保持不变。
+                when {
+                    result == legacyDefault -> Default
+                    parts.size == 5 && (result == legacyDefault.withAction(1, 1, false, ReaderTapAction.None) ||
+                        result == Default.withAction(1, 1, false, ReaderTapAction.None)) -> Default
+                    else -> result
+                }
             } catch (_: RuntimeException) {
                 Default
             }

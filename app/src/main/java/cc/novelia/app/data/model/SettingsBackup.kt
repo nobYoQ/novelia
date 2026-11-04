@@ -8,4 +8,5 @@ import kotlinx.serialization.Serializable
     val discoverWenkuGrid: Boolean = true,
     val shelfGrid: Boolean = false, val localFilesGrid: Boolean = false, val cloudShelfGrid: Boolean = false,
     val shelfTapToRead: Boolean = false,
+    val rememberLastShelfFolder: Boolean = true,
     val edgeToolbar: EdgeToolbarSettings = EdgeToolbarSettings())

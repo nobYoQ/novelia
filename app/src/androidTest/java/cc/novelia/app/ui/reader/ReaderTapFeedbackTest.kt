@@ -55,6 +55,8 @@ class ReaderTapFeedbackTest {
     @Test fun resizedMergedRegionHighlightsOnlyItsActualRowsAndColumns() {
         val map = ReaderTapZoneMap.Default.withColumnBoundary(1, .2f).withRowBoundary(1, .25f)
             .withRowBoundary(2, .8f).withAction(1, 1, false, ReaderTapAction.NextPage)
+            .withAction(2, 0, true, ReaderTapAction.Navigate).withAction(2, 2, true, ReaderTapAction.Menu)
+            .withAction(1, 2, true, ReaderTapAction.Menu)
         feedback(map)
         try {
             val body = compose.onNodeWithTag("feedback")
@@ -156,9 +158,9 @@ class ReaderTapFeedbackTest {
                 }
             }
         }
-        compose.onNodeWithTag("tap-zone-region-3").assertIsDisplayed().assertTextContains("上一页")
+        compose.onNodeWithTag("tap-zone-region-0").assertIsDisplayed().assertTextContains("上一页")
         compose.onNodeWithText("工具栏").assertIsDisplayed()
-        compose.onNodeWithTag("tap-zone-region-5").assertIsDisplayed().assertTextContains("下一页")
+        compose.onNodeWithTag("tap-zone-region-2").assertIsDisplayed().assertTextContains("下一页")
         compose.onNodeWithContentDescription("关闭点击翻页引导").assertHeightIsAtLeast(48.dp).performTouchInput {
             down(center)
             moveBy(Offset(1f, 1f))
