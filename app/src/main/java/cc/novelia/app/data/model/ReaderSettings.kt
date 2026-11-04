@@ -60,7 +60,8 @@ import kotlinx.serialization.Serializable
     val readingStatusItems: List<String>? = null,
     val showEpubRuby: Boolean? = null,
     val epubFootnotePopup: Boolean? = null,
-    val showEpubStyles: Boolean? = null
+    val showEpubStyles: Boolean? = null,
+    val rowShowPartialLines: Boolean? = null
 )
 
 /**
@@ -113,7 +114,9 @@ import kotlinx.serialization.Serializable
     val epubFootnotePopup: Boolean = true,
     val showEpubStyles: Boolean = true,
     // 保留旧开关，缺失格数的历史设置仍为两格；0 表示不缩进。
-    val indentSize: Int = 2
+    val indentSize: Int = 2,
+    // 行带分页默认保留底部局部行，与连续滚动保持一致；关闭后静止时隐藏底部不完整行。
+    val rowShowPartialLines: Boolean = true
 ) {
     companion object {
         const val MIN_LINE_HEIGHT = .5f
@@ -221,7 +224,8 @@ import kotlinx.serialization.Serializable
         readingStatusItems = readingStatusItems,
         showEpubRuby = showEpubRuby,
         epubFootnotePopup = epubFootnotePopup,
-        showEpubStyles = showEpubStyles
+        showEpubStyles = showEpubStyles,
+        rowShowPartialLines = rowShowPartialLines
     )
     private fun withPagingState(state: ReaderPagingState) = copy(
         mode = state.mode ?: mode,
@@ -276,7 +280,8 @@ import kotlinx.serialization.Serializable
         readingStatusItems = state.readingStatusItems ?: readingStatusItems,
         showEpubRuby = state.showEpubRuby ?: showEpubRuby,
         epubFootnotePopup = state.epubFootnotePopup ?: epubFootnotePopup,
-        showEpubStyles = state.showEpubStyles ?: showEpubStyles
+        showEpubStyles = state.showEpubStyles ?: showEpubStyles,
+        rowShowPartialLines = state.rowShowPartialLines ?: rowShowPartialLines
     )
     /**
      * 切换电子纸时分别记住两种模式的完整阅读配置。

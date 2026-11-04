@@ -179,7 +179,7 @@ internal object WebDavValidation {
         document.records.forEach { (key, record) ->
             if(WebDavMerge.winner(record.existence, existence = true)?.deleted != false) return@forEach
             val required = when (document.domain) {
-                SyncDomain.SETTINGS -> if (key == GLOBAL) portableGlobalFields else if (key.startsWith(BLOCKED)) setOf("kind", "value") else portableReaderFields - setOf("customColors", "showReadingStatusBar", "horizontalMargin", "verticalMargin", "autoReadSpeed", "autoReadIntervalSeconds", "textReplacements", "textReplacementsEnabled", "readingStatusItems", "showEpubRuby", "epubFootnotePopup", "showEpubStyles", "indentSize")
+                SyncDomain.SETTINGS -> if (key == GLOBAL) portableGlobalFields else if (key.startsWith(BLOCKED)) setOf("kind", "value") else portableReaderFields - setOf("customColors", "showReadingStatusBar", "horizontalMargin", "verticalMargin", "autoReadSpeed", "autoReadIntervalSeconds", "textReplacements", "textReplacementsEnabled", "readingStatusItems", "showEpubRuby", "epubFootnotePopup", "showEpubStyles", "indentSize", "rowShowPartialLines")
                 SyncDomain.FAVORITES -> if (key == ORDER) setOf("ids") else if (key.startsWith(FOLDER)) setOf("name") else setOf("book", "folderId", "pinned", "status", "addedAt")
                 SyncDomain.KEYWORDS -> if (key == ORDER) orderFields else if (key.startsWith(CATEGORY)) categoryFields else keywordEntryFields
                 SyncDomain.PROGRESS -> setOf("position")
@@ -189,7 +189,7 @@ internal object WebDavValidation {
             }
             // 老版同步快照可能缺少新增偏好，保留本机选择；字段存在时仍完整校验。
             val optional = when {
-                document.domain == SyncDomain.SETTINGS && (key == READER || key.startsWith(BOOK_SETTING)) -> setOf("devicePreferences", "customColors", "showReadingStatusBar", "horizontalMargin", "verticalMargin", "autoReadSpeed", "autoReadIntervalSeconds", "textReplacements", "textReplacementsEnabled", "readingStatusItems", "showEpubRuby", "epubFootnotePopup", "showEpubStyles", "indentSize")
+                document.domain == SyncDomain.SETTINGS && (key == READER || key.startsWith(BOOK_SETTING)) -> setOf("devicePreferences", "customColors", "showReadingStatusBar", "horizontalMargin", "verticalMargin", "autoReadSpeed", "autoReadIntervalSeconds", "textReplacements", "textReplacementsEnabled", "readingStatusItems", "showEpubRuby", "epubFootnotePopup", "showEpubStyles", "indentSize", "rowShowPartialLines")
                 document.domain == SyncDomain.NOTES || document.domain == SyncDomain.BOOKMARKS -> setOf("selection")
                 else -> emptySet()
             }
@@ -240,7 +240,7 @@ internal object WebDavValidation {
     private fun deviceReaderField(field: String, value: JsonElement) {
         when (field) {
             "activeModeSettings" -> {
-                require(value is JsonObject && value.keys.containsAll(WebDavSchema.readerModeFields - "indentSize") &&
+                require(value is JsonObject && value.keys.containsAll(WebDavSchema.readerModeFields - setOf("indentSize", "rowShowPartialLines")) &&
                     value.keys.all { it in WebDavSchema.readerModeFields }) { "当前阅读模式配置不完整" }
                 value.forEach { (property, propertyValue) ->
                     if(property in portableReaderFields) readerField(property, propertyValue)

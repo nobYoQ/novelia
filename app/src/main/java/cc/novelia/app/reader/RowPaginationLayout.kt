@@ -86,15 +86,28 @@ internal class RowPaginationLayout(val lines: List<PageLine>, val height: Int, v
         return if(row < lines.lastIndex && top - this.top(row) > this.top(row + 1) - top) row + 1 else row
     }
 
-    /** 显示切片可以包含首尾局部行；固定页表仍以完整行统计翻页起点。 */
+    /**
+     * 显示切片。
+     *
+     * [includePartialLines] 为 true 时保留首尾局部行，延续连续滚动的显示方式。
+     * 为 false 时隐藏底部不完整行；章末收底时顶部仍可能位于行内。
+     * 边界按实际像素游标判定，不假设 [top] 正好落在行首；翻页起点始终由 [screenEnd] 决定。
+     */
     fun slice(top: Float, includePartialLines: Boolean): StaticPage {
         if(lines.isEmpty()) return StaticPage(emptyList())
         val from = rowAt(top)
-        var end = screenEnd(from)
         if(includePartialLines) {
-            end = from + 1
+            var end = from + 1
             while(end < lines.size && this.top(end) < top + height) end++
+            return StaticPage(lines.subList(from, end))
         }
-        return StaticPage(lines.subList(from, end))
+        var end = from
+        while(end < lines.size && this.top(end) + lines[end].height.coerceAtMost(height) <= top + height + SLICE_TOLERANCE) end++
+        return StaticPage(lines.subList(from, end.coerceAtLeast(from + 1)))
+    }
+
+    private companion object {
+        /** 像素游标是浮点累加值，整行判定留一点容差，避免恰好的行被浮点误差排除。 */
+        const val SLICE_TOLERANCE = .01f
     }
 }

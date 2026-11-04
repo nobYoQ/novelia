@@ -27,6 +27,7 @@ class RowScrollSettlingTest {
     private val state = RowPagingState(null)
     private val text = (1..400).joinToString(" ") { "第${it}行，松手时仍应连续显示正文。" }
     private var viewportHeight by mutableFloatStateOf(337f)
+    private var showPartialLines by mutableStateOf(true)
     private val page get() = compose.onNodeWithTag("row-page")
 
     @After fun restoreAnimationClockBeforeActivityDisposal() {
@@ -39,7 +40,7 @@ class RowScrollSettlingTest {
             CompositionLocalProvider(LocalDensity provides Density(1f)) {
                 RowPagedReader(listOf(ReadingParagraph(0, listOf(TextPart(text, "local")))),
                     ReaderSettings(paginationMode = "row", horizontalPageTurn = true, fontSize = 22f,
-                        lineHeight = 1.7f, indent = false, eInkMode = false), state,
+                        lineHeight = 1.7f, indent = false, eInkMode = false, rowShowPartialLines = showPartialLines), state,
                     Modifier.requiredSize(300.dp, viewportHeight.dp).testTag("row-page"),
                     imageModel = { null }, onToggleMenu = {}, onSelect = {}, onPage = state::move,
                     background = Color.White, foreground = Color.Black)
@@ -163,6 +164,42 @@ class RowScrollSettlingTest {
         assertArrayEquals(resting, pixels())
         compose.runOnIdle { state.finishScroll() }
         assertArrayEquals(resting, pixels())
+    }
+
+    @Test fun partialLineSwitchUpdatesImmediatelyAndKeepsScrollAndHorizontalTurnAnchors() {
+        show()
+        val rowHeight = state.layout!!.lines[state.row].height
+        val height = (rowHeight * 8.75f).toInt()
+        compose.runOnIdle { viewportHeight = height.toFloat() }
+        compose.waitUntil(10_000) { state.ready && state.layout!!.height == height }
+        val geometry = state.layout!!
+        val anchor = state.anchor
+        val visible = pixels()
+        compose.runOnIdle { showPartialLines = false }
+        fun assertBottomPartialLineHidden() {
+            val partial = geometry.lines[geometry.screenEnd(state.row)]
+            compose.onNodeWithText(text.substring(partial.start, partial.end), substring = true, useUnmergedTree = true).assertDoesNotExist()
+        }
+        assertBottomPartialLineHidden()
+        val hidden = pixels()
+        assertTrue(hidden.takeLast(300 * (rowHeight / 2)).all { it == android.graphics.Color.WHITE })
+        compose.runOnIdle {
+            assertSame(geometry, state.layout)
+            assertEquals(anchor, state.anchor)
+            state.beginScroll()
+        }
+        assertArrayEquals(visible, pixels())
+        compose.runOnIdle { state.finishScroll() }
+        assertArrayEquals(hidden, pixels())
+        page.performTouchInput { swipeLeft() }
+        assertBottomPartialLineHidden()
+        page.performTouchInput { swipeRight() }
+        assertArrayEquals(hidden, pixels())
+        compose.runOnIdle {
+            assertEquals(anchor, state.anchor)
+            showPartialLines = true
+        }
+        assertArrayEquals(visible, pixels())
     }
 
     @Test fun externalSearchCancelsAnInFlightSnapWithoutOverwritingItsAnchor() {
