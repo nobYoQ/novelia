@@ -119,8 +119,8 @@ class AppReleaseDownloadCoordinatorTest {
     }
 
     @Test fun failedMissingAndCorruptDownloadsCanBeRetriedWithoutInstallingThem() = runBlocking {
-        val backend = Backend()
-        val service = AppReleaseDownloadCoordinator({ candidate() }, { InstalledAppRelease("0.2.0", 1) }, backend, Store())
+        val backend = Backend(); var requests = 0
+        val service = AppReleaseDownloadCoordinator({ requests++; candidate() }, { InstalledAppRelease("0.2.0", 1) }, backend, Store())
         service.check(AppReleaseChannel.Stable)
         backend.transfers[1] = AppTransfer(AppTransferStatus.Failed)
         service.refresh()
@@ -132,17 +132,75 @@ class AppReleaseDownloadCoordinatorTest {
         service.refresh()
         assertEquals(AppDownloadPhase.Failed, service.states.value.getValue(AppReleaseChannel.Stable).phase)
         assertNull(service.check(AppReleaseChannel.Stable))
+        assertEquals(4, requests)
         assertEquals(4L, backend.starts)
     }
 
-    @Test fun repeatedClickWhileDownloadingDoesNotEnqueueTwiceAndRestoresAfterDeath() = runBlocking {
-        val backend = Backend(); val store = Store()
-        fun service() = AppReleaseDownloadCoordinator({ candidate() }, { InstalledAppRelease("0.2.0", 1) }, backend, store)
-        val first = service(); first.check(AppReleaseChannel.Stable)
-        first.check(AppReleaseChannel.Stable)
-        val second = service(); second.refresh(); second.check(AppReleaseChannel.Stable)
-        assertEquals(1L, backend.starts)
-        assertEquals(AppDownloadPhase.Downloading, second.states.value.getValue(AppReleaseChannel.Stable).phase)
+    @Test fun repeatedClickWhileDownloadingOnlyShowsProgressAndRestoresAfterDeath() = runBlocking {
+        for(channel in AppReleaseChannel.entries) {
+            val backend = Backend(); val store = Store(); var requests = 0
+            val initial = candidate(channel)
+            fun service() = AppReleaseDownloadCoordinator({
+                requests++
+                if(requests > 1) throw AppReleaseException("离线时仍应能查看下载进度")
+                initial
+            }, { InstalledAppRelease("0.2.0", 1) }, backend, store)
+            val first = service()
+            first.check(channel)
+            if(channel == AppReleaseChannel.Preview) first.confirmPreview()
+            for(status in listOf(AppTransferStatus.Pending, AppTransferStatus.Running, AppTransferStatus.Paused)) {
+                backend.transfers[1] = AppTransfer(status, 400, 1000)
+                first.dismiss()
+                assertNull(first.check(channel))
+                assertEquals(channel, first.dialog.value)
+                val state = first.states.value.getValue(channel)
+                assertEquals(AppDownloadPhase.Downloading, state.phase)
+                assertEquals(initial, state.candidate)
+                assertEquals(.4f, state.progress!!, .001f)
+                assertEquals(1, requests)
+            }
+            val second = service()
+            assertNull(second.check(channel))
+            assertEquals(channel, second.dialog.value)
+            assertEquals(AppDownloadPhase.Downloading, second.states.value.getValue(channel).phase)
+            assertEquals(.4f, second.states.value.getValue(channel).progress!!, .001f)
+            second.dismiss(); second.refresh(); second.check(channel)
+            assertEquals(1, requests)
+            assertEquals(1L, backend.starts)
+            assertTrue(backend.removed.isEmpty())
+        }
+    }
+
+    @Test fun finishedOrFailedDownloadChecksForUpdatesEvenBeforeProgressRefresh() = runBlocking {
+        for(channel in AppReleaseChannel.entries) {
+            for(status in listOf(AppTransferStatus.Complete, AppTransferStatus.Failed, AppTransferStatus.Missing)) {
+                val backend = Backend(); var requests = 0
+                val service = AppReleaseDownloadCoordinator({ requests++; candidate(channel) },
+                    { InstalledAppRelease("0.2.0", 1) }, backend, Store())
+                service.check(channel)
+                if(channel == AppReleaseChannel.Preview) service.confirmPreview()
+                assertEquals(1, requests)
+                service.dismiss()
+                backend.transfers[1] = AppTransfer(status)
+                val ready = service.check(channel)
+                assertEquals(2, requests)
+                assertEquals(channel, service.dialog.value)
+                if(status == AppTransferStatus.Complete) {
+                    assertEquals(1L, ready!!.downloadId)
+                    assertEquals(AppDownloadPhase.Ready, service.states.value.getValue(channel).phase)
+                    assertEquals(1L, backend.starts)
+                } else {
+                    assertNull(ready)
+                    if(channel == AppReleaseChannel.Preview) {
+                        assertEquals(AppDownloadPhase.PreviewConsent, service.states.value.getValue(channel).phase)
+                        assertEquals(1L, backend.starts)
+                        service.confirmPreview()
+                    }
+                    assertEquals(AppDownloadPhase.Downloading, service.states.value.getValue(channel).phase)
+                    assertEquals(2L, backend.starts)
+                }
+            }
+        }
     }
 
     @Test fun installationFailureIsVisibleAndUpgradeDoesNotOfferTheOldPackageAgain() = runBlocking {

@@ -69,7 +69,7 @@ interface AppDownloadRecordStore {
     suspend fun save(records: Map<AppReleaseChannel, AppDownloadRecord>)
 }
 
-/** 两个渠道分别持久保存安装包身份；每次点击先取最新发行，再决定下载或安装。 */
+/** 两个渠道分别持久保存安装包身份；下载中点击查看进度，其余情况先取最新发行再决定下载或安装。 */
 class AppReleaseDownloadCoordinator(
     private val load: suspend (AppReleaseChannel) -> AppDownloadCandidate?,
     private val installed: suspend () -> InstalledAppRelease,
@@ -91,13 +91,24 @@ class AppReleaseDownloadCoordinator(
     fun dismiss() { mutableDialog.value = null }
     fun show(channel: AppReleaseChannel) { mutableDialog.value = channel }
 
-    /** 已缓存且仍是最新的安装包直接交给调用方打开安装器。 */
+    /** 下载中仅恢复进度弹窗；已缓存且仍是最新的安装包直接交给调用方打开安装器。 */
     suspend fun check(channel: AppReleaseChannel): AppDownloadRecord? = lock.withLock {
         restore()
         val previousState = states.value.getValue(channel)
         mutableDialog.value = channel
-        state(channel, AppDownloadState(AppDownloadPhase.Checking))
         try {
+            // 同时覆盖进程重建后、前台轮询尚未恢复状态时的点击。
+            val active = records[channel]?.takeIf {
+                previousState.phase == AppDownloadPhase.Idle || previousState.phase == AppDownloadPhase.Downloading
+            }
+            if(active != null) {
+                val transfer = backend.query(active)
+                if(transfer.status in listOf(AppTransferStatus.Pending, AppTransferStatus.Running, AppTransferStatus.Paused)) {
+                    state(channel, transferState(active, transfer))
+                    return@withLock null
+                }
+            }
+            state(channel, AppDownloadState(AppDownloadPhase.Checking))
             val candidate = load(channel)
             if(candidate == null || !candidate.isNewerThan(installed())) {
                 state(channel, AppDownloadState(AppDownloadPhase.Current, candidate, message = "当前已是最新${if(channel == AppReleaseChannel.Preview) "预览版" else "正式版"}，无需下载"))
