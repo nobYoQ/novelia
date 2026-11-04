@@ -68,6 +68,30 @@ class SettingsCategoriesTest {
             runBlocking { app.store.flush() }
         }
     }
+    @Test fun shelfTapToReadCanBeEnabledAndDisabledAfterRestoration() {
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
+        runBlocking { app.initialization.await() }
+        val original = app.store.state.value.shelfTapToRead
+        try {
+            app.store.update { it.copy(shelfTapToRead = false) }
+            val restoration = StateRestorationTester(compose)
+            restoration.setContent { NoveliaTheme("light") {
+                SettingsScreen(AppController(app, rememberNavController(), rememberCoroutineScope(), remember { SnackbarHostState() }), "LIBRARY")
+            } }
+            option("点击书架列表直接续读").assertIsOff()
+            saveTestScreenshot("shelf-tap-to-read-setting.png")
+            compose.onNodeWithText("点击书架列表直接续读").performClick()
+            compose.runOnIdle { assertTrue(app.store.state.value.shelfTapToRead) }
+            runBlocking { app.store.flush() }
+            restoration.emulateSavedInstanceStateRestore()
+            option("点击书架列表直接续读").assertIsOn().performClick()
+            compose.runOnIdle { assertFalse(app.store.state.value.shelfTapToRead) }
+        } finally {
+            app.store.update { it.copy(shelfTapToRead = original) }
+            runBlocking { app.store.flush() }
+        }
+    }
+
     private fun option(title: String): SemanticsNodeInteraction {
         compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText(title))
         return compose.onNodeWithText(title)

@@ -55,13 +55,14 @@ class ContinueReadingButtonTest {
     private val recent = books[7].book
     private val position = Position("chapter-12", title = "第十二章 在漫长旅途的终点再次相遇", updatedAt = 200L, chapterIndex = 11)
     private var navigationHeight = 0.dp
+    private val opened = mutableListOf<BookRef>()
 
     @Before fun prepare() {
         app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
         runBlocking { app.initialization.await() }
         assertNull("Use an anonymous dedicated test emulator", app.session.profile.value)
         before = app.store.state.value
-        app.store.update { it.copy(books = books, positions = mapOf(
+        app.store.update { it.copy(books = books, shelfGrid = false, shelfTapToRead = false, positions = mapOf(
             recent.ref.key to position,
             books[2].book.ref.key to position.copy(updatedAt = 100L),
             "syosetu/not-in-shelf" to position.copy(updatedAt = 300L),
@@ -84,7 +85,7 @@ class ContinueReadingButtonTest {
                                 composable("shelf") {
                                     RootDestinationLayout("shelf", { nav.navigate(it) },
                                         onNavigationBarHeightChanged = { navigationHeight = it }) {
-                                        ShelfScreen(controller, onOpenBook = {})
+                                        ShelfScreen(controller, onOpenBook = { opened += it })
                                     }
                                 }
                                 composable("reader/{provider}/{id}/{chapter}") { entry ->
@@ -98,6 +99,35 @@ class ContinueReadingButtonTest {
                 }
             }
         }
+    }
+
+    @Test fun shelfRowOptInKeepsCoverOpeningDetailsAndResumesThroughAccessibility() {
+        showShelf()
+        val book = books[2].book
+        compose.onNodeWithTag("shelf-books").performScrollToIndex(2)
+        val row = compose.onNodeWithTag("shelf-book-${book.ref.key}")
+        row.performClick()
+        compose.runOnIdle { assertEquals(listOf(book.ref), opened); app.store.update { it.copy(shelfTapToRead = true) } }
+        compose.onNodeWithContentDescription("${book.title} 默认封面", useUnmergedTree = true).performTouchInput { click() }
+        compose.runOnIdle { assertEquals(listOf(book.ref, book.ref), opened) }
+        row.performClick()
+        compose.onNodeWithTag("resumed-destination").assertTextEquals("${book.ref.key}/${position.chapterId}")
+    }
+
+    @Test fun shelfRowTouchResumesAfterLeavingSelectionInEInkMode() {
+        val book = books[0].book
+        app.store.update { it.copy(books = listOf(books[0]), shelfTapToRead = true, positions = mapOf(book.ref.key to position)) }
+        showShelf(eInk = true)
+        val row = compose.onNodeWithTag("shelf-book-${book.ref.key}")
+        row.performTouchInput { longClick() }
+        compose.onNodeWithText("已选 1 本").assertIsDisplayed()
+        compose.onNodeWithTag("resumed-destination").assertDoesNotExist()
+        row.performClick()
+        compose.onNodeWithText("已选 0 本").assertIsDisplayed()
+        compose.onNodeWithTag("local-selection-done").performClick()
+        row.performTouchInput { click(centerRight - androidx.compose.ui.geometry.Offset(16f, 0f)) }
+        compose.onNodeWithTag("resumed-destination").assertTextEquals("${book.ref.key}/${position.chapterId}")
+        compose.runOnIdle { assertTrue(opened.isEmpty()) }
     }
 
     @Test fun buttonCollapsesWhileBrowsingAndResumesTheLatestSavedBookInOneTap() {
@@ -137,6 +167,8 @@ class ContinueReadingButtonTest {
         compose.onNodeWithText("没有符合条件的小说").assertIsDisplayed()
         compose.onNodeWithTag("shelf-continue-reading").assertIsDisplayed()
         compose.onNodeWithText("清除筛选").performClick()
+        compose.waitUntil(5_000) { compose.onAllNodesWithTag("shelf-books").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("shelf-books").performScrollToNode(hasTestTag("shelf-book-${recent.ref.key}"))
         compose.onNodeWithTag("shelf-book-${recent.ref.key}").performTouchInput { longClick() }
         compose.onNodeWithTag("shelf-continue-reading").assertDoesNotExist()
         compose.onNodeWithTag("local-selection-done").performClick()
@@ -205,7 +237,7 @@ class ContinueReadingButtonTest {
         }
         val button = compose.onNodeWithTag("shelf-continue-reading")
         val full = button.getUnclippedBoundsInRoot()
-        assertEquals(184.dp, full.right - full.left)
+        assertEquals(184f, (full.right - full.left).value, .001f)
         assertTrue(full.bottom - full.top > 48.dp)
         compose.mainClock.autoAdvance = false
         try {
@@ -251,8 +283,8 @@ class ContinueReadingButtonTest {
             changeExpanded(false)
             compose.mainClock.advanceTimeBy(400)
             val compact = button.getUnclippedBoundsInRoot()
-            assertEquals(48.dp, compact.right - compact.left)
-            assertEquals(48.dp, compact.bottom - compact.top)
+            assertEquals(48f, (compact.right - compact.left).value, .001f)
+            assertEquals(48f, (compact.bottom - compact.top).value, .001f)
             assertEquals(full.right, compact.right)
             assertEquals(full.bottom, compact.bottom)
             compose.onNodeWithTag("shelf-continue-title", true).assertDoesNotExist()

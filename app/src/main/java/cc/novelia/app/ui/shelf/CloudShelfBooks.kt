@@ -84,21 +84,19 @@ import cc.novelia.app.ui.components.book.bookRowStatus
                 val displayed = metadata(book)
                 val chosen = if(managing) book.ref.key in selection else book.ref.key == selectedBookKey
                 val open = { if(!dragSelection.dragging && !busy) { if(managing) toggle(displayed) else onOpenBook(book.ref) } }
+                val position = local.positions[book.ref.key]
+                val onRead: (() -> Unit)? = if(local.shelfTapToRead && !managing && position != null && onReadBook != null) ({
+                    if(!dragSelection.dragging && !busy) onReadBook(book.ref, position.chapterId)
+                }) else null
                 BookRow(displayed, open,
                     Modifier.testTag("cloud-book-${book.ref.key}").semantics {
                         selected = chosen
-                        onClick(if(managing) "切换选择" else "打开书籍") { open(); true }
+                        onClick(if(managing) "切换选择" else if(onRead != null) "继续阅读" else "打开书籍") { (onRead ?: open)(); true }
                         if(active && !busy) onLongClick("选择${book.title}") { dragSelection.selectOne(book.ref.key); true }
                     }.then(if(chosen) Modifier.background(MaterialTheme.colorScheme.secondaryContainer) else Modifier),
                     status = bookRowStatus(displayed, local.books.firstOrNull { it.book.ref == book.ref }, local.positions[book.ref.key], local.bookUpdates[book.ref.key], account, preferCloud = true),
                     compactMetadata = true,
-                    onRead = onReadBook?.let { read ->
-                        {
-                            val position = local.positions[book.ref.key]
-                            if(position != null && !managing && !dragSelection.dragging && !busy) read(book.ref, position.chapterId)
-                            else open()
-                        }
-                    },
+                    onRead = onRead,
                     trailing = {
                         if(managing) AppCheckbox(book.ref.key in selection, { toggle(displayed) }, enabled = !busy,
                             modifier = Modifier.semantics { contentDescription = "选择${book.title}" })

@@ -7,4 +7,5 @@ import kotlinx.serialization.Serializable
     val autoCheckAppUpdates: Boolean = true, val squareCorners: Boolean = false, val amoledBlack: Boolean = false,
     val discoverWenkuGrid: Boolean = true,
     val shelfGrid: Boolean = false, val localFilesGrid: Boolean = false, val cloudShelfGrid: Boolean = false,
+    val shelfTapToRead: Boolean = false,
     val edgeToolbar: EdgeToolbarSettings = EdgeToolbarSettings())

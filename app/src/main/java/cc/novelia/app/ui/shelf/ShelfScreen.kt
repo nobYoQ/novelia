@@ -360,9 +360,16 @@ import kotlinx.coroutines.withContext
                                         else { filtersExpanded = false; onOpenBook(saved.book.ref) }
                                     }
                                 }
+                                val position = state.positions[saved.book.ref.key]
+                                val onRead: (() -> Unit)? = if(state.shelfTapToRead && row.parent == null && !pageManaging && position != null) ({
+                                    if(!dragSelection.dragging && !batchWorking) {
+                                        filtersExpanded = false
+                                        c.read(saved.book.ref, position.chapterId)
+                                    }
+                                }) else null
                                 val itemMotion = (if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(AppMotion.Release), placementSpec = if(dragging || dragSelection.dragging) null else tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit)))
                                     .semantics {
-                                        onClick(if(pageManaging) "切换选择" else "打开书籍") { onOpen(); true }
+                                        onClick(if(pageManaging) "切换选择" else if(onRead != null) "继续阅读" else "打开书籍") { (onRead ?: onOpen)(); true }
                                         if(pageManaging) stateDescription = if(saved.book.ref.key in selection) "已选择" else "未选择"
                                         if(active && selectable && !batchWorking) onLongClick("选择${saved.book.title}") { dragSelection.selectOne(saved.book.ref.key); true }
                                     }
@@ -384,14 +391,7 @@ import kotlinx.coroutines.withContext
                                     BookRow(if(filterCharacters) saved.book.copy(totalCharacters = characterCounts.count(saved.book)) else saved.book, onOpen,
                                         status = bookRowStatus(saved.book, saved, state.positions[saved.book.ref.key], state.bookUpdates[saved.book.ref.key], profile?.username),
                                         showCharacterCount = filterCharacters, compactMetadata = page == 0, trailing = trailing,
-                                        // 非封面区域：有阅读记录就直接续读，没有则仍进详情
-                                        onRead = {
-                                            val position = state.positions[saved.book.ref.key]
-                                            if(position != null && !pageManaging && !dragSelection.dragging) {
-                                                filtersExpanded = false
-                                                c.read(saved.book.ref, position.chapterId)
-                                            } else onOpen()
-                                        })
+                                        onRead = onRead)
                                     if(saved.book.ref.isWenku && (!pageManaging || dragSelection.dragging)) {
                                         val rotation by animateFloatAsState(if(row.expanded) 180f else 0f, tween(if(reducedMotion) 0 else AppMotion.Standard), label = "wenku-volume-disclosure")
                                         AppTextButton(onClick = {
