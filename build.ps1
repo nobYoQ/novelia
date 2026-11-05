@@ -72,7 +72,7 @@ try {
     $env:ANDROID_PREFS_ROOT = if ((Split-Path -Leaf $androidUserPath) -eq '.android') { Split-Path -Parent $androidUserPath } else { $null }
     $env:TEMP = $temporaryRoot
     $env:TMP = $temporaryRoot
-    if ($Tasks -match '(?i)eink|:app:(assemble|check|build)$') {
+    if ($Tasks -notcontains '-PreleaseSigning=true' -and ($Tasks -match '(?i)eink|:app:(assemble|check|build)$')) {
         $env:NOVELIA_EINK_PREVIEW_PASSWORD = Get-EinkPreviewPassword -RootPath $rootPath
     }
     # 同时指定 Gradle daemon JDK，避免用户 gradle.properties 中旧机器路径覆盖检测结果。

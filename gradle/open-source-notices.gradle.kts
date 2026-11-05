@@ -4,7 +4,8 @@ import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 
 // 使用实际发行依赖图并包含传递依赖，无需账号或新增插件。
 // 两个显示版本共用依赖和声明文件。
-val runtimeLibraries = providers.provider { configurations.getByName("standardReleaseRuntimeClasspath") }
+val noticeEdition = providers.gradleProperty("distributionEdition").getOrElse("standard")
+val runtimeLibraries = providers.provider { configurations.getByName("${noticeEdition}ReleaseRuntimeClasspath") }
 val noticeAssets = layout.buildDirectory.dir("generated/openSourceAssets/open-source")
 tasks.register("generateOpenSourceNotices") {
     group = "documentation"
