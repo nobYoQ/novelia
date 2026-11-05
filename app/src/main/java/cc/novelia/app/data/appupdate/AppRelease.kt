@@ -126,10 +126,9 @@ private fun okhttp3.HttpUrl.isOfficialGithubUrl(): Boolean =
 class AppReleaseClient(
     private val client: OkHttpClient = OkHttpClient.Builder().callTimeout(15, TimeUnit.SECONDS).build(),
     private val endpoint: String = LATEST_RELEASE_API,
-    previewEndpoint: String? = null,
+    private val previewEndpoint: String = PREVIEW_RELEASE_API,
     private val einkOnly: Boolean = BuildConfig.EINK_ONLY,
 ) {
-    private val previewUrl = previewEndpoint ?: if (einkOnly) "$PREVIEW_RELEASE_API-eink" else PREVIEW_RELEASE_API
     suspend fun latest(): AppRelease? {
         if (!einkOnly) return fetch<AppRelease>(endpoint)?.takeIf {
             it.isOfficial() && !it.prerelease && ReleaseVersion.parse(it.tag) != null
@@ -148,8 +147,8 @@ class AppReleaseClient(
 
     suspend fun latestForDevice(abis: List<String>): AppRelease? = latest()?.takeIf { it.apkFor(abis, einkOnly) != null }
 
-    suspend fun preview(): AppRelease? = fetch<AppRelease>(previewUrl)?.takeIf {
-        it.prerelease && it.isOfficial() && it.tag == if (einkOnly) "preview-eink" else "preview"
+    suspend fun preview(): AppRelease? = fetch<AppRelease>(previewEndpoint)?.takeIf {
+        it.prerelease && it.isOfficial() && it.tag == "preview"
     }
 
     suspend fun candidate(channel: AppReleaseChannel, abis: List<String>, currentVersion: String? = null): AppDownloadCandidate? {
@@ -161,7 +160,7 @@ class AppReleaseClient(
         val apk = release.apkFor(abis, einkOnly) ?: throw AppReleaseException("此发行版暂未提供适合当前设备和应用版本的 APK")
         if(channel == AppReleaseChannel.Stable)
             return AppDownloadCandidate(channel, release.versionTag.removePrefix("v").removePrefix("V"), apk)
-        val infoName = if (einkOnly) "Novelia-eink-preview-build-info.txt" else "Novelia-preview-build-info.txt"
+        val infoName = if (einkOnly) "Novelia-preview-eink-build-info.txt" else "Novelia-preview-build-info.txt"
         val info = release.assets.singleOrNull { it.name == infoName && it.isOfficialFor(release.tag) }
             ?: throw AppReleaseException("预览包缺少构建信息，暂时无法检查版本")
         val response = client.newNetworkCall(Request.Builder().url(info.downloadUrl).build()).awaitText()

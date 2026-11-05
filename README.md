@@ -56,7 +56,7 @@
 
 - **版本与更新**：已发布版本以 Releases 为准，当前源码版本见 [version.properties](version.properties)。
 - **预览版**：默认分支的成功构建自动更新 [Preview Pre-release](https://github.com/nobYoQ/novelia/releases/tag/preview)，仅构建 ARM64，可通过 [固定 APK 地址](https://github.com/nobYoQ/novelia/releases/download/preview/Novelia-preview-arm64-v8a.apk) 下载。任意分支的逐次构建产物仍在 [Actions → Preview APK](https://github.com/nobYoQ/novelia/actions/workflows/preview-apk.yml) 保留 14 天。构建、签名与发布说明见 [自动预览包](docs/development/getting-started.md#github-actions-自动预览包)。
-- **Novelia-eink**：电子纸版有独立包名和签名，最新的 ARM64 预览包见 [电子纸预览发布页](https://github.com/nobYoQ/novelia/releases/tag/preview-eink)。两版可连接同一份 [WebDAV 资料](docs/network/webdav-sync.md)。
+- **Novelia-eink**：电子纸版有独立包名和签名，最新的 ARM64 预览包见 [与普通版共用的预览发布页](https://github.com/nobYoQ/novelia/releases/tag/preview)。两版可连接同一份 [WebDAV 资料](docs/network/webdav-sync.md)。
 - **安装与升级**：正式包与本地测试包的签名可能不同；更换安装来源前，请先完成 [阅读资料备份](docs/data/backup-and-recovery.md)。
 - **问题与建议**：在 [Issues](https://github.com/nobYoQ/novelia/issues) 反馈客户端问题；原站内容、账号和权限问题请联系原站。
 

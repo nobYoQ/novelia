@@ -13,14 +13,8 @@ function gh {
     $global:LASTEXITCODE = 0
     if ($arguments[0] -eq 'release') {
         switch ($arguments[1]) {
-            'create' {
-                $fixture.Created = $true
-                $notesIndex = [Array]::IndexOf($arguments, '--notes-file')
-                $fixture.Body = [IO.File]::ReadAllText($arguments[$notesIndex + 1], [Text.Encoding]::UTF8)
-                return 'https://github.com/example/novelia/releases/untagged/draft-fixture'
-            }
             'upload' {
-                if ($fixture.Mode -eq 'upload-failure') {
+                if ($fixture.Mode -eq 'upload-failure' -or ($fixture.Mode -eq 'eink-upload-failure' -and ($arguments -join ' ') -match 'Novelia-preview-eink-arm64')) {
                     $global:LASTEXITCODE = 1
                     return 'gh: Service Unavailable (HTTP 503)'
                 }
@@ -48,6 +42,12 @@ function gh {
     if ($arguments[0] -eq 'api') {
         $method = $arguments[2]
         $endpoint = $arguments[3]
+        if ($method -eq 'POST' -and $endpoint -eq 'repos/example/novelia/releases') {
+            $fixture.Created = $true
+            $notes = $arguments | Where-Object { $_.StartsWith('body=@') } | Select-Object -First 1
+            $fixture.Body = [IO.File]::ReadAllText($notes.Substring(6), [Text.Encoding]::UTF8)
+            return (@{ id = 7; tag_name = $fixture.Tag; draft = $true; prerelease = $true } | ConvertTo-Json -Compress)
+        }
         if ($method -eq 'GET') {
             if ($endpoint.EndsWith('/git/ref/heads/main')) {
                 if ($fixture.Mode -eq 'head-not-found') {
@@ -153,8 +153,8 @@ foreach ($name in $environment.Keys) {
     [Environment]::SetEnvironmentVariable($name, $environment[$name], 'Process')
 }
 try {
-    $successModes = @('create', 'resume-draft', 'update', 'eink-update', 'legacy-universal', 'notes-manual-only', 'notes-managed-block', 'notes-empty', 'notes-null', 'notes-edited-during-upload')
-    $modes = $successModes + @('wrong-abi', 'notes-unclosed-start', 'notes-unclosed-end', 'notes-duplicate-block', 'notes-reversed-markers', 'duplicate-drafts', 'head-not-found', 'stale', 'race', 'upload-failure', 'digest-mismatch', 'tag-protected', 'immutable', 'regular', 'forbidden', 'checksum-mismatch', 'non-default')
+    $successModes = @('create', 'resume-draft', 'update', 'legacy-universal', 'notes-manual-only', 'notes-managed-block', 'notes-empty', 'notes-null', 'notes-edited-during-upload')
+    $modes = $successModes + @('wrong-abi', 'wrong-eink-edition', 'eink-upload-failure', 'notes-unclosed-start', 'notes-unclosed-end', 'notes-duplicate-block', 'notes-reversed-markers', 'duplicate-drafts', 'head-not-found', 'stale', 'race', 'upload-failure', 'digest-mismatch', 'tag-protected', 'immutable', 'regular', 'forbidden', 'checksum-mismatch', 'non-default')
     $startMarker = '<!-- novelia-preview-build:start -->'
     $endMarker = '<!-- novelia-preview-build:end -->'
     $manualPrefix = "# 维护者说明`r`n中文说明与 [手动链接](https://example.invalid/docs)。`r`n`r`n"
@@ -163,17 +163,21 @@ try {
     foreach ($mode in $modes) {
         $fixtureDirectory = Join-Path $rootPath ('outputs/ci-checks/publish-tests/' + $mode + '-' + [Guid]::NewGuid().ToString('N'))
         [IO.Directory]::CreateDirectory($fixtureDirectory) | Out-Null
-        $apkPath = Join-Path $fixtureDirectory 'Novelia-fixture.apk'
-        'synthetic APK fixture' | Set-Content -LiteralPath $apkPath -Encoding utf8NoBOM
-        $hash = (Get-FileHash -LiteralPath $apkPath -Algorithm SHA256).Hash.ToLowerInvariant()
-        if ($mode -eq 'checksum-mismatch') { $hash = '0' * 64 }
-        "$hash  Novelia-fixture.apk" | Set-Content -LiteralPath "$apkPath.sha256" -Encoding utf8NoBOM
-        'synthetic R8 mapping' | Set-Content -LiteralPath (Join-Path $fixtureDirectory 'Novelia-fixture-mapping.txt') -Encoding utf8NoBOM
-        $fixtureAbi = if ($mode -eq 'wrong-abi') { 'universal' } else { 'arm64-v8a' }
-        $edition = if ($mode -eq 'eink-update') { 'eink' } else { 'standard' }
-        $tag = if ($edition -eq 'eink') { 'preview-eink' } else { 'preview' }
-        @("commit=$env:GITHUB_SHA", 'versionName=0.0.1', 'versionCode=1', 'variant=release', "edition=$edition", "abi=$fixtureAbi") |
-            Set-Content -LiteralPath (Join-Path $fixtureDirectory 'Novelia-fixture-build-info.txt') -Encoding utf8NoBOM
+        $tag = 'preview'
+        foreach ($edition in @('standard', 'eink')) {
+            $dir = Join-Path $fixtureDirectory $edition
+            [IO.Directory]::CreateDirectory($dir) | Out-Null
+            $apkPath = Join-Path $dir 'Novelia-fixture.apk'
+            "synthetic $edition APK fixture" | Set-Content -LiteralPath $apkPath -Encoding utf8NoBOM
+            $hash = (Get-FileHash -LiteralPath $apkPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($edition -eq 'eink' -and $mode -eq 'checksum-mismatch') { $hash = '0' * 64 }
+            "$hash  Novelia-fixture.apk" | Set-Content -LiteralPath "$apkPath.sha256" -Encoding utf8NoBOM
+            'synthetic R8 mapping' | Set-Content -LiteralPath (Join-Path $dir 'Novelia-fixture-mapping.txt') -Encoding utf8NoBOM
+            $fixtureAbi = if ($mode -eq 'wrong-abi') { 'universal' } else { 'arm64-v8a' }
+            $infoEdition = if ($mode -eq 'wrong-eink-edition') { 'standard' } else { $edition }
+            @("commit=$env:GITHUB_SHA", 'versionName=0.0.1', 'versionCode=1', 'run=1', 'attempt=1', 'variant=release', "edition=$infoEdition", "abi=$fixtureAbi") |
+                Set-Content -LiteralPath (Join-Path $dir 'Novelia-fixture-build-info.txt') -Encoding utf8NoBOM
+        }
         $env:GITHUB_STEP_SUMMARY = Join-Path $fixtureDirectory 'summary.md'
         $env:GITHUB_REF = if ($mode -eq 'non-default') { 'refs/heads/feature' } else { 'refs/heads/main' }
         $initialBody = switch ($mode) {
@@ -202,7 +206,7 @@ try {
         }
         $fixture = $global:NoveliaPreviewFixture
         $stableNames = @('Novelia-preview-arm64-v8a.apk', 'Novelia-preview-arm64-v8a.apk.sha256', 'Novelia-preview-build-info.txt', 'Novelia-preview-mapping.zip')
-        if ($edition -eq 'eink') { $stableNames = $stableNames -replace '^Novelia-', 'Novelia-eink-' }
+        $einkNames = $stableNames -replace '^Novelia-preview-', 'Novelia-preview-eink-'
         $legacyNames = @('Novelia-preview-universal.apk', 'Novelia-preview-universal.apk.sha256')
         if ($mode -ne 'create') {
             for ($index = 0; $index -lt $stableNames.Count; $index++) {
@@ -215,20 +219,21 @@ try {
             $fixture.Assets.Add([pscustomobject]@{ id = 8; name = $legacyNames[1]; state = 'uploaded'; size = 1; digest = 'sha256:universal' })
         }
         $failure = $null
-        try { & $publicationPath -ArtifactsDirectory $fixtureDirectory -Tag $tag -Edition $edition *> $null }
+        try { & $publicationPath -ArtifactsDirectory (Join-Path $fixtureDirectory 'standard') -EinkArtifactsDirectory (Join-Path $fixtureDirectory 'eink') -Tag $tag *> $null }
         catch { $failure = $_.Exception.Message }
         if ($mode -in $successModes) {
             Assert-PreviewTest ($null -eq $failure) "$mode failed: $failure"
             Assert-PreviewTest ($fixture.Published -and $fixture.TagSha -eq $env:GITHUB_SHA) "$mode did not publish the expected commit."
-            foreach ($name in $stableNames) {
+            foreach ($name in ($stableNames + $einkNames)) {
                 Assert-PreviewTest (@($fixture.Assets | Where-Object { $_.name -eq $name }).Count -eq 1) "$mode did not replace $name."
             }
             Assert-PreviewTest (@($fixture.Assets | Where-Object { $_.name.StartsWith('Novelia-preview-staging-') }).Count -eq 0) "$mode left staged assets after success."
             Assert-PreviewTest ($fixture.Calls.Exists([Predicate[string]]{ param($call) $call.Contains('--latest=false') })) "$mode could change the stable Latest release."
             $remainingLegacy = @($fixture.Assets | Where-Object { $_.name -in $legacyNames })
-            $expectedLegacy = if ($edition -eq 'eink') { 2 } else { 0 }
-            Assert-PreviewTest ($remainingLegacy.Count -eq $expectedLegacy) "$mode touched the wrong edition's universal assets."
-            Assert-PreviewTest ($fixture.Body.Contains("/$tag/$($stableNames[0])")) "$mode published the wrong APK link."
+            Assert-PreviewTest ($remainingLegacy.Count -eq 0) "$mode retained obsolete universal assets."
+            foreach ($name in @($stableNames[0], $einkNames[0])) {
+                Assert-PreviewTest ($fixture.Body.Contains("/$tag/$name")) "$mode omitted the $name download link."
+            }
             if ($mode -eq 'legacy-universal') {
                 Assert-PreviewTest (-not $fixture.Deleted.Contains(5)) 'Migration removed a manual attachment.'
                 $publishIndex = $fixture.Calls.FindIndex([Predicate[string]]{ param($call) $call.StartsWith('release edit ') })

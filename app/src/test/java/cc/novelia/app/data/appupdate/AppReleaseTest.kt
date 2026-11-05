@@ -157,11 +157,38 @@ class AppReleaseTest {
         assertNull(release.copy(assets = listOf(eink)).apkFor(abis, einkOnly = false))
     }
 
-    @Test fun einkUpdatesFindTheirOwnStableReleaseAndDedicatedPreview() = runBlocking {
+    @Test fun sharedPreviewDownloadsEachApkWithItsOwnBuildInfo() = runBlocking {
+        MockWebServer().use { server ->
+            val names = listOf("Novelia-preview-eink-arm64-v8a.apk", "Novelia-preview-arm64-v8a.apk",
+                "Novelia-preview-build-info.txt", "Novelia-preview-eink-build-info.txt")
+            fun release(files: List<String>): MockResponse {
+                val assets = files.joinToString(",") { name ->
+                    """{"name":"$name","browser_download_url":"$APP_RELEASES_URL/download/preview/$name","size":256,"state":"uploaded"}"""
+                }
+                return MockResponse().setBody("""{"tag_name":"preview","html_url":"$APP_RELEASES_URL/tag/preview","prerelease":true,"assets":[$assets]}""")
+            }
+            val transport = okhttp3.OkHttpClient.Builder().addInterceptor { chain ->
+                val request = chain.request()
+                chain.proceed(request.newBuilder().url(server.url(request.url.encodedPath)).build())
+            }.build()
+            for (eink in listOf(false, true)) {
+                val client = AppReleaseClient(transport, previewEndpoint = server.url("/releases/tags/preview").toString(), einkOnly = eink)
+                val prefix = if (eink) "Novelia-preview-eink" else "Novelia-preview"
+                server.enqueue(release(names))
+                server.enqueue(MockResponse().setBody("versionName=0.3.8\nversionCode=59\nrun=2\nattempt=1\ncommit=${"a".repeat(40)}"))
+                val candidate = client.candidate(AppReleaseChannel.Preview, listOf("arm64-v8a"))!!
+                assertEquals("$prefix-arm64-v8a.apk", candidate.apk.name)
+                assertEquals("/releases/tags/preview", server.takeRequest().path)
+                assertEquals("/nobYoQ/novelia/releases/download/preview/$prefix-build-info.txt", server.takeRequest().path)
+            }
+        }
+    }
+
+    @Test fun einkUpdatesFindTheirOwnStableReleaseAndTheSharedPreview() = runBlocking {
         MockWebServer().use { server ->
             val abis = listOf("arm64-v8a")
             val client = AppReleaseClient(endpoint = server.url("/releases/latest").toString(), einkOnly = true,
-                previewEndpoint = server.url("/releases/tags/preview-eink").toString())
+                previewEndpoint = server.url("/releases/tags/preview").toString())
             fun release(tag: String, prerelease: Boolean = false): String {
                 val asset = "Novelia-eink-arm64-v8a.apk"
                 return """{"tag_name":"$tag","html_url":"$APP_RELEASES_URL/tag/$tag","prerelease":$prerelease,"assets":[{"name":"$asset","browser_download_url":"$APP_RELEASES_URL/download/$tag/$asset","size":100,"state":"uploaded"}]}"""
@@ -174,10 +201,10 @@ class AppReleaseTest {
             assertEquals("/releases?per_page=30&page=2", server.takeRequest().path)
             server.enqueue(MockResponse().setBody("[${release("v0.3.0")}]"))
             assertNull(client.latestForDevice(abis))
-            server.enqueue(MockResponse().setBody(release("preview", prerelease = true)))
+            server.enqueue(MockResponse().setBody(release("unrelated", prerelease = true)))
             assertNull(client.preview())
-            server.enqueue(MockResponse().setBody(release("preview-eink", prerelease = true)))
-            assertEquals("preview-eink", client.preview()!!.tag)
+            server.enqueue(MockResponse().setBody(release("preview", prerelease = true)))
+            assertEquals("preview", client.preview()!!.tag)
         }
     }
 }

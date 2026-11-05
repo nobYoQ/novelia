@@ -21,7 +21,7 @@
 
 APK、源码、元数据和标签必须对应同一个提交。正式版本发布后不移动标签，不静默覆盖旧附件。
 
-电子纸版使用独立包名 `cc.novelia.app.eink`。准备正式附件时给同一脚本传入 `-Edition eink`，它核对 `eink-v<versionName>` 标签并生成 `Novelia-eink-<版本>-<ABI>.apk`。将它发布到该标签的正式 Release，取消 GitHub 的 **Set as the latest release**，让仓库 Latest 继续指向普通版。电子纸版在发布列表中查找自己的正式标签，两版可分别发版；旧普通版客户端也只会看到普通版 APK。滚动预览分别使用 `preview` 和 `preview-eink`。
+电子纸版使用独立包名 `cc.novelia.app.eink`。准备正式附件时给同一脚本传入 `-Edition eink`，它核对 `eink-v<versionName>` 标签并生成 `Novelia-eink-<版本>-<ABI>.apk`。将它发布到该标签的正式 Release，取消 GitHub 的 **Set as the latest release**，让仓库 Latest 继续指向普通版。电子纸版在发布列表中查找自己的正式标签，两版可分别发版；旧普通版客户端也只会看到普通版 APK。滚动预览共用 `preview` Pre-release，按名称分别选择普通版和电子纸版的 APK 与构建信息。
 
 ## 签名配置
 

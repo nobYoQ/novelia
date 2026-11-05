@@ -66,7 +66,7 @@ Windows 构建默认将 Gradle 缓存放在 `.gradle-home/`、Android 工具偏�
 
 ## GitHub Actions 自动预览包
 
-同一次构建生成普通版和电子纸版。普通版继续使用 `preview` 和原有附件名；电子纸版使用 `preview-eink`，固定附件名为 `Novelia-eink-preview-arm64-v8a.apk`。构建信息、R8 映射及校验文件随对应的 APK 发布。
+同一次构建生成普通版和电子纸版，并将两个 APK 发布在同一个 `preview` Pre-release。普通版沿用 `Novelia-preview-arm64-v8a.apk`，电子纸版使用 `Novelia-preview-eink-arm64-v8a.apk`。发布前先核对两版的构建信息和产物，再替换各自的 APK、校验文件和 R8 映射。
 
 [Preview APK 工作流](../../.github/workflows/preview-apk.yml) 在每次推送到任意分支时，仅构建该次推送末端提交的 ARM64（`arm64-v8a`）Release APK，适用于 ARM64 Android 设备。仅本地 `commit` 不会触发，一次推送包含多个提交时只构建末端提交。默认分支包含工作流后，也可在 Actions 页面选择 **Run workflow** 手动构建。
 
