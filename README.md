@@ -84,7 +84,7 @@ Windows 推荐使用 PowerShell 7，在仓库根目录执行：
 # 构建本地 Release APK，同时运行单元测试和 Lint
 ./scripts/build-release.ps1 -Verify
 
-# 构建可与普通版并装的电子纸版，默认包含全部支持的 CPU 架构
+# 构建可与普通版并装的电子纸版，仅支持 ARM64
 ./scripts/build-release.ps1 -Edition eink
 ```
 
@@ -95,7 +95,7 @@ Windows 推荐使用 PowerShell 7，在仓库根目录执行：
 <details>
 <summary><strong>构建参数、输出位置与其他平台</strong></summary>
 
-- 默认生成通用 APK；`-Abi arm64-v8a` 可限定设备架构。
+- 普通版默认生成通用 APK，`-Abi arm64-v8a` 可限定架构。Novelia-eink 始终生成 ARM64 APK。
 - 已有完整依赖缓存时可加 `-Offline`；首次构建需要连接 Google Maven、Maven Central 和 Gradle 分发服务。
 - `-Verify` 运行对应变体的 JVM 单元测试和 Lint，不运行设备测试。
 - APK 与 SHA-256 校验文件位于 `outputs/packages/debug/` 或 `outputs/packages/release-local/`，日志位于 `outputs/logs/`；本地 Release 同时保留 R8 映射。重复构建会覆盖相同版本、模式和 ABI 的产物，不会自动安装或上传。

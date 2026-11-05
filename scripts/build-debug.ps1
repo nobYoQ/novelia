@@ -4,7 +4,7 @@
 [CmdletBinding()]
 param(
     [ValidateSet('standard', 'eink')][string]$Edition = 'standard',
-    [ValidateSet('universal', 'arm64-v8a', 'armeabi-v7a', 'x86_64', 'x86')][string]$Abi = 'universal',
+    [ValidateSet('universal', 'arm64-v8a', 'armeabi-v7a', 'x86_64', 'x86')][string]$Abi,
     [switch]$Offline,
     [switch]$Verify
 )
@@ -13,4 +13,4 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
 
-& (Join-Path $PSScriptRoot 'build-package.ps1') -Variant Debug -Edition $Edition -Abi $Abi -Offline:$Offline -Verify:$Verify
+& (Join-Path $PSScriptRoot 'build-package.ps1') -Variant Debug @PSBoundParameters

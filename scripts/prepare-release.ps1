@@ -12,6 +12,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
 $rootPath = Split-Path -Parent $PSScriptRoot
+if ($Edition -eq 'eink' -and $Abi -ne 'arm64-v8a') { throw 'Novelia-eink 仅支持 arm64-v8a。' }
 $utf8 = [Text.UTF8Encoding]::new($false)
 
 function Invoke-CheckedGit {

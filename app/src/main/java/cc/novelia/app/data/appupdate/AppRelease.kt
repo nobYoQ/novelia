@@ -84,6 +84,7 @@ internal fun compareAppVersions(candidate: String, current: String): Int? {
     fun apkFor(supportedAbis: List<String>, einkOnly: Boolean = false): AppReleaseAsset? {
         if(!isOfficial()) return null
         val apks = assets.filter { it.isDownloadableApk(tag) && EINK_ASSET.containsMatchIn(it.name) == einkOnly }
+        if (einkOnly) return apks.firstOrNull { it.abi == "arm64-v8a" && "arm64-v8a" in supportedAbis }
         supportedAbis.forEach { abi -> apks.firstOrNull { it.abi == abi }?.let { return it } }
         return apks.firstOrNull { it.abi == "universal" }
             ?: apks.filter { it.abi == null }.singleOrNull()

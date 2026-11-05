@@ -50,7 +50,7 @@ APK 归档到 `outputs/packages/debug/`，日志在 `outputs/logs/`。脚本不�
 | `./build.ps1 -Tasks @(...)` | 执行指定 Gradle 任务，不整理 APK 归档 |
 | `./scripts/prepare-release.ps1 ...` | 正式签名与发行附件，前提见[发布指南](../maintenance/releasing.md) |
 
-Debug 和本地 Release 都支持 `-Abi`、`-Offline` 和 `-Verify`。默认 ABI 为 `universal`，也可选 `arm64-v8a`、`armeabi-v7a`、`x86_64`、`x86`：
+Debug 和本地 Release 都支持 `-Offline` 和 `-Verify`。普通版默认构建 `universal`，也可用 `-Abi` 选择 `arm64-v8a`、`armeabi-v7a`、`x86_64` 或 `x86`。Novelia-eink 固定为 `arm64-v8a`。
 
 ```powershell
 ./scripts/build-release.ps1 -Abi arm64-v8a -Verify

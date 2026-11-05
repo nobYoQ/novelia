@@ -76,22 +76,21 @@ android {
         }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
-        providers.gradleProperty("targetAbi").orNull?.let { requestedAbi ->
-            require(requestedAbi in setOf("universal", "arm64-v8a", "armeabi-v7a", "x86_64", "x86")) { "Unsupported targetAbi" }
-            if (requestedAbi != "universal") {
-                ndk { abiFilters += requestedAbi }
-            }
-        }
     }
     flavorDimensions += "display"
     productFlavors {
         create("standard") {
             dimension = "display"
+            providers.gradleProperty("targetAbi").orNull?.let { abi ->
+                require(abi in setOf("universal", "arm64-v8a", "armeabi-v7a", "x86_64", "x86")) { "Unsupported targetAbi" }
+                if (abi != "universal") ndk { abiFilters += abi }
+            }
             buildConfigField("boolean", "EINK_ONLY", "false")
             resValue("string", "app_name", "Novelia")
         }
         create("eink") {
             dimension = "display"
+            ndk { abiFilters += "arm64-v8a" }
             applicationIdSuffix = ".eink"
             buildConfigField("boolean", "EINK_ONLY", "true")
             resValue("string", "app_name", "Novelia-eink")

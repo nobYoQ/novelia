@@ -148,13 +148,15 @@ class AppReleaseTest {
 
     @Test fun editionTakesPriorityOverAbiAndLegacyFallback() {
         val standard = apk("Novelia-arm64-v8a.apk")
-        val eink = apk("Novelia-eink-universal.apk")
+        val eink = apk("Novelia-eink-arm64-v8a.apk")
         val release = AppRelease("v0.3.0", "$APP_RELEASES_URL/tag/v0.3.0", assets = listOf(standard, eink))
         val abis = listOf("arm64-v8a")
         assertEquals(eink, release.apkFor(abis, einkOnly = true))
         assertEquals(standard, release.apkFor(abis, einkOnly = false))
         assertNull(release.copy(assets = listOf(apk("app-release.apk"))).apkFor(abis, einkOnly = true))
         assertNull(release.copy(assets = listOf(eink)).apkFor(abis, einkOnly = false))
+        assertNull(release.apkFor(listOf("armeabi-v7a"), einkOnly = true))
+        assertNull(release.copy(assets = listOf(apk("Novelia-eink-universal.apk"))).apkFor(abis, einkOnly = true))
     }
 
     @Test fun sharedPreviewDownloadsEachApkWithItsOwnBuildInfo() = runBlocking {

@@ -3,7 +3,7 @@
 param(
     [Parameter(Mandatory)][ValidateSet('Debug', 'Release')][string]$Variant,
     [ValidateSet('standard', 'eink')][string]$Edition = 'standard',
-    [ValidateSet('universal', 'arm64-v8a', 'armeabi-v7a', 'x86_64', 'x86')][string]$Abi = 'universal',
+    [ValidateSet('universal', 'arm64-v8a', 'armeabi-v7a', 'x86_64', 'x86')][string]$Abi = $(if ($Edition -eq 'eink') { 'arm64-v8a' } else { 'universal' }),
     [switch]$Offline,
     [switch]$Verify,
     [switch]$Unsigned
@@ -17,6 +17,7 @@ $utf8 = [Text.UTF8Encoding]::new($false)
 $Variant = if ($Variant -ieq 'Debug') { 'Debug' } else { 'Release' }
 $Abi = $Abi.ToLowerInvariant()
 $Edition = $Edition.ToLowerInvariant()
+if ($Edition -eq 'eink' -and $Abi -ne 'arm64-v8a') { throw 'Novelia-eink 仅支持 arm64-v8a。' }
 $variantName = "$Edition$Variant"
 $taskVariant = (Get-Culture).TextInfo.ToTitleCase($Edition) + $Variant
 $appId = if ($Edition -eq 'eink') { 'cc.novelia.app.eink' } else { 'cc.novelia.app' }

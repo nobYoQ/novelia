@@ -52,7 +52,7 @@ $certificateFingerprint = '<发布证书的 SHA-256 指纹>'
 
 工具路径是示例，使用实际安装位置。脚本要求工作区干净、版本标签指向 HEAD，执行 Release 单元测试、Lint 和构建，再检查 APK 版本、签名及证书指纹；拒绝 Debug 证书。完整缓存下可加 `-Offline`。
 
-默认 ABI 为 `arm64-v8a`，也支持 `armeabi-v7a`、`x86_64`、`x86`、`universal`。正式脚本选择 universal 时不显式传 targetAbi，应确认外部 Gradle 配置没有留下单 ABI 限制。
+正式包默认使用 `arm64-v8a`。普通版也支持 `armeabi-v7a`、`x86_64`、`x86` 和 `universal`；Novelia-eink 仅支持 `arm64-v8a`。
 
 输出到 `outputs/releases/v<版本>-<ABI>/`，不覆盖已有目录，不自动提交、打标签、推送或上传。收集失败可能留下部分附件，不能把目录存在当成准备成功。
 
