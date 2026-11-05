@@ -11,6 +11,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import cc.novelia.app.R
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.ui.components.base.AppScrollColumn
 
@@ -21,7 +23,7 @@ import cc.novelia.app.ui.components.base.AppScrollColumn
                 contentModifier = Modifier.padding(28.dp)) {
                 Icon(Icons.Outlined.LibraryBooks, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.height(20.dp))
-                Text("正在打开 Novelia", style = MaterialTheme.typography.headlineSmall)
+                Text("正在打开 ${stringResource(R.string.app_name)}", style = MaterialTheme.typography.headlineSmall)
                 Spacer(Modifier.height(8.dp))
                 Text(if(progress.failed) "${progress.step.title}未完成，请重试。" else progress.step.description,
                     Modifier.testTag("startup-current-step"), style = MaterialTheme.typography.bodyMedium)
