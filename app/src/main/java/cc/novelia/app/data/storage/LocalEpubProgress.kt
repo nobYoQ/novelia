@@ -1,4 +1,5 @@
 package cc.novelia.app.data.storage
+import cc.novelia.app.data.model.readerForDisplay
 
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.LibraryState
@@ -12,7 +13,7 @@ import cc.novelia.app.reader.validLocalGroups
 internal fun LibraryState.withRecoveredEpubChapter(id: String, previous: LocalChapter, restored: LocalChapter): LibraryState {
     if (previous.readingContent.groups == restored.readingContent.groups && previous.paragraphs == restored.paragraphs) return this
     val key = BookRef("local", id).key
-    val settings = bookSettings[key] ?: reader
+    val settings = readerForDisplay(key)
     val chapter = restored.toReaderChapter()
     val anchors = buildMap {
         for (group in validLocalGroups(chapter)) {

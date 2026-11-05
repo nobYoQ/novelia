@@ -12,7 +12,13 @@ android {
         targetSdk = 36
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
+    flavorDimensions += "display"
+    productFlavors {
+        create("standard") { dimension = "display" }
+        create("eink") { dimension = "display" }
+    }
     targetProjectPath = ":app"
+    buildFeatures { buildConfig = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
 }

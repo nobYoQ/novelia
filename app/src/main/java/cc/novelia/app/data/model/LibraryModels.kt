@@ -1,5 +1,6 @@
 package cc.novelia.app.data.model
 
+import cc.novelia.app.BuildConfig
 import cc.novelia.app.data.sync.CloudSyncStatus
 import cc.novelia.app.data.catalog.SavedSearchPreset
 import cc.novelia.app.data.updates.BookUpdateInfo
@@ -100,6 +101,18 @@ fun legacyFolderId(name: String): String = if(name == DEFAULT_FOLDER) DEFAULT_FO
     val forumRulesReminderDismissed: Boolean = false,
     val readingStatistics: ReadingStatistics = ReadingStatistics()
 )
+
+/** 显示版本只选择本机使用的配置；导入或同步的普通模式快照仍可以原样导出。 */
+internal fun LibraryState.readerForDisplay(bookKey: String? = null): ReaderSettings {
+    return (bookSettings[bookKey] ?: reader).forDisplay
+}
+
+/** bookKey 为空时编辑默认值，传入书目时创建或更新单书配置。 */
+internal fun LibraryState.withDisplayReader(bookKey: String?, value: ReaderSettings): LibraryState {
+    val stored = bookSettings[bookKey] ?: reader
+    val edited = if (BuildConfig.EINK_ONLY) value.withEInkMode(stored.eInkMode) else value
+    return if (bookKey == null) copy(reader = edited) else copy(bookSettings = bookSettings + (bookKey to edited))
+}
 
 /** 收藏夹名称仅用于显示；改名时 ID 及所有本地分卷仍保持原关系。 */
 fun LibraryState.withStableFolderIds(previous: LibraryState? = null): LibraryState {

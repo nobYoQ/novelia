@@ -8,7 +8,7 @@
 
 确认长期发布证书及备份、公开 SHA-256 指纹、素材授权和 GitHub 仓库设置。相关入口：[NOTICE](../../NOTICE.md)、[仓库设置清单](../../.github/REPOSITORY_SETUP.md)、[测试指南](../quality/testing.md)。
 
-本地 Release 默认使用原 `.android/debug.keystore` 的固定测试证书，Actions 预览从仓库 Secret 恢复同一密钥，两者可在版本码满足要求时覆盖安装。共用配置见[构建指南](../development/getting-started.md#配置共用签名维护者首次设置)。它可以检查 R8 后的行为，但不能作为正式发行包。更换签名时，同包名通常无法覆盖安装；先验证[阅读资料备份](../data/backup-and-recovery.md)，再制定用户迁移说明。
+普通版本地 Release 默认使用原 `.android/debug.keystore` 的固定测试证书，Actions 预览从仓库 Secret 恢复同一密钥，两者可在版本码满足要求时覆盖安装。共用配置见[构建指南](../development/getting-started.md#配置共用签名维护者首次设置)。它可以检查 R8 后的行为，但不能作为正式发行包。更换签名时，同包名通常无法覆盖安装；先验证[阅读资料备份](../data/backup-and-recovery.md)，再制定用户迁移说明。
 
 检查准备公开的 Git 历史。`.gitignore` 不移除已提交内容；若涉及凭据或未授权素材，另行处理范围与历史，不直接强推。
 
@@ -21,6 +21,8 @@
 
 APK、源码、元数据和标签必须对应同一个提交。正式版本发布后不移动标签，不静默覆盖旧附件。
 
+电子纸版使用独立包名 `cc.novelia.app.eink`。准备正式附件时给同一脚本传入 `-Edition eink`，它核对 `eink-v<versionName>` 标签并生成 `Novelia-eink-<版本>-<ABI>.apk`。将它发布到该标签的正式 Release，取消 GitHub 的 **Set as the latest release**，让仓库 Latest 继续指向普通版。电子纸版在发布列表中查找自己的正式标签，两版可分别发版；旧普通版客户端也只会看到普通版 APK。滚动预览分别使用 `preview` 和 `preview-eink`。
+
 ## 签名配置
 
 直接执行 Gradle `assembleRelease` 默认未签名；`scripts/build-release.ps1` 默认使用本地测试签名。正式构建显式使用 `-PreleaseSigning=true`，读取以下进程环境变量：
@@ -31,6 +33,8 @@ APK、源码、元数据和标签必须对应同一个提交。正式版本发�
 | `NOVELIA_KEYSTORE_PASSWORD` | 密钥库密码 |
 | `NOVELIA_KEY_ALIAS` | 密钥别名 |
 | `NOVELIA_KEY_PASSWORD` | 密钥密码 |
+
+电子纸正式发行使用独立的正式密钥，并将上面四个变量的前缀换成 `NOVELIA_EINK_`。准备附件的脚本会拒绝两张预览证书。
 
 通过本机安全方式注入，不把真实值写入命令历史、源码或聊天。构建结束后清理进程变量，不公开签名缓存或使用 build scan。测试签名 `-PlocalReleaseSigning=true` 与正式签名互斥。
 

@@ -86,7 +86,7 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
     val metadataCache get() = store.metadataCache
     internal val uiResults = cc.novelia.app.data.cache.UiResultStore()
     private val appReleaseClient by lazy { AppReleaseClient(ech.publicClient()) }
-    val appUpdates by lazy { cc.novelia.app.data.appupdate.AppUpdateChecker(this, load = appReleaseClient::latest,
+    val appUpdates by lazy { cc.novelia.app.data.appupdate.AppUpdateChecker(this, load = { appReleaseClient.latestForDevice(android.os.Build.SUPPORTED_ABIS.toList()) },
         automaticChecksEnabled = { store.state.value.autoCheckAppUpdates }) }
     val appReleaseDownloads by lazy { cc.novelia.app.data.appupdate.AppReleaseDownloader(this, appReleaseClient) }
     private var appUpdateCheck: Job? = null

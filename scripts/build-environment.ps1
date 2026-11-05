@@ -2,6 +2,17 @@
 # 供 build.ps1 复用的检测逻辑；手动配置请统一填写 build.ps1 顶部的配置区。
 Set-StrictMode -Version Latest
 
+function Get-EinkPreviewPassword {
+    param([string]$RootPath)
+    if ($env:NOVELIA_EINK_PREVIEW_PASSWORD) { return $env:NOVELIA_EINK_PREVIEW_PASSWORD }
+    $path = Join-Path $RootPath '.android/eink-preview.dpapi'
+    if ($IsWindows -and (Test-Path -LiteralPath $path -PathType Leaf)) {
+        $encrypted = (Get-Content -LiteralPath $path -Raw -Encoding utf8).Trim()
+        $secure = ConvertTo-SecureString $encrypted
+        try { return [System.Net.NetworkCredential]::new('', $secure).Password } finally { $secure.Dispose() }
+    }
+}
+
 function ConvertTo-BuildPath {
     param([string]$Path, [string]$RootPath)
     if ([string]::IsNullOrWhiteSpace($Path)) { return $null }

@@ -54,6 +54,7 @@ Debug 和本地 Release 都支持 `-Abi`、`-Offline` 和 `-Verify`。默认 ABI
 
 ```powershell
 ./scripts/build-release.ps1 -Abi arm64-v8a -Verify
+./scripts/build-release.ps1 -Edition eink
 ./scripts/build-debug.ps1 -Offline
 ```
 
@@ -65,11 +66,15 @@ Windows 构建默认将 Gradle 缓存放在 `.gradle-home/`、Android 工具偏�
 
 ## GitHub Actions 自动预览包
 
+同一次构建生成普通版和电子纸版。普通版继续使用 `preview` 和原有附件名；电子纸版使用 `preview-eink`，固定附件名为 `Novelia-eink-preview-arm64-v8a.apk`。构建信息、R8 映射及校验文件随对应的 APK 发布。
+
 [Preview APK 工作流](../../.github/workflows/preview-apk.yml) 在每次推送到任意分支时，仅构建该次推送末端提交的 ARM64（`arm64-v8a`）Release APK，适用于 ARM64 Android 设备。仅本地 `commit` 不会触发，一次推送包含多个提交时只构建末端提交。默认分支包含工作流后，也可在 Actions 页面选择 **Run workflow** 手动构建。
 
-工作流准备 JDK 17、Platform 36、Build Tools 35.0.0，并从项目配置读取固定的 Go 和 NDK 版本。Gradle 自动构建 ECH AAR 及运行依赖的 Go 单元测试；预览构建实际执行 `assembleRelease`，启用 R8 与资源收缩，使用 `-PreleaseSigning=false -PlocalReleaseSigning=true` 固定测试签名。不需要配置正式发布证书，但必须先设置下面的预览密钥 Secret。
+工作流准备 JDK 17、Platform 36、Build Tools 35.0.0，并从项目配置读取固定的 Go 和 NDK 版本。Gradle 自动构建 ECH AAR 及运行依赖的 Go 单元测试；预览构建实际执行 `assembleStandardRelease` 和 `assembleEinkRelease`，启用 R8 与资源收缩，使用 `-PreleaseSigning=false -PlocalReleaseSigning=true` 固定测试签名。不需要配置正式发布证书，但必须先设置下面的预览密钥 Secret。
 
 ### 配置共用签名（维护者首次设置）
+
+普通版与 Novelia-eink 各自使用独立预览证书，每一版在本地与 CI 之间共用自己的证书。电子纸预览使用 `.android/eink-preview.keystore`（或 `NOVELIA_EINK_PREVIEW_KEYSTORE_PATH`）和进程变量 `NOVELIA_EINK_PREVIEW_PASSWORD`。Windows 构建脚本也可从当前用户 DPAPI 保护的 `.android/eink-preview.dpapi` 读取口令。维护者用 `./scripts/configure-preview-signing.ps1 -Edition eink` 校验公开指纹，并通过 stdin 配置两个加密的 Actions Secret。请在私密存储中备份密钥和口令；DPAPI 文件绑定原 Windows 用户。
 
 沿用原签名机器的 `.android/debug.keystore`，不会生成新密钥。本地 Debug 和测试签名 Release 固定使用此文件，与 `ANDROID_USER_HOME` 无关；Actions 从 **`NOVELIA_PREVIEW_KEYSTORE_BASE64`** 仓库 Secret 恢复同一份密钥到运行器临时目录。测试密钥使用 Android 标准别名和口令，私密材料是密钥库文件本身；不要提交、公开或重新生成它。
 
@@ -118,7 +123,7 @@ gh auth login
 
 发布任务通过内置 `GITHUB_TOKEN` 的 `contents: write` 权限操作同仓库，不需要另建 PAT。仓库规则必须允许工作流创建或更新预览标签。滚动预览要求 **Settings → General → Releases → Enable release immutability** 未启用；不可变 Release 的标签和附件不能替换，详见 [GitHub 官方说明](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases)。
 
-包名仍为 `cc.novelia.app`，应用内部版本仍来自 `version.properties`。配置共用密钥后，本地包和各次 Actions 预览包签名一致，新包 `versionCode` 不低于设备已安装版本即可覆盖安装并保留数据。证书指纹记录在 `build-info` 中。此前使用临时运行器证书的旧 CI 包以及其他证书签名的包不在兼容范围内，迁移前先[备份阅读资料](../data/backup-and-recovery.md)。
+普通版包名为 `cc.novelia.app`，Novelia-eink 包名为 `cc.novelia.app.eink`，应用内部版本仍来自 `version.properties`。同一版本的本地包与 Actions 预览包签名一致，新包 `versionCode` 不低于设备已安装版本即可覆盖安装并保留数据。证书指纹记录在 `build-info` 中。此前使用临时运行器证书的旧 CI 包以及其他证书签名的包不在兼容范围内，迁移前先[备份阅读资料](../data/backup-and-recovery.md)。
 
 镜像线路是可选功能。维护者可在 **Settings → Secrets and variables → Actions** 设置 `NOVELIA_MIRROR_ACCESS_TOKEN` 仓库 Secret，工作流仅通过构建步骤环境变量注入。未设置时仍能构建和使用原站，镜像线路禁用。该入口口令会包含在 APK 中，说明见[镜像配置](book-source-mirrors.md)。
 
@@ -156,8 +161,8 @@ $env:ANDROID_HOME = 'C:/Tools/Android/Sdk'
 聚焦单个任务时使用通用入口：
 
 ```powershell
-./build.ps1 -Tasks @(':app:testDebugUnitTest', '--tests', 'cc.novelia.app.data.network.ApiContractTest')
-./build.ps1 -Tasks @(':app:assembleRelease', ':app:testReleaseUnitTest', ':app:lintRelease')
+./build.ps1 -Tasks @(':app:testStandardDebugUnitTest', '--tests', 'cc.novelia.app.data.network.ApiContractTest')
+./build.ps1 -Tasks @(':app:assembleStandardRelease', ':app:testStandardReleaseUnitTest', ':app:lintStandardRelease')
 ./build.ps1 -Tasks @(':app:generateOpenSourceNotices')
 ```
 
@@ -166,7 +171,7 @@ $env:ANDROID_HOME = 'C:/Tools/Android/Sdk'
 Linux / macOS 准备好同版本工具链后使用 Wrapper：
 
 ```sh
-sh ./gradlew --no-daemon :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
+sh ./gradlew --no-daemon :app:assembleStandardDebug :app:testStandardDebugUnitTest :app:lintStandardDebug
 ```
 
 Windows 的标准入口是 `./gradlew.bat`，它不会执行 PowerShell 脚本的环境自动检测。`.reference/` 和 `.local/` 等本地参考目录不是构建依赖。
@@ -180,8 +185,8 @@ Windows 的标准入口是 `./gradlew.bat`，它不会执行 PowerShell 脚本�
 | 正式发行附件 | `outputs/releases/` |
 | Go 工具链与缓存 | `outputs/ech-tools/` |
 | Gradle 原始 APK | `app/build/outputs/apk/` |
-| JVM 测试报告 | `app/build/reports/tests/testDebugUnitTest/index.html` |
-| Lint 报告 | `app/build/reports/lint-results-debug.html` |
+| JVM 测试报告 | `app/build/reports/tests/testStandardDebugUnitTest/index.html` |
+| Lint 报告 | `app/build/reports/lint-results-standardDebug.html` |
 | Release R8 映射 | `app/build/outputs/mapping/release/mapping.txt` |
 | 生成的许可证 | `app/build/generated/openSourceAssets/open-source/NOTICE.txt` |
 

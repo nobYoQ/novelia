@@ -35,9 +35,9 @@ try {
     $env:TMP = $env:TEMP
     [IO.Directory]::CreateDirectory($env:TEMP) | Out-Null
     & (Join-Path $rootPath 'build.ps1') -Offline:$Offline -Tasks @(
-        ':app:assembleDebug', ':app:assembleDebugAndroidTest', '-PisolatedLibraryTests=true'
+        ':app:assembleStandardDebug', ':app:assembleStandardDebugAndroidTest', '-PisolatedLibraryTests=true'
     ) -LogPath (Join-Path $reportRoot 'build.log')
-    foreach ($apk in @('app/build/outputs/apk/debug/app-debug.apk', 'app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk')) {
+    foreach ($apk in @('app/build/outputs/apk/standard/debug/app-standard-debug.apk', 'app/build/outputs/apk/androidTest/standard/debug/app-standard-debug-androidTest.apk')) {
         & $adb -s $Device install -r -t (Join-Path $rootPath $apk)
         if ($LASTEXITCODE -ne 0) { throw "测试安装失败：$apk；不会卸载或清除现有应用。" }
     }

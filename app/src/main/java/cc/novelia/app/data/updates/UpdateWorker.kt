@@ -1,4 +1,5 @@
 package cc.novelia.app.data.updates
+import cc.novelia.app.data.model.readerForDisplay
 
 import android.content.Context
 import androidx.work.*
@@ -52,7 +53,7 @@ open class UpdateWorker(context: Context, params: WorkerParameters) : CoroutineW
                     val unread = next.bookUpdates[ref.key]
                     val unreadDelta = delta.copy(newChapters = if((unread?.newChapters ?: 0) > 0) delta.newChapters else 0,
                         translations = delta.translations.filterKeys { (unread?.translations?.get(it) ?: 0) > 0 })
-                    if(unreadDelta.relevantTo(state.bookSettings[ref.key] ?: state.reader)) count++
+                    if(unreadDelta.relevantTo(state.readerForDisplay(ref.key))) count++
                     next
                 }
             } catch(e: kotlinx.coroutines.CancellationException) { throw e }

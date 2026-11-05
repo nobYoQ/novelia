@@ -1,5 +1,6 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.shelf
+import cc.novelia.app.data.model.readerForDisplay
 
 import android.net.Uri
 import androidx.activity.compose.BackHandler
@@ -188,7 +189,7 @@ import kotlinx.coroutines.withContext
                 c.action {
                     try {
                         val invalidFilenameChars = Regex("[\\/\\\\:*?\"<>|]")
-                        val reader = state.reader
+                        val reader = state.readerForDisplay()
                         downloadable.forEach { saved ->
                             val id = java.util.UUID.randomUUID().toString()
                             val filename = saved.book.title.replace(invalidFilenameChars, "_").take(120) + ".epub"

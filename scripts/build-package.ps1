@@ -2,6 +2,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][ValidateSet('Debug', 'Release')][string]$Variant,
+    [ValidateSet('standard', 'eink')][string]$Edition = 'standard',
     [ValidateSet('universal', 'arm64-v8a', 'armeabi-v7a', 'x86_64', 'x86')][string]$Abi = 'universal',
     [switch]$Offline,
     [switch]$Verify,
@@ -15,6 +16,10 @@ $rootPath = Split-Path -Parent $PSScriptRoot
 $utf8 = [Text.UTF8Encoding]::new($false)
 $Variant = if ($Variant -ieq 'Debug') { 'Debug' } else { 'Release' }
 $Abi = $Abi.ToLowerInvariant()
+$Edition = $Edition.ToLowerInvariant()
+$variantName = "$Edition$Variant"
+$taskVariant = (Get-Culture).TextInfo.ToTitleCase($Edition) + $Variant
+$appId = if ($Edition -eq 'eink') { 'cc.novelia.app.eink' } else { 'cc.novelia.app' }
 
 if ($Unsigned -and $Variant -ne 'Release') { throw '-Unsigned 仅适用于 Release。' }
 $mode = if ($Variant -eq 'Debug') { 'debug' } elseif ($Unsigned) { 'release-unsigned' } else { 'release-local' }
@@ -28,25 +33,25 @@ if ($versionName -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$' -or $v
 
 $logDirectory = Join-Path $rootPath 'outputs/logs'
 [IO.Directory]::CreateDirectory($logDirectory) | Out-Null
-$logPath = Join-Path $logDirectory ("build-$mode-$Abi-" + (Get-Date -Format 'yyyyMMdd-HHmmss-fff') + '.log')
+$logPath = Join-Path $logDirectory ("build-$Edition-$mode-$Abi-" + (Get-Date -Format 'yyyyMMdd-HHmmss-fff') + '.log')
 $tasks = @()
-if ($Verify) { $tasks += ":app:test${Variant}UnitTest", ":app:lint$Variant" }
-$tasks += ":app:assemble$Variant"
+if ($Verify) { $tasks += ":app:test${taskVariant}UnitTest", ":app:lint$taskVariant" }
+$tasks += ":app:assemble$taskVariant"
 # 显式传入 false，覆盖机器本地的 Gradle 属性及其默认值。
 $tasks += '-PreleaseSigning=false'
 $tasks += if ($mode -eq 'release-local') { '-PlocalReleaseSigning=true' } else { '-PlocalReleaseSigning=false' }
 $tasks += "-PtargetAbi=$Abi"
 
-Write-Host "构建：$mode / $Abi / $versionName ($versionCode)"
-if ($mode -eq 'release-local') { Write-Host '签名：与 Actions 共用的固定预览测试证书；已启用 Release 压缩优化。' }
+Write-Host "构建：$Edition / $mode / $Abi / $versionName ($versionCode)"
+if ($mode -eq 'release-local') { Write-Host "签名：使用 $Edition 与 Actions 共用的独立预览证书；已启用 Release 压缩优化。" }
 if ($Unsigned) { Write-Host '签名：未签名；此 APK 不能直接安装。' }
 Write-Host "日志：$logPath"
 try {
     & (Join-Path $rootPath 'build.ps1') -Tasks $tasks -Offline:$Offline -LogPath $logPath
 
-    $apkDirectory = Join-Path $rootPath ('app/build/outputs/apk/' + $Variant.ToLowerInvariant())
+    $apkDirectory = Join-Path $rootPath ("app/build/outputs/apk/$Edition/" + $Variant.ToLowerInvariant())
     $metadata = Get-Content -LiteralPath (Join-Path $apkDirectory 'output-metadata.json') -Encoding utf8 -Raw | ConvertFrom-Json
-    if ($metadata.applicationId -ne 'cc.novelia.app' -or @($metadata.elements).Count -ne 1) {
+    if ($metadata.applicationId -ne $appId -or $metadata.variantName -ne $variantName -or @($metadata.elements).Count -ne 1) {
         throw 'APK 输出信息与预期不符；没有整理安装包。'
     }
     $element = $metadata.elements[0]
@@ -59,14 +64,15 @@ try {
         [IO.Path]::GetExtension($apk) -ne '.apk' -or -not (Test-Path -LiteralPath $apk -PathType Leaf)) {
         throw 'APK 输出文件无效或不在构建目录内。'
     }
-    $mapping = Join-Path $rootPath 'app/build/outputs/mapping/release/mapping.txt'
+    $mapping = Join-Path $rootPath "app/build/outputs/mapping/$variantName/mapping.txt"
     if ($Variant -eq 'Release' -and -not (Test-Path -LiteralPath $mapping -PathType Leaf)) {
         throw 'Release 构建缺少 mapping.txt；没有整理安装包。'
     }
 
     $outputDirectory = Join-Path $rootPath "outputs/packages/$mode"
     [IO.Directory]::CreateDirectory($outputDirectory) | Out-Null
-    $stem = "Novelia-$versionName-$mode-$Abi"
+    $prefix = if ($Edition -eq 'eink') { 'Novelia-eink' } else { 'Novelia' }
+    $stem = "$prefix-$versionName-$mode-$Abi"
     $outputApk = Join-Path $outputDirectory "$stem.apk"
     Copy-Item -LiteralPath $apk -Destination $outputApk -Force
     $sha256 = (Get-FileHash -LiteralPath $outputApk -Algorithm SHA256).Hash.ToLowerInvariant()

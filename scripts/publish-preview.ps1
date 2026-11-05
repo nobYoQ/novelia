@@ -2,6 +2,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][string]$ArtifactsDirectory,
+    [ValidateSet('standard', 'eink')][string]$Edition = 'standard',
     [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9._-]*$')][string]$Tag = 'preview'
 )
 
@@ -9,6 +10,9 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
 $rootPath = Split-Path -Parent $PSScriptRoot
+$eink = $Edition -eq 'eink'
+if ($eink -ne ($Tag -eq 'preview-eink')) { throw 'The preview-eink tag is reserved for the E Ink edition.' }
+$assetPrefix = if ($eink) { 'Novelia-eink-preview' } else { 'Novelia-preview' }
 
 function Invoke-PreviewGh {
     param([string[]]$Arguments, [switch]$AllowNotFound)
@@ -106,7 +110,8 @@ foreach ($line in (Get-Content -LiteralPath $infoPath -Encoding utf8)) {
     $pair = $line.Split('=', 2)
     if ($pair.Count -eq 2) { $info[$pair[0]] = $pair[1] }
 }
-if ($info['commit'] -ne $env:GITHUB_SHA -or $info['variant'] -ne 'release' -or $info['abi'] -ne 'arm64-v8a') {
+$artifactEdition = if ($info.ContainsKey('edition')) { $info['edition'] } else { 'standard' }
+if ($artifactEdition -ne $Edition -or $info['commit'] -ne $env:GITHUB_SHA -or $info['variant'] -ne 'release' -or $info['abi'] -ne 'arm64-v8a') {
     throw 'Preview build info does not match this ARM64 Release build.'
 }
 if (-not (Test-PreviewHead)) {
@@ -126,9 +131,9 @@ if ($null -ne $release) {
 
 # Staging names keep the previous download available until every new upload succeeds.
 $generation = "$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
-$stageDirectory = Join-Path $rootPath "outputs/preview-release/$generation"
+$stageDirectory = Join-Path $rootPath "outputs/preview-release/$generation/$Edition"
 [IO.Directory]::CreateDirectory($stageDirectory) | Out-Null
-$names = @('Novelia-preview-arm64-v8a.apk', 'Novelia-preview-arm64-v8a.apk.sha256', 'Novelia-preview-build-info.txt', 'Novelia-preview-mapping.zip')
+$names = @("$assetPrefix-arm64-v8a.apk", "$assetPrefix-arm64-v8a.apk.sha256", "$assetPrefix-build-info.txt", "$assetPrefix-mapping.zip")
 $staged = @($names | ForEach-Object {
     [pscustomobject]@{ Name = $_; StagedName = "Novelia-preview-staging-$generation-$_"; Path = (Join-Path $stageDirectory "Novelia-preview-staging-$generation-$_") }
 })
@@ -156,7 +161,8 @@ $existingBody = if ($null -eq $release) { '' } else { [string]$release.body }
 $notes = Merge-PreviewReleaseNotes -ExistingBody $existingBody -BuildInfo $buildInfo
 # Write exactly the merged text, without adding a newline to the manual portion on every run.
 [IO.File]::WriteAllText($notesPath, $notes, [Text.UTF8Encoding]::new($false))
-$title = "Novelia $($info['versionName']) 预览版"
+$appName = if ($eink) { 'Novelia 电子纸版' } else { 'Novelia' }
+$title = "$appName $($info['versionName']) 预览版"
 if ($null -eq $release) {
     Invoke-PreviewGh -Arguments @('release', 'create', $Tag, '--repo', $repository, '--draft', '--prerelease', '--latest=false', '--target', $env:GITHUB_SHA, '--title', $title, '--notes-file', $notesPath) | Out-Null
     $release = Get-PreviewRelease -Repository $repository -EncodedTag $encodedTag -Tag $Tag
@@ -210,7 +216,7 @@ foreach ($oldStage in @($assets | Where-Object { $_.name.StartsWith('Novelia-pre
     Invoke-PreviewGh -Arguments @('api', '--method', 'DELETE', "repos/$repository/releases/assets/$($oldStage.id)") | Out-Null
 }
 # Remove only the former managed universal APK after the ARM64 release is published.
-$legacyNames = @('Novelia-preview-universal.apk', 'Novelia-preview-universal.apk.sha256')
+$legacyNames = if ($eink) { @() } else { @('Novelia-preview-universal.apk', 'Novelia-preview-universal.apk.sha256') }
 foreach ($oldUniversal in @($assets | Where-Object { $_.name -in $legacyNames })) {
     Invoke-PreviewGh -Arguments @('api', '--method', 'DELETE', "repos/$repository/releases/assets/$($oldUniversal.id)") | Out-Null
 }

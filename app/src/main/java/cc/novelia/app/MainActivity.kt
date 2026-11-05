@@ -85,13 +85,18 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.delay
 import cc.novelia.app.startup.StartupScreen
+import cc.novelia.app.data.model.readerForDisplay
 
 private data class AppAppearance(val theme: String, val amoledBlack: Boolean, val squareCorners: Boolean, val reducedMotion: Boolean, val eInk: Boolean, val eInkBooks: Set<String>,
     val screenButtons: Boolean, val hideStatusBar: Boolean, val bookStatusBars: Map<String, Boolean>,
     val readerOrientation: String, val bookOrientations: Map<String, String>)
-private fun LibraryState.appearance() = AppAppearance(theme, amoledBlack, squareCorners, reducedMotion || reader.eInkMode, reader.eInkMode,
-    bookSettings.filterValues { it.eInkMode }.keys, reader.showEInkScreenButtons, reader.hideStatusBar, bookSettings.mapValues { it.value.hideStatusBar },
-    reader.resolvedOrientation, bookSettings.mapValues { it.value.resolvedOrientation })
+private fun LibraryState.appearance(): AppAppearance {
+    val defaults = readerForDisplay()
+    val books = if (BuildConfig.EINK_ONLY) bookSettings.mapValues { it.value.forDisplay } else bookSettings
+    return AppAppearance(theme, amoledBlack, squareCorners, reducedMotion || defaults.eInkMode, defaults.eInkMode,
+        books.filterValues { it.eInkMode }.keys, defaults.showEInkScreenButtons, defaults.hideStatusBar, books.mapValues { it.value.hideStatusBar },
+        defaults.resolvedOrientation, books.mapValues { it.value.resolvedOrientation })
+}
 
 /**
  * Android 生命周期与 Compose 界面的连接点：等待应用初始化，装配主题、控制器和导航图。
@@ -119,7 +124,9 @@ class MainActivity : ComponentActivity() {
             ReportDrawnWhen { initialized }
             if (!initialized) {
                 val appearance by app.startupAppearance.state.collectAsStateWithLifecycle()
-                NoveliaTheme(appearance.theme, amoledBlack = appearance.amoledBlack) { StartupScreen(startup, app.startup::retry) }
+                AppInteractionMode(BuildConfig.EINK_ONLY, BuildConfig.EINK_ONLY) {
+                    NoveliaTheme(appearance.theme, amoledBlack = appearance.amoledBlack) { StartupScreen(startup, app.startup::retry) }
+                }
                 return@setContent
             }
             // 将完整书库投影成外观状态，阅读进度等频繁更新不会使整个导航容器随之刷新。

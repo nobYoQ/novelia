@@ -1,7 +1,7 @@
 #requires -Version 7.0
 [CmdletBinding()]
 param(
-    [string[]]$Tasks = @(':app:assembleDebug', ':app:testDebugUnitTest'),
+    [string[]]$Tasks = @(':app:assembleStandardDebug', ':app:testStandardDebugUnitTest'),
     [switch]$Offline,
     [string]$LogPath,
     [switch]$CheckEnvironment
@@ -57,7 +57,7 @@ $temporaryRoot = Join-Path $outputRoot 'tmp'
 [IO.Directory]::CreateDirectory($temporaryRoot) | Out-Null
 $arguments = @("-Djava.io.tmpdir=$temporaryRoot", '-classpath', (Join-Path $rootPath 'gradle/wrapper/gradle-wrapper.jar'), 'org.gradle.wrapper.GradleWrapperMain', '--no-daemon', '--console=plain') + $Tasks
 if ($Offline) { $arguments += '--offline' }
-$environmentNames = @('JAVA_HOME', 'ANDROID_HOME', 'ANDROID_SDK_ROOT', 'GRADLE_USER_HOME', 'ANDROID_USER_HOME', 'ANDROID_PREFS_ROOT', 'TEMP', 'TMP')
+$environmentNames = @('JAVA_HOME', 'ANDROID_HOME', 'ANDROID_SDK_ROOT', 'GRADLE_USER_HOME', 'ANDROID_USER_HOME', 'ANDROID_PREFS_ROOT', 'TEMP', 'TMP', 'NOVELIA_EINK_PREVIEW_PASSWORD')
 $previousEnvironment = @{}
 foreach ($name in $environmentNames) { $previousEnvironment[$name] = [Environment]::GetEnvironmentVariable($name) }
 Push-Location -LiteralPath $rootPath
@@ -72,6 +72,9 @@ try {
     $env:ANDROID_PREFS_ROOT = if ((Split-Path -Leaf $androidUserPath) -eq '.android') { Split-Path -Parent $androidUserPath } else { $null }
     $env:TEMP = $temporaryRoot
     $env:TMP = $temporaryRoot
+    if ($Tasks -match '(?i)eink|:app:(assemble|check|build)$') {
+        $env:NOVELIA_EINK_PREVIEW_PASSWORD = Get-EinkPreviewPassword -RootPath $rootPath
+    }
     # 同时指定 Gradle daemon JDK，避免用户 gradle.properties 中旧机器路径覆盖检测结果。
     $arguments += "-Dorg.gradle.java.home=$($jdk.Path)"
     & $jdk.Java @arguments 2>&1 | Tee-Object -FilePath $LogPath

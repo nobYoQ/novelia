@@ -11,7 +11,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
-private const val PACKAGE = "cc.novelia.app"
+private val PACKAGE = if (BuildConfig.FLAVOR == "eink") "cc.novelia.app.eink" else "cc.novelia.app"
 
 private fun MacrobenchmarkScope.waitForShelf() {
     assertTrue("Shelf did not become available", device.wait(Until.hasObject(By.text("本地文件")), 15_000))

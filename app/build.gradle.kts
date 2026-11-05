@@ -34,15 +34,20 @@ fun signingEnvironment(name: String): String = providers.environmentVariable(nam
 val previewKeystore = rootProject.file(
     providers.environmentVariable("NOVELIA_PREVIEW_KEYSTORE_PATH").orNull ?: ".android/debug.keystore"
 )
-if (localReleaseSigning) {
-    require(previewKeystore.isFile) {
-        "Missing shared preview keystore. Restore the existing key; do not generate a replacement."
-    }
-    val expected = rootProject.file("gradle/preview-signing.sha256").readText().trim()
+val einkPreviewKeystore = rootProject.file(
+    providers.environmentVariable("NOVELIA_EINK_PREVIEW_KEYSTORE_PATH").orNull ?: ".android/eink-preview.keystore"
+)
+val einkPreviewPassword = providers.environmentVariable("NOVELIA_EINK_PREVIEW_PASSWORD").orNull
+val distributionEdition = providers.gradleProperty("distributionEdition").getOrElse("standard")
+require(distributionEdition in setOf("standard", "eink")) { "Invalid distribution edition." }
+
+fun verifyPreviewKey(store: File, password: String?, alias: String, fingerprint: File) {
+    require(store.isFile && !password.isNullOrBlank()) { "Missing preview signing key or password. Restore the original for this edition." }
+    val expected = fingerprint.readText().trim()
     require(expected.matches(Regex("[0-9a-f]{64}"))) { "Invalid preview certificate fingerprint." }
-    val keystore = KeyStore.getInstance(previewKeystore, "android".toCharArray())
-    require(keystore.isKeyEntry("androiddebugkey")) { "Preview signing key is missing." }
-    val certificate = keystore.getCertificate("androiddebugkey")
+    val keystore = KeyStore.getInstance(store, password.toCharArray())
+    require(keystore.isKeyEntry(alias)) { "Preview signing key is missing." }
+    val certificate = keystore.getCertificate(alias)
     val actual = MessageDigest.getInstance("SHA-256").digest(certificate.encoded)
         .joinToString("") { "%02x".format(it.toInt() and 0xff) }
     require(actual == expected) { "Preview certificate mismatch. Restore the original shared key." }
@@ -78,17 +83,38 @@ android {
             }
         }
     }
+    flavorDimensions += "display"
+    productFlavors {
+        create("standard") {
+            dimension = "display"
+            buildConfigField("boolean", "EINK_ONLY", "false")
+            resValue("string", "app_name", "Novelia")
+        }
+        create("eink") {
+            dimension = "display"
+            applicationIdSuffix = ".eink"
+            buildConfigField("boolean", "EINK_ONLY", "true")
+            resValue("string", "app_name", "Novelia-eink")
+        }
+    }
     signingConfigs.getByName("debug") {
         storeFile = previewKeystore
     }
+    signingConfigs.create("einkPreview") {
+        storeFile = einkPreviewKeystore
+        storePassword = einkPreviewPassword
+        keyAlias = "novelia-eink"
+        keyPassword = einkPreviewPassword
+    }
     if (releaseSigning) {
+        val prefix = if (distributionEdition == "eink") "NOVELIA_EINK" else "NOVELIA"
         signingConfigs.create("distribution") {
-            storeFile = file(signingEnvironment("NOVELIA_KEYSTORE_PATH")).also {
+            storeFile = file(signingEnvironment("${prefix}_KEYSTORE_PATH")).also {
                 require(it.isFile) { "Release keystore does not exist." }
             }
-            storePassword = signingEnvironment("NOVELIA_KEYSTORE_PASSWORD")
-            keyAlias = signingEnvironment("NOVELIA_KEY_ALIAS")
-            keyPassword = signingEnvironment("NOVELIA_KEY_PASSWORD")
+            storePassword = signingEnvironment("${prefix}_KEYSTORE_PASSWORD")
+            keyAlias = signingEnvironment("${prefix}_KEY_ALIAS")
+            keyPassword = signingEnvironment("${prefix}_KEY_PASSWORD")
         }
     }
     buildTypes {
@@ -112,6 +138,27 @@ android {
     buildFeatures { compose = true; buildConfig = true }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
     testOptions { unitTests.isReturnDefaultValues = true }
+}
+
+androidComponents {
+    beforeVariants(selector().withBuildType("release")) { variant ->
+        if (releaseSigning && variant.productFlavors.none { it.second == distributionEdition }) variant.enable = false
+    }
+    onVariants { variant ->
+        val eink = variant.productFlavors.any { it.second == "eink" }
+        val preview = variant.buildType == "debug" || (!releaseSigning && localReleaseSigning)
+        if (preview && eink) variant.signingConfig?.setConfig(android.signingConfigs.getByName("einkPreview"))
+        if (preview && (eink || localReleaseSigning)) {
+            val name = variant.name.replaceFirstChar { it.uppercaseChar() }
+            val check = tasks.register("verify${name}PreviewKey") {
+                doLast {
+                    if (eink) verifyPreviewKey(einkPreviewKeystore, einkPreviewPassword, "novelia-eink", rootProject.file("gradle/eink-preview-signing.sha256"))
+                    else verifyPreviewKey(previewKeystore, "android", "androiddebugkey", rootProject.file("gradle/preview-signing.sha256"))
+                }
+            }
+            tasks.matching { it.name == "pre${name}Build" }.configureEach { dependsOn(check) }
+        }
+    }
 }
 
 dependencies {

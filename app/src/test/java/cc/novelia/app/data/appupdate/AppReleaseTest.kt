@@ -87,7 +87,7 @@ class AppReleaseTest {
     @Test fun publicReleaseRequestParsesUnknownFieldsWithoutSendingAccountCredentials() = runBlocking {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setBody("""{"tag_name":"v0.3.0","html_url":"$APP_RELEASES_URL/tag/v0.3.0","name":"新版本","body":"更新内容","assets":[{"id":123,"name":"Novelia-0.3.0-arm64-v8a.apk","browser_download_url":"$APP_RELEASES_URL/download/v0.3.0/Novelia-0.3.0-arm64-v8a.apk","size":2048,"state":"uploaded","content_type":"application/octet-stream"}],"draft":false,"prerelease":false}"""))
-            val release = AppReleaseClient(endpoint = server.url("/latest").toString()).latest()!!
+            val release = AppReleaseClient(endpoint = server.url("/latest").toString(), einkOnly = false).latest()!!
             assertEquals("新版本", release.name)
             assertTrue(release.availableFor("0.2.6"))
             assertEquals(2048L, release.apkFor(listOf("arm64-v8a"))!!.size)
@@ -101,7 +101,7 @@ class AppReleaseTest {
     @Test fun previewUsesItsOwnEndpointAndDoesNotRequireASemanticVersion() = runBlocking {
         MockWebServer().use { server ->
             val body = """{"tag_name":"preview","html_url":"$APP_RELEASES_URL/tag/preview","prerelease":true,"assets":[{"name":"Novelia-preview-arm64-v8a.apk","browser_download_url":"$APP_RELEASES_URL/download/preview/Novelia-preview-arm64-v8a.apk","size":1024,"state":"uploaded"}]}"""
-            val client = AppReleaseClient(endpoint = server.url("/latest").toString(),
+            val client = AppReleaseClient(endpoint = server.url("/latest").toString(), einkOnly = false,
                 previewEndpoint = server.url("/releases/tags/preview").toString())
             server.enqueue(MockResponse().setBody(body))
             val preview = client.preview()!!
@@ -140,9 +140,44 @@ class AppReleaseTest {
     @Test fun anInstalledStableReleaseDoesNotNeedACompatibleAssetOrAnyDownload() = runBlocking {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setBody("""{"tag_name":"v0.3.0","html_url":"$APP_RELEASES_URL/tag/v0.3.0","assets":[]}"""))
-            val client = AppReleaseClient(endpoint = server.url("/latest").toString())
+            val client = AppReleaseClient(endpoint = server.url("/latest").toString(), einkOnly = false)
             assertNull(client.candidate(AppReleaseChannel.Stable, listOf("x86"), "0.3.0"))
             assertEquals(1, server.requestCount)
+        }
+    }
+
+    @Test fun editionTakesPriorityOverAbiAndLegacyFallback() {
+        val standard = apk("Novelia-arm64-v8a.apk")
+        val eink = apk("Novelia-eink-universal.apk")
+        val release = AppRelease("v0.3.0", "$APP_RELEASES_URL/tag/v0.3.0", assets = listOf(standard, eink))
+        val abis = listOf("arm64-v8a")
+        assertEquals(eink, release.apkFor(abis, einkOnly = true))
+        assertEquals(standard, release.apkFor(abis, einkOnly = false))
+        assertNull(release.copy(assets = listOf(apk("app-release.apk"))).apkFor(abis, einkOnly = true))
+        assertNull(release.copy(assets = listOf(eink)).apkFor(abis, einkOnly = false))
+    }
+
+    @Test fun einkUpdatesFindTheirOwnStableReleaseAndDedicatedPreview() = runBlocking {
+        MockWebServer().use { server ->
+            val abis = listOf("arm64-v8a")
+            val client = AppReleaseClient(endpoint = server.url("/releases/latest").toString(), einkOnly = true,
+                previewEndpoint = server.url("/releases/tags/preview-eink").toString())
+            fun release(tag: String, prerelease: Boolean = false): String {
+                val asset = "Novelia-eink-arm64-v8a.apk"
+                return """{"tag_name":"$tag","html_url":"$APP_RELEASES_URL/tag/$tag","prerelease":$prerelease,"assets":[{"name":"$asset","browser_download_url":"$APP_RELEASES_URL/download/$tag/$asset","size":100,"state":"uploaded"}]}"""
+            }
+            server.enqueue(MockResponse().setBody(List(30) { release("v0.4.$it") }.joinToString(",", "[", "]")))
+            server.enqueue(MockResponse().setBody("[${release("eink-v0.3.0")}]"))
+            val candidate = client.candidate(AppReleaseChannel.Stable, abis, "0.2.0")!!
+            assertEquals("0.3.0", candidate.versionName)
+            assertEquals("/releases?per_page=30&page=1", server.takeRequest().path)
+            assertEquals("/releases?per_page=30&page=2", server.takeRequest().path)
+            server.enqueue(MockResponse().setBody("[${release("v0.3.0")}]"))
+            assertNull(client.latestForDevice(abis))
+            server.enqueue(MockResponse().setBody(release("preview", prerelease = true)))
+            assertNull(client.preview())
+            server.enqueue(MockResponse().setBody(release("preview-eink", prerelease = true)))
+            assertEquals("preview-eink", client.preview()!!.tag)
         }
     }
 }

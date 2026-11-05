@@ -1,5 +1,6 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.downloads
+import cc.novelia.app.data.model.readerForDisplay
 
 import cc.novelia.app.ui.components.base.AppButton
 import androidx.compose.foundation.layout.*
@@ -21,7 +22,7 @@ import cc.novelia.app.ui.navigation.AppController
 import kotlinx.coroutines.CancellationException
 
 @Composable fun DownloadSheet(c: AppController, book: BookCard, volumes: List<String>, onQueued: () -> Unit = {}, dismiss: () -> Unit) {
-    val settings = remember(book.ref) { c.store.state.value.reader }
+    val settings = remember(book.ref) { c.store.state.value.readerForDisplay() }
     var mode by remember { mutableStateOf(if(settings.mode == "jp" && book.ref.isWenku) "zh" else settings.mode) }; var type by remember { mutableStateOf("epub") }; var engine by remember { mutableStateOf(settings.engines.first()) }; var parallel by remember { mutableStateOf(false) }
     val binding = remember(book.ref, volumes) { c.session.capture() }
     var pending by remember { mutableStateOf<List<DownloadEntry>?>(null) }
