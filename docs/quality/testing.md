@@ -16,7 +16,7 @@
 ./scripts/build-release.ps1 -Verify
 
 # 聚焦一个逻辑测试
-./build.ps1 -Tasks @(':app:testStandardDebugUnitTest', '--tests', 'cc.novelia.app.data.network.ApiContractTest')
+./build.ps1 -Tasks @(':app:testDebugUnitTest', '--tests', 'cc.novelia.app.data.network.ApiContractTest')
 
 # Go 原生包及本地解析器依赖测试
 ./build.ps1 -Tasks @(':app:testEchNative')
@@ -26,8 +26,8 @@
 
 | 报告 | 位置 |
 | --- | --- |
-| JVM HTML / XML | `app/build/reports/tests/testStandardDebugUnitTest/` / `app/build/test-results/testStandardDebugUnitTest/` |
-| Lint | `app/build/reports/lint-results-standardDebug.html` |
+| JVM HTML / XML | `app/build/reports/tests/testDebugUnitTest/` / `app/build/test-results/testDebugUnitTest/` |
+| Lint | `app/build/reports/lint-results-debug.html` |
 | Gradle 设备报告 | `app/build/reports/androidTests/connected/` |
 | 脚本日志 | `outputs/logs/` |
 
@@ -67,10 +67,10 @@ Release 报告对应替换变体名。警告、失败和跳过分别记录。
 ```powershell
 adb devices
 $env:ANDROID_SERIAL = '<专用测试设备序列号>'
-./build.ps1 -Tasks @(':app:connectedStandardDebugAndroidTest', '-Pandroid.testInstrumentationRunnerArguments.class=cc.novelia.app.ui.reader.AppFlowTest')
+./build.ps1 -Tasks @(':app:connectedDebugAndroidTest', '-Pandroid.testInstrumentationRunnerArguments.class=cc.novelia.app.ui.reader.AppFlowTest')
 ```
 
-全量任务为 `:app:connectedStandardDebugAndroidTest`，包含较耗时的场景；只编译测试包用 `:app:assembleStandardDebugAndroidTest`。编译成功不代表设备测试已运行。
+全量任务为 `:app:connectedDebugAndroidTest`，包含较耗时的场景；只编译测试包用 `:app:assembleDebugAndroidTest`。编译成功不代表设备测试已运行。
 
 设备测试按 [ui](../../app/src/androidTest/java/cc/novelia/app/ui)、[data](../../app/src/androidTest/java/cc/novelia/app/data)、[files](../../app/src/androidTest/java/cc/novelia/app/files)、[integration](../../app/src/androidTest/java/cc/novelia/app/integration) 和 [performance](../../app/src/androidTest/java/cc/novelia/app/performance) 等职责组织。重点入口包括：
 
@@ -110,7 +110,7 @@ $env:ANDROID_SERIAL = '<专用测试设备序列号>'
 例如：
 
 ```powershell
-./build.ps1 -Tasks @(':app:connectedStandardDebugAndroidTest', '-Pandroid.testInstrumentationRunnerArguments.class=cc.novelia.app.integration.LiveReadOnlyTest', '-Pandroid.testInstrumentationRunnerArguments.live=true')
+./build.ps1 -Tasks @(':app:connectedDebugAndroidTest', '-Pandroid.testInstrumentationRunnerArguments.class=cc.novelia.app.integration.LiveReadOnlyTest', '-Pandroid.testInstrumentationRunnerArguments.live=true')
 ```
 
 下载联调会访问服务并写测试文件；“只读”不等于没有本地副作用。真实发帖、上传、修改和删除需要单独授权及专用账号，不属于普通联调。

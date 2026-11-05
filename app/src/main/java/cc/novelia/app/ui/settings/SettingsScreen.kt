@@ -1,9 +1,6 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, coil.annotation.ExperimentalCoilApi::class)
 
 package cc.novelia.app.ui.settings
-import cc.novelia.app.BuildConfig
-import cc.novelia.app.data.model.readerForDisplay
-import cc.novelia.app.data.model.withDisplayReader
 
 import android.os.Build
 import androidx.activity.compose.BackHandler
@@ -119,9 +116,9 @@ private enum class SettingsSection(val title: String, val summary: String) {
         if(section == SettingsSection.READING) {
         item { ProfileSectionTitle("阅读体验") }
         item { ProfileMenuRow("默认阅读偏好", "字号、排版、自定义配色、翻译与朗读", Icons.Outlined.TextFields, { reader = true }) }
-        if (!BuildConfig.EINK_ONLY) item { ProfileToggle("电子纸阅读模式", "全应用按屏翻动，关闭滚动惯性和动画，使用按钮调整分卷顺序", state.reader.eInkMode) { value -> c.store.update { it.copy(reader = it.reader.withEInkMode(value)) } } }
-        item { ProfileToggle("列表与面板翻屏按钮", "电子纸模式下显示上一屏、下一屏，关闭后仍可滑动翻屏", state.readerForDisplay().showEInkScreenButtons) { value -> c.store.update { it.withDisplayReader(null, it.readerForDisplay().copy(showEInkScreenButtons = value)) } } }
-        item { ProfileToggle("阅读时隐藏状态栏", "阅读时自动隐藏顶部系统状态栏，退出后恢复", state.readerForDisplay().hideStatusBar) { value -> c.store.update { it.withDisplayReader(null, it.readerForDisplay().copy(hideStatusBar = value)) } } }
+        item { ProfileToggle("电子纸阅读模式", "全应用按屏翻动，关闭滚动惯性和动画，使用按钮调整分卷顺序", state.reader.eInkMode) { value -> c.store.update { it.copy(reader = it.reader.withEInkMode(value)) } } }
+        item { ProfileToggle("列表与面板翻屏按钮", "电子纸模式下显示上一屏、下一屏，关闭后仍可滑动翻屏", state.reader.showEInkScreenButtons) { value -> c.store.update { it.copy(reader = it.reader.copy(showEInkScreenButtons = value)) } } }
+        item { ProfileToggle("阅读时隐藏状态栏", "阅读时自动隐藏顶部系统状态栏，退出后恢复", state.reader.hideStatusBar) { value -> c.store.update { it.copy(reader = it.reader.copy(hideStatusBar = value)) } } }
         item { ProfileMenuRow("朗读通知", "允许在通知栏控制朗读", Icons.Outlined.Notifications, { if(Build.VERSION.SDK_INT >= 33) notifications.launch(android.Manifest.permission.POST_NOTIFICATIONS) else c.message("当前系统无需申请通知权限") }) }
         }
         if(section == SettingsSection.APPEARANCE) {
@@ -169,7 +166,7 @@ private enum class SettingsSection(val title: String, val summary: String) {
     } } }
     }
     }
-    if(reader) AppSheet(onDismissRequest = { reader = false }) { ReaderPreferences(state.readerForDisplay(), state = preferenceState) { value -> c.store.update { it.withDisplayReader(null, value) } } }
+    if(reader) AppSheet(onDismissRequest = { reader = false }) { ReaderPreferences(state.reader, state = preferenceState) { value -> c.store.update { it.copy(reader = value) } } }
     if(clear) ConfirmDialog("清理阅读与图片缓存？", "已缓存的网络章节、详情和图片会被删除，之后需要联网加载。本地导入的小说和下载文件不受影响。", { clear = false }, confirmLabel = "清理缓存") {
         clearing = true
         c.action("缓存已清理") {

@@ -47,31 +47,6 @@ class WebDavProjectionTest {
     private val local = BookRef("local", "file1")
     private fun documents(state: LibraryState) = SyncReplica(deviceId = "a").track(emptyMap(), WebDavProjection.library(state)).bind("dataset").documents
 
-    @Test fun editionsExchangeOneDatasetWhileReadingTheirOwnModeSettings() {
-        val ordinary = ReaderSettings(fontSize = 18f).withEInkMode(true).copy(fontSize = 24f).withEInkMode(false)
-        val source = LibraryState(reader = ordinary, bookSettings = mapOf(web.key to ordinary),
-            positions = mapOf(web.key to Position("chapter", sourceParagraph = 12)),
-            notes = listOf(Note("note", web.key, "chapter", 12, "段落", "共用笔记", createdAt = 1)))
-        fun transmit(state: LibraryState, device: String): Map<SyncDomain, SyncDocument> =
-            SyncReplica(deviceId = device).track(emptyMap(), WebDavProjection.library(state, includeDevicePreferences = true))
-                .bind("shared-library").documents
-        val docs = transmit(source, "phone")
-        val received = WebDavProjection.applyLibrary(LibraryState(), docs, docs.keys, includeDevicePreferences = true)
-        val eink = cc.novelia.app.BuildConfig.EINK_ONLY
-        assertEquals(if (eink) 24f else 18f, received.readerForDisplay().fontSize)
-        assertEquals(if (eink) 24f else 18f, received.readerForDisplay(web.key).fontSize)
-        assertEquals(12, received.positions.getValue(web.key).sourceParagraph)
-        assertEquals("共用笔记", received.notes.single().text)
-        val edited = received.withDisplayReader(web.key, received.readerForDisplay(web.key).copy(fontSize = 28f))
-        val returned = transmit(edited, "reader")
-        assertTrue(returned.values.all { it.datasetId == "shared-library" })
-        val phone = WebDavProjection.applyLibrary(source, returned, returned.keys, includeDevicePreferences = true)
-        val book = phone.bookSettings.getValue(web.key)
-        assertFalse(book.eInkMode)
-        assertEquals(if (eink) 18f else 28f, book.fontSize)
-        assertEquals(if (eink) 28f else 24f, book.withEInkMode(true).fontSize)
-    }
-
     @Test fun readingStatusBarSyncsGlobalAndBookChoicesWhileLegacyRecordsKeepLocalChoices() {
         val remote = LibraryState(reader = ReaderSettings(showReadingStatusBar = false),
             bookSettings = mapOf(web.key to ReaderSettings(showReadingStatusBar = true)))

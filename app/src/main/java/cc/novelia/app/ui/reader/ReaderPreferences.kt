@@ -1,6 +1,5 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.reader
-import cc.novelia.app.BuildConfig
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
@@ -109,7 +108,7 @@ import kotlin.math.roundToInt
                         }
                     }
                     1 -> {
-                        if (!BuildConfig.EINK_ONLY) ReaderPreferenceSection("阅读模式", "选择适合屏幕的阅读方式", Icons.Outlined.AutoStories) {
+                        ReaderPreferenceSection("阅读模式", "选择适合屏幕的阅读方式", Icons.Outlined.AutoStories) {
                             TogglePreference("电子纸阅读模式", if(perBook == true) "仅影响当前阅读器；与普通模式分别保存阅读配置" else "全应用按屏翻动；与普通模式分别保存阅读配置", value.eInkMode, defaultValue = defaults?.eInkMode) { onChange(value.withEInkMode(it)) }
                             Text("首次开启继承当前配置，并使用横向分页、不透明工具栏；再次切换恢复该模式的设置。",
                                 Modifier.padding(horizontal = 20.dp, vertical = 4.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

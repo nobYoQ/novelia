@@ -1,8 +1,6 @@
 package cc.novelia.app.data.model
 
 import kotlinx.serialization.Serializable
-import cc.novelia.app.BuildConfig
-import kotlinx.serialization.Transient
 
 /** 不透明 RGB 配色作为一组保存和同步，避免混用不同设备的文字与背景颜色。 */
 @Serializable data class ReaderCustomColors(
@@ -120,10 +118,6 @@ import kotlinx.serialization.Transient
     // 行带分页默认保留底部局部行，与连续滚动保持一致；关闭后静止时隐藏底部不完整行。
     val rowShowPartialLines: Boolean = true
 ) {
-    // 阅读进度更新会反复取同一份设置。按不可变快照缓存转换结果，避免在低性能设备上反复复制。
-    @Transient private val einkDisplay = if (BuildConfig.EINK_ONLY && !eInkMode) lazy { withEInkMode(true) } else null
-    internal val forDisplay: ReaderSettings get() = einkDisplay?.value ?: this
-
     companion object {
         const val MIN_LINE_HEIGHT = .5f
         val LINE_HEIGHT_RANGE = MIN_LINE_HEIGHT..2.6f

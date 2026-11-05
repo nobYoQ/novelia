@@ -9,7 +9,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /** 每次前台启动后检查；自动检查遵守本机开关及提醒偏好，手动检查始终可用。 */
-class AppUpdateChecker(context: Context, private val load: suspend () -> AppRelease? = { AppReleaseClient().latestForDevice(android.os.Build.SUPPORTED_ABIS.toList()) },
+class AppUpdateChecker(context: Context, private val load: suspend () -> AppRelease? = AppReleaseClient()::latest,
     private val currentVersion: String = BuildConfig.VERSION_NAME,
     private val automaticChecksEnabled: () -> Boolean = { true },
     private val now: () -> Long = System::currentTimeMillis,

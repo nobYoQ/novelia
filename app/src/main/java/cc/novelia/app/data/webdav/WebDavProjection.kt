@@ -1,7 +1,6 @@
 package cc.novelia.app.data.webdav
 
 import cc.novelia.app.data.catalog.KeywordCatalog
-import cc.novelia.app.data.model.readerForDisplay
 import cc.novelia.app.data.webdav.WebDavSchema.FOLDER
 import cc.novelia.app.data.webdav.WebDavSchema.CATEGORY
 import cc.novelia.app.data.webdav.WebDavSchema.ORDER
@@ -70,7 +69,7 @@ object WebDavProjection {
             SyncDomain.SETTINGS -> settings(state, includeDevicePreferences)
             SyncDomain.FAVORITES -> favorites(state)
             SyncDomain.PROGRESS -> state.positions.filterKeys(::isNetworkKey).mapValues { (key, value) ->
-                val settings = state.readerForDisplay(key)
+                val settings = state.bookSettings[key] ?: state.reader
                 val position = json.encodeToJsonElement(Position.serializer(), value).jsonObject.filterKeys { it in positionFields }.toMutableMap()
                 position["sourceParagraph"] = (value.sourceParagraph ?: (value.index - 1).coerceAtLeast(0)).let(::JsonPrimitive)
                 position["anchorSource"] = JsonPrimitive(value.anchorSource ?: anchorSource(settings))
@@ -215,7 +214,7 @@ object WebDavProjection {
             WebDavMerge.materialize(document).forEach { (key, fields) ->
                 // 有并发续读候选时保留本机位置，待用户选择后再移动。
                 if (key in conflicts) result.positions[key]?.let { positions[key] = it }
-                else positions[key] = decodePosition(fields.getValue("position").jsonObject, result.readerForDisplay(key))
+                else positions[key] = decodePosition(fields.getValue("position").jsonObject, result.bookSettings[key] ?: result.reader)
             }
             result = result.copy(positions = positions)
         }

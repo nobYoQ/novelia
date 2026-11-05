@@ -55,8 +55,6 @@ import cc.novelia.app.data.chapters.chapterFreshness
 import cc.novelia.app.data.library.nextMountedVolume
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.Note
-import cc.novelia.app.data.model.readerForDisplay
-import cc.novelia.app.data.model.withDisplayReader
 import cc.novelia.app.data.model.Position
 import cc.novelia.app.data.storage.appJson
 import cc.novelia.app.data.webdav.WebDavProjection
@@ -95,7 +93,7 @@ import kotlinx.serialization.encodeToString
  */
 @Composable fun ReaderScreen(c: AppController, ref: BookRef, chapterId: String) {
     val local by c.store.state.collectAsStateWithLifecycle()
-    val settings = local.readerForDisplay(ref.key)
+    val settings = local.bookSettings[ref.key] ?: local.reader
     val eInk = settings.eInkMode
     val appEInk = LocalEInkMode.current || eInk
     CompositionLocalProvider(LocalScreenPageButtons provides settings.showEInkScreenButtons) {
@@ -114,11 +112,13 @@ import kotlinx.serialization.encodeToString
  */
 @Composable private fun ReaderContent(c: AppController, ref: BookRef, chapterId: String, wide: Boolean, availableWidth: androidx.compose.ui.unit.Dp) {
     val local by c.store.state.collectAsStateWithLifecycle()
-    val settings = local.readerForDisplay(ref.key)
+    val settings = local.bookSettings[ref.key] ?: local.reader
     val readerFont = rememberReaderFont(settings)
     fun setWideToc(show: Boolean) {
         c.store.update { state ->
-            state.withDisplayReader(ref.key.takeIf { it in state.bookSettings }, state.readerForDisplay(ref.key).copy(showWideToc = show))
+            val book = state.bookSettings[ref.key]
+            if(book != null) state.copy(bookSettings = state.bookSettings + (ref.key to book.copy(showWideToc = show)))
+            else state.copy(reader = state.reader.copy(showWideToc = show))
         }
     }
     // 导航过渡期间，离开的阅读器仍可能处于组合中；此时完成的刷新
@@ -198,9 +198,10 @@ import kotlinx.serialization.encodeToString
         ReadAloudService.follow(true)
         speechAction(action)
     }
-    fun updateReaderSettings(value: cc.novelia.app.data.model.ReaderSettings) {
+    fun updateSpeechSettings(value: cc.novelia.app.data.model.ReaderSettings) {
         c.store.update { state ->
-            state.withDisplayReader(ref.key.takeIf { it in state.bookSettings }, value)
+            if(state.bookSettings.containsKey(ref.key)) state.copy(bookSettings = state.bookSettings + (ref.key to value))
+            else state.copy(reader = value)
         }
     }
     val colors = readerColors(settings, MaterialTheme.colorScheme)
@@ -938,8 +939,9 @@ import kotlinx.serialization.encodeToString
             }
             if(editingTapZones) ReaderTapZoneEditor(settings.resolvedTapZoneMap, onSave = { map ->
                 c.store.update { current ->
-                    val value = current.readerForDisplay(ref.key).copy(tapZoneMap = ReaderTapZoneMap.encode(map))
-                    current.withDisplayReader(ref.key.takeIf { it in current.bookSettings }, value)
+                    val value = (current.bookSettings[ref.key] ?: current.reader).copy(tapZoneMap = ReaderTapZoneMap.encode(map))
+                    if(current.bookSettings.containsKey(ref.key)) current.copy(bookSettings = current.bookSettings + (ref.key to value))
+                    else current.copy(reader = value)
                 }
                 editingTapZones = false
             }, onDismiss = { editingTapZones = false },
@@ -973,7 +975,12 @@ import kotlinx.serialization.encodeToString
                 { id -> if(id != chapterId) rememberReadingPlace(); toc = false; openChapter(id) }, Modifier.fillMaxHeight(.8f))
         }
         if(autoReadSheet) ReaderAutoReadSheet(settings, settings.staticPagination || eInkInteraction,
-            onDismiss = { autoReadSheet = false }, onSettings = ::updateReaderSettings, onStart = {
+            onDismiss = { autoReadSheet = false }, onSettings = { value ->
+                c.store.update { state ->
+                    if(state.bookSettings.containsKey(ref.key)) state.copy(bookSettings = state.bookSettings + (ref.key to value))
+                    else state.copy(reader = value)
+                }
+            }, onStart = {
                 pauseReadingAutomation()
                 ReadAloudService.pauseForAutomaticReading(context)
                 autoReadSheet = false; menu = false; autoReading = true
@@ -984,7 +991,7 @@ import kotlinx.serialization.encodeToString
             onDismiss = { replacementsSheet = false; if(replacementSelection == null) preferences = true; replacementSelection = null }, onChange = { value ->
                 pauseReadingAutomation()
                 ReadAloudService.pauseForAutomaticReading(context)
-                c.store.update { it.withDisplayReader(ref.key, value) }
+                c.store.update { it.copy(bookSettings = it.bookSettings + (ref.key to value)) }
             })
         if(speechSheet) ReaderSpeechSheet(settings, speechStatus, onDismiss = { speechSheet = false },
             onStart = {
@@ -1007,11 +1014,11 @@ import kotlinx.serialization.encodeToString
             onPrevious = { stepSpeech("previous") }, onNext = { stepSpeech("next") },
             onFollow = ReadAloudService::follow,
             onRate = { rate ->
-                updateReaderSettings(settings.copy(speechRate = rate))
+                updateSpeechSettings(settings.copy(speechRate = rate))
                 if(bookSpeech != null) context.startService(Intent(context, ReadAloudService::class.java).setAction("rate").putExtra("rate", rate))
             },
             onTimer = { minutes ->
-                updateReaderSettings(settings.copy(speechMinutes = minutes))
+                updateSpeechSettings(settings.copy(speechMinutes = minutes))
                 if(bookSpeech != null) context.startService(Intent(context, ReadAloudService::class.java).setAction("timer").putExtra("minutes", minutes))
             },
         )
@@ -1068,8 +1075,8 @@ import kotlinx.serialization.encodeToString
     }
     if(preferences) {
         ReaderPreferencesSheet(onDismissRequest = { preferences = false }) { expanded, onExpandedChange ->
-            ReaderPreferences(settings, local.bookSettings.containsKey(ref.key), { perBook -> c.store.update { if(perBook) it.withDisplayReader(ref.key, settings) else it.copy(bookSettings = it.bookSettings - ref.key) } },
-                state = preferenceState, modifier = Modifier.fillMaxSize(), livePreview = true, defaultSettings = local.readerForDisplay(),
+            ReaderPreferences(settings, local.bookSettings.containsKey(ref.key), { perBook -> c.store.update { it.copy(bookSettings = if(perBook) it.bookSettings + (ref.key to settings) else it.bookSettings - ref.key) } },
+                state = preferenceState, modifier = Modifier.fillMaxSize(), livePreview = true, defaultSettings = local.reader,
                 onEditTapZones = { preferences = false; editingTapZones = true },
                 onTextReplacements = { preferences = false; replacementsSheet = true; pauseReadingAutomation() },
                 onShowTapTutorial = { preferences = false; c.store.update { it.copy(readerTapTutorialSeen = false) } }, headerActions = {
@@ -1078,7 +1085,7 @@ import kotlinx.serialization.encodeToString
                     }
                     AppTextButton(onClick = { preferences = false }) { Text("关闭面板") }
                 }) { value ->
-                    updateReaderSettings(value)
+                    updateSpeechSettings(value)
                     if(bookSpeech != null && value.speechMinutes != settings.speechMinutes) {
                         context.startService(Intent(context, ReadAloudService::class.java).setAction("timer").putExtra("minutes", value.speechMinutes))
                     }

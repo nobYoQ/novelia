@@ -3,8 +3,7 @@
 # 应用版本号/版本码统一修改根目录 version.properties；修改后直接重新执行本脚本。
 [CmdletBinding()]
 param(
-    [ValidateSet('standard', 'eink')][string]$Edition = 'standard',
-    [ValidateSet('universal', 'arm64-v8a', 'armeabi-v7a', 'x86_64', 'x86')][string]$Abi,
+    [ValidateSet('universal', 'arm64-v8a', 'armeabi-v7a', 'x86_64', 'x86')][string]$Abi = 'universal',
     [switch]$Offline,
     [switch]$Verify,
     [switch]$Unsigned
@@ -14,4 +13,4 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
 
-& (Join-Path $PSScriptRoot 'build-package.ps1') -Variant Release @PSBoundParameters
+& (Join-Path $PSScriptRoot 'build-package.ps1') -Variant Release -Abi $Abi -Offline:$Offline -Verify:$Verify -Unsigned:$Unsigned

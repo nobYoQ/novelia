@@ -56,7 +56,6 @@
 
 - **版本与更新**：已发布版本以 Releases 为准，当前源码版本见 [version.properties](version.properties)。
 - **预览版**：默认分支的成功构建自动更新 [Preview Pre-release](https://github.com/nobYoQ/novelia/releases/tag/preview)，仅构建 ARM64，可通过 [固定 APK 地址](https://github.com/nobYoQ/novelia/releases/download/preview/Novelia-preview-arm64-v8a.apk) 下载。任意分支的逐次构建产物仍在 [Actions → Preview APK](https://github.com/nobYoQ/novelia/actions/workflows/preview-apk.yml) 保留 14 天。构建、签名与发布说明见 [自动预览包](docs/development/getting-started.md#github-actions-自动预览包)。
-- **Novelia-eink**：电子纸版有独立包名和签名，最新的 ARM64 预览包见 [与普通版共用的预览发布页](https://github.com/nobYoQ/novelia/releases/tag/preview)。两版可连接同一份 [WebDAV 资料](docs/network/webdav-sync.md)。
 - **安装与升级**：正式包与本地测试包的签名可能不同；更换安装来源前，请先完成 [阅读资料备份](docs/data/backup-and-recovery.md)。
 - **问题与建议**：在 [Issues](https://github.com/nobYoQ/novelia/issues) 反馈客户端问题；原站内容、账号和权限问题请联系原站。
 
@@ -83,19 +82,14 @@ Windows 推荐使用 PowerShell 7，在仓库根目录执行：
 
 # 构建本地 Release APK，同时运行单元测试和 Lint
 ./scripts/build-release.ps1 -Verify
-
-# 构建可与普通版并装的电子纸版，仅支持 ARM64
-./scripts/build-release.ps1 -Edition eink
 ```
 
 本地 Release 使用测试证书签名，保留 R8 压缩与资源收缩。正式发行请遵循 [发布指南](docs/maintenance/releasing.md)。
 
-普通版使用 `cc.novelia.app`，电子纸版使用 `cc.novelia.app.eink`。电子纸版从书架到正文始终使用电子纸交互，字号和翻页方式仍可调整。两个应用各自保存书库，已有资料可通过阅读资料备份导入。两版分别检查适合自己的正式包和预览包。
-
 <details>
 <summary><strong>构建参数、输出位置与其他平台</strong></summary>
 
-- 普通版默认生成通用 APK，`-Abi arm64-v8a` 可限定架构。Novelia-eink 始终生成 ARM64 APK。
+- 默认生成通用 APK；`-Abi arm64-v8a` 可限定设备架构。
 - 已有完整依赖缓存时可加 `-Offline`；首次构建需要连接 Google Maven、Maven Central 和 Gradle 分发服务。
 - `-Verify` 运行对应变体的 JVM 单元测试和 Lint，不运行设备测试。
 - APK 与 SHA-256 校验文件位于 `outputs/packages/debug/` 或 `outputs/packages/release-local/`，日志位于 `outputs/logs/`；本地 Release 同时保留 R8 映射。重复构建会覆盖相同版本、模式和 ABI 的产物，不会自动安装或上传。
@@ -104,7 +98,7 @@ Windows 推荐使用 PowerShell 7，在仓库根目录执行：
 Linux / macOS 使用 Gradle Wrapper：
 
 ```sh
-sh ./gradlew --no-daemon :app:assembleStandardDebug :app:testStandardDebugUnitTest :app:lintStandardDebug
+sh ./gradlew --no-daemon :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
 ```
 
 直接调用 Gradle 的 `assembleRelease` 默认生成未签名产物。AGP、Gradle、Kotlin 与 Compose 版本见 [开发环境](docs/development/getting-started.md#开发环境)，ECH 构建逻辑见 [Gradle 配置](gradle/ech-native.gradle.kts)。

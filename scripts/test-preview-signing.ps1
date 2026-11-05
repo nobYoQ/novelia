@@ -122,7 +122,7 @@ try {
     Assert-SigningFailure 'invalid Base64' $restore 'not valid Base64'
     $env:NOVELIA_PREVIEW_KEYSTORE_BASE64 = 'A' * (48 * 1024 + 1)
     Assert-SigningFailure 'oversized Secret' $restore 'too large'
-    if (Test-Path -LiteralPath (Join-Path $fixturePath 'novelia-standard-preview.keystore')) { throw 'Invalid Secret created a key file.' }
+    if (Test-Path -LiteralPath (Join-Path $fixturePath 'novelia-preview.keystore')) { throw 'Invalid Secret created a key file.' }
     Write-Host 'Preview signing checks passed: 10 scenarios, no network requests or private key files created.'
 } finally {
     if ($hadNativeExitCode) { Set-Variable -Name LASTEXITCODE -Value $previousNativeExitCode -Scope Global }

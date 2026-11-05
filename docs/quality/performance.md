@@ -17,7 +17,7 @@
 另有 `LargeLibraryPerformanceTest` 覆盖 2000 个真实小型 TXT 的首次/重复导入，以及全部书目已有进度时的保存与重载；同一运行还检查暂停导入与备份恢复。运行 `./scripts/test-large-library.ps1 -Offline`，测试安装为独立的 `.librarytest` 应用，项目内缓存及报告位置见 [benchmark README](../../benchmark/README.md)。该场景的前后内存快照不是峰值，也不测 UI 帧率。
 
 ```powershell
-./build.ps1 -Tasks @(':app:connectedStandardDebugAndroidTest', '-Pandroid.testInstrumentationRunnerArguments.class=cc.novelia.app.performance.PerformanceScenarioTest', '-Pandroid.testInstrumentationRunnerArguments.performanceIterations=3')
+./build.ps1 -Tasks @(':app:connectedDebugAndroidTest', '-Pandroid.testInstrumentationRunnerArguments.class=cc.novelia.app.performance.PerformanceScenarioTest', '-Pandroid.testInstrumentationRunnerArguments.performanceIterations=3')
 ```
 
 报告写到设备应用外部目录的 `performance/scenarios-<运行ID>.json` 和 `.txt`，instrumentation 返回路径。它记录设备、API、ABI、版本、耗时和内存快照。Debug 结果适合定位热点，不作为正式包性能结论。
@@ -38,7 +38,7 @@ benchmark 模块最低 API 28。`ReadingBenchmark` 使用 `CompilationMode.Parti
 [KeywordPerformanceRegressionTest](../../app/src/test/java/cc/novelia/app/data/catalog/KeywordPerformanceRegressionTest.kt) 使用 1,000、20,000 和 50,000 条合成标签验证增量同步与整库参考算法一致、未变记录复用、仅使用时间变化不产生同步版本，以及流式读写保留用户编辑和同步身份。它也验证收集合并、失败重试和显式保存排空队列；不使用机器相关的耗时阈值作为正确性断言。
 
 ```powershell
-./build.ps1 -Offline -Tasks @(':app:testStandardDebugUnitTest', '--tests', 'cc.novelia.app.Keyword*Test', '--tests', 'cc.novelia.app.data.webdav.*')
+./build.ps1 -Offline -Tasks @(':app:testDebugUnitTest', '--tests', 'cc.novelia.app.Keyword*Test', '--tests', 'cc.novelia.app.data.webdav.*')
 ```
 
 性能复测还应分别记录启动解码/校验、整页新增标签、重复访问已知标签、译名索引和磁盘保存，并覆盖开启与关闭 WebDAV 的连续搜索翻页。累计分配量不等于峰值或常驻堆内存，JVM 算法数据也不能代替目标手机 Release 包的启动和帧时间。

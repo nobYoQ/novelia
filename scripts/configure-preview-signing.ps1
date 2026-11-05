@@ -3,7 +3,6 @@
 param(
     [ValidatePattern('^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$')][string]$Repository = 'nobYoQ/novelia',
     [string]$KeystorePath,
-    [ValidateSet('standard', 'eink')][string]$Edition = 'standard',
     [switch]$CheckOnly
 )
 
@@ -11,18 +10,14 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
 $rootPath = Split-Path -Parent $PSScriptRoot
-$eink = $Edition -eq 'eink'
-. (Join-Path $PSScriptRoot 'build-environment.ps1')
 if (-not $KeystorePath) {
-    $KeystorePath = if ($eink) { $env:NOVELIA_EINK_PREVIEW_KEYSTORE_PATH ?? '.android/eink-preview.keystore' }
-        else { $env:NOVELIA_PREVIEW_KEYSTORE_PATH ?? '.android/debug.keystore' }
+    $KeystorePath = if ($env:NOVELIA_PREVIEW_KEYSTORE_PATH) { $env:NOVELIA_PREVIEW_KEYSTORE_PATH } else { '.android/debug.keystore' }
 }
 $KeystorePath = [IO.Path]::GetFullPath($KeystorePath, $rootPath)
 if (-not (Test-Path -LiteralPath $KeystorePath -PathType Leaf)) {
     throw '缺少原有预览密钥。请从私密备份恢复；本脚本不会生成或覆盖密钥。'
 }
-$fingerprintFile = if ($eink) { 'gradle/eink-preview-signing.sha256' } else { 'gradle/preview-signing.sha256' }
-$expected = (Get-Content -LiteralPath (Join-Path $rootPath $fingerprintFile) -Raw -Encoding utf8).Trim()
+$expected = (Get-Content -LiteralPath (Join-Path $rootPath 'gradle/preview-signing.sha256') -Raw -Encoding utf8).Trim()
 if ($expected -cnotmatch '^[0-9a-f]{64}$') { throw '预览证书指纹配置无效。' }
 
 $keytool = if ($env:JAVA_HOME) {
@@ -35,11 +30,8 @@ $keytool = if ($env:JAVA_HOME) {
 $previousPassword = [Environment]::GetEnvironmentVariable('NOVELIA_PREVIEW_STORE_PASSWORD')
 try {
     # Android 测试密钥的标准口令；私密材料是现有密钥库本身。
-    $password = if ($eink) { Get-EinkPreviewPassword -RootPath $rootPath } else { 'android' }
-    if (-not $password) { throw '缺少电子纸预览签名口令。' }
-    $env:NOVELIA_PREVIEW_STORE_PASSWORD = $password
-    $aliasName = if ($eink) { 'novelia-eink' } else { 'androiddebugkey' }
-    $certificateOutput = (& $keytool -list -rfc -alias $aliasName -keystore $KeystorePath -storepass:env NOVELIA_PREVIEW_STORE_PASSWORD 2>&1) -join "`n"
+    $env:NOVELIA_PREVIEW_STORE_PASSWORD = 'android'
+    $certificateOutput = (& $keytool -list -rfc -alias androiddebugkey -keystore $KeystorePath -storepass:env NOVELIA_PREVIEW_STORE_PASSWORD 2>&1) -join "`n"
     if ($LASTEXITCODE -ne 0) { throw '读取预览证书失败；不会上传密钥。' }
 } finally {
     [Environment]::SetEnvironmentVariable('NOVELIA_PREVIEW_STORE_PASSWORD', $previousPassword, 'Process')
@@ -65,15 +57,10 @@ try {
     $encoded = [Convert]::ToBase64String($keystoreBytes)
     if ($encoded.Length -gt 48 * 1024) { throw '密钥库超过 GitHub Secret 大小限制；未上传。' }
     # 仅在内存中编码，通过 stdin 传给 gh；不落盘、不输出，也不放进命令行参数。
-    $secretName = if ($eink) { 'NOVELIA_EINK_PREVIEW_KEYSTORE_BASE64' } else { 'NOVELIA_PREVIEW_KEYSTORE_BASE64' }
-    if ($eink) {
-        $secretOutput = $password | & gh secret set NOVELIA_EINK_PREVIEW_PASSWORD --repo $Repository --app actions 2>&1
-        if ($LASTEXITCODE -ne 0) { throw '配置 GitHub Secret 失败；电子纸口令上传失败。' }
-    }
-    $secretOutput = $encoded | & gh secret set $secretName --repo $Repository --app actions 2>&1
+    $secretOutput = $encoded | & gh secret set NOVELIA_PREVIEW_KEYSTORE_BASE64 --repo $Repository --app actions 2>&1
     if ($LASTEXITCODE -ne 0) { throw '配置 GitHub Secret 失败；请检查仓库写入权限后重试。' }
 } finally {
     [Array]::Clear($keystoreBytes, 0, $keystoreBytes.Length)
     $encoded = $null
 }
-Write-Host "已配置 $Repository 的 $secretName。"
+Write-Host "已配置 $Repository 的 NOVELIA_PREVIEW_KEYSTORE_BASE64；未改动本地密钥。"

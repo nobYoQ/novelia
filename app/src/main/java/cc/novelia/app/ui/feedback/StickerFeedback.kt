@@ -1,6 +1,4 @@
 package cc.novelia.app.ui.feedback
-import androidx.compose.ui.res.stringResource
-import cc.novelia.app.R
 
 import cc.novelia.app.ui.components.base.AppTextButton
 import cc.novelia.app.ui.components.base.AppIconButton
@@ -102,7 +100,7 @@ internal fun AboutIdentity() {
             if(waving) StickerAccent(MidoriSticker.Wave, wave, Modifier.fillMaxSize().semantics { contentDescription = "小绿向你招手" })
             else Icon(Icons.Outlined.AutoStories, null, Modifier.fillMaxSize(), tint = MaterialTheme.colorScheme.primary)
         }
-        Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineLarge)
+        Text("Novelia", style = MaterialTheme.typography.headlineLarge)
         Box(Modifier.heightIn(min = 48.dp).clickable(onClickLabel = "版本信息") {
             val now = SystemClock.uptimeMillis()
             taps = if(now - lastTap < 800) taps + 1 else 1

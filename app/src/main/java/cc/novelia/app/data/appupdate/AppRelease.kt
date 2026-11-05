@@ -1,6 +1,5 @@
 package cc.novelia.app.data.appupdate
 
-import cc.novelia.app.BuildConfig
 import cc.novelia.app.data.network.newNetworkCall
 
 import cc.novelia.app.data.network.awaitText
@@ -76,15 +75,13 @@ internal fun compareAppVersions(candidate: String, current: String): Int? {
             destination.pathSegments == listOf("nobYoQ", "novelia", "releases", "tag", tag)
     }
 
-    val versionTag get() = tag.removePrefix("eink-")
     fun availableFor(current: String): Boolean =
-        isOfficial() && !prerelease && isNewerAppVersion(current, versionTag)
+        isOfficial() && !prerelease && isNewerAppVersion(current, tag)
 
     /** 按设备的 ABI 优先级选择，其次通用包；兼容早期未标注 ABI 的单 APK 发行。 */
-    fun apkFor(supportedAbis: List<String>, einkOnly: Boolean = false): AppReleaseAsset? {
+    fun apkFor(supportedAbis: List<String>): AppReleaseAsset? {
         if(!isOfficial()) return null
-        val apks = assets.filter { it.isDownloadableApk(tag) && EINK_ASSET.containsMatchIn(it.name) == einkOnly }
-        if (einkOnly) return apks.firstOrNull { it.abi == "arm64-v8a" && "arm64-v8a" in supportedAbis }
+        val apks = assets.filter { it.isDownloadableApk(tag) }
         supportedAbis.forEach { abi -> apks.firstOrNull { it.abi == abi }?.let { return it } }
         return apks.firstOrNull { it.abi == "universal" }
             ?: apks.filter { it.abi == null }.singleOrNull()
@@ -118,7 +115,6 @@ internal fun compareAppVersions(candidate: String, current: String): Int? {
 
 private val APK_ABI = Regex("(?<![a-z0-9])(?:arm64-v8a|armeabi-v7a|x86_64|x86|universal)(?![a-z0-9])", RegexOption.IGNORE_CASE)
 private val NON_DISTRIBUTION_APK = Regex("(?:^|[-_.])(?:staging|unsigned|unaligned|debug|androidtest)(?:[-_.]|$)", RegexOption.IGNORE_CASE)
-private val EINK_ASSET = Regex("(?:^|[-_.])eink(?:[-_.]|$)", RegexOption.IGNORE_CASE)
 private fun okhttp3.HttpUrl.isOfficialGithubUrl(): Boolean =
     scheme == "https" && host == "github.com" && port == 443 && username.isEmpty() && password.isEmpty() &&
         query == null && fragment == null
@@ -128,41 +124,21 @@ class AppReleaseClient(
     private val client: OkHttpClient = OkHttpClient.Builder().callTimeout(15, TimeUnit.SECONDS).build(),
     private val endpoint: String = LATEST_RELEASE_API,
     private val previewEndpoint: String = PREVIEW_RELEASE_API,
-    private val einkOnly: Boolean = BuildConfig.EINK_ONLY,
 ) {
-    suspend fun latest(): AppRelease? {
-        if (!einkOnly) return fetch<AppRelease>(endpoint)?.takeIf {
-            it.isOfficial() && !it.prerelease && ReleaseVersion.parse(it.tag) != null
-        }
-        // 电子纸版单独发布；普通版提前发版时，仍可找到上一份电子纸更新。
-        val releases = endpoint.substringBeforeLast('/')
-        var page = 1
-        while (true) {
-            val batch = fetch<List<AppRelease>>("$releases?per_page=30&page=$page") ?: return null
-            batch.firstOrNull { it.isOfficial() && !it.prerelease && it.tag.startsWith("eink-v") &&
-                ReleaseVersion.parse(it.versionTag) != null }?.let { return it }
-            if (batch.size < 30) return null
-            page++
-        }
-    }
+    suspend fun latest(): AppRelease? = fetch(endpoint)
 
-    suspend fun latestForDevice(abis: List<String>): AppRelease? = latest()?.takeIf { it.apkFor(abis, einkOnly) != null }
-
-    suspend fun preview(): AppRelease? = fetch<AppRelease>(previewEndpoint)?.takeIf {
-        it.prerelease && it.isOfficial() && it.tag == "preview"
-    }
+    suspend fun preview(): AppRelease? = fetch(previewEndpoint)?.takeIf { it.prerelease && it.isOfficial() }
 
     suspend fun candidate(channel: AppReleaseChannel, abis: List<String>, currentVersion: String? = null): AppDownloadCandidate? {
         val release = (if(channel == AppReleaseChannel.Preview) preview() else latest())
             ?: throw AppReleaseException("暂时没有可用的${if(channel == AppReleaseChannel.Preview) "预览版" else "正式版"}")
         if(!release.isOfficial() || release.prerelease != (channel == AppReleaseChannel.Preview))
             throw AppReleaseException("发行版信息无效，请稍后重试")
-        if(channel == AppReleaseChannel.Stable && currentVersion != null && !isNewerAppVersion(currentVersion, release.versionTag)) return null
-        val apk = release.apkFor(abis, einkOnly) ?: throw AppReleaseException("此发行版暂未提供适合当前设备和应用版本的 APK")
+        if(channel == AppReleaseChannel.Stable && currentVersion != null && !isNewerAppVersion(currentVersion, release.tag)) return null
+        val apk = release.apkFor(abis) ?: throw AppReleaseException("此发行版暂未提供适合当前设备的 APK")
         if(channel == AppReleaseChannel.Stable)
-            return AppDownloadCandidate(channel, release.versionTag.removePrefix("v").removePrefix("V"), apk)
-        val infoName = if (einkOnly) "Novelia-preview-eink-build-info.txt" else "Novelia-preview-build-info.txt"
-        val info = release.assets.singleOrNull { it.name == infoName && it.isOfficialFor(release.tag) }
+            return AppDownloadCandidate(channel, release.tag.removePrefix("v").removePrefix("V"), apk)
+        val info = release.assets.singleOrNull { it.name == "Novelia-preview-build-info.txt" && it.isOfficialFor(release.tag) }
             ?: throw AppReleaseException("预览包缺少构建信息，暂时无法检查版本")
         val response = client.newNetworkCall(Request.Builder().url(info.downloadUrl).build()).awaitText()
         if(response.code !in 200..299 || response.text.length > 16_384)
@@ -170,12 +146,12 @@ class AppReleaseClient(
         return parsePreviewCandidate(apk, response.text)
     }
 
-    private suspend inline fun <reified T> fetch(url: String): T? {
+    private suspend fun fetch(url: String): AppRelease? {
         val request = Request.Builder().url(url).header("Accept", "application/vnd.github+json")
             .header("X-GitHub-Api-Version", "2022-11-28").header("User-Agent", "Novelia-Android").build()
         val response = client.newNetworkCall(request).awaitText()
         if(response.code == 404) return null
         if(response.code !in 200..299) throw AppReleaseException("获取发行版失败（HTTP ${response.code}），请稍后重试")
-        return appJson.decodeFromString<T>(response.text)
+        return appJson.decodeFromString<AppRelease>(response.text)
     }
 }
