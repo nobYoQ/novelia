@@ -13,11 +13,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.auth.SessionBinding
+import cc.novelia.app.data.library.resumeDestination
 import cc.novelia.app.data.library.withCloudReadingMetadata
 import cc.novelia.app.data.library.withoutReadingHistory
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.Page
+import cc.novelia.app.data.model.WebDetail
 import cc.novelia.app.data.model.WebOutline
 import cc.novelia.app.ui.account.ProfileDetailList
 import cc.novelia.app.ui.account.ProfileDetailCard
@@ -55,7 +57,8 @@ private data class HistoryRemoval(val book: BookCard, val binding: SessionBindin
             if(history.isEmpty()) item { ProfileEmptyState("还没有阅读记录", "打开一本小说，最近阅读记录就会出现在这里。") }
             items(history, key = { it.key }, contentType = { "book" }) { (key, entry) ->
                 val book = booksByKey[key]?.book ?: BookCard(BookRef.fromKey(key), entry.bookTitle.ifBlank { "未命名作品" })
-                ProfileDetailCard { BookRow(book.copy(subtitle = entry.chapterTitle), { c.read(book.ref, entry.chapterId) }, trailing = {
+                ProfileDetailCard { BookRow(book.copy(subtitle = entry.chapterTitle), { c.book(book.ref) },
+                    onRead = { c.read(book.ref, entry.chapterId) }, trailing = {
                     AppIconButton(onClick = { removal = HistoryRemoval(book) }, enabled = !deleting) {
                         Icon(Icons.Outlined.DeleteOutline, "删除《${book.title}》的本地阅读历史")
                     }
@@ -76,8 +79,24 @@ private data class HistoryRemoval(val book: BookCard, val binding: SessionBindin
                 if(cards.isEmpty()) ProfileEmptyState("暂无云端阅读历史", "登录后阅读的小说会出现在这里。")
                 cards.forEach { book -> key(book.ref.key) {
                     val displayed = rememberCloudBookMetadata(c, book, profile?.username, version)
+                    var opening by remember(book.ref, binding) { mutableStateOf(false) }
                     ProfileDetailCard { BookRow(displayed, { c.book(book.ref) }, status = bookRowStatus(displayed, booksByKey[book.ref.key],
-                        state.positions[book.ref.key], state.bookUpdates[book.ref.key], profile?.username, preferCloud = true), trailing = {
+                        state.positions[book.ref.key], state.bookUpdates[book.ref.key], profile?.username, preferCloud = true),
+                        onRead = {
+                            if(!opening) {
+                                opening = true
+                                c.action {
+                                    try {
+                                        c.session.ensureCurrent(binding)
+                                        val detail = c.detail<WebDetail>("novel/${book.ref.key}")
+                                        c.session.ensureCurrent(binding)
+                                        val destination = resumeDestination(detail.toc, localId = null, cloudId = detail.lastReadChapterId)
+                                            ?: error("这本小说没有可阅读的章节")
+                                        c.read(book.ref, destination.chapterId)
+                                    } finally { opening = false }
+                                }
+                            }
+                        }, trailing = {
                         AppIconButton(onClick = { removal = HistoryRemoval(book, binding) }, enabled = !deleting) {
                             Icon(Icons.Outlined.DeleteOutline, "删除《${book.title}》的云端阅读历史")
                         }
