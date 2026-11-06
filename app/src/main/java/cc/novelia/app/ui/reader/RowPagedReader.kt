@@ -1,6 +1,7 @@
 package cc.novelia.app.ui.reader
 
 import android.animation.ValueAnimator
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
@@ -16,7 +17,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -141,6 +144,16 @@ private data class RowMeasurement(val input: RowMeasureInput, val chapter: Measu
         if(chapter == null) Text("正在分页…", Modifier.align(Alignment.Center), color = foreground)
         else {
             val geometry = state.layout!!
+            val showPartialLines = settings.rowShowPartialLines || state.scrolling
+            // 渐隐只跟随当前阅读位置；翻页、搜索和重新排版不能带入上一屏的残影。
+            val partialLineAlpha = remember(geometry, state.navigationRevision) { Animatable(if(showPartialLines) 1f else 0f) }
+            LaunchedEffect(partialLineAlpha, showPartialLines, animate) {
+                if(showPartialLines || !animate) partialLineAlpha.snapTo(if(showPartialLines) 1f else 0f)
+                else partialLineAlpha.animateTo(0f, tween(AppMotion.Quick))
+            }
+            val fadingPartialLine by remember(partialLineAlpha, showPartialLines, animate) {
+                derivedStateOf { !showPartialLines && animate && partialLineAlpha.value > 0f }
+            }
             // 按键、按钮、自动阅读直接更新同一个行游标，也提供横向过渡。
             LaunchedEffect(geometry, state.navigationRevision, canInteract, animate) {
                 gestureJob?.cancel()
@@ -296,15 +309,25 @@ private data class RowMeasurement(val input: RowMeasureInput, val chapter: Measu
                 .padding(contentPadding).clipToBounds()) {
                 @Composable fun body(top: Float, x: Float) {
                     // 上下滚动始终保留局部行；静止与横翻遵循用户选择，不改变翻页起点。
-                    val includePartialLines = settings.rowShowPartialLines || state.scrolling
+                    val includePartialLines = showPartialLines || fadingPartialLine
                     val slice = remember(geometry, top, includePartialLines) { geometry.slice(top, includePartialLines) }
-                    val y = geometry.top(geometry.rowAt(top)) - top
+                    val completeSlice = remember(geometry, top) { geometry.slice(top, includePartialLines = false) }
+                    val firstRow = geometry.rowAt(top)
+                    val y = geometry.top(firstRow) - top
+                    val partialLineTop = geometry.top(firstRow + completeSlice.lines.size) - geometry.top(firstRow)
                     Box(Modifier.fillMaxSize().graphicsLayer { translationX = x }.background(background).clipToBounds()) {
                         PageBody(slice, chapter, settings, foreground, highlightLayers, annotations, density, context,
                             navigation, { if(canInteract) { navigation.cancel(); onSelect(it) } }, imageModel,
                             { if(canInteract) { navigation.cancel(); expandedImage = it } }, height,
                             { if(canInteract) { navigation.cancel(); onNote(it) } },
-                            Modifier.fillMaxWidth().wrapContentHeight(Alignment.Top, unbounded = true).graphicsLayer { translationY = y })
+                            Modifier.fillMaxWidth().wrapContentHeight(Alignment.Top, unbounded = true).graphicsLayer { translationY = y }
+                                .drawWithContent {
+                                    drawContent()
+                                    // 在同一份正文上渐隐尾行，完整行、段间距和正文交互不随动画重新排版。
+                                    if(fadingPartialLine && partialLineTop < size.height) drawRect(
+                                        color = background, topLeft = Offset(0f, partialLineTop),
+                                        size = Size(size.width, size.height - partialLineTop), alpha = 1f - partialLineAlpha.value)
+                                })
                         if(chapterEnd != null) Box(Modifier.fillMaxWidth().wrapContentHeight(Alignment.Top, unbounded = true)
                             .onSizeChanged { state.updateEndContentHeight(it.height + gap) }
                             .graphicsLayer { translationY = geometry.totalHeight + gap - top }) { chapterEnd() }
