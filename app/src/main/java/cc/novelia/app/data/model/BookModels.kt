@@ -1,6 +1,7 @@
 package cc.novelia.app.data.model
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 
 @Serializable data class Author(val name: String = "", val link: String? = null)
 
@@ -12,6 +13,7 @@ import kotlinx.serialization.Serializable
     val account: String, val lastReadAt: Long? = null, val chapterId: String? = null,
     val chapterIndex: Int? = null, val chapterCount: Int? = null,
     val chapterResolved: Boolean = false,
+    val chapterTitle: String? = null,
 ) {
     val hasHistory get() = (lastReadAt ?: 0) > 0 || !chapterId.isNullOrBlank()
 }
@@ -39,5 +41,7 @@ import kotlinx.serialization.Serializable
     // null 表示列表摘要或旧收藏尚未取得出版目录，不能从中日文文件数推算。
     val publishedVolumeCount: Int? = null,
     // null 表示旧摘要尚未取得插画师；空列表表示详情明确没有插画师。
-    val artists: List<String>? = null
+    val artists: List<String>? = null,
+    // 只展示本次从目录确认的最新章，不把它随书架备份长期保存。
+    @Transient val latestChapter: TocItem? = null,
 )

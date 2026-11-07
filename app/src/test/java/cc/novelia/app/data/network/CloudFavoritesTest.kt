@@ -26,7 +26,7 @@ class CloudFavoritesTest {
         }
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setBody("""{"pageNumber":1,"items":[{"providerId":"syosetu","novelId":"n1","titleJp":"测试作品","lastReadAt":null,"total":4}]}"""))
-            server.enqueue(MockResponse().setBody("""{"lastReadChapterId":"c","toc":[{"titleJp":"卷标题"},{"chapterId":"a"},{"chapterId":"b"},{"chapterId":"c","createAt":1700000000},{"chapterId":"d","createAt":1700000100}]}"""))
+            server.enqueue(MockResponse().setBody("""{"lastReadChapterId":"c","toc":[{"titleJp":"卷标题"},{"chapterId":"a"},{"chapterId":"b"},{"chapterId":"c","titleZh":"雨停之后","createAt":1700000000},{"chapterId":"d","createAt":1700000100}]}"""))
             val api = NoveliaApi(session, server.url("/api/").toString())
             val outline = api.cloudFavorites(false, "all", 0).items.single()
             assertNull(bookRowStatus(outline, null, null, null, "alice").progress)
@@ -35,6 +35,9 @@ class CloudFavoritesTest {
             assertEquals("/api/novel/syosetu/n1", server.takeRequest().requestUrl!!.encodedPath)
             assertEquals(.75f, bookRowStatus(resolved, null, null, null, "alice").progress!!, .0001f)
             assertEquals("读到第 3 章", bookRowStatus(resolved, null, null, null, "alice").progressLabel)
+            assertEquals("雨停之后", resolved.cloudReading?.chapterTitle)
+            assertEquals("d", resolved.latestChapter?.chapterId)
+            assertEquals("第 4 章", resolved.latestChapter?.title)
             assertEquals(1_700_000_100L, resolved.updateAt)
             assertEquals(outline.title, resolved.title)
         }

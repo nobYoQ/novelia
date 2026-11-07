@@ -72,4 +72,16 @@ class BookMetadataTest {
         assertEquals("b", dated.lastUpdatedChapter?.chapterId)
         assertNull(WebDetail(toc = listOf(TocItem(titleJp = "卷标题"))).lastUpdatedChapter)
     }
+
+    @Test fun historyUsesTheLatestPublishedChapterUnlessTheSummaryPointsToANewerCatalog() {
+        val detail = WebDetail(toc = listOf(
+            TocItem(titleZh = "番外", chapterId = "extra", createAt = 200),
+            TocItem(titleZh = "旧章", chapterId = "old", createAt = 100),
+            TocItem(titleZh = "卷标题", createAt = 300),
+        ))
+        val book = BookCard(ref, "作品", total = 2, updateAt = 200)
+        assertEquals("extra", detail.latestChapterFor(book)?.chapterId)
+        assertNull(detail.latestChapterFor(book.copy(total = 3)))
+        assertNull(detail.latestChapterFor(book.copy(updateAt = 201)))
+    }
 }

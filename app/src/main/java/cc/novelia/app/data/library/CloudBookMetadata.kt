@@ -24,13 +24,15 @@ class CloudBookMetadataLoader(
         val account = binding.account ?: return book
         return requests.withPermit {
             session.ensureCurrent(binding)
-            val resolved = detail(book.ref).card(book.ref, account)
+            val catalog = detail(book.ref)
+            val resolved = catalog.card(book.ref, account)
             session.ensureCurrent(binding)
             val reading = resolved.cloudReading?.let {
                 it.copy(lastReadAt = book.cloudReading?.takeIf { source -> source.account == account && it.hasHistory }?.lastReadAt)
             }
             book.copy(
                 cloudReading = reading,
+                latestChapter = catalog.latestChapterFor(book),
                 updateAt = book.updateAt?.takeIf { it > 0 } ?: resolved.updateAt,
                 total = maxOf(book.total, resolved.total),
                 novelType = resolved.novelType,

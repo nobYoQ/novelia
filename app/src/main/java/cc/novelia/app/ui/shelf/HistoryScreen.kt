@@ -19,16 +19,18 @@ import cc.novelia.app.data.library.withoutReadingHistory
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.Page
+import cc.novelia.app.data.model.TocItem
 import cc.novelia.app.data.model.WebDetail
 import cc.novelia.app.data.model.WebOutline
+import cc.novelia.app.data.model.withKnownChapter
+import cc.novelia.app.data.model.withKnownUpdateTime
+import cc.novelia.app.data.storage.appJson
+import cc.novelia.app.data.storage.hashName
 import cc.novelia.app.ui.account.ProfileDetailList
-import cc.novelia.app.ui.account.ProfileDetailCard
 import cc.novelia.app.ui.account.ProfileToggle
 import cc.novelia.app.ui.components.base.CachedAsyncContent
 import cc.novelia.app.ui.components.base.AppTextButton
 import cc.novelia.app.ui.components.base.rememberCachedListState
-import cc.novelia.app.ui.components.book.BookRow
-import cc.novelia.app.ui.components.book.bookRowStatus
 import cc.novelia.app.ui.components.book.rememberCloudBookMetadata
 import cc.novelia.app.ui.account.ProfileChoiceRow
 import cc.novelia.app.ui.components.base.ConfirmDialog
@@ -36,8 +38,39 @@ import cc.novelia.app.ui.account.ProfileEmptyState
 import cc.novelia.app.ui.components.base.PageControls
 import cc.novelia.app.ui.account.ProfileDetailScreen
 import cc.novelia.app.ui.navigation.AppController
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private data class HistoryRemoval(val book: BookCard, val binding: SessionBinding? = null)
+
+// 此设备历史只读取已导入的目录或当前账号的详情缓存，离线也能比较章节。
+@Composable
+private fun localHistoryBook(c: AppController, book: BookCard, binding: SessionBinding, generation: Long): BookCard {
+    if (book.ref.isWenku) return book
+    return key(book, binding, generation) {
+        produceState(book) {
+            value = withContext(Dispatchers.IO) {
+                runCatching {
+                    if (book.ref.isLocal) {
+                        val chapters = c.store.documentIndex(book.ref.id).chapters
+                        val last = chapters.lastOrNull() ?: return@runCatching book
+                        book.copy(latestChapter = TocItem(chapterId = last.id,
+                            titleZh = last.title.ifBlank { "第 ${chapters.size} 章" }))
+                    } else {
+                        val path = "novel/${book.ref.key}"
+                        val raw = c.metadataCache.read(hashName("${binding.cacheAccount}:$path"), newerThan = c.api.detailMutationAt(path))
+                            ?: return@runCatching book
+                        val detail = appJson.decodeFromString<WebDetail>(raw)
+                        book.copy(
+                            updateAt = listOfNotNull(book.updateAt, detail.lastUpdatedAt).maxOrNull(),
+                            latestChapter = detail.latestChapterFor(book),
+                        )
+                    }
+                }.getOrDefault(book)
+            }
+        }.value
+    }
+}
 
 @Composable fun HistoryScreen(c: AppController) {
     val state by c.store.state.collectAsStateWithLifecycle(); val profile by c.session.profile.collectAsStateWithLifecycle()
@@ -57,12 +90,16 @@ private data class HistoryRemoval(val book: BookCard, val binding: SessionBindin
             if(history.isEmpty()) item { ProfileEmptyState("还没有阅读记录", "打开一本小说，最近阅读记录就会出现在这里。") }
             items(history, key = { it.key }, contentType = { "book" }) { (key, entry) ->
                 val book = booksByKey[key]?.book ?: BookCard(BookRef.fromKey(key), entry.bookTitle.ifBlank { "未命名作品" })
-                ProfileDetailCard { BookRow(book.copy(subtitle = entry.chapterTitle), { c.book(book.ref) },
-                    onRead = { c.read(book.ref, entry.chapterId) }, trailing = {
-                    AppIconButton(onClick = { removal = HistoryRemoval(book) }, enabled = !deleting) {
-                        Icon(Icons.Outlined.DeleteOutline, "删除《${book.title}》的本地阅读历史")
-                    }
-                }) }
+                val position = state.positions[key]?.takeIf { it.chapterId == entry.chapterId }
+                val chapter = entry.chapterTitle.takeIf(String::isNotBlank)
+                    ?: position?.title?.takeIf(String::isNotBlank)
+                    ?: position?.chapterIndex?.takeIf { it >= 0 }?.let { "第 ${it + 1} 章" }
+                HistoryBookRow(
+                    book = localHistoryBook(c, book, binding, cacheGeneration),
+                    readChapterId = entry.chapterId, chapterTitle = chapter, lastReadSeconds = entry.lastReadAt / 1000L,
+                    onRead = { c.read(book.ref, entry.chapterId) }, onCover = { c.book(book.ref) },
+                    onRemove = { removal = HistoryRemoval(book) }, canRemove = !deleting,
+                )
             }
         } else if(profile == null) item { ProfileEmptyState("登录以查看云端历史", "原站同步到章节，本设备还会保存段落位置。", action = "登录", onAction = { c.go("login") }) }
         else item(key = "cloud-history") { CachedAsyncContent(c.uiResults.history, listOf(page, binding, profile?.role, cacheGeneration), refreshKey = version,
@@ -78,10 +115,19 @@ private data class HistoryRemoval(val book: BookCard, val binding: SessionBindin
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 if(cards.isEmpty()) ProfileEmptyState("暂无云端阅读历史", "登录后阅读的小说会出现在这里。")
                 cards.forEach { book -> key(book.ref.key) {
-                    val displayed = rememberCloudBookMetadata(c, book, profile?.username, version)
+                    val saved = booksByKey[book.ref.key]?.book
+                    val displayed = rememberCloudBookMetadata(c, book, binding.account, version).withKnownUpdateTime(saved)
+                    val savedProgress = saved?.cloudReading?.takeIf { it.account == binding.account }
+                    val progress = displayed.cloudReading?.takeIf { it.account == binding.account }
+                        ?.withKnownChapter(savedProgress) ?: savedProgress
                     var opening by remember(book.ref, binding) { mutableStateOf(false) }
-                    ProfileDetailCard { BookRow(displayed, { c.book(book.ref) }, status = bookRowStatus(displayed, booksByKey[book.ref.key],
-                        state.positions[book.ref.key], state.bookUpdates[book.ref.key], profile?.username, preferCloud = true),
+                    HistoryBookRow(
+                        book = displayed,
+                        readChapterId = progress?.chapterId,
+                        chapterTitle = progress?.chapterTitle?.takeIf(String::isNotBlank)
+                            ?: progress?.chapterIndex?.takeIf { it >= 0 }?.let { "第 ${it + 1} 章" },
+                        lastReadSeconds = book.cloudReading?.takeIf { it.account == binding.account }?.lastReadAt ?: progress?.lastReadAt,
+                        onCover = { c.book(book.ref) },
                         onRead = {
                             if(!opening) {
                                 opening = true
@@ -96,11 +142,9 @@ private data class HistoryRemoval(val book: BookCard, val binding: SessionBindin
                                     } finally { opening = false }
                                 }
                             }
-                        }, trailing = {
-                        AppIconButton(onClick = { removal = HistoryRemoval(book, binding) }, enabled = !deleting) {
-                            Icon(Icons.Outlined.DeleteOutline, "删除《${book.title}》的云端阅读历史")
-                        }
-                    }) }
+                        },
+                        onRemove = { removal = HistoryRemoval(book, binding) }, canRemove = !deleting,
+                    )
                 } }
                 PageControls(page, result.pageNumber) { page = it }
                 AppTextButton(onClick = refresh) { Text("刷新历史") }

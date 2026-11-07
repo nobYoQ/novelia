@@ -33,12 +33,26 @@ import kotlinx.serialization.Serializable
     val lastUpdatedChapter get() = toc.withIndex().filter { it.value.chapterId != null }
         .maxWithOrNull(compareBy<IndexedValue<TocItem>> { it.value.createAt?.takeIf { time -> time > 0 } ?: 0L }
             .thenBy { it.index })?.value
+
+    internal fun latestChapterFor(book: BookCard): TocItem? {
+        val latest = lastUpdatedChapter?.takeUnless { it.chapterId.isNullOrBlank() } ?: return null
+        // 详情可能来自离线缓存。书目已明确有更新时，旧目录不能用来判断追平。
+        val catalogTime = lastUpdatedAt
+        if (catalogTime != null && (book.updateAt ?: 0L) > catalogTime) return null
+        if (book.total > 0 && book.total > toc.count { it.chapterId != null }) return null
+        if (latest.title.isNotBlank()) return latest
+        val number = toc.asSequence().filter { it.chapterId != null }.indexOfFirst { it.chapterId == latest.chapterId } + 1
+        return latest.copy(titleZh = "第 $number 章")
+    }
+
     fun card(ref: BookRef) = BookCard(ref, title, titleJp, subtitle = authors.joinToString { it.name }, tags = keywords, total = toc.count { it.chapterId != null }, translated = maxOf(gpt, sakura, youdao), favored = favored, updateAt = lastUpdatedAt, translations = mapOf("gpt" to gpt, "sakura" to sakura, "youdao" to youdao), authors = authors.map { it.name }, novelType = type, attentions = attentions, totalCharacters = totalCharacters?.takeIf { it >= 0 })
     fun card(ref: BookRef, account: String?): BookCard {
-        val chapters = toc.mapNotNull { it.chapterId }
+        val chapters = toc.filter { it.chapterId != null }
         return card(ref).copy(cloudReading = account?.let {
+            val index = chapters.indexOfFirst { it.chapterId == lastReadChapterId }.takeIf { it >= 0 }
             CloudReadingProgress(it, chapterId = lastReadChapterId,
-                chapterIndex = chapters.indexOf(lastReadChapterId).takeIf { index -> index >= 0 }, chapterCount = chapters.size, chapterResolved = true)
+                chapterIndex = index, chapterCount = chapters.size, chapterResolved = true,
+                chapterTitle = index?.let { i -> chapters[i].title.takeIf(String::isNotBlank) })
         })
     }
 }
