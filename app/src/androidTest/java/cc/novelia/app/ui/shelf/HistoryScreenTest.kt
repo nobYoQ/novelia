@@ -2,6 +2,7 @@ package cc.novelia.app.ui.shelf
 
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.unit.dp
 import cc.novelia.app.MainActivity
 import cc.novelia.app.NoveliaApplication
 import cc.novelia.app.data.model.BookCard
@@ -33,23 +34,26 @@ class HistoryScreenTest {
         val today = LocalDate.now(zone)
         fun time(daysAgo: Long, hour: Int, minute: Int) =
             today.minusDays(daysAgo).atTime(hour, minute).atZone(zone).toEpochSecond()
-        val first = BookCard(BookRef("syosetu", "history-preview-rain"), "雨停之后的书店",
+        val first = BookCard(BookRef("syosetu", "history-preview-rain"), "反派贵族与爱太沉重的英雄们的孤儿院生活",
             updateAt = time(0, 8, 20))
-        val second = BookCard(BookRef("kakuyomu", "history-preview-sea"), "在海风吹过的车站等你",
+        val second = BookCard(BookRef("kakuyomu", "history-preview-sea"), "为了改变游戏的结局，骑士与魔女踏上了归途",
             updateAt = time(5, 16, 10), novelType = "已完结", attentions = emptyList())
-        val third = BookCard(BookRef("local", "history-letter-${System.nanoTime()}"), "给明天的一封信 · 第一卷")
+        val third = BookCard(BookRef("local", "history-letter-${System.nanoTime()}"), "見習い魔女のホームステイ、居候先での長い一日")
+        val fourth = BookCard(BookRef("hameln", "history-preview-night"), "夜行列车")
         val parent = BookCard(BookRef("wenku", "history-parent"), "给明天的一封信")
         fun entry(book: BookCard, chapter: String, read: Long) =
             ReadingHistoryEntry(book.ref.key, book.title, "chapter", chapter, read * 1000L)
         val entries = listOf(
-            entry(first, "第 42 话 · 夜雨初晴", time(1, 21, 36)),
+            entry(first, "第 1 话　与未来的英雄们的生活", time(1, 21, 36)),
             entry(second, "第 8 章 · 末班列车", time(2, 18, 10)),
             entry(third, "序章 · 春日来信", time(4, 12, 30)),
+            entry(fourth, "第 2 章　沿途的灯火", time(6, 19, 10)),
         )
         val account = app.session.capture().cacheAccount
         val rainCache = hashName("$account:novel/${first.ref.key}")
         val seaCache = hashName("$account:novel/${second.ref.key}")
         val parentCache = hashName("$account:wenku/${parent.ref.id}")
+        val nightCache = hashName("$account:novel/${fourth.ref.key}")
         try {
             store.metadataCache.write(rainCache, appJson.encodeToString(WebDetail(type = "连载中", toc = listOf(
                 TocItem(titleZh = entries[0].chapterTitle, chapterId = "chapter", createAt = time(5, 0, 0)),
@@ -65,29 +69,41 @@ class HistoryScreenTest {
                 LocalChapter("credit", "BOOK☆WALKER", listOf("版权页")),
             )))
             store.metadataCache.write(parentCache, appJson.encodeToString(WenkuDetail(title = parent.title, introduction = "春日书信文库简介")))
+            store.metadataCache.write(nightCache, appJson.encodeToString(WebDetail(type = "连载中", toc = listOf(
+                TocItem(titleZh = entries[3].chapterTitle, chapterId = "chapter"),
+                TocItem(titleZh = "第 3 章　终点站", chapterId = "last"),
+            ))))
             compose.runOnIdle { store.update { it.copy(
-                books = original.books + listOf(SavedBook(first), SavedBook(second), SavedBook(parent), SavedBook(third, parentWenkuKey = parent.ref.key)),
+                books = original.books + listOf(SavedBook(first), SavedBook(second), SavedBook(parent),
+                    SavedBook(third, parentWenkuKey = parent.ref.key), SavedBook(fourth)),
                 readingHistory = entries.associateBy { entry -> entry.bookKey }, historyMigrated = true,
                 theme = "dark", reducedMotion = true, readerTapTutorialSeen = true,
             ) } }
             compose.onNodeWithText("我的").performClick()
             compose.onNodeWithTag("profile-history").performClick()
-            compose.onNodeWithText("读到 第 42 话 · 夜雨初晴", useUnmergedTree = true).assertIsDisplayed()
+            val list = compose.onNode(hasScrollToIndexAction())
+            list.performScrollToIndex(2)
+            val readLine = compose.onNodeWithText(entries[0].chapterTitle, useUnmergedTree = true).assertIsDisplayed()
             compose.waitUntil(5_000) {
-                compose.onAllNodesWithText("最新 第 45 话 · 打烊后的来信", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() &&
-                    compose.onAllNodesWithText("（已是最新）", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+                compose.onAllNodesWithText("第 45 话 · 打烊后的来信", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
             }
-            compose.onNodeWithText("最新 第 45 话 · 打烊后的来信", useUnmergedTree = true).assertIsDisplayed()
-            compose.onNodeWithText("（已是最新）", useUnmergedTree = true).performScrollTo().assertIsDisplayed()
-            compose.onNodeWithText("最新 ${entries[1].chapterTitle}", useUnmergedTree = true).assertDoesNotExist()
-            compose.onNode(hasScrollToIndexAction()).performScrollToIndex(0)
-            compose.onNodeWithText("昨天 21:36 读过", useUnmergedTree = true).assertIsDisplayed()
+            val latestLine = compose.onNodeWithText("第 45 话 · 打烊后的来信", useUnmergedTree = true).assertIsDisplayed()
+            val titleBounds = compose.onNodeWithText(first.title, useUnmergedTree = true).getUnclippedBoundsInRoot()
+            val readBounds = readLine.getUnclippedBoundsInRoot()
+            val latestBounds = latestLine.getUnclippedBoundsInRoot()
+            assertTrue(readBounds.top - titleBounds.bottom >= 9.dp)
+            assertTrue(latestBounds.left == readBounds.left && latestBounds.top - readBounds.bottom >= 4.dp)
+            val readTime = compose.onNodeWithText("昨天 21:36 读过", useUnmergedTree = true).assertIsDisplayed()
+            assertTrue(readTime.getUnclippedBoundsInRoot().top - latestBounds.bottom >= 10.dp)
             compose.onNodeWithText("今天 08:20 更新", useUnmergedTree = true).assertIsDisplayed()
             compose.onNodeWithText("删除阅读历史").assertDoesNotExist()
-            saveTestScreenshot("history-catalog.png")
+            saveTestScreenshot("history-layout.png")
+            list.performScrollToNode(hasText("已是最新"))
+            compose.onNodeWithText("已是最新", useUnmergedTree = true).assertIsDisplayed()
+            compose.onAllNodesWithText(entries[1].chapterTitle, useUnmergedTree = true).assertCountEquals(1)
             val volumeCover = compose.onNodeWithContentDescription("${third.title} 默认封面", useUnmergedTree = true)
             compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasContentDescription("${third.title} 默认封面"))
-            compose.onNodeWithText("最新 BOOK☆WALKER", useUnmergedTree = true).assertDoesNotExist()
+            compose.onNodeWithText("BOOK☆WALKER", useUnmergedTree = true).assertDoesNotExist()
             volumeCover.performClick()
             compose.onNodeWithText("文库详情").assertIsDisplayed()
             compose.onNodeWithText("春日书信文库简介").performScrollTo().assertIsDisplayed()
@@ -98,7 +114,7 @@ class HistoryScreenTest {
             compose.onNodeWithText("删除阅读历史？").assertIsDisplayed()
             assertTrue(first.ref.key in store.state.value.readingHistory)
             compose.onNodeWithText("取消").performClick()
-            val readLabel = "读到 ${entries[2].chapterTitle}"
+            val readLabel = entries[2].chapterTitle
             compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText(readLabel))
             compose.onNodeWithText(readLabel).performClick()
             compose.waitUntil(15_000) { store.state.value.positions[third.ref.key]?.chapterId == "chapter" }
@@ -109,6 +125,7 @@ class HistoryScreenTest {
             store.metadataCache.remove(rainCache)
             store.metadataCache.remove(seaCache)
             store.metadataCache.remove(parentCache)
+            store.metadataCache.remove(nightCache)
             compose.runOnIdle { store.update { it.copy(books = original.books,
                 readingHistory = original.readingHistory, historyMigrated = original.historyMigrated,
                 positions = it.positions - third.ref.key, readingStatistics = original.readingStatistics,
