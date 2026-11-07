@@ -19,57 +19,63 @@ import cc.novelia.app.data.library.withoutReadingHistory
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.Page
-import cc.novelia.app.data.model.TocItem
+import cc.novelia.app.data.model.ReadingHistoryEntry
 import cc.novelia.app.data.model.WebDetail
 import cc.novelia.app.data.model.WebOutline
 import cc.novelia.app.data.model.withKnownChapter
 import cc.novelia.app.data.model.withKnownUpdateTime
-import cc.novelia.app.data.storage.appJson
-import cc.novelia.app.data.storage.hashName
+import cc.novelia.app.data.network.ApiException
 import cc.novelia.app.ui.account.ProfileDetailList
 import cc.novelia.app.ui.account.ProfileToggle
 import cc.novelia.app.ui.components.base.CachedAsyncContent
 import cc.novelia.app.ui.components.base.AppTextButton
 import cc.novelia.app.ui.components.base.rememberCachedListState
-import cc.novelia.app.ui.components.book.rememberCloudBookMetadata
 import cc.novelia.app.ui.account.ProfileChoiceRow
 import cc.novelia.app.ui.components.base.ConfirmDialog
 import cc.novelia.app.ui.account.ProfileEmptyState
 import cc.novelia.app.ui.components.base.PageControls
 import cc.novelia.app.ui.account.ProfileDetailScreen
 import cc.novelia.app.ui.navigation.AppController
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.CancellationException
 
 private data class HistoryRemoval(val book: BookCard, val binding: SessionBinding? = null)
 
-// 此设备历史只读取已导入的目录或当前账号的详情缓存，离线也能比较章节。
+private data class HistoryCatalogRow(val book: BookCard? = null, val failed: Boolean = false,
+    val attempt: Int = 0, val checkedAt: Long = 0)
+
+private fun MutableMap<BookRef, HistoryCatalogRow>.retryAction(ref: BookRef): (() -> Unit)? {
+    val row = this[ref]?.takeIf { it.failed } ?: return null
+    return { this[ref] = row.copy(failed = false, attempt = row.attempt + 1) }
+}
+
+// 已补齐的摘要随当前列表保留；滚回旧条目时先展示上次结果。
 @Composable
-private fun localHistoryBook(c: AppController, book: BookCard, binding: SessionBinding, generation: Long): BookCard {
-    if (book.ref.isWenku) return book
-    return key(book, binding, generation) {
-        produceState(book) {
-            value = withContext(Dispatchers.IO) {
-                runCatching {
-                    if (book.ref.isLocal) {
-                        val chapters = c.store.documentIndex(book.ref.id).chapters
-                        val last = chapters.lastOrNull() ?: return@runCatching book
-                        book.copy(latestChapter = TocItem(chapterId = last.id,
-                            titleZh = last.title.ifBlank { "第 ${chapters.size} 章" }))
-                    } else {
-                        val path = "novel/${book.ref.key}"
-                        val raw = c.metadataCache.read(hashName("${binding.cacheAccount}:$path"), newerThan = c.api.detailMutationAt(path))
-                            ?: return@runCatching book
-                        val detail = appJson.decodeFromString<WebDetail>(raw)
-                        book.copy(
-                            updateAt = listOfNotNull(book.updateAt, detail.lastUpdatedAt).maxOrNull(),
-                            latestChapter = detail.latestChapterFor(book),
-                        )
+private fun rememberHistoryCatalogs(c: AppController, books: List<BookCard>, binding: SessionBinding, generation: Long,
+    refreshKey: Any? = null, cloud: Boolean = false): MutableMap<BookRef, HistoryCatalogRow> {
+    val rows = remember(c, binding, generation, refreshKey) { mutableStateMapOf<BookRef, HistoryCatalogRow>() }
+    for (book in books) {
+        if (book.ref.isLocal || book.ref.isWenku) continue
+        key(book.ref) {
+            val attempt = rows[book.ref]?.attempt ?: 0
+            LaunchedEffect(c, binding, generation, refreshKey, attempt) {
+                val lastCheck = rows[book.ref]?.checkedAt ?: 0L
+                if (System.currentTimeMillis() - lastCheck in 0 until 5 * 60_000L) return@LaunchedEffect
+                try {
+                    c.historyCatalog.load(book, binding) { resolved ->
+                        rows[book.ref] = HistoryCatalogRow(book = resolved, attempt = attempt)
+                        if (cloud) c.store.update { it.withCloudReadingMetadata(listOf(resolved), binding.account) }
                     }
-                }.getOrDefault(book)
+                    rows[book.ref]?.let { rows[book.ref] = it.copy(checkedAt = System.currentTimeMillis()) }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    val prior = rows[book.ref]?.book?.takeUnless { e is ApiException && e.status in setOf(401, 403, 404) }
+                    rows[book.ref] = HistoryCatalogRow(prior, failed = true, attempt = attempt)
+                }
             }
-        }.value
+        }
     }
+    return rows
 }
 
 @Composable fun HistoryScreen(c: AppController) {
@@ -82,6 +88,21 @@ private fun localHistoryBook(c: AppController, book: BookCard, binding: SessionB
     val cacheGeneration by c.store.cacheGeneration.collectAsStateWithLifecycle()
     val binding = c.session.capture()
     val scroll = rememberCachedListState(c.uiResults.history, listOf("history-scroll", tab, if(tab == 0) 0 else page, c.session.capture(), cacheGeneration))
+    fun deviceBook(key: String, entry: ReadingHistoryEntry) =
+        booksByKey[key]?.book ?: BookCard(BookRef.fromKey(key), entry.bookTitle.ifBlank { "未命名作品" })
+    // 列表开头有两个设置项。预取当前可见区和后续八条，无需逐本打开详情。
+    val historySize = history.size
+    val window by remember(scroll, historySize) { derivedStateOf {
+        val first = (scroll.firstVisibleItemIndex - 2).coerceIn(0, historySize)
+        val last = scroll.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: scroll.firstVisibleItemIndex
+        val end = (maxOf(first, last - 2) + 9).coerceAtMost(historySize)
+        first until end
+    } }
+    val nearby = remember(tab, window, history, booksByKey) {
+        if (tab == 0) history.subList(window.first, window.last + 1).map { (key, entry) -> deviceBook(key, entry) }
+        else emptyList()
+    }
+    val localCatalogs = rememberHistoryCatalogs(c, nearby, binding, cacheGeneration)
     fun pauseHistory(value: Boolean) { c.store.update { it.copy(historyPaused = value) }; if(profile != null) c.action { c.api.request(if(value) "PUT" else "DELETE", "user/read-history/paused") } }
     ProfileDetailScreen("阅读历史", c::back, actions = { AppIconButton(onClick = { clear = true }, enabled = !deleting && (tab == 0 || profile != null)) { Icon(Icons.Outlined.DeleteSweep, "清空历史") } }) { padding -> ProfileDetailList(Modifier.padding(padding), state = scroll) {
         item { ProfileChoiceRow("历史来源", listOf("此设备", "原站云端"), tab) { tab = it } }
@@ -89,16 +110,23 @@ private fun localHistoryBook(c: AppController, book: BookCard, binding: SessionB
         if(tab == 0) {
             if(history.isEmpty()) item { ProfileEmptyState("还没有阅读记录", "打开一本小说，最近阅读记录就会出现在这里。") }
             items(history, key = { it.key }, contentType = { "book" }) { (key, entry) ->
-                val book = booksByKey[key]?.book ?: BookCard(BookRef.fromKey(key), entry.bookTitle.ifBlank { "未命名作品" })
+                val saved = booksByKey[key]
+                val source = deviceBook(key, entry)
+                val ref = source.ref
+                val catalog = localCatalogs[ref]
+                val book = catalog?.book ?: source
+                val parent = saved?.parentWenkuKey?.let(booksByKey::get)?.book?.takeIf { ref.isLocal && it.ref.isWenku }
                 val position = state.positions[key]?.takeIf { it.chapterId == entry.chapterId }
                 val chapter = entry.chapterTitle.takeIf(String::isNotBlank)
                     ?: position?.title?.takeIf(String::isNotBlank)
                     ?: position?.chapterIndex?.takeIf { it >= 0 }?.let { "第 ${it + 1} 章" }
                 HistoryBookRow(
-                    book = localHistoryBook(c, book, binding, cacheGeneration),
+                    book = book,
                     readChapterId = entry.chapterId, chapterTitle = chapter, lastReadSeconds = entry.lastReadAt / 1000L,
-                    onRead = { c.read(book.ref, entry.chapterId) }, onCover = { c.book(book.ref) },
+                    onRead = { c.read(ref, entry.chapterId) }, onCover = { c.showBookDetails(parent?.ref ?: ref) },
                     onRemove = { removal = HistoryRemoval(book) }, canRemove = !deleting,
+                    loadingCatalog = (catalog?.checkedAt ?: 0L) == 0L,
+                    retryCatalog = localCatalogs.retryAction(ref),
                 )
             }
         } else if(profile == null) item { ProfileEmptyState("登录以查看云端历史", "原站同步到章节，本设备还会保存段落位置。", action = "登录", onAction = { c.go("login") }) }
@@ -107,8 +135,9 @@ private fun localHistoryBook(c: AppController, book: BookCard, binding: SessionB
             val result = c.api.get<Page<WebOutline>>("user/read-history", mapOf("page" to "$page", "pageSize" to "20"))
             c.session.ensureCurrent(binding)
             Page(result.pageNumber, result.items.map { it.card(binding.account) })
-        }) { result, refresh ->
+        }) { result, _ ->
             val cards = result.items
+            val catalogs = rememberHistoryCatalogs(c, cards, binding, cacheGeneration, listOf(page, version, cards), cloud = true)
             LaunchedEffect(page, result.pageNumber) { page = page.coerceAtMost((result.pageNumber - 1).coerceAtLeast(0)) }
             LaunchedEffect(cards) { c.store.update { it.withCloudReadingMetadata(cards, c.session.profile.value?.username) } }
             // 云端每页最多 20 条，共用外层滚动，放大文字时仍能滚过筛选区。
@@ -116,7 +145,8 @@ private fun localHistoryBook(c: AppController, book: BookCard, binding: SessionB
                 if(cards.isEmpty()) ProfileEmptyState("暂无云端阅读历史", "登录后阅读的小说会出现在这里。")
                 cards.forEach { book -> key(book.ref.key) {
                     val saved = booksByKey[book.ref.key]?.book
-                    val displayed = rememberCloudBookMetadata(c, book, binding.account, version).withKnownUpdateTime(saved)
+                    val catalog = catalogs[book.ref]
+                    val displayed = (catalog?.book ?: book).withKnownUpdateTime(saved)
                     val savedProgress = saved?.cloudReading?.takeIf { it.account == binding.account }
                     val progress = displayed.cloudReading?.takeIf { it.account == binding.account }
                         ?.withKnownChapter(savedProgress) ?: savedProgress
@@ -144,10 +174,12 @@ private fun localHistoryBook(c: AppController, book: BookCard, binding: SessionB
                             }
                         },
                         onRemove = { removal = HistoryRemoval(book, binding) }, canRemove = !deleting,
+                        loadingCatalog = (catalog?.checkedAt ?: 0L) == 0L,
+                        retryCatalog = catalogs.retryAction(book.ref),
                     )
                 } }
                 PageControls(page, result.pageNumber) { page = it }
-                AppTextButton(onClick = refresh) { Text("刷新历史") }
+                AppTextButton(onClick = { version++ }) { Text("刷新历史") }
             }
         } }
     } }

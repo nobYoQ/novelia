@@ -82,6 +82,7 @@ class BookMetadataTest {
         val book = BookCard(ref, "作品", total = 2, updateAt = 200)
         assertEquals("extra", detail.latestChapterFor(book)?.chapterId)
         assertNull(detail.latestChapterFor(book.copy(total = 3)))
-        assertNull(detail.latestChapterFor(book.copy(updateAt = 201)))
+        assertEquals("extra", detail.latestChapterFor(book.copy(updateAt = 201))?.chapterId)
+        assertNull(detail.copy(updateAt = 200).latestChapterFor(book.copy(updateAt = 201)))
     }
 }

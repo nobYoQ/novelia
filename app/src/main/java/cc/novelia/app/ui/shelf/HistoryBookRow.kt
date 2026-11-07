@@ -8,11 +8,19 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.ui.account.ProfileDetailCard
 import cc.novelia.app.ui.components.base.AppIconButton
+import cc.novelia.app.ui.components.base.AppTextButton
 import cc.novelia.app.ui.components.book.BookCover
 import cc.novelia.app.ui.theme.motionClickable
 import java.time.Instant
@@ -22,6 +30,12 @@ import java.time.format.DateTimeFormatter
 
 private val clock = DateTimeFormatter.ofPattern("HH:mm")
 private val monthDay = DateTimeFormatter.ofPattern("M月d日")
+
+private fun chapterLine(label: String, title: String, labelColor: Color) = buildAnnotatedString {
+    withStyle(SpanStyle(color = labelColor, fontWeight = FontWeight.SemiBold)) { append(label) }
+    append(" ")
+    append(title)
+}
 
 internal fun historyTime(seconds: Long?, today: LocalDate, zone: ZoneId): String? {
     if (seconds == null || seconds <= 0) return null
@@ -46,28 +60,33 @@ internal fun HistoryBookRow(
     onCover: () -> Unit,
     onRemove: () -> Unit,
     canRemove: Boolean,
+    loadingCatalog: Boolean,
+    retryCatalog: (() -> Unit)?,
 ) {
     val zone = ZoneId.systemDefault()
     val today = LocalDate.now(zone)
     val readTime = historyTime(lastReadSeconds, today, zone)
     val updateTime = historyTime(book.updateAt, today, zone)
     val secondary = MaterialTheme.colorScheme.onSurfaceVariant
-    val latest = book.latestChapter?.takeIf { !it.chapterId.isNullOrBlank() && !readChapterId.isNullOrBlank() }
+    val accent = MaterialTheme.colorScheme.primary
+    val isWeb = !book.ref.isLocal && !book.ref.isWenku
+    val latest = book.latestChapter?.takeIf { isWeb && !it.chapterId.isNullOrBlank() }
     val caughtUp = latest != null && latest.chapterId == readChapterId
     val readTitle = chapterTitle?.takeIf(String::isNotBlank) ?: latest?.takeIf { caughtUp }?.title
     var menuOpen by remember(book.ref) { mutableStateOf(false) }
 
     ProfileDetailCard {
         Row(
-            Modifier.fillMaxWidth().motionClickable(onClick = onRead).padding(horizontal = 14.dp, vertical = 6.dp),
+            Modifier.fillMaxWidth().motionClickable(onClick = onRead).padding(horizontal = 14.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            BookCover(book, Modifier.size(52.dp, 72.dp).motionClickable(onClick = onCover), showFallbackTitle = false)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            BookCover(book, Modifier.size(64.dp, 90.dp).motionClickable(onClick = onCover), showFallbackTitle = false)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(book.title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Box {
                         AppIconButton(onClick = { menuOpen = true }, enabled = canRemove) {
                             Icon(Icons.Outlined.MoreVert, "《${book.title}》的更多操作", tint = secondary)
@@ -81,24 +100,29 @@ internal fun HistoryBookRow(
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(readTitle?.let { "读到 $it" } ?: "继续阅读",
+                    Text(readTitle?.let { chapterLine("读到", it, secondary) } ?: AnnotatedString("继续阅读"),
                         modifier = Modifier.weight(1f, fill = false),
-                        style = MaterialTheme.typography.bodySmall, color = secondary,
+                        style = MaterialTheme.typography.bodyMedium, color = secondary,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    if (caughtUp) Text("（已是最新）", style = MaterialTheme.typography.bodySmall, color = secondary)
+                    if (caughtUp) Text("（已是最新）", style = MaterialTheme.typography.bodySmall, color = accent)
                 }
                 if (latest != null && !caughtUp) {
-                    Text("最新 ${latest.title}", style = MaterialTheme.typography.bodySmall, color = secondary,
+                    Text(chapterLine("最新", latest.title, accent), style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
+                } else if (isWeb && latest == null) {
+                    if (retryCatalog != null) AppTextButton(onClick = retryCatalog) { Text("目录未获取 · 重试") }
+                    else Text(if (loadingCatalog) "正在读取目录…" else "目录暂无可读章节",
+                        style = MaterialTheme.typography.bodySmall, color = secondary)
                 }
                 if (readTime != null || updateTime != null) {
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        if (readTime != null) Text("$readTime 读过", style = MaterialTheme.typography.labelSmall, color = secondary)
+                    FlowRow(Modifier.padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        if (readTime != null) Text("$readTime 读过", style = MaterialTheme.typography.bodySmall, color = secondary)
                         if (updateTime != null) {
                             val newer = lastReadSeconds != null && lastReadSeconds > 0 &&
                                 book.updateAt != null && book.updateAt > lastReadSeconds
-                            Text("$updateTime 更新", style = MaterialTheme.typography.labelSmall,
-                                color = if (newer) MaterialTheme.colorScheme.primary else secondary)
+                            Text("$updateTime 更新", style = MaterialTheme.typography.bodySmall,
+                                color = if (newer) accent else secondary)
                         }
                     }
                 }

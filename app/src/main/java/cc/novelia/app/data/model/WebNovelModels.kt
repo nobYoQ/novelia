@@ -34,12 +34,19 @@ import kotlinx.serialization.Serializable
         .maxWithOrNull(compareBy<IndexedValue<TocItem>> { it.value.createAt?.takeIf { time -> time > 0 } ?: 0L }
             .thenBy { it.index })?.value
 
+    internal fun catalogBehind(book: BookCard): Boolean {
+        // 列表 updateAt 是目录变动时间，不能和从 createAt 推导出的章节发布时间比较。
+        return (updateAt != null && updateAt > 0 && (book.updateAt ?: 0) > updateAt) ||
+            (book.total > 0 && book.total > toc.count { it.chapterId != null })
+    }
+
     internal fun latestChapterFor(book: BookCard): TocItem? {
+        if (catalogBehind(book)) return null
+        return latestReadableChapter()
+    }
+
+    internal fun latestReadableChapter(): TocItem? {
         val latest = lastUpdatedChapter?.takeUnless { it.chapterId.isNullOrBlank() } ?: return null
-        // 详情可能来自离线缓存。书目已明确有更新时，旧目录不能用来判断追平。
-        val catalogTime = lastUpdatedAt
-        if (catalogTime != null && (book.updateAt ?: 0L) > catalogTime) return null
-        if (book.total > 0 && book.total > toc.count { it.chapterId != null }) return null
         if (latest.title.isNotBlank()) return latest
         val number = toc.asSequence().filter { it.chapterId != null }.indexOfFirst { it.chapterId == latest.chapterId } + 1
         return latest.copy(titleZh = "第 $number 章")

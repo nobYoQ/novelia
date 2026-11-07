@@ -3,6 +3,7 @@ package cc.novelia.app.data.library
 import cc.novelia.app.data.auth.AuthenticationSession
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
+import cc.novelia.app.data.model.TocItem
 import cc.novelia.app.data.model.WebDetail
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -25,20 +26,26 @@ class CloudBookMetadataLoader(
         return requests.withPermit {
             session.ensureCurrent(binding)
             val catalog = detail(book.ref)
-            val resolved = catalog.card(book.ref, account)
             session.ensureCurrent(binding)
-            val reading = resolved.cloudReading?.let {
-                it.copy(lastReadAt = book.cloudReading?.takeIf { source -> source.account == account && it.hasHistory }?.lastReadAt)
-            }
-            book.copy(
-                cloudReading = reading,
-                latestChapter = catalog.latestChapterFor(book),
-                updateAt = book.updateAt?.takeIf { it > 0 } ?: resolved.updateAt,
-                total = maxOf(book.total, resolved.total),
-                novelType = resolved.novelType,
-                attentions = resolved.attentions,
-                totalCharacters = resolved.totalCharacters ?: book.totalCharacters,
-            )
+            catalog.enrichBook(book, account, latestChapter = catalog.latestChapterFor(book),
+                updateTime = book.updateAt?.takeIf { it > 0 } ?: catalog.lastUpdatedAt)
         }
     }
+}
+
+internal fun WebDetail.enrichBook(book: BookCard, account: String?, latestChapter: TocItem?,
+    updateTime: Long? = listOfNotNull(book.updateAt, lastUpdatedAt).maxOrNull()): BookCard {
+    val resolved = card(book.ref, account)
+    val reading = resolved.cloudReading?.let {
+        it.copy(lastReadAt = book.cloudReading?.takeIf { source -> source.account == account && it.hasHistory }?.lastReadAt)
+    }
+    return book.copy(
+        cloudReading = reading,
+        latestChapter = latestChapter,
+        updateAt = updateTime,
+        total = maxOf(book.total, resolved.total),
+        novelType = resolved.novelType?.takeIf(String::isNotBlank) ?: book.novelType,
+        attentions = resolved.attentions ?: book.attentions,
+        totalCharacters = resolved.totalCharacters ?: book.totalCharacters,
+    )
 }

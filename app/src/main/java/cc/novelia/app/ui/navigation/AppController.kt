@@ -39,6 +39,7 @@ import cc.novelia.app.data.updates.withBookUpdate
 import cc.novelia.app.data.library.withCloudReadingMetadata
 import cc.novelia.app.data.library.withCloudFavoriteLocalCopy
 import cc.novelia.app.data.library.CloudBookMetadataLoader
+import cc.novelia.app.data.library.HistoryCatalogLoader
 import cc.novelia.app.data.network.ApiException
 import cc.novelia.app.data.storage.appJson
 import cc.novelia.app.data.storage.hashName
@@ -179,6 +180,9 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
         }.also { readerToc = key to it }
     }
     private val cloudBookMetadata = CloudBookMetadataLoader(session) { ref -> detail<WebDetail>("novel/${ref.key}") }
+    internal val historyCatalog by lazy {
+        HistoryCatalogLoader(session, metadataCache, api::detailMutationAt) { ref -> webDetail(ref, forceNetwork = true) }
+    }
 
     /** 仅云端收藏也需要章节元数据，补取详情时不隐式加入本地书架。 */
     suspend fun refreshCloudReading(book: BookCard): BookCard {
@@ -198,8 +202,9 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
                 store.documentIndex(ref.id).chapters.firstOrNull()?.id ?: error("这本小说没有可阅读的章节")
             }
             read(ref, chapter)
-        } else go("book/${ref.provider}/${ref.id}")
+        } else showBookDetails(ref)
     }
+    fun showBookDetails(ref: BookRef) = go("book/${ref.provider}/${Uri.encode(ref.id)}")
     fun read(ref: BookRef, chapter: String) {
         // 从书架/详情重新开始阅读时重新检查目录；连续切章走下面的交接入口。
         synchronized(this) { readerToc = null }
