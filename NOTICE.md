@@ -16,6 +16,8 @@ Copyright (C) 2026 Novelia Android contributors.
 
 ## 第三方软件
 
+RAR、7z 和 TAR 漫画读取使用 libarchive-android 1.1.6。Android 绑定版权归 Google LLC，采用 Apache-2.0。原生库及其压缩组件的许可和版权声明随应用提供。[上游固定版本](https://github.com/zhanghai/libarchive-android/tree/v1.1.6) · [原生组件声明](licenses/libarchive-android.txt)
+
 AndroidX / Compose、Kotlin、kotlinx.coroutines、kotlinx.serialization、OkHttp、Okio、Coil、Markwon 等依赖采用 Apache-2.0；Jsoup 采用 MIT；ICU4J 76.1 使用 Unicode-3.0 并附带其他数据许可；CommonMark 使用 BSD-2-Clause。OkHttp 所含 Public Suffix List 数据使用 MPL-2.0，来源见 [OkHttp 4.12.0](https://github.com/square/okhttp/tree/parent-4.12.0/okhttp/src/main/resources/okhttp3/internal/publicsuffix) 和 [Public Suffix List](https://publicsuffix.org/list/)。这些第三方组件的许可不因本项目选择 GPL-3.0 而改变。
 
 完整通用条款及来源记录位于 [licenses](licenses/README.md)。构建时还会从实际 Release 依赖图生成包含版本及 JAR/AAR 内原始 LICENSE/NOTICE 的报告，随 APK 打包；可在「我的 → 帮助与关于 → 开源许可证」离线查看。变更依赖后应复核报告，为依赖包未携带的许可证补入完整文本。

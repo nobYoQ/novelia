@@ -15,7 +15,12 @@ import cc.novelia.app.files.epub.EpubContents
 import cc.novelia.app.files.epub.parseEpubChapter
 import cc.novelia.app.files.epub.readEpubFile
 import cc.novelia.app.files.epub.EpubNotes
-import cc.novelia.app.files.comic.readCbz
+import cc.novelia.app.data.model.comicArchiveFormats
+import cc.novelia.app.data.model.supportedBookFiles
+import cc.novelia.app.data.model.hasOnlyImagePages
+import cc.novelia.app.files.comic.ComicArchive
+import cc.novelia.app.files.comic.isRasterSpineImage
+import cc.novelia.app.files.epub.EPUB_CONTENT_VERSION
 
 /**
  * EPUB、TXT、SRT、CBZ 的解析与转换工具，统一限制输入大小和压缩内容展开体积。
@@ -57,8 +62,8 @@ object DocumentTools {
         val extension = name.substringAfterLast('.', "txt").lowercase()
         val contents = when (extension) {
             "epub" -> readEpubFile(file, imageSink, checkCancelled, downloadMode)
-            "cbz" -> {
-                val chapter = file.inputStream().use { readCbz(it, imageSink, checkCancelled) }
+            in comicArchiveFormats -> {
+                val chapter = ComicArchive(imageSink, checkCancelled).read(file, extension)
                 EpubContents(listOf(chapter), chapter.paragraphs.first().removePrefix("novelia-image:"))
             }
             "txt", "srt" -> {
@@ -67,12 +72,12 @@ object DocumentTools {
                 require(text.length <= 16 * 1024 * 1024) { "正文过长，请先拆分" }
                 EpubContents(parseText(text, extension, checkCancelled), null)
             }
-            else -> error("支持 EPUB、TXT、SRT 和 CBZ 文件")
+            else -> error(supportedBookFiles)
         }
         require(contents.chapters.any { it.paragraphs.any(String::isNotBlank) }) { "文件没有可读取的正文" }
         checkCancelled()
         return LocalDocument(UUID.randomUUID().toString(), name.substringBeforeLast('.'), extension, contents.chapters,
-            coverImage = contents.cover, sourceHash = sourceHash ?: file.inputStream().use { digest(it, checkCancelled = checkCancelled) }, downloadMode = downloadMode)
+            coverImage = contents.cover, sourceHash = sourceHash ?: file.inputStream().use { digest(it, checkCancelled = checkCancelled) }, downloadMode = downloadMode).classifyEpub()
     }
     fun parse(name: String, bytes: ByteArray, downloadMode: String? = null): LocalDocument {
         require(bytes.size <= MAX_INPUT) { "文件超过 64 MB，请先拆分" }
@@ -80,18 +85,24 @@ object DocumentTools {
         val images = linkedMapOf<String, String>(); var cover: String? = null
         val chapters = when(extension) {
             "epub" -> readEpub(bytes, images, downloadMode) { cover = it }
-            "cbz" -> {
-                val chapter = readCbz(bytes.inputStream(), { hash, input ->
+            in comicArchiveFormats -> {
+                val chapter = ComicArchive({ hash, input ->
                     images[hash] = java.util.Base64.getEncoder().encodeToString(input.readBytes())
-                }, {})
+                }, {}).read(bytes, extension)
                 cover = chapter.paragraphs.first().removePrefix("novelia-image:")
                 listOf(chapter)
             }
             "txt", "srt" -> parseText(decodeText(bytes), extension)
-            else -> error("支持 EPUB、TXT、SRT 和 CBZ 文件")
+            else -> error(supportedBookFiles)
         }
         require(chapters.any { it.paragraphs.any(String::isNotBlank) }) { "文件没有可读取的正文" }
-        return LocalDocument(UUID.randomUUID().toString(), name.substringBeforeLast('.'), extension, chapters, images = images, coverImage = cover, sourceHash = digest(bytes), downloadMode = downloadMode)
+        return LocalDocument(UUID.randomUUID().toString(), name.substringBeforeLast('.'), extension, chapters, images = images, coverImage = cover, sourceHash = digest(bytes), downloadMode = downloadMode).classifyEpub()
+    }
+    private fun LocalDocument.classifyEpub(): LocalDocument {
+        if (format != "epub") return this
+        val comic = chapters.all { it.hasOnlyImagePages() }
+        val cover = coverImage ?: if (comic) chapters.first().paragraphs.first().removePrefix("novelia-image:") else null
+        return copy(imageOnlyEpub = comic, coverImage = cover)
     }
     /** 优先按 BOM 判断 UTF-16，否则严格尝试 UTF-8；解码失败再回退 GB18030，最后移除 BOM。 */
     fun decodeText(bytes: ByteArray): String {
@@ -160,7 +171,7 @@ object DocumentTools {
         val opfPath = Jsoup.parse(container, "", Parser.xmlParser()).getElementsByTag("rootfile").firstOrNull()?.attr("full-path") ?: error("EPUB 未指定内容文件")
         val opf = Jsoup.parse(files[opfPath]?.toString(Charsets.UTF_8) ?: error("EPUB 缺少 OPF"), "", Parser.xmlParser())
         val directory = opfPath.substringBeforeLast('/', "")
-        val manifest = opf.getElementsByTag("item").associate { it.attr("id") to it.attr("href") }
+        val manifest = opf.getElementsByTag("item").associateBy { it.attr("id") }
         fun resource(base: String, href: String): String? {
             if(href.contains(':') || href.startsWith('/')) return null
             val decoded = java.net.URLDecoder.decode(href.replace("+", "%2B"), "UTF-8")
@@ -172,13 +183,16 @@ object DocumentTools {
             val hash = digest(content); images[hash] = java.util.Base64.getEncoder().encodeToString(content); return hash
         }
         val coverId = opf.getElementsByTag("meta").firstOrNull { it.attr("name") == "cover" }?.attr("content")
-        val coverHref = opf.getElementsByTag("item").firstOrNull { it.attr("properties").split(' ').contains("cover-image") }?.attr("href") ?: manifest[coverId]
+        val coverHref = opf.getElementsByTag("item").firstOrNull { it.attr("properties").split(' ').contains("cover-image") }?.attr("href") ?: manifest[coverId]?.attr("href")
         cover(coverHref?.let { image(resource(directory, it)) })
         val notes = EpubNotes({ path -> files[path]?.takeIf { it.size <= 8 * 1024 * 1024 }?.toString(Charsets.UTF_8) })
         return opf.getElementsByTag("itemref").mapNotNull { item ->
-            val href = manifest[item.attr("idref")] ?: return@mapNotNull null
-            val decoded = java.net.URLDecoder.decode(href.replace("+", "%2B"), "UTF-8")
-            val path = normalize(if(directory.isBlank()) decoded else "$directory/$decoded") ?: return@mapNotNull null
+            val resourceItem = manifest[item.attr("idref")] ?: return@mapNotNull null
+            val path = resource(directory, resourceItem.attr("href")) ?: return@mapNotNull null
+            if (isRasterSpineImage(path, resourceItem.attr("media-type"))) {
+                return@mapNotNull image(path)?.let { LocalChapter(item.attr("idref"), path.substringAfterLast('/'),
+                    listOf("novelia-image:$it"), epubContentVersion = EPUB_CONTENT_VERSION, downloadMode = downloadMode) }
+            }
             val html = files[path]?.toString(Charsets.UTF_8) ?: return@mapNotNull null
             parseEpubChapter(item.attr("idref"), html, downloadMode,
                 image = { source -> image(resource(path.substringBeforeLast('/', ""), source)) },

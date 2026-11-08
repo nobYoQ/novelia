@@ -92,7 +92,7 @@ import kotlinx.coroutines.withContext
                     AppButton(onClick = { export.launch("novelia-library-${java.time.LocalDate.now()}.zip") }, enabled = !busy) { Text("导出备份") }
                 }
             } }
-            item { ProfileToggle("同时打包原始书籍文件", "包含已有 EPUB、TXT、SRT、CBZ 原件", includeOriginals, enabled = !busy) { includeOriginals = it } }
+            item { ProfileToggle("同时打包原始书籍文件", "包含已保存的电子书和漫画归档原件", includeOriginals, enabled = !busy) { includeOriginals = it } }
             item { ProfileSectionTitle("从备份恢复") }
             item { ProfileDetailCard {
                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {

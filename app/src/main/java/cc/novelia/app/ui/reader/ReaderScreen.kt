@@ -75,6 +75,7 @@ import cc.novelia.app.ui.components.base.friendlyMessage
 import cc.novelia.app.ui.markdown.textOffsetAt
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.reader.comic.LocalComicReader
+import cc.novelia.app.ui.reader.comic.loadComicVolume
 import cc.novelia.app.ui.theme.AppInteractionMode
 import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.LocalEInkMode
@@ -104,8 +105,8 @@ import kotlinx.serialization.encodeToString
  */
 @Composable fun ReaderScreen(c: AppController, ref: BookRef, chapterId: String) {
     if (ref.isLocal) {
-        AsyncContent(ref, load = { withContext(Dispatchers.IO) { c.store.documentIndex(ref.id) } }) { doc, _ ->
-            if (doc.format == "cbz") LocalComicReader(c, ref, doc, chapterId)
+        AsyncContent(ref, load = { c.store.loadComicVolume(ref.id) }) { comic, _ ->
+            if (comic != null) LocalComicReader(c, ref, comic, chapterId)
             else NovelReaderScreen(c, ref, chapterId)
         }
     } else NovelReaderScreen(c, ref, chapterId)

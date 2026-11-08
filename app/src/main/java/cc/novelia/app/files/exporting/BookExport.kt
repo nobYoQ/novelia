@@ -1,15 +1,17 @@
 package cc.novelia.app.files.exporting
 
 import cc.novelia.app.data.storage.LocalStore
+import cc.novelia.app.data.model.comicMimeTypes
+import cc.novelia.app.data.model.comicArchiveFormats
+import cc.novelia.app.data.model.hasOnlyImagePages
 import java.io.OutputStream
 
-internal fun bookFileMimeType(fileName: String): String = when(fileName.substringAfterLast('.', "").lowercase()) {
-    "cbz" -> "application/vnd.comicbook+zip"
+internal fun bookFileMimeType(fileName: String): String = when(val format = fileName.substringAfterLast('.', "").lowercase()) {
     "epub" -> "application/epub+zip"
     "txt" -> "text/plain"
     "srt" -> "application/x-subrip"
     "tsv" -> "text/tab-separated-values"
-    else -> "application/octet-stream"
+    else -> comicMimeTypes[format]?.first() ?: "application/octet-stream"
 }
 
 internal data class LocalBookExport(val fileName: String, val original: Boolean)
@@ -27,7 +29,10 @@ internal fun localBookExportFileName(name: String, sourceFormat: String, format:
 internal fun prepareLocalBookExport(store: LocalStore, id: String): LocalBookExport {
     val doc = store.documentIndex(id)
     val original = store.documentSource(id, doc.format).isFile
-    require(original || doc.format != "cbz") { "缺少 CBZ 原件，可通过阅读资料备份导出漫画页" }
+    if (!original) {
+        val imageEpub = doc.format == "epub" && (doc.imageOnlyEpub ?: doc.chapters.all { store.documentChapter(id, it.id).hasOnlyImagePages() })
+        require(doc.format !in comicArchiveFormats && !imageEpub) { "缺少漫画原件，可通过阅读资料备份导出漫画页" }
+    }
     val format = if(original) doc.format else "txt"
     return LocalBookExport(localBookExportFileName(doc.name, doc.format, format), original)
 }

@@ -55,7 +55,7 @@ internal object LibraryBackupArchive {
     private const val MAX_MANIFEST_BYTES = 16L * 1024 * 1024
     private const val MAX_ENTRIES = 30_000
     private val id = Regex("[a-zA-Z0-9-]{1,128}")
-    private val documentPath = Regex("documents/[a-zA-Z0-9-]{1,128}\\.(json|epub|txt|srt|cbz)")
+    private val documentPath = Regex("documents/[a-zA-Z0-9-]{1,128}\\.(json|${localDocumentFormats.joinToString("|")})")
     private val imagePath = Regex("documents/[a-zA-Z0-9-]{1,128}-images/[a-f0-9]{64}")
 
     fun requireSafePath(path: String) {

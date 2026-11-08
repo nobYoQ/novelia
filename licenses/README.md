@@ -5,6 +5,7 @@
 | 文件 | 原始来源 | 用途 |
 | --- | --- | --- |
 | `Apache-2.0.txt` | https://www.apache.org/licenses/LICENSE-2.0.txt | AndroidX、Kotlin、Square、Coil、Markwon 等 |
+| `libarchive-android.txt` | https://github.com/zhanghai/libarchive-android/tree/v1.1.6 | 漫画归档读取使用的 JNI 绑定、libarchive 和随附的原生压缩组件 |
 | `ICU-76.1.txt` | https://github.com/unicode-org/icu/blob/release-76-1/LICENSE | ICU4J 76.1：Unicode-3.0 及附带数据声明 |
 | `MPL-2.0.txt` | https://github.com/spdx/license-list-data/blob/main/text/MPL-2.0.txt | OkHttp 的 Public Suffix List 数据 |
 | `ECH-native.txt` | Go 1.27.1、基于 Jissr Bypass v0.1.1 的本地修改版本及 `native/ech/go.mod` 固定的 Go 模块 | ECH 本地库及 JNI 的 Apache-2.0 / BSD-3-Clause 原文；本地修改及源码见 `native/ech/third_party/jissr-bypass` |

@@ -22,7 +22,7 @@ internal fun parseEpubChapter(
     note: (String, Boolean) -> Pair<String, String>? = { _, _ -> null },
 ): LocalChapter? {
     val doc = Jsoup.parse(html)
-    doc.select("script,style,nav").remove()
+    doc.select("script,style,nav,svg title,svg desc").remove()
     val ruby = prepareEpubRuby(doc, checkCancelled)
     val paragraphs = mutableListOf<String>()
     val inline = linkedMapOf<Int, List<InlineContent>>()

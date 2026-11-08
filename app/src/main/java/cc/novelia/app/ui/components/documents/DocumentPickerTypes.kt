@@ -1,11 +1,13 @@
 package cc.novelia.app.ui.components.documents
 
+import cc.novelia.app.data.model.comicMimeTypes
+
 /** 默认只声明可处理的类型；识别不准确的文件由单独的“显示所有文件”入口选择。 */
 internal object DocumentPickerTypes {
     val Epub = listOf("application/epub+zip")
     val Volumes = Epub + "text/plain"
     private val subtitles = listOf("application/x-subrip", "application/srt", "text/srt")
-    val Books = Volumes + subtitles + listOf("application/vnd.comicbook+zip", "application/x-cbz")
+    val Books = Volumes + subtitles + comicMimeTypes.values.flatten()
     val Json = listOf("application/json", "text/json")
     val StickerImages = listOf("image/png", "image/webp", "image/jpeg")
     val Backup = listOf("application/zip", "application/x-zip-compressed", "application/x-zip")

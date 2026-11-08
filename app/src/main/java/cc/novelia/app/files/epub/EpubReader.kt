@@ -9,6 +9,7 @@ import java.util.zip.ZipFile
 import org.jsoup.Jsoup
 import org.jsoup.parser.Parser
 import cc.novelia.app.files.DocumentTools
+import cc.novelia.app.files.comic.isRasterSpineImage
 
 internal data class EpubContents(val chapters: List<LocalChapter>, val cover: String?)
 
@@ -90,17 +91,21 @@ internal fun readEpubFile(
         ?.let(::normalizeEpubPath) ?: error("EPUB 未指定内容文件")
     val opf = Jsoup.parse(text(opfPath) ?: error("EPUB 缺少 OPF"), "", Parser.xmlParser())
     val directory = opfPath.substringBeforeLast('/', "")
-    val manifest = opf.getElementsByTag("item").associate { it.attr("id") to it.attr("href") }
+    val manifest = opf.getElementsByTag("item").associateBy { it.attr("id") }
     val coverId = opf.getElementsByTag("meta").firstOrNull { it.attr("name") == "cover" }?.attr("content")
-    val coverHref = opf.getElementsByTag("item").firstOrNull { it.attr("properties").split(' ').contains("cover-image") }?.attr("href") ?: manifest[coverId]
+    val coverHref = opf.getElementsByTag("item").firstOrNull { it.attr("properties").split(' ').contains("cover-image") }?.attr("href") ?: manifest[coverId]?.attr("href")
     val cover = if (chapterId == null) coverHref?.let { image(resource(directory, it)) } else null
     var textCharacters = 0L
     val notes = EpubNotes(::text, checkCancelled)
     val chapters = opf.getElementsByTag("itemref").mapNotNull { item ->
         checkCancelled()
         if (chapterId != null && item.attr("idref") != chapterId) return@mapNotNull null
-        val href = manifest[item.attr("idref")] ?: return@mapNotNull null
-        val path = resource(directory, href) ?: return@mapNotNull null
+        val resourceItem = manifest[item.attr("idref")] ?: return@mapNotNull null
+        val path = resource(directory, resourceItem.attr("href")) ?: return@mapNotNull null
+        if (isRasterSpineImage(path, resourceItem.attr("media-type"))) {
+            return@mapNotNull image(path)?.let { LocalChapter(item.attr("idref"), path.substringAfterLast('/'),
+                listOf("novelia-image:$it"), epubContentVersion = EPUB_CONTENT_VERSION, downloadMode = downloadMode) }
+        }
         val html = text(path) ?: return@mapNotNull null
         parseEpubChapter(item.attr("idref"), html, downloadMode,
             image = { source -> image(resource(path.substringBeforeLast('/', ""), source)) },

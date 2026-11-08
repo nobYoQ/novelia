@@ -154,6 +154,10 @@ import kotlinx.coroutines.withContext
     val importLocalFiles = {
         if(!importing) importer.launch()
     }
+    val comicFolder = rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()) { tree ->
+        if (tree != null) importModel.start(listOf(tree))
+    }
+    var importMenu by remember { mutableStateOf(false) }
     val recent = remember(state.books, state.positions) {
         state.books.asSequence().filter { state.positions.containsKey(it.book.ref.key) }.maxByOrNull { state.positions.getValue(it.book.ref.key).updatedAt }
     }
@@ -210,7 +214,13 @@ import kotlinx.coroutines.withContext
         AppIconButton(onClick = { c.go("updates") }) { Icon(Icons.Outlined.NewReleases, "查看书架更新") }
         AppIconButton(onClick = { UpdateWorker.checkNow(c.app); c.message("已开始检查书架更新") }) { Icon(Icons.Outlined.Sync, "检查更新") }
         AppIconButton(onClick = { c.go("history") }) { Icon(Icons.Outlined.History, "阅读历史") }
-        AppIconButton(onClick = importLocalFiles, enabled = !importing) { Icon(Icons.Outlined.FileOpen, "导入本地文件") }
+        Box {
+            AppIconButton(onClick = { importMenu = true }, enabled = !importing) { Icon(Icons.Outlined.FileOpen, "导入本地文件") }
+            DropdownMenu(expanded = importMenu, onDismissRequest = { importMenu = false }) {
+                DropdownMenuItem(text = { Text("选择书籍文件") }, onClick = { importMenu = false; importLocalFiles() })
+                DropdownMenuItem(text = { Text("选择漫画图片文件夹") }, onClick = { importMenu = false; comicFolder.launch(null) })
+            }
+        }
     }) { padding ->
         ShelfPager(tab, { tab = it }, enabled = !batchWorking && !cloudBusy, modifier = Modifier.padding(padding),
             controls = {
@@ -303,7 +313,7 @@ import kotlinx.coroutines.withContext
                             if(books.isEmpty()) item {
                                 if(query.isNotBlank() || folder != "全部" || readingStatus != "全部" || (if(page == 0) bookType else fileType) != ShelfBookType.All)
                                     EmptyState("没有符合条件的小说", if(filterCharacters) "可以放宽字数范围、包含未知作品或继续补全字数。" else "试试其他书名、作者、类型或阅读状态。", action = "清除筛选", onAction = { query = ""; folderId = null; readingStatus = "全部"; bookType = ShelfBookType.All; fileType = ShelfBookType.All; characterFilter = CharacterCountFilter() })
-                                else EmptyState(if(page == 1) "把故事装进口袋" else "书架等你来填满", if(page == 1) "支持 EPUB、TXT、SRT 和 CBZ，导入后即可离线阅读。" else "去发现喜欢的小说，或导入你已有的文件。", action = if(page == 1) "导入文件" else "去发现", onAction = { if(page == 1) importLocalFiles() else c.go("discover") }, sticker = Sticker.Welcome)
+                                else EmptyState(if(page == 1) "把故事装进口袋" else "书架等你来填满", if(page == 1) "从文件导入电子书、漫画压缩包，也可以选择漫画图片文件夹。" else "去发现喜欢的小说，或导入你已有的文件。", action = if(page == 1) "导入文件" else "去发现", onAction = { if(page == 1) importMenu = true else c.go("discover") }, sticker = Sticker.Welcome)
                             }
                             if(showGrid) items(gridRows, key = { it.first().saved.book.ref.key }, contentType = { "cover-row" }) { groupRow ->
                                 Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
