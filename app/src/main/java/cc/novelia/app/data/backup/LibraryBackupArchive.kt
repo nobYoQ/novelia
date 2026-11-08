@@ -5,6 +5,7 @@ import cc.novelia.app.data.catalog.KeywordLibrary
 import cc.novelia.app.data.catalog.KeywordLibraryFormat
 import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.LocalDocument
+import cc.novelia.app.data.model.localDocumentFormats
 import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.data.model.validFont
 import cc.novelia.app.data.model.validNightReading
@@ -54,7 +55,7 @@ internal object LibraryBackupArchive {
     private const val MAX_MANIFEST_BYTES = 16L * 1024 * 1024
     private const val MAX_ENTRIES = 30_000
     private val id = Regex("[a-zA-Z0-9-]{1,128}")
-    private val documentPath = Regex("documents/[a-zA-Z0-9-]{1,128}\\.(json|epub|txt|srt)")
+    private val documentPath = Regex("documents/[a-zA-Z0-9-]{1,128}\\.(json|epub|txt|srt|cbz)")
     private val imagePath = Regex("documents/[a-zA-Z0-9-]{1,128}-images/[a-f0-9]{64}")
 
     fun requireSafePath(path: String) {
@@ -169,14 +170,14 @@ internal object LibraryBackupArchive {
             val path = "documents/$documentId.json"
             require(path in manifest.assets) { "备份缺少解析文档" }; expected += path
             val document = appJson.decodeFromString<LocalDocument>(File(staging, path).readText(Charsets.UTF_8))
-            require(document.id == documentId && document.format in setOf("epub", "txt", "srt") && document.images.isEmpty() && document.chapterFiles.isEmpty()) { "备份解析文档无效" }
+            require(document.id == documentId && document.format in localDocumentFormats && document.images.isEmpty() && document.chapterFiles.isEmpty()) { "备份解析文档无效" }
             require(document.chapters.all { it.id.isNotBlank() } && document.chapters.map { it.id }.distinct().size == document.chapters.size) { "备份章节标识无效或重复" }
             val imageIds = document.chapters.flatMap { it.paragraphs }.filter { it.startsWith("novelia-image:") }.map { it.removePrefix("novelia-image:") }.toSet() + listOfNotNull(document.coverImage)
             imageIds.forEach { hash ->
                 val image = "documents/$documentId-images/$hash"
                 requireSafePath(image); require(image in manifest.assets) { "备份缺少正文插图" }; expected += image
             }
-            listOf("epub", "txt", "srt").forEach { format ->
+            localDocumentFormats.forEach { format ->
                 val source = "documents/$documentId.$format"
                 if (source in manifest.assets) { require(manifest.originalsIncluded) { "原文件索引无效" }; expected += source }
             }

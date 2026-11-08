@@ -15,9 +15,10 @@ import cc.novelia.app.files.epub.EpubContents
 import cc.novelia.app.files.epub.parseEpubChapter
 import cc.novelia.app.files.epub.readEpubFile
 import cc.novelia.app.files.epub.EpubNotes
+import cc.novelia.app.files.comic.readCbz
 
 /**
- * EPUB、TXT、SRT 的解析与转换工具，统一限制输入大小和压缩内容展开体积。
+ * EPUB、TXT、SRT、CBZ 的解析与转换工具，统一限制输入大小和压缩内容展开体积。
  * 文件导入优先使用 parseFile 的流式图片出口；parse(ByteArray) 适合已在内存中的小文件。
  * 归档内部路径只用于解析引用，落盘路径由调用方根据文档 ID 和内容哈希生成。
  */
@@ -56,13 +57,17 @@ object DocumentTools {
         val extension = name.substringAfterLast('.', "txt").lowercase()
         val contents = when (extension) {
             "epub" -> readEpubFile(file, imageSink, checkCancelled, downloadMode)
+            "cbz" -> {
+                val chapter = file.inputStream().use { readCbz(it, imageSink, checkCancelled) }
+                EpubContents(listOf(chapter), chapter.paragraphs.first().removePrefix("novelia-image:"))
+            }
             "txt", "srt" -> {
                 val text = file.inputStream().use { decodeText(readBounded(it, checkCancelled = checkCancelled)) }
                 checkCancelled()
                 require(text.length <= 16 * 1024 * 1024) { "正文过长，请先拆分" }
                 EpubContents(parseText(text, extension, checkCancelled), null)
             }
-            else -> error("支持 EPUB、TXT 和 SRT 文件")
+            else -> error("支持 EPUB、TXT、SRT 和 CBZ 文件")
         }
         require(contents.chapters.any { it.paragraphs.any(String::isNotBlank) }) { "文件没有可读取的正文" }
         checkCancelled()
@@ -75,8 +80,15 @@ object DocumentTools {
         val images = linkedMapOf<String, String>(); var cover: String? = null
         val chapters = when(extension) {
             "epub" -> readEpub(bytes, images, downloadMode) { cover = it }
+            "cbz" -> {
+                val chapter = readCbz(bytes.inputStream(), { hash, input ->
+                    images[hash] = java.util.Base64.getEncoder().encodeToString(input.readBytes())
+                }, {})
+                cover = chapter.paragraphs.first().removePrefix("novelia-image:")
+                listOf(chapter)
+            }
             "txt", "srt" -> parseText(decodeText(bytes), extension)
-            else -> error("支持 EPUB、TXT 和 SRT 文件")
+            else -> error("支持 EPUB、TXT、SRT 和 CBZ 文件")
         }
         require(chapters.any { it.paragraphs.any(String::isNotBlank) }) { "文件没有可读取的正文" }
         return LocalDocument(UUID.randomUUID().toString(), name.substringBeforeLast('.'), extension, chapters, images = images, coverImage = cover, sourceHash = digest(bytes), downloadMode = downloadMode)

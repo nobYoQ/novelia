@@ -2,6 +2,10 @@ package cc.novelia.app.data.model
 
 import kotlinx.serialization.Serializable
 
+internal val localDocumentFormats = setOf("epub", "txt", "srt", "cbz")
+
+enum class ComicReadingMode { RightToLeft, LeftToRight, Webtoon }
+
 /** 保留 EPUB 的原始段落下标；一个 p 内的 br 可以对应多段。 */
 @Serializable data class LocalBilingualGroup(val original: List<Int>, val translations: List<List<Int>>)
 

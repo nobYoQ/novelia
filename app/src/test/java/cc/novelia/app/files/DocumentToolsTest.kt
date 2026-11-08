@@ -23,6 +23,19 @@ class DocumentToolsTest {
         val bytes = archive(mapOf("../../escape" to "unexpected"))
         assertThrows(IllegalArgumentException::class.java) { DocumentTools.unzip(bytes) }
     }
+    @Test fun cbzSortsNumericPageNamesAndPreservesRepeatedPages() {
+        val bytes = archive(linkedMapOf("卷/10.PNG" to "ten", "卷/2.jpg" to "two",
+            "__MACOSX/卷/2.jpg" to "ignored", "ComicInfo.xml" to "metadata", "卷/1.webp" to "two"))
+        val book = DocumentTools.parse("漫画.CBZ", bytes)
+        fun marker(text: String) = "novelia-image:" + DocumentTools.digest(text.byteInputStream())
+        assertEquals(listOf(marker("two"), marker("two"), marker("ten")), book.chapters.single().paragraphs)
+        assertEquals(marker("two").substringAfter(':'), book.coverImage)
+        assertEquals(2, book.images.size)
+    }
+    @Test fun cbzRejectsUnsafePathsAndEmptyArchives() {
+        assertThrows(IllegalArgumentException::class.java) { DocumentTools.parse("漫画.cbz", archive(mapOf("../1.png" to "x"))) }
+        assertThrows(IllegalArgumentException::class.java) { DocumentTools.parse("漫画.cbz", archive(mapOf(".meta/1.png" to "x"))) }
+    }
     @Test fun epubIllustrationsRemainInReadingOrder() {
         val bytes = archive(linkedMapOf(
             "META-INF/container.xml" to """<container><rootfiles><rootfile full-path="OPS/book.opf"/></rootfiles></container>""",

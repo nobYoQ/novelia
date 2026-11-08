@@ -27,6 +27,7 @@ import cc.novelia.app.data.model.Chapter
 import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.LocalChapter
 import cc.novelia.app.data.model.LocalDocument
+import cc.novelia.app.data.model.localDocumentFormats
 import cc.novelia.app.data.model.LocalReadingContent
 import cc.novelia.app.data.model.Position
 import cc.novelia.app.data.model.WebDetail
@@ -367,7 +368,7 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
         found?.let { BookRef("local", it) }
     }
     fun documentImage(id: String, hash: String): File { require(hash.matches(Regex("[a-f0-9]{64}"))); return File(documentsDir, "${safeId(id)}-images/$hash") }
-    fun documentSource(id: String, format: String): File { require(format in listOf("epub", "txt", "srt")); return File(documentsDir, "${safeId(id)}.$format") }
+    fun documentSource(id: String, format: String): File { require(format in localDocumentFormats); return File(documentsDir, "${safeId(id)}.$format") }
     /** 轻量章节目录，用于阅读导航、搜索规划和导出元数据。 */
     fun documentIndex(id: String): LocalDocument = synchronized(documentLock) {
         val key = safeId(id)
@@ -446,7 +447,7 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
         if(importBatchDepth == 0) sourceIndex.flush()
         File(documentsDir, "$key-images").listFiles()?.forEach { it.delete() }
         File(documentsDir, "$key-images").delete()
-        listOf("epub", "txt", "srt").forEach { documentSource(key, it).delete() }
+        localDocumentFormats.forEach { documentSource(key, it).delete() }
         update { it.withDeletedBookRecords(setOf(BookRef("local", key)), eraseReadingData = false) }
     }
 

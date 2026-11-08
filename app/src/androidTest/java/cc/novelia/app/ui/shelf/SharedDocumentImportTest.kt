@@ -2,6 +2,7 @@ package cc.novelia.app.ui.shelf
 
 import android.content.ClipData
 import android.content.Intent
+import android.graphics.Bitmap
 import android.net.Uri
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
@@ -10,6 +11,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.MainActivity
 import cc.novelia.app.NoveliaApplication
+import cc.novelia.app.data.model.ComicReadingMode
 import cc.novelia.app.files.importing.documentImportLock
 import java.io.File
 import java.util.UUID
@@ -50,6 +52,59 @@ class SharedDocumentImportTest {
             compose.waitUntil(10_000) { compose.onAllNodesWithText("这是系统分享导入的正文。$prefix", substring = true).fetchSemanticsNodes().isNotEmpty() }
             assertEquals(1, importedCount())
         }
+    }
+
+    @Test fun cbzOpensInComicReaderAndKeepsThePageAcrossModesAndRecreation() {
+        val previousMode = app.store.state.value.comicReadingMode
+        app.store.update { it.copy(comicReadingMode = ComicReadingMode.RightToLeft) }
+        val file = File(app.store.exportsDir, "$prefix.cbz")
+        files += file
+        ZipOutputStream(file.outputStream()).use { zip ->
+            listOf(10, 2, 1).forEach { number ->
+                val image = Bitmap.createBitmap(160, if (number == 2) 1500 else 240, Bitmap.Config.ARGB_8888)
+                image.eraseColor(android.graphics.Color.rgb(number * 20, 100, 120))
+                zip.putNextEntry(ZipEntry("$number.png"))
+                image.compress(Bitmap.CompressFormat.PNG, 100, zip)
+                zip.closeEntry()
+                image.recycle()
+            }
+        }
+        val uri = FileProvider.getUriForFile(app, "${app.packageName}.files", file)
+        try {
+            ActivityScenario.launch<MainActivity>(share(listOf(uri), "application/vnd.comicbook+zip")).use { scenario ->
+                awaitBooks(1)
+                val ref = app.store.state.value.books.single { it.book.title == prefix }.book.ref
+                compose.onNodeWithTag("import-results").performClick()
+                compose.onNodeWithText("开始阅读").performClick()
+                fun awaitText(label: String) = compose.waitUntil(15_000) {
+                    compose.onAllNodesWithText(label).fetchSemanticsNodes().isNotEmpty()
+                }
+                awaitText("1 / 3")
+                compose.onNodeWithContentDescription("第 1 页").performTouchInput { doubleClick(center) }
+                compose.onNode(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "250%")).assertExists()
+                compose.onNodeWithContentDescription("第 1 页").performTouchInput { doubleClick(center) }
+                compose.onNodeWithContentDescription("第 1 页").performTouchInput { swipeRight() }
+                awaitText("2 / 3")
+                compose.onNodeWithText("从右向左").performClick()
+                compose.onNodeWithText("纵向条漫").performClick()
+                compose.onNodeWithContentDescription("下一屏").performClick()
+                compose.waitUntil(10_000) { (app.store.state.value.positions[ref.key]?.offset ?: 0) > 0 }
+                compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("第 2 页").fetchSemanticsNodes().isNotEmpty() }
+                val position = app.store.state.value.positions.getValue(ref.key)
+                scenario.recreate()
+                awaitText("2 / 3")
+                assertEquals(position.offset, app.store.state.value.positions.getValue(ref.key).offset)
+                compose.onNodeWithText("纵向条漫").performClick()
+                compose.onNodeWithText("从左向右").performClick()
+                compose.onNodeWithContentDescription("第 2 页").performTouchInput { swipeLeft() }
+                awaitText("3 / 3")
+                compose.onNodeWithContentDescription("返回").performClick()
+                compose.onNodeWithTag("shelf-tab-0").performClick()
+                compose.onNodeWithTag("shelf-continue-reading").performClick()
+                awaitText("3 / 3")
+                assertTrue(app.store.state.value.positions.getValue(ref.key).chapterCompleted)
+            }
+        } finally { app.store.update { it.copy(comicReadingMode = previousMode) } }
     }
 
     @Test fun dismissedImportStaysClosedAfterRecreationAndNextBatchCanBeShown() {
@@ -123,7 +178,7 @@ class SharedDocumentImportTest {
                 awaitBooks(2)
                 scenario.onActivity { assertEquals(Intent.ACTION_SEND_MULTIPLE, it.intent.action) }
                 compose.onNodeWithTag("import-results").performClick()
-                compose.waitUntil(10_000) { compose.onAllNodesWithText("失败 · 支持 EPUB、TXT 和 SRT 文件").fetchSemanticsNodes().isNotEmpty() }
+                compose.waitUntil(10_000) { compose.onAllNodesWithText("失败 · 支持 EPUB、TXT、SRT 和 CBZ 文件").fetchSemanticsNodes().isNotEmpty() }
                 assertEquals(setOf("epub", "srt"), app.store.state.value.books.filter { it.book.title.startsWith(prefix) }
                     .map { app.store.documentIndex(it.book.ref.id).format }.toSet())
             } finally {

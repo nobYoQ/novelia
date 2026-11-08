@@ -74,6 +74,7 @@ import cc.novelia.app.ui.components.base.AsyncContent
 import cc.novelia.app.ui.components.base.friendlyMessage
 import cc.novelia.app.ui.markdown.textOffsetAt
 import cc.novelia.app.ui.navigation.AppController
+import cc.novelia.app.ui.reader.comic.LocalComicReader
 import cc.novelia.app.ui.theme.AppInteractionMode
 import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.LocalEInkMode
@@ -102,6 +103,15 @@ import kotlinx.serialization.encodeToString
  * ReaderContent 负责加载和位置生命周期；正文投影、静态分页与搜索算法位于 reader 包。
  */
 @Composable fun ReaderScreen(c: AppController, ref: BookRef, chapterId: String) {
+    if (ref.isLocal) {
+        AsyncContent(ref, load = { withContext(Dispatchers.IO) { c.store.documentIndex(ref.id) } }) { doc, _ ->
+            if (doc.format == "cbz") LocalComicReader(c, ref, doc, chapterId)
+            else NovelReaderScreen(c, ref, chapterId)
+        }
+    } else NovelReaderScreen(c, ref, chapterId)
+}
+
+@Composable private fun NovelReaderScreen(c: AppController, ref: BookRef, chapterId: String) {
     val local by c.store.state.collectAsStateWithLifecycle()
     val settings = local.bookSettings[ref.key] ?: local.reader
     var brightnessPreview by remember { mutableStateOf<ReaderBrightness?>(null) }

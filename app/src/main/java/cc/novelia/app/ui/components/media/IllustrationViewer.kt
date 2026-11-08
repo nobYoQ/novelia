@@ -91,7 +91,7 @@ internal fun IllustrationViewer(model: Any, imageLabel: String = "插图", onDis
                         })
                     }, contentAlignment = Alignment.Center) {
                     // Coil 将等价请求视为同一模型，重试需创建新的 painter。
-                    key(retry) { AsyncImage(request, "放大的小说${imageLabel}", Modifier.fillMaxSize().graphicsLayer {
+                    key(retry) { AsyncImage(request, "放大的${imageLabel}", Modifier.fillMaxSize().graphicsLayer {
                         scaleX = transform.scale; scaleY = transform.scale
                         translationX = transform.offset.x; translationY = transform.offset.y
                     }, contentScale = ContentScale.Fit,

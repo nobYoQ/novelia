@@ -9,7 +9,8 @@ import java.util.UUID
 import kotlinx.serialization.Serializable
 
 /**
- * 本机精确阅读位置。index 是含章标题的阅读列表下标（正文从 1 开始），offset 为滚动像素偏移；
+ * 本机精确阅读位置。文本的 index 是含章标题的列表下标（正文从 1 开始），offset 为滚动像素偏移；
+ * 漫画的 index 从第 1 页开始，条漫的 offset 为该页原图坐标中的纵向偏移。
  * textOffset 是整段显示文本中的 UTF-16 偏移，用于静态分页及模式切换后的定位。
  * chapterIndex 从 0 开始，章节/段落总数可为空，不能为显示进度额外阻塞正文加载。
  * chapterCompleted 独立记录本章已到末屏，不能用修改屏顶锚点的方式表示读完。
@@ -119,7 +120,8 @@ fun legacyFolderId(name: String): String = if(name == DEFAULT_FOLDER) DEFAULT_FO
     val forumDefaultCategory: String? = null, val forumSkipPinned: Boolean = false,
     // 系统 TTS 引擎取决于本机安装情况；普通设置备份保留，WebDAV 不同步。
     val ttsEnginePackage: String? = null,
-    val readingStatistics: ReadingStatistics = ReadingStatistics()
+    val readingStatistics: ReadingStatistics = ReadingStatistics(),
+    val comicReadingMode: ComicReadingMode = ComicReadingMode.RightToLeft
 )
 
 /** 收藏夹名称仅用于显示；改名时 ID 及所有本地分卷仍保持原关系。 */

@@ -5,7 +5,7 @@ internal object DocumentPickerTypes {
     val Epub = listOf("application/epub+zip")
     val Volumes = Epub + "text/plain"
     private val subtitles = listOf("application/x-subrip", "application/srt", "text/srt")
-    val Books = Volumes + subtitles
+    val Books = Volumes + subtitles + listOf("application/vnd.comicbook+zip", "application/x-cbz")
     val Json = listOf("application/json", "text/json")
     val StickerImages = listOf("image/png", "image/webp", "image/jpeg")
     val Backup = listOf("application/zip", "application/x-zip-compressed", "application/x-zip")

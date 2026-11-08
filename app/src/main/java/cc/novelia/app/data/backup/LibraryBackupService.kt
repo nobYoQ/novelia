@@ -4,6 +4,7 @@ import cc.novelia.app.data.catalog.KeywordStore
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.LocalDocument
+import cc.novelia.app.data.model.localDocumentFormats
 import cc.novelia.app.data.storage.LocalStore
 import cc.novelia.app.data.storage.appJson
 import java.io.File
@@ -52,7 +53,7 @@ class LibraryBackupService(private val store: LocalStore, private val keywords: 
                 require(image.isFile) { "《${document.name}》的插图缺失，请重新导入后再备份" }
                 files["documents/$id-images/$hash"] = image
             }
-            if (includeOriginals) listOf("epub", "txt", "srt").forEach { format ->
+            if (includeOriginals) localDocumentFormats.forEach { format ->
                 store.documentSource(id, format).takeIf { it.isFile }?.let { files["documents/$id.$format"] = it }
             }
         }
@@ -126,7 +127,7 @@ class LibraryBackupService(private val store: LocalStore, private val keywords: 
                         val retained = old
                         mapping[sourceId] = retained.id; covers[retained.id] = document.coverImage
                         // 后续备份可以补回首次恢复时缺少的原始文件。
-                        listOf("epub", "txt", "srt").forEach { format ->
+                        localDocumentFormats.forEach { format ->
                             work.ensureActive()
                             val path = "documents/$sourceId.$format"
                             if (path in manifest.assets) {
@@ -139,7 +140,8 @@ class LibraryBackupService(private val store: LocalStore, private val keywords: 
                     }
                     // 重新生成 ID，即使归档来自本机，也不会覆盖现有文档。
                     val targetId = UUID.randomUUID().toString(); mapping[sourceId] = targetId; covers[targetId] = document.coverImage
-                    manifest.assets.keys.filter { it == "documents/$sourceId.json" || it.startsWith("documents/$sourceId-images/") || it in listOf("documents/$sourceId.epub", "documents/$sourceId.txt", "documents/$sourceId.srt") }.forEach { path ->
+                    val originalPaths = localDocumentFormats.map { "documents/$sourceId.$it" }.toSet()
+                    manifest.assets.keys.filter { it == "documents/$sourceId.json" || it.startsWith("documents/$sourceId-images/") || it in originalPaths }.forEach { path ->
                         work.ensureActive()
                         val relative = path.removePrefix("documents/").replaceFirst(sourceId, targetId)
                         val target = File(store.documentsDir, relative)
