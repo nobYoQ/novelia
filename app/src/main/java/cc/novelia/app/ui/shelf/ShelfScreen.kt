@@ -116,17 +116,17 @@ import kotlinx.coroutines.withContext
     }
     LaunchedEffect(importState) { importModel.takeImportedMedium()?.let(::switchShelf) }
     panes.SaveableStateProvider(medium.name) {
-        MediumShelf(c, medium, ::switchShelf, pending, importModel, onOpenBook, selectedBookKey, sharedDocuments, onSharedDocumentsConsumed)
+        MediumShelf(c, medium, ::switchShelf, pending.isNotEmpty(), importModel, onOpenBook, selectedBookKey, sharedDocuments, onSharedDocumentsConsumed)
     }
 }
 
 @Composable private fun MediumShelf(c: AppController, medium: BookMedium, switchShelf: (BookMedium) -> Unit,
-    pending: Set<BookRef>, importModel: DocumentImportViewModel, onOpenBook: (BookRef) -> Unit, selectedBookKey: String?,
+    classifyingBooks: Boolean, importModel: DocumentImportViewModel, onOpenBook: (BookRef) -> Unit, selectedBookKey: String?,
     sharedDocuments: List<Uri>, onSharedDocumentsConsumed: (List<Uri>) -> Unit) {
     val state by c.store.state.collectAsStateWithLifecycle()
     val profile by c.session.profile.collectAsStateWithLifecycle()
     val comics = medium == BookMedium.Comic
-    val shelfBooks = remember(state.books, medium, pending) { state.books.filter { it.book.ref !in pending && it.book.shelfMedium == medium } }
+    val shelfBooks = remember(state.books, medium) { state.books.filter { it.book.shelfMedium == medium } }
     val localLabel = if (comics) "本地漫画" else "本地小说"
     var tab by rememberSaveable { mutableIntStateOf(if (comics) 0 else state.restoredShelfLocation().tab) }
     var folderId by rememberSaveable { mutableStateOf(state.restoredShelfLocation().let { if (comics) it.comicFolderId else it.localFolderId }) }
@@ -262,7 +262,8 @@ import kotlinx.coroutines.withContext
             }
         }
     }) { padding ->
-        ShelfPager(tab, { tab = it }, enabled = !batchWorking && !cloudBusy, singlePage = comics, modifier = Modifier.padding(padding),
+        ShelfPager(tab, { tab = it }, enabled = !batchWorking && !cloudBusy, singlePage = comics,
+            classifyingBooks = classifyingBooks, modifier = Modifier.padding(padding),
             header = {
                 ShelfKindSwitch(listOf("小说书架", "漫画书架"), medium.ordinal, "shelf-medium",
                     enabled = !batchWorking && !cloudBusy && !queueingDownloads) { switchShelf(BookMedium.entries[it]) }
@@ -359,8 +360,7 @@ import kotlinx.coroutines.withContext
                             contentPadding = PaddingValues(top = if(showGrid) 8.dp else 0.dp, bottom = if(continueBook != null)
                                 with(density) { continueHeight.toDp() } + 32.dp else 0.dp)) {
                             if(books.isEmpty()) item {
-                                if (pending.isNotEmpty()) Text("正在整理已有书籍…", Modifier.padding(20.dp))
-                                else if(query.isNotBlank() || folder != "全部" || readingStatus != "全部" || (if(page == 0) bookType else fileType) != ShelfBookType.All)
+                                if(query.isNotBlank() || folder != "全部" || readingStatus != "全部" || (if(page == 0) bookType else fileType) != ShelfBookType.All)
                                     EmptyState(if (comics) "没有符合条件的漫画" else "没有符合条件的小说", if(filterCharacters) "可以放宽字数范围、包含未知作品或继续补全字数。" else "试试其他书名、作者或阅读状态。", action = "清除筛选", onAction = { query = ""; folderId = null; readingStatus = "全部"; bookType = ShelfBookType.All; fileType = ShelfBookType.All; characterFilter = CharacterCountFilter() })
                                 else if (comics) EmptyState("漫画书架还是空的", "选择漫画压缩包、纯图片 EPUB 或图片文件夹开始阅读。", action = "导入漫画", onAction = { importMenu = true })
                                 else EmptyState(if(page == 1) "把故事装进口袋" else "书架等你来填满", if(page == 1) "从文件导入电子书、漫画压缩包，也可以选择漫画图片文件夹。" else "去发现喜欢的小说，或导入你已有的文件。", action = if(page == 1) "导入文件" else "去发现", onAction = { if(page == 1) importMenu = true else c.go("discover") }, sticker = Sticker.Welcome)
