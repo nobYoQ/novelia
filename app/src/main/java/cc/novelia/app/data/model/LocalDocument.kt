@@ -47,7 +47,19 @@ fun LocalChapter.toReaderChapter(novelTitle: String? = null, prevId: String? = n
     /** 下载请求的内容模式，用于结合 EPUB 原文标记识别对照段落。 */
     val downloadMode: String? = null,
     /** 仅 EPUB 导入时预判；旧书在打开时根据章节内容识别。 */
-    val imageOnlyEpub: Boolean? = null)
+    val imageOnlyEpub: Boolean? = null,
+    val archivePages: List<ArchivePage> = emptyList(),
+    val comicSeries: Boolean = false,
+    val comicMetadata: ComicMetadata? = null)
+
+@Serializable data class ArchivePage(val path: String, val width: Int, val height: Int, val orientation: Int = 1,
+    val regionDecodable: Boolean = true)
+@Serializable data class ComicMetadata(val series: String = "", val title: String = "", val number: String = "", val writer: String = "") {
+    fun label(fallback: String): String = listOf(series, number.takeIf { it.isNotBlank() }?.let { "第 $it 卷" }.orEmpty(), title)
+        .filter { it.isNotBlank() }.distinct().joinToString(" · ").ifBlank { fallback }
+}
+@Serializable data class ComicPreferences(val mode: ComicReadingMode? = null, val fitWidth: Boolean = false,
+    val cropBorders: Boolean = false, val splitWide: Boolean = false)
 
 private val imageParagraph = Regex("novelia-image:[a-f0-9]{64}")
 internal fun LocalChapter.hasOnlyImagePages() = paragraphs.isNotEmpty() && paragraphs.all(imageParagraph::matches)

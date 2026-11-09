@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.model.ComicReadingMode
+import cc.novelia.app.data.model.ComicPreferences
 import cc.novelia.app.reader.ComicPage
 import cc.novelia.app.reader.ComicStripLayout
 import cc.novelia.app.ui.components.base.AppIconButton
@@ -35,7 +36,7 @@ import cc.novelia.app.ui.components.media.IllustrationViewer
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-private val ComicReadingMode.label: String get() = when (this) {
+internal val ComicReadingMode.label: String get() = when (this) {
     ComicReadingMode.RightToLeft -> "从右向左"
     ComicReadingMode.LeftToRight -> "从左向右"
     ComicReadingMode.Webtoon -> "纵向条漫"
@@ -44,10 +45,14 @@ private val ComicReadingMode.label: String get() = when (this) {
 @Composable
 internal fun ComicReader(
     title: String, pages: List<ComicPage>, mode: ComicReadingMode, initialPage: Int, initialOffset: Int,
-    onMode: (ComicReadingMode) -> Unit, onPosition: (Int, Int, Boolean) -> Unit, onBack: () -> Unit,
+    preferences: ComicPreferences, sections: List<ComicSection>, defaultMode: ComicReadingMode,
+    onDefaultMode: (ComicReadingMode) -> Unit, onPreferences: (ComicPreferences) -> Unit,
+    onPosition: (Int, Int, Boolean) -> Unit, onBack: () -> Unit, onDetails: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var menu by rememberSaveable { mutableStateOf(true) }
+    var overview by rememberSaveable { mutableStateOf(false) }
+    var settings by rememberSaveable { mutableStateOf(false) }
     var zoomPage by rememberSaveable { mutableStateOf<Int?>(null) }
     var anchorPage by rememberSaveable { mutableIntStateOf(initialPage) }
     var anchorOffset by rememberSaveable { mutableIntStateOf(initialOffset.coerceIn(0, pages[initialPage].height - 1)) }
@@ -55,16 +60,30 @@ internal fun ComicReader(
     val webtoon = mode == ComicReadingMode.Webtoon
     val rtl = mode == ComicReadingMode.RightToLeft
     val layout = remember(pages) { ComicStripLayout(pages) }
+    val frames = remember(pages, rtl, preferences.splitWide) {
+        buildList {
+            pages.forEachIndexed { index, p ->
+                if (preferences.splitWide && p.text == null && p.width > p.height && p.width > 1) {
+                    add(index to if (rtl) 1 else 0)
+                    add(index to if (rtl) 0 else 1)
+                } else add(index to -1)
+            }
+        }
+    }
+    val firstFrame = remember(frames) { IntArray(pages.size).also { starts ->
+        for (i in frames.indices.reversed()) starts[frames[i].first] = i
+    } }
     BoxWithConstraints(modifier.fillMaxSize().background(Color.Black).windowInsetsPadding(WindowInsets.safeDrawing)) {
         val width = constraints.maxWidth.coerceAtLeast(1)
-        key(mode) {
-            val pager = rememberPagerState(initialPage = anchorPage) { pages.size }
+        key(mode, preferences.splitWide) {
+            val start = firstFrame[anchorPage]
+            val pager = rememberPagerState(initialPage = start + if (frames[start].second >= 0 && anchorOffset == 1) 1 else 0) { frames.size }
             val first = layout.stripAt(anchorPage, anchorOffset)
             val list = rememberLazyListState(first,
                 ((anchorOffset - layout[first].top).coerceAtLeast(0) * width.toDouble() / pages[anchorPage].width).roundToInt())
             val scope = rememberCoroutineScope()
             val page by remember { derivedStateOf {
-                if (webtoon) layout[list.firstVisibleItemIndex].page else pager.currentPage
+                if (webtoon) layout[list.firstVisibleItemIndex].page else frames[pager.currentPage].first
             } }
             fun position(): ComicPosition? {
                 if (webtoon) {
@@ -74,7 +93,7 @@ internal fun ComicReader(
                         .roundToInt().coerceIn(strip.top, strip.bottom - 1)
                     return ComicPosition(strip.page, offset, !list.canScrollForward)
                 }
-                return ComicPosition(pager.currentPage, 0, pager.currentPage == pages.lastIndex)
+                return ComicPosition(page, pager.currentPage - firstFrame[page], pager.currentPage == frames.lastIndex)
             }
             fun save(position: ComicPosition?) {
                 if (position == null) return
@@ -94,12 +113,12 @@ internal fun ComicReader(
             fun seek(target: Int) {
                 scope.launch {
                     if (webtoon) list.scrollToItem(layout.firstStrip[target])
-                    else pager.scrollToPage(target)
+                    else pager.scrollToPage(firstFrame[target])
                 }
             }
             fun step(delta: Int) {
                 if (webtoon) scope.launch { list.scrollBy(delta * list.layoutInfo.viewportSize.height * .9f) }
-                else seek((page + delta).coerceIn(pages.indices))
+                else scope.launch { pager.scrollToPage((pager.currentPage + delta).coerceIn(frames.indices)) }
             }
             if (webtoon) {
                 // 短末页也能定位到屏顶，从分页跳入条漫时保留相同页码。
@@ -110,50 +129,68 @@ internal fun ComicReader(
                     items(layout.size) { index ->
                         val strip = layout[index]
                         val source = pages[strip.page]
-                        ComicStripImage(source, strip, width, Modifier.fillMaxWidth()
+                        val imageModifier = Modifier.fillMaxWidth()
                             .aspectRatio(source.width.toFloat() / (strip.bottom - strip.top))
                             .pointerInput(strip.page) {
-                                detectTapGestures(onTap = { menu = !menu }, onDoubleTap = { zoomPage = strip.page })
-                            })
+                                detectTapGestures(onTap = { menu = !menu }, onDoubleTap = { if (source.text == null) zoomPage = strip.page })
+                            }
+                        if (source.text != null) ComicTextPage(source.text, imageModifier)
+                        else ResolvedPage(source, strip.page, imageModifier) { resolved -> ComicStripImage(resolved, strip, width, Modifier.fillMaxSize()) }
                     }
                 }
             } else {
                 HorizontalPager(pager, modifier = Modifier.fillMaxSize(),
                     reverseLayout = rtl != (LocalLayoutDirection.current == LayoutDirection.Rtl)) { index ->
-                    ComicPagedImage(pages[index], index, onTap = { fraction ->
+                    val (physical, half) = frames[index]
+                    val source = pages[physical]
+                    val tap: (Float) -> Unit = { fraction ->
                         when {
                             fraction < .25f -> step(if (rtl) 1 else -1)
                             fraction > .75f -> step(if (rtl) -1 else 1)
                             else -> menu = !menu
                         }
-                    })
+                    }
+                    if (source.text != null) ComicTextPage(source.text, Modifier.fillMaxSize().pointerInput(physical) {
+                        detectTapGestures { tap(it.x / size.width.coerceAtLeast(1)) }
+                    }) else ResolvedPage(source, physical, Modifier.fillMaxSize()) { resolved ->
+                        ComicPagedImage(resolved, physical, preferences, half, tap)
+                    }
                 }
             }
             if (menu) {
-                ComicHeader(title, mode, onMode = { next ->
+                val chapter = sections.lastOrNull { it.first <= page }
+                ComicHeader(if (sections.size > 1 && chapter != null) title + " · " + chapter.title else title,
+                    mode, settings = { settings = true }, overview = { overview = true }, onMode = { next ->
                     save(position())
-                    onMode(next)
+                    onPreferences(preferences.copy(mode = next))
                 }, onBack = onBack, modifier = Modifier.align(Alignment.TopCenter))
                 ComicPageControls(page, pages.size, rtl, webtoon,
-                    canBack = if (webtoon) list.canScrollBackward else page > 0,
-                    canForward = if (webtoon) list.canScrollForward else page < pages.lastIndex,
-                    step = ::step, seek = ::seek, zoom = { zoomPage = page },
+                    canBack = if (webtoon) list.canScrollBackward else pager.currentPage > 0,
+                    canForward = if (webtoon) list.canScrollForward else pager.currentPage < frames.lastIndex,
+                    step = ::step, seek = ::seek, zoom = { if (pages[page].text == null) zoomPage = page },
                     modifier = Modifier.align(Alignment.BottomCenter))
             }
+            if (overview) ComicOverview(pages, sections, page, { target -> seek(target); overview = false }, { overview = false })
         }
     }
-    zoomPage?.let { index -> IllustrationViewer(pages[index].file, "第 ${index + 1} 页") { zoomPage = null } }
+    if (settings) ComicDisplaySettings(preferences, defaultMode, onDefaultMode, onPreferences,
+        details = { settings = false; onDetails() }, close = { settings = false })
+    zoomPage?.let { index -> ResolvedPage(pages[index], index, Modifier) { resolved ->
+        IllustrationViewer(resolved.file, "第 ${index + 1} 页") { zoomPage = null }
+    } }
 }
 
 private data class ComicPosition(val page: Int, val offset: Int, val completed: Boolean)
 
 @Composable private fun ComicHeader(title: String, mode: ComicReadingMode, onMode: (ComicReadingMode) -> Unit,
-    onBack: () -> Unit, modifier: Modifier) {
+    settings: () -> Unit, overview: () -> Unit, onBack: () -> Unit, modifier: Modifier) {
     var expanded by remember { mutableStateOf(false) }
     Surface(modifier.fillMaxWidth(), color = Color.Black.copy(alpha = .82f), contentColor = Color.White) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             AppIconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "返回") }
             Text(title, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            AppIconButton(onClick = overview) { Icon(Icons.Outlined.GridView, "页缩略图") }
+            AppIconButton(onClick = settings) { Icon(Icons.Outlined.Settings, "漫画显示设置") }
             Box {
                 TextButton(onClick = { expanded = true }) { Text(mode.label, color = Color.White) }
                 DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {

@@ -115,7 +115,7 @@ import kotlinx.coroutines.withContext
                     }
                 } }
             } }
-            item { Text("不包含登录会话、账号凭据、待同步操作、下载任务和网络章节缓存。备份单文件上限 128 MB，总计上限 1 GB。请将备份保存到设备之外，以便换机或卸载后恢复。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            item { Text("漫画归档正文随备份保存。漫画归档每份最多 1 GiB，其他文件每份最多 128 MiB，备份合计最多 4 GiB。登录凭据、待同步操作、下载任务和网络章节缓存由本机管理。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
     }
     if (confirm) ConfirmDialog("合并恢复阅读资料？", "将按上方规则合并备份。当前资料会保留；恢复完成前不要强制停止应用。", { confirm = false }, confirmLabel = "合并恢复资料") {

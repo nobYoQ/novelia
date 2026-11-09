@@ -34,8 +34,10 @@ internal class DocumentImportViewModel(private val store: LocalStore) : ViewMode
     private var task: Job? = null
     private var showImportedShelf = false
 
-    fun start(uris: List<Uri>) {
+    private var series = false
+    fun start(uris: List<Uri>, asSeries: Boolean = false) {
         if (state.value.running || uris.isEmpty()) return
+        series = asSeries
         showImportedShelf = true
         mutable.value = DocumentImportState(uris.map { uri ->
             ImportItem(uri.toString(), uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() } ?: "导入文件")
@@ -96,7 +98,8 @@ internal class DocumentImportViewModel(private val store: LocalStore) : ViewMode
                             lastPublishedAt = now
                         }
                     }, errorMessage = { it.friendlyMessage() }) { item, progress ->
-                        importDocumentUri(store, Uri.parse(item.source), onProgress = progress)
+                        if (series) cc.novelia.app.files.comic.importComicSeries(store, Uri.parse(item.source), progress = progress)
+                        else importDocumentUri(store, Uri.parse(item.source), onProgress = progress)
                     }
                 }.also { mutable.value = DocumentImportState(it) }
             } catch(cancelled: CancellationException) { throw cancelled }

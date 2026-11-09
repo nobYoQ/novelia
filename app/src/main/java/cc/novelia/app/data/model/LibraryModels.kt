@@ -31,7 +31,8 @@ import kotlinx.serialization.Serializable
     val folderId: String? = null,
     val sourceVolumeId: String? = null, val siteVolumeOrderDescending: Boolean = false,
     // 缺失代表旧版本来源不明，按手动保护；新书由 newSavedBook 显式开启自动管理。
-    val readingStatusControl: ReadingStatusControl? = null)
+    val readingStatusControl: ReadingStatusControl? = null,
+    val comicPreferences: ComicPreferences = ComicPreferences(), val epubMediumOverride: BookMedium? = null)
 
 /** revision 标识一次用户管理意图；自动阅读只能在同一意图下推进。 */
 @Serializable data class ReadingStatusControl(

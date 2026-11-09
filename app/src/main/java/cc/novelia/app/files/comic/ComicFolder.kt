@@ -4,7 +4,7 @@ import android.content.ContentResolver
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.DocumentsContract.Document
-import cc.novelia.app.files.DocumentTools
+
 import java.io.File
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -38,36 +38,26 @@ internal fun packComicFolder(resolver: ContentResolver, tree: Uri, target: File,
                 require(path.length <= 4096) { "漫画文件路径过长" }
                 if (it.getString(2) == Document.MIME_TYPE_DIR) {
                     if (visited.add(child)) pending.add(child to "$path/")
-                } else if (isComicImage(name)) {
+                } else if (isComicImage(name) || path.equals("ComicInfo.xml", true)) {
                     require(pages.put(path, documentUri(child)) == null) { "漫画包含重名页面" }
                 }
             }
         }
     }
-    require(pages.isNotEmpty()) { "文件夹中没有可读取的漫画图片，请选择包含图片的目录" }
-    val buffer = ByteArray(32 * 1024)
+    require(pages.keys.any(::isComicImage)) { "文件夹中没有可读取的漫画图片，请选择包含图片的目录" }
     var expanded = 0L
     ZipOutputStream(target.outputStream().buffered()).use { zip ->
         // 固定顺序和时间，使同一文件夹重选时能复用原书和阅读位置。
         for ((path, uri) in pages) {
             checkCancelled()
             zip.putNextEntry(ZipEntry(path).apply { time = 0L })
-            var size = 0
             requireNotNull(resolver.openInputStream(uri)) { "漫画页无法读取" }.use { input ->
-                while (true) {
-                    checkCancelled()
-                    val count = input.read(buffer)
-                    if (count < 0) break
-                    size += count
-                    expanded += count
-                    require(size <= maxComicPageBytes && expanded <= DocumentTools.MAX_EXPANDED) { "漫画图片超过导入大小限制" }
-                    zip.write(buffer, 0, count)
-                }
+                expanded += transferComic(input, zip, minOf(comicPageLimit.toLong(), comicExpandedLimit - expanded), checkCancelled)
             }
             zip.closeEntry()
-            DocumentTools.requireImportSize(target.length())
+            require(target.length() <= comicInputLimit) { "漫画文件夹超过 1 GiB" }
         }
     }
-    DocumentTools.requireImportSize(target.length())
+    require(target.length() <= comicInputLimit) { "漫画文件夹超过 1 GiB" }
     return title
 }

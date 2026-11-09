@@ -368,7 +368,40 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
         found?.let { BookRef("local", it) }
     }
     fun documentImage(id: String, hash: String): File { require(hash.matches(Regex("[a-f0-9]{64}"))); return File(documentsDir, "${safeId(id)}-images/$hash") }
-    fun documentSource(id: String, format: String): File { require(format in localDocumentFormats); return File(documentsDir, "${safeId(id)}.$format") }
+    fun documentSource(id: String, format: String): File {
+        require(format in localDocumentFormats)
+        val key = safeId(id)
+        val source = File(documentsDir, "$key.$format")
+        val revisions = File(documentsDir, "$key-series")
+        if (format != "cbz" || !revisions.isDirectory) return source
+        return synchronized(documentLock) {
+            if (!documentStorage.exists(key)) return@synchronized source
+            val digest = documentIndex(key).sourceHash
+            if (!digest.matches(Regex("[a-f0-9]{64}"))) return@synchronized source
+            val staged = File(revisions, digest)
+            if (!staged.isFile) return@synchronized source
+            try {
+                java.nio.file.Files.move(staged.toPath(), source.toPath(), java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+                revisions.delete()
+                source
+            } catch (_: java.io.IOException) { staged }
+        }
+    }
+
+    /** 目录是提交点；进程中断后，读者按目录哈希找到相应版本的原件。 */
+    internal fun publishComicSeries(document: LocalDocument, packed: File) = synchronized(documentLock) {
+        require(document.comicSeries && document.format == "cbz" && document.sourceHash.matches(Regex("[a-f0-9]{64}")))
+        val revisions = File(documentsDir, "${safeId(document.id)}-series").apply { mkdirs() }
+        val staged = File(revisions, document.sourceHash)
+        java.nio.file.Files.move(packed.toPath(), staged.toPath(), java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+            java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        saveDocument(document)
+        val active = documentSource(document.id, "cbz")
+        revisions.listFiles().orEmpty().filter { it != active }.forEach { it.delete() }
+        revisions.delete()
+        Unit
+    }
     /** 轻量章节目录，用于阅读导航、搜索规划和导出元数据。 */
     fun documentIndex(id: String): LocalDocument = synchronized(documentLock) {
         val key = safeId(id)
@@ -444,6 +477,9 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
         localChapterMemory.clear()
         sourceIndex.remove(key)
         documentStorage.remove(key)
+        val series = File(documentsDir, "$key-series")
+        series.listFiles().orEmpty().forEach { it.delete() }
+        series.delete()
         if(importBatchDepth == 0) sourceIndex.flush()
         File(documentsDir, "$key-images").listFiles()?.forEach { it.delete() }
         File(documentsDir, "$key-images").delete()

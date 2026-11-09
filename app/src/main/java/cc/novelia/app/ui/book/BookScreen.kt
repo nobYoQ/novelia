@@ -223,7 +223,7 @@ import kotlinx.coroutines.withContext
 @Composable private fun LocalBookDetailScreen(c: AppController, ref: BookRef, onBack: () -> Unit) {
     val state by c.store.state.collectAsStateWithLifecycle()
     Screen("本地书籍", onBack) { padding ->
-        AsyncContent(ref, load = { withContext(Dispatchers.IO) { c.store.documentIndex(ref.id) } }, modifier = Modifier.padding(padding), revealContent = true) { document, _ ->
+        AsyncContent(ref, load = { withContext(Dispatchers.IO) { c.store.documentIndex(ref.id) } }, modifier = Modifier.padding(padding), revealContent = true) { document, reload ->
             val book = state.books.firstOrNull { it.book.ref == ref }?.book ?: BookCard(ref, document.name, cover = document.coverImage, total = document.chapters.size)
             val toc = remember(document) { document.chapters.map { TocItem(titleJp = it.title, chapterId = it.id) } }
             val savedPosition = state.positions[ref.key]
@@ -248,6 +248,11 @@ import kotlinx.coroutines.withContext
                         }
                         destination?.let { Text(it.title, Modifier.padding(horizontal = 24.dp, vertical = 12.dp), style = MaterialTheme.typography.bodyMedium) }
                     }
+                    if (document.format == "epub") item { EpubMediumChoice(c, ref, document) }
+                    if (document.comicSeries) item { SeriesRefresh(c, ref, reload) }
+                    document.comicMetadata?.writer?.takeIf { it.isNotBlank() }?.let { writer -> item {
+                        Text("作者 · $writer", Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+                    } }
                     item { MenuRow("本地术语表", "维护此文件的专有名词", Icons.Outlined.Translate, { c.go("glossary/${ref.key}") }) }
                 } else TocPanel(c, ref, toc, destination?.chapterId) { c.read(ref, it) }
             }

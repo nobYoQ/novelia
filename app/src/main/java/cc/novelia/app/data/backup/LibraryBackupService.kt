@@ -38,13 +38,14 @@ class LibraryBackupService(private val store: LocalStore, private val keywords: 
         val snapshot = store.state.value.forBackup()
         val files = linkedMapOf<String, File>()
         val documents = mutableListOf<String>(); val missing = mutableListOf<String>()
+        val indexedSources = mutableMapOf<String, String>()
         localDocumentIds(snapshot).forEach { id ->
             work.ensureActive()
             require(id.matches(Regex("[a-zA-Z0-9-]{1,128}"))) { "本地文档标识无效，无法备份" }
             val source = File(store.documentsDir, "$id.json")
             if (!source.isFile) { missing += id; return@forEach }
             val document = store.document(id) { work.ensureActive() }
-            // 归档保持自包含的版本 1 格式，旧版应用也可读取。
+            if (document.archivePages.isNotEmpty()) indexedSources["documents/$id.${document.format}"] = document.sourceHash
             val portableDocument = File(exportStage, "$id.json").apply { writeText(appJson.encodeToString(document), Charsets.UTF_8) }
             documents += id; files["documents/$id.json"] = portableDocument
             val images = document.chapters.flatMap { it.paragraphs }.filter { it.startsWith("novelia-image:") }.map { it.removePrefix("novelia-image:") }.toSet() + listOfNotNull(document.coverImage)
@@ -53,7 +54,8 @@ class LibraryBackupService(private val store: LocalStore, private val keywords: 
                 require(image.isFile) { "《${document.name}》的插图缺失，请重新导入后再备份" }
                 files["documents/$id-images/$hash"] = image
             }
-            if (includeOriginals) localDocumentFormats.forEach { format ->
+            if (document.archivePages.isNotEmpty()) require(store.documentSource(id, document.format).isFile) { "漫画正文原件缺失" }
+            if (includeOriginals || document.archivePages.isNotEmpty()) localDocumentFormats.forEach { format ->
                 store.documentSource(id, format).takeIf { it.isFile }?.let { files["documents/$id.$format"] = it }
             }
         }
@@ -62,8 +64,10 @@ class LibraryBackupService(private val store: LocalStore, private val keywords: 
             if (saved.book.ref.isLocal) saved.copy(book = saved.book.copy(cover = null)) else saved
         })
         val vocabulary = keywords.exportLibrary()
-        val manifest = LibraryBackupManifest("novelia-library", 1, System.currentTimeMillis(), portable, documents,
-            missing, includeOriginals, vocabulary.entries, files.mapValues { LibraryBackupArchive.digest(it.value) { work.ensureActive() } }, vocabulary.categories)
+        val assets = files.mapValues { LibraryBackupArchive.digest(it.value) { work.ensureActive() } }
+        require(indexedSources.all { (path, expected) -> assets[path]?.sha256 == expected }) { "漫画原件已改变，请重新备份" }
+        val manifest = LibraryBackupManifest("novelia-library", if (indexedSources.isNotEmpty()) 2 else 1, System.currentTimeMillis(), portable, documents,
+            missing, includeOriginals, vocabulary.entries, assets, vocabulary.categories)
         LibraryBackupArchive.write(output, manifest, files) { work.ensureActive() }
         } finally { exportStage.deleteRecursively() }
     }
@@ -118,6 +122,8 @@ class LibraryBackupService(private val store: LocalStore, private val keywords: 
                         catch (_: Exception) { null }
                     }.firstOrNull { candidate ->
                         candidate.format == document.format && candidate.chapters == document.chapters && candidate.coverImage == document.coverImage &&
+                        candidate.archivePages == document.archivePages && (document.archivePages.isEmpty() || matchesBackupAsset(
+                            store.documentSource(candidate.id, candidate.format), manifest.assets["documents/$sourceId.${document.format}"]) { work.ensureActive() }) &&
                         document.chapters.flatMap { it.paragraphs }.filter { it.startsWith("novelia-image:") }
                             .map { it.removePrefix("novelia-image:") }.plus(listOfNotNull(document.coverImage)).distinct().all { hash ->
                                 matchesBackupAsset(store.documentImage(candidate.id, hash), manifest.assets["documents/$sourceId-images/$hash"]) { work.ensureActive() }

@@ -15,9 +15,10 @@ internal fun transformIllustration(
     centroid: Offset = Offset(viewport.width / 2f, viewport.height / 2f),
     zoom: Float = 1f,
     pan: Offset = Offset.Zero,
+    maxScale: Float = 5f,
 ): IllustrationTransform {
     if(viewport.isEmpty() || image.isEmpty()) return IllustrationTransform()
-    val scale = (current.scale * zoom).coerceIn(1f, 5f)
+    val scale = (current.scale * zoom).coerceIn(1f, maxScale)
     if(scale == 1f) return IllustrationTransform()
     val ratio = scale / current.scale
     val fromCenter = centroid - Offset(viewport.width / 2f, viewport.height / 2f)

@@ -38,18 +38,33 @@ import kotlinx.coroutines.withContext
 import java.io.IOException
 import kotlin.math.roundToInt
 
-@Composable internal fun ComicPagedImage(page: ComicPage, index: Int, onTap: (Float) -> Unit) {
+@Composable internal fun ComicPagedImage(page: ComicPage, index: Int, preferences: cc.novelia.app.data.model.ComicPreferences,
+    half: Int, onTap: (Float) -> Unit) {
     var viewport by remember { mutableStateOf(Size.Zero) }
-    var transform by remember(page, viewport) { mutableStateOf(IllustrationTransform()) }
-    val image = Size(page.width.toFloat(), page.height.toFloat())
+    var image by remember(page, half, preferences.cropBorders) {
+        mutableStateOf(Size(page.width.toFloat() / if (half < 0) 1 else 2, page.height.toFloat()))
+    }
+    val initial = remember(viewport, image, preferences.fitWidth) {
+        if (!preferences.fitWidth || viewport.isEmpty()) IllustrationTransform() else {
+            val fit = minOf(viewport.width / image.width, viewport.height / image.height)
+            val scale = maxOf(1f, viewport.width / (fit * image.width))
+            IllustrationTransform(scale, androidx.compose.ui.geometry.Offset(0f, ((image.height * fit * scale - viewport.height) / 2f).coerceAtLeast(0f)))
+        }
+    }
+    var transform by remember(page, viewport, initial, half) { mutableStateOf(initial) }
     val gestures = rememberTransformableState { zoom, pan, _ ->
-        transform = transformIllustration(transform, viewport, image, zoom = zoom, pan = pan)
+        transform = transformIllustration(transform, viewport, image, zoom = zoom, pan = pan, maxScale = maxOf(5f, initial.scale))
     }
     val latestTap by rememberUpdatedState(onTap)
     Box(Modifier.fillMaxSize().clipToBounds()
         .semantics { stateDescription = "${(transform.scale * 100).roundToInt()}%" }
         .onSizeChanged { viewport = Size(it.width.toFloat(), it.height.toFloat()) }
-        .transformable(state = gestures, canPan = { transform.scale > 1f })
+        .transformable(state = gestures, canPan = { delta ->
+            val fit = minOf(viewport.width / image.width, viewport.height / image.height)
+            val horizontal = kotlin.math.abs(delta.x) > kotlin.math.abs(delta.y)
+            transform.scale > 1f && if (horizontal) image.width * fit * transform.scale > viewport.width + 1f
+                else image.height * fit * transform.scale > viewport.height + 1f
+        })
         .pointerInput(page, viewport) {
             detectTapGestures(onTap = { latestTap(it.x / size.width.coerceAtLeast(1)) }, onDoubleTap = {
                 transform = if (transform.scale > 1f) IllustrationTransform()
@@ -61,7 +76,7 @@ import kotlin.math.roundToInt
             scaleY = transform.scale
             translationX = transform.offset.x
             translationY = transform.offset.y
-        })
+        }, crop = preferences.cropBorders, half = half, onDimensions = { image = it })
     }
 }
 
@@ -123,10 +138,13 @@ private fun decodeStrip(page: ComicPage, strip: ComicStrip, width: Int): Bitmap 
     } finally { decoder.recycle() }
 }
 
-@Composable private fun ComicImage(page: ComicPage, index: Int, modifier: Modifier) {
+@Composable private fun ComicImage(page: ComicPage, index: Int, modifier: Modifier, crop: Boolean = false,
+    half: Int = -1, onDimensions: (Size) -> Unit = {}) {
     val context = LocalContext.current
-    val request = remember(page, context) {
-        ImageRequest.Builder(context).data(page.file).size(3072, 3072).build()
+    val request = remember(page, context, crop, half) {
+        ImageRequest.Builder(context).data(page.file).size(3072, 3072).apply {
+            if (crop || half >= 0) transformations(ComicPageTransform(crop, half))
+        }.build()
     }
     var retry by remember(page) { mutableIntStateOf(0) }
     key(page, retry) {
@@ -134,19 +152,24 @@ private fun decodeStrip(page: ComicPage, strip: ComicStrip, width: Int): Bitmap 
         var failed by remember { mutableStateOf(false) }
         Box(modifier, contentAlignment = Alignment.Center) {
             RecoveringAsyncImage(request, "第 ${index + 1} 页", Modifier.fillMaxSize(),
-                onSuccess = { loading = false }, onError = { loading = false; failed = true })
+                onSuccess = { success ->
+                    loading = false
+                    val drawable = success.result.drawable
+                    if (drawable.intrinsicWidth > 0 && drawable.intrinsicHeight > 0)
+                        onDimensions(Size(drawable.intrinsicWidth.toFloat(), drawable.intrinsicHeight.toFloat()))
+                }, onError = { loading = false; failed = true })
             if (loading) PageLoading()
             if (failed) PageError(index) { retry++ }
         }
     }
 }
 
-@Composable private fun PageLoading() {
+@Composable internal fun PageLoading() {
     if (appReducedMotion()) Text("正在加载…", color = Color.White)
     else CircularProgressIndicator(Modifier.size(24.dp), color = Color.White)
 }
 
-@Composable private fun PageError(index: Int, retry: () -> Unit) {
+@Composable internal fun PageError(index: Int, retry: () -> Unit) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text("第 ${index + 1} 页加载失败", color = Color.White)
         TextButton(onClick = retry) { Text("重试") }

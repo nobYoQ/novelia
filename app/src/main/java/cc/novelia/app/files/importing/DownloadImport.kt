@@ -3,7 +3,8 @@ package cc.novelia.app.files.importing
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.provider.DocumentsContract
-import cc.novelia.app.files.comic.packComicFolder
+import cc.novelia.app.files.comic.*
+import cc.novelia.app.data.model.comicArchiveFormats
 import cc.novelia.app.NoveliaApplication
 import cc.novelia.app.data.library.withDownloadedVolume
 import cc.novelia.app.data.library.withWenkuSiteOrder
@@ -39,7 +40,9 @@ import cc.novelia.app.files.epub.contentMode
 data class DocumentImportResult(val ref: BookRef, val imported: Boolean)
 internal val documentImportLock = Mutex()
 
-private fun copyImport(input: InputStream, target: File, checkCancelled: () -> Unit) {
+private fun fileLimit(name: String) = if (name.substringAfterLast('.').lowercase() in comicArchiveFormats) comicInputLimit else DocumentTools.MAX_INPUT.toLong()
+
+private fun copyImport(input: InputStream, target: File, limit: Long = DocumentTools.MAX_INPUT.toLong(), checkCancelled: () -> Unit) {
     target.outputStream().use { output ->
         val buffer = ByteArray(65536)
         var total = 0L
@@ -48,7 +51,7 @@ private fun copyImport(input: InputStream, target: File, checkCancelled: () -> U
             val count = input.read(buffer)
             if (count < 0) break
             total += count
-            DocumentTools.requireImportSize(total)
+            require(total <= limit) { "文件超过导入限制（${limit / 1048576} MiB）" }
             output.write(buffer, 0, count)
         }
     }
@@ -83,13 +86,15 @@ suspend fun importDocumentUri(store: LocalStore, uri: Uri, onProgress: (String) 
         }
     } catch(cancelled: CancellationException) { throw cancelled }
     catch(_: Exception) { null }
-    metadata?.second?.takeIf { it >= 0 }?.let(DocumentTools::requireImportSize)
+
     val mime = runCatching { resolver.getType(uri) }.getOrNull()
     val name = documentImportName(metadata?.first, uri.lastPathSegment, mime)
+    val limit = fileLimit(name)
+    require((metadata?.second ?: 0) <= limit) { "文件超过导入限制（${limit / 1048576} MiB）" }
     val staged = File.createTempFile("document-input-", ".tmp", store.context.cacheDir)
     try {
         val workContext = coroutineContext
-        resolver.openInputStream(uri)?.use { copyImport(it, staged) { workContext.ensureActive() } } ?: error("无法读取文件")
+        resolver.openInputStream(uri)?.use { copyImport(it, staged, limit) { workContext.ensureActive() } } ?: error("无法读取文件")
         importLocalDocument(store, staged, name, onProgress = onProgress)
     } finally { staged.delete() }
 }
@@ -103,9 +108,10 @@ suspend fun importLocalDocument(store: LocalStore, file: File, name: String = fi
     downloadMode: String? = null, onProgress: (String) -> Unit = {}): DocumentImportResult = withContext(Dispatchers.IO) {
     documentImportLock.withLock {
         onProgress("正在检查重复文件")
-        DocumentTools.requireImportSize(file.length())
+        val limit = fileLimit(name)
+        require(file.length() <= limit) { "文件超过导入限制（${limit / 1048576} MiB）" }
         val workContext = coroutineContext
-        val hash = file.inputStream().use { DocumentTools.digest(it) { workContext.ensureActive() } }
+        val hash = file.inputStream().use { DocumentTools.digest(it, limit) { workContext.ensureActive() } }
         store.findDocumentByHash(hash) { workContext.ensureActive() }?.let {
             if (downloadMode != null) store.recordDocumentDownloadMode(it.id, downloadMode)
             if(store.state.value.books.none { saved -> saved.book.ref == it }) {
@@ -122,21 +128,23 @@ suspend fun importLocalDocument(store: LocalStore, file: File, name: String = fi
         val images = java.nio.file.Files.createTempDirectory(store.context.cacheDir.toPath(), "document-images-").toFile()
         try {
             onProgress("正在解析章节")
-            val parsed = DocumentTools.parseFile(name, file, { imageHash, input ->
+            val parsed = if (name.substringAfterLast('.').lowercase() in comicArchiveFormats) {
+                indexComic(file, name, hash, images) { workContext.ensureActive() }
+            } else DocumentTools.parseFile(name, file, { imageHash, input ->
                 copyImport(input, File(images, imageHash)) { workContext.ensureActive() }
             }, hash, downloadMode) { workContext.ensureActive() }
             val document = if (title == null) parsed else parsed.copy(name = title)
             val ref = BookRef("local", document.id)
             try {
                 onProgress("正在保存书籍")
-                file.inputStream().use { copyImport(it, store.documentSource(document.id, document.format)) { workContext.ensureActive() } }
+                file.inputStream().use { copyImport(it, store.documentSource(document.id, document.format), limit) { workContext.ensureActive() } }
                 images.listFiles().orEmpty().forEach { image ->
                     workContext.ensureActive()
                     val destination = store.documentImage(document.id, image.name).apply { parentFile?.mkdirs() }
                     if (!image.renameTo(destination)) image.copyTo(destination, overwrite = true)
                 }
                 store.saveDocument(document) { workContext.ensureActive() }
-                store.saveBook(BookCard(ref, document.name,
+                store.saveBook(BookCard(ref, document.name, authors = listOfNotNull(document.comicMetadata?.writer?.takeIf { it.isNotBlank() }),
                     cover = document.coverImage?.let { store.documentImage(document.id, it).absolutePath },
                     subtitle = "${document.format.uppercase()} · ${document.chapters.size} 章",
                     medium = document.bookMedium { chapter -> store.documentChapter(ref.id, chapter) }))

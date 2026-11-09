@@ -40,7 +40,7 @@ class ShelfGridUiTest {
         runBlocking { app.initialization.await() }
         assertNull("Use an anonymous dedicated test emulator", app.session.profile.value)
         before = app.store.state.value
-        app.store.update { it.copy(books = books, positions = emptyMap(), shelfGrid = true, localFilesGrid = false, cloudShelfGrid = false) }
+        app.store.update { it.copy(lastShelfLocation = cc.novelia.app.data.model.ShelfLocation(), books = books, positions = emptyMap(), shelfGrid = true, localFilesGrid = false, cloudShelfGrid = false) }
     }
     @After fun restore() { app.store.update { before } }
     private fun show(reduced: Boolean = true, eInk: Boolean = false, fontScale: Float = 1f) {

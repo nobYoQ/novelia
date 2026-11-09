@@ -51,7 +51,9 @@ data class BackupPreview(
 internal object LibraryBackupArchive {
     const val MANIFEST = "manifest.json"
     const val MAX_ENTRY_BYTES = 128L * 1024 * 1024
-    const val MAX_TOTAL_BYTES = 1024L * 1024 * 1024
+    const val MAX_TOTAL_BYTES = 4L * 1024 * 1024 * 1024
+    private fun entryLimit(name: String) = if (name.substringAfterLast('.') in cc.novelia.app.data.model.comicArchiveFormats)
+        cc.novelia.app.files.comic.comicInputLimit else MAX_ENTRY_BYTES
     private const val MAX_MANIFEST_BYTES = 16L * 1024 * 1024
     private const val MAX_ENTRIES = 30_000
     private val id = Regex("[a-zA-Z0-9-]{1,128}")
@@ -64,7 +66,7 @@ internal object LibraryBackupArchive {
 
     fun digest(file: File, checkCancelled: () -> Unit = {}): BackupAsset = file.inputStream().use { input ->
         val digest = MessageDigest.getInstance("SHA-256")
-        val size = transfer(input, null, MAX_ENTRY_BYTES, checkCancelled) { bytes, count -> digest.update(bytes, 0, count) }
+        val size = transfer(input, null, entryLimit(file.name), checkCancelled) { bytes, count -> digest.update(bytes, 0, count) }
         BackupAsset(size, digest.digest().joinToString("") { "%02x".format(it.toInt() and 255) })
     }
 
@@ -72,7 +74,7 @@ internal object LibraryBackupArchive {
         require(files.keys == manifest.assets.keys) { "备份文件索引不完整" }
         val metadata = appJson.encodeToString(manifest).toByteArray(Charsets.UTF_8)
         require(metadata.size <= MAX_MANIFEST_BYTES) { "阅读资料索引超过 16 MB，无法备份" }
-        require(files.size + 1 <= MAX_ENTRIES && manifest.assets.values.sumOf { it.bytes } + metadata.size <= MAX_TOTAL_BYTES) { "备份超过 1 GB 或文件数量过多" }
+        require(files.size + 1 <= MAX_ENTRIES && manifest.assets.values.sumOf { it.bytes } + metadata.size <= MAX_TOTAL_BYTES) { "备份超过 4 GiB 或文件数量过多" }
         ZipOutputStream(output.buffered()).use { zip ->
             zip.putNextEntry(ZipEntry(MANIFEST)); zip.write(metadata); zip.closeEntry()
             files.forEach { (name, file) ->
@@ -80,7 +82,7 @@ internal object LibraryBackupArchive {
                 // 检测导出快照组装期间文档是否被修改。
                 require(digest(file, checkCancelled) == manifest.assets[name]) { "备份期间文件发生变化，请重试" }
                 zip.putNextEntry(ZipEntry(name))
-                file.inputStream().use { transfer(it, zip, MAX_ENTRY_BYTES, checkCancelled) }
+                file.inputStream().use { transfer(it, zip, entryLimit(name), checkCancelled) }
                 zip.closeEntry()
             }
         }
@@ -96,7 +98,7 @@ internal object LibraryBackupArchive {
                 val entry = zip.nextEntry ?: break
                 requireSafePath(entry.name)
                 require(!entry.isDirectory && names.add(entry.name) && names.size <= MAX_ENTRIES) { "备份包含重复路径或文件数量过多" }
-                val maximum = minOf(if (entry.name == MANIFEST) MAX_MANIFEST_BYTES else MAX_ENTRY_BYTES, MAX_TOTAL_BYTES - total)
+                val maximum = minOf(if (entry.name == MANIFEST) MAX_MANIFEST_BYTES else entryLimit(entry.name), MAX_TOTAL_BYTES - total)
                 val target = File(staging, entry.name)
                 target.parentFile?.mkdirs()
                 target.outputStream().use { total += transfer(zip, it, maximum, checkCancelled) }
@@ -115,12 +117,12 @@ internal object LibraryBackupArchive {
         val manifestFile = File(staging, MANIFEST)
         require(manifestFile.length() <= MAX_MANIFEST_BYTES) { "备份索引过大" }
         val manifest = appJson.decodeFromString<LibraryBackupManifest>(manifestFile.readText(Charsets.UTF_8))
-        require(manifest.format == "novelia-library" && manifest.version == 1) { "不支持此备份格式或版本，请升级应用后重试" }
+        require(manifest.format == "novelia-library" && manifest.version in 1..2) { "不支持此备份格式或版本，请升级应用后重试" }
         require(manifest.assets.size <= MAX_ENTRIES && manifest.assets.values.sumOf { it.bytes } <= MAX_TOTAL_BYTES) { "备份体积过大" }
         extracted?.let { require(it == manifest.assets.keys) { "备份文件与索引不一致" } }
         manifest.assets.forEach { (path, asset) ->
             checkCancelled(); requireSafePath(path)
-            require(path != MANIFEST && asset.bytes in 0..MAX_ENTRY_BYTES && asset.sha256.matches(Regex("[a-f0-9]{64}"))) { "备份文件索引无效" }
+            require(path != MANIFEST && asset.bytes in 0..entryLimit(path) && asset.sha256.matches(Regex("[a-f0-9]{64}"))) { "备份文件索引无效" }
             val file = File(staging, path)
             require(file.isFile && digest(file, checkCancelled) == asset) { "备份文件缺失或校验失败" }
         }
@@ -177,9 +179,20 @@ internal object LibraryBackupArchive {
                 val image = "documents/$documentId-images/$hash"
                 requireSafePath(image); require(image in manifest.assets) { "备份缺少正文插图" }; expected += image
             }
+            if (document.archivePages.isNotEmpty()) {
+                require(manifest.version == 2 && document.format in cc.novelia.app.data.model.comicArchiveFormats &&
+                    manifest.assets["documents/$documentId.${document.format}"]?.sha256 == document.sourceHash &&
+                    document.sourceHash.isNotBlank() && document.archivePages.size <= 10000) { "漫画正文或索引无效" }
+                require(document.archivePages.all { it.width > 0 && it.height > 0 && it.height.toLong() <= it.width.toLong() * 512 &&
+                    it.orientation in 0..8 && it.path.length in 1..4096 } && document.chapters.all { chapter ->
+                    chapter.paragraphs.isNotEmpty() && chapter.paragraphs.all { token ->
+                        token.startsWith("novelia-archive:") && token.substringAfter(':').toIntOrNull() in document.archivePages.indices
+                    }
+                }) { "漫画页索引无效" }
+            }
             localDocumentFormats.forEach { format ->
                 val source = "documents/$documentId.$format"
-                if (source in manifest.assets) { require(manifest.originalsIncluded) { "原文件索引无效" }; expected += source }
+                if (source in manifest.assets) { require(manifest.originalsIncluded || document.archivePages.isNotEmpty() && format == document.format) { "原文件索引无效" }; expected += source }
             }
         }
         require(expected == manifest.assets.keys) { "备份包含未引用的文档或图片" }
@@ -193,7 +206,7 @@ internal object LibraryBackupArchive {
             checkCancelled()
             val count = input.read(bytes); if (count < 0) break
             total += count
-            require(total <= limit) { "备份文件过大（单文件上限 128 MB，总计上限 1 GB）" }
+            require(total <= limit) { "备份文件超过体积限制" }
             consume(bytes, count); output?.write(bytes, 0, count)
         }
         return total

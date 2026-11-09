@@ -4,7 +4,8 @@ import java.io.File
 
 /** 阅读器只消费已按阅读顺序排列的本地图片，站点适配器也可以提供自己的图片缓存。 */
 internal data class ComicPage(val file: File, val width: Int, val height: Int, val orientation: Int = 1,
-    val regionDecodable: Boolean = true)
+    val regionDecodable: Boolean = true, val text: String? = null,
+    val load: (() -> File)? = null)
 
 internal data class ComicStrip(val page: Int, val top: Int, val bottom: Int)
 
