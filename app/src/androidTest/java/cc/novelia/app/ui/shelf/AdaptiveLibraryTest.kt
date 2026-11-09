@@ -119,7 +119,8 @@ class AdaptiveLibraryTest {
                 LocalChapter("first", "第一章 林间", listOf("第一章正文")),
                 LocalChapter("second", "第二章 湖畔", listOf("第二章正文")),
             )))
-            app.store.update { it.copy(books = listOf(SavedBook(BookCard(ref, "双栏阅读测试"))), positions = emptyMap()) }
+            app.store.update { it.copy(lastShelfLocation = cc.novelia.app.data.model.ShelfLocation(),
+                books = listOf(SavedBook(BookCard(ref, "双栏阅读测试"))), positions = emptyMap()) }
             compose.setContent {
                 AppInteractionMode(eInk = true, reducedMotion = true) {
                     NoveliaTheme("light") {

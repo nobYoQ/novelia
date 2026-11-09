@@ -126,7 +126,9 @@ class ShelfGridUiTest {
                 }
             }
         }
-        compose.onNodeWithTag("shelf-medium").assertIsDisplayed().assertIsNotEnabled().assertTextEquals("小说")
+        val switch = compose.onNodeWithTag("shelf-medium").assertIsDisplayed().assertIsNotEnabled().assertTextEquals("小说")
+        fun SemanticsNodeInteraction.centerY() = getUnclippedBoundsInRoot().let { (it.top.value + it.bottom.value) / 2 }
+        assertEquals(compose.onNodeWithText("书架").centerY(), switch.centerY(), 1f)
         compose.onNodeWithContentDescription("导入本地文件").assertIsDisplayed()
         compose.onNodeWithContentDescription("书架操作").performClick()
         compose.onNodeWithText("检查更新").performClick()

@@ -8,6 +8,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.onClick
@@ -16,31 +18,37 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.model.BookMedium
 import cc.novelia.app.ui.components.base.AppIconButton
-import cc.novelia.app.ui.components.base.AppTextButton
+import cc.novelia.app.ui.theme.appShape
 
 @Composable internal fun ShelfTopBar(
     medium: BookMedium, switchEnabled: Boolean, onSwitch: () -> Unit,
     importEnabled: Boolean, onImport: () -> Unit, onHistory: () -> Unit,
-    onUpdates: () -> Unit, onCheckUpdates: () -> Unit,
+    onUpdates: () -> Unit, onCheckUpdates: () -> Unit, rotation: () -> Float = { 0f },
 ) {
     val novel = medium == BookMedium.Novel
     val label = if (novel) "小说" else "漫画"
     val switchLabel = if (novel) "切换到漫画书架" else "切换到小说书架"
     BoxWithConstraints {
         // 分栏或大字体下，为标题和切换按钮留足宽度。
-        val compact = maxWidth < 236.dp + (80 * LocalDensity.current.fontScale).dp
+        val compact = maxWidth < 250.dp + (80 * LocalDensity.current.fontScale).dp
         TopAppBar(title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("书架", maxLines = 1)
-                AppTextButton(onClick = onSwitch, enabled = switchEnabled,
-                    contentPadding = PaddingValues(horizontal = 6.dp),
-                    modifier = Modifier.heightIn(min = 48.dp).testTag("shelf-medium").semantics {
+                val colors = MaterialTheme.colorScheme
+                Surface(onClick = onSwitch, enabled = switchEnabled,
+                    color = lerp(colors.surface, colors.primary, if (switchEnabled) .19f else .075f),
+                    contentColor = colors.onSurface.copy(alpha = if (switchEnabled) 1f else .45f),
+                    shape = appShape(MaterialTheme.shapes.small),
+                    modifier = Modifier.testTag("shelf-medium").semantics {
                         stateDescription = "当前为${label}书架"
                         onClick(label = switchLabel, action = null)
                     }) {
-                    Icon(Icons.Outlined.Autorenew, null, Modifier.size(18.dp))
-                    Spacer(Modifier.width(3.dp))
-                    Text(label, maxLines = 1, style = MaterialTheme.typography.labelLarge)
+                    Row(Modifier.heightIn(min = 30.dp).padding(horizontal = 9.dp), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Icon(Icons.Outlined.Autorenew, null, Modifier.size(17.dp).graphicsLayer { rotationZ = rotation() })
+                        Text(label, maxLines = 1, style = MaterialTheme.typography.labelLarge)
+                    }
                 }
             }
         }, actions = {

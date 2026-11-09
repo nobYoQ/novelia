@@ -34,8 +34,9 @@ import cc.novelia.app.ui.components.base.AppSheet
 @Composable internal fun ImportResultsPanel(
     items: List<ImportItem>, running: Boolean, onPause: () -> Unit, onRetryFailed: () -> Unit,
     onResume: () -> Unit, onRead: (BookRef) -> Unit, onDismiss: () -> Unit, error: String? = null,
+    detailsOpen: MutableState<Boolean> = rememberSaveable { mutableStateOf(false) },
 ) {
-    var open by rememberSaveable { mutableStateOf(false) }
+    var open by detailsOpen
     if(items.isEmpty()) {
         LaunchedEffect(Unit) { open = false }
         return
