@@ -27,6 +27,8 @@ import kotlinx.serialization.Transient
     companion object { fun fromKey(key: String): BookRef = key.split('/', limit = 2).let { BookRef(it[0], it.getOrElse(1) { "" }) } }
 }
 
+enum class BookMedium { Novel, Comic }
+
 /** 列表与书架共用的轻量摘要，不包含章节正文；云端阅读摘要带有独立的账号归属。 */
 @Serializable data class BookCard(
     val ref: BookRef, val title: String, val originalTitle: String = "", val cover: String? = null,
@@ -44,4 +46,14 @@ import kotlinx.serialization.Transient
     val artists: List<String>? = null,
     // 只展示本次从目录确认的最新章，不把它随书架备份长期保存。
     @Transient val latestChapter: TocItem? = null,
+    val medium: BookMedium? = null,
 )
+
+// 旧版本的本地摘要以原件格式开头。书名可自由修改，不用作分类依据。
+internal val BookCard.knownShelfMedium: BookMedium? get() = medium ?: if (!ref.isLocal) BookMedium.Novel else
+    when (subtitle.substringBefore(" · ").lowercase()) {
+        in comicArchiveFormats -> BookMedium.Comic
+        "txt", "srt" -> BookMedium.Novel
+        else -> null
+    }
+internal val BookCard.shelfMedium: BookMedium get() = knownShelfMedium ?: BookMedium.Novel

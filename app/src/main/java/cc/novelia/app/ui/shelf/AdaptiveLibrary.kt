@@ -53,7 +53,8 @@ import kotlinx.coroutines.flow.map
                 // 手机仍保持单击打开本地小说；在大屏上选择的书籍，
                 // 缩小窗口后转为完整详情页。
                 if(ref.isLocal && !expanded) c.book(ref) else selectedKey = ref.key
-            }, selectedBookKey = selectedKey, sharedDocuments = sharedDocuments, onSharedDocumentsConsumed = onSharedDocumentsConsumed)
+            }, selectedBookKey = selectedKey, sharedDocuments = sharedDocuments, onSharedDocumentsConsumed = onSharedDocumentsConsumed,
+                onShelfChanged = { selectedKey = null })
         },
         detail = { key -> BookScreen(c, BookRef.fromKey(key), onBack = { selectedKey = null }) },
     )

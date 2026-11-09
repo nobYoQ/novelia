@@ -31,7 +31,7 @@ import cc.novelia.app.ui.components.base.*
     maxHeight: Dp, onCreateFolder: () -> Unit, onRenameFolder: () -> Unit, onDeleteFolder: () -> Unit,
     characters: CharacterCountFilter = CharacterCountFilter(), onCharacters: (CharacterCountFilter) -> Unit = {},
     countLabel: String = "", visible: Boolean = true, active: Boolean = true, modifier: Modifier = Modifier,
-    grid: Boolean? = null, onToggleLayout: () -> Unit = {},
+    grid: Boolean? = null, onToggleLayout: () -> Unit = {}, comics: Boolean = false,
     trailingContent: @Composable () -> Unit = {},
 ) {
     val focus = LocalFocusManager.current
@@ -114,7 +114,7 @@ import cc.novelia.app.ui.components.base.*
             onDismiss = { onExpanded(false) },
             onReset = { draftType = ShelfBookType.All; draftStatus = "全部"; draftCharacters = CharacterCountFilter(); validCharacters = true },
             onApply = { focus.clearFocus(); onType(draftType); onStatus(draftStatus); onCharacters(draftCharacters); onExpanded(false) }) {
-            ShelfFilterOptions("小说类型", labels, setOf(types.indexOf(draftType)), "local-novel-kind") { draftType = types[it] }
+            if (!comics) ShelfFilterOptions("小说类型", labels, setOf(types.indexOf(draftType)), "local-novel-kind") { draftType = types[it] }
             ShelfFilterOptions("阅读状态", statuses, setOf(statuses.indexOf(draftStatus)), "local-reading-status") { draftStatus = statuses[it] }
             if(!localFiles && draftType == ShelfBookType.Web) {
                 ShelfCharacterFilter(draftCharacters, { draftCharacters = it }, { validCharacters = it })

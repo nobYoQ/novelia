@@ -60,6 +60,57 @@ class ShelfGridUiTest {
     }
     private fun openVolumes() = compose.onNodeWithTag("shelf-grid-volumes-${parent.book.ref.key}").performClick()
 
+    @Test fun novelAndComicShelvesClassifyLegacyEpubsAndKeepSeparateListsAndResumeTargets() {
+        val marker = "novelia-image:" + "a".repeat(64)
+        fun legacy(title: String, paragraphs: List<String>): SavedBook {
+            val id = java.util.UUID.randomUUID().toString()
+            app.store.saveDocument(LocalDocument(id, title, "epub", listOf(LocalChapter("c", "正文", paragraphs))))
+            return SavedBook(BookCard(BookRef("local", id), title, subtitle = "EPUB · 1 章"))
+        }
+        val comic = legacy("图册", listOf(marker)).copy(parentWenkuKey = parent.book.ref.key)
+        val novel = legacy("图文故事", listOf(marker, "正文"))
+        try {
+            app.store.update { it.copy(books = listOf(parent.copy(volumesExpanded = true), novel, comic),
+                lastShelfLocation = ShelfLocation(), rememberLastShelfFolder = true, shelfGrid = false, comicShelfGrid = true,
+                positions = mapOf(novel.book.ref.key to Position("c", updatedAt = 1), comic.book.ref.key to Position("c", updatedAt = 2))) }
+            show()
+            compose.waitUntil(15_000) { app.store.state.value.books.filter { it.book.ref.isLocal }.all { it.book.medium != null } }
+            fun row(saved: SavedBook) = compose.onNodeWithTag("shelf-book-${saved.book.ref.key}")
+            fun resume() = compose.onNodeWithTag("shelf-continue-title", true)
+            compose.onNodeWithText("小说书架").assertIsSelected()
+            row(novel).assertExists()
+            row(comic).assertDoesNotExist()
+            compose.onNodeWithTag("shelf-volume-${comic.book.ref.key}").assertDoesNotExist()
+            resume().assertTextEquals(novel.book.title)
+            compose.onNodeWithTag("shelf-tab-1").performClick()
+            row(novel).assertExists()
+            row(comic).assertDoesNotExist()
+            fun fileControl(tag: String) = compose.onNode(hasTestTag(tag) and hasAnyAncestor(hasTestTag("shelf-page-1")))
+            fileControl("local-search-toggle").performClick()
+            fileControl("local-search-field").performTextInput("图文")
+            fileControl("local-search-toggle").performClick()
+            compose.onNodeWithText("漫画书架").performClick().assertIsSelected()
+            row(comic).assertExists()
+            row(novel).assertDoesNotExist()
+            row(parent).assertDoesNotExist()
+            compose.onNodeWithText("云端收藏").assertDoesNotExist()
+            compose.onNodeWithTag("shelf-books-grid").assertExists()
+            resume().assertTextEquals(comic.book.title)
+            restoration.emulateSavedInstanceStateRestore()
+            compose.onNodeWithText("漫画书架").assertIsSelected()
+            row(comic).assertExists()
+            compose.onNodeWithText("小说书架").performClick()
+            compose.onNodeWithTag("shelf-tab-1").assertIsSelected()
+            row(novel).assertExists()
+            fileControl("local-search-toggle").performClick()
+            fileControl("local-search-field").assertTextContains("图文")
+            assertEquals(parent.book.ref.key, app.store.state.value.books.single { it.book.ref == comic.book.ref }.parentWenkuKey)
+        } finally {
+            app.store.removeDocument(comic.book.ref.id)
+            app.store.removeDocument(novel.book.ref.id)
+        }
+    }
+
     @Test fun switchingLayoutsPreservesTheVisibleBookAndEachSectionPreference() {
         show(reduced = false)
         compose.onNodeWithTag("shelf-books-grid").performScrollToIndex(5)

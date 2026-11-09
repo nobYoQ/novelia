@@ -30,21 +30,21 @@ import cc.novelia.app.ui.components.base.*
 
 @Composable internal fun ShelfSelectionActions(count: Int, localFiles: Boolean, busy: Boolean, downloading: Boolean,
     canDownload: Boolean, onMove: () -> Unit, onStatus: () -> Unit, onDownload: () -> Unit,
-    onRemove: () -> Unit, onDelete: () -> Unit, onSingleBook: (() -> Unit)?) {
+    onRemove: () -> Unit, onDelete: () -> Unit, onSingleBook: (() -> Unit)?, comics: Boolean = false) {
     var more by remember { mutableStateOf(false) }
     val enabled = count > 0 && !busy
     LaunchedEffect(enabled) { if(!enabled) more = false }
     ShelfSelectionBar("local") {
         ShelfActionButton("移动", "移动到收藏夹", Icons.AutoMirrored.Outlined.DriveFileMove, "local-selection-move", enabled, onMove)
         ShelfActionButton("状态", "修改阅读状态", Icons.Outlined.BookmarkBorder, "local-selection-status", enabled, onStatus)
-        ShelfActionButton(if(downloading) "加入中" else "下载", if(downloading) "正在加入下载" else "下载",
+        if (!comics) ShelfActionButton(if(downloading) "加入中" else "下载", if(downloading) "正在加入下载" else "下载",
             Icons.Outlined.Download, "local-selection-download", enabled && !downloading && canDownload, onDownload)
         ShelfActionButton("更多", "更多操作", Icons.Outlined.MoreHoriz, "local-selection-more", enabled) { more = true }
     }
     if(more) AppSheet(onDismissRequest = { more = false }) {
         Column(Modifier.padding(bottom = 16.dp).testTag("local-selection-menu")) {
             Text("已选 $count 本", Modifier.padding(20.dp), style = MaterialTheme.typography.titleLarge)
-            if(onSingleBook != null) MenuRow("管理这本书", "置顶、导出、挂载分卷等单书操作", Icons.Outlined.Settings, { more = false; onSingleBook() })
+            if(onSingleBook != null) MenuRow("管理这本书", "置顶、重命名或导出", Icons.Outlined.Settings, { more = false; onSingleBook() })
             Box(Modifier.testTag("local-selection-remove")) {
                 MenuRow(if(localFiles) "删除本地副本" else "移出书架", "处理所选 $count 本，操作前再次确认", Icons.Outlined.RemoveCircleOutline,
                     { more = false; onRemove() })

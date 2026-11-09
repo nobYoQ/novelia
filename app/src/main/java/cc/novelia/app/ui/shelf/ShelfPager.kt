@@ -19,9 +19,17 @@ import kotlinx.coroutines.launch
 /** 点击和滑动共用分页状态；分区落定后才退出批量整理，各页单独保存滚动和筛选控件。 */
 @Composable internal fun ShelfPager(
     selected: Int, onSelect: (Int) -> Unit, enabled: Boolean,
-    modifier: Modifier = Modifier, controls: @Composable () -> Unit = {},
+    modifier: Modifier = Modifier, controls: @Composable () -> Unit = {}, singlePage: Boolean = false, header: @Composable () -> Unit = {},
     content: @Composable (Int) -> Unit,
 ) {
+    if (singlePage) {
+        Column(modifier.fillMaxSize()) {
+            header()
+            controls()
+            Box(Modifier.weight(1f).fillMaxWidth()) { content(0) }
+        }
+        return
+    }
     val pager = rememberPagerState(initialPage = selected.coerceIn(0, 2)) { 3 }
     val pages = rememberSaveableStateHolder()
     val scope = rememberCoroutineScope()
@@ -29,6 +37,11 @@ import kotlinx.coroutines.launch
     val focus = LocalFocusManager.current
     val select by rememberUpdatedState(onSelect)
     val currentSelection by rememberUpdatedState(selected)
+    var previousRequest by remember { mutableIntStateOf(selected) }
+    LaunchedEffect(selected) {
+        if (selected != previousRequest && pager.settledPage != selected) pager.scrollToPage(selected)
+        previousRequest = selected
+    }
     LaunchedEffect(pager) {
         // 包含首次发射，让中途重建后恢复的分页位置重新同步到外层。
         snapshotFlow { pager.settledPage }.distinctUntilChanged().collect { page ->
@@ -39,6 +52,7 @@ import kotlinx.coroutines.launch
         }
     }
     Column(modifier.fillMaxSize()) {
+        header()
         PrimaryTabRow(pager.currentPage) {
             listOf("我的书架", "本地文件", "云端收藏").forEachIndexed { index, title ->
                 Tab(pager.currentPage == index, onClick = {

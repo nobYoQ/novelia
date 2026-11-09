@@ -19,6 +19,7 @@ import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -49,6 +50,10 @@ import cc.novelia.app.data.library.withVolumeParent
 import cc.novelia.app.data.library.withWenkuVolumeOrder
 import cc.novelia.app.data.library.withWenkuVolumes
 import cc.novelia.app.data.model.BookRef
+import cc.novelia.app.data.model.BookMedium
+import cc.novelia.app.data.model.shelfMedium
+import cc.novelia.app.data.model.knownShelfMedium
+import cc.novelia.app.data.storage.restoreBookMedia
 import cc.novelia.app.data.model.DownloadEntry
 import cc.novelia.app.data.model.SavedBook
 import cc.novelia.app.data.model.createShelfFolder
@@ -87,18 +92,52 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
 @Composable fun ShelfScreen(c: AppController, onOpenBook: (BookRef) -> Unit = c::book, selectedBookKey: String? = null,
-    sharedDocuments: List<Uri> = emptyList(), onSharedDocumentsConsumed: (List<Uri>) -> Unit = {}) {
+    sharedDocuments: List<Uri> = emptyList(), onSharedDocumentsConsumed: (List<Uri>) -> Unit = {}, onShelfChanged: () -> Unit = {}) {
+    val state by c.store.state.collectAsStateWithLifecycle()
+    var medium by rememberSaveable { mutableStateOf(state.restoredShelfLocation().medium) }
+    val panes = rememberSaveableStateHolder()
+    val importModel = rememberDocumentImporter(c)
+    val importState by importModel.state.collectAsStateWithLifecycle()
+    var checked by remember { mutableStateOf(emptySet<BookRef>()) }
+    val pending = remember(state.books, checked) {
+        state.books.mapNotNull { if (it.book.knownShelfMedium == null && it.book.ref !in checked) it.book.ref else null }.toSet()
+    }
+    LaunchedEffect(pending) {
+        if (pending.isNotEmpty()) {
+            c.store.restoreBookMedia(pending)
+            checked += pending
+        }
+    }
+    fun switchShelf(next: BookMedium) {
+        if (next == medium) return
+        onShelfChanged()
+        medium = next
+        c.store.update { if (it.rememberLastShelfFolder) it.copy(lastShelfLocation = it.lastShelfLocation.copy(medium = next)) else it }
+    }
+    LaunchedEffect(importState) { importModel.takeImportedMedium()?.let(::switchShelf) }
+    panes.SaveableStateProvider(medium.name) {
+        MediumShelf(c, medium, ::switchShelf, pending, importModel, onOpenBook, selectedBookKey, sharedDocuments, onSharedDocumentsConsumed)
+    }
+}
+
+@Composable private fun MediumShelf(c: AppController, medium: BookMedium, switchShelf: (BookMedium) -> Unit,
+    pending: Set<BookRef>, importModel: DocumentImportViewModel, onOpenBook: (BookRef) -> Unit, selectedBookKey: String?,
+    sharedDocuments: List<Uri>, onSharedDocumentsConsumed: (List<Uri>) -> Unit) {
     val state by c.store.state.collectAsStateWithLifecycle()
     val profile by c.session.profile.collectAsStateWithLifecycle()
-    var tab by rememberSaveable { mutableIntStateOf(state.restoredShelfLocation().tab) }
-    var folderId by rememberSaveable { mutableStateOf(state.restoredShelfLocation().localFolderId) }
+    val comics = medium == BookMedium.Comic
+    val shelfBooks = remember(state.books, medium, pending) { state.books.filter { it.book.ref !in pending && it.book.shelfMedium == medium } }
+    val localLabel = if (comics) "本地漫画" else "本地小说"
+    var tab by rememberSaveable { mutableIntStateOf(if (comics) 0 else state.restoredShelfLocation().tab) }
+    var folderId by rememberSaveable { mutableStateOf(state.restoredShelfLocation().let { if (comics) it.comicFolderId else it.localFolderId }) }
     val folder = state.folders.firstOrNull { state.folderIds[it] == folderId } ?: "全部"
     var query by rememberSaveable { mutableStateOf("") }; var sort by rememberSaveable { mutableIntStateOf(0) }
     LaunchedEffect(tab, folderId, state.folderIds, state.rememberLastShelfFolder) {
         val validFolderId = folderId?.takeIf { it in state.folderIds.values }
         folderId = validFolderId
-        c.store.update { if(it.rememberLastShelfFolder) it.copy(lastShelfLocation = it.lastShelfLocation.copy(
-            tab = tab, localFolderId = validFolderId)) else it }
+        c.store.update { if(it.rememberLastShelfFolder) it.copy(lastShelfLocation = if (comics)
+            it.lastShelfLocation.copy(comicFolderId = validFolderId)
+            else it.lastShelfLocation.copy(tab = tab, localFolderId = validFolderId)) else it }
     }
     var bookType by rememberSaveable { mutableStateOf(ShelfBookType.All) }
     var fileType by rememberSaveable { mutableStateOf(ShelfBookType.All) }
@@ -138,12 +177,11 @@ import kotlinx.coroutines.withContext
             }
         }
     }
-    val importModel = rememberDocumentImporter(c)
     val importState by importModel.state.collectAsStateWithLifecycle()
     val importing = importState.running
     LaunchedEffect(sharedDocuments, importing) {
         if(sharedDocuments.isNotEmpty() && !importing) {
-            tab = 1
+            if (!comics) tab = 1
             importModel.start(sharedDocuments)
             onSharedDocumentsConsumed(sharedDocuments)
         }
@@ -158,24 +196,24 @@ import kotlinx.coroutines.withContext
         if (tree != null) importModel.start(listOf(tree))
     }
     var importMenu by remember { mutableStateOf(false) }
-    val recent = remember(state.books, state.positions) {
-        state.books.asSequence().filter { state.positions.containsKey(it.book.ref.key) }.maxByOrNull { state.positions.getValue(it.book.ref.key).updatedAt }
+    val recent = remember(shelfBooks, state.positions) {
+        shelfBooks.asSequence().filter { state.positions.containsKey(it.book.ref.key) }.maxByOrNull { state.positions.getValue(it.book.ref.key).updatedAt }
     }
     val settledQuery = rememberDebouncedQuery(query)
     var collapsedSearchGroups by remember(settledQuery, readingStatus) { mutableStateOf(setOf<String>()) }
     val filteringVolumes = settledQuery.isNotBlank() || readingStatus != "全部"
     val reducedMotion = appReducedMotion()
     val cacheGeneration by c.store.cacheGeneration.collectAsStateWithLifecycle()
-    val shelfGroups = remember(state.books, state.positions, folder, settledQuery, sort, bookType, readingStatus) {
-        state.shelfGroups(localOnly = false, folder = folder, query = settledQuery, sort = sort, type = bookType, status = readingStatus)
+    val shelfGroups = remember(shelfBooks, state.positions, folder, settledQuery, sort, bookType, readingStatus) {
+        state.shelfGroups(localOnly = false, folder = folder, query = settledQuery, sort = sort, type = bookType, status = readingStatus, candidates = shelfBooks)
     }
     val filterShelfCharacters = bookType == ShelfBookType.Web && characterFilter.active
     val countCandidates = if(bookType == ShelfBookType.Web) shelfGroups.map { it.saved.book } else emptyList()
     // 字数结果留在分页器外，离开书架分区后返回时无需重新补全。
     val characterCounts = rememberShelfCharacterCounts(c, countCandidates, tab == 0 && filterShelfCharacters, profile?.username, cacheGeneration)
     LaunchedEffect(tab) { managing = false; selection = emptySet(); volumeSheetKey = null }
-    val allVolumeGroups = remember(state.books) {
-        state.shelfGroups(localOnly = false, folder = "全部", query = "", sort = 2).associateBy { it.saved.book.ref.key }
+    val allVolumeGroups = remember(shelfBooks) {
+        state.shelfGroups(localOnly = false, folder = "全部", query = "", sort = 2, candidates = shelfBooks).associateBy { it.saved.book.ref.key }
     }
     val commitVolumeOrder: (String, List<String>) -> Unit = { parent, keys ->
         c.store.update { current ->
@@ -208,11 +246,13 @@ import kotlinx.coroutines.withContext
                 val refs = chosen.map { it.book.ref }.toSet()
                 if(localFiles) batchDeletion = refs.filter { it.isLocal }.toSet() else batchRemoval = refs
             }, onDelete = { permanentDeletion = chosen.map { it.book.ref }.toSet() },
-            onSingleBook = chosen.singleOrNull()?.let { single -> { selected = single } })
+            onSingleBook = chosen.singleOrNull()?.let { single -> { selected = single } }, comics = comics)
     }
     Screen("书架", actions = {
-        AppIconButton(onClick = { c.go("updates") }) { Icon(Icons.Outlined.NewReleases, "查看书架更新") }
-        AppIconButton(onClick = { UpdateWorker.checkNow(c.app); c.message("已开始检查书架更新") }) { Icon(Icons.Outlined.Sync, "检查更新") }
+        if (!comics) {
+            AppIconButton(onClick = { c.go("updates") }) { Icon(Icons.Outlined.NewReleases, "查看书架更新") }
+            AppIconButton(onClick = { UpdateWorker.checkNow(c.app); c.message("已开始检查书架更新") }) { Icon(Icons.Outlined.Sync, "检查更新") }
+        }
         AppIconButton(onClick = { c.go("history") }) { Icon(Icons.Outlined.History, "阅读历史") }
         Box {
             AppIconButton(onClick = { importMenu = true }, enabled = !importing) { Icon(Icons.Outlined.FileOpen, "导入本地文件") }
@@ -222,22 +262,29 @@ import kotlinx.coroutines.withContext
             }
         }
     }) { padding ->
-        ShelfPager(tab, { tab = it }, enabled = !batchWorking && !cloudBusy, modifier = Modifier.padding(padding),
+        ShelfPager(tab, { tab = it }, enabled = !batchWorking && !cloudBusy, singlePage = comics, modifier = Modifier.padding(padding),
+            header = {
+                ShelfKindSwitch(listOf("小说书架", "漫画书架"), medium.ordinal, "shelf-medium",
+                    enabled = !batchWorking && !cloudBusy && !queueingDownloads) { switchShelf(BookMedium.entries[it]) }
+            },
             controls = {
                 DocumentPickerFallback(importer, enabled = !importing)
-                DocumentImportPanel(importModel, c::book)
+                DocumentImportPanel(importModel) { ref ->
+                    c.store.state.value.books.firstOrNull { it.book.ref == ref }?.let { switchShelf(it.book.shelfMedium) }
+                    c.book(ref)
+                }
             }) { page ->
             val active = page == tab
             if(page == 2) CloudShelf(c, onOpenBook, selectedBookKey, active = active, onSelectionStateChanged = updateCloudSelection) else BoxWithConstraints(Modifier.fillMaxSize()) {
                 // 邻页预组合时按自己的分区生成列表，不能复用当前选中页的数据或修剪其批量选择。
-                val baseGroups = if(page == 0) shelfGroups else remember(state.books, state.positions, folder, settledQuery, sort, fileType, readingStatus) {
+                val baseGroups = if(page == 0) shelfGroups else remember(shelfBooks, state.positions, folder, settledQuery, sort, fileType, readingStatus) {
                     state.shelfGroups(localOnly = true, folder = folder, query = settledQuery, sort = sort,
-                        type = fileType, status = readingStatus)
+                        type = fileType, status = readingStatus, candidates = shelfBooks)
                 }
                 val filterCharacters = page == 0 && filterShelfCharacters
                 val groups = if(filterCharacters) baseGroups.filter { characterFilter.matches(characterCounts.count(it.saved.book)) } else baseGroups
                 val books = remember(groups) { groups.flatMap { (if(it.matchesFilters) listOf(it.saved) else emptyList()) + it.volumes } }
-                val grid = if(page == 0) state.shelfGrid else state.localFilesGrid
+                val grid = if (comics) state.comicShelfGrid else if(page == 0) state.shelfGrid else state.localFilesGrid
                 val columns = shelfGridColumns(maxWidth)
                 val gridRows = remember(groups, columns) { groups.chunked(columns) }
                 val selectableKeys = remember(books, groups, grid) {
@@ -291,7 +338,8 @@ import kotlinx.coroutines.withContext
                             characters = characterFilter, onCharacters = { characterFilter = it },
                             countLabel = "${groups.size} 本" + groups.sumOf { it.volumes.size }.takeIf { it > 0 }?.let { " · $it 分卷" }.orEmpty(),
                             visible = !pageManaging, active = active, modifier = Modifier.onSizeChanged { controlsHeight = it.height },
-                            grid = grid, onToggleLayout = { c.store.update { if(page == 0) it.copy(shelfGrid = !it.shelfGrid) else it.copy(localFilesGrid = !it.localFilesGrid) } }) {
+                            comics = comics, grid = grid, onToggleLayout = { c.store.update { if (comics) it.copy(comicShelfGrid = !it.comicShelfGrid)
+                                else if(page == 0) it.copy(shelfGrid = !it.shelfGrid) else it.copy(localFilesGrid = !it.localFilesGrid) } }) {
                             if(filterCharacters) Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                                 val unknown = countCandidates.count { characterCounts.count(it) == null }
                                 Text(if(characterCounts.loading) "正在补全字数…" else "$unknown 本字数未知", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
@@ -311,8 +359,10 @@ import kotlinx.coroutines.withContext
                             contentPadding = PaddingValues(top = if(showGrid) 8.dp else 0.dp, bottom = if(continueBook != null)
                                 with(density) { continueHeight.toDp() } + 32.dp else 0.dp)) {
                             if(books.isEmpty()) item {
-                                if(query.isNotBlank() || folder != "全部" || readingStatus != "全部" || (if(page == 0) bookType else fileType) != ShelfBookType.All)
-                                    EmptyState("没有符合条件的小说", if(filterCharacters) "可以放宽字数范围、包含未知作品或继续补全字数。" else "试试其他书名、作者、类型或阅读状态。", action = "清除筛选", onAction = { query = ""; folderId = null; readingStatus = "全部"; bookType = ShelfBookType.All; fileType = ShelfBookType.All; characterFilter = CharacterCountFilter() })
+                                if (pending.isNotEmpty()) Text("正在整理已有书籍…", Modifier.padding(20.dp))
+                                else if(query.isNotBlank() || folder != "全部" || readingStatus != "全部" || (if(page == 0) bookType else fileType) != ShelfBookType.All)
+                                    EmptyState(if (comics) "没有符合条件的漫画" else "没有符合条件的小说", if(filterCharacters) "可以放宽字数范围、包含未知作品或继续补全字数。" else "试试其他书名、作者或阅读状态。", action = "清除筛选", onAction = { query = ""; folderId = null; readingStatus = "全部"; bookType = ShelfBookType.All; fileType = ShelfBookType.All; characterFilter = CharacterCountFilter() })
+                                else if (comics) EmptyState("漫画书架还是空的", "选择漫画压缩包、纯图片 EPUB 或图片文件夹开始阅读。", action = "导入漫画", onAction = { importMenu = true })
                                 else EmptyState(if(page == 1) "把故事装进口袋" else "书架等你来填满", if(page == 1) "从文件导入电子书、漫画压缩包，也可以选择漫画图片文件夹。" else "去发现喜欢的小说，或导入你已有的文件。", action = if(page == 1) "导入文件" else "去发现", onAction = { if(page == 1) importMenu = true else c.go("discover") }, sticker = Sticker.Welcome)
                             }
                             if(showGrid) items(gridRows, key = { it.first().saved.book.ref.key }, contentType = { "cover-row" }) { groupRow ->
@@ -459,10 +509,10 @@ import kotlinx.coroutines.withContext
         actions = { selectionActions(false, volumeGroup.volumes.filter { it.book.ref.key in selection }) })
     if(createFolder) TextPrompt("新建收藏夹", "名称", onDismiss = { createFolder = false }) { name -> c.action { c.store.update { it.createShelfFolder(name.trim()) } } }
     if(renameFolder) TextPrompt("重命名收藏夹", "名称", folder, { renameFolder = false }) { name -> val previous = folder; c.action { c.store.update { it.renameShelfFolder(previous, name.trim()) } } }
-    if(deleteFolder) ConfirmDialog("删除收藏夹？", "其中的书籍会移入默认收藏，文件不会删除。", { deleteFolder = false }, confirmLabel = "删除收藏夹") { val previous = folder; c.action { c.store.update { it.deleteShelfFolder(previous) }; folderId = null } }
+    if(deleteFolder) ConfirmDialog("删除收藏夹？", "两个书架中属于这个收藏夹的书籍都会移入默认收藏。", { deleteFolder = false }, confirmLabel = "删除收藏夹") { val previous = folder; c.action { c.store.update { it.deleteShelfFolder(previous) }; folderId = null } }
     batchRemoval?.let { refs ->
         val deletesCopies = state.deleteLocalCopyOnShelfRemoval && refs.any { it.isLocal }
-        ConfirmDialog("移出 ${refs.size} 本书？", if(deletesCopies) "已开启移出书架时删除本地副本：所选本地小说的导入副本会同时删除，无法撤销。原文件、下载文件和阅读记录保留。未选中的分卷会解除挂载。"
+        ConfirmDialog("移出 ${refs.size} 本书？", if(deletesCopies) "已开启移出书架时删除本地副本：所选书籍的导入副本会同时删除，无法撤销。原文件、下载文件和阅读记录保留。未选中的分卷会解除挂载。"
             else "移出所选书籍，保留本地文件和阅读记录；完成后可撤销。未选中的分卷会解除挂载。", { batchRemoval = null }, confirmLabel = "移出书架") {
             batchWorking = true
             c.action {
@@ -490,7 +540,11 @@ import kotlinx.coroutines.withContext
         }
     }
     permanentDeletion?.let { refs ->
-        ConfirmDialog("彻底删除 ${refs.size} 本书？", "移出所选书籍，删除其全部本地分卷、导入副本、对应下载任务和文件，以及本机阅读记录、笔记和单书设置。正在下载的任务会取消。导入前的原文件和原站收藏不受影响，此操作无法撤销。",
+        val parents = refs.filter { it.isWenku }.map { it.key }.toSet()
+        val linkedComics = state.books.count { it.parentWenkuKey in parents && it.book.shelfMedium == BookMedium.Comic }
+        ConfirmDialog("彻底删除 ${refs.size} 本书？", "移出所选书籍，删除其全部本地分卷、导入副本、对应下载任务和文件，以及本机阅读记录、笔记和单书设置。"
+            + (if (linkedComics > 0) "其中包括漫画书架上的 $linkedComics 本挂载分卷。" else "")
+            + "正在下载的任务会取消。导入前的原文件和原站收藏不受影响，此操作无法撤销。",
             { permanentDeletion = null }, confirmLabel = "彻底删除") {
             batchWorking = true
             c.action("书籍及关联文件已彻底删除") {
@@ -514,8 +568,8 @@ import kotlinx.coroutines.withContext
             bulkStatus = false; managing = false; selection = emptySet()
         }) { Text("恢复自动管理") }
     } }, confirmButton = {})
-    renamingDocument?.let { saved -> TextPrompt("重命名本地小说", "名称", saved.book.title, { renamingDocument = null }) { name ->
-        c.action("小说已重命名") { withContext(Dispatchers.IO) { c.store.renameDocument(saved.book.ref.id, name) } }
+    renamingDocument?.let { saved -> TextPrompt("重命名$localLabel", "名称", saved.book.title, { renamingDocument = null }) { name ->
+        c.action("已重命名") { withContext(Dispatchers.IO) { c.store.renameDocument(saved.book.ref.id, name) } }
     } }
     selected?.let { saved -> AppSheet(onDismissRequest = { selected = null }) { AppScrollColumn(modifier = Modifier.navigationBarsPadding(), contentModifier = Modifier.padding(bottom = 28.dp)) {
         Text(saved.book.title, Modifier.padding(20.dp), style = MaterialTheme.typography.titleLarge, maxLines = 2)
@@ -531,9 +585,9 @@ import kotlinx.coroutines.withContext
         else Text("所属收藏夹：${parent.folder}", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = MaterialTheme.typography.bodyMedium)
         if(saved.book.ref.isWenku) MenuRow("管理挂载分卷", "选择已导入的分卷，在本书下方展开阅读", Icons.Outlined.LibraryAdd, { selected = null; volumeManager = saved })
         if(saved.book.ref.isWenku && state.books.any { it.parentWenkuKey == saved.book.ref.key }) WenkuSiteOrderActions(c, saved.book.ref.key)
-        if(saved.book.ref.isLocal) MenuRow(if(parent == null) "挂载到文库小说" else "更换或取消挂载", parent?.let { "当前挂载：${it.book.title}" } ?: "归入指定的文库收藏", Icons.Outlined.DriveFileMove, { selected = null; volumeParentPicker = saved })
-        if(saved.book.ref.isLocal) MenuRow("重命名", "修改本地小说或分卷名称", Icons.Outlined.Edit, { selected = null; renamingDocument = saved })
-        if(saved.book.ref.isLocal) MenuRow("本地术语表", "维护此文件的专有名词", Icons.Outlined.Translate, { selected = null; c.go("glossary/${saved.book.ref.key}") })
+        if(saved.book.ref.isLocal && (!comics || parent != null)) MenuRow(if(parent == null) "挂载到文库小说" else "更换或取消挂载", parent?.let { "当前挂载：${it.book.title}" } ?: "归入指定的文库收藏", Icons.Outlined.DriveFileMove, { selected = null; volumeParentPicker = saved })
+        if(saved.book.ref.isLocal) MenuRow("重命名", "修改书名", Icons.Outlined.Edit, { selected = null; renamingDocument = saved })
+        if(saved.book.ref.isLocal && !comics) MenuRow("本地术语表", "维护此文件的专有名词", Icons.Outlined.Translate, { selected = null; c.go("glossary/${saved.book.ref.key}") })
         if(saved.book.ref.isLocal) MenuRow("导出原文件", "导出保存在本机的书籍文件", Icons.Outlined.IosShare, { c.action {
             val export = withContext(Dispatchers.IO) { prepareLocalBookExport(c.store, saved.book.ref.id) }
             localExportId = saved.book.ref.id
@@ -554,20 +608,24 @@ import kotlinx.coroutines.withContext
                 }
             }
         })
-        if(saved.book.ref.isLocal) MenuRow("删除本地小说", "删除导入副本及对应下载，保留阅读记录", Icons.Outlined.DeleteOutline, { selected = null; deletingDocument = saved })
+        if(saved.book.ref.isLocal) MenuRow("删除$localLabel", "删除导入副本及对应下载，保留阅读记录", Icons.Outlined.DeleteOutline, { selected = null; deletingDocument = saved })
         MenuRow("彻底删除", if(saved.book.ref.isWenku) "移出书架并删除全部分卷、对应下载和阅读资料" else "移出书架并删除副本、对应下载和阅读资料", Icons.Outlined.DeleteForever, {
             selected = null; permanentDeletion = setOf(saved.book.ref)
         })
     } } }
-    volumeManager?.let { parent -> WenkuVolumeManager(parent, state.books, { volumeManager = null }) { keys ->
-        c.store.update { it.withWenkuVolumes(parent.book.ref.key, keys) }
+    volumeManager?.let { parent -> WenkuVolumeManager(parent, shelfBooks, { volumeManager = null }) { keys ->
+        val shown = shelfBooks.map { it.book.ref.key }.toSet()
+        c.store.update { current ->
+            val hidden = current.books.filter { it.parentWenkuKey == parent.book.ref.key && it.book.ref.key !in shown }
+            current.withWenkuVolumes(parent.book.ref.key, keys + hidden.map { it.book.ref.key })
+        }
         volumeManager = null
     } }
     volumeParentPicker?.let { volume -> VolumeParentPicker(volume, state.books, { volumeParentPicker = null }) { parentKey ->
         c.store.update { it.withVolumeParent(volume.book.ref.key, parentKey) }
         volumeParentPicker = null
     } }
-    deletingDocument?.let { saved -> ConfirmDialog("删除「${saved.book.title}」？", "将删除导入副本及对应下载任务和文件，并移出书架。导入前的原文件和阅读记录保留。此操作无法撤销。", { deletingDocument = null }, confirmLabel = "删除本地小说") {
-        c.action("本地小说及对应下载已删除") { deleteBookFiles(c.app, setOf(saved.book.ref), eraseReadingData = false) }
+    deletingDocument?.let { saved -> ConfirmDialog("删除「${saved.book.title}」？", "将删除导入副本及对应下载任务和文件，并移出书架。导入前的原文件和阅读记录保留。此操作无法撤销。", { deletingDocument = null }, confirmLabel = "删除$localLabel") {
+        c.action("${localLabel}及对应下载已删除") { deleteBookFiles(c.app, setOf(saved.book.ref), eraseReadingData = false) }
     } }
 }

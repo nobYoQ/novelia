@@ -14,7 +14,8 @@ fun LibraryState.withSavedBook(book: BookCard, folder: String = "默认收藏"):
     val previous = books.firstOrNull { it.book.ref == book.ref }
     val baseline = updateSnapshots[book.ref.key] ?: (previous?.book ?: book).updateSnapshot()
     val merged = book.withKnownUpdateTime(previous?.book).let {
-        if(book.ref.isLocal) it else it.copy(total = maxOf(it.total, previous?.book?.total ?: 0, baseline.total))
+        if(book.ref.isLocal) it.copy(medium = it.medium ?: previous?.book?.medium)
+        else it.copy(total = maxOf(it.total, previous?.book?.total ?: 0, baseline.total))
     }
     return copy(
         books = books.filterNot { it.book.ref == book.ref } + (previous?.copy(book = merged, folder = folder) ?: newSavedBook(merged, folder)),

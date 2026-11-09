@@ -12,6 +12,7 @@ import kotlinx.serialization.Serializable
     val rememberLastShelfFolder: Boolean = true,
     val autoReadingStatus: Boolean = true,
     val edgeToolbar: EdgeToolbarSettings = EdgeToolbarSettings(),
+    val comicShelfGrid: Boolean = true,
     val hideUnavailableComments: Boolean = false,
     val hideLocalFavorites: Boolean = false, val hideCloudFavorites: Boolean = false,
     val forumDefaultCategory: String? = null, val forumSkipPinned: Boolean = false,

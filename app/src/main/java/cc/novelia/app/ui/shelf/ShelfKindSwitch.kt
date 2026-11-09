@@ -14,7 +14,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 
 /** 同样的低对比底座与分段选中态；窄屏、大字模式下保持标签完整。 */
-@Composable internal fun ShelfKindSwitch(labels: List<String>, selectedIndex: Int, tag: String, onChange: (Int) -> Unit) {
+@Composable internal fun ShelfKindSwitch(labels: List<String>, selectedIndex: Int, tag: String, enabled: Boolean = true, onChange: (Int) -> Unit) {
     Surface(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp).testTag(tag),
         shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainerLow) {
         BoxWithConstraints(Modifier.padding(4.dp).selectableGroup()) {
@@ -25,7 +25,7 @@ import androidx.compose.ui.unit.dp
                     Row {
                         values.forEachIndexed { column, label ->
                             val index = row * columns + column
-                            AppTextButton(onClick = { if(selectedIndex != index) onChange(index) },
+                            AppTextButton(onClick = { if(selectedIndex != index) onChange(index) }, enabled = enabled,
                                 modifier = Modifier.weight(1f).heightIn(min = 48.dp).semantics { selected = selectedIndex == index },
                                 contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
                                 shape = MaterialTheme.shapes.small,

@@ -92,9 +92,10 @@ data class ShelfGroup(val saved: SavedBook, val volumes: List<SavedBook> = empty
  * 最近阅读排序取当前分组中父项和子卷的最新时间，置顶优先于其他排序条件。
  */
 fun LibraryState.shelfGroups(localOnly: Boolean, folder: String, query: String, sort: Int,
-    type: ShelfBookType = ShelfBookType.All, status: String = "全部"): List<ShelfGroup> {
+    type: ShelfBookType = ShelfBookType.All, status: String = "全部", candidates: List<SavedBook> = books): List<ShelfGroup> {
     val parents = books.filter { it.book.ref.isWenku }.associateBy { it.book.ref.key }
-    fun parentOf(saved: SavedBook) = if(saved.book.ref.isLocal) parents[saved.parentWenkuKey] else null
+    val visibleParents = if (candidates === books) parents else candidates.filter { it.book.ref.isWenku }.associateBy { it.book.ref.key }
+    fun parentOf(saved: SavedBook) = if(saved.book.ref.isLocal) visibleParents[saved.parentWenkuKey] else null
     val keyword = query.trim()
     fun matchesQuery(saved: SavedBook): Boolean = saved.book.let { book ->
         book.title.contains(keyword, true) || book.originalTitle.contains(keyword, true) || book.authors.any { it.contains(keyword, true) }
@@ -106,10 +107,10 @@ fun LibraryState.shelfGroups(localOnly: Boolean, folder: String, query: String, 
         ShelfBookType.Web -> !saved.book.ref.isWenku && !saved.book.ref.isLocal
         ShelfBookType.Local -> saved.book.ref.isLocal && parentOf(saved) == null
     }
-    val mounted = books.filter { parentOf(it) != null }.groupBy { it.parentWenkuKey }
-    val groups = books.asSequence().filter { if(localOnly) it.book.ref.isLocal else parentOf(it) == null }
+    val mounted = candidates.filter { parentOf(it) != null }.groupBy { it.parentWenkuKey }
+    val groups = candidates.asSequence().filter { if(localOnly) it.book.ref.isLocal else parentOf(it) == null }
         .filter(::matchesType)
-        .filter { folder == "全部" || (parentOf(it)?.folder ?: it.folder) == folder }
+        .filter { folder == "全部" || (parents[it.parentWenkuKey]?.folder ?: it.folder) == folder }
         .map { saved ->
             val volumes = if(localOnly) emptyList() else orderedVolumes(saved, mounted[saved.book.ref.key].orEmpty())
             val parentMatchesQuery = matchesQuery(saved) || (parentOf(saved)?.let(::matchesQuery) == true)
