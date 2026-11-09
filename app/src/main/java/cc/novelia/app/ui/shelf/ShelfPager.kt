@@ -21,7 +21,7 @@ import kotlinx.coroutines.launch
 @Composable internal fun ShelfPager(
     selected: Int, onSelect: (Int) -> Unit, enabled: Boolean,
     modifier: Modifier = Modifier, controls: @Composable () -> Unit = {}, singlePage: Boolean = false,
-    classifyingBooks: Boolean = false, header: @Composable () -> Unit = {},
+    classifyingBooks: Boolean = false,
     content: @Composable (Int) -> Unit,
 ) {
     val pages = rememberSaveableStateHolder()
@@ -34,7 +34,6 @@ import kotlinx.coroutines.launch
     }
     if (singlePage) {
         Column(modifier.fillMaxSize()) {
-            header()
             controls()
             Box(Modifier.weight(1f).fillMaxWidth()) { pageContent(0) }
         }
@@ -61,7 +60,6 @@ import kotlinx.coroutines.launch
         }
     }
     Column(modifier.fillMaxSize()) {
-        header()
         PrimaryTabRow(pager.currentPage) {
             listOf("我的书架", "本地文件", "云端收藏").forEachIndexed { index, title ->
                 Tab(pager.currentPage == index, onClick = {

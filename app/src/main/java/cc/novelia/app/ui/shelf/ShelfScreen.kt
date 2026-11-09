@@ -78,7 +78,6 @@ import cc.novelia.app.files.exporting.exportLocalBook
 import cc.novelia.app.files.downloads.deleteBookFiles
 import cc.novelia.app.ui.components.base.EmptyState
 import cc.novelia.app.ui.components.base.MenuRow
-import cc.novelia.app.ui.components.base.Screen
 import cc.novelia.app.ui.components.base.TextPrompt
 import cc.novelia.app.ui.components.base.rememberDebouncedQuery
 import cc.novelia.app.ui.feedback.Sticker
@@ -201,7 +200,7 @@ import kotlinx.coroutines.withContext
             importModel.start(listOf(tree), asSeries = true)
         }
     }
-    var importMenu by remember { mutableStateOf(false) }
+    var importMenu by rememberSaveable { mutableStateOf(false) }
     val recent = remember(shelfBooks, state.positions) {
         shelfBooks.asSequence().filter { state.positions.containsKey(it.book.ref.key) }.maxByOrNull { state.positions.getValue(it.book.ref.key).updatedAt }
     }
@@ -254,27 +253,18 @@ import kotlinx.coroutines.withContext
             }, onDelete = { permanentDeletion = chosen.map { it.book.ref }.toSet() },
             onSingleBook = chosen.singleOrNull()?.let { single -> { selected = single } }, comics = comics)
     }
-    Screen("书架", actions = {
-        if (!comics) {
-            AppIconButton(onClick = { c.go("updates") }) { Icon(Icons.Outlined.NewReleases, "查看书架更新") }
-            AppIconButton(onClick = { UpdateWorker.checkNow(c.app); c.message("已开始检查书架更新") }) { Icon(Icons.Outlined.Sync, "检查更新") }
-        }
-        AppIconButton(onClick = { c.go("history") }) { Icon(Icons.Outlined.History, "阅读历史") }
-        Box {
-            AppIconButton(onClick = { importMenu = true }, enabled = !importing) { Icon(Icons.Outlined.FileOpen, "导入本地文件") }
-            DropdownMenu(expanded = importMenu, onDismissRequest = { importMenu = false }) {
-                DropdownMenuItem(text = { Text("选择书籍文件") }, onClick = { importMenu = false; importLocalFiles() })
-                DropdownMenuItem(text = { Text("选择漫画图片文件夹") }, onClick = { importMenu = false; comicFolder.launch(null) })
-                DropdownMenuItem(text = { Text("导入系列文件夹") }, onClick = { importMenu = false; seriesFolder.launch(null) })
-            }
-        }
+    if (importMenu && !importing) ShelfImportSheet(onDismiss = { importMenu = false },
+        onFiles = { importMenu = false; importLocalFiles() },
+        onImages = { importMenu = false; comicFolder.launch(null) },
+        onSeries = { importMenu = false; seriesFolder.launch(null) })
+    Scaffold(topBar = {
+        ShelfTopBar(medium = medium, switchEnabled = !batchWorking && !cloudBusy && !queueingDownloads,
+            onSwitch = { switchShelf(if (comics) BookMedium.Novel else BookMedium.Comic) },
+            importEnabled = !importing, onImport = { importMenu = true }, onHistory = { c.go("history") },
+            onUpdates = { c.go("updates") }, onCheckUpdates = { UpdateWorker.checkNow(c.app); c.message("已开始检查书架更新") })
     }) { padding ->
         ShelfPager(tab, { tab = it }, enabled = !batchWorking && !cloudBusy, singlePage = comics,
             classifyingBooks = classifyingBooks, modifier = Modifier.padding(padding),
-            header = {
-                ShelfKindSwitch(listOf("小说书架", "漫画书架"), medium.ordinal, "shelf-medium",
-                    enabled = !batchWorking && !cloudBusy && !queueingDownloads) { switchShelf(BookMedium.entries[it]) }
-            },
             controls = {
                 DocumentPickerFallback(importer, enabled = !importing)
                 DocumentImportPanel(importModel) { ref ->

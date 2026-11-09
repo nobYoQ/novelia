@@ -12,7 +12,8 @@ internal val comicMimeTypes = mapOf(
 )
 internal val comicArchiveFormats = comicMimeTypes.keys
 internal val localDocumentFormats = setOf("epub", "txt", "srt") + comicArchiveFormats
-internal const val supportedBookFiles = "支持 EPUB、TXT、SRT、ZIP/CBZ、RAR/CBR、7z/CB7 和 TAR/CBT 文件"
+internal const val comicArchiveTypes = "ZIP/CBZ、RAR/CBR、7z/CB7 和 TAR/CBT"
+internal const val supportedBookFiles = "支持 EPUB、TXT、SRT、$comicArchiveTypes 文件"
 
 enum class ComicReadingMode { RightToLeft, LeftToRight, Webtoon }
 

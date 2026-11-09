@@ -1,11 +1,15 @@
 package cc.novelia.app.ui.shelf
 
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.junit4.StateRestorationTester
@@ -77,7 +81,8 @@ class ShelfGridUiTest {
             compose.waitUntil(15_000) { app.store.state.value.books.filter { it.book.ref.isLocal }.all { it.book.medium != null } }
             fun row(saved: SavedBook) = compose.onNodeWithTag("shelf-book-${saved.book.ref.key}")
             fun resume() = compose.onNodeWithTag("shelf-continue-title", true)
-            compose.onNodeWithText("小说书架").assertIsSelected()
+            val toggle = compose.onNodeWithTag("shelf-medium")
+            toggle.assertTextEquals("小说")
             row(novel).assertExists()
             row(comic).assertDoesNotExist()
             compose.onNodeWithTag("shelf-volume-${comic.book.ref.key}").assertDoesNotExist()
@@ -89,7 +94,7 @@ class ShelfGridUiTest {
             fileControl("local-search-toggle").performClick()
             fileControl("local-search-field").performTextInput("图文")
             fileControl("local-search-toggle").performClick()
-            compose.onNodeWithText("漫画书架").performClick().assertIsSelected()
+            toggle.performClick().assertTextEquals("漫画")
             row(comic).assertExists()
             row(novel).assertDoesNotExist()
             row(parent).assertDoesNotExist()
@@ -97,9 +102,9 @@ class ShelfGridUiTest {
             compose.onNodeWithTag("shelf-books-grid").assertExists()
             resume().assertTextEquals(comic.book.title)
             restoration.emulateSavedInstanceStateRestore()
-            compose.onNodeWithText("漫画书架").assertIsSelected()
+            toggle.assertTextEquals("漫画")
             row(comic).assertExists()
-            compose.onNodeWithText("小说书架").performClick()
+            toggle.performClick().assertTextEquals("小说")
             compose.onNodeWithTag("shelf-tab-1").assertIsSelected()
             row(novel).assertExists()
             fileControl("local-search-toggle").performClick()
@@ -109,6 +114,35 @@ class ShelfGridUiTest {
             app.store.removeDocument(comic.book.ref.id)
             app.store.removeDocument(novel.book.ref.id)
         }
+    }
+
+    @Test fun compactTitleKeepsSwitchAndImportVisibleAtLargeFontSize() {
+        var checked = false
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, 1.8f)) {
+                Box(Modifier.width(320.dp)) {
+                    ShelfTopBar(BookMedium.Novel, switchEnabled = false, onSwitch = {},
+                        importEnabled = true, onImport = {}, onHistory = {}, onUpdates = {}, onCheckUpdates = { checked = true })
+                }
+            }
+        }
+        compose.onNodeWithTag("shelf-medium").assertIsDisplayed().assertIsNotEnabled().assertTextEquals("小说")
+        compose.onNodeWithContentDescription("导入本地文件").assertIsDisplayed()
+        compose.onNodeWithContentDescription("书架操作").performClick()
+        compose.onNodeWithText("检查更新").performClick()
+        compose.runOnIdle { assertTrue(checked) }
+    }
+
+    @Test fun importChoicesExplainFilesAndFolderStructureBeforeOpeningPicker() {
+        show(reduced = false)
+        val toolbarImport = compose.onNodeWithContentDescription("导入本地文件")
+        toolbarImport.assertIsDisplayed()
+        cc.novelia.app.ui.saveTestScreenshot("shelf-title-switch.png")
+        toolbarImport.performClick()
+        compose.onNodeWithText("ZIP/CBZ、RAR/CBR、7z/CB7 和 TAR/CBT", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("第一卷/001.jpg", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("作品/第02话.cbz", substring = true).assertIsDisplayed()
+        cc.novelia.app.ui.saveTestScreenshot("shelf-import-options.png")
     }
 
     @Test fun switchingLayoutsPreservesTheVisibleBookAndEachSectionPreference() {
