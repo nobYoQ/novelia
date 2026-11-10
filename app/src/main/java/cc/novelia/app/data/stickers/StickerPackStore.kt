@@ -56,7 +56,7 @@ class StickerPackStore(private val root: File, private val imageType: (File) -> 
         val id = UUID.randomUUID().toString()
         val directory = draftDirectory(id).apply { check(mkdirs()) { "无法创建贴纸草稿" } }
         try {
-            val manifest = if(original == null) StickerPackManifest(id = newPackId(), title = "未命名贴纸集", companionName = "阅读搭子")
+            val manifest = if(original == null) StickerPackManifest(id = newPackId(), title = "未命名贴纸集", companionName = "动态icon")
                 else {
                 val copied = original.manifest.artwork.values.distinct().associateWith { path ->
                     val source = stickerFile(original.directory, path)
@@ -241,7 +241,7 @@ class StickerPackStore(private val root: File, private val imageType: (File) -> 
         val record = appJson.decodeFromString<DraftRecord>(readText(File(directory, "draft.json")))
         // 草稿允许名称留空、颜色输入未完成；正式保存时才检查完整的显示信息。
         require(record.manifest.title.length <= 40 && record.manifest.companionName.length <= 24 && record.manifest.heartColor.length <= 7)
-        record.manifest.copy(title = "草稿", companionName = "阅读搭子", heartColor = "#E15C86").validate(requireNeutral = false)
+        record.manifest.copy(title = "草稿", companionName = "动态icon", heartColor = "#E15C86").validate(requireNeutral = false)
         require(LOCAL_STICKER_ID.matches(record.manifest.id) && (record.originalId == null || record.originalId == record.manifest.id)) { "草稿 ID 无效" }
         require(record.manifest.artwork.values.all { stickerFile(directory, it).isFile }) { "草稿图片已丢失" }
         return StickerDraft(id, record.originalId, LocalStickerPack(record.manifest, directory))

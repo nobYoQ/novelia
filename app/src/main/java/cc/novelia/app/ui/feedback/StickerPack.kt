@@ -36,6 +36,8 @@ class StickerPack(
     private val artwork = artwork.toMap()
     private val files = files.toMap()
     val custom get() = files.isNotEmpty()
+    val expressionCount get() = artwork.size + files.size
+    fun contains(sticker: Sticker): Boolean = sticker in artwork || sticker in files
 
     init {
         require(id.isNotBlank() && title.isNotBlank() && companionName.isNotBlank())
@@ -56,8 +58,8 @@ fun InstalledStickerPack.asStickerPack() = StickerPack(id, manifest.title, manif
 object StickerPacks {
     val default = StickerPack(
         id = DEFAULT_STICKER_PACK_ID,
-        title = "小绿",
-        companionName = "小绿",
+        title = "星川绿@Hoshikawa Midori",
+        companionName = "星川绿",
         artwork = mapOf(
             Sticker.Neutral to R.drawable.midori_neutral,
             Sticker.Happy to R.drawable.midori_happy,

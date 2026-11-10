@@ -98,7 +98,7 @@ internal fun AboutIdentity() {
     }
     Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Box(Modifier.size(64.dp)) {
-            if(waving) StickerAccent(Sticker.Wave, wave, Modifier.fillMaxSize().semantics { contentDescription = "${pack.companionName}向你招手" })
+            if(waving) StickerAccent(Sticker.Wave, wave, Modifier.fillMaxSize().semantics { contentDescription = "${pack.companionName}互动" })
             else Icon(Icons.Outlined.AutoStories, null, Modifier.fillMaxSize(), tint = MaterialTheme.colorScheme.primary)
         }
         Text("Novelia", style = MaterialTheme.typography.headlineLarge)

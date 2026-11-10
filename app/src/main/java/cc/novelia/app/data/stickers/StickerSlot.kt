@@ -2,7 +2,7 @@ package cc.novelia.app.data.stickers
 
 /** key 是贴纸包格式的一部分，发布后不随界面名称改变。 */
 enum class StickerSlot(val key: String, val title: String, val description: String) {
-    Neutral("neutral", "常态", "等你打招呼"),
+    Neutral("neutral", "常态", "等待互动"),
     Happy("happy", "开心", "开心地笑了"),
     Wink("wink", "眨眼", "向你眨眨眼"),
     Love("love", "喜欢", "收到你的喜欢啦"),
@@ -14,7 +14,7 @@ enum class StickerSlot(val key: String, val title: String, val description: Stri
     Approve("approve", "完成", "完成啦"),
     Sleep("sleep", "休息", "安心休息"),
     Concerned("concerned", "担心", "遇到一点小状况"),
-    Wave("wave", "招手", "向你招手"),
+    Wave("wave", "招手", "互动"),
 }
 
 /** 先匹配文件名，再将其余图片依次填入空位，绝不静默忽略多余图片。 */

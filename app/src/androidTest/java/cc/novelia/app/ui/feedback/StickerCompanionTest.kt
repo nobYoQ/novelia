@@ -29,7 +29,7 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class StickerCompanionTest {
     @get:Rule val compose = createComposeRule()
-    private fun companion() = compose.onNodeWithContentDescription("小绿，阅读搭子")
+    private fun companion() = compose.onNodeWithContentDescription("${cc.novelia.app.ui.feedback.StickerPacks.default.companionName}，动态icon")
     private fun state(value: String) = SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, value)
 
     @Test fun rapidTapsChangeExpressionsWithoutMovingOrTriggeringLogin() {
@@ -44,7 +44,7 @@ class StickerCompanionTest {
                 }
             }
         }
-        companion().assertIsEnabled().assert(state("等你打招呼"))
+        companion().assertIsEnabled().assert(state("等待互动"))
         val originalBounds = companion().fetchSemanticsNode().boundsInRoot
         val loginBounds = compose.onNodeWithText("登录 / 注册").fetchSemanticsNode().boundsInRoot
         compose.mainClock.autoAdvance = false
@@ -57,7 +57,7 @@ class StickerCompanionTest {
         }
         compose.runOnIdle { assertEquals(0, logins) }
         compose.mainClock.autoAdvance = true
-        compose.waitUntil(4000) { compose.onAllNodes(state("等你打招呼")).fetchSemanticsNodes().size == 1 }
+        compose.waitUntil(4000) { compose.onAllNodes(state("等待互动")).fetchSemanticsNodes().size == 1 }
         companion().assertIsEnabled()
         compose.onNodeWithText("登录 / 注册").performClick()
         compose.runOnIdle { assertEquals(1, logins) }
@@ -86,10 +86,10 @@ class StickerCompanionTest {
         companion().assert(state("向你眨眨眼"))
         compose.runOnIdle { visible = false }
         compose.mainClock.advanceTimeByFrame()
-        companion().assertIsNotEnabled().assert(state("等你打招呼"))
+        companion().assertIsNotEnabled().assert(state("等待互动"))
         compose.runOnIdle { visible = true }
         compose.mainClock.advanceTimeByFrame()
-        companion().assertIsEnabled().assert(state("等你打招呼"))
+        companion().assertIsEnabled().assert(state("等待互动"))
         compose.onNodeWithText("好耶，收到喜欢！").assertDoesNotExist()
         companion().performClick()
         compose.mainClock.advanceTimeByFrame()

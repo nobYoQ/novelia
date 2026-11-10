@@ -33,6 +33,7 @@ class StickerPackEditorTest {
                 MaterialTheme { StickerPackEditor(store, state.drafts.firstOrNull { it.id == id } ?: initial, {}, { savedId = it.id }) }
             }
             compose.onNodeWithTag("sticker-pack-save").assertIsNotEnabled()
+            compose.onNodeWithText("名称与配色").performClick()
             compose.onNodeWithTag("sticker-pack-title").performTextReplacement("我的自定义贴纸")
             restoration.emulateSavedInstanceStateRestore()
             compose.onNodeWithTag("sticker-pack-title").assertTextContains("我的自定义贴纸")

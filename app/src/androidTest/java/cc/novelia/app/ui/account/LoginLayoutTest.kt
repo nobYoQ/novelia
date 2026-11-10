@@ -70,7 +70,7 @@ class LoginLayoutTest {
     @Test fun interactiveStickerPasswordVisibilityAndAccountModesKeepWorking() {
         showLogin()
         compose.onNodeWithTag("login-submit").assertIsDisplayed().assertIsNotEnabled()
-        val companion = compose.onNodeWithContentDescription("小绿，阅读搭子")
+        val companion = compose.onNodeWithContentDescription("${cc.novelia.app.ui.feedback.StickerPacks.default.companionName}，动态icon")
         companion.assertIsDisplayed().assertIsEnabled()
         val before = companion.getUnclippedBoundsInRoot()
         capture("login-light")
@@ -152,7 +152,7 @@ class LoginLayoutTest {
         compose.onNodeWithTag("login-otp").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("login-submit").performScrollTo().assertIsDisplayed()
         capture("login-large-eink")
-        compose.onNodeWithContentDescription("小绿，阅读搭子").assertIsNotEnabled()
+        compose.onNodeWithContentDescription("${cc.novelia.app.ui.feedback.StickerPacks.default.companionName}，动态icon").assertIsNotEnabled()
     }
 
     private fun dismissKeyboard() {

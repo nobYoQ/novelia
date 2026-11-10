@@ -105,7 +105,7 @@ class StickerFeaturesTest {
             compose.onNodeWithContentDescription("返回").performClick()
             openMenu("帮助与关于")
             repeat(5) { compose.onNodeWithText("Android ${BuildConfig.VERSION_NAME}").performClick() }
-            compose.onNodeWithContentDescription("小绿向你招手").assertIsDisplayed()
+            compose.onNodeWithContentDescription("${cc.novelia.app.ui.feedback.StickerPacks.default.companionName}互动").assertIsDisplayed()
             screenshot("v2-about-wave")
             compose.onNodeWithContentDescription("返回").performClick()
         } finally {

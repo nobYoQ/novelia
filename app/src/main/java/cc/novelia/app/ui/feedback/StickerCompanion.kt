@@ -113,13 +113,13 @@ fun StickerCompanion(modifier: Modifier = Modifier, visible: Boolean = true) {
     Box(
         modifier.size(128.dp)
             .semantics {
-                contentDescription = "${pack.companionName}，阅读搭子"
+                contentDescription = "${pack.companionName}，动态icon"
                 stateDescription = sticker.description
             }
             .clickable(
                 interactionSource = interactionSource,
                 indication = if(reducedMotion) null else ripple(bounded = false, radius = 56.dp),
-                enabled = active, role = Role.Button, onClickLabel = "打个招呼，切换表情",
+                enabled = active, role = Role.Button, onClickLabel = "互动，切换表情",
             ) {
                 reactionIndex = (reactionIndex + 1) % HappyReactions.size
                 reacting = true

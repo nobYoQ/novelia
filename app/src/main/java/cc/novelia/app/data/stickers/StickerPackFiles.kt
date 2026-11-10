@@ -38,7 +38,7 @@ internal val STICKER_DRAFT_ID = Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a
 internal fun StickerPackManifest.validate(requireNeutral: Boolean = true) {
     require(format == "novelia-stickers" && version == 1) { "不支持的贴纸包格式或版本" }
     require(title.isNotBlank() && title.length <= 40 && title.none(Char::isISOControl)) { "贴纸集名称需为 1–40 个字符" }
-    require(companionName.isNotBlank() && companionName.length <= 24 && companionName.none(Char::isISOControl)) { "搭子名称需为 1–24 个字符" }
+    require(companionName.isNotBlank() && companionName.length <= 24 && companionName.none(Char::isISOControl)) { "动态icon名称需为 1–24 个字符" }
     require(Regex("#[0-9a-fA-F]{6}").matches(heartColor)) { "爱心颜色请使用 #RRGGBB 格式" }
     require(artwork.keys.all { key -> StickerSlot.entries.any { it.key == key } }) { "贴纸包包含未知表情" }
     require(!requireNeutral || StickerSlot.Neutral.key in artwork) { "请至少添加一张常态图片" }

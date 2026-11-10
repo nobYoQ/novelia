@@ -8,6 +8,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
@@ -43,13 +45,15 @@ class StickerPackRenderingTest {
         fun pixels(tag: String): IntArray = compose.onNodeWithTag(tag).captureToImage().let { image ->
             IntArray(image.width * image.height).also { image.readPixels(it) }
         }
-        compose.onNodeWithContentDescription("小绿，阅读搭子").assertIsDisplayed()
+        val dynamicIcon = compose.onNodeWithContentDescription("${cc.novelia.app.ui.feedback.StickerPacks.default.companionName}，动态icon")
+        dynamicIcon.assertIsDisplayed().assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "等待互动"))
+        assertEquals("互动，切换表情", dynamicIcon.fetchSemanticsNode().config[SemanticsActions.OnClick].label)
         compose.onNodeWithText("完成提示").assertIsDisplayed()
         val tags = listOf("artwork", "cover", "snackbar")
         val before = tags.associateWith(::pixels)
         compose.runOnIdle { pack = preview }
         tags.forEach { tag -> assertFalse("$tag must use the new pack", before.getValue(tag).contentEquals(pixels(tag))) }
-        compose.onNodeWithContentDescription("预览搭子，阅读搭子").assertIsDisplayed().performClick()
+        compose.onNodeWithContentDescription("预览搭子，动态icon").assertIsDisplayed().performClick()
         compose.onNodeWithText("完成提示").assertIsDisplayed()
         compose.runOnIdle { pack = StickerPacks.default }
         tags.forEach { tag -> assertArrayEquals("$tag must restore the original pack", before.getValue(tag), pixels(tag)) }

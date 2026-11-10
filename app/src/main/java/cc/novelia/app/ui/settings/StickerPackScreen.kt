@@ -4,6 +4,8 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -14,6 +16,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.model.DEFAULT_STICKER_PACK_ID
 import cc.novelia.app.data.stickers.StickerDraft
 import cc.novelia.app.ui.account.ProfileDetailScreen
+import cc.novelia.app.ui.account.ProfileDetailCard
+import cc.novelia.app.ui.account.ProfileMenuRow
+import cc.novelia.app.ui.account.ProfileSectionTitle
 import cc.novelia.app.ui.components.base.*
 import cc.novelia.app.ui.components.documents.*
 import cc.novelia.app.ui.feedback.StickerPacks
@@ -32,6 +37,7 @@ internal fun StickerPackScreen(c: AppController) {
     val packs = remember(library.packs) { StickerPacks.all + library.packs.map { it.asStickerPack() } }
     val scope = rememberCoroutineScope()
     var draftId by rememberSaveable { mutableStateOf<String?>(null) }
+    var previewId by rememberSaveable { mutableStateOf<String?>(null) }
     var cachedDraft by remember { mutableStateOf<StickerDraft?>(null) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -54,6 +60,7 @@ internal fun StickerPackScreen(c: AppController) {
                 c.app.contentResolver.openInputStream(uri)?.use { store.importArchive(it) } ?: kotlin.error("无法读取贴纸包")
             }
             c.store.update { it.copy(stickerPackId = pack.id) }
+            previewId = pack.id
             c.message("贴纸集已导入并启用")
         }
     }
@@ -80,9 +87,28 @@ internal fun StickerPackScreen(c: AppController) {
             c.store.update { it.copy(stickerPackId = pack.id) }
             draftId = null
             cachedDraft = null
+            previewId = pack.id
             error = null
             c.message("贴纸集已保存并启用")
         })
+        return
+    }
+    val preview = packs.firstOrNull { it.id == previewId }
+    // 确认弹窗保留在页面分支之外，预览、编辑和列表共用同一组操作。
+    deleting?.let { id -> ConfirmDialog("删除贴纸集？", "将删除本机的这套图片。正在使用时会切回默认集，建议先导出留存。",
+        { deleting = null }, "删除") { operation {
+            store.remove(id)
+            if(c.store.state.value.stickerPackId == id) c.store.update { it.copy(stickerPackId = DEFAULT_STICKER_PACK_ID) }
+            previewId = null
+        } } }
+    discarding?.let { id -> ConfirmDialog("放弃草稿？", "将删除这份草稿，已保存的贴纸集不受影响。",
+        { discarding = null }, "放弃") { operation { store.discardDraft(id) } } }
+    if(preview != null) {
+        StickerPackDetailScreen(preview, preview.id == state.stickerPackId, busy, error, onBack = { previewId = null; error = null },
+            onUse = { c.store.update { it.copy(stickerPackId = preview.id) } },
+            onEdit = { operation { draftId = store.beginDraft(preview.id).id } },
+            onExport = { exportId = preview.id; exporter.launch("novelia-stickers.zip") },
+            onDelete = { deleting = preview.id })
         return
     }
     BackHandler(busy) { }
@@ -90,37 +116,31 @@ internal fun StickerPackScreen(c: AppController) {
         StickerPackPicker(state.stickerPackId, { id -> c.store.update { it.copy(stickerPackId = id) } },
             Modifier.padding(padding).fillMaxSize(), packs, enabled = !busy, showTitle = false,
             header = {
-                Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AppButton(onClick = { operation { draftId = store.beginDraft().id } }, enabled = !busy,
-                        modifier = Modifier.fillMaxWidth().testTag("sticker-pack-create")) { Text("制作贴纸集") }
-                    AppOutlinedButton(onClick = importer.launch, enabled = !busy,
-                        modifier = Modifier.fillMaxWidth().testTag("sticker-pack-import")) { Text("导入贴纸包 ZIP") }
-                    DocumentPickerFallback(importer, enabled = !busy)
-                    Text("从 PNG、WebP、JPG 图片制作，或导入导出的完整贴纸包。自定义贴纸保存在本机，可单独导出迁移。",
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    if(busy) AppLinearProgressIndicator(Modifier.fillMaxWidth())
-                    (error ?: library.error)?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                    library.drafts.forEach { unfinished ->
-                        Text("草稿：${unfinished.pack.manifest.title.ifBlank { "未命名贴纸集" }}", style = MaterialTheme.typography.titleSmall)
-                        Row {
-                            AppTextButton(onClick = { draftId = unfinished.id }, enabled = !busy) { Text("继续制作") }
-                            AppTextButton(onClick = { discarding = unfinished.id }, enabled = !busy) { Text("放弃草稿") }
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    ProfileDetailCard {
+                        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text("添加贴纸集", style = MaterialTheme.typography.titleMedium)
+                            Text("从图片制作自己的贴纸，或导入已有贴纸包。", style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            StickerActionButtons("制作贴纸集", { operation { draftId = store.beginDraft().id } }, enabled = !busy,
+                                secondary = "导入贴纸包", onSecondary = importer.launch,
+                                primaryModifier = Modifier.testTag("sticker-pack-create"), secondaryModifier = Modifier.testTag("sticker-pack-import"))
                         }
                     }
+                    DocumentPickerFallback(importer, enabled = !busy)
+                    if(busy) AppLinearProgressIndicator(Modifier.fillMaxWidth())
+                    (error ?: library.error)?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    if(library.drafts.isNotEmpty()) ProfileSectionTitle("未完成的制作 · ${library.drafts.size}")
+                    library.drafts.forEach { unfinished ->
+                        ProfileMenuRow(unfinished.pack.manifest.title.ifBlank { "未命名贴纸集" },
+                            "${unfinished.pack.manifest.artwork.size} 个表情已添加 · 继续制作", Icons.Outlined.EditNote,
+                            { if(!busy) draftId = unfinished.id }, trailing = {
+                                AppIconButton(onClick = { discarding = unfinished.id }, enabled = !busy) {
+                                    Icon(Icons.Outlined.DeleteOutline, "放弃${unfinished.pack.manifest.title}草稿")
+                                }
+                            })
+                    }
                 }
-            }, actions = { pack ->
-                if(pack.custom) Row(Modifier.padding(start = 24.dp, end = 24.dp, bottom = 12.dp)) {
-                    AppTextButton(onClick = { operation { draftId = store.beginDraft(pack.id).id } }, enabled = !busy) { Text("编辑") }
-                    AppTextButton(onClick = { exportId = pack.id; exporter.launch("novelia-stickers.zip") }, enabled = !busy) { Text("导出") }
-                    AppTextButton(onClick = { deleting = pack.id }, enabled = !busy) { Text("删除") }
-                }
-            })
+            }, onPreview = { previewId = it.id })
     }
-    deleting?.let { id -> ConfirmDialog("删除贴纸集？", "将删除本机的这套图片。正在使用时会切回默认集，建议先导出留存。",
-        { deleting = null }, "删除") { operation {
-            store.remove(id)
-            if(c.store.state.value.stickerPackId == id) c.store.update { it.copy(stickerPackId = DEFAULT_STICKER_PACK_ID) }
-        } } }
-    discarding?.let { id -> ConfirmDialog("放弃草稿？", "将删除这份草稿，已保存的贴纸集不受影响。",
-        { discarding = null }, "放弃") { operation { store.discardDraft(id) } } }
 }

@@ -33,9 +33,9 @@ class ProfileStickerTest {
         try {
             compose.runOnIdle { app.store.update { it.copy(theme = "light", reducedMotion = false) } }
             compose.onNodeWithText("我的").performClick()
-            val companion = compose.onNodeWithContentDescription("小绿，阅读搭子")
+            val companion = compose.onNodeWithContentDescription("${cc.novelia.app.ui.feedback.StickerPacks.default.companionName}，动态icon")
             companion.assertIsDisplayed().assertIsEnabled()
-            compose.onNodeWithText("你的阅读搭子").assertDoesNotExist()
+            compose.onNodeWithText("你的动态icon").assertDoesNotExist()
             compose.onNodeWithText("戳戳我", substring = true).assertDoesNotExist()
             compose.onNodeWithText("登录 / 注册").assertExists().assertHasClickAction()
             screenshot("profile-idle")

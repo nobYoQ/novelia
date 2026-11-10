@@ -87,7 +87,7 @@ $env:ANDROID_SERIAL = '<专用测试设备序列号>'
 - 不限时朗读：`SpeechSleepTimerTest` 验证定时切换、旧设置兼容与备份恢复，`ReaderAnnotationSyncTest` 验证设置同步。设备测试 `ReaderSpeechControlsTest` 检查“不限时”入口，真实 TTS 的长时间播放仍需设备验收。
 - 自定义缩进：`ReaderIndentTest` 验证自定义格数的搜索/进度锚点、旧设置兼容与备份恢复，`ReaderAnnotationSyncTest` 验证设置同步。设备测试 `ReaderIndentPreferenceTest` 检查输入校验和分页文本。
 - 静态交互：`EInkReaderFlowTest`、`ReducedMotionSheetTest`、`PanelSessionTest`。`EInkReaderFlowTest` 同时覆盖物理按键、滚动/分页锚点互换、搜索与重新进入阅读；离开阅读器后按现有“阅读与朗读”“外观与操作”分类检查设置。
-- 贴纸集：`ui.settings.StickerPackPickerTest` 检查候选集切换与未知 ID 回退；`ui.settings.StickerPackEditorTest` 检查编辑输入恢复、必需常态图和保存；`data.stickers.StickerPackImagesTest` 检查真实图片校验、导出再导入和损坏图片拒绝；`ui.feedback.StickerPackRenderingTest` 检查已显示的插画、默认封面、阅读搭子和提示随贴纸集即时刷新。原有动效与静态模式另见 `StickerCompanionTest`、`StickerFallbackTest`。
+- 贴纸集：`ui.settings.StickerPackPickerTest` 检查候选集切换与未知 ID 回退；`ui.settings.StickerPackEditorTest` 检查编辑输入恢复、必需常态图和保存；`ui.settings.StickerPackLayoutTest` 走通列表、预览、图片操作面板、名称、选色和保存路径，检查长名称与窄屏大字号，并保存浅色、深色和电子纸布局截图；`data.stickers.StickerPackImagesTest` 检查真实图片校验、导出再导入和损坏图片拒绝；`ui.feedback.StickerPackRenderingTest` 检查已显示的插画、默认封面、动态icon和提示随贴纸集即时刷新。原有动效与静态模式另见 `StickerCompanionTest`、`StickerFallbackTest`。
 - 收藏夹列表：`ShelfBatchUiTest` 使用 40 个自建收藏夹检查普通滚动和电子纸翻屏。
 - 独立阅读配置：`ReaderPreferencesTest` 检查两套完整阅读配置的切换、旧数据兼容和备份恢复；`WebDavProjectionTest` 检查模式配置同步、冲突处理及本机字体保留。
 - 点击分区浮层：`ReaderToolbarOverlayTest` 检查普通分页、电子纸分页和连续滚动下，分区编辑与教程不叠显阅读控件，关闭后恢复布局及位置。

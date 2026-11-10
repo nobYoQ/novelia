@@ -65,7 +65,7 @@ class AboutWaveMotionTest {
             compose.mainClock.advanceTimeByFrame()
         }
         compose.mainClock.advanceTimeBy(64)
-        compose.onNodeWithContentDescription("小绿向你招手").assertIsDisplayed()
+        compose.onNodeWithContentDescription("${cc.novelia.app.ui.feedback.StickerPacks.default.companionName}互动").assertIsDisplayed()
         val first = compose.onNodeWithTag("wave-frame").captureToImage().toPixelMap()
         compose.mainClock.advanceTimeBy(240)
         val second = compose.onNodeWithTag("wave-frame").captureToImage().toPixelMap()

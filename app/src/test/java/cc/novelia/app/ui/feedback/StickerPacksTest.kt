@@ -24,6 +24,8 @@ class StickerPacksTest {
             R.drawable.midori_approve, R.drawable.midori_sleep, R.drawable.midori_concerned, R.drawable.midori_wave)
         assertEquals(expected, Sticker.entries.map { StickerPacks.default.drawable(it) })
         assertEquals(DEFAULT_STICKER_PACK_ID, StickerPacks.default.id)
+        assertEquals("星川绿@Hoshikawa Midori", StickerPacks.default.title)
+        assertEquals("星川绿", StickerPacks.default.companionName)
         assertEquals(StickerPacks.all.size, StickerPacks.all.map { it.id }.distinct().size)
         StickerPacks.all.forEach { assertSame(it, StickerPacks.resolve(it.id)) }
     }

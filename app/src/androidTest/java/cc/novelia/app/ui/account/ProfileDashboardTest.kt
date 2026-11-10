@@ -44,8 +44,8 @@ class ProfileDashboardTest {
                 }
             }
         }
-        compose.onNodeWithContentDescription("小绿，阅读搭子").assertIsDisplayed().performClick()
-        compose.onNodeWithContentDescription("小绿，阅读搭子")
+        compose.onNodeWithContentDescription("${cc.novelia.app.ui.feedback.StickerPacks.default.companionName}，动态icon").assertIsDisplayed().performClick()
+        compose.onNodeWithContentDescription("${cc.novelia.app.ui.feedback.StickerPacks.default.companionName}，动态icon")
             .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "开心地笑了"))
         compose.runOnIdle { assertTrue(visits.isEmpty()) }
         compose.onNodeWithText("登录 / 注册").assertHeightIsAtLeast(48.dp).performClick()

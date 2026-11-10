@@ -69,7 +69,7 @@ class ProfileLandscapeTest {
         assertTrue("关于卡应完整显示", compose.onNodeWithTag("profile-about").getUnclippedBoundsInRoot().bottom <= dashboard.bottom)
         compose.onNodeWithTag("profile-about").assertIsDisplayed()
         capture("profile-landscape-dark")
-        compose.onNodeWithContentDescription("小绿，阅读搭子").performClick()
+        compose.onNodeWithContentDescription("${cc.novelia.app.ui.feedback.StickerPacks.default.companionName}，动态icon").performClick()
         compose.onNodeWithTag("profile-account-menu").performClick()
         compose.onNodeWithTag("profile-logout").assertIsDisplayed()
         androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
