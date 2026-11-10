@@ -108,7 +108,7 @@ object WebDavProjection {
     }
 
     private fun reader(settings: ReaderSettings, includeDevicePreferences: Boolean = false): JsonObject {
-        val encoded = json.encodeToJsonElement(ReaderSettings.serializer(), settings).jsonObject
+        val encoded = withoutNightFonts(json.encodeToJsonElement(ReaderSettings.serializer(), settings).jsonObject)
         val portable = encoded.filterKeys { it in portableReaderFields }
         val device = encoded.filterKeys { it in deviceReaderFields }.mapValues { (field, value) ->
             if(field in setOf("beforeEInk", "eInkPreferences") && value is JsonObject)
@@ -118,6 +118,24 @@ object WebDavProjection {
         val activeMode = JsonObject(encoded.filterKeys { it in WebDavSchema.readerModeFields })
         return JsonObject(if (includeDevicePreferences) portable + ("devicePreferences" to JsonObject(device + ("activeModeSettings" to activeMode))) else portable)
     }
+
+    private fun withoutNightFonts(value: JsonObject): JsonObject = JsonObject(value.mapValues { (field, child) ->
+        when {
+            field == "nightPreset" && child is JsonObject -> JsonObject(child.filterKeys { it !in setOf("fontFamily", "customFont") })
+            field in setOf("beforeEInk", "eInkPreferences") && child is JsonObject -> withoutNightFonts(child)
+            else -> child
+        }
+    })
+
+    private fun withLocalNightFonts(local: JsonObject, incoming: JsonObject): JsonObject = JsonObject(incoming.mapValues { (field, child) ->
+        when {
+            field == "nightPreset" && child is JsonObject -> JsonObject(child +
+                (local[field] as? JsonObject).orEmpty().filterKeys { it in setOf("fontFamily", "customFont") })
+            field in setOf("beforeEInk", "eInkPreferences") && child is JsonObject ->
+                withLocalNightFonts(local[field] as? JsonObject ?: local, child)
+            else -> child
+        }
+    })
 
     private fun favorites(state: LibraryState): Map<String, JsonObject> = buildMap {
         val folderIds = state.folders.associateWith { if (it == DEFAULT_FOLDER) DEFAULT_FOLDER_ID else state.folderIds[it] ?: legacyFolderId(it) }
@@ -269,8 +287,8 @@ object WebDavProjection {
                     JsonObject(previous + value.filterKeys { it in WebDavSchema.readerModeFields } + localFont)
                 } else value
             }
-        return json.decodeFromJsonElement(ReaderSettings.serializer(), JsonObject(
-            encodedLocal + remote.filterKeys { it in portableReaderFields } + preferences + activeMode))
+        return json.decodeFromJsonElement(ReaderSettings.serializer(), withLocalNightFonts(encodedLocal, JsonObject(
+            encodedLocal + remote.filterKeys { it in portableReaderFields } + preferences + activeMode)))
     }
 
     private fun applyFavorites(state: LibraryState, records: Map<String, JsonObject>): LibraryState {

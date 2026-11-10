@@ -84,6 +84,8 @@ internal fun readerColors(settings: ReaderSettings, appColors: ColorScheme): Rea
         ReaderColors(Color(0xFF000000L or it.background), Color(0xFF000000L or it.text), Color(0xFF000000L or it.toolbar))
     } else readerColors(settings.resolvedTheme, appColors)
 
+internal fun nightReaderColors(settings: ReaderSettings): ReaderColors = readerColors(settings, DarkColors)
+
 internal fun readerColors(theme: String, appColors: ColorScheme): ReaderColors = when(theme) {
     "paper" -> ReaderColors(Color(0xFFF4ECD8), Color(0xFF282E27), Color(0xFFDED2B8))
     "light" -> ReaderLightColors
@@ -93,6 +95,13 @@ internal fun readerColors(theme: String, appColors: ColorScheme): ReaderColors =
         appColors.surface.luminance() > .5f -> ReaderLightColors
         appColors.surface == Color.Black -> ReaderDarkColors.copy(background = Color.Black, foreground = appColors.onSurface, toolbar = Color.Black)
         else -> ReaderDarkColors
+    }
+}
+
+/** 夜间阅读的主题作用域包括正文、目录及所有后续弹层，不改变应用主题。 */
+@Composable internal fun ReaderNightTheme(enabled: Boolean, content: @Composable () -> Unit) {
+    CompositionLocalProvider(LocalAmoledBlack provides (LocalAmoledBlack.current && !enabled)) {
+        MaterialTheme(colorScheme = if(enabled) DarkColors else MaterialTheme.colorScheme, content = content)
     }
 }
 

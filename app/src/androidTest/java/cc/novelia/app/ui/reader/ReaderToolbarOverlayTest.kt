@@ -153,7 +153,7 @@ class ReaderToolbarOverlayTest {
         assertFalse(saved.bookSettings.getValue(ref.key).showReadingStatusBar)
         compose.onNodeWithTag(bodyTag).performTouchInput { click(center) }
         compose.onNodeWithContentDescription("阅读设置").performClick()
-        compose.onNodeWithText("仅应用于这本书").performScrollTo().performClick()
+        compose.onNodeWithText("仅应用于这本书").assertIsDisplayed().performClick()
         compose.onNodeWithText("关闭面板").performClick()
         compose.onNodeWithTag("reader-reading-status-bar").assertIsDisplayed()
         assertEquals("恢复底栏后应回到原有正文布局", original, snapshot(bodyTag))
@@ -483,7 +483,7 @@ class ReaderToolbarOverlayTest {
         assertTrue(saved.reader.showProgressBar)
         assertFalse(saved.bookSettings.getValue(ref.key).showProgressBar)
         compose.onNodeWithContentDescription("阅读设置").performClick()
-        compose.onNodeWithText("仅应用于这本书").performScrollTo().performClick()
+        compose.onNodeWithText("仅应用于这本书").assertIsDisplayed().performClick()
         compose.onNodeWithText("关闭面板").performClick()
         compose.onNodeWithTag("reader-seek-bar").assertIsDisplayed()
         compose.runOnIdle { app.store.update { it.copy(reader = it.reader.copy(showProgressBar = false)) } }
@@ -516,7 +516,7 @@ class ReaderToolbarOverlayTest {
         compose.onNodeWithText("阅读下一章").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
         if(perBook) {
             compose.onNodeWithContentDescription("阅读设置").performClick()
-            compose.onNodeWithText("仅应用于这本书").performScrollTo().performClick()
+            compose.onNodeWithText("仅应用于这本书").assertIsDisplayed().performClick()
             compose.onNodeWithText("关闭面板").performClick()
         }
         toggleChapterEndButtons()
@@ -954,7 +954,7 @@ class ReaderToolbarOverlayTest {
             compose.onNodeWithText("界面").performClick()
             compose.onNodeWithTag("reader-toolbar-transparency").performScrollTo()
                 .assertRangeInfoEquals(androidx.compose.ui.semantics.ProgressBarRangeInfo(.6f, 0f..1f))
-            compose.onNodeWithText("仅应用于这本书").performScrollTo().performClick()
+            compose.onNodeWithText("仅应用于这本书").assertIsDisplayed().performClick()
             compose.onNodeWithTag("reader-toolbar-transparency").performScrollTo()
                 .assertRangeInfoEquals(androidx.compose.ui.semantics.ProgressBarRangeInfo(0f, 0f..1f))
             compose.onNodeWithText("关闭面板").performClick()

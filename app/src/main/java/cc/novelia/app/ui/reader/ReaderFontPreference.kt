@@ -108,7 +108,7 @@ internal data class ReaderFontFace(val typeface: Typeface, val available: Boolea
                     Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("阅读字体", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
-                        Text("即时生效", style = MaterialTheme.typography.labelMedium, color = colors.primary)
+                        Text(if(LocalReaderPresetDraft.current) "预设预览" else "即时生效", style = MaterialTheme.typography.labelMedium, color = colors.primary)
                     }
                     AppScrollColumn(Modifier.weight(1f), contentModifier = Modifier.padding(horizontal = 20.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -146,8 +146,10 @@ internal data class ReaderFontFace(val typeface: Typeface, val available: Boolea
     LaunchedEffect(context, revision, settings.customFont, defaults?.customFont) {
         try {
             val state = (context as? NoveliaApplication)?.store?.state?.value
-            val known = listOfNotNull(settings.customFont, defaults?.customFont, state?.reader?.customFont) +
-                state?.bookSettings?.values.orEmpty().mapNotNull { it.customFont }
+            val known = listOfNotNull(settings.customFont, defaults?.customFont) +
+                (listOfNotNull(state?.reader) + state?.bookSettings?.values.orEmpty()).flatMap { reader ->
+                    reader.modeConfigurations().flatMap { listOfNotNull(it.customFont, it.nightPreset.customFont) }
+                }
             importedFonts = ReaderFontStore.library(context, known)
         } catch(error: CancellationException) { throw error }
         catch(_: Exception) { feedback = "字体列表读取失败，请重新打开面板" }

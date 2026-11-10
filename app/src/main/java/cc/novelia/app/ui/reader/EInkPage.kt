@@ -161,6 +161,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
         checkCancelled()
         val paint = TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
             textSize = settings.fontSize * 1.25f * density * fontScale
+            letterSpacing = settings.letterSpacing
             color = android.graphics.Color.BLACK
             typeface = Typeface.create(readerTypeface, Typeface.BOLD)
         }
@@ -196,6 +197,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
             if (text.isEmpty()) text.append(" ")
             val paint = TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
                 textSize = settings.fontSize * density * fontScale
+                letterSpacing = settings.letterSpacing
                 color = android.graphics.Color.BLACK
                 typeface = Typeface.create(readerTypeface, if (settings.weight) Typeface.BOLD else Typeface.NORMAL)
             }
@@ -350,7 +352,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
     ) {
         val width = constraints.maxWidth.coerceAtLeast(1)
         val height = constraints.maxHeight.coerceAtLeast(1)
-        val typography = listOf(settings.fontSize, settings.lineHeight, settings.paragraphSpacing, settings.weight, settings.resolvedIndentSize, settings.parallel, settings.underline, settings.secondaryAlpha, font.typeface, font.loading,
+        val typography = listOf(settings.fontSize, settings.lineHeight, settings.letterSpacing, settings.paragraphSpacing, settings.weight, settings.resolvedIndentSize, settings.parallel, settings.underline, settings.secondaryAlpha, font.typeface, font.loading,
             settings.showEpubRuby, settings.epubFootnotePopup, settings.showEpubStyles)
         val input = EInkMeasureInput(paragraphs, chapterTitle, typography, width, height, density.density, density.fontScale)
         val measured by produceState<EInkMeasurement?>(null, input) {

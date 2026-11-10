@@ -11,6 +11,8 @@ import cc.novelia.app.data.model.PendingAction
 import cc.novelia.app.data.model.Position
 import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.data.model.ReaderCustomColors
+import cc.novelia.app.data.model.ReaderNightPreset
+import cc.novelia.app.data.model.ReaderBrightness
 import cc.novelia.app.data.model.ReadingHistoryEntry
 import cc.novelia.app.data.model.SavedBook
 import cc.novelia.app.data.storage.appJson
@@ -30,6 +32,24 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LibraryBackupTest {
+    @Test fun nightPresetAndBrightnessBackupRoundTripAndRejectInvalidInactivePresets() {
+        val reader = ReaderSettings(theme = "paper", nightReading = true,
+            nightPreset = ReaderNightPreset(lineHeight = 2.1f, letterSpacing = .06f),
+            nightBrightness = ReaderBrightness.night().copy(adjustment = -.04f))
+            .withEInkMode(true).copy(nightReading = false)
+        val valid = LibraryState(reader = reader, bookSettings = mapOf("web/test" to reader))
+        val invalid = valid.copy(reader = reader.copy(beforeEInk = reader.beforeEInk!!.copy(
+            nightPreset = ReaderNightPreset(letterSpacing = 1f))))
+        listOf(valid, invalid).forEachIndexed { index, state ->
+            val root = temp()
+            try {
+                val bytes = archive(mapOf("manifest.json" to appJson.encodeToString(manifest(state)).toByteArray(Charsets.UTF_8)))
+                if(index == 0) assertEquals(state, LibraryBackupArchive.extract(ByteArrayInputStream(bytes), root).library)
+                else fails { LibraryBackupArchive.extract(ByteArrayInputStream(bytes), root) }
+            } finally { root.deleteRecursively() }
+        }
+    }
+
     private fun temp() = Files.createTempDirectory("novelia-backup-test-").toFile()
     private fun archive(entries: Map<String, ByteArray>): ByteArray = ByteArrayOutputStream().also { output ->
         ZipOutputStream(output).use { zip -> entries.forEach { (name, bytes) -> zip.putNextEntry(ZipEntry(name)); zip.write(bytes); zip.closeEntry() } }

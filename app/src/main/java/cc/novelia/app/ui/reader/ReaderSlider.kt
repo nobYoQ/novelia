@@ -46,7 +46,8 @@ import kotlin.math.abs
 import kotlin.math.max
 
 @Composable internal fun ReaderSlider(label: String, value: Float, range: ClosedFloatingPointRange<Float>, modifier: Modifier = Modifier,
-    enabled: Boolean = true, livePreviewStep: Float? = null, defaultValue: Float? = null, onChange: (Float) -> Unit) {
+    enabled: Boolean = true, livePreviewStep: Float? = null, defaultValue: Float? = null,
+    onPreview: ((Float) -> Unit)? = null, onChange: (Float) -> Unit) {
     val reference = defaultValue?.takeIf { it.isFinite() }?.coerceIn(range)
     val name = label.substringBefore(' ')
     val resetDescription = reference?.let { "恢复$name 默认值 ${formatPreferenceValue(it)}" }.orEmpty()
@@ -70,13 +71,14 @@ import kotlin.math.max
                 AppOutlinedButton(onClick = { onChange((value + step).coerceIn(range)) }, enabled = enabled && value < range.endInclusive, modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp)) { Icon(Icons.Outlined.Add, "增大 $label") }
             }
         } else {
-            ReaderProgressSlider(name, value, range, modifier, enabled, livePreviewStep, reference, resetDescription, onChange)
+            ReaderProgressSlider(name, value, range, modifier, enabled, livePreviewStep, reference, resetDescription, onPreview, onChange)
         }
     }
 }
 
 @Composable private fun ReaderProgressSlider(name: String, value: Float, range: ClosedFloatingPointRange<Float>, modifier: Modifier,
-    enabled: Boolean, livePreviewStep: Float?, reference: Float?, resetDescription: String, onChange: (Float) -> Unit) {
+    enabled: Boolean, livePreviewStep: Float?, reference: Float?, resetDescription: String,
+    onPreview: ((Float) -> Unit)?, onChange: (Float) -> Unit) {
     val squareCorners = LocalSquareCorners.current
     val reducedMotion = appReducedMotion()
     var draft by remember { mutableFloatStateOf(value) }
@@ -167,6 +169,7 @@ import kotlin.math.max
                 draft = next
                 dragging = true
                 gestureChanged = true
+                onPreview?.invoke(next)
                 if(livePreviewStep != null && abs(next - lastPreviewed) >= livePreviewStep) {
                     lastPreviewed = next
                     onChange(next)

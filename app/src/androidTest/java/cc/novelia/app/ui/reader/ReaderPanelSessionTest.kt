@@ -40,7 +40,7 @@ class ReaderPanelSessionTest {
         compose.runOnIdle { assertEquals(defaults.fontSize, book.fontSize, 0f); assertEquals(2.1f, book.lineHeight, 0f); assertTrue(independent) }
         compose.onNodeWithText("跟随应用").performScrollTo().performClick().assertIsSelected()
         compose.runOnIdle { assertEquals(defaults.resolvedTheme, book.resolvedTheme); assertEquals(2.1f, book.lineHeight, 0f) }
-        compose.onNodeWithText("仅应用于这本书").performScrollTo().performClick()
+        compose.onNodeWithText("仅应用于这本书").assertIsDisplayed().performClick()
         compose.onNodeWithText("正在修改默认设置").assertIsDisplayed()
         compose.runOnIdle { assertFalse(independent) }
     }

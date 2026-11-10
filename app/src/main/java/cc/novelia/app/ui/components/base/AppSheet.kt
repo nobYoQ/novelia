@@ -33,6 +33,7 @@ internal val LocalInAppSheet = compositionLocalOf { false }
         modifier = Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)),
         contentWindowInsets = { WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom) },
     ) {
+        cc.novelia.app.ui.theme.ApplyReaderDialogBrightness()
         CompositionLocalProvider(LocalInAppSheet provides true, LocalPanelSession provides session) { content() }
     }
     else AppDialog(onDismissRequest, properties = DialogProperties(usePlatformDefaultWidth = false)) {

@@ -60,6 +60,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
                 AppSheetDragHandle()
             }
         }) {
+        cc.novelia.app.ui.theme.ApplyReaderDialogBrightness()
         CompositionLocalProvider(LocalInAppSheet provides true, LocalPanelSession provides session) {
             Column(Modifier.fillMaxWidth().height(sheetHeight).then(resizeGesture).testTag("reader-preferences-panel")) { content(expanded) { expanded = it } }
         }

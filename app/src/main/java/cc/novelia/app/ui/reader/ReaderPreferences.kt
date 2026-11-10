@@ -12,6 +12,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.graphics.vector.ImageVector
 import cc.novelia.app.ui.theme.appRoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -23,10 +24,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.model.ReaderSettings
+import cc.novelia.app.data.model.readingAppearance
+import cc.novelia.app.data.model.withReadingAppearance
 import cc.novelia.app.reader.*
 import cc.novelia.app.ui.components.base.AppScrollColumn
 import cc.novelia.app.ui.components.base.AppTextButton
@@ -56,11 +60,30 @@ import kotlin.math.roundToInt
     onEditTapZones: (() -> Unit)? = null, onShowTapTutorial: (() -> Unit)? = null,
     onTextReplacements: (() -> Unit)? = null,
     onChange: (ReaderSettings) -> Unit) {
-    val reducedMotion = appReducedMotion()
+    ReaderPreferencesContent(value.readingAppearance(), perBook, onPerBook, state, modifier, headerActions,
+        livePreview, defaultSettings?.copy(nightReading = value.nightReading)?.readingAppearance(),
+        onEditTapZones, onShowTapTutorial, onTextReplacements, value, onChange) { edited ->
+        onChange(value.withReadingAppearance(edited))
+    }
+}
+
+@Composable private fun ReaderPreferencesContent(value: ReaderSettings, perBook: Boolean?, onPerBook: (Boolean) -> Unit,
+    state: ReaderPreferencesState, modifier: Modifier, headerActions: @Composable RowScope.() -> Unit,
+    livePreview: Boolean, defaultSettings: ReaderSettings?, onEditTapZones: (() -> Unit)?,
+    onShowTapTutorial: (() -> Unit)?, onTextReplacements: (() -> Unit)?, storedValue: ReaderSettings,
+    onStoredChange: (ReaderSettings) -> Unit, onChange: (ReaderSettings) -> Unit) {
     val defaults = defaultSettings.takeIf { perBook == true }
     var tab by state.tab
     var previewZones by remember { mutableStateOf(false) }
     var statusBarExpanded by rememberSaveable { mutableStateOf(false) }
+    var nightEditorOpen by rememberSaveable { mutableStateOf(false) }
+    var nightEditorTab by rememberSaveable { mutableIntStateOf(0) }
+    fun editNight(tab: Int = 0) { nightEditorTab = tab; nightEditorOpen = true }
+    if(nightEditorOpen) ReaderNightPresetEditor(storedValue, perBook == true, initialTab = nightEditorTab,
+        onDismiss = { nightEditorOpen = false }, onSave = { preset, brightness ->
+            onStoredChange(storedValue.copy(nightPreset = preset, nightBrightness = brightness))
+            nightEditorOpen = false
+        })
     if(previewZones) ReaderTapZonePreview(value, onSave = {
         onChange(value.copy(tapZoneMap = ReaderTapZoneMap.encode(it)))
         previewZones = false
@@ -70,9 +93,16 @@ import kotlin.math.roundToInt
             Text("阅读偏好", Modifier.weight(1f).padding(start = 20.dp, end = 8.dp, top = 12.dp, bottom = 12.dp), style = MaterialTheme.typography.titleLarge)
             headerActions()
         }
-        Text(if(perBook == true) "仅修改本书" else "正在修改默认设置",
-            Modifier.padding(horizontal = 20.dp, vertical = 4.dp).testTag("reader-preference-scope"),
-            style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp).heightIn(min = 48.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(if(perBook == true) "仅修改本书" else "正在修改默认设置", Modifier.weight(1f).testTag("reader-preference-scope"),
+                style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            if(perBook != null) Row(Modifier.toggleable(perBook, role = Role.Switch, onValueChange = onPerBook).heightIn(min = 48.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("仅应用于这本书", style = MaterialTheme.typography.labelSmall)
+                Switch(perBook, onCheckedChange = null)
+            }
+        }
         PrimaryTabRow(tab) {
             listOf("常用", "翻页", "界面", "更多").forEachIndexed { index, title ->
                 Tab(tab == index, { tab = index }, modifier = Modifier.heightIn(min = 48.dp), text = { Text(title) })
@@ -80,18 +110,20 @@ import kotlin.math.roundToInt
         }
         key(tab) {
             AppScrollColumn(modifier = Modifier.weight(1f, fill = false), state = state.scrollStates[tab], contentModifier = Modifier.padding(bottom = 20.dp)) {
-                if(perBook != null) TogglePreference("仅应用于这本书", "关闭后跟随默认设置", perBook, onChange = onPerBook)
                 if(defaults != null) Text("点击滑条默认进度或浅色选项可恢复",
                     Modifier.padding(horizontal = 20.dp, vertical = 4.dp), style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 when(tab) {
                     0 -> {
-                        ReaderPreferenceSection("文字与主题", "字体、间距与纸张颜色", Icons.Outlined.TextFields) {
+                        key(perBook) { ReaderDisplayPreferences(storedValue, { editNight() }, onStoredChange) }
+                        if(!storedValue.nightReading) ReaderPreferenceSection("文字与主题", "普通阅读的字体、间距与配色", Icons.Outlined.TextFields) {
                             ReaderFontPreference(value, defaults, onChange)
                             ReaderSlider("字号 ${value.fontSize.toInt()}", value.fontSize, 14f..32f,
                                 defaultValue = defaults?.fontSize, livePreviewStep = if(livePreview) .5f else null) { onChange(value.copy(fontSize = it)) }
                             ReaderSlider("行距 ${"%.1f".format(value.lineHeight)}", value.lineHeight, ReaderSettings.LINE_HEIGHT_RANGE,
                                 modifier = Modifier.testTag("reader-line-height"), defaultValue = defaults?.lineHeight, livePreviewStep = if(livePreview) .05f else null) { onChange(value.copy(lineHeight = it)) }
+                            ReaderSlider("字距 ${"%.2f".format(value.letterSpacing)} em", value.letterSpacing, 0f..0.15f,
+                                modifier = Modifier.testTag("reader-letter-spacing"), defaultValue = defaults?.letterSpacing) { onChange(value.copy(letterSpacing = it)) }
                             ReaderSlider("段距 ${value.resolvedParagraphSpacing.roundToInt()} dp", value.resolvedParagraphSpacing, 0f..32f,
                                 modifier = Modifier.testTag("reader-paragraph-spacing"), defaultValue = defaults?.resolvedParagraphSpacing, livePreviewStep = if(livePreview) 1f else null) { onChange(value.copy(paragraphSpacing = it)) }
                             ChoiceRow("阅读主题", listOf("跟随应用", "纸张", "浅色", "深色", "黑白", "自定义"), ReaderSettings.THEMES.indexOf(value.resolvedTheme),
@@ -109,7 +141,7 @@ import kotlin.math.roundToInt
                     }
                     1 -> {
                         ReaderPreferenceSection("阅读模式", "选择适合屏幕的阅读方式", Icons.Outlined.AutoStories) {
-                            TogglePreference("电子纸阅读模式", if(perBook == true) "仅影响当前阅读器；与普通模式分别保存阅读配置" else "全应用按屏翻动；与普通模式分别保存阅读配置", value.eInkMode, defaultValue = defaults?.eInkMode) { onChange(value.withEInkMode(it)) }
+                            TogglePreference("电子纸阅读模式", if(perBook == true) "仅影响当前阅读器；与普通模式分别保存阅读配置" else "全应用按屏翻动；与普通模式分别保存阅读配置", value.eInkMode, defaultValue = defaults?.eInkMode) { onStoredChange(storedValue.withEInkMode(it)) }
                             Text("首次开启继承当前配置，并使用横向分页、不透明工具栏；再次切换恢复该模式的设置。",
                                 Modifier.padding(horizontal = 20.dp, vertical = 4.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
@@ -151,15 +183,7 @@ import kotlin.math.roundToInt
                         }
                     }
                     2 -> {
-                        ReaderPreferenceSection("屏幕", "亮度、方向与阅读时的显示方式", Icons.Outlined.Brightness6) {
-                            TogglePreference("跟随系统亮度", "关闭后可单独调整", value.brightness < 0, defaultValue = defaults?.let { it.brightness < 0 }) { onChange(value.copy(brightness = if(it) -1f else defaults?.brightness?.takeIf { brightness -> brightness >= 0 } ?: .5f)) }
-                            AnimatedVisibility(value.brightness >= 0,
-                                enter = if(reducedMotion) EnterTransition.None else fadeIn(tween(AppMotion.Quick)) + expandVertically(tween(AppMotion.Standard), expandFrom = Alignment.Top),
-                                exit = if(reducedMotion) ExitTransition.None else fadeOut(tween(AppMotion.Exit)) + shrinkVertically(tween(AppMotion.Release), shrinkTowards = Alignment.Top)
-                            ) {
-                                ReaderSlider("屏幕亮度", value.brightness.coerceIn(.05f, 1f), .05f..1f, enabled = value.brightness >= 0,
-                                    defaultValue = defaults?.brightness?.takeIf { it >= 0 }) { onChange(value.copy(brightness = it)) }
-                            }
+                        ReaderPreferenceSection("屏幕", "方向与阅读时的显示方式", Icons.Outlined.Brightness6) {
                             ChoiceRow("阅读方向", listOf("跟随系统", "竖屏", "横屏"), ReaderSettings.ORIENTATIONS.indexOf(value.resolvedOrientation),
                                 defaultSelected = defaults?.let { ReaderSettings.ORIENTATIONS.indexOf(it.resolvedOrientation) }) { onChange(value.copy(orientation = ReaderSettings.ORIENTATIONS[it])) }
                             Text("仅在阅读器中锁定方向，退出阅读后恢复跟随系统。", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.bodySmall)
@@ -174,10 +198,15 @@ import kotlin.math.roundToInt
                             }
                             TogglePreference("阅读时隐藏状态栏", "隐藏顶部时间、电量和 Wi-Fi 等图标；从顶部下滑可临时显示，退出阅读后恢复", value.hideStatusBar, defaultValue = defaults?.hideStatusBar) { onChange(value.copy(hideStatusBar = it)) }
                             TogglePreference("阅读进度条", "展开工具栏时显示，可快速跳转本章位置", value.showProgressBar, defaultValue = defaults?.showProgressBar) { onChange(value.copy(showProgressBar = it)) }
+                            if(storedValue.nightReading) AppTextButton(onClick = { editNight(1) }, modifier = Modifier.padding(horizontal = 12.dp)) {
+                                Text("在夜间预设中调整工具栏外观")
+                            }
+                            else {
                             ReaderSlider("工具栏透明度 ${(value.resolvedToolbarTransparency * 100).roundToInt()}%", value.resolvedToolbarTransparency, 0f..1f,
                                 modifier = Modifier.testTag("reader-toolbar-transparency"), defaultValue = defaults?.resolvedToolbarTransparency) { onChange(value.copy(toolbarTransparency = it)) }
                             Text("0% 为不透明，100% 为背景完全透明；文字和图标保持清晰。工具栏覆盖正文，显示或收起不会改变排版。",
                                 Modifier.padding(horizontal = 20.dp, vertical = 4.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                         }
                     }
                     else -> {
@@ -211,8 +240,13 @@ import kotlin.math.roundToInt
                                 modifier = Modifier.testTag("reader-horizontal-margin"), defaultValue = defaults?.resolvedHorizontalMargin) { onChange(value.copy(horizontalMargin = it)) }
                             ReaderSlider("上下页边距 ${value.resolvedVerticalMargin.toInt()} dp", value.resolvedVerticalMargin, 0f..64f,
                                 modifier = Modifier.testTag("reader-vertical-margin"), defaultValue = defaults?.resolvedVerticalMargin) { onChange(value.copy(verticalMargin = it)) }
-                            ReaderSlider("辅文本不透明度 ${(value.secondaryAlpha * 100).toInt()}%", value.secondaryAlpha, .45f..1f, defaultValue = defaults?.secondaryAlpha) { onChange(value.copy(secondaryAlpha = it)) }
-                            TogglePreference("加粗文字", "两种阅读模式使用一致的粗体", value.weight, defaultValue = defaults?.weight) { onChange(value.copy(weight = it)) }
+                            if(storedValue.nightReading) AppTextButton(onClick = { editNight(2) }, modifier = Modifier.padding(horizontal = 12.dp)) {
+                                Text("在夜间预设中调整字体与文字外观")
+                            }
+                            else {
+                                ReaderSlider("辅文本不透明度 ${(value.secondaryAlpha * 100).toInt()}%", value.secondaryAlpha, .45f..1f, defaultValue = defaults?.secondaryAlpha) { onChange(value.copy(secondaryAlpha = it)) }
+                                TogglePreference("加粗文字", "两种阅读模式使用一致的粗体", value.weight, defaultValue = defaults?.weight) { onChange(value.copy(weight = it)) }
+                            }
                             ReaderIndentPreference(value.resolvedIndentSize, defaults?.resolvedIndentSize ?: 2) {
                                 onChange(value.copy(indent = it > 0, indentSize = it))
                             }
@@ -233,7 +267,7 @@ import kotlin.math.roundToInt
         }
     }
 }
-@Composable private fun ReaderPreferenceSection(title: String, summary: String, icon: ImageVector, content: @Composable () -> Unit) {
+@Composable internal fun ReaderPreferenceSection(title: String, summary: String, icon: ImageVector, content: @Composable () -> Unit) {
     Surface(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
         shape = appRoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .6f))) {

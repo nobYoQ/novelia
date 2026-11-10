@@ -2,6 +2,7 @@ package cc.novelia.app.reader
 
 import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.data.model.fontLabel
+import cc.novelia.app.data.model.activeBrightness
 
 internal data class ReaderSettingDifference(val label: String, val book: String, val default: String)
 
@@ -11,7 +12,7 @@ internal fun readerSettingsDifferences(book: ReaderSettings, defaults: ReaderSet
         "显示语言" to when(mode) { "jp" -> "日文"; "zh-jp" -> "中日"; "jp-zh" -> "日中"; else -> "中文" },
         "译文优先顺序" to engines.joinToString(" → "), "并列展示译文" to parallel.label(),
         "阅读字体" to fontLabel,
-        "字号" to "$fontSize sp", "行距" to "$lineHeight 倍", "段距" to "$resolvedParagraphSpacing dp",
+        "字号" to "$fontSize sp", "行距" to "$lineHeight 倍", "字距" to "$letterSpacing em", "段距" to "$resolvedParagraphSpacing dp",
         "加粗文字" to weight.label(), "内容宽度" to "$width dp", "首行缩进" to "$resolvedIndentSize 格",
         "左右页边距" to "$resolvedHorizontalMargin dp", "上下页边距" to "$resolvedVerticalMargin dp",
         "宽屏目录" to showWideToc.label(),
@@ -30,7 +31,12 @@ internal fun readerSettingsDifferences(book: ReaderSettings, defaults: ReaderSet
         "底部阅读信息" to showReadingStatusBar.label(),
         "底栏内容顺序" to resolvedReadingStatusItems.joinToString(" → ") { cc.novelia.app.data.model.ReaderStatusItems.labels.getValue(it) }.ifEmpty { "无" },
         "列表与面板翻屏按钮" to showEInkScreenButtons.label(), "阅读时隐藏状态栏" to hideStatusBar.label(),
-        "屏幕亮度" to if(brightness < 0) "跟随系统" else "${(brightness * 100).toInt()}%",
+        "夜间阅读模式" to nightReading.label(),
+        "屏幕亮度" to activeBrightness.let { when(it.mode) {
+            "adaptive" -> "自适应 ${(it.minimum * 100).toInt()}%～${(it.maximum * 100).toInt()}% · 偏好 ${(it.adjustment * 100).toInt()}%"
+            "manual" -> "${(it.level * 100).toInt()}%"
+            else -> "跟随系统"
+        } },
         "工具栏透明度" to "${(resolvedToolbarTransparency * 100).toInt()}%", "繁体显示" to traditional.label(),
         "朗读速度" to "$speechRate×", "朗读定时停止" to ReaderSettings.speechTimerLabel(resolvedSpeechMinutes),
         "朗读语言" to when(speechLanguage) { "jp" -> "日文"; "zh" -> "中文"; else -> "随显示模式" },

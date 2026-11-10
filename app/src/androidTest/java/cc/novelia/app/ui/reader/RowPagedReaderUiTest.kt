@@ -29,6 +29,27 @@ class RowPagedReaderUiTest {
         horizontalPageTurn = true, fontSize = 20f, lineHeight = 1.4f)
     private val paragraphs = listOf(ReadingParagraph(7, listOf(TextPart((1..300).joinToString(" ") { "第${it}行的阅读内容。" }, "local"))))
 
+    @Test fun changingLetterSpacingRebuildsTheRowsAndRetainsTheCharacterAnchor() {
+        val state = RowPagingState(null)
+        var preferences by mutableStateOf(settings)
+        compose.setContent { NoveliaTheme("light") {
+            CompositionLocalProvider(LocalDensity provides Density(1f)) {
+                RowPagedReader(paragraphs, preferences, state, Modifier.requiredSize(300.dp, 300.dp),
+                    imageModel = { null }, onToggleMenu = {}, onSelect = {}, onPage = state::move)
+            }
+        } }
+        compose.waitUntil(10_000) { state.ready }
+        val before = state.layout!!
+        val anchor = state.anchor
+        compose.runOnIdle { preferences = preferences.copy(letterSpacing = .15f) }
+        compose.waitUntil(10_000) { state.ready && state.layout !== before }
+        compose.runOnIdle {
+            assertTrue(state.layout!!.lines.size > before.lines.size)
+            assertEquals(anchor.sourceIndex, state.anchor.sourceIndex)
+            assertEquals(anchor.textOffset, state.anchor.textOffset)
+        }
+    }
+
     @Test fun animatedTurnSettlesToTheSamePixelsAndReturnsToTheOriginalScreen() {
         val state = RowPagingState(null)
         compose.setContent { NoveliaTheme("light") {

@@ -5,6 +5,10 @@ import cc.novelia.app.data.catalog.KeywordLibrary
 import cc.novelia.app.data.model.DEFAULT_FOLDER
 import cc.novelia.app.data.model.DEFAULT_FOLDER_ID
 import cc.novelia.app.data.model.ReaderSettings
+import cc.novelia.app.data.model.ReaderBrightness
+import cc.novelia.app.data.model.ReaderNightPreset
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -40,6 +44,7 @@ import cc.novelia.app.data.webdav.WebDavSchema.arrayStrings
 
 /** 校验每个同步候选、完整记录与字段值，不负责应用或生成业务投影。 */
 internal object WebDavValidation {
+    private val readerDisplayJson = Json { ignoreUnknownKeys = false; coerceInputValues = false }
     /** 校验所有候选而非只校验赢家，损坏或本地文件引用不能隐蔽地重新上传。 */
     fun validateField(domain: SyncDomain, key: String, field: String, value: JsonElement) {
         validateKey(domain, key)
@@ -180,7 +185,7 @@ internal object WebDavValidation {
         document.records.forEach { (key, record) ->
             if(WebDavMerge.winner(record.existence, existence = true)?.deleted != false) return@forEach
             val required = when (document.domain) {
-                SyncDomain.SETTINGS -> if (key == GLOBAL) portableGlobalFields - optionalGlobalFields else if (key.startsWith(BLOCKED)) setOf("kind", "value") else portableReaderFields - setOf("customColors", "showReadingStatusBar", "horizontalMargin", "verticalMargin", "autoReadSpeed", "autoReadIntervalSeconds", "textReplacements", "textReplacementsEnabled", "readingStatusItems", "showEpubRuby", "epubFootnotePopup", "showEpubStyles", "indentSize", "rowShowPartialLines")
+                SyncDomain.SETTINGS -> if (key == GLOBAL) portableGlobalFields - optionalGlobalFields else if (key.startsWith(BLOCKED)) setOf("kind", "value") else portableReaderFields - setOf("customColors", "showReadingStatusBar", "horizontalMargin", "verticalMargin", "autoReadSpeed", "autoReadIntervalSeconds", "textReplacements", "textReplacementsEnabled", "readingStatusItems", "showEpubRuby", "epubFootnotePopup", "showEpubStyles", "indentSize", "rowShowPartialLines", "letterSpacing", "nightPreset")
                 SyncDomain.FAVORITES -> if (key == ORDER) setOf("ids") else if (key.startsWith(FOLDER)) setOf("name") else setOf("book", "folderId", "pinned", "status", "addedAt")
                 SyncDomain.KEYWORDS -> if (key == ORDER) orderFields else if (key.startsWith(CATEGORY)) categoryFields else keywordEntryFields
                 SyncDomain.PROGRESS -> setOf("position")
@@ -191,7 +196,7 @@ internal object WebDavValidation {
             // 老版同步快照可能缺少新增偏好，保留本机选择；字段存在时仍完整校验。
             val optional = when {
                 document.domain == SyncDomain.SETTINGS && key == GLOBAL -> optionalGlobalFields
-                document.domain == SyncDomain.SETTINGS && (key == READER || key.startsWith(BOOK_SETTING)) -> setOf("devicePreferences", "customColors", "showReadingStatusBar", "horizontalMargin", "verticalMargin", "autoReadSpeed", "autoReadIntervalSeconds", "textReplacements", "textReplacementsEnabled", "readingStatusItems", "showEpubRuby", "epubFootnotePopup", "showEpubStyles", "indentSize", "rowShowPartialLines")
+                document.domain == SyncDomain.SETTINGS && (key == READER || key.startsWith(BOOK_SETTING)) -> setOf("devicePreferences", "customColors", "showReadingStatusBar", "horizontalMargin", "verticalMargin", "autoReadSpeed", "autoReadIntervalSeconds", "textReplacements", "textReplacementsEnabled", "readingStatusItems", "showEpubRuby", "epubFootnotePopup", "showEpubStyles", "indentSize", "rowShowPartialLines", "letterSpacing", "nightPreset")
                 document.domain == SyncDomain.NOTES || document.domain == SyncDomain.BOOKMARKS -> setOf("selection")
                 else -> emptySet()
             }
@@ -204,7 +209,7 @@ internal object WebDavValidation {
 
     private fun readerField(field: String, value: JsonElement) {
         if (field == "devicePreferences") {
-            require(value is JsonObject && value.keys.containsAll(deviceReaderFields - setOf("tapZoneMap", "showWideToc", "orientation")) && value.keys.all { it in WebDavSchema.devicePreferenceFields }) { "设备偏好原子组字段不完整" }
+            require(value is JsonObject && value.keys.containsAll(deviceReaderFields - setOf("tapZoneMap", "showWideToc", "orientation", "nightReading", "brightnessPreferences", "nightBrightness")) && value.keys.all { it in WebDavSchema.devicePreferenceFields }) { "设备偏好原子组字段不完整" }
             value.forEach { (deviceField, deviceValue) -> deviceReaderField(deviceField, deviceValue) }
             return
         }
@@ -219,6 +224,11 @@ internal object WebDavValidation {
             }
             "fontSize" -> number(value, 14.0, 32.0)
             "lineHeight" -> number(value, ReaderSettings.MIN_LINE_HEIGHT.toDouble(), 2.6)
+            "letterSpacing" -> number(value, 0.0, 0.15)
+            "nightPreset" -> {
+                require(value is JsonObject && value.keys == setOf("theme", "customColors", "fontSize", "lineHeight", "paragraphSpacing", "letterSpacing", "weight", "secondaryAlpha", "toolbarTransparency")) { "夜间预设包含未知或本机字体字段" }
+                require(readerDisplayJson.decodeFromJsonElement<ReaderNightPreset>(value).valid) { "夜间阅读预设无效" }
+            }
             "width" -> number(value, 300.0, 900.0)
             "secondaryAlpha" -> number(value, 0.0, 1.0)
             "speechRate" -> number(value, 0.5, 2.0)
@@ -242,7 +252,7 @@ internal object WebDavValidation {
     private fun deviceReaderField(field: String, value: JsonElement) {
         when (field) {
             "activeModeSettings" -> {
-                require(value is JsonObject && value.keys.containsAll(WebDavSchema.readerModeFields - setOf("indentSize", "rowShowPartialLines")) &&
+                require(value is JsonObject && value.keys.containsAll(WebDavSchema.readerModeFields - setOf("indentSize", "rowShowPartialLines", "letterSpacing", "nightPreset", "nightReading", "brightnessPreferences", "nightBrightness")) &&
                     value.keys.all { it in WebDavSchema.readerModeFields }) { "当前阅读模式配置不完整" }
                 value.forEach { (property, propertyValue) ->
                     if(property in portableReaderFields) readerField(property, propertyValue)
@@ -250,6 +260,10 @@ internal object WebDavValidation {
                 }
             }
             "brightness" -> number(value, -1.0, 1.0)
+            "brightnessPreferences", "nightBrightness" -> if(value != JsonNull) {
+                require(value is JsonObject && value.keys == setOf("mode", "level", "minimum", "maximum", "adjustment") &&
+                    readerDisplayJson.decodeFromJsonElement<ReaderBrightness>(value).valid) { "阅读亮度策略无效" }
+            } else require(field == "brightnessPreferences") { "夜间亮度策略不能为空" }
             "paginationMode" -> enumText(value, ReaderSettings.PAGINATION_MODES.toSet())
             "orientation" -> enumText(value, ReaderSettings.ORIENTATIONS.toSet())
             "prefetchChapters" -> nonnegativeInt(value, 20)

@@ -66,11 +66,12 @@ import kotlin.math.roundToInt
     val latestLayout by rememberUpdatedState(onLayout)
     BoxWithConstraints(Modifier.fillMaxWidth().onGloballyPositioned { top = it.positionInParent().y.roundToInt() }) {
         val indent = settings.indentText
-        val layout = remember(part, settings.fontSize, settings.lineHeight, settings.weight, indent, font.typeface, constraints.maxWidth, density) {
+        val layout = remember(part, settings.fontSize, settings.lineHeight, settings.letterSpacing, settings.weight, indent, font.typeface, constraints.maxWidth, density) {
             val text = SpannableStringBuilder(indent + part.text)
             text.addReaderInline(part, indent.length, constraints.maxWidth)
             val paint = TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
                 textSize = readerPartFontSize(settings, part.secondary) * density.density * density.fontScale
+                letterSpacing = settings.letterSpacing
                 typeface = Typeface.create(font.typeface, if (settings.weight) Typeface.BOLD else Typeface.NORMAL)
             }
             readerNativeLayout(text, paint, constraints.maxWidth, settings.lineHeight)

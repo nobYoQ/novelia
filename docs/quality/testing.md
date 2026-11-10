@@ -77,6 +77,7 @@ $env:ANDROID_SERIAL = '<专用测试设备序列号>'
 - 导航和双栏：`RootNavigationTest`、`AdaptiveLibraryTest`。
 - 边缘工具栏：`EdgeToolbarTest`，覆盖闲置后单击展开、拖动保存、跨页面及临时隐藏时保留位置和闲置计时、显隐中间帧与快速反向切换、静态模式即时显隐、电子纸松手定位和拖动取消；`ReaderToolbarOverlayTest` 额外验证阅读菜单、系统状态栏和历史页切换不挪动圆点，以及单书电子纸设置对工具栏显隐和拖动的作用。
 - 正文和手势：`ReaderAdaptiveUiTest`、`ReaderToolbarOverlayTest`、`ReaderTapNavigationTest`、`ReaderSpacingTest`；位置恢复与阅读返回另看 `ReadingContinuityUiTest`、`ReaderCompletionFlowTest`。阅读器组件拆分仍需覆盖工具栏开关不改变正文视口、滚动/分页互换保留锚点、后台再前台及段落测量。
+- 夜间阅读和亮度：JVM `data.model.ReaderNightSettingsTest`、`data.webdav.ReaderNightSyncTest` 及 `data.backup.LibraryBackupTest` 覆盖普通配置隔离、重置、备份和同步兼容；设备 `ReaderNightPreferencesTest`、`RowPagedReaderUiTest` 覆盖常用页入口、重置撤销、主题切换保留面板、弹窗亮度恢复及字距重排。光线感应需在支持光线传感器的真机上检查明暗环境切换、短暂遮挡、后台恢复和亮度上下限；无传感器设备应显示固定亮度回退提示。
 - 论坛与编辑：`ForumEditorUiTest`、`ForumAccountUiTest`、`ForumCommentThreadTest`、`ForumLayoutUiTest`、`EditorDraftLifecycleTest`；原生链接粘贴与撤销另见 `ui.markdown.MarkdownLinkPasteTest`。
 - 会话：`NativeLoginSessionTest`、`MirrorSessionTest`、`ForumMirrorSessionTest`、`ForumSessionIsolationTest`、`ForumSharedAuthTest`；原生登录界面另见 `integration.AuthPageTest`、`ui.account.ForumMirrorLoginTest` 和 `ui.settings.BookSourceNavigationTest`。
 - Android 平台解析：`ForumCommunityRulesParserAndroidTest`。

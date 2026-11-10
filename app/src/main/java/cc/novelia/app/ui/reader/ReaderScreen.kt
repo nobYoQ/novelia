@@ -56,6 +56,14 @@ import cc.novelia.app.data.library.nextMountedVolume
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.Note
 import cc.novelia.app.data.model.Position
+import cc.novelia.app.data.model.ReaderBrightness
+import cc.novelia.app.data.model.activeBrightness
+import cc.novelia.app.data.model.readingAppearance
+import cc.novelia.app.ui.theme.LocalReaderBrightness
+import cc.novelia.app.ui.theme.LocalReaderBrightnessPreview
+import cc.novelia.app.ui.theme.rememberReaderBrightness
+import cc.novelia.app.ui.theme.ApplyReaderWindowBrightness
+import cc.novelia.app.ui.theme.ReaderNightTheme
 import cc.novelia.app.data.storage.appJson
 import cc.novelia.app.data.webdav.WebDavProjection
 import cc.novelia.app.reader.*
@@ -94,13 +102,19 @@ import kotlinx.serialization.encodeToString
 @Composable fun ReaderScreen(c: AppController, ref: BookRef, chapterId: String) {
     val local by c.store.state.collectAsStateWithLifecycle()
     val settings = local.bookSettings[ref.key] ?: local.reader
+    var brightnessPreview by remember { mutableStateOf<ReaderBrightness?>(null) }
+    val brightness = rememberReaderBrightness(brightnessPreview ?: settings.activeBrightness)
     val eInk = settings.eInkMode
     val appEInk = LocalEInkMode.current || eInk
-    CompositionLocalProvider(LocalScreenPageButtons provides settings.showEInkScreenButtons) {
+    CompositionLocalProvider(LocalScreenPageButtons provides settings.showEInkScreenButtons,
+        LocalReaderBrightness provides brightness, LocalReaderBrightnessPreview provides { brightnessPreview = it }) {
+    ApplyReaderWindowBrightness(LocalContext.current.activityOrNull()?.window)
+    ReaderNightTheme(settings.nightReading) {
     AppInteractionMode(appEInk, LocalReducedMotion.current || eInk) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             ReaderContent(c, ref, chapterId, wide = maxWidth >= 840.dp, availableWidth = maxWidth)
         }
+    }
     }
     }
 }
@@ -112,7 +126,8 @@ import kotlinx.serialization.encodeToString
  */
 @Composable private fun ReaderContent(c: AppController, ref: BookRef, chapterId: String, wide: Boolean, availableWidth: androidx.compose.ui.unit.Dp) {
     val local by c.store.state.collectAsStateWithLifecycle()
-    val settings = local.bookSettings[ref.key] ?: local.reader
+    val storedSettings = local.bookSettings[ref.key] ?: local.reader
+    val settings = storedSettings.readingAppearance()
     val readerFont = rememberReaderFont(settings)
     fun setWideToc(show: Boolean) {
         c.store.update { state ->
@@ -211,11 +226,9 @@ import kotlinx.serialization.encodeToString
     val foreground = colors.foreground
     val toolbarBackground = colors.toolbar.copy(alpha = 1f - settings.resolvedToolbarTransparency)
     SideEffect { activity?.let { WindowCompat.getInsetsController(it.window, it.window.decorView).apply { isAppearanceLightStatusBars = background.luminance() > .5f; isAppearanceLightNavigationBars = background.luminance() > .5f } } }
-    DisposableEffect(settings.keepScreenOn, settings.brightness, autoReading) {
-        val old = activity?.window?.attributes?.screenBrightness
+    DisposableEffect(settings.keepScreenOn, autoReading) {
         if(settings.keepScreenOn || autoReading) activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        activity?.window?.attributes = activity?.window?.attributes?.apply { screenBrightness = settings.brightness }
-        onDispose { activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); activity?.window?.attributes = activity?.window?.attributes?.apply { screenBrightness = old ?: -1f } }
+        onDispose { activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
     }
     BackHandler(preferences || (toc && !wide) || search || bookSearch) { preferences = false; toc = false; search = false; bookSearch = false }
     AsyncContent(listOf(ref, chapterId), load = { c.chapter(ref, chapterId, version > 0) }, refreshKey = version) { (chapter, cached), _ ->
@@ -974,7 +987,7 @@ import kotlinx.serialization.encodeToString
             ReaderTocPane(c, ref, tocState, { scope.launch { tocState.ensureLoaded(chapterId, knownChapterCount, refresh = true) } }, chapterId, tocScroll, tocQuery, { tocQuery = it }, tocReversed, { tocReversed = it }, tocLocateRequest, { tocLocateRequest = 0; tocLocated = true },
                 { id -> if(id != chapterId) rememberReadingPlace(); toc = false; openChapter(id) }, Modifier.fillMaxHeight(.8f))
         }
-        if(autoReadSheet) ReaderAutoReadSheet(settings, settings.staticPagination || eInkInteraction,
+        if(autoReadSheet) ReaderAutoReadSheet(storedSettings, settings.staticPagination || eInkInteraction,
             onDismiss = { autoReadSheet = false }, onSettings = { value ->
                 c.store.update { state ->
                     if(state.bookSettings.containsKey(ref.key)) state.copy(bookSettings = state.bookSettings + (ref.key to value))
@@ -985,7 +998,7 @@ import kotlinx.serialization.encodeToString
                 ReadAloudService.pauseForAutomaticReading(context)
                 autoReadSheet = false; menu = false; autoReading = true
             })
-        if(replacementsSheet) ReaderReplacementsSheet(settings,
+        if(replacementsSheet) ReaderReplacementsSheet(storedSettings,
             sample = replacementSample,
             initialSource = replacementSelection,
             onDismiss = { replacementsSheet = false; if(replacementSelection == null) preferences = true; replacementSelection = null }, onChange = { value ->
@@ -1014,11 +1027,11 @@ import kotlinx.serialization.encodeToString
             onPrevious = { stepSpeech("previous") }, onNext = { stepSpeech("next") },
             onFollow = ReadAloudService::follow,
             onRate = { rate ->
-                updateSpeechSettings(settings.copy(speechRate = rate))
+                updateSpeechSettings(storedSettings.copy(speechRate = rate))
                 if(bookSpeech != null) context.startService(Intent(context, ReadAloudService::class.java).setAction("rate").putExtra("rate", rate))
             },
             onTimer = { minutes ->
-                updateSpeechSettings(settings.copy(speechMinutes = minutes))
+                updateSpeechSettings(storedSettings.copy(speechMinutes = minutes))
                 if(bookSpeech != null) context.startService(Intent(context, ReadAloudService::class.java).setAction("timer").putExtra("minutes", minutes))
             },
         )
@@ -1075,7 +1088,7 @@ import kotlinx.serialization.encodeToString
     }
     if(preferences) {
         ReaderPreferencesSheet(onDismissRequest = { preferences = false }) { expanded, onExpandedChange ->
-            ReaderPreferences(settings, local.bookSettings.containsKey(ref.key), { perBook -> c.store.update { it.copy(bookSettings = if(perBook) it.bookSettings + (ref.key to settings) else it.bookSettings - ref.key) } },
+            ReaderPreferences(storedSettings, local.bookSettings.containsKey(ref.key), { perBook -> c.store.update { it.copy(bookSettings = if(perBook) it.bookSettings + (ref.key to storedSettings) else it.bookSettings - ref.key) } },
                 state = preferenceState, modifier = Modifier.fillMaxSize(), livePreview = true, defaultSettings = local.reader,
                 onEditTapZones = { preferences = false; editingTapZones = true },
                 onTextReplacements = { preferences = false; replacementsSheet = true; pauseReadingAutomation() },

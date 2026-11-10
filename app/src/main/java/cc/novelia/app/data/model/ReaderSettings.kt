@@ -61,7 +61,12 @@ import kotlinx.serialization.Serializable
     val showEpubRuby: Boolean? = null,
     val epubFootnotePopup: Boolean? = null,
     val showEpubStyles: Boolean? = null,
-    val rowShowPartialLines: Boolean? = null
+    val rowShowPartialLines: Boolean? = null,
+    val letterSpacing: Float? = null,
+    val nightReading: Boolean? = null,
+    val nightPreset: ReaderNightPreset? = null,
+    val brightnessPreferences: ReaderBrightness? = null,
+    val nightBrightness: ReaderBrightness? = null
 )
 
 /**
@@ -116,7 +121,12 @@ import kotlinx.serialization.Serializable
     // 保留旧开关，缺失格数的历史设置仍为两格；0 表示不缩进。
     val indentSize: Int = 2,
     // 行带分页默认保留底部局部行，与连续滚动保持一致；关闭后静止时隐藏底部不完整行。
-    val rowShowPartialLines: Boolean = true
+    val rowShowPartialLines: Boolean = true,
+    val letterSpacing: Float = 0f,
+    val nightReading: Boolean = false,
+    val nightPreset: ReaderNightPreset = ReaderNightPreset(),
+    val brightnessPreferences: ReaderBrightness? = null,
+    val nightBrightness: ReaderBrightness = ReaderBrightness.night()
 ) {
     companion object {
         const val MIN_LINE_HEIGHT = .5f
@@ -225,7 +235,9 @@ import kotlinx.serialization.Serializable
         showEpubRuby = showEpubRuby,
         epubFootnotePopup = epubFootnotePopup,
         showEpubStyles = showEpubStyles,
-        rowShowPartialLines = rowShowPartialLines
+        rowShowPartialLines = rowShowPartialLines,
+        letterSpacing = letterSpacing, nightReading = nightReading, nightPreset = nightPreset,
+        brightnessPreferences = brightnessPreferences, nightBrightness = nightBrightness
     )
     private fun withPagingState(state: ReaderPagingState) = copy(
         mode = state.mode ?: mode,
@@ -281,7 +293,12 @@ import kotlinx.serialization.Serializable
         showEpubRuby = state.showEpubRuby ?: showEpubRuby,
         epubFootnotePopup = state.epubFootnotePopup ?: epubFootnotePopup,
         showEpubStyles = state.showEpubStyles ?: showEpubStyles,
-        rowShowPartialLines = state.rowShowPartialLines ?: rowShowPartialLines
+        rowShowPartialLines = state.rowShowPartialLines ?: rowShowPartialLines,
+        letterSpacing = state.letterSpacing ?: letterSpacing,
+        nightReading = state.nightReading ?: nightReading,
+        nightPreset = state.nightPreset ?: nightPreset,
+        brightnessPreferences = state.brightnessPreferences ?: if(state.brightness != null) null else brightnessPreferences,
+        nightBrightness = state.nightBrightness ?: nightBrightness
     )
     /**
      * 切换电子纸时分别记住两种模式的完整阅读配置。

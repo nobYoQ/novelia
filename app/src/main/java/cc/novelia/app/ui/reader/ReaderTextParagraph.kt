@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.em
 import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.reader.*
 import kotlin.math.roundToInt
@@ -80,6 +81,7 @@ import kotlin.math.roundToInt
                 onTextLayout = { measurement.layout = it; reportLayout() },
                 fontSize = readerPartFontSize(settings, part.secondary).sp,
                 lineHeight = readerPartLineHeight(settings, part.secondary).sp,
+                letterSpacing = settings.letterSpacing.em,
                 fontWeight = if(settings.weight) FontWeight.Bold else FontWeight.Normal,
                 fontFamily = fontFamily,
                 color = foreground.copy(alpha = if(part.secondary) settings.secondaryAlpha else 1f),

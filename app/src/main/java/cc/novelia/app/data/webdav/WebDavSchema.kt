@@ -24,11 +24,12 @@ internal object WebDavSchema {
         "indent", "indentSize", "theme", "secondaryAlpha", "underline", "speechRate", "speechMinutes", "traditional", "speechLanguage",
         "toolbarTransparency", "paragraphSpacing", "showScrollPageButtons", "showProgressBar", "showReadingStatusBar", "speechContinueChapters", "customColors",
         "horizontalMargin", "verticalMargin", "autoReadSpeed", "autoReadIntervalSeconds", "textReplacements", "textReplacementsEnabled", "readingStatusItems",
-        "showEpubRuby", "epubFootnotePopup", "showEpubStyles", "rowShowPartialLines")
+        "showEpubRuby", "epubFootnotePopup", "showEpubStyles", "rowShowPartialLines", "letterSpacing", "nightPreset")
     // fontFamily/customFont 依赖本机字体文件，两种同步模式均保留接收端的字体选择。
     val deviceReaderFields = setOf("keepScreenOn", "volumeKeys", "paged", "eInkMode", "monochrome", "scrollPageTurn",
         "horizontalPageTurn", "brightness", "paginationMode", "showPageButtons", "beforeEInk", "eInkPreferences", "prefetchChapters",
-        "prefetchWifiOnly", "speechNetworkContinuation", "showEInkScreenButtons", "hideStatusBar", "tapPageTurn", "tapZoneMap", "showWideToc", "orientation")
+        "prefetchWifiOnly", "speechNetworkContinuation", "showEInkScreenButtons", "hideStatusBar", "tapPageTurn", "tapZoneMap", "showWideToc", "orientation",
+        "nightReading", "brightnessPreferences", "nightBrightness")
     val readerModeFields = (portableReaderFields + deviceReaderFields) - setOf("eInkMode", "beforeEInk", "eInkPreferences")
     val devicePreferenceFields = deviceReaderFields + "activeModeSettings"
     val portableGlobalFields = setOf("theme", "reducedMotion", "historyPaused", "hideNovelComments",

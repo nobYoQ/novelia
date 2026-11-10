@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.em
 import cc.novelia.app.data.model.ReaderCustomColors
 import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.ui.theme.readerColors
@@ -23,7 +24,9 @@ import cc.novelia.app.ui.theme.readerColors
 private fun rgb(value: Long) = Color(0xFF000000L or value)
 private fun hex(value: Long) = "#%06X".format(value)
 
-@Composable internal fun ReaderThemeEditor(settings: ReaderSettings, defaults: ReaderSettings?, onChange: (ReaderSettings) -> Unit) {
+@Composable internal fun ReaderThemeEditor(settings: ReaderSettings, defaults: ReaderSettings?, onChange: (ReaderSettings) -> Unit,
+    showPreview: Boolean = true, showReset: Boolean = true,
+    helperText: String = "点击打开取色盘，也可输入 #RRGGBB。工具栏透明度可在「界面」中调整。") {
     val palette = settings.resolvedCustomColors
     var editing by rememberSaveable { mutableStateOf<String?>(null) }
     fun update(field: String, color: Long) = onChange(settings.copy(customColors = when(field) {
@@ -33,7 +36,7 @@ private fun hex(value: Long) = "#%06X".format(value)
     }))
     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         val colors = readerColors(settings, MaterialTheme.colorScheme)
-        Surface(color = colors.background, contentColor = colors.foreground, shape = MaterialTheme.shapes.medium,
+        if(showPreview) Surface(color = colors.background, contentColor = colors.foreground, shape = MaterialTheme.shapes.medium,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), modifier = Modifier.fillMaxWidth().testTag("reader-color-preview")) {
             Column {
                 Surface(color = colors.toolbar, contentColor = colors.foreground, modifier = Modifier.fillMaxWidth()) {
@@ -41,6 +44,7 @@ private fun hex(value: Long) = "#%06X".format(value)
                 }
                 Text("这是一行句子", Modifier.padding(16.dp), fontSize = settings.fontSize.sp,
                     fontFamily = rememberReaderFont(settings).family,
+                    letterSpacing = settings.letterSpacing.em,
                     lineHeight = (settings.fontSize * settings.lineHeight).sp)
             }
         }
@@ -61,8 +65,8 @@ private fun hex(value: Long) = "#%06X".format(value)
                 }
             }
         }
-        Text("点击打开取色盘，也可输入 #RRGGBB。工具栏透明度可在「翻页」中调整。", style = MaterialTheme.typography.bodySmall)
-        AppTextButton(onClick = { onChange(settings.copy(customColors = defaults?.resolvedCustomColors ?: ReaderCustomColors())) }) {
+        Text(helperText, style = MaterialTheme.typography.bodySmall)
+        if(showReset) AppTextButton(onClick = { onChange(settings.copy(customColors = defaults?.resolvedCustomColors ?: ReaderCustomColors())) }) {
             Text(if(defaults != null) "恢复默认阅读配色" else "重置自定义配色")
         }
     }

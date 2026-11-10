@@ -33,6 +33,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
 
 /** 窗口动画不受 Compose 动画缩放控制，需要单独关闭。 */
 @Composable private fun ApplyDialogMotion() {
+    cc.novelia.app.ui.theme.ApplyReaderDialogBrightness()
     val reduced = appReducedMotion()
     val window = (LocalView.current.parent as? DialogWindowProvider)?.window
     val defaultAnimations = remember(window) { window?.attributes?.windowAnimations ?: 0 }
