@@ -9,4 +9,5 @@ import kotlinx.serialization.Serializable
     val shelfGrid: Boolean = false, val localFilesGrid: Boolean = false, val cloudShelfGrid: Boolean = false,
     val shelfTapToRead: Boolean = false,
     val rememberLastShelfFolder: Boolean = true,
-    val edgeToolbar: EdgeToolbarSettings = EdgeToolbarSettings())
+    val edgeToolbar: EdgeToolbarSettings = EdgeToolbarSettings(),
+    val hideUnavailableComments: Boolean = false)

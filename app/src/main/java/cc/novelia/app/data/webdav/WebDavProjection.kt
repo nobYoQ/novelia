@@ -60,6 +60,7 @@ object WebDavProjection {
             before.reducedMotion != after.reducedMotion || before.historyPaused != after.historyPaused ||
             before.blockedBooks != after.blockedBooks || before.blockedTags != after.blockedTags || before.blockedAuthors != after.blockedAuthors ||
             before.blockedUsers != after.blockedUsers || before.hideNovelComments != after.hideNovelComments ||
+            before.hideUnavailableComments != after.hideUnavailableComments ||
             before.autoCollapseCloudFilters != after.autoCollapseCloudFilters || before.autoSaveCloudFavoritesLocally != after.autoSaveCloudFavoritesLocally ||
             before.clipboardLinkHints != after.clipboardLinkHints || before.keywordLimit != after.keywordLimit) add(SyncDomain.SETTINGS)
     }
@@ -91,6 +92,7 @@ object WebDavProjection {
         put(GLOBAL, mapOf(
             "theme" to JsonPrimitive(state.theme), "reducedMotion" to JsonPrimitive(state.reducedMotion),
             "historyPaused" to JsonPrimitive(state.historyPaused), "hideNovelComments" to JsonPrimitive(state.hideNovelComments),
+            "hideUnavailableComments" to JsonPrimitive(state.hideUnavailableComments),
             "autoCollapseCloudFilters" to JsonPrimitive(state.autoCollapseCloudFilters),
             "autoSaveCloudFavoritesLocally" to JsonPrimitive(state.autoSaveCloudFavoritesLocally),
             "clipboardLinkHints" to JsonPrimitive(state.clipboardLinkHints), "keywordLimit" to (state.keywordLimit?.let(::JsonPrimitive) ?: JsonNull)
@@ -242,6 +244,7 @@ object WebDavProjection {
             blockedBooks = state.blockedBooks.filterNot(::isNetworkKey).toSet() + blocked("book"),
             blockedTags = blocked("tag"), blockedAuthors = blocked("author"),
             blockedUsers = blocked("user"), hideNovelComments = bool("hideNovelComments", state.hideNovelComments),
+            hideUnavailableComments = bool("hideUnavailableComments", state.hideUnavailableComments),
             autoCollapseCloudFilters = bool("autoCollapseCloudFilters", state.autoCollapseCloudFilters),
             autoSaveCloudFavoritesLocally = bool("autoSaveCloudFavoritesLocally", state.autoSaveCloudFavoritesLocally),
             clipboardLinkHints = bool("clipboardLinkHints", state.clipboardLinkHints),

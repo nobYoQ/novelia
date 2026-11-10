@@ -32,10 +32,12 @@ internal data class ForumReplyFocus(val rootId: Long, val page: Int, val comment
     discussionKey: Any, root: ForumComment, viewer: Profile?, version: Int,
     focus: ForumReplyFocus? = null, blockedUsers: Set<String> = emptySet(),
     knownReplyCount: Long? = null, countLoading: Boolean = false, onReplyCount: (Long) -> Unit = {},
+    hideUnavailableComments: Boolean = false,
     replyPages: ForumReplyPageCache = rememberForumReplyPages(discussionKey, root.id, viewer?.userId, viewer?.role, version, initialRoots = listOf(root)),
     loadReplies: suspend (Int) -> ForumPage<ForumComment>,
     render: @Composable (ForumComment, Boolean, (@Composable () -> Unit)?) -> Unit
 ) {
+    if(!root.visible(blockedUsers, hideUnavailableComments)) return
     var expanded by rememberSaveable(discussionKey, root.id, viewer?.userId, viewer?.role) { mutableStateOf(false) }
     var page by rememberSaveable(discussionKey, root.id, viewer?.userId, viewer?.role) { mutableIntStateOf(0) }
     var replyTotal by remember(discussionKey, root.id, viewer?.userId, viewer?.role, version) { mutableStateOf<Long?>(null) }
@@ -80,10 +82,11 @@ internal data class ForumReplyFocus(val rootId: Long, val page: Int, val comment
                     refreshKey = version, load = { replyPages.load(root.id, page) { loadReplies(page) } }, onLoaded = onPageLoaded,
                     modifier = Modifier.padding(start = 16.dp).testTag("forum-replies-${root.id}")) { replies, _ ->
                     Column(Modifier.fillMaxWidth()) {
-                        replies.items.filter { !it.authorBlocked && it.authorUsername !in blockedUsers }.forEach { reply ->
+                        val visibleReplies = replies.items.filter { it.visible(blockedUsers, hideUnavailableComments) }
+                        visibleReplies.forEach { reply ->
                             key(reply.id) { render(reply, root.status == 0, null) }
                         }
-                        if(replies.items.isEmpty()) Text("暂无回复", Modifier.padding(12.dp))
+                        if(visibleReplies.isEmpty()) Text(if(replies.items.isEmpty()) "暂无回复" else "本页没有可显示的回复", Modifier.padding(12.dp))
                         if(replies.pageCount() > 1) PageControls(page, replies.pageCount()) { page = it }
                     }
                 }

@@ -49,6 +49,8 @@ import cc.novelia.app.data.model.User
 ) {
     val replyRoot get() = rootId ?: id
     val createdEpoch get() = Instant.parse(createdAt).epochSecond
+    fun visible(blockedUsers: Set<String>, hideUnavailable: Boolean) =
+        !authorBlocked && authorUsername !in blockedUsers && (!hideUnavailable || status == 0)
     fun canModify(profile: Profile?, now: Long = Instant.now().epochSecond) =
         profile != null && (profile.role == "admin" || profile.userId == authorId && now - createdEpoch in 0 until ForumRules.MODIFICATION_SECONDS)
 }

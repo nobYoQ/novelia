@@ -88,6 +88,7 @@ fun legacyFolderId(name: String): String = if(name == DEFAULT_FOLDER) DEFAULT_FO
     // 本机启动检查偏好，普通设置备份保留，WebDAV 不同步。
     val autoCheckAppUpdates: Boolean = true,
     val blockedUsers: Set<String> = emptySet(), val hideNovelComments: Boolean = false, val wifiOnly: Boolean = false,
+    val hideUnavailableComments: Boolean = false,
     val personalGlossaries: Map<String, Map<String, String>> = emptyMap(),
     val autoSync: Boolean = true, val syncStatus: Map<String, CloudSyncStatus> = emptyMap(),
     val updateSnapshots: Map<String, BookUpdateSnapshot> = emptyMap(),

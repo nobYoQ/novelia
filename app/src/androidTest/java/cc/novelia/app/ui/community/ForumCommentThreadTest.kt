@@ -108,6 +108,51 @@ class ForumCommentThreadTest {
         compose.onNodeWithContentDescription("下一页").performScrollTo().assertIsEnabled()
     }
 
+    @Test fun unavailableRepliesAreFilteredImmediatelyWithoutChangingServerPagination() {
+        var hide by mutableStateOf(false)
+        val replies = ForumPage(21, listOf(reply(12, "已删除回复").copy(status = 2),
+            reply(13, "已隐藏回复").copy(status = 1), reply(14, "正常回复")))
+        compose.setContent { NoveliaTheme("light") {
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                ForumCommentThread(5, root.copy(replies = replies), null, 0,
+                    hideUnavailableComments = hide, loadReplies = { replies }) { comment, _, actions ->
+                    Column { Text(comment.content); actions?.invoke() }
+                }
+            }
+        } }
+        compose.onNodeWithText("查看 21 条回复").performClick()
+        compose.onNodeWithText("已删除回复").assertExists()
+        compose.onNodeWithText("已隐藏回复").assertExists()
+        compose.runOnIdle { hide = true }
+        compose.onNodeWithText("已删除回复").assertDoesNotExist()
+        compose.onNodeWithText("已隐藏回复").assertDoesNotExist()
+        compose.onNodeWithText("正常回复").assertExists()
+        compose.onNodeWithContentDescription("下一页").performScrollTo().assertIsEnabled()
+        compose.runOnIdle { hide = false }
+        compose.onNodeWithText("已删除回复").assertExists()
+    }
+
+    @Test fun filteringUnavailableRootsRemovesTheWholeThreadWithoutLoadingReplies() {
+        var hide by mutableStateOf(true)
+        var requests = 0
+        compose.setContent { NoveliaTheme("light") {
+            Column {
+                listOf(1, 2).forEach { status ->
+                    ForumCommentThread(5, root.copy(id = status.toLong(), status = status), null, 0,
+                        hideUnavailableComments = hide, loadReplies = { requests++; ForumPage(0, emptyList()) }) { comment, _, actions ->
+                        Column { Text(comment.content); actions?.invoke() }
+                    }
+                }
+            }
+        } }
+        compose.onNodeWithTag("forum-thread-1").assertDoesNotExist()
+        compose.onNodeWithTag("forum-thread-2").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(0, requests); hide = false }
+        compose.onNodeWithTag("forum-thread-1").assertExists()
+        compose.onNodeWithTag("forum-thread-2").assertExists()
+        compose.runOnIdle { assertEquals(0, requests) }
+    }
+
     @Test fun accountBlockedAuthorsStayHiddenInCachedReplyPreviews() {
         val replies = ForumPage(2, listOf(reply(12, "账号拉黑的回复").copy(authorBlocked = true), reply(13, "可见回复")))
         val preview = root.copy(replyCount = 2, replies = replies)

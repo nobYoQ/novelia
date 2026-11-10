@@ -51,7 +51,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 @Composable internal fun NovelCommentsPanel(c: AppController, site: String, locked: Boolean = false) {
     val state by c.store.state.collectAsStateWithLifecycle()
     if(state.hideNovelComments) {
-        EmptyState("小说评论已隐藏", "可以在设置的阅读体验中重新开启。", Icons.Outlined.CommentsDisabled)
+        EmptyState("小说评论已隐藏", "可以在设置的“内容与标签”中重新开启。", Icons.Outlined.CommentsDisabled)
         return
     }
     val api = c.app.novelCommentApi
@@ -101,8 +101,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
             // 在讨论串首次组合之前初始化，避免展开时先发请求再填入首屏数据。
             val replyPages = rememberForumReplyPages(discussionKey, listOf(binding, blacklistRevision), profile?.role, version, countsRevision,
                 initialRoots = result.items, shared = c.uiResults.replies, identity = discussionIdentity)
-            val comments = result.items.filter { !it.authorBlocked && it.authorUsername !in state.blockedUsers }
-            LaunchedEffect(result.items, version, countsRevision, state.blockedUsers) {
+            val comments = result.items.filter { it.visible(state.blockedUsers, state.hideUnavailableComments) }
+            LaunchedEffect(result.items, version, countsRevision, state.blockedUsers, state.hideUnavailableComments) {
                 try {
                     loadForumReplyCounts(comments.filterNot { replyCounts.containsKey(it.id) },
                         load = { session.ensureCurrent(binding); discussion.replyCount(it).also { session.ensureCurrent(binding) } }) { id, count ->
@@ -116,10 +116,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
             }
             AppLazyColumn(state = scroll, contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 20.dp,
                 bottom = if(!locked && !composerExpanded) 88.dp else 20.dp)) {
-                if(comments.isEmpty()) item { EmptyState("还没有讨论", "来分享你的感想吧。", Icons.Outlined.ChatBubbleOutline) }
+                if(comments.isEmpty()) item { EmptyState(if(result.items.isEmpty()) "还没有讨论" else "本页没有可显示的评论",
+                    if(result.items.isEmpty()) "来分享你的感想吧。" else "评论已按屏蔽设置过滤，可以查看其他页或调整设置。", Icons.Outlined.ChatBubbleOutline) }
                 items(comments, key = { "${profile?.userId}:${profile?.role}:${it.id}" }) { root ->
                     ForumCommentThread(discussionKey, root, profile, version, replyFocus, state.blockedUsers,
                         knownReplyCount = replyCounts[root.id], countLoading = !replyCounts.containsKey(root.id),
+                        hideUnavailableComments = state.hideUnavailableComments,
                         onReplyCount = { replyCounts[root.id] = it },
                         replyPages = replyPages,
                         loadReplies = {
