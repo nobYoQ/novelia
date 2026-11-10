@@ -68,6 +68,46 @@ class SettingsCategoriesTest {
             runBlocking { app.store.flush() }
         }
     }
+    @Test fun contentFiltersAreIndependentAndKeywordsHaveTheirOwnCategory() {
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
+        runBlocking { app.initialization.await() }
+        val original = app.store.state.value
+        try {
+            app.store.update { it.copy(hideUnavailableComments = false, hideLocalFavorites = false, hideCloudFavorites = false) }
+            val restoration = StateRestorationTester(compose)
+            restoration.setContent { NoveliaTheme("light") {
+                SettingsScreen(AppController(app, rememberNavController(), rememberCoroutineScope(), remember { SnackbarHostState() }), "CONTENT")
+            } }
+            option("不显示已删除或已隐藏的评论").assertIsOff().performClick()
+            saveTestScreenshot("content-comment-visibility-setting.png")
+            option("屏蔽本地已收藏书籍").assertIsOff().performClick()
+            option("屏蔽云端已收藏书籍").assertIsOff()
+            saveTestScreenshot("content-favorite-visibility-settings.png")
+            compose.runOnIdle {
+                assertTrue(app.store.state.value.hideUnavailableComments)
+                assertTrue(app.store.state.value.hideLocalFavorites)
+                assertFalse(app.store.state.value.hideCloudFavorites)
+            }
+            compose.onNodeWithText("标签库与分类").assertDoesNotExist()
+            runBlocking { app.store.flush() }
+            restoration.emulateSavedInstanceStateRestore()
+            option("不显示已删除或已隐藏的评论").assertIsOn()
+            option("屏蔽本地已收藏书籍").assertIsOn().performClick()
+            option("屏蔽云端已收藏书籍").assertIsOff().performClick()
+            compose.runOnIdle {
+                assertFalse(app.store.state.value.hideLocalFavorites)
+                assertTrue(app.store.state.value.hideCloudFavorites)
+            }
+            compose.onNodeWithContentDescription("返回").performClick()
+            option("标签与词库").performClick()
+            option("标签库与分类").assertIsDisplayed()
+            compose.onNodeWithText("隐藏小说评论").assertDoesNotExist()
+        } finally {
+            app.store.update { it.copy(hideUnavailableComments = original.hideUnavailableComments,
+                hideLocalFavorites = original.hideLocalFavorites, hideCloudFavorites = original.hideCloudFavorites) }
+            runBlocking { app.store.flush() }
+        }
+    }
     @Test fun shelfTapToReadCanBeEnabledAndDisabledAfterRestoration() {
         val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
         runBlocking { app.initialization.await() }

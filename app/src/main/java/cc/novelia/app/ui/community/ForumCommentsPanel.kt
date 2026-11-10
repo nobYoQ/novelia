@@ -51,7 +51,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 @Composable internal fun NovelCommentsPanel(c: AppController, site: String, locked: Boolean = false) {
     val state by c.store.state.collectAsStateWithLifecycle()
     if(state.hideNovelComments) {
-        EmptyState("小说评论已隐藏", "可以在设置的“内容与标签”中重新开启。", Icons.Outlined.CommentsDisabled)
+        EmptyState("小说评论已隐藏", "可以在设置的“内容与屏蔽”中重新开启。", Icons.Outlined.CommentsDisabled)
         return
     }
     val api = c.app.novelCommentApi

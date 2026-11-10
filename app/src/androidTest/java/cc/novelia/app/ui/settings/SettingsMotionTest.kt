@@ -27,11 +27,12 @@ class SettingsMotionTest {
     private var reduced by mutableStateOf(false)
     private lateinit var back: OnBackPressedDispatcher
 
-    @Test fun allSixCategoriesAnimateForwardAndBackWithTheWholePage() {
+    @Test fun allSevenCategoriesAnimateForwardAndBackWithTheWholePage() {
         showSettings()
         val frame = compose.onNodeWithTag("settings-motion-frame").fetchSemanticsNode().boundsInRoot
         val categories = listOf("READING" to "阅读与朗读", "APPEARANCE" to "外观与操作",
-            "LIBRARY" to "书架与下载", "NETWORK" to "网络与同步", "CONTENT" to "内容与标签", "STORAGE" to "数据与备份")
+            "LIBRARY" to "书架与下载", "NETWORK" to "网络与同步", "CONTENT" to "内容与屏蔽",
+            "KEYWORDS" to "标签与词库", "STORAGE" to "存储与备份")
         for((id, title) in categories) {
             compose.mainClock.autoAdvance = true
             compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText(title))
