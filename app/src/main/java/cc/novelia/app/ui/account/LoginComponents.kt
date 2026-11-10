@@ -29,7 +29,7 @@ import cc.novelia.app.data.network.SourceSelection
 import cc.novelia.app.ui.components.base.AppChipFlowRow
 import cc.novelia.app.ui.components.base.AppScrollColumn
 import cc.novelia.app.ui.components.base.FilterPanelExpandIcon
-import cc.novelia.app.ui.feedback.MidoriCompanion
+import cc.novelia.app.ui.feedback.StickerCompanion
 import cc.novelia.app.ui.theme.appRoundedCornerShape
 
 @Composable internal fun LoginPageLayout(
@@ -85,11 +85,11 @@ import cc.novelia.app.ui.theme.appRoundedCornerShape
             }
         }
         if(maxWidth / fontScale < 280.dp) Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            MidoriCompanion(Modifier.size(104.dp), visible = companionVisible)
+            StickerCompanion(Modifier.size(104.dp), visible = companionVisible)
             text(Modifier.fillMaxWidth())
         } else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             text(Modifier.weight(1f))
-            MidoriCompanion(Modifier.size(112.dp), visible = companionVisible)
+            StickerCompanion(Modifier.size(112.dp), visible = companionVisible)
         }
     }
 }

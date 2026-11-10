@@ -48,6 +48,8 @@ import cc.novelia.app.ui.discover.RankScreen
 import cc.novelia.app.ui.downloads.DownloadsScreen
 import cc.novelia.app.ui.feedback.ObserveDownloadCelebrations
 import cc.novelia.app.ui.feedback.StickerSnackbarHost
+import cc.novelia.app.ui.feedback.LocalStickerPack
+import cc.novelia.app.ui.feedback.StickerPacks
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.navigation.DISCOVER_ROUTE
 import cc.novelia.app.ui.navigation.RootDestinationLayout
@@ -88,10 +90,10 @@ import cc.novelia.app.startup.StartupScreen
 
 private data class AppAppearance(val theme: String, val amoledBlack: Boolean, val squareCorners: Boolean, val reducedMotion: Boolean, val eInk: Boolean, val eInkBooks: Set<String>,
     val screenButtons: Boolean, val hideStatusBar: Boolean, val bookStatusBars: Map<String, Boolean>,
-    val readerOrientation: String, val bookOrientations: Map<String, String>)
+    val readerOrientation: String, val bookOrientations: Map<String, String>, val stickerPackId: String)
 private fun LibraryState.appearance() = AppAppearance(theme, amoledBlack, squareCorners, reducedMotion || reader.eInkMode, reader.eInkMode,
     bookSettings.filterValues { it.eInkMode }.keys, reader.showEInkScreenButtons, reader.hideStatusBar, bookSettings.mapValues { it.value.hideStatusBar },
-    reader.resolvedOrientation, bookSettings.mapValues { it.value.resolvedOrientation })
+    reader.resolvedOrientation, bookSettings.mapValues { it.value.resolvedOrientation }, stickerPackId)
 
 /**
  * Android 生命周期与 Compose 界面的连接点：等待应用初始化，装配主题、控制器和导航图。
@@ -139,6 +141,7 @@ class MainActivity : ComponentActivity() {
                 val edgeReader = remember { EdgeToolbarReaderState() }
                 CompositionLocalProvider(LocalBookSyncPresentation provides bookSync, LocalBookListPresentation provides bookList,
                     LocalAppOverlayRegistry provides overlays, LocalEdgeToolbarReaderState provides edgeReader,
+                    LocalStickerPack provides StickerPacks.resolve(appearance.stickerPackId),
                     cc.novelia.app.ui.theme.LocalScreenPageButtons provides appearance.screenButtons) {
                 controller.pendingFavorite?.let { book ->
                     FavoriteSheet(controller, book, initialCloud = controller.pendingFavoriteCloud) { controller.pendingFavorite = null }

@@ -12,7 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import cc.novelia.app.ui.feedback.MidoriSticker
+import cc.novelia.app.ui.feedback.Sticker
 import cc.novelia.app.ui.feedback.StickerAccent
 import cc.novelia.app.ui.theme.MotionContent
 import cc.novelia.app.ui.theme.LocalEInkMode
@@ -74,7 +74,7 @@ import kotlinx.coroutines.ensureActive
         val current = result
         when {
             current == null -> Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) { if(!appReducedMotion()) CircularProgressIndicator(); Text(loadingLabel, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            current.isFailure -> if(loading) { Text(loadingLabel, Modifier.align(Alignment.Center)) } else EmptyState("暂时无法加载", current.exceptionOrNull().friendlyMessage(), Icons.Outlined.CloudOff, "重试", retry, sticker = MidoriSticker.Concerned)
+            current.isFailure -> if(loading) { Text(loadingLabel, Modifier.align(Alignment.Center)) } else EmptyState("暂时无法加载", current.exceptionOrNull().friendlyMessage(), Icons.Outlined.CloudOff, "重试", retry, sticker = Sticker.Concerned)
             else -> {
                 // 刷新时保留原组合，使列表位置和编辑器状态得以延续。
                 MotionContent(key, Modifier.fillMaxSize(), animateInitial = revealContent && initialResult == null) {
@@ -97,7 +97,7 @@ import kotlinx.coroutines.ensureActive
                     MotionContent(error, Modifier.align(Alignment.BottomCenter).padding(12.dp)) {
                         Snackbar(modifier = Modifier.heightIn(min = 64.dp), action = { AppTextButton(onClick = retry) { Text("重试") } }) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                StickerAccent(MidoriSticker.Concerned, error, Modifier.size(40.dp))
+                                StickerAccent(Sticker.Concerned, error, Modifier.size(40.dp))
                                 Text("刷新未完成：${error.friendlyMessage()}", Modifier.weight(1f))
                             }
                         }

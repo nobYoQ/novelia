@@ -72,6 +72,8 @@ fun legacyFolderId(name: String): String = if(name == DEFAULT_FOLDER) DEFAULT_FO
     val amoledBlack: Boolean = false,
     // 直角彩蛋是本机偏好，普通设置备份保留，WebDAV 不同步。
     val squareCorners: Boolean = false,
+    // 应用内贴纸集是本机显示偏好，普通设置备份保留，WebDAV 不同步。
+    val stickerPackId: String = DEFAULT_STICKER_PACK_ID,
     // 文库发现页布局是本机显示偏好，普通设置备份保留，WebDAV 不同步。
     val discoverWenkuGrid: Boolean = true,
     // 三个书架分区分别记住布局，兼容旧书库时保留列表；不参与 WebDAV 同步。

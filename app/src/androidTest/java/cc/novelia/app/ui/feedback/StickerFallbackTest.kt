@@ -37,7 +37,7 @@ class StickerFallbackTest {
         var reduced by mutableStateOf(false)
         compose.setContent { MaterialTheme {
             CompositionLocalProvider(LocalReducedMotion provides reduced) {
-                StickerAccent(MidoriSticker.Celebrate, trigger, Modifier.size(96.dp))
+                StickerAccent(Sticker.Celebrate, trigger, Modifier.size(96.dp))
             }
         } }
         fun pixels(): IntArray = compose.onRoot().captureToImage().let { image ->

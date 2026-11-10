@@ -39,7 +39,7 @@ import kotlinx.coroutines.flow.map
 
 /** 一次交互只播放一轮有限动画，结束后静止，不续播被中断的动画。 */
 @Composable
-fun StickerAccent(sticker: MidoriSticker, trigger: Any? = Unit, modifier: Modifier = Modifier) {
+fun StickerAccent(sticker: Sticker, trigger: Any? = Unit, modifier: Modifier = Modifier) {
     val motion = stickerMotionEnabled()
     var resumed by remember { mutableStateOf(false) }
     var played by remember(sticker, trigger) { mutableStateOf(false) }
@@ -58,15 +58,15 @@ fun StickerAccent(sticker: MidoriSticker, trigger: Any? = Unit, modifier: Modifi
         played = true
         if(motion) {
             progress.snapTo(0f)
-            progress.animateTo(1f, tween(if(sticker == MidoriSticker.Sleep) AppMotion.StickerRest else AppMotion.Sticker, easing = LinearEasing))
+            progress.animateTo(1f, tween(if(sticker == Sticker.Sleep) AppMotion.StickerRest else AppMotion.Sticker, easing = LinearEasing))
         }
     }
-    MidoriIllustration(sticker, modifier.graphicsLayer {
+    StickerIllustration(sticker, modifier.graphicsLayer {
         val p = if(motion && resumed) progress.value else 1f
         val arc = sin(p * PI).toFloat()
         transformOrigin = TransformOrigin(.5f, .8f)
         when(sticker) {
-            MidoriSticker.Wave -> {
+            Sticker.Wave -> {
                 // 脚底为支点，起跳后逐渐衰减的挤压与拉伸带来 Q 弹招手反馈。
                 val bounce = sin(p * PI * 4).toFloat() * (1f - p) * (1f - p)
                 transformOrigin = TransformOrigin(.5f, 1f)
@@ -75,8 +75,8 @@ fun StickerAccent(sticker: MidoriSticker, trigger: Any? = Unit, modifier: Modifi
                 scaleY = 1f + bounce * .20f
                 rotationZ = sin(p * PI * 6).toFloat() * (1f - p) * 10f
             }
-            MidoriSticker.Concerned, MidoriSticker.Curious -> rotationZ = sin(p * PI * 4).toFloat() * (1f - p) * 5f
-            MidoriSticker.Sleep -> { scaleX = 1f + arc * .045f; scaleY = scaleX }
+            Sticker.Concerned, Sticker.Curious -> rotationZ = sin(p * PI * 4).toFloat() * (1f - p) * 5f
+            Sticker.Sleep -> { scaleX = 1f + arc * .045f; scaleY = scaleX }
             else -> {
                 translationY = -arc * 7.dp.toPx()
                 scaleX = 1f + arc * .09f
@@ -88,6 +88,7 @@ fun StickerAccent(sticker: MidoriSticker, trigger: Any? = Unit, modifier: Modifi
 
 @Composable
 internal fun AboutIdentity() {
+    val pack = LocalStickerPack.current
     var taps by remember { mutableIntStateOf(0) }
     var lastTap by remember { mutableLongStateOf(0L) }
     var wave by remember { mutableIntStateOf(0) }
@@ -97,7 +98,7 @@ internal fun AboutIdentity() {
     }
     Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Box(Modifier.size(64.dp)) {
-            if(waving) StickerAccent(MidoriSticker.Wave, wave, Modifier.fillMaxSize().semantics { contentDescription = "小绿向你招手" })
+            if(waving) StickerAccent(Sticker.Wave, wave, Modifier.fillMaxSize().semantics { contentDescription = "${pack.companionName}向你招手" })
             else Icon(Icons.Outlined.AutoStories, null, Modifier.fillMaxSize(), tint = MaterialTheme.colorScheme.primary)
         }
         Text("Novelia", style = MaterialTheme.typography.headlineLarge)
@@ -114,7 +115,7 @@ internal fun AboutIdentity() {
 
 internal data class StickerSnackbarVisuals(
     override val message: String,
-    val sticker: MidoriSticker,
+    val sticker: Sticker,
     override val actionLabel: String? = null,
     override val withDismissAction: Boolean = true,
     override val duration: SnackbarDuration = SnackbarDuration.Short,
@@ -169,7 +170,7 @@ fun ObserveDownloadCelebrations(c: AppController, route: String?) {
             // 后台完成结果留在下载历史中，返回页面时不补播庆祝动画。
             if(finished.isNotEmpty() && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) && latestRoute?.startsWith("reader/") != true) {
                 c.celebrate(if(finished.size == 1) "「${finished.single().title}」下载完成" else "${finished.size} 个文件下载完成",
-                    MidoriSticker.Celebrate, actionLabel = "查看下载") { c.go("downloads", replaceTop = true) }
+                    Sticker.Celebrate, actionLabel = "查看下载") { c.go("downloads", replaceTop = true) }
             }
         }
     }

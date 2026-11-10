@@ -49,7 +49,7 @@ import cc.novelia.app.data.sync.syncFailureMessage
 import cc.novelia.app.data.sync.synchronizePending
 import cc.novelia.app.data.sync.updateCloudPending
 import cc.novelia.app.ui.components.base.friendlyMessage
-import cc.novelia.app.ui.feedback.MidoriSticker
+import cc.novelia.app.ui.feedback.Sticker
 import cc.novelia.app.ui.feedback.StickerSnackbarVisuals
 import cc.novelia.app.ui.reader.ReaderTocState
 import java.io.IOException
@@ -249,14 +249,14 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
         if(snackbar.showSnackbar(text, actionLabel = actionLabel, withDismissAction = actionLabel != null,
                 duration = if(actionLabel == null) SnackbarDuration.Short else SnackbarDuration.Long) == SnackbarResult.ActionPerformed) onAction()
     } }
-    fun celebrate(text: String, sticker: MidoriSticker, actionLabel: String? = null, onAction: () -> Unit = {}) {
+    fun celebrate(text: String, sticker: Sticker, actionLabel: String? = null, onAction: () -> Unit = {}) {
         celebration?.cancel()
         celebration = scope.launch {
             if(snackbar.showSnackbar(StickerSnackbarVisuals(text, sticker, actionLabel = actionLabel,
                     duration = if(actionLabel == null) SnackbarDuration.Short else SnackbarDuration.Long)) == SnackbarResult.ActionPerformed) onAction()
         }
     }
-    fun action(success: String? = null, sticker: MidoriSticker? = null, block: suspend () -> Unit) { scope.launch(Dispatchers.Main.immediate) {
+    fun action(success: String? = null, sticker: Sticker? = null, block: suspend () -> Unit) { scope.launch(Dispatchers.Main.immediate) {
         try { block(); success?.let { if(sticker != null) celebrate(it, sticker) else snackbar.showSnackbar(it) } }
         catch(e: kotlinx.coroutines.CancellationException) { throw e }
         catch(e: Exception) { snackbar.showSnackbar(e.friendlyMessage()) }

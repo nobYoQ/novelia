@@ -17,7 +17,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import cc.novelia.app.ui.feedback.MidoriCompanion
+import cc.novelia.app.ui.feedback.StickerCompanion
 import cc.novelia.app.ui.theme.LocalReducedMotion
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -27,7 +27,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
-class MidoriCompanionTest {
+class StickerCompanionTest {
     @get:Rule val compose = createComposeRule()
     private fun companion() = compose.onNodeWithContentDescription("小绿，阅读搭子")
     private fun state(value: String) = SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, value)
@@ -38,7 +38,7 @@ class MidoriCompanionTest {
             MaterialTheme {
                 Surface(color = MaterialTheme.colorScheme.primaryContainer) {
                     Column(Modifier.width(300.dp)) {
-                        MidoriCompanion()
+                        StickerCompanion()
                         Button(onClick = { logins++ }) { Text("登录 / 注册") }
                     }
                 }
@@ -69,7 +69,7 @@ class MidoriCompanionTest {
         compose.setContent {
             MaterialTheme {
                 CompositionLocalProvider(LocalReducedMotion provides reduced) {
-                    MidoriCompanion(Modifier.width(300.dp), visible = visible)
+                    StickerCompanion(Modifier.width(300.dp), visible = visible)
                 }
             }
         }
@@ -104,7 +104,7 @@ class MidoriCompanionTest {
         compose.setContent {
             MaterialTheme {
                 Surface(color = MaterialTheme.colorScheme.primaryContainer) {
-                    MidoriCompanion(Modifier.width(300.dp))
+                    StickerCompanion(Modifier.width(300.dp))
                 }
             }
         }

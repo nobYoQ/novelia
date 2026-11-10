@@ -14,7 +14,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.NoveliaApplication
-import cc.novelia.app.ui.feedback.MidoriSticker
+import cc.novelia.app.ui.feedback.Sticker
 import cc.novelia.app.ui.feedback.StickerSnackbarHost
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.theme.AppInteractionMode
@@ -43,7 +43,7 @@ class DownloadFeedbackTest {
         setup()
         compose.runOnIdle {
             controller.go("downloads")
-            controller.celebrate("第1卷下载完成", MidoriSticker.Celebrate, actionLabel = "查看下载") {
+            controller.celebrate("第1卷下载完成", Sticker.Celebrate, actionLabel = "查看下载") {
                 controller.go("downloads", replaceTop = true)
             }
         }

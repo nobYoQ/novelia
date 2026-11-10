@@ -1,12 +1,10 @@
 package cc.novelia.app.ui.feedback
 
-import androidx.annotation.DrawableRes
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -19,11 +17,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.MotionDurationScale
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -31,40 +26,12 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
-import cc.novelia.app.R
 import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.appReducedMotion
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** 使用原始本地 WebP 素材，保留透明边缘和宽高比。 */
-enum class MidoriSticker(@get:DrawableRes val drawable: Int, val description: String) {
-    Neutral(R.drawable.midori_neutral, "等你打招呼"),
-    Happy(R.drawable.midori_happy, "开心地笑了"),
-    Wink(R.drawable.midori_wink, "向你眨眨眼"),
-    Love(R.drawable.midori_love, "收到你的喜欢啦"),
-    Welcome(R.drawable.midori_welcome, "欢迎新的故事"),
-    Curious(R.drawable.midori_curious, "正在寻找故事"),
-    Reading(R.drawable.midori_reading, "安静阅读"),
-    Thinking(R.drawable.midori_thinking, "若有所思"),
-    Celebrate(R.drawable.midori_celebrate, "开心庆祝"),
-    Approve(R.drawable.midori_approve, "完成啦"),
-    Sleep(R.drawable.midori_sleep, "安心休息"),
-    Concerned(R.drawable.midori_concerned, "遇到一点小状况"),
-    Wave(R.drawable.midori_wave, "向你招手"),
-}
-
-@Composable
-fun MidoriIllustration(sticker: MidoriSticker, modifier: Modifier = Modifier) {
-    Image(
-        painterResource(sticker.drawable), contentDescription = null,
-        modifier = modifier, contentScale = ContentScale.Fit,
-    )
-}
-
-private val HappyReactions = listOf(MidoriSticker.Happy, MidoriSticker.Wink, MidoriSticker.Love)
-// 颜色取自原始贴纸中的爱心，避免被理解为错误或状态提示。
-private val StickerHeartPink = Color(0xFFE15C86)
+private val HappyReactions = listOf(Sticker.Happy, Sticker.Wink, Sticker.Love)
 
 @Composable
 internal fun stickerMotionEnabled(): Boolean {
@@ -74,7 +41,8 @@ internal fun stickerMotionEnabled(): Boolean {
 }
 
 @Composable
-fun MidoriCompanion(modifier: Modifier = Modifier, visible: Boolean = true) {
+fun StickerCompanion(modifier: Modifier = Modifier, visible: Boolean = true) {
+    val pack = LocalStickerPack.current
     var resumed by remember { mutableStateOf(false) }
     LifecycleResumeEffect(Unit) {
         resumed = true
@@ -92,7 +60,7 @@ fun MidoriCompanion(modifier: Modifier = Modifier, visible: Boolean = true) {
     var bursts by remember { mutableStateOf(emptyList<Int>()) }
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
-    val sticker = if(reacting && active) HappyReactions[reactionIndex] else MidoriSticker.Neutral
+    val sticker = if(reacting && active) HappyReactions[reactionIndex] else Sticker.Neutral
 
     // 同时只保留一个可替换反馈，快速点击重新开始，不累积粒子或任务。
     LaunchedEffect(taps, active) {
@@ -145,7 +113,7 @@ fun MidoriCompanion(modifier: Modifier = Modifier, visible: Boolean = true) {
     Box(
         modifier.size(128.dp)
             .semantics {
-                contentDescription = "小绿，阅读搭子"
+                contentDescription = "${pack.companionName}，阅读搭子"
                 stateDescription = sticker.description
             }
             .clickable(
@@ -160,15 +128,15 @@ fun MidoriCompanion(modifier: Modifier = Modifier, visible: Boolean = true) {
             },
         contentAlignment = Alignment.Center,
     ) {
-        Crossfade(sticker, modifier = Modifier.size(112.dp).testTag("midori-artwork").graphicsLayer {
+        Crossfade(sticker, modifier = Modifier.size(112.dp).testTag("sticker-artwork").graphicsLayer {
             // 在绘制阶段读取动画帧，卡片和账号数据无需逐帧重组。
             transformOrigin = TransformOrigin(.5f, .85f)
             rotationZ = if(animate) tilt.value else 0f
             translationY = if(animate) lift.value.dp.toPx() else 0f
             scaleX = if(animate) 1f + squash.value * .09f else 1f
             scaleY = if(animate) 1f - squash.value * .1f else 1f
-        }, animationSpec = tween(if(reducedMotion || !active) 0 else 120), label = "midori expression") {
-            MidoriIllustration(it, Modifier.fillMaxSize())
+        }, animationSpec = tween(if(reducedMotion || !active) 0 else 120), label = "sticker expression") {
+            StickerIllustration(it, Modifier.fillMaxSize())
         }
         if(active && reacting) {
             if(reducedMotion) ReactionHearts(animated = false)
@@ -181,13 +149,14 @@ fun MidoriCompanion(modifier: Modifier = Modifier, visible: Boolean = true) {
 
 /** 最多保留两组独立爱心，下一次点击不会把正在飘走的爱心拉回原位。 */
 @Composable private fun BoxScope.ReactionHearts(animated: Boolean, onFinished: () -> Unit = {}) {
+    val heartColor = LocalStickerPack.current.heartColor
     val hearts = remember { Animatable(0f) }
     val finished by rememberUpdatedState(onFinished)
     LaunchedEffect(animated) {
         if(animated) { hearts.animateTo(1f, tween(AppMotion.StickerHearts)); finished() }
     }
     repeat(3) { index ->
-        Icon(Icons.Filled.Favorite, null, tint = StickerHeartPink,
+        Icon(Icons.Filled.Favorite, null, tint = heartColor,
             modifier = Modifier.size(if(index == 1) 16.dp else 12.dp).graphicsLayer {
                 val progress = if(!animated) .65f else hearts.value
                 val fraction = ((progress - index * .09f) / .82f).coerceIn(0f, 1f)

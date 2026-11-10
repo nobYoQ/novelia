@@ -75,7 +75,7 @@ import cc.novelia.app.ui.components.base.MenuRow
 import cc.novelia.app.ui.components.base.Screen
 import cc.novelia.app.ui.components.base.TextPrompt
 import cc.novelia.app.ui.components.base.rememberDebouncedQuery
-import cc.novelia.app.ui.feedback.MidoriSticker
+import cc.novelia.app.ui.feedback.Sticker
 import cc.novelia.app.ui.markdown.format
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.navigation.LocalRootSelectionMode
@@ -302,7 +302,7 @@ import kotlinx.coroutines.withContext
                             if(books.isEmpty()) item {
                                 if(query.isNotBlank() || folder != "全部" || readingStatus != "全部" || (if(page == 0) bookType else fileType) != ShelfBookType.All)
                                     EmptyState("没有符合条件的小说", if(filterCharacters) "可以放宽字数范围、包含未知作品或继续补全字数。" else "试试其他书名、作者、类型或阅读状态。", action = "清除筛选", onAction = { query = ""; folderId = null; readingStatus = "全部"; bookType = ShelfBookType.All; fileType = ShelfBookType.All; characterFilter = CharacterCountFilter() })
-                                else EmptyState(if(page == 1) "把故事装进口袋" else "书架等你来填满", if(page == 1) "支持 EPUB、TXT 和 SRT，导入后即可离线阅读。" else "去发现喜欢的小说，或导入你已有的文件。", action = if(page == 1) "导入文件" else "去发现", onAction = { if(page == 1) importLocalFiles() else c.go("discover") }, sticker = MidoriSticker.Welcome)
+                                else EmptyState(if(page == 1) "把故事装进口袋" else "书架等你来填满", if(page == 1) "支持 EPUB、TXT 和 SRT，导入后即可离线阅读。" else "去发现喜欢的小说，或导入你已有的文件。", action = if(page == 1) "导入文件" else "去发现", onAction = { if(page == 1) importLocalFiles() else c.go("discover") }, sticker = Sticker.Welcome)
                             }
                             if(showGrid) items(gridRows, key = { it.first().saved.book.ref.key }, contentType = { "cover-row" }) { groupRow ->
                                 Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {

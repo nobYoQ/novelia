@@ -50,7 +50,7 @@ import cc.novelia.app.ui.components.base.MenuRow
 import cc.novelia.app.ui.components.base.PageControls
 import cc.novelia.app.ui.components.base.SectionTitle
 import cc.novelia.app.ui.components.base.appHorizontalScroll
-import cc.novelia.app.ui.feedback.MidoriSticker
+import cc.novelia.app.ui.feedback.Sticker
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.appReducedMotion
@@ -192,7 +192,7 @@ import kotlinx.coroutines.sync.withPermit
                             Column {
                                 EmptyState("没有找到匹配的作品", if(filterCount > 0) "先放宽筛选条件，搜索关键词会保留。" else "试试较短的关键词，或检查屏蔽条件。", Icons.Outlined.SearchOff,
                                     if(filterCount > 0) "放宽筛选" else if(submitted.isNotBlank()) "浏览全部作品" else "重新加载",
-                                    { if(filterCount > 0) resetFilters() else if(submitted.isNotBlank()) { query = ""; submitted = ""; resetPages() } else refresh() }, sticker = MidoriSticker.Curious)
+                                    { if(filterCount > 0) resetFilters() else if(submitted.isNotBlank()) { query = ""; submitted = ""; resetPages() } else refresh() }, sticker = Sticker.Curious)
                                 if(local.blockedBooks.isNotEmpty() || local.blockedTags.isNotEmpty() || local.blockedAuthors.isNotEmpty() || local.hideLocalFavorites || local.hideCloudFavorites) AppTextButton(onClick = { c.go("settings?section=CONTENT") }, Modifier.fillMaxWidth()) { Text("检查屏蔽条件") }
                             }
                         }

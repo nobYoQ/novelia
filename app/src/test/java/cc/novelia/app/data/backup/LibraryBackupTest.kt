@@ -32,6 +32,19 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LibraryBackupTest {
+    @Test fun stickerPackRestoresIntoEmptyLibraryAndKeepsExistingLibraryPreference() {
+        val root = temp()
+        try {
+            val incoming = LibraryState(stickerPackId = "incoming-pack")
+            val bytes = archive(mapOf("manifest.json" to appJson.encodeToString(manifest(incoming)).toByteArray(Charsets.UTF_8)))
+            val restored = LibraryBackupArchive.extract(ByteArrayInputStream(bytes), root).library
+            assertEquals("incoming-pack", mergeLibraryBackup(LibraryState(), restored).stickerPackId)
+            val current = LibraryState(stickerPackId = "local-pack",
+                books = listOf(SavedBook(BookCard(BookRef("syosetu", "n1"), "已有书籍"))))
+            assertEquals("local-pack", mergeLibraryBackup(current, restored).stickerPackId)
+        } finally { root.deleteRecursively() }
+    }
+
     @Test fun nightPresetAndBrightnessBackupRoundTripAndRejectInvalidInactivePresets() {
         val reader = ReaderSettings(theme = "paper", nightReading = true,
             nightPreset = ReaderNightPreset(lineHeight = 2.1f, letterSpacing = .06f),

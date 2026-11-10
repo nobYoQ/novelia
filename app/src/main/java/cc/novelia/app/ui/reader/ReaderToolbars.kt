@@ -33,7 +33,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.reader.*
-import cc.novelia.app.ui.feedback.MidoriSticker
+import cc.novelia.app.ui.feedback.Sticker
 import cc.novelia.app.ui.feedback.StickerAccent
 import cc.novelia.app.ui.theme.AppMotion
 
@@ -76,7 +76,7 @@ internal data class ReaderChapterSearchState(
                 AppIconButton(onClick = onToggleSearch) { Icon(Icons.Outlined.Search, "搜索本章") }
                 AppIconButton(onClick = onAutoRead) { Icon(Icons.Outlined.PlayArrow, "自动阅读") }
                 AppIconButton(onClick = onSpeech) {
-                    if(state.speechStatus == ReadAloudService.SLEEP_TIMER_FINISHED) StickerAccent(MidoriSticker.Sleep, state.speechStatus, Modifier.size(40.dp).semantics { contentDescription = "朗读定时已结束，打开朗读设置" })
+                    if(state.speechStatus == ReadAloudService.SLEEP_TIMER_FINISHED) StickerAccent(Sticker.Sleep, state.speechStatus, Modifier.size(40.dp).semantics { contentDescription = "朗读定时已结束，打开朗读设置" })
                     else Icon(Icons.Outlined.VolumeUp, "朗读本章")
                 }
             }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent, scrolledContainerColor = Color.Transparent, titleContentColor = foreground, actionIconContentColor = foreground, navigationIconContentColor = foreground))

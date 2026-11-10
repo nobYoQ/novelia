@@ -42,7 +42,7 @@ import cc.novelia.app.ui.components.base.Screen
 import cc.novelia.app.ui.components.base.displayDate
 import cc.novelia.app.ui.components.base.FilterPanelExpandIcon
 import cc.novelia.app.ui.components.base.StaticMenuPosition
-import cc.novelia.app.ui.feedback.MidoriCompanion
+import cc.novelia.app.ui.feedback.StickerCompanion
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.LocalEInkMode
@@ -97,11 +97,11 @@ import cc.novelia.app.ui.theme.appReducedMotion
                         modifier = Modifier.heightIn(min = 48.dp)) { Text("登录 / 注册") }
                 }
                 if(compact) Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    MidoriCompanion(Modifier.size(88.dp), visible = companionVisible)
+                    StickerCompanion(Modifier.size(88.dp), visible = companionVisible)
                     accountActions()
                 } else Column(horizontalAlignment = Alignment.End) {
                     accountActions()
-                    MidoriCompanion(Modifier.size(96.dp), visible = companionVisible)
+                    StickerCompanion(Modifier.size(96.dp), visible = companionVisible)
                 }
             }
             if(profile == null && separateLogin) AppFilledTonalButton(onClick = onLogin,

@@ -33,7 +33,7 @@ import cc.novelia.app.ui.navigation.downloadAppRelease
     val states by c.app.appReleaseDownloads.coordinator.states.collectAsStateWithLifecycle()
     val preparing = states.values.any { it.phase == AppDownloadPhase.Checking }
     AppAlertDialog(onDismissRequest = onLater, modifier = Modifier.testTag("app-update-dialog"),
-        icon = { MidoriIllustration(MidoriSticker.Welcome, Modifier.size(96.dp)) },
+        icon = { StickerIllustration(Sticker.Welcome, Modifier.size(96.dp)) },
         title = { Text("发现新版本 ${release.tag}") },
         text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             downloadError?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("app-update-error")) }

@@ -12,6 +12,21 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LibraryStateCodecTest {
+    @Test fun stickerPackSelectionSurvivesRestartAndOnlyChangesTheCorePartition() {
+        val directory = Files.createTempDirectory("sticker-pack").toFile()
+        try {
+            fun codec() = LibraryStateCodec(directory, { it.readText(Charsets.UTF_8) }, { file, text -> file.writeText(text, Charsets.UTF_8) })
+            val running = codec()
+            val original = LibraryState()
+            val first = running.encode(original)
+            val selected = original.copy(stickerPackId = "future-pack")
+            val second = running.encode(selected)
+            assertEquals(selected, codec().decode(second))
+            assertEquals(parts(first).filterKeys { it != "core" }, parts(second).filterKeys { it != "core" })
+            assertNotEquals(parts(first)["core"], parts(second)["core"])
+        } finally { directory.deleteRecursively() }
+    }
+
     @Test fun readingStatisticsUseReadingPartitionAndSurviveRestart() {
         val directory = Files.createTempDirectory("reading-statistics").toFile()
         try {
