@@ -10,6 +10,30 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class WebDavProjectionTest {
+    @Test fun contentVisibilityPreferencesSyncAndLegacyRecordsKeepCurrentValues() {
+        val original = LibraryState()
+        val remote = original.copy(hideUnavailableComments = true, hideLocalFavorites = true, hideCloudFavorites = true)
+        listOf(original.copy(hideUnavailableComments = true), original.copy(hideLocalFavorites = true),
+            original.copy(hideCloudFavorites = true)).forEach { changed ->
+            assertEquals(setOf(SyncDomain.SETTINGS), WebDavProjection.affectedLibraryDomains(original, changed))
+        }
+        val docs = documents(remote)
+        val settings = docs.getValue(SyncDomain.SETTINGS)
+        WebDavProjection.validateRecords(settings)
+        val restored = WebDavProjection.applyLibrary(original, docs, setOf(SyncDomain.SETTINGS))
+        assertTrue(restored.hideUnavailableComments && restored.hideLocalFavorites && restored.hideCloudFavorites)
+        val names = setOf("hideUnavailableComments", "hideLocalFavorites", "hideCloudFavorites")
+        val legacy = settings.copy(records = settings.records.mapValues { (_, record) -> record.copy(fields = record.fields - names) })
+        WebDavProjection.validateRecords(legacy)
+        val kept = WebDavProjection.applyLibrary(remote, mapOf(SyncDomain.SETTINGS to legacy), setOf(SyncDomain.SETTINGS))
+        assertTrue(kept.hideUnavailableComments && kept.hideLocalFavorites && kept.hideCloudFavorites)
+        names.forEach { name ->
+            assertThrows(IllegalArgumentException::class.java) {
+                WebDavProjection.validateField(SyncDomain.SETTINGS, "@global", name, JsonPrimitive("true"))
+            }
+        }
+    }
+
     @Test fun rowPaginationIsValidInDevicePreferencesAndModeSnapshots() {
         val row = ReaderSettings().withPaginationMode("row")
         val reader = row.withEInkMode(true).withPaginationMode("row")

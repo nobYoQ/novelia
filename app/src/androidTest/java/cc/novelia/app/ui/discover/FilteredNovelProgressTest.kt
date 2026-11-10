@@ -4,6 +4,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.navigation.compose.rememberNavController
@@ -23,6 +26,31 @@ import org.junit.Test
 
 class FilteredNovelProgressTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun favoriteChangesRecomputeAccumulatedResultsAndRemovingFavoritesRestoresBooks() {
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
+        runBlocking { app.initialization.await() }
+        val favorite = BookCard(BookRef("syosetu", "favorite-filter-a"), "收藏过滤作品", totalCharacters = 123_456)
+        val other = favorite.copy(ref = BookRef("syosetu", "favorite-filter-b"), title = "保留作品")
+        var library by mutableStateOf(LibraryState(hideLocalFavorites = true))
+        compose.setContent {
+            val nav = rememberNavController()
+            val scope = rememberCoroutineScope()
+            val controller = remember { AppController(app, nav, scope, SnackbarHostState()) }
+            MaterialTheme { FilteredNovelList(controller, "favorite-filter-progress", NovelLocalFilter(CharacterCountFilter(minimum = 100_000)),
+                library, loadPage = { _, _ -> Page(1, listOf(favorite, other)) }, onReset = {}) }
+        }
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("已检查 2 本，找到 2 本").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("收藏过滤作品").assertExists()
+        compose.runOnIdle { library = library.copy(books = listOf(SavedBook(favorite))) }
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("已检查 2 本，找到 1 本").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("收藏过滤作品").assertDoesNotExist()
+        compose.onNodeWithText("保留作品").assertExists()
+        compose.runOnIdle { library = library.copy(books = emptyList()) }
+        compose.onNodeWithText("收藏过滤作品").assertExists()
+        compose.runOnIdle { library = library.copy(books = listOf(SavedBook(favorite)), hideLocalFavorites = false) }
+        compose.onNodeWithText("收藏过滤作品").assertExists()
+    }
 
     @Test fun completedPagesStayVisibleWhileLoadingAndRetryResumesTheFailedPage() {
         val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication

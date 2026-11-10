@@ -33,19 +33,23 @@ import cc.novelia.app.ui.components.base.friendlyMessage
 @Composable internal fun FilteredNovelList(c: AppController, requestKey: Any, filter: NovelLocalFilter, library: LibraryState,
     loadPage: suspend (Int, Boolean) -> Page<BookCard>, onReset: () -> Unit, keywordLabels: Map<String, String> = emptyMap(),
     onPageTurn: (Int) -> Unit = {}, refreshKey: Int = 0) {
+    val profile by c.session.profile.collectAsStateWithLifecycle()
+    val visibility = rememberBookVisibility(library, profile?.username)
+    // 累积结果已过滤，收藏变化后须从头扫描，避免沿用旧结果或漏掉取消收藏的作品。
+    val filteredKey = listOf(requestKey, visibility)
     val cache = c.uiResults.filtered
     val revision by cache.revision.collectAsStateWithLifecycle()
-    val initial = remember(requestKey) { cache.snapshot(requestKey) }
-    var result by remember(requestKey) { mutableStateOf(initial?.value) }
-    var reloading by remember(requestKey) { mutableStateOf(initial?.fresh == false) }
-    var request by remember(requestKey) { mutableIntStateOf(0) }
-    var loading by remember(requestKey) { mutableStateOf(result == null) }
-    var error by remember(requestKey) { mutableStateOf<String?>(null) }
-    var failure by remember(requestKey) { mutableStateOf<Throwable?>(null) }
+    val initial = remember(filteredKey) { cache.snapshot(filteredKey) }
+    var result by remember(filteredKey) { mutableStateOf(initial?.value) }
+    var reloading by remember(filteredKey) { mutableStateOf(initial?.fresh == false) }
+    var request by remember(filteredKey) { mutableIntStateOf(0) }
+    var loading by remember(filteredKey) { mutableStateOf(result == null) }
+    var error by remember(filteredKey) { mutableStateOf<String?>(null) }
+    var failure by remember(filteredKey) { mutableStateOf<Throwable?>(null) }
     cc.novelia.app.ui.components.base.NetworkRecoveryEffect(if (loading) null else failure) { request++ }
-    var forceNetwork by remember(requestKey) { mutableStateOf(initial?.fresh == false) }
-    var observedRevision by remember(requestKey) { mutableLongStateOf(revision) }
-    var observedRefresh by remember(requestKey) { mutableIntStateOf(refreshKey) }
+    var forceNetwork by remember(filteredKey) { mutableStateOf(initial?.fresh == false) }
+    var observedRevision by remember(filteredKey) { mutableLongStateOf(revision) }
+    var observedRefresh by remember(filteredKey) { mutableIntStateOf(refreshKey) }
     LaunchedEffect(refreshKey) {
         if(observedRefresh != refreshKey) { observedRefresh = refreshKey; reloading = true; forceNetwork = true; request++ }
     }
@@ -53,7 +57,7 @@ import cc.novelia.app.ui.components.base.friendlyMessage
         if(observedRevision != revision) { observedRevision = revision; reloading = true; forceNetwork = true; request++ }
     }
     val currentLoad by rememberUpdatedState(loadPage)
-    LaunchedEffect(requestKey, request) {
+    LaunchedEffect(filteredKey, request) {
         if(request == 0 && result != null && !reloading) return@LaunchedEffect
         loading = true
         error = null
@@ -64,11 +68,11 @@ import cc.novelia.app.ui.components.base.friendlyMessage
             fun publish(batch: FilteredNovelBatch) {
                 result = batch.copy(books = (before.books + batch.books).distinctBy { it.ref.key },
                     scanned = before.scanned + batch.scanned, unknown = before.unknown + batch.unknown)
-                cache.put(requestKey, result!!, cacheRevision)
+                cache.put(filteredKey, result!!, cacheRevision)
             }
             val batch = loadFilteredNovels(before.nextPage, filter, loadPage = { currentLoad(it, forceNetwork) },
                 enrich = { enrichAuthors(it, c, library.blockedAuthors, filter.characters.active, forceNetwork) },
-                visible = { visibleBook(it, library) }, onProgress = { publish(it) })
+                visible = visibility::visible, onProgress = { publish(it) })
             currentCoroutineContext().ensureActive()
             publish(batch)
             reloading = false
@@ -76,9 +80,9 @@ import cc.novelia.app.ui.components.base.friendlyMessage
           catch(e: Exception) { failure = e; error = e.friendlyMessage() }
         finally { loading = false; forceNetwork = false }
     }
-    val scroll = rememberCachedListState(cache, requestKey)
+    val scroll = rememberCachedListState(cache, filteredKey)
     val reducedMotion = appReducedMotion()
-    MotionContent(listOf(requestKey, result != null), Modifier.fillMaxSize(), animateInitial = result != null) {
+    MotionContent(listOf(filteredKey, result != null), Modifier.fillMaxSize(), animateInitial = result != null) {
     AppLazyColumn(state = scroll, modifier = Modifier.fillMaxSize(), onPageTurn = onPageTurn) {
         item {
             Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {

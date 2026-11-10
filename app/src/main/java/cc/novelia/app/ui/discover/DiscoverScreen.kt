@@ -82,6 +82,7 @@ import kotlinx.coroutines.sync.withPermit
     fun setPage(section: Int, value: Int) { pageNumbers = pageNumbers.mapIndexed { index, page -> if(index == section) value else page } }
     fun resetPages() { pageNumbers = listOf(0, 0, 0) }
     val local by c.store.state.collectAsStateWithLifecycle(); val profile by c.session.profile.collectAsStateWithLifecycle()
+    val visibility = rememberBookVisibility(local, profile?.username)
     val binding = c.session.capture()
     val cacheGeneration by c.store.cacheGeneration.collectAsStateWithLifecycle()
     val keywords by c.app.keywords.state.collectAsStateWithLifecycle()
@@ -121,8 +122,8 @@ import kotlinx.coroutines.sync.withPermit
                     val recommendationScroll = rememberCachedListState(c.uiResults.recommendations, requestKey)
                     CachedAsyncContent(c.uiResults.recommendations, requestKey, load = { coroutineScope { val web = async { c.api.webList(0, sort = 1) }; val wenku = async { c.api.wenkuList(0) }; enrichAuthors(web.await().items.map { it.card() }, c, local.blockedAuthors) to enrichAuthors(wenku.await().items.map { it.card() }, c, local.blockedAuthors) } },
                         validate = { c.session.ensureCurrent(binding) }, revealContent = true, pullToRefreshEnabled = true) { (web, wenku), refresh ->
-                        val visibleWeb = remember(web, local.blockedBooks, local.blockedTags, local.blockedAuthors) { web.asSequence().filter { visibleBook(it, local) }.take(8).toList() }
-                        val visibleWenku = remember(wenku, local.blockedBooks, local.blockedTags, local.blockedAuthors) { wenku.asSequence().filter { visibleBook(it, local) }.take(6).toList() }
+                        val visibleWeb = remember(web, visibility) { web.asSequence().filter(visibility::visible).take(8).toList() }
+                        val visibleWenku = remember(wenku, visibility) { wenku.asSequence().filter(visibility::visible).take(6).toList() }
                         AppLazyColumn(state = recommendationScroll, contentPadding = PaddingValues(bottom = 20.dp), onPageTurn = onPageTurn) {
                             if(local.recentSearches.isNotEmpty()) {
                                 item(key = "recent-searches", contentType = "searches") {
@@ -186,13 +187,13 @@ import kotlinx.coroutines.sync.withPermit
                             Page(it.pageNumber, enrichAuthors(it.items.map(WenkuOutline::card), c, local.blockedAuthors))
                         }
                     }, validate = { c.session.ensureCurrent(binding) }, revealContent = true, pullToRefreshEnabled = true) { result, refresh ->
-                        val books = remember(result.items, local.blockedBooks, local.blockedTags, local.blockedAuthors) { result.items.filter { visibleBook(it, local) } }
+                        val books = remember(result.items, visibility) { result.items.filter(visibility::visible) }
                         val emptyContent: @Composable () -> Unit = {
                             Column {
                                 EmptyState("没有找到匹配的作品", if(filterCount > 0) "先放宽筛选条件，搜索关键词会保留。" else "试试较短的关键词，或检查屏蔽条件。", Icons.Outlined.SearchOff,
                                     if(filterCount > 0) "放宽筛选" else if(submitted.isNotBlank()) "浏览全部作品" else "重新加载",
                                     { if(filterCount > 0) resetFilters() else if(submitted.isNotBlank()) { query = ""; submitted = ""; resetPages() } else refresh() }, sticker = MidoriSticker.Curious)
-                                if(local.blockedBooks.isNotEmpty() || local.blockedTags.isNotEmpty() || local.blockedAuthors.isNotEmpty()) AppTextButton(onClick = { c.go("blocked") }, Modifier.fillMaxWidth()) { Text("检查屏蔽条件") }
+                                if(local.blockedBooks.isNotEmpty() || local.blockedTags.isNotEmpty() || local.blockedAuthors.isNotEmpty() || local.hideLocalFavorites || local.hideCloudFavorites) AppTextButton(onClick = { c.go("settings?section=CONTENT") }, Modifier.fillMaxWidth()) { Text("检查屏蔽条件") }
                             }
                         }
                         if(section == 2) key(requestKey) {

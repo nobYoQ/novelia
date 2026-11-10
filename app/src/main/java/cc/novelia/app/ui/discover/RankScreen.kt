@@ -35,6 +35,7 @@ private val syosetuGenres = listOf("恋爱：异世界", "恋爱：现实世界"
 @Composable fun RankScreen(c: AppController) {
     val local by c.store.state.collectAsStateWithLifecycle()
     val profile by c.session.profile.collectAsStateWithLifecycle()
+    val visibility = rememberBookVisibility(local, profile?.username)
     val cacheGeneration by c.store.cacheGeneration.collectAsStateWithLifecycle()
     var source by rememberSaveable { mutableIntStateOf(0) }; var kind by rememberSaveable { mutableIntStateOf(1) }; var genre by rememberSaveable { mutableIntStateOf(0) }; var range by rememberSaveable { mutableIntStateOf(0) }; var status by rememberSaveable { mutableIntStateOf(0) }; var page by rememberSaveable { mutableIntStateOf(0) }; var filters by remember { mutableStateOf(false) }
     val provider = if(source == 0) "syosetu" else "kakuyomu"
@@ -54,8 +55,8 @@ private val syosetuGenres = listOf("恋爱：异世界", "恋爱：现实世界"
                     Page(it.pageNumber, enrichAuthors(it.items.map(WebOutline::card), c, local.blockedAuthors))
                 }
             }, validate = { c.session.ensureCurrent(binding) }, pullToRefreshEnabled = true) { result, refresh ->
-                val cards = remember(result.items, local.blockedBooks, local.blockedTags, local.blockedAuthors) {
-                    result.items.filter { visibleBook(it, local) }
+                val cards = remember(result.items, visibility) {
+                    result.items.filter(visibility::visible)
                 }
                 AppLazyColumn(state = scroll) {
                     if(cards.isEmpty()) item { EmptyState("这个榜单暂时没有作品", "可以切换周期或流派；榜单数据由原站获取。") }
