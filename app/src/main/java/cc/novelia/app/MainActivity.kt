@@ -50,6 +50,7 @@ import cc.novelia.app.ui.feedback.ObserveDownloadCelebrations
 import cc.novelia.app.ui.feedback.StickerSnackbarHost
 import cc.novelia.app.ui.feedback.LocalStickerPack
 import cc.novelia.app.ui.feedback.StickerPacks
+import cc.novelia.app.ui.feedback.asStickerPack
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.navigation.DISCOVER_ROUTE
 import cc.novelia.app.ui.navigation.RootDestinationLayout
@@ -129,6 +130,9 @@ class MainActivity : ComponentActivity() {
                 .collectAsStateWithLifecycle(initialValue = remember(app) { app.store.state.value.appearance() })
             val link by incoming.collectAsStateWithLifecycle()
             val sharedDocuments by incomingDocuments.collectAsStateWithLifecycle()
+            val localStickers by remember(app) { app.stickerPacks.state.map { it.packs }.distinctUntilChanged() }
+                .collectAsStateWithLifecycle(initialValue = app.stickerPacks.state.value.packs)
+            val stickerPacks = remember(localStickers) { StickerPacks.all + localStickers.map { it.asStickerPack() } }
             AppInteractionMode(appearance.eInk, appearance.reducedMotion) {
             NoveliaTheme(appearance.theme, squareCorners = appearance.squareCorners, amoledBlack = appearance.amoledBlack) {
                 val nav = rememberNavController(); val scope = rememberCoroutineScope(); val snackbar = remember { SnackbarHostState() }
@@ -141,7 +145,7 @@ class MainActivity : ComponentActivity() {
                 val edgeReader = remember { EdgeToolbarReaderState() }
                 CompositionLocalProvider(LocalBookSyncPresentation provides bookSync, LocalBookListPresentation provides bookList,
                     LocalAppOverlayRegistry provides overlays, LocalEdgeToolbarReaderState provides edgeReader,
-                    LocalStickerPack provides StickerPacks.resolve(appearance.stickerPackId),
+                    LocalStickerPack provides StickerPacks.resolve(appearance.stickerPackId, stickerPacks),
                     cc.novelia.app.ui.theme.LocalScreenPageButtons provides appearance.screenButtons) {
                 controller.pendingFavorite?.let { book ->
                     FavoriteSheet(controller, book, initialCloud = controller.pendingFavoriteCloud) { controller.pendingFavorite = null }
@@ -269,6 +273,7 @@ class MainActivity : ComponentActivity() {
                             composable("forum-blacklist") { ForumBlacklistScreen(controller) }
                             composable("forum-rules") { ForumRulesScreen(controller) }
                             composable("settings?section={section}") { entry -> SettingsScreen(controller, entry.arguments?.getString("section")) }
+                            composable("sticker-packs") { cc.novelia.app.ui.settings.StickerPackScreen(controller) }
                             composable("edge-toolbar") { EdgeToolbarSettingsScreen(controller) }
                             composable("edge-toolbar-edit") { EdgeToolbarEditorScreen(controller) }
                             composable("backup") { LibraryBackupScreen(controller) }

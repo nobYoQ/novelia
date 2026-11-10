@@ -7,6 +7,7 @@ internal object DocumentPickerTypes {
     private val subtitles = listOf("application/x-subrip", "application/srt", "text/srt")
     val Books = Volumes + subtitles
     val Json = listOf("application/json", "text/json")
+    val StickerImages = listOf("image/png", "image/webp", "image/jpeg")
     val Backup = listOf("application/zip", "application/x-zip-compressed", "application/x-zip")
     val Text = listOf("text/*", "application/json", "application/xml") + subtitles
     // 包含 Android 新旧版本和文件提供方使用的 SFNT / TrueType 类型名，不放行 WOFF。

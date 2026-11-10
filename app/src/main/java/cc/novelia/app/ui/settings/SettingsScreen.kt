@@ -131,7 +131,7 @@ private enum class SettingsSection(val title: String, val summary: String) {
         item { ProfileToggle("纯黑显示模式", "深色主题使用纯黑底色，卡片与弹层保留层次", state.amoledBlack) { value -> c.store.update { it.copy(amoledBlack = value) } } }
         item { ProfileToggle("fuck 圆角", "让整个应用变成直角", state.squareCorners) { value -> c.store.update { it.copy(squareCorners = value) } } }
         item { LauncherIconPreference(c.app.launcherIcons) }
-        item { StickerPackPreference(state.stickerPackId) { id -> c.store.update { it.copy(stickerPackId = id) } } }
+        item { StickerPackPreference(c.app.stickerPacks, state.stickerPackId) { c.go("sticker-packs") } }
         item { ProfileSectionTitle("交互与提示") }
         item { ProfileMenuRow("边缘工具栏", "快捷入口、圆点位置与闲置半隐藏", Icons.Outlined.Widgets, { c.go("edge-toolbar", replaceTop = true) }) }
         item { ProfileToggle("减少动态效果", "关闭页面转场与连续动画反馈", state.reducedMotion) { value -> c.store.update { it.copy(reducedMotion = value) } } }

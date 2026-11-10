@@ -68,6 +68,7 @@ build.ps1                    根目录统一 Gradle 任务入口
 | [data/model](../../app/src/main/java/cc/novelia/app/data/model) | 跨功能使用的 `BookRef`、`LibraryState`、阅读设置及小说/文库 DTO |
 | [data/community](../../app/src/main/java/cc/novelia/app/data/community) | 原站评论、论坛 API、社区模型、规则、链接与回复缓存 |
 | [data/storage](../../app/src/main/java/cc/novelia/app/data/storage) | `LocalStore`、异步写盘、JSON 编解码、损坏恢复 |
+| [data/stickers](../../app/src/main/java/cc/novelia/app/data/stickers) | 本机贴纸集、制作草稿、图片校验和贴纸 ZIP 导入导出 |
 | [data/documents](../../app/src/main/java/cc/novelia/app/data/documents)、[data/backup](../../app/src/main/java/cc/novelia/app/data/backup) | 本地正文分块、来源哈希索引、ZIP 备份与合并恢复 |
 | [data/auth](../../app/src/main/java/cc/novelia/app/data/auth) | 令牌加密、认证流程、会话和来源绑定 |
 | [data/network](../../app/src/main/java/cc/novelia/app/data/network) | 小说 API、书源线路、HTTP/ECH 传输、请求合并和诊断 |

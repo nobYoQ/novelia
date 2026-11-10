@@ -77,6 +77,7 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
     val session by lazy { Session(this, client = httpTransport, sources = bookSources) }
     val forumSession by lazy { Session(this, client = httpTransport, sources = bookSources, target = AuthTarget.FORUM) }
     val keywords by lazy { KeywordStore(this) { store.state.value.keywordLimit } }
+    val stickerPacks by lazy { cc.novelia.app.data.stickers.StickerPackStore(File(filesDir, "sticker-packs")) }
     val webDavConfig by lazy { WebDavConfigStore(this) }
     val webDav by lazy { WebDavSyncManager(this) }
     @Volatile private var webDavForeground = false
@@ -111,7 +112,7 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
             StartupStep.LIBRARY to { startupAppearance.update(StartupAppearance(store.state.value.theme, store.state.value.amoledBlack)) },
             StartupStep.CONNECTION to { webDavConfig; bookSources; session; forumSession; Unit },
             StartupStep.KEYWORDS to { keywords.observe(store.state.value.books.flatMap { it.book.tags }); Unit },
-            StartupStep.INTERFACE to { api; forumApi; novelCommentApi; imageLoader.diskCache; Unit }
+            StartupStep.INTERFACE to { api; forumApi; novelCommentApi; imageLoader.diskCache; stickerPacks.load(); Unit }
         ))
     } }
     internal val launcherIcons by lazy { LauncherIconManager(this) }
