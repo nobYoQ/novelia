@@ -61,7 +61,9 @@ import cc.novelia.app.ui.theme.motionClickable
     }
 }
 @Composable private fun ForumCommunity(c: AppController, available: List<ForumCategory>) {
-    var category by rememberSaveable { mutableStateOf(available.first().slug) }; var search by rememberSaveable { mutableStateOf("") }
+    val state by c.store.state.collectAsStateWithLifecycle()
+    // 新加载论坛页时应用默认分类；导航返回和页面恢复仍保留已有浏览状态。
+    var category by rememberSaveable { mutableStateOf(initialForumCategory(available, state.forumDefaultCategory)) }; var search by rememberSaveable { mutableStateOf("") }
     var pageNumbers by rememberSaveable { mutableStateOf(mapOf<String, Int>()) }
     var tagIds by rememberSaveable { mutableStateOf(mapOf<String, Long>()) }
     var source by rememberSaveable { mutableIntStateOf(0) }
@@ -78,7 +80,7 @@ import cc.novelia.app.ui.theme.motionClickable
         if(tagId != null && availableTags.none { it.id == tagId }) { setTag(null); setPage(0) }
     }
     LaunchedEffect(available) {
-        if(available.none { it.slug == category }) { category = available.first().slug }
+        if(available.none { it.slug == category }) { category = initialForumCategory(available, state.forumDefaultCategory) }
     }
     val profile by c.forumSession.profile.collectAsStateWithLifecycle()
     val forumBinding = c.forumSession.capture()
@@ -98,8 +100,8 @@ import cc.novelia.app.ui.theme.motionClickable
             }
         }
     }
-    val state by c.store.state.collectAsStateWithLifecycle()
     var draftBoxOpen by rememberSaveable { mutableStateOf(false) }
+    var optionsOpen by rememberSaveable { mutableStateOf(false) }
     fun showFeed(value: Int) { source = value }
     Screen("社区", actions = {
         AppIconButton(onClick = { draftBoxOpen = true }) { Icon(Icons.Outlined.Drafts, "帖子草稿箱") }
@@ -129,6 +131,9 @@ import cc.novelia.app.ui.theme.motionClickable
                         availableTags.firstOrNull { it.id == selectedTagId }?.name) { tagsExpanded = !tagsExpanded }
                     if(source == 0) ForumSortPicker(sort) { sort = it; pageNumbers = emptyMap() }
                     else AppTextButton(onClick = { showFeed(0) }) { Text("返回全部帖子") }
+                    AppIconButton(onClick = { optionsOpen = true }, modifier = Modifier.testTag("forum-options-toggle")) {
+                        Icon(Icons.Outlined.Settings, "论坛选项")
+                    }
                 }
                 FilterPanelVisibility(source == 0 && tagsExpanded) {
                     ForumTagFilter(availableTags, selectedTagId) { setTag(it); setPage(0) }
@@ -143,23 +148,32 @@ import cc.novelia.app.ui.theme.motionClickable
                 val requestKey = listOf(pageCategory.slug, feedPage, settledSearch, feedSource, sort, feedTagId,
                     forumBinding, profile?.role, blacklistRevision, cacheGeneration)
                 val scroll = rememberCachedListState(c.forumPages, requestKey)
+                var pinnedScrollRefresh by rememberSaveable(requestKey) { mutableIntStateOf(0) }
                 CachedAsyncContent(c.forumPages, requestKey, load = {
                     when(feedSource) { 1 -> c.forumApi.favorites(feedPage); 2 -> c.forumApi.myPosts(feedPage); else -> c.forumApi.posts(feedPage, pageCategory.slug, settledSearch, sort.visibleSort.apiValue, listOfNotNull(feedTagId)) }
                 }, validate = { c.forumSession.ensureCurrent(forumBinding) }, onLoaded = {
                     // 顶部刷新后显示新插入的帖子，不让旧首项的稳定 key 把视口推到下方。
-                    if(!scroll.canScrollBackward) scroll.requestScrollToItem(0)
+                    if(!scroll.canScrollBackward) { scroll.requestScrollToItem(0); pinnedScrollRefresh++ }
                 },
                     revealContent = true, pullToRefreshEnabled = active) { result, refresh ->
                     val articles = remember(result.items, settledSearch, feedSource, feedTagId, state.blockedUsers, available) {
-                        result.items.filter { (feedSource == 0 || it.title.contains(settledSearch, true)) && !it.authorBlocked && it.authorUsername !in state.blockedUsers }
+                        visibleForumPosts(result.items, settledSearch, feedSource != 0, state.blockedUsers)
                             .map { it.article(available, if(feedSource == 0) feedTagId else null) }
                     }
+                    ForumPinnedPostScroll(articles, scroll, state.forumSkipPinned && feedSource == 0, active,
+                        listOf(requestKey, pinnedScrollRefresh))
                     ArticleList(c, Page(result.pageCount(), articles), feedPage, { if(active) setPage(it) }, scroll, refresh)
                 }
             }
         }
     }
     if(draftBoxOpen) AppSheet(onDismissRequest = { draftBoxOpen = false }) { ArticleDraftBox(c) { draftBoxOpen = false } }
+    if(optionsOpen) AppSheet(onDismissRequest = { optionsOpen = false }) {
+        ForumOptions(available, state.forumDefaultCategory, state.forumSkipPinned,
+            onDefaultCategory = { value -> c.store.update { it.copy(forumDefaultCategory = value) } },
+            onSkipPinned = { value -> c.store.update { it.copy(forumSkipPinned = value) } },
+            onClose = { optionsOpen = false })
+    }
 }
 @Composable private fun ArticleList(c: AppController, result: Page<Article>, page: Int, changePage: (Int) -> Unit,
     scroll: LazyListState, refresh: () -> Unit) {

@@ -102,6 +102,8 @@ fun legacyFolderId(name: String): String = if(name == DEFAULT_FOLDER) DEFAULT_FO
     val readerTapTutorialSeen: Boolean = false,
     val syncReplica: SyncReplica = SyncReplica(),
     val forumRulesReminderDismissed: Boolean = false,
+    // 论坛浏览偏好保存在本机和普通设置备份中，不参与 WebDAV 同步。
+    val forumDefaultCategory: String? = null, val forumSkipPinned: Boolean = false,
     val readingStatistics: ReadingStatistics = ReadingStatistics()
 )
 
