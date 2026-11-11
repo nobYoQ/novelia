@@ -30,6 +30,7 @@ import cc.novelia.app.data.model.Folder
 import cc.novelia.app.data.network.ALL_CLOUD_FAVORITES
 import cc.novelia.app.data.network.CloudWebFilter
 import cc.novelia.app.data.network.cloudFavorites
+import cc.novelia.app.data.network.allCloudFavorites
 import cc.novelia.app.data.network.cloudFolderChoices
 import cc.novelia.app.ui.components.base.AsyncContent
 import cc.novelia.app.ui.components.base.CachedAsyncContent
@@ -74,12 +75,14 @@ import cc.novelia.app.ui.navigation.AppController
     var bulkBusy by remember { mutableStateOf(false) }
     var bulkProgress by remember { mutableIntStateOf(0) }
     var bulkLocal by remember { mutableStateOf<List<BookCard>?>(null) }
+    var bulkImport by remember { mutableStateOf<Boolean?>(null) }
+    var importProgress by remember { mutableStateOf<String?>(null) }
     var bulkRemoval by remember { mutableStateOf<Pair<String, List<BookCard>>?>(null) }
     SideEffect { onSelectionStateChanged(active && managing, bulkBusy) }
     DisposableEffect(onSelectionStateChanged) { onDispose { onSelectionStateChanged(false, false) } }
     BackHandler(active && managing) { if(!bulkBusy) { managing = false; selection = emptyMap() } }
     LaunchedEffect(active) {
-        if(!active) { managing = false; selection = emptyMap(); expanded = false; bulkLocal = null; bulkRemoval = null }
+        if(!active) { managing = false; selection = emptyMap(); expanded = false; bulkLocal = null; bulkImport = null; bulkRemoval = null }
     }
     // 行内重试或后台重试可能独立于本页菜单回调完成；
     // 成功后刷新远端结果，由 AsyncContent 保留当前视口。
@@ -108,7 +111,7 @@ import cc.novelia.app.ui.navigation.AppController
                 }
             }
             LaunchedEffect(kind, current?.id, sort, filter) {
-                managing = false; selection = emptyMap(); bulkLocal = null; bulkRemoval = null
+                managing = false; selection = emptyMap(); bulkLocal = null; bulkImport = null; bulkRemoval = null
             }
             val editable = current?.takeUnless { it.id == ALL_CLOUD_FAVORITES }
             val requestKey = listOf(binding, cacheGeneration, kind, current?.id, page, sort, if(kind == 0) filter else null)
@@ -151,6 +154,7 @@ import cc.novelia.app.ui.navigation.AppController
                             onRemove = { bulkRemoval = current.id to selection.values.toList() }, onRetry = retry,
                             onReadBook = { ref, chapter -> c.read(ref, chapter) },
                             grid = local.cloudShelfGrid, gridState = gridState,
+                            onImportAll = { bulkImport = it }, progressLabel = importProgress,
                             metadata = { rememberCloudBookMetadata(c, it, account, refreshKey) }, actions = { displayed, canAct ->
                                 val book = displayed
                                 val cancelling = pendingFavoriteAction(local.pending, account, book.ref)?.method == "DELETE"
@@ -171,6 +175,27 @@ import cc.novelia.app.ui.navigation.AppController
         c.store.update { it.withCloudFavoritesAddedLocally(books, folder) }
         bulkLocal = null; managing = false; selection = emptyMap()
         c.message("已加入 $added 本到「$folder」" + if(added < books.size) "，${books.size - added} 本已在本地" else "")
+    } }
+    bulkImport?.let { wenku -> CloudFavoriteImportSheet(local.folders, wenku, { bulkImport = null }) { folder ->
+        val importBinding = c.session.capture()
+        val kindLabel = if(wenku) "文库小说" else "网络小说"
+        bulkImport = null; bulkBusy = true; expanded = false
+        importProgress = "正在读取全部云端$kindLabel…"
+        c.action {
+            try {
+                if(importBinding.account != account) throw SessionChangedException()
+                val books = c.api.allCloudFavorites(wenku, validate = { c.session.ensureCurrent(importBinding) }) {
+                    importProgress = "正在读取$kindLabel · 第 ${it.pagesRead} / ${it.pageCount} 页，已读取 ${it.booksRead} 本…"
+                }
+                c.session.ensureCurrent(importBinding)
+                val existing = c.store.state.value.books.map { it.book.ref }.toSet()
+                val added = books.count { it.ref !in existing }
+                if(books.isNotEmpty()) c.store.update { it.withCloudFavoritesAddedLocally(books, folder) }
+                managing = false; selection = emptyMap()
+                c.message(if(books.isEmpty()) "云端暂无${kindLabel}收藏" else
+                    "已导入 $added 本${kindLabel}到「$folder」" + if(added < books.size) "，${books.size - added} 本已在本地" else "")
+            } finally { bulkBusy = false; importProgress = null }
+        }
     } }
     bulkRemoval?.let { (selectedFolder, books) ->
         ConfirmDialog("取消 ${books.size} 本云端收藏？", "仅取消所选作品的云端收藏，本地收藏和阅读记录会保留。",

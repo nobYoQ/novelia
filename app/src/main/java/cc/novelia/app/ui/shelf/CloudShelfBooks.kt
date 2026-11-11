@@ -1,3 +1,4 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.shelf
 
 import androidx.compose.foundation.background
@@ -32,6 +33,7 @@ import cc.novelia.app.ui.components.book.bookRowStatus
     grid: Boolean = false,
     gridState: LazyListState? = null,
     metadata: @Composable (BookCard) -> BookCard = { it }, actions: @Composable (BookCard, () -> Boolean) -> Unit = { _, _ -> },
+    onImportAll: ((Boolean) -> Unit)? = null, progressLabel: String? = null,
 ) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
     val density = LocalDensity.current
@@ -106,18 +108,35 @@ import cc.novelia.app.ui.components.book.bookRowStatus
             item { PageControls(page, pageCount) { if(!busy && !dragSelection.dragging) onPage(it) } }
         }
         }
-        if(managing) CloudSelectionActions(selection.size, busy, progress, onLocal, onRemove, { onSelection(emptyMap()) })
+        if(managing) CloudSelectionActions(selection.size, busy, progress, onLocal, onRemove, { onSelection(emptyMap()) }, onImportAll, progressLabel)
     }
     }
 }
 
-@Composable internal fun CloudSelectionActions(count: Int, busy: Boolean, progress: Int, onLocal: () -> Unit, onRemove: () -> Unit, onClear: () -> Unit) {
+@Composable internal fun CloudSelectionActions(count: Int, busy: Boolean, progress: Int, onLocal: () -> Unit, onRemove: () -> Unit, onClear: () -> Unit,
+    onImportAll: ((Boolean) -> Unit)? = null, progressLabel: String? = null) {
+    var more by remember { mutableStateOf(false) }
+    LaunchedEffect(busy) { if(busy) more = false }
     val enabled = count > 0 && !busy
-    if(busy) Text("正在处理 $progress / $count 本…", Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+    if(busy) Text(progressLabel ?: "正在处理 $progress / $count 本…", Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     ShelfSelectionBar("cloud") {
         ShelfActionButton("加入本地", "加入本地收藏", Icons.Outlined.LibraryAdd, "cloud-selection-local", enabled, onLocal)
         ShelfActionButton("清空选择", "清空选择", Icons.Outlined.Deselect, "cloud-selection-clear", enabled, onClear)
         ShelfActionButton("取消收藏", "取消云端收藏", Icons.Outlined.BookmarkRemove, "cloud-selection-remove", enabled, onRemove)
+        if(onImportAll != null) ShelfActionButton("更多", "更多操作", Icons.Outlined.MoreHoriz, "cloud-selection-more", !busy) { more = true }
+    }
+    if(more && onImportAll != null) AppSheet(onDismissRequest = { more = false }) {
+        AppScrollColumn(contentModifier = Modifier.padding(bottom = 28.dp).testTag("cloud-selection-menu")) {
+            Text("更多操作", Modifier.padding(20.dp), style = MaterialTheme.typography.titleLarge)
+            Box(Modifier.testTag("cloud-import-all-web")) {
+                MenuRow("导入全部网络小说", "所有云端收藏夹中的网络小说，跨页加入本地", Icons.Outlined.LibraryAdd,
+                    { more = false; onImportAll(false) })
+            }
+            Box(Modifier.testTag("cloud-import-all-wenku")) {
+                MenuRow("导入全部文库小说", "所有云端收藏夹中的文库小说，跨页加入本地", Icons.Outlined.LibraryAdd,
+                    { more = false; onImportAll(true) })
+            }
+        }
     }
 }

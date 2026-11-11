@@ -7,6 +7,8 @@ import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.Position
 import cc.novelia.app.data.model.SavedBook
 import cc.novelia.app.data.network.ApiException
+import cc.novelia.app.data.updates.updateSnapshot
+import cc.novelia.app.data.updates.withSavedBook
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
@@ -49,6 +51,17 @@ class CloudFavoriteBatchTest {
         assertEquals(setOf(wenku.ref.key), result.queued)
         assertEquals(setOf(rejected.ref.key), result.failed.keys)
         assertEquals(listOf(1, 2, 3), progress)
+    }
+
+    @Test fun fullImportPreservesUpdateBaselinesForPreviouslyRemovedBooks() {
+        val older = web.copy(total = 30)
+        val before = LibraryState(updateSnapshots = mapOf(web.ref.key to older.updateSnapshot()))
+        val imported = listOf(web.copy(updateAt = -1), wenku)
+        val expected = imported.fold(before) { state, book -> state.withSavedBook(book, "默认收藏") }
+        val result = before.withCloudFavoritesAddedLocally(imported, "默认收藏")
+        assertEquals(expected.books.map { it.copy(addedAt = 0) }, result.books.map { it.copy(addedAt = 0) })
+        assertEquals(expected.updateSnapshots, result.updateSnapshots)
+        assertEquals(30, result.books.first().book.total)
     }
 
     @Test fun expiredAuthenticationDoesNotKeepSendingOtherBooks() = runBlocking {

@@ -32,7 +32,7 @@ class CloudFavoriteBatchUiTest {
                         Column {
                             ShelfSelectionHeader(selected, !busy, 48.dp, { selected = if(selected == 2) 0 else 2 },
                                 { managing = false }, "cloud", if(selected == 2) "取消本页全选" else "全选本页")
-                            if(managing) CloudSelectionActions(selected, busy, 1, { local = true }, { busy = true }, { selected = 0 })
+                            if(managing) CloudSelectionActions(selected, busy, 1, { local = true }, { busy = true }, { selected = 0 }, onImportAll = {})
                         }
                     }
                     if(local) CloudFavoriteLocalSheet(listOf("默认收藏", "周末阅读"), selected, { local = false }) {
@@ -52,7 +52,47 @@ class CloudFavoriteBatchUiTest {
         compose.onNodeWithContentDescription("加入本地收藏").assertIsDisplayed().assertIsEnabled()
         compose.onNodeWithContentDescription("取消云端收藏").assertIsDisplayed().performClick()
         compose.onNodeWithText("正在处理 1 / 2 本…").assertIsDisplayed()
-        listOf("cloud-selection-done", "cloud-select-all", "cloud-selection-clear", "cloud-selection-local", "cloud-selection-remove").forEach {
+        listOf("cloud-selection-done", "cloud-select-all", "cloud-selection-clear", "cloud-selection-local", "cloud-selection-remove", "cloud-selection-more").forEach {
+            compose.onNodeWithTag(it).assertIsNotEnabled()
+        }
+    }
+
+    @Test fun importAllMenuSeparatesWebAndWenkuAndWorksAfterClearingTheSelection() {
+        var importKind by mutableStateOf<Boolean?>(null)
+        var busy by mutableStateOf(false)
+        val imports = mutableListOf<Pair<Boolean, String>>()
+        compose.setContent {
+            NoveliaTheme("dark") {
+                Surface(Modifier.requiredWidth(320.dp)) {
+                    Column {
+                        CloudSelectionActions(0, busy, 0, { fail("全部导入不应触发勾选导入") },
+                            { fail("全部导入不应修改云端收藏") }, {}, onImportAll = { importKind = it },
+                            progressLabel = "正在读取文库小说 · 第 2 / 3 页，已读取 40 本…")
+                    }
+                }
+                importKind?.let { wenku ->
+                    CloudFavoriteImportSheet(listOf("默认收藏", "云端导入"), wenku, { importKind = null }) {
+                        imports += wenku to it
+                        importKind = null
+                        if(wenku) busy = true
+                    }
+                }
+            }
+        }
+        compose.onNodeWithTag("cloud-selection-local").assertIsNotEnabled()
+        compose.onNodeWithTag("cloud-selection-more").assertIsEnabled().performClick()
+        compose.onNodeWithText("导入全部网络小说").assertIsDisplayed().performClick()
+        compose.onNodeWithText("导入全部网络小说").assertIsDisplayed()
+        compose.onNodeWithText("云端导入").performClick()
+        compose.runOnIdle { assertEquals(listOf(false to "云端导入"), imports) }
+
+        compose.onNodeWithTag("cloud-selection-more").performClick()
+        compose.onNodeWithText("导入全部文库小说").assertIsDisplayed().performClick()
+        compose.onNodeWithText("导入全部文库小说").assertIsDisplayed()
+        compose.onNodeWithText("默认收藏").performClick()
+        compose.runOnIdle { assertEquals(listOf(false to "云端导入", true to "默认收藏"), imports) }
+        compose.onNodeWithText("正在读取文库小说 · 第 2 / 3 页，已读取 40 本…").assertIsDisplayed()
+        listOf("cloud-selection-local", "cloud-selection-clear", "cloud-selection-remove", "cloud-selection-more").forEach {
             compose.onNodeWithTag(it).assertIsNotEnabled()
         }
     }

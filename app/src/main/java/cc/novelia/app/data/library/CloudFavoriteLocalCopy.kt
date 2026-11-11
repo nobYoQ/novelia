@@ -3,7 +3,8 @@ package cc.novelia.app.data.library
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.SavedBook
-import cc.novelia.app.data.updates.withSavedBook
+import cc.novelia.app.data.model.withKnownUpdateTime
+import cc.novelia.app.data.updates.updateSnapshot
 
 /** 云端收藏可新增本地副本，但不得移动用户已有的手动收藏。 */
 fun LibraryState.withCloudFavoriteLocalCopy(book: BookCard): LibraryState {
@@ -15,7 +16,14 @@ fun LibraryState.withCloudFavoriteLocalCopy(book: BookCard): LibraryState {
 fun LibraryState.withCloudFavoritesAddedLocally(selected: List<BookCard>, folder: String): LibraryState {
     require(folder.isNotBlank()) { "收藏夹名称不能为空" }
     val existing = books.map { it.book.ref }.toSet()
-    return selected.distinctBy { it.ref }.filterNot { it.ref in existing }.fold(
-        copy(folders = (folders + folder).distinct())
-    ) { state, book -> state.withSavedBook(book, folder) }
+    val snapshots = updateSnapshots.toMutableMap()
+    val added = selected.distinctBy { it.ref }.filterNot { it.ref in existing }.map { book ->
+        val baseline = snapshots[book.ref.key] ?: book.updateSnapshot()
+        val merged = book.withKnownUpdateTime(null).let {
+            if(book.ref.isLocal) it else it.copy(total = maxOf(it.total, baseline.total))
+        }
+        if(!book.ref.isLocal) snapshots[book.ref.key] = baseline
+        SavedBook(merged, folder)
+    }
+    return copy(books = books + added, folders = (folders + folder).distinct(), updateSnapshots = snapshots)
 }

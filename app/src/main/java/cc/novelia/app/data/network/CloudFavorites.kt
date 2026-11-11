@@ -6,6 +6,8 @@ import cc.novelia.app.data.model.Folder
 import cc.novelia.app.data.model.Page
 import cc.novelia.app.data.model.WebOutline
 import cc.novelia.app.data.model.WenkuOutline
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 
 const val ALL_CLOUD_FAVORITES = "all"
 
@@ -48,4 +50,34 @@ suspend fun NoveliaApi.cloudFavorites(
             binding?.let { session?.ensureCurrent(it) }
             Page(result.pageNumber, result.items.map { it.card(binding?.account) })
         }
+}
+
+data class CloudFavoriteImportProgress(val pagesRead: Int, val pageCount: Int, val booksRead: Int)
+
+/** 显式读取某一类型的全部收藏，不沿用页面的收藏夹或筛选；完整读取后才交给调用方写入。 */
+suspend fun NoveliaApi.allCloudFavorites(
+    wenku: Boolean,
+    validate: () -> Unit = {},
+    onProgress: (CloudFavoriteImportProgress) -> Unit = {},
+): List<BookCard> {
+    val binding = session?.capture()
+    val context = currentCoroutineContext()
+    fun ensureCurrent() {
+        context.ensureActive()
+        binding?.let { session?.ensureCurrent(it) }
+        validate()
+    }
+    val books = linkedMapOf<String, BookCard>()
+    var page = 0
+    do {
+        ensureCurrent()
+        // 按收藏时间读取，避免作品更新引发排序变化；all 覆盖所有云端收藏夹。
+        val result = cloudFavorites(wenku, ALL_CLOUD_FAVORITES, page, sort = "create")
+        ensureCurrent()
+        result.items.forEach { books.putIfAbsent(it.ref.key, it) }
+        page++
+        onProgress(CloudFavoriteImportProgress(page, result.pageNumber.coerceAtLeast(page), books.size))
+    } while(page < result.pageNumber)
+    ensureCurrent()
+    return books.values.toList()
 }
