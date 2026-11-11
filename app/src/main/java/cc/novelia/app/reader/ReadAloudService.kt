@@ -39,6 +39,8 @@ import kotlinx.serialization.encodeToString
  */
 class ReadAloudService : Service() {
     private var engine: TextToSpeech? = null
+    private var configuredEnginePackage: String? = null
+    private var engineGeneration = 0L
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var loadJob: Job? = null
     private var continuation: SpeechChapterSequence? = null
@@ -59,10 +61,21 @@ class ReadAloudService : Service() {
         super.onCreate()
         getSystemService(NotificationManager::class.java).createNotificationChannel(NotificationChannel("reading", "小说朗读", NotificationManager.IMPORTANCE_LOW))
         focus = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN).setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build()).setOnAudioFocusChangeListener { if(it <= AudioManager.AUDIOFOCUS_LOSS) pause() }.build()
-        engine = TextToSpeech(this) { result -> handler.post {
+    }
+    private fun ensureSpeechEngine() {
+        val preferred = (application as NoveliaApplication).store.state.value.ttsEnginePackage
+        val selected = preferred?.let { runCatching { selectedSystemTtsEngine(it, readSystemTtsCatalog(this).engines) }.getOrNull() }
+        // 跟随系统时重新绑定，确保系统默认引擎改变后，下次开始朗读能立即采用。
+        if(engine != null && selected != null && configuredEnginePackage == selected) return
+        ready = false
+        val generation = ++engineGeneration
+        engine?.stop(); engine?.shutdown()
+        configuredEnginePackage = selected
+        engine = TextToSpeech(this, { result -> handler.post {
+            if(generation != engineGeneration) return@post
             ready = result == TextToSpeech.SUCCESS
             if(ready) configureAndSpeak() else { status.value = "系统朗读引擎不可用，请在系统设置中安装语音"; stopSelf() }
-        } }
+        } }, selected)
         engine?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) { handler.post { if(!paused && isCurrentUtterance(utteranceId)) { status.value = "正在朗读：$title"; publishPlayback(true) } } }
             override fun onDone(utteranceId: String?) { handler.post { if(!paused && isCurrentUtterance(utteranceId)) { index++; speak() } } }
@@ -93,6 +106,7 @@ class ReadAloudService : Service() {
             }
             "start" -> {
                 loadJob?.cancel(); continuation = null; binding = null; currentUtterance = null; engine?.stop(); paragraphs = emptyList(); segments = emptyList(); playback.value = null; loading = true
+                ensureSpeechEngine()
                 index = 0; title = intent.getStringExtra("title") ?: "小说朗读"; rate = intent.getFloatExtra("rate", 1f); language = if(intent.getBooleanExtra("japanese", false)) Locale.JAPAN else Locale.SIMPLIFIED_CHINESE; paused = false
                 // 按 Android 要求立即进入前台服务，再把全部 IO 放到主线程之外。
                 startForeground(100, notification())
@@ -222,7 +236,7 @@ class ReadAloudService : Service() {
             .setContentIntent(PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
             .addAction(0, if(paused) "继续" else "暂停", pending(if(paused) "resume" else "pause")).addAction(0, "停止", pending("stop")).build()
     }
-    override fun onDestroy() { if(playback.value?.session == activeRequest) playback.value = null; serviceScope.cancel(); handler.removeCallbacksAndMessages(null); engine?.stop(); engine?.shutdown(); getSystemService(AudioManager::class.java).abandonAudioFocusRequest(focus); stopForeground(STOP_FOREGROUND_REMOVE); super.onDestroy() }
+    override fun onDestroy() { engineGeneration++; if(playback.value?.session == activeRequest) playback.value = null; serviceScope.cancel(); handler.removeCallbacksAndMessages(null); engine?.stop(); engine?.shutdown(); getSystemService(AudioManager::class.java).abandonAudioFocusRequest(focus); stopForeground(STOP_FOREGROUND_REMOVE); super.onDestroy() }
     override fun onBind(intent: Intent?): IBinder? = null
     companion object {
         const val SLEEP_TIMER_FINISHED = "朗读定时已结束"

@@ -1023,6 +1023,7 @@ import kotlinx.serialization.encodeToString
             },
             onPause = { speechAction("pause") }, onResume = { speechAction("resume") }, onStop = { speechAction("stop") },
             onSettings = { speechSheet = false; speechPreferencesRequested = true; preferences = true },
+            onEngineSettings = { speechSheet = false; c.go("tts-settings") },
             playback = bookSpeech, sample = paragraphs.getOrNull(firstParagraph)?.parts?.firstOrNull()?.text.orEmpty(),
             onPrevious = { stepSpeech("previous") }, onNext = { stepSpeech("next") },
             onFollow = ReadAloudService::follow,

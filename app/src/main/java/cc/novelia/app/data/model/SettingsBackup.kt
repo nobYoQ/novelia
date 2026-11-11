@@ -13,4 +13,5 @@ import kotlinx.serialization.Serializable
     val edgeToolbar: EdgeToolbarSettings = EdgeToolbarSettings(),
     val hideUnavailableComments: Boolean = false,
     val hideLocalFavorites: Boolean = false, val hideCloudFavorites: Boolean = false,
-    val forumDefaultCategory: String? = null, val forumSkipPinned: Boolean = false)
+    val forumDefaultCategory: String? = null, val forumSkipPinned: Boolean = false,
+    val ttsEnginePackage: String? = null)

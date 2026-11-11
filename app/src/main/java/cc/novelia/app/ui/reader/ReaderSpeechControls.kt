@@ -23,6 +23,7 @@ import cc.novelia.app.ui.theme.appRoundedCornerShape
     onStop: () -> Unit, onSettings: () -> Unit,
     playback: SpeechPlayback? = null, onPrevious: () -> Unit = {}, onNext: () -> Unit = {}, onFollow: (Boolean) -> Unit = {},
     sample: String = "", onRate: (Float) -> Unit = {}, onTimer: (Int) -> Unit = {},
+    onEngineSettings: (() -> Unit)? = null,
 ) {
     val preparing = speechStatus == "正在准备朗读…" || speechStatus == "正在准备下一章…"
     ReaderSheet(onDismissRequest = onDismiss) {
@@ -79,6 +80,7 @@ import cc.novelia.app.ui.theme.appRoundedCornerShape
                 AppTextButton(onClick = onSettings) { Text("语言与连续听书") }
                 if(playback != null) AppTextButton(onClick = onStart, enabled = !preparing) { Text("从当前段重读") }
             }
+            if(onEngineSettings != null) AppTextButton(onClick = onEngineSettings) { Text("系统朗读引擎") }
         }
     }
 }

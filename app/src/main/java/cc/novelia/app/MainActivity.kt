@@ -64,6 +64,7 @@ import cc.novelia.app.ui.settings.WebDavSyncScreen
 import cc.novelia.app.ui.settings.WebDavServerScreen
 import cc.novelia.app.ui.settings.LibraryBackupScreen
 import cc.novelia.app.ui.settings.SettingsScreen
+import cc.novelia.app.ui.settings.SystemTtsSettingsScreen
 import cc.novelia.app.ui.settings.ChapterCacheScreen
 import cc.novelia.app.ui.discover.KeywordLibraryScreen
 import cc.novelia.app.ui.shelf.AdaptiveLibraryScreen
@@ -283,6 +284,7 @@ class MainActivity : ComponentActivity() {
                             // 外层已留出导航栏空间；同步页面本身也可独立处理系统边距。
                             composable("webdav") { Box(Modifier.consumeWindowInsets(WindowInsets.navigationBars)) { WebDavSyncScreen(controller) } }
                             composable("webdav-server") { Box(Modifier.consumeWindowInsets(WindowInsets.navigationBars)) { WebDavServerScreen(controller) } }
+                            composable("tts-settings") { SystemTtsSettingsScreen(controller) }
                             composable("updates") { BookUpdatesScreen(controller) }
                             composable("downloads") { DownloadsScreen(controller) }
                             composable("tools") { ToolsScreen(controller) }
