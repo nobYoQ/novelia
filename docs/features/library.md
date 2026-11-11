@@ -61,7 +61,9 @@
 
 云端同样通过长按进入选择模式，支持单点、长按拖选和边缘自动滚动；普通滑动只滚动。顶部提供全选本页／取消本页全选和完成，底部使用图标加文字的操作栏。普通书目行不再提供取消收藏按钮，取消单本或多本均从选择模式发起并确认；已排队取消的书目仍保留行内撤销入口。翻页保留其他页的选择，更换账号、小说类型、文件夹、排序或筛选会清空选择。批量加入本地保留已有条目属性；取消云端收藏逐本走队列，显示已完成、待同步和失败，会话变化则中止。队列排序与重试规则见[原站同步](../network/network-and-sync.md#哪些操作可以离线排队)。
 
-选择模式的“更多”提供“导入全部网络小说”和“导入全部文库小说”。选择本地收藏夹后，按所选类型读取所有云端收藏夹的全部分页，不受当前分页、搜索、书源或其他筛选影响，并显示页数和已读取数量。完整读取并确认会话未变化后，统一加入本地书架；已有书目保留原收藏夹、置顶、阅读状态和阅读记录，重复导入不会新增副本。此操作只加入书目，不下载正文，也不修改云端收藏。请求失败、取消或账号／书源变化时不写入本次导入结果，可重新发起。
+选择模式的“更多”提供“导入全部网络小说”和“导入全部文库小说”。选择导入方式后，按所选类型读取所有云端收藏夹的全部分页，不受当前分页、搜索、书源或其他筛选影响，并显示页数和已读取数量。完整读取并确认会话未变化后，统一加入本地书架。此操作只加入书目，不下载正文，也不修改云端收藏。请求失败、取消或账号／书源变化时不写入本次导入结果，可重新发起。
+
+“加入本地”的多选导入与全量导入均提供“按云端收藏夹导入”，按每本书的云端收藏夹名称匹配同名本地收藏夹，不存在时自动创建；网络与文库的云端收藏夹 ID 分开解析，两类同名收藏夹可共用一个本地收藏夹。已有书目也移到对应收藏夹，其置顶、阅读状态、精确阅读位置等资料保留，文库挂载分卷随父项归类，不改变挂载和排序。摘要缺少归属时逐页查询实际收藏夹，无法确认时中止整批操作，不猜测默认分组。仍可手动选择单一本地收藏夹，此方式保留已有书目的原收藏夹。重复导入不会创建重复书目或重复的同名收藏夹。
 
 ## 文库与分卷
 
@@ -99,4 +101,4 @@
 
 页面在 [ui/shelf](../../app/src/main/java/cc/novelia/app/ui/shelf)，规则在 [data/library](../../app/src/main/java/cc/novelia/app/data/library)，更新检查在 [data/updates](../../app/src/main/java/cc/novelia/app/data/updates)。
 
-优先看 `CloudFavoriteLocalCopyTest`、`CloudFavoriteBatchTest`、`CloudFavoriteImportTest`、`BookListPresentationTest`、`WenkuVolumesTest`、`ReadingContinuityTest`、`ReadingProgressUpdatesTest` 和 `BookUpdateStateTest`。重点覆盖离线移动后取消、切账号、跨页导入失败、撤销期间修改、旧位置缺字段、父项消失和重复更新响应。
+优先看 `CloudFavoriteLocalCopyTest`、`CloudFavoriteBatchTest`、`CloudFavoriteImportTest`、`CloudFavoriteFolderImportTest`、`BookListPresentationTest`、`WenkuVolumesTest`、`ReadingContinuityTest`、`ReadingProgressUpdatesTest` 和 `BookUpdateStateTest`。重点覆盖离线移动后取消、切账号、跨页导入失败、收藏夹归属缺失或重名、撤销期间修改、旧位置缺字段、父项消失和重复更新响应。

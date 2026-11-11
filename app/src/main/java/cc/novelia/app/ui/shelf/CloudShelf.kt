@@ -20,6 +20,7 @@ import cc.novelia.app.data.catalog.providers
 import cc.novelia.app.data.auth.SessionChangedException
 import cc.novelia.app.data.library.removeCloudFavorites
 import cc.novelia.app.data.library.withCloudFavoritesAddedLocally
+import cc.novelia.app.data.library.withCloudFavoritesAddedByCloudFolders
 import cc.novelia.app.data.library.withCloudReadingMetadata
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
@@ -32,6 +33,7 @@ import cc.novelia.app.data.network.CloudWebFilter
 import cc.novelia.app.data.network.cloudFavorites
 import cc.novelia.app.data.network.allCloudFavorites
 import cc.novelia.app.data.network.cloudFolderChoices
+import cc.novelia.app.data.network.resolveCloudFavoriteFolders
 import cc.novelia.app.ui.components.base.AsyncContent
 import cc.novelia.app.ui.components.base.CachedAsyncContent
 import cc.novelia.app.ui.components.base.rememberCachedListState
@@ -93,6 +95,41 @@ import cc.novelia.app.ui.navigation.AppController
     val path = if (kind == 0) "user/favored-web" else "user/favored-wenku"
     val filter = CloudWebFilter(submitted, source, type, level, translate)
     fun submit() { if(!bulkBusy) { submitted = query.trim(); page = 0; focus.clearFocus() } }
+    fun importBooks(folder: String?, selected: List<BookCard>? = null, wenku: Boolean = false) {
+        val importBinding = c.session.capture()
+        val kindLabel = if(wenku) "文库小说" else "网络小说"
+        bulkLocal = null; bulkImport = null; bulkBusy = true; expanded = false
+        importProgress = if(selected == null) "正在读取全部云端$kindLabel…" else "正在加入本地书架…"
+        c.action {
+            try {
+                if(importBinding.account != account) throw SessionChangedException()
+                val books = selected?.distinctBy { it.ref } ?: c.api.allCloudFavorites(wenku,
+                    validate = { c.session.ensureCurrent(importBinding) }) {
+                    importProgress = "正在读取$kindLabel · 第 ${it.pagesRead} / ${it.pageCount} 页，已读取 ${it.booksRead} 本…"
+                }
+                val grouped = if(folder == null && books.isNotEmpty()) {
+                    importProgress = "正在确认云端收藏夹…"
+                    c.api.resolveCloudFavoriteFolders(books, validate = { c.session.ensureCurrent(importBinding) }) {
+                        importProgress = "正在确认云端收藏夹 · 已确认 $it / ${books.size} 本…"
+                    }
+                } else null
+                c.session.ensureCurrent(importBinding)
+                val existing = c.store.state.value.books.map { it.book.ref }.toSet()
+                val added = books.count { it.ref !in existing }
+                if(books.isNotEmpty()) c.store.update {
+                    c.session.ensureCurrent(importBinding)
+                    if(grouped != null) it.withCloudFavoritesAddedByCloudFolders(grouped.books, grouped.folders)
+                    else it.withCloudFavoritesAddedLocally(books, requireNotNull(folder))
+                }
+                managing = false; selection = emptyMap()
+                c.message(when {
+                    books.isEmpty() -> "云端暂无${kindLabel}收藏"
+                    grouped != null -> "已按云端收藏夹归类 ${books.size} 本，新增 $added 本"
+                    else -> "已加入 $added 本到「$folder」" + if(added < books.size) "，${books.size - added} 本已在本地" else ""
+                })
+            } finally { bulkBusy = false; importProgress = null }
+        }
+    }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val filterHeight = maxHeight * .9f
@@ -170,32 +207,13 @@ import cc.novelia.app.ui.navigation.AppController
             }
         }
     }
-    bulkLocal?.let { books -> CloudFavoriteLocalSheet(local.folders, books.size, { bulkLocal = null }) { folder ->
-        val added = books.count { book -> c.store.state.value.books.none { it.book.ref == book.ref } }
-        c.store.update { it.withCloudFavoritesAddedLocally(books, folder) }
-        bulkLocal = null; managing = false; selection = emptyMap()
-        c.message("已加入 $added 本到「$folder」" + if(added < books.size) "，${books.size - added} 本已在本地" else "")
+    bulkLocal?.let { books -> CloudFavoriteLocalSheet(local.folders, books.size, { bulkLocal = null },
+        onCloudFolders = { importBooks(null, books) }) { folder ->
+        importBooks(folder, books)
     } }
-    bulkImport?.let { wenku -> CloudFavoriteImportSheet(local.folders, wenku, { bulkImport = null }) { folder ->
-        val importBinding = c.session.capture()
-        val kindLabel = if(wenku) "文库小说" else "网络小说"
-        bulkImport = null; bulkBusy = true; expanded = false
-        importProgress = "正在读取全部云端$kindLabel…"
-        c.action {
-            try {
-                if(importBinding.account != account) throw SessionChangedException()
-                val books = c.api.allCloudFavorites(wenku, validate = { c.session.ensureCurrent(importBinding) }) {
-                    importProgress = "正在读取$kindLabel · 第 ${it.pagesRead} / ${it.pageCount} 页，已读取 ${it.booksRead} 本…"
-                }
-                c.session.ensureCurrent(importBinding)
-                val existing = c.store.state.value.books.map { it.book.ref }.toSet()
-                val added = books.count { it.ref !in existing }
-                if(books.isNotEmpty()) c.store.update { it.withCloudFavoritesAddedLocally(books, folder) }
-                managing = false; selection = emptyMap()
-                c.message(if(books.isEmpty()) "云端暂无${kindLabel}收藏" else
-                    "已导入 $added 本${kindLabel}到「$folder」" + if(added < books.size) "，${books.size - added} 本已在本地" else "")
-            } finally { bulkBusy = false; importProgress = null }
-        }
+    bulkImport?.let { wenku -> CloudFavoriteImportSheet(local.folders, wenku, { bulkImport = null },
+        onCloudFolders = { importBooks(null, wenku = wenku) }) { folder ->
+        importBooks(folder, wenku = wenku)
     } }
     bulkRemoval?.let { (selectedFolder, books) ->
         ConfirmDialog("取消 ${books.size} 本云端收藏？", "仅取消所选作品的云端收藏，本地收藏和阅读记录会保留。",

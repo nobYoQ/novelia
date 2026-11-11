@@ -94,6 +94,16 @@ class CloudFavoritesTest {
         }
     }
 
+    @Test fun concreteFolderRequestsFillMissingMembershipForBothKinds() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""{"pageNumber":1,"items":[{"providerId":"syosetu","novelId":"n1"}]}"""))
+            server.enqueue(MockResponse().setBody("""{"pageNumber":1,"items":[{"id":"w1"}]}"""))
+            val api = NoveliaApi(null, server.url("/api/").toString())
+            assertEquals("web-folder", api.cloudFavorites(false, "web-folder", 0).items.single().favored)
+            assertEquals("wenku-folder", api.cloudFavorites(true, "wenku-folder", 0).items.single().favored)
+        }
+    }
+
     @Test fun oldStateAndNewReadingAnchorsRoundTrip() {
         assertFalse(appJson.decodeFromString<ReaderSettings>("{}").eInkMode)
         val state = LibraryState(reader = ReaderSettings(eInkMode = true), autoCollapseCloudFilters = false,

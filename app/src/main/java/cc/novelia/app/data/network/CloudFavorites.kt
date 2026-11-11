@@ -43,13 +43,18 @@ suspend fun NoveliaApi.cloudFavorites(
             put("translate", "${filter.translate}")
         }
     }
-    return if (wenku) get<Page<WenkuOutline>>("user/favored-wenku/${encodeSegment(folderId)}", params)
+    val result = if (wenku) get<Page<WenkuOutline>>("user/favored-wenku/${encodeSegment(folderId)}", params)
         .let { Page(it.pageNumber, it.items.map(WenkuOutline::card)) }
     else get<Page<WebOutline>>("user/favored-web/${encodeSegment(folderId)}", params)
         .let { result ->
             binding?.let { session?.ensureCurrent(it) }
             Page(result.pageNumber, result.items.map { it.card(binding?.account) })
         }
+    // 指定收藏夹的接口本身已确认归属；部分列表摘要不返回 favored 字段。
+    val fallback = folderId.takeIf { it.isNotBlank() && it != ALL_CLOUD_FAVORITES } ?: return result
+    return Page(result.pageNumber, result.items.map { book ->
+        if(book.favored.isNullOrBlank() || book.favored == ALL_CLOUD_FAVORITES) book.copy(favored = fallback) else book
+    })
 }
 
 data class CloudFavoriteImportProgress(val pagesRead: Int, val pageCount: Int, val booksRead: Int)

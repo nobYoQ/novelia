@@ -3,9 +3,12 @@ package cc.novelia.app.data.library
 import cc.novelia.app.data.auth.SessionChangedException
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
+import cc.novelia.app.data.model.CloudFolders
+import cc.novelia.app.data.model.Folder
 import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.Position
 import cc.novelia.app.data.model.SavedBook
+import cc.novelia.app.data.model.withStableFolderIds
 import cc.novelia.app.data.network.ApiException
 import cc.novelia.app.data.updates.updateSnapshot
 import cc.novelia.app.data.updates.withSavedBook
@@ -62,6 +65,56 @@ class CloudFavoriteBatchTest {
         assertEquals(expected.books.map { it.copy(addedAt = 0) }, result.books.map { it.copy(addedAt = 0) })
         assertEquals(expected.updateSnapshots, result.updateSnapshots)
         assertEquals(30, result.books.first().book.total)
+    }
+
+    @Test fun cloudFolderImportSeparatesWebAndWenkuIdsAndReusesLocalNames() {
+        val cloud = CloudFolders(favoredWeb = listOf(Folder("same-id", "网络收藏"), Folder("unused", "空文件夹")),
+            favoredWenku = listOf(Folder("same-id", "文库收藏")))
+        val before = LibraryState(folders = listOf("默认收藏", "网络收藏"), autoSaveCloudFavoritesLocally = false)
+        val incoming = listOf(web.copy(favored = "same-id"), wenku.copy(favored = "same-id"), web.copy(favored = "same-id"))
+        val result = before.withCloudFavoritesAddedByCloudFolders(incoming, cloud)
+        assertEquals(listOf("网络收藏", "文库收藏"), result.books.map { it.folder })
+        assertEquals(listOf("默认收藏", "网络收藏", "文库收藏"), result.folders)
+        assertEquals(result, result.withCloudFavoritesAddedByCloudFolders(incoming, cloud))
+        assertEquals(setOf(web.ref.key, wenku.ref.key), result.updateSnapshots.keys)
+    }
+
+    @Test fun cloudFolderImportMovesExistingBooksAndMountedVolumesWithoutReplacingTheirData() {
+        val volume = BookCard(BookRef("local", "volume-1"), "本地分卷")
+        val parent = SavedBook(wenku, "手动收藏", pinned = true, status = "读完", addedAt = 42,
+            hasUpdates = true, volumesExpanded = true, volumeOrder = listOf(volume.ref.key))
+        val mounted = SavedBook(volume, "手动收藏", parentWenkuKey = wenku.ref.key)
+        val unrelated = SavedBook(web, "手动收藏")
+        val position = Position("chapter-2", 3, textOffset = 120)
+        val before = LibraryState(books = listOf(parent, mounted, unrelated), folders = listOf("默认收藏", "手动收藏"),
+            positions = mapOf(volume.ref.key to position), updateSnapshots = mapOf(wenku.ref.key to wenku.updateSnapshot())).withStableFolderIds()
+        val cloud = CloudFolders(favoredWenku = listOf(Folder("reading", "文库收藏")))
+        val result = before.withCloudFavoritesAddedByCloudFolders(listOf(wenku.copy(title = "云端旧标题", favored = "reading")), cloud).withStableFolderIds()
+        val folderId = result.folderIds.getValue("文库收藏")
+        assertEquals(before.books[0].copy(folder = "文库收藏", folderId = folderId), result.books[0])
+        assertEquals(before.books[1].copy(folder = "文库收藏", folderId = folderId), result.books[1])
+        assertEquals(before.books[2], result.books[2])
+        assertEquals(before.positions, result.positions)
+        assertEquals(before.updateSnapshots, result.updateSnapshots)
+        assertEquals(before.pending, result.pending)
+        assertEquals(before.folderIds.getValue("手动收藏"), result.folderIds.getValue("手动收藏"))
+    }
+
+    @Test fun distinctCloudFoldersWithTheSameNameShareOneLocalFolder() {
+        val cloud = CloudFolders(favoredWeb = listOf(Folder("one", "在读")), favoredWenku = listOf(Folder("two", "在读")))
+        val result = LibraryState().withCloudFavoritesAddedByCloudFolders(listOf(web.copy(favored = "one"), wenku.copy(favored = "two")), cloud)
+        assertEquals(1, result.folders.count { it == "在读" })
+        assertTrue(result.books.all { it.folder == "在读" })
+    }
+
+    @Test fun unresolvableCloudFolderDoesNotPartiallyMoveOrImportBooks() {
+        val before = LibraryState(books = listOf(SavedBook(web, "手动收藏")))
+        val cloud = CloudFolders(favoredWeb = listOf(Folder("reading", "在读")))
+        assertThrows(IllegalArgumentException::class.java) {
+            before.withCloudFavoritesAddedByCloudFolders(listOf(web.copy(favored = "reading"), wenku.copy(favored = "missing")), cloud)
+        }
+        assertEquals("手动收藏", before.books.single().folder)
+        assertEquals(listOf("默认收藏"), before.folders)
     }
 
     @Test fun expiredAuthenticationDoesNotKeepSendingOtherBooks() = runBlocking {

@@ -17,6 +17,33 @@ import org.junit.Test
 class CloudFavoriteBatchUiTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun selectedAndFullImportsBothOfferCloudFolderRouting() {
+        var stage by mutableIntStateOf(0)
+        val grouped = mutableListOf<String>()
+        compose.setContent {
+            NoveliaTheme("dark") {
+                when(stage) {
+                    0 -> CloudFavoriteLocalSheet(listOf("默认收藏"), 3, {}, onCloudFolders = {
+                        grouped += "selected"; stage++
+                    }) { fail("按云端归类不应走单一收藏夹") }
+                    1 -> CloudFavoriteImportSheet(listOf("默认收藏"), false, {}, onCloudFolders = {
+                        grouped += "web"; stage++
+                    }) { fail("按云端归类不应走单一收藏夹") }
+                    2 -> CloudFavoriteImportSheet(listOf("默认收藏"), true, {}, onCloudFolders = {
+                        grouped += "wenku"; stage++
+                    }) { fail("按云端归类不应走单一收藏夹") }
+                }
+            }
+        }
+        compose.onNodeWithText("加入本地收藏 · 3 本").assertIsDisplayed()
+        compose.onNodeWithText("按云端收藏夹导入").assertIsDisplayed().performClick()
+        compose.onNodeWithText("导入全部网络小说").assertIsDisplayed()
+        compose.onNodeWithText("按云端收藏夹导入").assertIsDisplayed().performClick()
+        compose.onNodeWithText("导入全部文库小说").assertIsDisplayed()
+        compose.onNodeWithText("按云端收藏夹导入").assertIsDisplayed().performClick()
+        compose.runOnIdle { assertEquals(listOf("selected", "web", "wenku"), grouped) }
+    }
+
     @Test fun localFolderChoiceAndBusyBatchActionsStayReachableAtNarrowWidths() {
         var managing by mutableStateOf(true)
         var selected by mutableIntStateOf(0)
