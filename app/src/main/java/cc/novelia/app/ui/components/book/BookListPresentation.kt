@@ -3,6 +3,7 @@ package cc.novelia.app.ui.components.book
 import androidx.compose.runtime.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.model.BookCard
+import cc.novelia.app.data.model.CloudFolders
 import cc.novelia.app.data.model.Position
 import cc.novelia.app.data.model.SavedBook
 import cc.novelia.app.data.model.PendingAction
@@ -93,10 +94,12 @@ internal data class BookListPresentation(
     val updates: Map<String, BookUpdateInfo> = emptyMap(),
     val account: String? = null,
     val pending: List<PendingAction> = emptyList(),
+    val cloudFolders: CloudFolders? = null,
 ) {
     // 只采用当前列表响应的云端关系，不读取可能属于旧账号的本地 BookCard.favored。
     fun favoriteState(book: BookCard): BookFavoriteState = bookFavoriteState(
         book.ref, book.ref.key in books, book.favored, account, pending,
+        localFolderName = books[book.ref.key]?.folder, cloudFolders = cloudFolders,
     )
 }
 
@@ -104,6 +107,7 @@ internal val LocalBookListPresentation = compositionLocalOf { BookListPresentati
 
 @Composable internal fun rememberBookListPresentation(c: AppController): BookListPresentation {
     val profile by c.session.profile.collectAsStateWithLifecycle()
+    val cloudFolders = rememberCloudFavoriteFolders(c)
     val source = remember(c.store) {
         c.store.state.map { BookListPresentation(it.books.associateBy { saved -> saved.book.ref.key }, it.positions, it.bookUpdates, pending = it.pending) }
             .distinctUntilChanged()
@@ -122,5 +126,7 @@ internal val LocalBookListPresentation = compositionLocalOf { BookListPresentati
             c.store.update { it.acknowledgeCompletedBookUpdates(profile?.username) }
         }
     }
-    return remember(presentation, profile?.username) { presentation.copy(account = profile?.username) }
+    return remember(presentation, profile?.username, cloudFolders) {
+        presentation.copy(account = profile?.username, cloudFolders = cloudFolders)
+    }
 }

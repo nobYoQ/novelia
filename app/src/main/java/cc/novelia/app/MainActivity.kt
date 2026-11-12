@@ -132,7 +132,7 @@ class MainActivity : ComponentActivity() {
             val link by incoming.collectAsStateWithLifecycle()
             val sharedDocuments by incomingDocuments.collectAsStateWithLifecycle()
             val localStickers by remember(app) { app.stickerPacks.state.map { it.packs }.distinctUntilChanged() }
-                .collectAsStateWithLifecycle(initialValue = app.stickerPacks.state.value.packs)
+                .collectAsStateWithLifecycle(initialValue = remember(app) { app.stickerPacks.state.value.packs })
             val stickerPacks = remember(localStickers) { StickerPacks.all + localStickers.map { it.asStickerPack() } }
             AppInteractionMode(appearance.eInk, appearance.reducedMotion) {
             NoveliaTheme(appearance.theme, squareCorners = appearance.squareCorners, amoledBlack = appearance.amoledBlack) {

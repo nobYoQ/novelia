@@ -1,6 +1,7 @@
 package cc.novelia.app.ui.components
 
 import android.graphics.Bitmap
+import android.animation.ValueAnimator
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -20,13 +21,16 @@ import cc.novelia.app.data.model.Folder
 import cc.novelia.app.data.model.Profile
 import cc.novelia.app.ui.account.ProfileAccountCard
 import cc.novelia.app.ui.book.BookReadingActions
+import cc.novelia.app.ui.book.BookFavoriteActions
 import cc.novelia.app.ui.shelf.BookFavoriteState
 import cc.novelia.app.ui.shelf.CompactCloudControls
 import cc.novelia.app.data.network.CloudWebFilter
 import cc.novelia.app.ui.theme.AppInteractionMode
+import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.NoveliaTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import java.io.File
@@ -117,8 +121,30 @@ class CompactLayoutTest {
             if(scale == 1f || scale == 2f) capture("book-reading-$scale")
             compose.runOnIdle { favoriteState = BookFavoriteState(false, "reading", "PUT") }
             assertTextFits("云端收藏待同步")
+            compose.runOnIdle { favoriteState = BookFavoriteState(true, "reading", "PUT", "本地追更", "云端待读") }
+            for((tag, name) in listOf("book-local-favorite" to "本地追更", "book-cloud-favorite" to "云端待读")) {
+                val action = compose.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
+                val folder = compose.onNodeWithTag("$tag-folder", useUnmergedTree = true)
+                    .assertIsDisplayed().assertTextEquals(name).fetchSemanticsNode().boundsInRoot
+                assertTrue("收藏夹应显示在对应按钮内部", folder.top >= action.top && folder.bottom <= action.bottom && folder.left >= action.left && folder.right <= action.right)
+            }
+            assertTextFits("云端收藏待同步")
+            if(scale == 1f) {
+                val actionHeights = listOf("book-local-favorite", "book-cloud-favorite", "book-download")
+                    .map { compose.onNodeWithTag(it).fetchSemanticsNode().boundsInRoot.height }
+                assertEquals("同排操作按钮应等高", 1, actionHeights.distinct().size)
+            }
+            compose.runOnIdle { favoriteState = favoriteState.copy(localFolderName = "本地收藏夹名称非常长而且只允许单行显示", cloudFolderName = "云端收藏夹名称非常长而且只允许单行显示") }
+            for(tag in listOf("book-local-favorite-folder", "book-cloud-favorite-folder")) {
+                val layouts = mutableListOf<TextLayoutResult>()
+                compose.onNodeWithTag(tag, useUnmergedTree = true).performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+                assertEquals("收藏夹长名称只能占一行", 1, layouts.single().lineCount)
+                assertTrue("收藏夹长名称应省略而非增加高度", layouts.single().isLineEllipsized(0))
+            }
         }
         compose.runOnIdle { favoriteState = BookFavoriteState(true, null) }
+        compose.onNodeWithTag("book-local-favorite-folder", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithTag("book-cloud-favorite-folder", useUnmergedTree = true).assertDoesNotExist()
         compose.onNodeWithText("已本地收藏").assertIsDisplayed()
         compose.onNodeWithText("收藏到云端").assertIsDisplayed()
         compose.runOnIdle { favoriteState = BookFavoriteState(false, "reading") }
@@ -131,6 +157,52 @@ class CompactLayoutTest {
         compose.runOnIdle { assertEquals(1, read); assertEquals(1, localFavorite); assertEquals(1, cloudFavorite); assertEquals(1, download); destination = null }
         compose.onNodeWithTag("book-read-action").assertIsNotEnabled()
         compose.onNodeWithTag("book-resume-chapter", useUnmergedTree = true).assertDoesNotExist()
+    }
+
+    @Test fun favoriteChangesAnimateSizeInBothDirectionsAndReducedMotionFinishesImmediately() {
+        assumeTrue(ValueAnimator.areAnimatorsEnabled())
+        val empty = BookFavoriteState(false, null)
+        val saved = BookFavoriteState(true, "reading", localFolderName = "本地追更", cloudFolderName = "云端待读")
+        var favorite by mutableStateOf(empty)
+        var reduced by mutableStateOf(false)
+        var clicks = 0
+        compose.setContent {
+            AppInteractionMode(eInk = false, reducedMotion = reduced) {
+                NoveliaTheme("dark") {
+                    Surface(Modifier.requiredWidth(320.dp)) {
+                        BookFavoriteActions(favorite, { clicks++ }, {}, onDownload = {})
+                    }
+                }
+            }
+        }
+        fun height() = compose.onNodeWithTag("book-favorite-actions").getUnclippedBoundsInRoot().let { it.bottom - it.top }
+        val compactHeight = height()
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { favorite = saved }
+        compose.mainClock.advanceTimeBy(64)
+        val growingHeight = height()
+        compose.mainClock.advanceTimeBy(500)
+        val savedHeight = height()
+        assertTrue("收藏后应平滑增高", compactHeight < growingHeight && growingHeight < savedHeight)
+        compose.onNodeWithTag("book-local-favorite-folder", useUnmergedTree = true).assertTextEquals("本地追更")
+        compose.runOnIdle { favorite = empty }
+        compose.mainClock.advanceTimeBy((AppMotion.Quick + 64).toLong())
+        val shrinkingHeight = height()
+        assertTrue("取消收藏后应平滑收起", compactHeight < shrinkingHeight && shrinkingHeight < savedHeight)
+        // 尚未收起时再次收藏，应转向最新状态，且始终只有一个点击入口。
+        compose.runOnIdle { favorite = saved.copy(localFolderName = "新的收藏夹") }
+        compose.mainClock.advanceTimeBy(500)
+        compose.onNodeWithTag("book-local-favorite-folder", useUnmergedTree = true).assertTextEquals("新的收藏夹")
+        compose.onAllNodesWithTag("book-local-favorite").assertCountEquals(1)
+        compose.onNodeWithTag("book-local-favorite").performClick()
+        compose.runOnIdle { assertEquals(1, clicks); favorite = empty }
+        compose.mainClock.advanceTimeBy(48)
+        compose.runOnIdle { reduced = true }
+        compose.mainClock.advanceTimeBy(48)
+        assertEquals("途中启用减少动效应立即完成切换", compactHeight, height())
+        compose.onNodeWithTag("book-local-favorite-folder", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithTag("book-cloud-favorite-folder", useUnmergedTree = true).assertDoesNotExist()
+        compose.mainClock.autoAdvance = true
     }
 
     @Test fun accountCardKeepsLogoutBehindMenuAndGuestLoginReachable() {

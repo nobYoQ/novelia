@@ -62,6 +62,7 @@ import cc.novelia.app.ui.markdown.format
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.reader.ChapterCacheDialog
 import cc.novelia.app.ui.shelf.FavoriteSheet
+import cc.novelia.app.ui.components.book.LocalBookListPresentation
 import cc.novelia.app.ui.shelf.bookFavoriteState
 import cc.novelia.app.ui.shelf.WenkuSiteOrderActions
 import cc.novelia.app.data.library.withCloudReadingMetadata
@@ -83,7 +84,9 @@ import kotlinx.coroutines.withContext
     }
     var menu by remember { mutableStateOf(false) }; var favorite by remember { mutableStateOf<Pair<BookCard, Boolean>?>(null) }; var download by remember { mutableStateOf<BookCard?>(null) }; var version by remember { mutableIntStateOf(0) }
     val state by c.store.state.collectAsStateWithLifecycle(); val profile by c.session.profile.collectAsStateWithLifecycle()
-    val localSaved = remember(state.books, ref) { state.books.any { it.book.ref == ref } }
+    val localSaved = remember(state.books, ref) { state.books.firstOrNull { it.book.ref == ref } }
+    val favoritePresentation = LocalBookListPresentation.current
+    val cloudFolders = favoritePresentation.cloudFolders?.takeIf { favoritePresentation.account == profile?.username }
     val cacheGeneration by c.store.cacheGeneration.collectAsStateWithLifecycle()
     val cacheActions = rememberChapterCacheActions(c)
     val detailKey = c.detailKey(if(ref.isWenku) "wenku/${ref.id}" else "novel/${ref.key}").copy(generation = cacheGeneration)
@@ -109,7 +112,8 @@ import kotlinx.coroutines.withContext
             load = { c.detail<WenkuDetail>("wenku/${ref.id}", forceNetwork = version > 0 || c.uiResults.wenkuDetails.snapshot(detailKey) != null) },
             modifier = Modifier.padding(padding), validate = { c.session.ensureCurrent(detailKey.binding) }, revealContent = true) { detail, _ ->
             val book = remember(detail, ref) { detail.card(ref) }
-            val favoriteState = bookFavoriteState(ref, localSaved, detail.favored, profile?.username, state.pending)
+            val favoriteState = bookFavoriteState(ref, localSaved != null, detail.favored, profile?.username, state.pending,
+                localFolderName = localSaved?.folder, cloudFolders = cloudFolders)
             val relatedWebRefs = remember(detail.webIds) {
                 detail.webIds.map { BookRef.fromKey(it.trim()) }
                     .filter { it.provider.isNotBlank() && it.id.isNotBlank() && !it.isWenku && !it.isLocal }
@@ -164,7 +168,8 @@ import kotlinx.coroutines.withContext
                 c.store.update { it.withCloudReadingMetadata(listOf(book), c.session.profile.value?.username) }
                 withContext(Dispatchers.IO) { runCatching { c.store.registerCachedChapters(ref, book.title, detail.toc.mapNotNull { it.chapterId }) } }
             }
-            val favoriteState = bookFavoriteState(ref, localSaved, detail.favored, profile?.username, state.pending)
+            val favoriteState = bookFavoriteState(ref, localSaved != null, detail.favored, profile?.username, state.pending,
+                localFolderName = localSaved?.folder, cloudFolders = cloudFolders)
             val chapterCount = remember(detail.toc) { detail.toc.count { it.chapterId != null } }
             val refresh: () -> Unit = { version++ }
             var tab by rememberSaveable(ref.key) { mutableIntStateOf(0) }

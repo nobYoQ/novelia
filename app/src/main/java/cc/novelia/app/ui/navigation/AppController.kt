@@ -87,7 +87,8 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
         return listOf("forum-categories", source.source, source.sourceRevision, store.cacheGeneration.value)
     }
     internal suspend fun categories(): List<ForumCategory> = uiResults.categories.load(categoriesKey()) { forumApi.categories() }
-    internal fun foldersKey(): Any = listOf(session.capture(), store.cacheGeneration.value)
+    internal fun foldersKey(binding: SessionBinding = session.capture(), generation: Long = store.cacheGeneration.value): Any =
+        listOf(binding, generation)
     internal suspend fun folders(): CloudFolders = uiResults.folders.load(foldersKey()) { api.get<CloudFolders>("user/favored") }
     internal suspend fun webDetail(ref: BookRef, forceNetwork: Boolean = false): WebDetail {
         val key = detailKey("novel/${ref.key}")

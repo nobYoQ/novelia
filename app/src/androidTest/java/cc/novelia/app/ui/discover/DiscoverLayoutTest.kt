@@ -20,6 +20,8 @@ import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.SavedBook
 import cc.novelia.app.data.model.PendingAction
+import cc.novelia.app.data.model.CloudFolders
+import cc.novelia.app.data.model.Folder
 import cc.novelia.app.data.updates.BookUpdateInfo
 import cc.novelia.app.ui.components.book.BookListPresentation
 import cc.novelia.app.ui.components.book.LocalBookListPresentation
@@ -90,7 +92,16 @@ class DiscoverLayoutTest {
         compose.onNodeWithTag("book-favorite-${web.ref.key}", useUnmergedTree = true).assertDoesNotExist()
         compose.onNodeWithTag("book-favorite-cloud-${wenku.ref.key}", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithTag("book-favorite-local-${wenku.ref.key}", useUnmergedTree = true).assertDoesNotExist()
-        compose.runOnIdle { presentation = presentation.copy(books = mapOf(web.ref.key to SavedBook(web), wenku.ref.key to SavedBook(wenku))) }
+        compose.onNodeWithText("云端收藏", useUnmergedTree = true).assertIsDisplayed()
+        compose.runOnIdle { presentation = presentation.copy(
+            books = mapOf(web.ref.key to SavedBook(web, "本地追更"), wenku.ref.key to SavedBook(wenku, "本地文库")),
+            cloudFolders = CloudFolders(favoredWeb = listOf(Folder("reading", "网络待读")),
+                favoredWenku = listOf(Folder("reading", "文库待读"))),
+        ) }
+        compose.onNodeWithText("本地追更", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("本地文库", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("文库待读", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("网络待读", useUnmergedTree = true).assertDoesNotExist()
         compose.onNodeWithTag("book-favorite-local-${web.ref.key}", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithTag("book-favorite-cloud-${web.ref.key}", useUnmergedTree = true).assertDoesNotExist()
         compose.onNodeWithTag("book-favorite-local-${wenku.ref.key}", useUnmergedTree = true).assertIsDisplayed()
@@ -102,6 +113,9 @@ class DiscoverLayoutTest {
         }
         val queued = PendingAction("favorite", "alice", "PUT", "user/favored-wenku/reading/${wenku.ref.id}")
         compose.runOnIdle { presentation = presentation.copy(pending = listOf(queued)) }
+        compose.onNodeWithText("文库待读", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("· 待同步", useUnmergedTree = true).assertIsDisplayed()
+        compose.runOnIdle { presentation = presentation.copy(cloudFolders = null) }
         compose.onNodeWithText("云端收藏待同步", useUnmergedTree = true).assertIsDisplayed()
         compose.runOnIdle { presentation = presentation.copy(pending = listOf(queued.copy(method = "DELETE"))) }
         compose.onNodeWithTag("book-favorite-cloud-${wenku.ref.key}", useUnmergedTree = true).assertDoesNotExist()

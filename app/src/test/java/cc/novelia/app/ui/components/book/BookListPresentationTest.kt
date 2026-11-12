@@ -10,6 +10,8 @@ import cc.novelia.app.data.model.WebDetail
 import cc.novelia.app.data.model.TocItem
 import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.PendingAction
+import cc.novelia.app.data.model.CloudFolders
+import cc.novelia.app.data.model.Folder
 import cc.novelia.app.data.library.withCloudReadingMetadata
 import cc.novelia.app.data.storage.appJson
 import kotlinx.serialization.encodeToString
@@ -49,6 +51,38 @@ class BookListPresentationTest {
         val wenku = book.copy(ref = BookRef("wenku", "n1"))
         assertFalse(pending.copy(pending = listOf(removal.copy(method = "PUT"))).favoriteState(wenku).isSaved)
         assertEquals("reading", pending.copy(pending = listOf(removal.copy(method = "PUT", path = "user/favored-wenku/reading/n1"))).favoriteState(wenku).cloudFolder)
+    }
+
+    @Test fun folderNamesFollowLocalMembershipBookTypeAndLatestPendingMove() {
+        val folders = CloudFolders(
+            favoredWeb = listOf(Folder("default", "网络默认"), Folder("reading", "网络待读")),
+            favoredWenku = listOf(Folder("default", "文库默认"), Folder("reading", "文库待读")),
+        )
+        val local = SavedBook(book.copy(favored = "stale-account-folder"), "本地追更")
+        val presentation = BookListPresentation(books = mapOf(book.ref.key to local), account = "alice", cloudFolders = folders)
+        val state = presentation.favoriteState(book.copy(favored = "default"))
+        assertEquals("本地追更", state.localFolderName)
+        assertEquals("本地追更", state.localIndicatorLabel)
+        assertEquals("网络默认", state.cloudFolderName)
+        assertEquals("网络默认", state.cloudIndicatorLabel)
+        assertNull(presentation.favoriteState(book).cloudFolderName)
+        assertEquals("文库默认", presentation.favoriteState(book.copy(ref = BookRef("wenku", "n1"), favored = "default")).cloudFolderName)
+
+        val move = PendingAction("move", "alice", "PUT", "user/favored-web/reading/${book.ref.key}")
+        val moved = presentation.copy(pending = listOf(move)).favoriteState(book.copy(favored = "default"))
+        assertEquals("网络待读", moved.cloudFolderName)
+        assertEquals("网络待读 · 待同步", moved.cloudIndicatorLabel)
+        assertEquals("本地追更", moved.localFolderName)
+        assertNull(presentation.copy(pending = listOf(move.copy(method = "DELETE"))).favoriteState(book.copy(favored = "default")).cloudFolderName)
+        assertNull(presentation.copy(account = null).favoriteState(book.copy(favored = "default")).cloudFolderName)
+        assertEquals("网络默认", presentation.copy(account = "bob", pending = listOf(move)).favoriteState(book.copy(favored = "default")).cloudFolderName)
+
+        val unavailable = presentation.copy(cloudFolders = null).favoriteState(book.copy(favored = "default"))
+        assertEquals("云端收藏", unavailable.cloudIndicatorLabel)
+        assertEquals("云端收藏待同步", presentation.copy(cloudFolders = null, pending = listOf(move)).favoriteState(book).cloudIndicatorLabel)
+        assertEquals("云端收藏", presentation.favoriteState(book.copy(favored = "missing")).cloudIndicatorLabel)
+        assertEquals("云端收藏", presentation.copy(cloudFolders = CloudFolders(favoredWeb = listOf(Folder("default", "  "))))
+            .favoriteState(book.copy(favored = "default")).cloudIndicatorLabel)
     }
 
     @Test fun cloudOnlyHistoryIsNotUnreadOrAFabricatedZeroPercent() {
