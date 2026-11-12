@@ -421,6 +421,7 @@ import kotlinx.serialization.encodeToString
         var topOverlayHeight by remember { mutableIntStateOf(0) }
         var bottomOverlayHeight by remember { mutableIntStateOf(0) }
         var speechControlsHeight by remember { mutableIntStateOf(0) }
+        var pageButtonsHeight by remember { mutableIntStateOf(0) }
         val density = LocalDensity.current
         val safeInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
         val direction = androidx.compose.ui.platform.LocalLayoutDirection.current
@@ -432,7 +433,10 @@ import kotlinx.serialization.encodeToString
         val statusRows = cc.novelia.app.data.model.ReaderStatusItems.layout(settings.visibleReadingStatusItems, statusColumns).size
         // 预留空间只跟随配置、宽度和系统字体变化；时间与进度更新不会重新分页。
         val readingStatusBarHeight = if(statusRows > 0) with(density) { 16.sp.toDp() } * statusRows + 12.dp + 4.dp * (statusRows - 1) else 0.dp
-        val persistentBottomHeight = readingStatusBarHeight + with(density) { if(bookSpeech != null) speechControlsHeight.toDp() else 0.dp }
+        val persistentBottomHeight = readingStatusBarHeight + with(density) {
+            (if(bookSpeech != null) speechControlsHeight.toDp() else 0.dp) +
+                (if(settings.showPageButtons) pageButtonsHeight.toDp() else 0.dp)
+        }
         // 隐藏状态栏时正文延伸到顶部，避免屏幕缺口仍留出整条空白；
         // 保留横屏两侧和底部安全区，目录与引导控件仍避让全部系统区域。
         val readingInsets = if(settings.hideStatusBar) safeInsets.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom) else safeInsets
@@ -849,7 +853,10 @@ import kotlinx.serialization.encodeToString
                         interactionSource = remember { MutableInteractionSource() }, indication = null,
                         onClickLabel = "显示或收起阅读工具栏", onClick = tapNavigation::click)) {
                         if(chapterHeading(chapter.title, paragraphs) != null) {
-                            Text(chapter.title, Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium, color = foreground, fontFamily = readerFont.family)
+                            Text(chapter.title, Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium,
+                                fontSize = (settings.fontSize * 1.25f).sp,
+                                lineHeight = (settings.fontSize * 1.25f * settings.lineHeight).sp,
+                                color = foreground, fontFamily = readerFont.family)
                             Spacer(Modifier.height(12.dp))
                         }
                         Text(if(ref.isLocal) "本地小说" else (providers[ref.provider].orEmpty() + " · " + if(settings.mode == "jp") "日文原文" else "机翻阅读"), style = MaterialTheme.typography.labelMedium, color = foreground.copy(alpha = .65f))
@@ -914,6 +921,7 @@ import kotlinx.serialization.encodeToString
                 onToc = { if(wide) { setWideToc(!settings.showWideToc); if(!settings.showWideToc) tocLocateRequest++ } else toc = true },
                 onBookmark = { paragraphs.getOrNull(firstParagraph)?.let { saveBookmark(it) } }, onPreferences = { preferences = true },
                 onSpeechHeightChanged = { speechControlsHeight = it },
+                onPageButtonsHeightChanged = { pageButtonsHeight = it },
                 speechControls = if(bookSpeech == null) null else { {
                     ReaderSpeechDock(bookSpeech, speechStatus,
                         onPrevious = { stepSpeech("previous") }, onNext = { stepSpeech("next") },

@@ -118,7 +118,7 @@ import kotlin.math.roundToInt
                         key(perBook) { ReaderDisplayPreferences(storedValue, { editNight() }, onStoredChange) }
                         if(!storedValue.nightReading) ReaderPreferenceSection("文字与主题", "普通阅读的字体、间距与配色", Icons.Outlined.TextFields) {
                             ReaderFontPreference(value, defaults, onChange)
-                            ReaderSlider("字号 ${value.fontSize.toInt()}", value.fontSize, 14f..32f,
+                            ReaderSlider("字号 ${value.fontSize.toInt()}", value.fontSize, ReaderSettings.FONT_SIZE_RANGE,
                                 defaultValue = defaults?.fontSize, livePreviewStep = if(livePreview) .5f else null) { onChange(value.copy(fontSize = it)) }
                             ReaderSlider("行距 ${"%.1f".format(value.lineHeight)}", value.lineHeight, ReaderSettings.LINE_HEIGHT_RANGE,
                                 modifier = Modifier.testTag("reader-line-height"), defaultValue = defaults?.lineHeight, livePreviewStep = if(livePreview) .05f else null) { onChange(value.copy(lineHeight = it)) }

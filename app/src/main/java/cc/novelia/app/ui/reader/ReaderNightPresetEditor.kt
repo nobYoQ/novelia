@@ -120,7 +120,7 @@ internal val LocalReaderPresetDraft = staticCompositionLocalOf { false }
                                     TogglePreference("沿用普通字号", "当前普通字号为 ${draft.fontSize.toInt()}", draft.nightPreset.fontSize == null) {
                                         draft = draft.copy(nightPreset = draft.nightPreset.copy(fontSize = if(it) null else shown.fontSize))
                                     }
-                                    if(draft.nightPreset.fontSize != null) ReaderSlider("夜间字号 ${shown.fontSize.toInt()}", shown.fontSize, 14f..32f,
+                                    if(draft.nightPreset.fontSize != null) ReaderSlider("夜间字号 ${shown.fontSize.toInt()}", shown.fontSize, ReaderSettings.FONT_SIZE_RANGE,
                                         modifier = Modifier.testTag("night-font-size")) { edit(shown.copy(fontSize = it)) }
                                     TogglePreference("加粗文字", "内置预设使用正常字重，保持较柔和的观感", shown.weight) { edit(shown.copy(weight = it)) }
                                     EditorHeading("行距与字距")

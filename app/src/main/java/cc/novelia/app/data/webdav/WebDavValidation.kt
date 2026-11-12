@@ -222,7 +222,7 @@ internal object WebDavValidation {
                 require(value is JsonObject && value.keys == setOf("text", "background", "toolbar")) { "阅读配色组不完整" }
                 value.values.forEach { color -> require(color is JsonPrimitive && !color.isString && color.longOrNull in 0L..0xFFFFFFL) { "阅读颜色必须是有效 RGB 值" } }
             }
-            "fontSize" -> number(value, 14.0, 32.0)
+            "fontSize" -> number(value, ReaderSettings.MIN_FONT_SIZE.toDouble(), ReaderSettings.MAX_FONT_SIZE.toDouble())
             "lineHeight" -> number(value, ReaderSettings.MIN_LINE_HEIGHT.toDouble(), 2.6)
             "letterSpacing" -> number(value, 0.0, 0.15)
             "nightPreset" -> {

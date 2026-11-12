@@ -81,7 +81,7 @@ class EInkAndCloudFilterTest {
     @Test fun reflowChecksCancellationBeforeMeasuringEveryParagraph() {
         var checks = 0
         try {
-            measureEInkChapter(List(30) { ReadingParagraph(it, listOf(TextPart("正文", "gpt"))) }, ReaderSettings(), 300, 400, 1f, 1f) {
+            measureEInkChapter(List(30) { ReadingParagraph(it, listOf(TextPart("正文", "gpt"))) }, ReaderSettings(), 300, 400, Density(1f)) {
                 if(++checks == 5) throw kotlinx.coroutines.CancellationException()
             }
             fail("Expected cancellation")
@@ -226,7 +226,7 @@ class EInkAndCloudFilterTest {
     @Test fun realTextLayoutCoversAllCharactersAtSmallAndLandscapeSizes() {
         val paragraphs = listOf(ReadingParagraph(0, listOf(TextPart("旅人沿着森林小路前行。日文と中文を読みます。😀".repeat(200), "gpt"))))
         for ((width, height, scale) in listOf(Triple(327, 440, 1f), Triple(690, 150, 1f), Triple(327, 300, 2f))) {
-            val measured = measureEInkChapter(paragraphs, ReaderSettings(eInkMode = true), width, height, 1f, scale)
+            val measured = measureEInkChapter(paragraphs, ReaderSettings(eInkMode = true), width, height, Density(1f, scale))
             val layout = measured.layouts.getValue(0)
             val lines = measured.pages.flatMap { it.lines }
             assertEquals(0, lines.first().start)

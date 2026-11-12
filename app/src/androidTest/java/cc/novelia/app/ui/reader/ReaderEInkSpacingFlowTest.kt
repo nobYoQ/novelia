@@ -48,15 +48,26 @@ class ReaderEInkSpacingFlowTest {
 
     @Test fun rowMarginsStillProtectTheViewportInTheMiddleOfAChapter() = verifySpacing(false, "row", true)
 
-    private fun verifySpacing(perBook: Boolean, mode: String, midChapter: Boolean = false) {
+    @Test fun normalHorizontalSpacingAndMarginsUpdateTheReadingLayout() = verifySpacing(false, "auto", true, false)
+
+    @Test fun normalRowSpacingAndMarginsUpdateTheReadingLayout() = verifySpacing(false, "row", true, false)
+
+    @Test fun normalScrollSpacingAndMarginsUpdateTheReadingLayout() = verifySpacing(false, "scroll", true, false)
+
+    @Test fun horizontalPageButtonsDoNotCoverTextWithZeroPageMargins() = verifySpacing(false, "auto", true, initialMargin = 0f)
+
+    @Test fun rowPageButtonsDoNotCoverTextWithZeroPageMargins() = verifySpacing(false, "row", true, initialMargin = 0f)
+
+    private fun verifySpacing(perBook: Boolean, mode: String, midChapter: Boolean = false, eInkMode: Boolean = true,
+        initialMargin: Float = 16f) {
         val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
         runBlocking { app.initialization.await() }
         val previous = app.store.state.value
         val ref = BookRef("local", "eink-spacing-regression")
         val firstParagraph = if(midChapter) 51 else 1
         val initial = ReaderSettings(fontSize = 14f, lineHeight = 1f, paragraphSpacing = 8f,
-            verticalMargin = 16f, prefetchChapters = 0, indent = false, hideStatusBar = true)
-            .withEInkMode(true).withPaginationMode(mode)
+            verticalMargin = initialMargin, prefetchChapters = 0, indent = false, hideStatusBar = true)
+            .withEInkMode(eInkMode).withPaginationMode(mode).copy(showPageButtons = true)
         lateinit var controller: AppController
         var readerOpened = false
         fun current() = app.store.state.value.let { if(perBook) it.bookSettings.getValue(ref.key) else it.reader }
@@ -69,22 +80,35 @@ class ReaderEInkSpacingFlowTest {
         }
         fun bounds(index: Int) = compose.onNodeWithText("正文第 ${firstParagraph + index - 1} 段", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
         fun gap() = bounds(2).top - bounds(1).bottom
-        fun assertViewportMargins() {
+        fun assertViewportMargins(menuHidden: Boolean = false) {
             val viewport = compose.onNodeWithTag(if(mode == "scroll") "reader-scroll" else "reader-page").fetchSemanticsNode().boundsInRoot
+            val buttons = compose.onNodeWithTag("reader-page-buttons").fetchSemanticsNode().boundsInRoot
             val status = compose.onNodeWithTag("reader-reading-status-bar").fetchSemanticsNode().boundsInRoot
+            // 展开菜单仍是正文浮层；常驻按钮在收起菜单后才回到底部的预留区域。
+            val lowerEdge = if(menuHidden) buttons.top else status.top - buttons.height
             val margin = current().verticalMargin * compose.density.density
             val visible = compose.onAllNodes(hasText("正文第", substring = true), useUnmergedTree = true)
                 .fetchSemanticsNodes().map { it.boundsInRoot }.filter { it.width > 0f && it.height > 0f }
             assertTrue("$mode 上页边距应保留 $margin px，正文顶部 ${visible.minOf { it.top }}，视口顶部 ${viewport.top}",
                 visible.minOf { it.top } >= viewport.top + margin - 1f)
-            assertTrue("$mode 下页边距应保留 $margin px，正文底部 ${visible.maxOf { it.bottom }}，底栏顶部 ${status.top}",
-                visible.maxOf { it.bottom } <= status.top - margin + 1f)
+            assertTrue("$mode 下页边距应保留 $margin px，正文底部 ${visible.maxOf { it.bottom }}，常驻按钮边界 $lowerEdge",
+                visible.maxOf { it.bottom } <= lowerEdge - margin + 1f)
         }
-        fun tapAdjustment(label: String) = compose.onNodeWithContentDescription(label, substring = true)
-            .performScrollTo().performTouchInput { click() }
+        fun adjust(label: String, tag: String, amount: Float) {
+            if(eInkMode) compose.onNodeWithContentDescription(label, substring = true)
+                .performScrollTo().performTouchInput { click() }
+            else compose.onNodeWithTag(tag).performScrollTo()
+                .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { it(amount) }
+        }
         fun closePreferences() {
             compose.onNodeWithText("关闭面板").performTouchInput { click() }
             waitForPage()
+            if(midChapter) {
+                val body = compose.onNodeWithTag(if(mode == "scroll") "reader-scroll" else "reader-page")
+                body.performTouchInput { click(center) }
+                assertViewportMargins(menuHidden = true)
+                body.performTouchInput { click(center) }
+            }
         }
         try {
             app.store.saveDocument(LocalDocument(ref.id, "电子纸间距测试", "txt", listOf(
@@ -93,7 +117,7 @@ class ReaderEInkSpacingFlowTest {
                 positions = (it.positions - ref.key) + if(midChapter) mapOf(ref.key to Position("first",
                     index = firstParagraph, sourceParagraph = firstParagraph - 1)) else emptyMap(),
                 bookSettings = (it.bookSettings - ref.key) + if(perBook) mapOf(ref.key to initial) else emptyMap()) }
-            compose.setContent { NoveliaTheme("light") { AppInteractionMode(true, true) {
+            compose.setContent { NoveliaTheme("light") { AppInteractionMode(eInkMode, true) {
                 val nav = rememberNavController()
                 val scope = rememberCoroutineScope()
                 val snackbar = remember { SnackbarHostState() }
@@ -108,22 +132,22 @@ class ReaderEInkSpacingFlowTest {
             val density = compose.density.density
             val originalGap = gap()
             compose.onNodeWithContentDescription("阅读设置").performTouchInput { click() }
-            tapAdjustment("增大 段距")
+            adjust("增大 段距", "reader-paragraph-spacing", 9f)
             compose.runOnIdle { assertEquals(9f, current().paragraphSpacing, 0f) }
-            tapAdjustment("减小 段距")
+            adjust("减小 段距", "reader-paragraph-spacing", 8f)
             compose.runOnIdle { assertEquals(8f, current().paragraphSpacing, 0f) }
-            tapAdjustment("增大 段距")
+            adjust("增大 段距", "reader-paragraph-spacing", 9f)
             closePreferences()
             assertEquals(originalGap + density, gap(), 1f)
             val originalTop = bounds(1).top
             compose.onNodeWithContentDescription("阅读设置").performTouchInput { click() }
             compose.onNodeWithText("更多").performTouchInput { click() }
             compose.onNodeWithText("进阶排版").performScrollTo().performTouchInput { click() }
-            tapAdjustment("增大 上下页边距")
-            compose.runOnIdle { assertEquals(17f, current().verticalMargin, 0f) }
-            tapAdjustment("减小 上下页边距")
-            compose.runOnIdle { assertEquals(16f, current().verticalMargin, 0f) }
-            tapAdjustment("增大 上下页边距")
+            adjust("增大 上下页边距", "reader-vertical-margin", initialMargin + 1f)
+            compose.runOnIdle { assertEquals(initialMargin + 1f, current().verticalMargin, 0f) }
+            adjust("减小 上下页边距", "reader-vertical-margin", initialMargin)
+            compose.runOnIdle { assertEquals(initialMargin, current().verticalMargin, 0f) }
+            adjust("增大 上下页边距", "reader-vertical-margin", initialMargin + 1f)
             closePreferences()
             if(midChapter) assertViewportMargins() else assertEquals(originalTop + density, bounds(1).top, 1f)
             if(midChapter) {
@@ -131,6 +155,7 @@ class ReaderEInkSpacingFlowTest {
                 body.performTouchInput { click(center) }
                 // 翻页按钮和阅读信息底栏常驻，以设置按钮判断工具栏是否收起。
                 compose.onNodeWithContentDescription("阅读设置").assertDoesNotExist()
+                assertViewportMargins(menuHidden = true)
                 body.performTouchInput { click(Offset(centerX, current().verticalMargin * density / 2f)) }
                 compose.onNodeWithContentDescription("阅读设置").assertIsDisplayed()
             }

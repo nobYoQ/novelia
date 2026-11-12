@@ -45,6 +45,7 @@ import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import cc.novelia.app.data.model.Page
 import cc.novelia.app.data.model.Position
 import cc.novelia.app.data.model.ReaderSettings
@@ -56,7 +57,6 @@ import cc.novelia.app.ui.theme.LocalReducedMotion
 import cc.novelia.app.ui.components.media.RecoveringAsyncImage as AsyncImage
 import coil.request.ImageRequest
 import kotlin.math.abs
-import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -149,18 +149,18 @@ private class SecondaryOpacity(private val alpha: Float) : CharacterStyle(), Upd
 
 /**
  * 用 Android StaticLayout 一次测量整章，再把不可分的行交给纯分页算法。
- * width/height 为像素，字号需乘 density 与 fontScale，段距只乘 density。
+ * width/height 为像素，字号沿用 Compose 的 sp 换算，保留系统非线性字体缩放；段距使用 dp。
  * 拼接标签、缩进和语言分隔符的顺序必须与 paragraphPartStarts 一致，才能复用搜索字符锚点。
  * 返回的段落、布局与页表属于同一测量快照，显示时不能与新一轮内容混用。
  */
-internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: ReaderSettings, width: Int, height: Int, density: Float, fontScale: Float,
+internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: ReaderSettings, width: Int, height: Int, density: Density,
     readerTypeface: Typeface = Typeface.SANS_SERIF, title: String = "", checkCancelled: () -> Unit = {}): MeasuredEInkChapter {
     val layouts = mutableMapOf<Int, StaticLayout>()
     val lines = mutableListOf<PageLine>()
     chapterHeading(title, paragraphs)?.let { heading ->
         checkCancelled()
         val paint = TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-            textSize = settings.fontSize * 1.25f * density * fontScale
+            textSize = with(density) { (settings.fontSize * 1.25f).sp.toPx() }
             letterSpacing = settings.letterSpacing
             color = android.graphics.Color.BLACK
             typeface = Typeface.create(readerTypeface, Typeface.BOLD)
@@ -190,13 +190,13 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
                 text.addReaderInline(part.withInlinePreferences(settings), bodyStart, width)
                 if (part.secondary) {
                     text.setSpan(SecondaryOpacity(settings.secondaryAlpha), start, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-                    text.setSpan(AbsoluteSizeSpan((readerPartFontSize(settings, true) * density * fontScale).toInt()), start, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    text.setSpan(AbsoluteSizeSpan(with(density) { readerPartFontSize(settings, true).sp.roundToPx() }), start, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                     if (settings.underline) text.setSpan(UnderlineSpan(), start, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                 }
             }
             if (text.isEmpty()) text.append(" ")
             val paint = TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-                textSize = settings.fontSize * density * fontScale
+                textSize = with(density) { settings.fontSize.sp.toPx() }
                 letterSpacing = settings.letterSpacing
                 color = android.graphics.Color.BLACK
                 typeface = Typeface.create(readerTypeface, if (settings.weight) Typeface.BOLD else Typeface.NORMAL)
@@ -211,7 +211,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
     }
     val pairedParagraphs = paragraphs.indices.filterTo(mutableSetOf()) { paragraphs[it].parts.size > 1 }
     return MeasuredEInkChapter(paragraphs, layouts,
-        paginateLines(lines, height, (settings.resolvedParagraphSpacing * density).roundToInt(), pairedParagraphs, checkCancelled))
+        paginateLines(lines, height, with(density) { settings.resolvedParagraphSpacing.dp.roundToPx() }, pairedParagraphs, checkCancelled))
 }
 
 /**
@@ -360,7 +360,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
             if (!font.loading && width != Constraints.Infinity && height != Constraints.Infinity) {
                 val next = withContext(Dispatchers.Default) {
                     val jobContext = currentCoroutineContext()
-                    measureEInkChapter(paragraphs, settings, width, height, density.density, density.fontScale, font.typeface, chapterTitle) { jobContext.ensureActive() }
+                    measureEInkChapter(paragraphs, settings, width, height, density, font.typeface, chapterTitle) { jobContext.ensureActive() }
                 }
                 state.install(next.pages, next.paragraphs)
                 value = EInkMeasurement(input, next)

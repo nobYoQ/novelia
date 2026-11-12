@@ -129,6 +129,9 @@ import kotlinx.serialization.Serializable
     val nightBrightness: ReaderBrightness = ReaderBrightness.night()
 ) {
     companion object {
+        const val MIN_FONT_SIZE = 14f
+        const val MAX_FONT_SIZE = 64f
+        val FONT_SIZE_RANGE = MIN_FONT_SIZE..MAX_FONT_SIZE
         const val MIN_LINE_HEIGHT = .5f
         val LINE_HEIGHT_RANGE = MIN_LINE_HEIGHT..2.6f
         val THEMES = listOf("system", "paper", "light", "dark", "monochrome", "custom")

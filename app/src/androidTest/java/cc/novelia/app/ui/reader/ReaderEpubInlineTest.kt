@@ -45,7 +45,7 @@ class ReaderEpubInlineTest {
     @Test fun nativeLayoutHonorsAllIndependentDisplaySwitchesWithoutChangingText() {
         for (ruby in listOf(false, true)) for (notes in listOf(false, true)) for (styles in listOf(false, true)) {
             val configured = settings.copy(showEpubRuby = ruby, epubFootnotePopup = notes, showEpubStyles = styles)
-            val layout = measureEInkChapter(listOf(paragraph), configured, 300, 300, 1f, 1f).layouts.getValue(0)
+            val layout = measureEInkChapter(listOf(paragraph), configured, 300, 300, Density(1f)).layouts.getValue(0)
             val text = layout.text as Spanned
             assertEquals(body, text.toString())
             assertEquals(if (ruby) 2 else 0, text.getSpans(0, text.length, ReaderRubySpan::class.java).size)
@@ -84,8 +84,8 @@ class ReaderEpubInlineTest {
     @Test fun rubyReservesHeightAndPagesCoverEveryBaseCharacterAtDifferentSizes() {
         for (fontSize in listOf(16f, 32f)) for (scale in listOf(1f, 1.5f)) {
             val typography = settings.copy(fontSize = fontSize, lineHeight = .5f)
-            val rich = measureEInkChapter(listOf(paragraph), typography, 160, 90, 1f, scale)
-            val plain = measureEInkChapter(listOf(paragraph.copy(parts = listOf(part.copy(inline = emptyList())))), typography, 160, 90, 1f, scale)
+            val rich = measureEInkChapter(listOf(paragraph), typography, 160, 90, Density(1f, scale))
+            val plain = measureEInkChapter(listOf(paragraph.copy(parts = listOf(part.copy(inline = emptyList())))), typography, 160, 90, Density(1f, scale))
             val layout = rich.layouts.getValue(0)
             assertTrue(layout.getLineBottom(0) > plain.layouts.getValue(0).getLineBottom(0))
             assertEquals(body, rich.pages.flatMap { it.lines }.joinToString("") { body.substring(it.start, it.end) })
@@ -102,7 +102,7 @@ class ReaderEpubInlineTest {
     }
 
     @Test fun noteHitTestingRejectsTrailingWhitespaceAndOtherLines() {
-        val layout = measureEInkChapter(listOf(paragraph), settings, 300, 400, 1f, 1f, Typeface.DEFAULT).layouts.getValue(0)
+        val layout = measureEInkChapter(listOf(paragraph), settings, 300, 400, Density(1f), Typeface.DEFAULT).layouts.getValue(0)
         val x = (layout.getPrimaryHorizontal(2) + layout.getPrimaryHorizontal(5)) / 2
         val y = (layout.getLineTop(0) + layout.getLineBottom(0)) / 2f
         assertEquals(note, layout.noteAt(x, y))
@@ -139,7 +139,7 @@ class ReaderEpubInlineTest {
                 }
             } }
         }
-        val layout = measureEInkChapter(listOf(paragraph), settings, 300, 300, 1f, 1f, Typeface.DEFAULT).layouts.getValue(0)
+        val layout = measureEInkChapter(listOf(paragraph), settings, 300, 300, Density(1f), Typeface.DEFAULT).layouts.getValue(0)
         val point = Offset((layout.getPrimaryHorizontal(2) + layout.getPrimaryHorizontal(5)) / 2,
             (layout.getLineTop(0) + layout.getLineBottom(0)) / 2f)
         for (mode in listOf(false, true)) {
@@ -184,7 +184,7 @@ class ReaderEpubInlineTest {
         compose.waitUntil(10_000) { state.ready }
         val target = prefix.length + 3
         compose.runOnIdle { state.find(0, target); assertTrue(state.pageIndex > 0) }
-        val layout = measureEInkChapter(content, settings, 300, 130, 1f, 1f, Typeface.DEFAULT).layouts.getValue(0)
+        val layout = measureEInkChapter(content, settings, 300, 130, Density(1f), Typeface.DEFAULT).layouts.getValue(0)
         val line = layout.getLineForOffset(target)
         val top = layout.getLineTop(layout.getLineForOffset(state.current!!.lines.first().start))
         val point = Offset((layout.getPrimaryHorizontal(target) + layout.getPrimaryHorizontal(target + 1)) / 2,

@@ -1,5 +1,6 @@
 package cc.novelia.app.ui.reader
 
+import androidx.compose.ui.unit.Density
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
@@ -61,7 +62,7 @@ class ReaderIndentPreferenceTest {
         val paragraph = ReadingParagraph(0, listOf(TextPart("原文", "jp"), TextPart("译文", "gpt")))
         for(size in listOf(0, 1, 7)) {
             val settings = ReaderSettings(indentSize = size, parallel = true)
-            val layout = measureEInkChapter(listOf(paragraph), settings, 400, 600, 1f, 1f).layouts.getValue(0)
+            val layout = measureEInkChapter(listOf(paragraph), settings, 400, 600, Density(1f)).layouts.getValue(0)
             assertEquals("　".repeat(size) + "原文\nGPT\n" + "　".repeat(size) + "译文", layout.text.toString())
         }
     }

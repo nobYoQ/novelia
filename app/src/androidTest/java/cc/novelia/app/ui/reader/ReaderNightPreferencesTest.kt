@@ -152,12 +152,12 @@ class ReaderNightPreferencesTest {
     @Test fun nativePaginationAppliesLetterSpacingToPlainAndRubyText() {
         val plain = cc.novelia.app.reader.ReadingParagraph(0, listOf(cc.novelia.app.reader.TextPart("夜间阅读字距测试".repeat(15), "中文")))
         val settings = ReaderSettings(fontSize = 20f, indent = false)
-        val normal = measureEInkChapter(listOf(plain), settings, 220, 600, 1f, 1f)
-        val spaced = measureEInkChapter(listOf(plain), settings.copy(letterSpacing = .15f), 220, 600, 1f, 1f)
+        val normal = measureEInkChapter(listOf(plain), settings, 220, 600, Density(1f))
+        val spaced = measureEInkChapter(listOf(plain), settings.copy(letterSpacing = .15f), 220, 600, Density(1f))
         assertTrue(spaced.layouts.getValue(0).lineCount > normal.layouts.getValue(0).lineCount)
         assertEquals(.15f, spaced.layouts.getValue(0).paint.letterSpacing, 0f)
         val ruby = plain.copy(parts = listOf(plain.parts.single().copy(inline = listOf(InlineContent(0, 2, InlineKind.Ruby, "やかん")))))
-        val rich = measureEInkChapter(listOf(ruby), settings.copy(letterSpacing = .15f), 220, 600, 1f, 1f)
+        val rich = measureEInkChapter(listOf(ruby), settings.copy(letterSpacing = .15f), 220, 600, Density(1f))
         assertEquals(.15f, rich.layouts.getValue(0).paint.letterSpacing, 0f)
     }
 

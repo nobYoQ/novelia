@@ -33,6 +33,7 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.text
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.unit.sp
 import cc.novelia.app.data.model.InlineKind
 import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.reader.*
@@ -70,7 +71,7 @@ import kotlin.math.roundToInt
             val text = SpannableStringBuilder(indent + part.text)
             text.addReaderInline(part, indent.length, constraints.maxWidth)
             val paint = TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-                textSize = readerPartFontSize(settings, part.secondary) * density.density * density.fontScale
+                textSize = with(density) { readerPartFontSize(settings, part.secondary).sp.toPx() }
                 letterSpacing = settings.letterSpacing
                 typeface = Typeface.create(font.typeface, if (settings.weight) Typeface.BOLD else Typeface.NORMAL)
             }

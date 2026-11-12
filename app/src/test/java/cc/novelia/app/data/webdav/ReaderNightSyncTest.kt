@@ -7,9 +7,9 @@ import org.junit.Test
 
 class ReaderNightSyncTest {
     @Test fun stylesSyncButBrightnessAndLocalNightFontsStayOnReceivingDevice() {
-        val source = LibraryState(reader = ReaderSettings(nightReading = true,
+        val source = LibraryState(reader = ReaderSettings(nightReading = true, fontSize = 64f,
             nightBrightness = ReaderBrightness.night().copy(maximum = .4f),
-            nightPreset = ReaderNightPreset(lineHeight = 2.2f, fontFamily = "custom", customFont = ReaderCustomFont("a".repeat(64), "本机字体"))))
+            nightPreset = ReaderNightPreset(fontSize = 64f, lineHeight = 2.2f, fontFamily = "custom", customFont = ReaderCustomFont("a".repeat(64), "本机字体"))))
         val projection = WebDavProjection.library(source, setOf(SyncDomain.SETTINGS), includeDevicePreferences = true)
         val docs = SyncReplica(deviceId = "a").track(emptyMap(), projection).bind("dataset").documents
         WebDavProjection.validateRecords(docs.getValue(SyncDomain.SETTINGS))
@@ -18,6 +18,8 @@ class ReaderNightSyncTest {
         assertFalse("fontFamily" in fields.getValue("nightPreset").jsonObject)
         val target = LibraryState(reader = ReaderSettings(nightPreset = ReaderNightPreset(fontFamily = "monospace")))
         val restored = WebDavProjection.applyLibrary(target, docs, setOf(SyncDomain.SETTINGS))
+        assertEquals(64f, restored.reader.fontSize, 0f)
+        assertEquals(64f, restored.reader.nightPreset.fontSize!!, 0f)
         assertFalse(restored.reader.nightReading)
         assertEquals(target.reader.nightBrightness, restored.reader.nightBrightness)
         assertEquals(2.2f, restored.reader.nightPreset.lineHeight!!, 0f)

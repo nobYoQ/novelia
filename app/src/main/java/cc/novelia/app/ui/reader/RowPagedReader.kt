@@ -123,7 +123,7 @@ private data class RowMeasurement(val input: RowMeasureInput, val chapter: Measu
             if(!font.loading && width != Constraints.Infinity && height != Constraints.Infinity) {
                 val next = withContext(Dispatchers.Default) {
                     val coroutine = currentCoroutineContext()
-                    measureEInkChapter(paragraphs, settings, width, height, density.density, density.fontScale, font.typeface, chapterTitle) {
+                    measureEInkChapter(paragraphs, settings, width, height, density, font.typeface, chapterTitle) {
                         coroutine.ensureActive()
                     }
                 }

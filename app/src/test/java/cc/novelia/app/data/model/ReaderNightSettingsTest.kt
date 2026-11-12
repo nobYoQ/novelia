@@ -6,6 +6,12 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ReaderNightSettingsTest {
+    @Test fun largeFontSizesAreValidAndOutOfRangeNightSizesAreRejected() {
+        assertTrue(ReaderNightPreset(fontSize = 64f).valid)
+        assertFalse(ReaderNightPreset(fontSize = 65f).valid)
+        assertFalse(ReaderNightPreset(fontSize = Float.NaN).valid)
+    }
+
     @Test fun nightEditsAndResetNeverOverwriteOrdinaryReadingConfiguration() {
         val ordinary = ReaderSettings(theme = "paper", fontSize = 23f, lineHeight = 1.7f, letterSpacing = .01f,
             weight = true, fontFamily = "serif", brightness = .65f, toolbarTransparency = .4f)

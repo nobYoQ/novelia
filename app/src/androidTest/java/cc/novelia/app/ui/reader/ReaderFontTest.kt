@@ -1,6 +1,7 @@
 package cc.novelia.app.ui.reader
 
 import android.content.ContextWrapper
+import android.content.res.Configuration
 import android.graphics.Typeface
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Surface
@@ -8,12 +9,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.sp
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.data.model.ReaderCustomFont
 import cc.novelia.app.data.model.ReaderSettings
@@ -30,6 +33,45 @@ import java.io.File
 
 class ReaderFontTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun scrollRichTextAndBothPagersKeepTheSameGlyphSizeWithSystemFontScaling() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        var scale by mutableFloatStateOf(1f)
+        var settings by mutableStateOf(ReaderSettings(fontFamily = "monospace", indent = false, fontSize = 32f))
+        var secondary by mutableStateOf(false)
+        var textDensity: Density = Density(1f)
+        var richLayout: android.text.StaticLayout? = null
+        val sample = "MM"
+        compose.setContent { NoveliaTheme("light") {
+            val density = remember(scale) { Density(context.createConfigurationContext(
+                Configuration(context.resources.configuration).apply { fontScale = scale })) }
+            textDensity = density
+            CompositionLocalProvider(LocalDensity provides density) {
+                Column(Modifier.width(320.dp)) {
+                    Box(Modifier.testTag("font-plain")) {
+                        ReaderTextParagraph(ReadingParagraph(0, listOf(TextPart(sample, "gpt", secondary = secondary))),
+                            settings, settings, Color.Black, {}, {}, null) { _, _ -> }
+                    }
+                    ReaderInlineText(TextPart(sample, "gpt", secondary = secondary), settings, Color.Black,
+                        {}, {}, {}, emptyList(), emptyList()) { layout, _ -> richLayout = layout }
+                }
+            }
+        } }
+        for(fontScale in listOf(1f, 1.3f, 2f)) for(size in listOf(32f, 64f)) for(isSecondary in listOf(false, true)) {
+            compose.runOnIdle { scale = fontScale; settings = settings.copy(fontSize = size); secondary = isSecondary }
+            val results = mutableListOf<TextLayoutResult>()
+            compose.onNode(hasText(sample) and hasAnyAncestor(hasTestTag("font-plain")), useUnmergedTree = true)
+                .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(results) }
+            val scrollWidth = results.single().getBoundingBox(0).width
+            val native = measureEInkChapter(listOf(ReadingParagraph(0, listOf(TextPart(sample, "gpt", secondary = isSecondary)))),
+                settings, 1000, 1000, textDensity, Typeface.MONOSPACE).layouts.getValue(0)
+            assertEquals("分页字形应与滚动一致：$fontScale/$size/$isSecondary", scrollWidth,
+                native.getPrimaryHorizontal(1) - native.getPrimaryHorizontal(0), 1f)
+            assertEquals("EPUB 字形应与滚动一致", scrollWidth,
+                richLayout!!.getPrimaryHorizontal(1) - richLayout!!.getPrimaryHorizontal(0), 1f)
+            assertEquals(with(textDensity) { readerPartFontSize(settings, isSecondary).sp.toPx() }, richLayout!!.paint.textSize, .01f)
+        }
+    }
 
     @Test fun fontChoicePreviewsAndCanRestoreTheBookDefaultWithoutChangingOtherSettings() {
         val defaults = ReaderSettings(fontFamily = "serif", fontSize = 23f)
@@ -99,12 +141,12 @@ class ReaderFontTest {
             val layout = layouts.single()
             kotlin.math.abs(layout.getBoundingBox(0).width - layout.getBoundingBox(5).width) < .1f
         }
-        val mono = measureEInkChapter(paragraphs, settings, 300, 300, 1f, 1f, Typeface.MONOSPACE)
+        val mono = measureEInkChapter(paragraphs, settings, 300, 300, Density(1f), Typeface.MONOSPACE)
         assertEquals(Typeface.MONOSPACE, mono.layouts.getValue(0).paint.typeface)
         state.install(mono.pages, paragraphs)
         state.move(1)
         val anchor = state.textOffset
-        val serif = measureEInkChapter(paragraphs, settings.copy(fontFamily = "serif"), 300, 300, 1f, 1f, Typeface.SERIF)
+        val serif = measureEInkChapter(paragraphs, settings.copy(fontFamily = "serif"), 300, 300, Density(1f), Typeface.SERIF)
         state.install(serif.pages, paragraphs)
         assertEquals(pageForAnchor(serif.pages, 0, anchor), state.pageIndex)
         val monoPaint = mono.layouts.getValue(0).paint

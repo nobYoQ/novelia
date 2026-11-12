@@ -182,7 +182,7 @@ class RowPagedReaderUiTest {
         } }
         compose.waitUntil(10_000) { state.ready }
         compose.onNodeWithTag("reader-page-chapter-title").assertIsDisplayed()
-        val layout = measureEInkChapter(content, settings, 300, 300, 1f, 1f).layouts.getValue(0)
+        val layout = measureEInkChapter(content, settings, 300, 300, Density(1f)).layouts.getValue(0)
         val point = Offset((layout.getPrimaryHorizontal(0) + layout.getPrimaryHorizontal(2)) / 2f,
             (layout.getLineTop(0) + layout.getLineBottom(0)) / 2f)
         val text = compose.onNodeWithText(body, useUnmergedTree = true)

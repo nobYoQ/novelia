@@ -38,14 +38,14 @@ class ReaderSpacingTest {
         compose.onNodeWithTag("reader-line-height").performScrollTo()
             .performSemanticsAction(SemanticsActions.SetProgress) { it(.5f) }
         compose.runOnIdle { assertEquals(.5f, settings.lineHeight, 0f) }
-        compose.onNodeWithText("行距 0.5").assertIsDisplayed()
+        compose.onNodeWithText("行距 0.5").performScrollTo().assertIsDisplayed()
         compose.runOnIdle { settings = settings.withEInkMode(true).copy(lineHeight = .55f) }
         compose.onNodeWithContentDescription("减小 行距", substring = true).performScrollTo().performClick()
         compose.runOnIdle { assertEquals(.5f, settings.lineHeight, .0001f) }
         compose.onNodeWithContentDescription("减小 行距", substring = true).assertIsNotEnabled()
         compose.runOnIdle { showing = false }
         compose.runOnIdle { showing = true }
-        compose.onNodeWithText("行距 0.5").assertIsDisplayed()
+        compose.onNodeWithText("行距 0.5").performScrollTo().assertIsDisplayed()
     }
 
     @Test fun chineseScrollParagraphsUseContentHeightAndTheSelectedGapWithoutJapaneseSlots() {
@@ -93,7 +93,7 @@ class ReaderSpacingTest {
             compose.onNodeWithText(paragraph.parts.single().text, useUnmergedTree = true)
                 .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
             val scrollGap = layouts.single().getLineBaseline(1) - layouts.single().getLineBaseline(0)
-            val layout = measureEInkChapter(listOf(paragraph), settings, 327, 500, 1f, 1f).layouts.getValue(0)
+            val layout = measureEInkChapter(listOf(paragraph), settings, 327, 500, Density(1f)).layouts.getValue(0)
             val bounds = Rect()
             layout.paint.getTextBounds(sample, 0, sample.length, bounds)
             val pageGap = layout.getLineBaseline(1) - layout.getLineBaseline(0)

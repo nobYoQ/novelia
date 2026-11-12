@@ -1,5 +1,6 @@
 package cc.novelia.app.ui.reader
 
+import androidx.compose.ui.unit.Density
 import android.content.Context
 import android.content.ContextWrapper
 import android.text.Spanned
@@ -50,7 +51,7 @@ class LocalEpubReadingFlowTest {
         for (mode in listOf("zh", "jp", "jp-zh", "zh-jp")) {
             val settings = ReaderSettings(mode = mode, secondaryAlpha = .45f, indent = false)
             val paragraphs = projectParagraphs(chapter, settings)
-            val text = measureEInkChapter(paragraphs, settings, 400, 1000, 1f, 1f).layouts.getValue(0).text as Spanned
+            val text = measureEInkChapter(paragraphs, settings, 400, 1000, Density(1f)).layouts.getValue(0).text as Spanned
             fun alpha(word: String): Int {
                 val start = text.indexOf(word)
                 assertTrue(start >= 0)
@@ -148,7 +149,7 @@ class LocalEpubReadingFlowTest {
             for (mode in listOf("zh", "jp", "zh-jp", "jp-zh")) {
                 val settings = ReaderSettings(mode = mode, indent = false, fontSize = 20f)
                 val paragraphs = projectParagraphs(recovered.toReaderChapter(), settings)
-                val layout = measureEInkChapter(paragraphs, settings, 400, 1000, 1f, 1f).layouts.getValue(0)
+                val layout = measureEInkChapter(paragraphs, settings, 400, 1000, Density(1f)).layouts.getValue(0)
                 assertEquals(if (mode.contains('-')) 2 else 1, layout.lineCount)
             }
             store.flush()

@@ -1,5 +1,6 @@
 package cc.novelia.app.performance
 
+import androidx.compose.ui.unit.Density
 import android.app.ActivityManager
 import android.content.Context
 import android.content.ContextWrapper
@@ -117,7 +118,7 @@ class PerformanceScenarioTest {
                             val dimensions = JSONObject().put("characters", characters).put("iteration", iteration).put("viewport", viewport.name)
                                 .put("widthPx", viewport.width).put("heightPx", viewport.height).put("fontScale", viewport.fontScale)
                             report.stage("reader.measureAndPaginate", dimensions) {
-                                val measured = measureEInkChapter(prepared, settings, viewport.width, viewport.height, 1f, viewport.fontScale) { cancellation.ensureActive() }
+                                val measured = measureEInkChapter(prepared, settings, viewport.width, viewport.height, Density(1f, viewport.fontScale)) { cancellation.ensureActive() }
                                 dimensions.put("pages", measured.pages.size).put("lines", measured.pages.sumOf { it.lines.size })
                                 assertTrue(measured.pages.isNotEmpty())
                                 assertEquals(prepared.size, measured.layouts.size)

@@ -1,5 +1,6 @@
 package cc.novelia.app.ui.reader
 
+import androidx.compose.ui.unit.Density
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import cc.novelia.app.data.model.Chapter
 import cc.novelia.app.data.model.ReaderSettings
@@ -17,11 +18,11 @@ class EInkBilingualTest {
         for(mode in listOf("zh-jp", "jp-zh")) {
             val settings = ReaderSettings(mode = mode, indent = false)
             val paragraphs = prepareReadingParagraphs(chapter, settings)
-            val full = measureEInkChapter(paragraphs, settings, 327, 1000, 1f, 1f)
+            val full = measureEInkChapter(paragraphs, settings, 327, 1000, Density(1f))
             val firstHeight = full.layouts.getValue(0).height
             val secondFirstLine = full.layouts.getValue(1).getLineBottom(0)
             val height = firstHeight + settings.resolvedParagraphSpacing.toInt() + secondFirstLine
-            val measured = measureEInkChapter(paragraphs, settings, 327, height, 1f, 1f)
+            val measured = measureEInkChapter(paragraphs, settings, 327, height, Density(1f))
             assertEquals(2, measured.pages.size)
             measured.pages.forEachIndexed { index, page ->
                 assertTrue(page.lines.all { it.paragraph == index })
@@ -38,14 +39,14 @@ class EInkBilingualTest {
         val state = EInkPageState(null)
         val settings = ReaderSettings(mode = "zh-jp", indent = true)
         val before = prepareReadingParagraphs(chapter, settings)
-        val first = measureEInkChapter(before, settings, 327, 100, 1f, 1f)
+        val first = measureEInkChapter(before, settings, 327, 100, Density(1f))
         state.install(first.pages, before)
         state.find(1, paragraphPartStarts(before[1], settings)[1])
         assertTrue(state.textOffset > 0)
 
         val changed = settings.copy(mode = "jp-zh")
         val after = prepareReadingParagraphs(chapter, changed)
-        val next = measureEInkChapter(after, changed, 327, 100, 1f, 1f)
+        val next = measureEInkChapter(after, changed, 327, 100, Density(1f))
         state.install(next.pages, after)
         assertTrue(state.current!!.lines.any { it.paragraph == 1 && it.start == 0 })
         assertEquals(1, after[state.current!!.lines.last().paragraph].index)
@@ -55,8 +56,8 @@ class EInkBilingualTest {
         val chapter = Chapter(paragraphs = listOf("宽屏电子纸上的长篇正文。".repeat(200)))
         val settings = ReaderSettings(mode = "jp", fontSize = 19f, lineHeight = 1.3f)
         val paragraphs = prepareReadingParagraphs(chapter, settings)
-        val previous = measureEInkChapter(paragraphs, settings, 690, 180, 1f, 1f)
-        val compact = measureEInkChapter(paragraphs, settings.copy(lineHeight = 1f), 690, 180, 1f, 1f)
+        val previous = measureEInkChapter(paragraphs, settings, 690, 180, Density(1f))
+        val compact = measureEInkChapter(paragraphs, settings.copy(lineHeight = 1f), 690, 180, Density(1f))
         assertTrue(compact.pages.first().lines.size > previous.pages.first().lines.size)
         assertTrue(compact.pages.size < previous.pages.size)
         assertTrue(compact.pages.all { it.lines.sumOf(PageLine::height) <= 180 })
