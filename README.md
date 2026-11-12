@@ -130,4 +130,14 @@ sh ./gradlew --no-daemon :app:assembleDebug :app:testDebugUnitTest :app:lintDebu
 
 原创代码和文档采用 [GPL-3.0-only](LICENSE)。第三方依赖、角色素材及网站上的小说、封面、译文和用户内容保留各自权利，不属于本项目的内容再授权范围，详见 [来源与素材声明](NOTICE.md) 与 [许可证来源](licenses/README.md)。完整开源许可证也可在 App 的「我的 → 帮助与关于 → 开源许可证」离线查看。
 
-感谢 [轻小说机翻机器人](https://n.novelia.cc/) 与开源社区提供的基础。愿你总能找到下一本想读的书。
+感谢 [轻小说机翻机器人](https://n.novelia.cc/) 与开源社区提供的基础。愿你总能找到下一本想读的书。  
+  
+## Star History
+
+<a href="https://www.star-history.com/?repos=nobyoq%2Fnovelia&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=nobyoq/novelia&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=nobyoq/novelia&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=nobyoq/novelia&type=date&legend=top-left" />
+ </picture>
+</a>
