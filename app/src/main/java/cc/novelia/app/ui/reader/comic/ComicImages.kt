@@ -31,6 +31,7 @@ import cc.novelia.app.reader.ComicStrip
 import cc.novelia.app.reader.IllustrationTransform
 import cc.novelia.app.reader.transformIllustration
 import cc.novelia.app.ui.components.media.RecoveringAsyncImage
+import cc.novelia.app.ui.components.base.AppTextButton
 import cc.novelia.app.ui.theme.appReducedMotion
 import coil.request.ImageRequest
 import kotlinx.coroutines.Dispatchers
@@ -164,14 +165,16 @@ private fun decodeStrip(page: ComicPage, strip: ComicStrip, width: Int): Bitmap 
     }
 }
 
-@Composable internal fun PageLoading() {
-    if (appReducedMotion()) Text("正在加载…", color = Color.White)
-    else CircularProgressIndicator(Modifier.size(24.dp), color = Color.White)
+@Composable internal fun PageLoading(darkBackground: Boolean = true) {
+    val color = if (darkBackground) Color.White else MaterialTheme.colorScheme.primary
+    if (appReducedMotion()) Text("正在加载…", color = color, style = MaterialTheme.typography.labelMedium)
+    else CircularProgressIndicator(Modifier.size(24.dp), color = color)
 }
 
-@Composable internal fun PageError(index: Int, retry: () -> Unit) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text("第 ${index + 1} 页加载失败", color = Color.White)
-        TextButton(onClick = retry) { Text("重试") }
+@Composable internal fun PageError(index: Int, darkBackground: Boolean = true, retry: () -> Unit) {
+    val color = if (darkBackground) Color.White else MaterialTheme.colorScheme.onSurface
+    Column(Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text("第 ${index + 1} 页加载失败", color = color, style = MaterialTheme.typography.bodySmall)
+        AppTextButton(onClick = retry, colors = ButtonDefaults.textButtonColors(contentColor = color)) { Text("重试") }
     }
 }
