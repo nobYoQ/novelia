@@ -36,9 +36,12 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.isActive
 
 /** 一级评论分页加载并保留附带的首屏回复；展开时复用，后续页通过独立接口读取。 */
 @Composable internal fun ForumCommentsPanel(c: AppController, postId: Long, locked: Boolean) {
@@ -59,7 +62,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
     DiscussionCommentsPanel(c, discussion, c.session, locked, MarkdownLinks.commentDocumentUrl(site), c::requireLogin)
 }
 
-@Composable private fun DiscussionCommentsPanel(c: AppController, discussion: CommentDiscussion, session: Session,
+@Composable internal fun DiscussionCommentsPanel(c: AppController, discussion: CommentDiscussion, session: Session,
     locked: Boolean, documentUrl: String?, requireLogin: (() -> Unit) -> Unit) {
     val discussionKey = discussion.key
     val profile by session.profile.collectAsStateWithLifecycle()
@@ -87,6 +90,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
     var text by rememberSaveable(draftKey) { mutableStateOf(state.drafts[draftKey] ?: editing?.content.orEmpty()) }
     val latestDraft by rememberUpdatedState(draftKey to text)
     val renderer = rememberMarkdownRenderer(c, documentUrl)
+    val composerScope = rememberCoroutineScope()
+    val focus = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    fun finishInput() { focus.clearFocus(force = true); keyboard?.hide() }
     // 同时保护主评论和展开回复中的页码输入，编辑器收起或讨论锁定时也生效。
     Box(Modifier.fillMaxSize().imePadding()) {
     Column(Modifier.fillMaxSize()) {
@@ -159,9 +166,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
                 AppTextButton(onClick = { rootId = null; editing = null }) { Text("取消") }
             }
             MarkdownCommentInput(text, { value -> text = value; c.store.update { it.copy(drafts = it.drafts + (draftKey to value)) } }, if(editing != null) "编辑评论" else "写下评论", isError = commentContent.isNotEmpty() && commentError != null, softLimit = true, unicodeLimit = ForumRules.COMMENT_LIMIT) {
-                AppFilledIconButton(enabled = commentError == null && canSend && canEditDraft && !sending, modifier = Modifier.testTag("forum-comment-submit"), onClick = {
+                AppFilledIconButton(enabled = commentError == null && canSend && canEditDraft && !sending, modifier = Modifier.testTag("forum-comment-submit"), onClick = submit@{
+                    if(sending) return@submit
                     // Login changes the account-specific draft key; retain the text being submitted.
                     val submittedText = text; val content = submittedText.trim(); val submittedRoot = rootId; val submittedReplyCount = replyCount; val submittedEdit = editing; val submittedDraft = draftKey
+                    // 写入成功会先触发回复列表刷新；在此之前结束输入，避免 IME/焦点定位与重布局并发。
+                    finishInput()
                     requireLogin { c.action {
                         require(ForumRules.canWrite(session.profile.value)) { "当前账号暂不具备评论权限，草稿已保留" }
                         require(submittedEdit != null || ForumRules.canCreateComment(session.profile.value)) { "注册满 30 天后才能发表评论，草稿已保留" }
@@ -175,7 +185,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
                                     (submittedReplyCount / 20).coerceIn(0, Int.MAX_VALUE - 1L).toInt(), created.id) }
                             }
                             c.store.update { if(it.drafts[submittedDraft] == submittedText) it.copy(drafts = it.drafts - submittedDraft) else it }
-                            if(latestDraft == (submittedDraft to submittedText)) { text = ""; rootId = null; editing = null; composerExpanded = false }
+                            if(composerScope.isActive && latestDraft == (submittedDraft to submittedText)) {
+                                // 请求期间可能重新聚焦，清空正文和移除编辑模式前再次结束输入。
+                                finishInput()
+                                text = ""; rootId = null; editing = null; composerExpanded = false
+                            }
                             version++
                         } finally { sending = false }
                     } }
