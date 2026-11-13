@@ -179,13 +179,14 @@ import kotlinx.coroutines.withContext
             val destination = remember(detail.toc, localDestination, cloudDestination) { resumeDestination(detail.toc, localDestination?.chapterId, cloudDestination?.chapterId) }
             val start = destination?.chapterId
             val continuing = localDestination != null || cloudDestination != null
+            val continueReading: () -> Unit = { start?.let { if(localDestination != null && cloudDestination != null && localDestination.chapterId != cloudDestination.chapterId) progressChoice = localDestination to cloudDestination else c.read(ref, it) } }
             AdaptiveBookDetail(tab, { tab = it }, listOf("简介", "目录 $chapterCount", "讨论"), tabState) { panel ->
                     when(panel) {
                         0 -> AppLazyColumn(contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             item { BookHero(book, "${detail.type} · ${providers[ref.provider]}", bottomPadding = 0.dp) }
                             item { BookReadingActions(destination, continuing,
                                 favoriteState = favoriteState, onLocalFavorite = { favorite = book to false }, onCloudFavorite = { favorite = book to true },
-                                onRead = { start?.let { if(localDestination != null && cloudDestination != null && localDestination.chapterId != cloudDestination.chapterId) progressChoice = localDestination to cloudDestination else c.read(ref, it) } },
+                                onRead = continueReading,
                                 onDownload = { download = book }) }
                             item { BookUpdateSummary(detail) { id -> c.read(ref, id) } }
                             if(!continuing && (state.positions.containsKey(ref.key) || detail.lastReadChapterId != null)) item { Text("原进度章节已不在目录中，将从第一章开始。", Modifier.padding(horizontal = 24.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -209,7 +210,7 @@ import kotlinx.coroutines.withContext
                             detail.wenkuId?.let { id -> item { MenuRow("关联文库版", "查看分卷与出版信息", Icons.Outlined.LibraryBooks, { c.book(BookRef("wenku", id)) }) } }
                             item { AppTextButton(onClick = refresh, Modifier.fillMaxWidth()) { Text("刷新书籍资料") } }
                         }
-                        1 -> TocPanel(c, ref, detail.toc, start) { id -> c.read(ref, id) }
+                        1 -> TocPanel(c, ref, detail.toc, start, onContinue = continueReading) { id -> c.read(ref, id) }
                         2 -> NovelCommentsPanel(c, "web-${ref.provider}-${ref.id}")
                     }
             }
@@ -325,7 +326,8 @@ import kotlinx.coroutines.withContext
     }
     if(expandedCover && cover != null) IllustrationViewer(cover, imageLabel = "封面") { expandedCover = false }
 }
-@Composable fun TocPanel(c: AppController, ref: BookRef, toc: List<TocItem>, current: String?, onRead: (String) -> Unit) {
+@Composable fun TocPanel(c: AppController, ref: BookRef, toc: List<TocItem>, current: String?,
+    onContinue: (() -> Unit)? = null, onRead: (String) -> Unit) {
     var search by rememberSaveable(ref.key) { mutableStateOf("") }; var reversed by rememberSaveable(ref.key) { mutableStateOf(false) }
     var cacheDialog by remember(ref.key) { mutableStateOf(false) }
     val cacheActions = rememberChapterCacheActions(c)
@@ -339,7 +341,8 @@ import kotlinx.coroutines.withContext
     val hasChapters = remember(list) { list.any { it.value.chapterId != null } }
     val reducedMotion = appReducedMotion()
     val scroll = rememberLazyListState(); val scope = rememberCoroutineScope()
-    Column {
+    Box(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize()) {
         OutlinedTextField(search, { search = it }, label = { Text("搜索章节") }, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), singleLine = true, leadingIcon = { Icon(Icons.Outlined.Search, null) })
         FlowRow(Modifier.padding(horizontal = 12.dp)) {
             AppTextButton(onClick = { reversed = !reversed }) { Text(if(reversed) "倒序" else "正序") }
@@ -349,7 +352,7 @@ import kotlinx.coroutines.withContext
                 enabled = cachedIds.isNotEmpty() && !cacheActions.busy) { Text("清理缓存") }
         }
         if(!ref.isLocal) Text(remember(toc, cachedIds) { offlineRangeLabel(toc, cachedIds) }, Modifier.padding(horizontal = 20.dp, vertical = 4.dp), style = MaterialTheme.typography.labelMedium)
-        AppLazyColumn(state = scroll, modifier = Modifier.weight(1f)) {
+        AppLazyColumn(state = scroll, modifier = Modifier.weight(1f), contentPadding = PaddingValues(bottom = 88.dp)) {
             items(list, key = { it.value.chapterId?.let { id -> "chapter-$id" } ?: "section-${it.index}" }, contentType = { if(it.value.chapterId == null) "section" else "chapter" }) { entry ->
                 val item = entry.value
                 val itemMotion = if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(AppMotion.Release), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit))
@@ -359,5 +362,15 @@ import kotlinx.coroutines.withContext
             if(list.isEmpty()) item { EmptyState("没有匹配的章节", "可以修改搜索词，或刷新书籍目录。") }
         }
     }
+    if(current != null) TocContinueButton(onClick = { if(onContinue != null) onContinue() else onRead(current) },
+        modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp))
+    }
     if(cacheDialog) ChapterCacheDialog(c, ref, toc, current, onChanged = {}, onDismiss = { cacheDialog = false })
+}
+
+@Composable internal fun TocContinueButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    FloatingActionButton(onClick = onClick, shape = MaterialTheme.shapes.large,
+        modifier = modifier.testTag("toc-continue-reading")) {
+        Icon(Icons.Outlined.MenuBook, "继续阅读")
+    }
 }
