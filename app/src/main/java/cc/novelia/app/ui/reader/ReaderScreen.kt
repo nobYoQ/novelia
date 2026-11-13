@@ -42,6 +42,7 @@ import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
@@ -863,9 +864,9 @@ import kotlinx.serialization.encodeToString
                         interactionSource = remember { MutableInteractionSource() }, indication = null,
                         onClickLabel = "显示或收起阅读工具栏", onClick = tapNavigation::click)) {
                         if(chapterHeading(chapter.title, paragraphs) != null) {
-                            Text(chapter.title, Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium,
+                            Text(chapter.title, Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium.copy(lineHeightStyle = ReaderLineHeightStyle),
                                 fontSize = (settings.fontSize * 1.25f).sp,
-                                lineHeight = (settings.fontSize * 1.25f * settings.lineHeight).sp,
+                                lineHeight = settings.lineHeight.em,
                                 color = foreground, fontFamily = readerFont.family)
                             Spacer(Modifier.height(12.dp))
                         }

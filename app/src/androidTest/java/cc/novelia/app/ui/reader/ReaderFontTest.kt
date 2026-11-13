@@ -4,6 +4,8 @@ import android.content.ContextWrapper
 import android.content.res.Configuration
 import android.graphics.Typeface
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -41,13 +43,13 @@ class ReaderFontTest {
         var secondary by mutableStateOf(false)
         var textDensity: Density = Density(1f)
         var richLayout: android.text.StaticLayout? = null
-        val sample = "MM"
+        val sample = "MM\nMM"
         compose.setContent { NoveliaTheme("light") {
             val density = remember(scale) { Density(context.createConfigurationContext(
                 Configuration(context.resources.configuration).apply { fontScale = scale })) }
             textDensity = density
             CompositionLocalProvider(LocalDensity provides density) {
-                Column(Modifier.width(320.dp)) {
+                Column(Modifier.width(320.dp).verticalScroll(rememberScrollState())) {
                     Box(Modifier.testTag("font-plain")) {
                         ReaderTextParagraph(ReadingParagraph(0, listOf(TextPart(sample, "gpt", secondary = secondary))),
                             settings, settings, Color.Black, {}, {}, null) { _, _ -> }
@@ -57,8 +59,9 @@ class ReaderFontTest {
                 }
             }
         } }
-        for(fontScale in listOf(1f, 1.3f, 2f)) for(size in listOf(32f, 64f)) for(isSecondary in listOf(false, true)) {
-            compose.runOnIdle { scale = fontScale; settings = settings.copy(fontSize = size); secondary = isSecondary }
+        for(fontScale in listOf(1f, 1.3f, 2f)) for(size in listOf(32f, 64f)) for(isSecondary in listOf(false, true))
+            for(multiplier in listOf(.5f, 1f, 1.8f, 2.6f)) {
+            compose.runOnIdle { scale = fontScale; settings = settings.copy(fontSize = size, lineHeight = multiplier); secondary = isSecondary }
             val results = mutableListOf<TextLayoutResult>()
             compose.onNode(hasText(sample) and hasAnyAncestor(hasTestTag("font-plain")), useUnmergedTree = true)
                 .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(results) }
@@ -70,6 +73,13 @@ class ReaderFontTest {
             assertEquals("EPUB 字形应与滚动一致", scrollWidth,
                 richLayout!!.getPrimaryHorizontal(1) - richLayout!!.getPrimaryHorizontal(0), 1f)
             assertEquals(with(textDensity) { readerPartFontSize(settings, isSecondary).sp.toPx() }, richLayout!!.paint.textSize, .01f)
+            val expected = readerLineHeightPx(with(textDensity) { readerPartFontSize(settings, isSecondary).sp.toPx() }, multiplier).toFloat()
+            assertEquals("滚动行高应按实际字号计算：$fontScale/$size/$isSecondary/$multiplier", expected,
+                results.single().getLineBaseline(1) - results.single().getLineBaseline(0), 1f)
+            assertEquals("分页行高应与滚动一致", expected,
+                (native.getLineBaseline(1) - native.getLineBaseline(0)).toFloat(), 1f)
+            assertEquals("EPUB 行高应与滚动一致", expected,
+                (richLayout!!.getLineBaseline(1) - richLayout!!.getLineBaseline(0)).toFloat(), 1f)
         }
     }
 

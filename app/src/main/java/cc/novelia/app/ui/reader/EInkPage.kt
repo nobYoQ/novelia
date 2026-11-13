@@ -194,17 +194,23 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
             paragraph.parts.forEachIndexed { partIndex, part ->
                 checkCancelled()
                 if (partIndex > 0) text.append(READING_PART_SEPARATOR)
+                val partStart = text.length
                 if (settings.parallel && part.source in listOf("sakura", "gpt", "youdao")) text.append(part.source.uppercase()).append("\n")
                 val start = text.length
                 text.append(settings.indentText)
                 val bodyStart = text.length
                 text.append(part.text)
-                text.addReaderInline(part.withInlinePreferences(settings), bodyStart, width)
+                val styledPart = part.withInlinePreferences(settings)
+                text.addReaderInline(styledPart, bodyStart, width)
                 if (part.secondary) {
                     text.setSpan(SecondaryOpacity(settings.secondaryAlpha), start, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                     text.setSpan(AbsoluteSizeSpan(with(density) { readerPartFontSize(settings, true).sp.roundToPx() }), start, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                     if (settings.underline) text.setSpan(UnderlineSpan(), start, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                 }
+                if(text.length > partStart) text.setSpan(ReaderLineHeightSpan(
+                    readerLineHeightPx(with(density) { readerPartFontSize(settings, part.secondary).sp.toPx() }, settings.lineHeight),
+                    styledPart.inline.any { it.kind == cc.novelia.app.data.model.InlineKind.Ruby }),
+                    partStart, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             }
             if (text.isEmpty()) text.append(" ")
             val paint = TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {

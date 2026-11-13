@@ -15,7 +15,6 @@ internal fun ReadingTextMatch.textOffset(paragraph: ReadingParagraph, settings: 
     paragraphPartStarts(paragraph, settings).getOrElse(part) { 0 } + settings.resolvedIndentSize + start
 
 internal fun readerPartFontSize(settings: ReaderSettings, secondary: Boolean): Float = settings.fontSize - if(secondary) 1f else 0f
-internal fun readerPartLineHeight(settings: ReaderSettings, secondary: Boolean): Float = readerPartFontSize(settings, secondary) * settings.lineHeight
 
 /** 从当前搜索命中继续，或从长段落中实际可见的字符位置开始。 */
 internal fun nextReadingMatchIndex(matches: List<ReadingTextMatch>, current: ReadingTextMatch?, direction: Int,

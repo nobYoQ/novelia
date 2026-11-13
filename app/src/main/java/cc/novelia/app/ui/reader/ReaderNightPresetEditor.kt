@@ -199,7 +199,8 @@ internal val LocalReaderPresetDraft = staticCompositionLocalOf { false }
             }, Modifier.padding(14.dp),
                 fontFamily = rememberReaderFont(settings).family, fontSize = settings.fontSize.sp,
                 fontWeight = if(settings.weight) FontWeight.Bold else FontWeight.Normal,
-                lineHeight = (settings.fontSize * settings.lineHeight).sp, letterSpacing = settings.letterSpacing.em,
+                lineHeight = settings.lineHeight.em,
+                style = LocalTextStyle.current.copy(lineHeightStyle = ReaderLineHeightStyle), letterSpacing = settings.letterSpacing.em,
                 maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }

@@ -9,6 +9,7 @@ import android.text.Spanned
 import android.text.StaticLayout
 import android.text.TextPaint
 import android.text.style.ReplacementSpan
+import android.text.style.LineHeightSpan
 import android.text.style.StrikethroughSpan
 import android.text.style.StyleSpan
 import android.text.style.UnderlineSpan
@@ -19,6 +20,31 @@ import kotlin.math.max
 import kotlin.math.min
 
 internal class ReaderNoteSpan(val body: String) : UnderlineSpan()
+
+/** 与滚动正文使用同一像素行高；注音行至少保留字形和注音需要的高度。 */
+internal class ReaderLineHeightSpan(private val height: Int, private val preserveGlyphHeight: Boolean) : LineHeightSpan {
+    private var ascent: Int? = null
+    private var descent = 0
+
+    override fun chooseHeight(text: CharSequence, start: Int, end: Int, spanstartv: Int, v: Int, fm: Paint.FontMetricsInt) {
+        // 字体回退可能令各行的自然度量不同；固定首行基线，才能与 Compose 的居中行高一致。
+        val fixedAscent = ascent
+        if(!preserveGlyphHeight && fixedAscent != null) {
+            fm.ascent = fixedAscent
+            fm.descent = descent
+            return
+        }
+        val original = fm.descent - fm.ascent
+        if(original <= 0) return
+        val target = if(preserveGlyphHeight) max(height, original) else height
+        fm.descent += ceil((target - original) / 2.0).toInt()
+        fm.ascent = fm.descent - target
+        if(!preserveGlyphHeight) {
+            ascent = fm.ascent
+            descent = fm.descent
+        }
+    }
+}
 
 /** 底文仍占原 UTF-16 区间；一组 Ruby 同行排版，超宽组缩放到视口内。 */
 internal class ReaderRubySpan(private val reading: String, private val maxWidth: Int) : ReplacementSpan() {
@@ -78,9 +104,14 @@ internal fun SpannableStringBuilder.addReaderInline(part: TextPart, offset: Int,
 
 internal fun readerNativeLayout(text: CharSequence, paint: TextPaint, width: Int, lineHeight: Float): StaticLayout {
     val ruby = text is Spanned && text.getSpans(0, text.length, ReaderRubySpan::class.java).isNotEmpty()
-    return StaticLayout.Builder.obtain(text, 0, text.length, paint, width.coerceAtLeast(1))
+    val hasLineHeights = text is Spanned && text.getSpans(0, text.length, ReaderLineHeightSpan::class.java).isNotEmpty()
+    val styled = if(hasLineHeights) text else SpannableStringBuilder(text).apply {
+        setSpan(ReaderLineHeightSpan(readerLineHeightPx(paint.textSize, lineHeight), ruby),
+            0, length, Spanned.SPAN_INCLUSIVE_EXCLUSIVE)
+    }
+    return StaticLayout.Builder.obtain(styled, 0, styled.length, paint, width.coerceAtLeast(1))
         .setAlignment(Layout.Alignment.ALIGN_NORMAL).setIncludePad(false)
-        .setLineSpacing(0f, if (ruby) lineHeight.coerceAtLeast(1f) else lineHeight).build()
+        .setLineSpacing(0f, 1f).build()
 }
 
 /** Ruby 在排版上是一个整体；命中其中一个字时仍高亮整组，文字锚点保持原区间。 */

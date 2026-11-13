@@ -87,7 +87,7 @@ class ReaderSpacingTest {
             }
         }
         val results = mutableListOf("fontSize,multiplier,glyphHeight,scrollBaselineGap,pageBaselineGap")
-        for(fontSize in listOf(14f, 19f, 32f)) for(multiplier in listOf(.5f, .8f, .9f, 1f)) {
+        for(fontSize in listOf(14f, 19f, 32f, 64f)) for(multiplier in listOf(.5f, .8f, .9f, 1f, 1.8f, 2.6f)) {
             compose.runOnIdle { settings = settings.copy(fontSize = fontSize, lineHeight = multiplier) }
             val layouts = mutableListOf<TextLayoutResult>()
             compose.onNodeWithText(paragraph.parts.single().text, useUnmergedTree = true)
@@ -97,6 +97,7 @@ class ReaderSpacingTest {
             val bounds = Rect()
             layout.paint.getTextBounds(sample, 0, sample.length, bounds)
             val pageGap = layout.getLineBaseline(1) - layout.getLineBaseline(0)
+            assertEquals("中日文行高应跨模式一致：$fontSize/$multiplier", scrollGap, pageGap.toFloat(), 1f)
             results += "$fontSize,$multiplier,${bounds.height()},$scrollGap,$pageGap"
             if(multiplier == .5f) {
                 assertTrue("0.5 倍在滚动排版中会重叠", scrollGap < bounds.height())
