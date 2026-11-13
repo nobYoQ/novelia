@@ -124,8 +124,8 @@ import kotlin.math.roundToInt
                                 modifier = Modifier.testTag("reader-line-height"), defaultValue = defaults?.lineHeight, livePreviewStep = if(livePreview) .05f else null) { onChange(value.copy(lineHeight = it)) }
                             ReaderSlider("字距 ${"%.2f".format(value.letterSpacing)} em", value.letterSpacing, 0f..0.15f,
                                 modifier = Modifier.testTag("reader-letter-spacing"), defaultValue = defaults?.letterSpacing) { onChange(value.copy(letterSpacing = it)) }
-                            ReaderSlider("段距 ${value.resolvedParagraphSpacing.roundToInt()} dp", value.resolvedParagraphSpacing, 0f..32f,
-                                modifier = Modifier.testTag("reader-paragraph-spacing"), defaultValue = defaults?.resolvedParagraphSpacing, livePreviewStep = if(livePreview) 1f else null) { onChange(value.copy(paragraphSpacing = it)) }
+                            ReaderSlider("段距 ${value.resolvedParagraphSpacing.roundToInt()} dp", value.resolvedParagraphSpacing, ReaderSettings.PARAGRAPH_SPACING_RANGE,
+                                modifier = Modifier.testTag("reader-paragraph-spacing"), defaultValue = defaults?.resolvedParagraphSpacing, livePreviewStep = if(livePreview) 1f else null, eInkStep = 1f) { onChange(value.copy(paragraphSpacing = it)) }
                             ChoiceRow("阅读主题", listOf("跟随应用", "纸张", "浅色", "深色", "黑白", "自定义"), ReaderSettings.THEMES.indexOf(value.resolvedTheme),
                                 defaultSelected = defaults?.let { ReaderSettings.THEMES.indexOf(it.resolvedTheme) }) { onChange(value.withTheme(ReaderSettings.THEMES[it])) }
                             if(value.resolvedTheme == "custom") ReaderThemeEditor(value, defaults, onChange)

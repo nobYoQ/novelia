@@ -6,6 +6,16 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ReaderNightSettingsTest {
+    @Test fun expandedParagraphSpacingKeepsOldValuesAndRejectsInvalidSettings() {
+        assertEquals(8f, ReaderSettings().resolvedParagraphSpacing, 0f)
+        assertEquals(32f, ReaderSettings(paragraphSpacing = 32f).resolvedParagraphSpacing, 0f)
+        assertEquals(128f, ReaderSettings(paragraphSpacing = 128f).resolvedParagraphSpacing, 0f)
+        assertEquals(128f, ReaderSettings(paragraphSpacing = 129f).resolvedParagraphSpacing, 0f)
+        assertTrue(ReaderNightPreset(paragraphSpacing = 128f).valid)
+        assertFalse(ReaderNightPreset(paragraphSpacing = 129f).valid)
+        assertFalse(ReaderNightPreset(paragraphSpacing = Float.NaN).valid)
+    }
+
     @Test fun largeFontSizesAreValidAndOutOfRangeNightSizesAreRejected() {
         assertTrue(ReaderNightPreset(fontSize = 64f).valid)
         assertFalse(ReaderNightPreset(fontSize = 65f).valid)

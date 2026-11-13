@@ -208,7 +208,7 @@ class ReaderSpacingTest {
         } }
         compose.waitUntil(10_000) { state.ready }
         val original = state.pages
-        for((gap, margin) in listOf(9f to 17f, 0f to 0f, 32f to 64f)) {
+        for((gap, margin) in listOf(9f to 17f, 0f to 0f, 32f to 64f, 128f to 0f)) {
             val previous = state.pages
             compose.runOnIdle { settings = settings.copy(paragraphSpacing = gap, verticalMargin = margin) }
             compose.waitUntil(10_000) { state.ready && state.pages !== previous }

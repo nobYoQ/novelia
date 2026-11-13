@@ -137,6 +137,7 @@ internal object LibraryBackupArchive {
             require(settings.theme in ReaderSettings.THEMES && settings.customColors.valid) { "备份阅读配色无效" }
             require(settings.validFont) { "备份阅读字体设置无效" }
             require(settings.validNightReading) { "备份夜间阅读或亮度设置无效" }
+            require(settings.paragraphSpacing in ReaderSettings.PARAGRAPH_SPACING_RANGE) { "备份段落留白无效" }
             require(settings.horizontalMargin in 0f..64f && settings.verticalMargin in 0f..64f) { "备份页边距无效" }
             require(settings.orientation in ReaderSettings.ORIENTATIONS) { "备份阅读方向无效" }
             require(settings.validAutoRead) { "备份自动阅读速度无效" }

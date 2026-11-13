@@ -241,7 +241,7 @@ internal object WebDavValidation {
                 require(cc.novelia.app.data.model.validReaderTextReplacements(value.mapValues { it.value.jsonPrimitive.content })) { "文字替换规则超出范围" }
             }
             "toolbarTransparency" -> number(value, 0.0, 1.0)
-            "paragraphSpacing" -> number(value, 0.0, 32.0)
+            "paragraphSpacing" -> number(value, 0.0, ReaderSettings.MAX_PARAGRAPH_SPACING.toDouble())
             "autoReadSpeed" -> number(value, 5.0, 80.0)
             "autoReadIntervalSeconds" -> positiveInt(value, 120).also { require(value.jsonPrimitive.intOrNull!! >= 5) { "自动翻页停留时间过短" } }
             "horizontalMargin", "verticalMargin" -> number(value, 0.0, 64.0)

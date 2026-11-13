@@ -6,10 +6,17 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ReaderNightSyncTest {
+    @Test fun paragraphSpacingAcceptsExpandedRangeAndRejectsValuesAboveIt() {
+        WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "paragraphSpacing", JsonPrimitive(128))
+        assertThrows(IllegalArgumentException::class.java) {
+            WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "paragraphSpacing", JsonPrimitive(129))
+        }
+    }
+
     @Test fun stylesSyncButBrightnessAndLocalNightFontsStayOnReceivingDevice() {
-        val source = LibraryState(reader = ReaderSettings(nightReading = true, fontSize = 64f,
+        val source = LibraryState(reader = ReaderSettings(nightReading = true, fontSize = 64f, paragraphSpacing = 128f,
             nightBrightness = ReaderBrightness.night().copy(maximum = .4f),
-            nightPreset = ReaderNightPreset(fontSize = 64f, lineHeight = 2.2f, fontFamily = "custom", customFont = ReaderCustomFont("a".repeat(64), "本机字体"))))
+            nightPreset = ReaderNightPreset(fontSize = 64f, paragraphSpacing = 128f, lineHeight = 2.2f, fontFamily = "custom", customFont = ReaderCustomFont("a".repeat(64), "本机字体"))))
         val projection = WebDavProjection.library(source, setOf(SyncDomain.SETTINGS), includeDevicePreferences = true)
         val docs = SyncReplica(deviceId = "a").track(emptyMap(), projection).bind("dataset").documents
         WebDavProjection.validateRecords(docs.getValue(SyncDomain.SETTINGS))
@@ -20,6 +27,8 @@ class ReaderNightSyncTest {
         val restored = WebDavProjection.applyLibrary(target, docs, setOf(SyncDomain.SETTINGS))
         assertEquals(64f, restored.reader.fontSize, 0f)
         assertEquals(64f, restored.reader.nightPreset.fontSize!!, 0f)
+        assertEquals(128f, restored.reader.paragraphSpacing, 0f)
+        assertEquals(128f, restored.reader.nightPreset.paragraphSpacing!!, 0f)
         assertFalse(restored.reader.nightReading)
         assertEquals(target.reader.nightBrightness, restored.reader.nightBrightness)
         assertEquals(2.2f, restored.reader.nightPreset.lineHeight!!, 0f)

@@ -136,7 +136,7 @@ internal val LocalReaderPresetDraft = staticCompositionLocalOf { false }
                                         draft = draft.copy(nightPreset = draft.nightPreset.copy(paragraphSpacing = if(it) null else shown.resolvedParagraphSpacing))
                                     }
                                     if(draft.nightPreset.paragraphSpacing != null) ReaderSlider("段落间距 ${shown.resolvedParagraphSpacing.roundToInt()} dp",
-                                        shown.resolvedParagraphSpacing, 0f..32f, modifier = Modifier.testTag("night-paragraph-spacing")) { edit(shown.copy(paragraphSpacing = it)) }
+                                        shown.resolvedParagraphSpacing, ReaderSettings.PARAGRAPH_SPACING_RANGE, modifier = Modifier.testTag("night-paragraph-spacing"), eInkStep = 1f) { edit(shown.copy(paragraphSpacing = it)) }
                                 }
                             }
                         }

@@ -135,6 +135,8 @@ import kotlinx.serialization.Serializable
         const val MIN_FONT_SIZE = 14f
         const val MAX_FONT_SIZE = 64f
         val FONT_SIZE_RANGE = MIN_FONT_SIZE..MAX_FONT_SIZE
+        const val MAX_PARAGRAPH_SPACING = 128f
+        val PARAGRAPH_SPACING_RANGE = 0f..MAX_PARAGRAPH_SPACING
         const val MIN_LINE_HEIGHT = .5f
         val LINE_HEIGHT_RANGE = MIN_LINE_HEIGHT..2.6f
         val THEMES = listOf("system", "paper", "light", "dark", "monochrome", "custom")
@@ -153,7 +155,7 @@ import kotlinx.serialization.Serializable
     // 0 是明确的不限时选择；损坏的负数配置仍回退到默认定时。
     val resolvedSpeechMinutes get() = if(speechMinutes < 0) 30 else speechMinutes.coerceAtMost(MAX_SPEECH_MINUTES)
     val validSpeechTimer get() = speechMinutes in 0..MAX_SPEECH_MINUTES
-    val resolvedParagraphSpacing get() = if(paragraphSpacing.isFinite()) paragraphSpacing.coerceIn(0f, 32f) else 8f
+    val resolvedParagraphSpacing get() = if(paragraphSpacing.isFinite()) paragraphSpacing.coerceIn(PARAGRAPH_SPACING_RANGE) else 8f
     val resolvedHorizontalMargin get() = if(horizontalMargin.isFinite()) horizontalMargin.coerceIn(0f, 64f) else 24f
     val resolvedVerticalMargin get() = if(verticalMargin.isFinite()) verticalMargin.coerceIn(0f, 64f) else 0f
     val resolvedOrientation get() = orientation.takeIf { it in ORIENTATIONS } ?: "system"

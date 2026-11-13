@@ -46,8 +46,8 @@ class LibraryBackupTest {
     }
 
     @Test fun nightPresetAndBrightnessBackupRoundTripAndRejectInvalidInactivePresets() {
-        val reader = ReaderSettings(theme = "paper", nightReading = true, fontSize = 64f,
-            nightPreset = ReaderNightPreset(fontSize = 64f, lineHeight = 2.1f, letterSpacing = .06f),
+        val reader = ReaderSettings(theme = "paper", nightReading = true, fontSize = 64f, paragraphSpacing = 128f,
+            nightPreset = ReaderNightPreset(fontSize = 64f, paragraphSpacing = 128f, lineHeight = 2.1f, letterSpacing = .06f),
             nightBrightness = ReaderBrightness.night().copy(adjustment = -.04f))
             .withEInkMode(true).copy(nightReading = false)
         val valid = LibraryState(reader = reader, bookSettings = mapOf("web/test" to reader))

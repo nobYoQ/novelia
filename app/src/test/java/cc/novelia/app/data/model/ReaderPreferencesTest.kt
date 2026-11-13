@@ -203,7 +203,8 @@ class ReaderPreferencesTest {
         assertEquals(backup, appJson.decodeFromString<SettingsBackup>(appJson.encodeToString(backup)))
         assertEquals(0f, settings.withEInkMode(true).withEInkMode(false).paragraphSpacing, 0f)
         assertEquals(0f, ReaderSettings(paragraphSpacing = -1f).resolvedParagraphSpacing, 0f)
-        assertEquals(32f, ReaderSettings(paragraphSpacing = 50f).resolvedParagraphSpacing, 0f)
+        assertEquals(50f, ReaderSettings(paragraphSpacing = 50f).resolvedParagraphSpacing, 0f)
+        assertEquals(128f, ReaderSettings(paragraphSpacing = 129f).resolvedParagraphSpacing, 0f)
     }
 
     @Test fun toolbarTransparencyMigratesAndPersistsAcrossModesBooksAndBackups() {

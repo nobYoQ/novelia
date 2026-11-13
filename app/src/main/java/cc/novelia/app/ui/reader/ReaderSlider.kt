@@ -47,14 +47,15 @@ import kotlin.math.max
 
 @Composable internal fun ReaderSlider(label: String, value: Float, range: ClosedFloatingPointRange<Float>, modifier: Modifier = Modifier,
     enabled: Boolean = true, livePreviewStep: Float? = null, defaultValue: Float? = null,
-    onPreview: ((Float) -> Unit)? = null, onChange: (Float) -> Unit) {
+    onPreview: ((Float) -> Unit)? = null, eInkStep: Float? = null,
+    onChange: (Float) -> Unit) {
     val reference = defaultValue?.takeIf { it.isFinite() }?.coerceIn(range)
     val name = label.substringBefore(' ')
     val resetDescription = reference?.let { "恢复$name 默认值 ${formatPreferenceValue(it)}" }.orEmpty()
     Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
         Text(label, style = MaterialTheme.typography.labelLarge)
         if(LocalEInkMode.current) {
-            val step = when { range.endInclusive - range.start > 100f -> 20f; range.endInclusive - range.start > 10f -> 1f; else -> .05f }
+            val step = eInkStep ?: when { range.endInclusive - range.start > 100f -> 20f; range.endInclusive - range.start > 10f -> 1f; else -> .05f }
             Row(modifier.fillMaxWidth().semantics {
                 progressBarRangeInfo = ProgressBarRangeInfo(value.coerceIn(range), range)
                 if(!enabled) disabled()

@@ -44,7 +44,7 @@ import kotlin.math.ln
 ) {
     val valid get() = theme in ReaderSettings.THEMES && customColors.valid &&
         (fontSize == null || fontSize in ReaderSettings.FONT_SIZE_RANGE) && (lineHeight == null || lineHeight in ReaderSettings.MIN_LINE_HEIGHT..4f) &&
-        (paragraphSpacing == null || paragraphSpacing in 0f..32f) && letterSpacing in 0f..0.15f &&
+        (paragraphSpacing == null || paragraphSpacing in ReaderSettings.PARAGRAPH_SPACING_RANGE) && letterSpacing in 0f..0.15f &&
         (fontFamily == null || fontFamily in READER_FONT_FAMILIES) && (customFont == null || customFont.valid) &&
         (fontFamily != "custom" || customFont != null) && secondaryAlpha in .45f..1f && toolbarTransparency in 0f..1f
 }
