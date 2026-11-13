@@ -129,13 +129,13 @@ import kotlin.math.roundToInt
                             ReaderSlider("字号 ${formatReaderDp(typography.fontSize)} dp", typography.fontSize, ReaderTypographyDp.FONT_SIZE_RANGE,
                                 modifier = Modifier.testTag("reader-font-size"), defaultValue = defaultTypography?.fontSize, livePreviewStep = if(livePreview) .5f else null,
                                 eInkStep = 1f, eInkCoarseStep = 10f) { onChange(value.copy(typographyDp = typography.copy(fontSize = it))) }
-                            ReaderSlider("行距 ${formatReaderDp(typography.lineSpacing)} dp · 两行间额外留白", typography.lineSpacing, ReaderTypographyDp.LINE_SPACING_RANGE,
+                            ReaderSlider("行距 ${formatReaderDp(typography.lineSpacing)} dp", typography.lineSpacing, ReaderTypographyDp.LINE_SPACING_RANGE,
                                 modifier = Modifier.testTag("reader-line-height"), defaultValue = defaultTypography?.lineSpacing, livePreviewStep = if(livePreview) 1f else null,
                                 eInkStep = 1f, eInkCoarseStep = 10f) { onChange(value.copy(typographyDp = typography.copy(lineSpacing = it))) }
                             ReaderSlider("字距 ${formatReaderDp(typography.letterSpacing)} dp", typography.letterSpacing, ReaderTypographyDp.LETTER_SPACING_RANGE,
                                 modifier = Modifier.testTag("reader-letter-spacing"), defaultValue = defaultTypography?.letterSpacing,
                                 eInkStep = .1f, eInkCoarseStep = 1f) { onChange(value.copy(typographyDp = typography.copy(letterSpacing = it))) }
-                            ReaderSlider("段距 ${value.resolvedParagraphSpacing.roundToInt()} dp · 额外留白", value.resolvedParagraphSpacing, ReaderSettings.PARAGRAPH_SPACING_RANGE,
+                            ReaderSlider("段距 ${value.resolvedParagraphSpacing.roundToInt()} dp", value.resolvedParagraphSpacing, ReaderSettings.PARAGRAPH_SPACING_RANGE,
                                 modifier = Modifier.testTag("reader-paragraph-spacing"), defaultValue = defaults?.resolvedParagraphSpacing, livePreviewStep = if(livePreview) 1f else null,
                                 eInkStep = 1f, eInkCoarseStep = 10f) { onChange(value.copy(paragraphSpacing = it)) }
                             ChoiceRow("阅读主题", listOf("跟随应用", "纸张", "浅色", "深色", "黑白", "自定义"), ReaderSettings.THEMES.indexOf(value.resolvedTheme),

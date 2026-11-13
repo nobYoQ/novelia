@@ -39,14 +39,14 @@ class ReaderSpacingTest {
         compose.onNodeWithTag("reader-line-height").performScrollTo()
             .performSemanticsAction(SemanticsActions.SetProgress) { it(0f) }
         compose.runOnIdle { assertEquals(0f, settings.typographyDp!!.lineSpacing, 0f) }
-        compose.onNodeWithText("行距 0 dp · 两行间额外留白").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("行距 0 dp").performScrollTo().assertIsDisplayed()
         compose.runOnIdle { settings = settings.withEInkMode(true).copy(typographyDp = settings.typographyDp!!.copy(lineSpacing = 1f)) }
         compose.onNodeWithContentDescription("减小 行距", substring = true).performScrollTo().performClick()
         compose.runOnIdle { assertEquals(0f, settings.typographyDp!!.lineSpacing, .0001f) }
         compose.onNodeWithContentDescription("减小 行距", substring = true).assertIsNotEnabled()
         compose.runOnIdle { showing = false }
         compose.runOnIdle { showing = true }
-        compose.onNodeWithText("行距 0 dp · 两行间额外留白").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("行距 0 dp").performScrollTo().assertIsDisplayed()
     }
 
     @Test fun chineseScrollParagraphsUseContentHeightAndTheSelectedGapWithoutJapaneseSlots() {
