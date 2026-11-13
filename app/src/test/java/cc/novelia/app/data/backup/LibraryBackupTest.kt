@@ -13,6 +13,8 @@ import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.data.model.ReaderCustomColors
 import cc.novelia.app.data.model.ReaderNightPreset
 import cc.novelia.app.data.model.ReaderBrightness
+import cc.novelia.app.data.model.ReaderTypographyDp
+import cc.novelia.app.data.model.withDpTypography
 import cc.novelia.app.data.model.ReadingHistoryEntry
 import cc.novelia.app.data.model.SavedBook
 import cc.novelia.app.data.storage.appJson
@@ -32,6 +34,21 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LibraryBackupTest {
+    @Test fun dpTypographyBacksUpBothProfilesAndRejectsInvalidDormantValues() {
+        val reader = ReaderSettings().withDpTypography { it }.withEInkMode(true)
+            .copy(typographyDp = ReaderTypographyDp(128f, 256f, 32f))
+        val valid = LibraryState(reader = reader, bookSettings = mapOf("web/test" to reader))
+        val invalid = valid.copy(reader = reader.copy(beforeEInk = reader.beforeEInk!!.copy(typographyDp = ReaderTypographyDp(lineSpacing = -1f))))
+        listOf(valid, invalid).forEachIndexed { index, state ->
+            val root = temp()
+            try {
+                val bytes = archive(mapOf("manifest.json" to appJson.encodeToString(manifest(state)).toByteArray(Charsets.UTF_8)))
+                if(index == 0) assertEquals(state, LibraryBackupArchive.extract(ByteArrayInputStream(bytes), root).library)
+                else fails { LibraryBackupArchive.extract(ByteArrayInputStream(bytes), root) }
+            } finally { root.deleteRecursively() }
+        }
+    }
+
     @Test fun stickerPackRestoresIntoEmptyLibraryAndKeepsExistingLibraryPreference() {
         val root = temp()
         try {

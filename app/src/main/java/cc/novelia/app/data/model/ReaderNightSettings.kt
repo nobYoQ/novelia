@@ -28,7 +28,7 @@ import kotlin.math.ln
     }
 }
 
-/** 夜间覆盖项。空值继承普通配置；内置行距在普通配置上增加 0.1 倍字号。 */
+/** 夜间覆盖项。空值继承普通配置；旧版相对单位仅用于迁移历史设置。 */
 @Serializable data class ReaderNightPreset(
     val theme: String = "custom",
     val customColors: ReaderCustomColors = ReaderCustomColors(0xB8B4AB, 0x1C1D1B, 0x252622),
@@ -40,13 +40,15 @@ import kotlin.math.ln
     val fontFamily: String? = null,
     val customFont: ReaderCustomFont? = null,
     val secondaryAlpha: Float = .85f,
-    val toolbarTransparency: Float = 0f
+    val toolbarTransparency: Float = 0f,
+    val typographyDp: ReaderNightTypographyDp? = null
 ) {
     val valid get() = theme in ReaderSettings.THEMES && customColors.valid &&
         (fontSize == null || fontSize in ReaderSettings.FONT_SIZE_RANGE) && (lineHeight == null || lineHeight in ReaderSettings.MIN_LINE_HEIGHT..4f) &&
         (paragraphSpacing == null || paragraphSpacing in ReaderSettings.PARAGRAPH_SPACING_RANGE) && letterSpacing in 0f..0.15f &&
         (fontFamily == null || fontFamily in READER_FONT_FAMILIES) && (customFont == null || customFont.valid) &&
-        (fontFamily != "custom" || customFont != null) && secondaryAlpha in .45f..1f && toolbarTransparency in 0f..1f
+        (fontFamily != "custom" || customFont != null) && secondaryAlpha in .45f..1f && toolbarTransparency in 0f..1f &&
+        (typographyDp == null || typographyDp.valid)
 }
 
 val ReaderSettings.normalBrightness: ReaderBrightness
@@ -58,7 +60,7 @@ val ReaderSettings.activeBrightness: ReaderBrightness
 
 val ReaderSettings.validNightReading: Boolean
     get() = nightPreset.valid && nightBrightness.valid && (brightnessPreferences == null || brightnessPreferences.valid) &&
-        letterSpacing in 0f..0.15f
+        letterSpacing in 0f..0.15f && (typographyDp == null || typographyDp.valid)
 
 /** 渲染使用投影，始终保留原始普通配置，关闭夜间模式无需反向迁移。 */
 fun ReaderSettings.readingAppearance(): ReaderSettings {
@@ -69,13 +71,22 @@ fun ReaderSettings.readingAppearance(): ReaderSettings {
         paragraphSpacing = preset.paragraphSpacing ?: paragraphSpacing, letterSpacing = preset.letterSpacing,
         weight = preset.weight, fontFamily = preset.fontFamily ?: fontFamily,
         customFont = if (preset.fontFamily == null) customFont else preset.customFont,
-        secondaryAlpha = preset.secondaryAlpha, toolbarTransparency = preset.toolbarTransparency)
+        secondaryAlpha = preset.secondaryAlpha, toolbarTransparency = preset.toolbarTransparency,
+        typographyDp = typographyDp?.let { ordinary -> preset.typographyDp?.resolve(ordinary) })
 }
 
 /** 偏好控件编辑实际显示值；夜间只把发生变化的外观项写入夜间预设。 */
 fun ReaderSettings.withReadingAppearance(edited: ReaderSettings): ReaderSettings {
     if (!nightReading) return edited
     val shown = readingAppearance()
+    val shownTypography = shown.typographyDp
+    val editedTypography = edited.typographyDp
+    val nightTypography = if(shownTypography != null && editedTypography != null) {
+        (nightPreset.typographyDp ?: ReaderNightTypographyDp()).copy(
+            fontSize = if(editedTypography.fontSize != shownTypography.fontSize) editedTypography.fontSize else nightPreset.typographyDp?.fontSize,
+            lineSpacing = if(editedTypography.lineSpacing != shownTypography.lineSpacing) editedTypography.lineSpacing else nightPreset.typographyDp?.lineSpacing,
+            letterSpacing = editedTypography.letterSpacing)
+    } else nightPreset.typographyDp
     val preset = nightPreset.copy(
         theme = if (edited.theme != shown.theme) edited.theme else nightPreset.theme,
         customColors = if (edited.customColors != shown.customColors) edited.customColors else nightPreset.customColors,
@@ -85,11 +96,11 @@ fun ReaderSettings.withReadingAppearance(edited: ReaderSettings): ReaderSettings
         letterSpacing = edited.letterSpacing, weight = edited.weight,
         fontFamily = if (edited.fontFamily != shown.fontFamily || edited.customFont != shown.customFont) edited.fontFamily else nightPreset.fontFamily,
         customFont = if (edited.fontFamily != shown.fontFamily || edited.customFont != shown.customFont) edited.customFont else nightPreset.customFont,
-        secondaryAlpha = edited.secondaryAlpha, toolbarTransparency = edited.toolbarTransparency)
+        secondaryAlpha = edited.secondaryAlpha, toolbarTransparency = edited.toolbarTransparency, typographyDp = nightTypography)
     return edited.copy(theme = theme, monochrome = monochrome, customColors = customColors, fontSize = fontSize,
         lineHeight = lineHeight, paragraphSpacing = paragraphSpacing, letterSpacing = letterSpacing, weight = weight,
         fontFamily = fontFamily, customFont = customFont, secondaryAlpha = secondaryAlpha,
-        toolbarTransparency = toolbarTransparency, nightPreset = preset)
+        toolbarTransparency = toolbarTransparency, nightPreset = preset, typographyDp = typographyDp)
 }
 
 fun ReaderSettings.withBrightness(preferences: ReaderBrightness): ReaderSettings =

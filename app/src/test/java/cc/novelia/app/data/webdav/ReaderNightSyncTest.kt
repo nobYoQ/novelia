@@ -6,6 +6,40 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ReaderNightSyncTest {
+    @Test fun dpTypographySyncsAsAnAtomicGroupAndPreservesModeAndNightOverrides() {
+        val normal = ReaderSettings().withDpTypography { it }.copy(typographyDp = ReaderTypographyDp(32f, 12f, 1f))
+        val ink = normal.withEInkMode(true).copy(typographyDp = ReaderTypographyDp(64f, 24f, 2f),
+            nightPreset = normal.nightPreset.copy(typographyDp = ReaderNightTypographyDp(48f, 20f, 1.5f)))
+        val projection = WebDavProjection.library(LibraryState(reader = ink), setOf(SyncDomain.SETTINGS), includeDevicePreferences = true)
+        val docs = SyncReplica(deviceId = "a").track(emptyMap(), projection).bind("dataset").documents
+        WebDavProjection.validateRecords(docs.getValue(SyncDomain.SETTINGS))
+        val restored = WebDavProjection.applyLibrary(LibraryState(), docs, setOf(SyncDomain.SETTINGS), includeDevicePreferences = true).reader
+        assertEquals(ink.typographyDp, restored.typographyDp)
+        assertEquals(ink.nightPreset.typographyDp, restored.nightPreset.typographyDp)
+        assertEquals(normal.typographyDp, restored.withEInkMode(false).typographyDp)
+    }
+
+    @Test fun legacySyncWithoutDpUnitsKeepsLocalDpTypography() {
+        val local = LibraryState(reader = ReaderSettings().withDpTypography { it * 1.5f })
+        val legacy = WebDavProjection.library(LibraryState(), setOf(SyncDomain.SETTINGS), includeDevicePreferences = true)
+        val docs = SyncReplica(deviceId = "old").track(emptyMap(), legacy).bind("dataset").documents
+        WebDavProjection.validateRecords(docs.getValue(SyncDomain.SETTINGS))
+        for(devices in listOf(false, true)) {
+            val restored = WebDavProjection.applyLibrary(local, docs, setOf(SyncDomain.SETTINGS), includeDevicePreferences = devices).reader
+            assertEquals(local.reader.typographyDp, restored.typographyDp)
+            assertEquals(local.reader.nightPreset.typographyDp, restored.nightPreset.typographyDp)
+        }
+    }
+
+    @Test fun invalidOrIncompleteDpGroupsAreRejected() {
+        for(raw in listOf("""{"fontSize":129,"lineSpacing":0,"letterSpacing":0}""",
+            """{"fontSize":20,"lineSpacing":-1,"letterSpacing":0}""", """{"fontSize":20}""")) {
+            assertThrows(IllegalArgumentException::class.java) {
+                WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "typographyDp", Json.parseToJsonElement(raw))
+            }
+        }
+    }
+
     @Test fun paragraphSpacingAcceptsExpandedRangeAndRejectsValuesAboveIt() {
         WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "paragraphSpacing", JsonPrimitive(128))
         assertThrows(IllegalArgumentException::class.java) {

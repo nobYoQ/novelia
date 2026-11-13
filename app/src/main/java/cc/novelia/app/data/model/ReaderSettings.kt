@@ -67,7 +67,8 @@ import kotlinx.serialization.Serializable
     val nightPreset: ReaderNightPreset? = null,
     val brightnessPreferences: ReaderBrightness? = null,
     val nightBrightness: ReaderBrightness? = null,
-    val horizontalDualPage: Boolean? = null
+    val horizontalDualPage: Boolean? = null,
+    val typographyDp: ReaderTypographyDp? = null
 )
 
 /**
@@ -129,7 +130,8 @@ import kotlinx.serialization.Serializable
     val brightnessPreferences: ReaderBrightness? = null,
     val nightBrightness: ReaderBrightness = ReaderBrightness.night(),
     // 横向分页的可选子模式；窄窗口回退单页，其他分页方式保留此偏好但不启用。
-    val horizontalDualPage: Boolean = false
+    val horizontalDualPage: Boolean = false,
+    val typographyDp: ReaderTypographyDp? = null
 ) {
     companion object {
         const val MIN_FONT_SIZE = 14f
@@ -246,13 +248,14 @@ import kotlinx.serialization.Serializable
         rowShowPartialLines = rowShowPartialLines,
         letterSpacing = letterSpacing, nightReading = nightReading, nightPreset = nightPreset,
         brightnessPreferences = brightnessPreferences, nightBrightness = nightBrightness,
-        horizontalDualPage = horizontalDualPage
+        horizontalDualPage = horizontalDualPage, typographyDp = typographyDp
     )
     private fun withPagingState(state: ReaderPagingState) = copy(
         mode = state.mode ?: mode,
         engines = state.engines ?: engines,
         parallel = state.parallel ?: parallel,
         fontSize = state.fontSize ?: fontSize,
+        typographyDp = state.typographyDp ?: typographyDp.takeIf { state.fontSize == null },
         lineHeight = state.lineHeight ?: lineHeight,
         weight = state.weight ?: weight,
         width = state.width ?: width,

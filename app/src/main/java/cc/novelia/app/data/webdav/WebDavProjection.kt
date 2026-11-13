@@ -119,23 +119,26 @@ object WebDavProjection {
         return JsonObject(if (includeDevicePreferences) portable + ("devicePreferences" to JsonObject(device + ("activeModeSettings" to activeMode))) else portable)
     }
 
-    private fun withoutNightFonts(value: JsonObject): JsonObject = JsonObject(value.mapValues { (field, child) ->
+    private fun withoutNightFonts(value: JsonObject): JsonObject = JsonObject(value.filterNot { (field, child) -> field == "typographyDp" && child == JsonNull }.mapValues { (field, child) ->
         when {
-            field == "nightPreset" && child is JsonObject -> JsonObject(child.filterKeys { it !in setOf("fontFamily", "customFont") })
+            field == "nightPreset" && child is JsonObject -> JsonObject(child.filter { (key, item) -> key !in setOf("fontFamily", "customFont") && !(key == "typographyDp" && item == JsonNull) })
             field in setOf("beforeEInk", "eInkPreferences") && child is JsonObject -> withoutNightFonts(child)
             else -> child
         }
     })
 
-    private fun withLocalNightFonts(local: JsonObject, incoming: JsonObject): JsonObject = JsonObject(incoming.mapValues { (field, child) ->
+    private fun withLocalNightFonts(local: JsonObject, incoming: JsonObject): JsonObject {
+        val compatible = if("typographyDp" !in incoming && "typographyDp" in local) JsonObject(incoming + ("typographyDp" to local.getValue("typographyDp"))) else incoming
+        return JsonObject(compatible.mapValues { (field, child) ->
         when {
-            field == "nightPreset" && child is JsonObject -> JsonObject(child +
+            field == "nightPreset" && child is JsonObject -> JsonObject(withLocalNightFonts(local[field] as? JsonObject ?: JsonObject(emptyMap()), child) +
                 (local[field] as? JsonObject).orEmpty().filterKeys { it in setOf("fontFamily", "customFont") })
             field in setOf("beforeEInk", "eInkPreferences") && child is JsonObject ->
                 withLocalNightFonts(local[field] as? JsonObject ?: local, child)
             else -> child
         }
-    })
+        })
+    }
 
     private fun favorites(state: LibraryState): Map<String, JsonObject> = buildMap {
         val folderIds = state.folders.associateWith { if (it == DEFAULT_FOLDER) DEFAULT_FOLDER_ID else state.folderIds[it] ?: legacyFolderId(it) }
