@@ -27,8 +27,58 @@ import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import java.io.File
+import kotlin.math.roundToInt
 
 class ReaderDefaultControlsTest {
+    @Test fun eInkTypographyButtonsOfferFineAndCoarseStepsAndClampAtBothEnds() {
+        var value by mutableFloatStateOf(8f)
+        compose.setContent { AppInteractionMode(true, true) { NoveliaTheme("light") {
+            Surface(Modifier.width(320.dp)) {
+                ReaderSlider("段距 ${value.toInt()} dp", value, ReaderSettings.PARAGRAPH_SPACING_RANGE,
+                    eInkStep = 1f, eInkCoarseStep = 10f) { value = it }
+            }
+        } } }
+        fun tap(label: String) = compose.onNodeWithContentDescription(label, substring = true)
+            .assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp).performTouchInput { click() }
+        tap("增大 段距")
+        compose.runOnIdle { assertEquals(9f, value, 0f) }
+        tap("快速增加 段距")
+        compose.runOnIdle { assertEquals(19f, value, 0f); value = 125f }
+        tap("快速增加 段距")
+        compose.runOnIdle { assertEquals(128f, value, 0f) }
+        compose.onNodeWithContentDescription("增大 段距", substring = true).assertIsNotEnabled()
+        compose.onNodeWithContentDescription("快速增加 段距", substring = true).assertIsNotEnabled()
+        compose.runOnIdle { value = 5f }
+        tap("快速减少 段距")
+        compose.runOnIdle { assertEquals(0f, value, 0f) }
+        compose.onNodeWithContentDescription("减小 段距", substring = true).assertIsNotEnabled()
+    }
+
+    @Test fun eInkLetterSpacingStepsStayAccurateOnNarrowScreensWithLargeSystemText() {
+        var value by mutableFloatStateOf(.02f)
+        compose.setContent { AppInteractionMode(true, true) { NoveliaTheme("light") {
+            CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides
+                androidx.compose.ui.unit.Density(androidx.compose.ui.platform.LocalDensity.current.density, 2f)) {
+                Surface(Modifier.width(320.dp).testTag("reader-step-preview")) {
+                    ReaderSlider("字距", value, 0f..0.15f, eInkStep = .01f, eInkCoarseStep = .05f,
+                        valueFormatter = { "${(it * 100).roundToInt()}%" }) { value = it }
+                }
+            }
+        } } }
+        fun tap(label: String) = compose.onNodeWithContentDescription(label, substring = true)
+            .assertIsDisplayed().assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp).performTouchInput { click() }
+        tap("增大 字距")
+        compose.runOnIdle { assertEquals(.03f, value, .000001f) }
+        tap("快速增加 字距")
+        compose.runOnIdle { assertEquals(.08f, value, .000001f) }
+        tap("减小 字距")
+        tap("快速减少 字距")
+        compose.runOnIdle { assertEquals(.02f, value, .000001f) }
+        compose.onNodeWithText("+1%").assertIsDisplayed()
+        compose.onNodeWithText("+5%").assertIsDisplayed()
+        capture("reader-eink-letter-spacing-steps.png", "reader-step-preview")
+    }
+
     @get:Rule val compose = createComposeRule()
 
     @Test fun inlineDefaultsStayVisibleAndResetOnlyTheirOwnSetting() {

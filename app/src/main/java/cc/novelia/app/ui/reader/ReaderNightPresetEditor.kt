@@ -121,22 +121,25 @@ internal val LocalReaderPresetDraft = staticCompositionLocalOf { false }
                                         draft = draft.copy(nightPreset = draft.nightPreset.copy(fontSize = if(it) null else shown.fontSize))
                                     }
                                     if(draft.nightPreset.fontSize != null) ReaderSlider("夜间字号 ${shown.fontSize.toInt()}", shown.fontSize, ReaderSettings.FONT_SIZE_RANGE,
-                                        modifier = Modifier.testTag("night-font-size")) { edit(shown.copy(fontSize = it)) }
+                                        modifier = Modifier.testTag("night-font-size"), eInkStep = 1f, eInkCoarseStep = 10f) { edit(shown.copy(fontSize = it)) }
                                     TogglePreference("加粗文字", "内置预设使用正常字重，保持较柔和的观感", shown.weight) { edit(shown.copy(weight = it)) }
                                     EditorHeading("行距与字距")
                                     TogglePreference("跟随普通行距", "在普通行距上增加 0.1 倍字号", draft.nightPreset.lineHeight == null) {
                                         draft = draft.copy(nightPreset = draft.nightPreset.copy(lineHeight = if(it) null else shown.lineHeight))
                                     }
-                                    if(draft.nightPreset.lineHeight != null) ReaderSlider("夜间行距 ${"%.1f".format(shown.lineHeight)} 倍", shown.lineHeight,
-                                        ReaderSettings.MIN_LINE_HEIGHT..4f, modifier = Modifier.testTag("night-line-height")) { edit(shown.copy(lineHeight = it)) }
+                                    if(draft.nightPreset.lineHeight != null) ReaderSlider("夜间行距 ${"%.2f".format(shown.lineHeight)} 倍字号", shown.lineHeight,
+                                        ReaderSettings.MIN_LINE_HEIGHT..4f, modifier = Modifier.testTag("night-line-height"),
+                                        eInkStep = .05f, eInkCoarseStep = .5f) { edit(shown.copy(lineHeight = it)) }
                                     ReaderSlider("额外字距 ${(shown.letterSpacing * 100).roundToInt()}% 字号", shown.letterSpacing, 0f..0.15f,
-                                        modifier = Modifier.testTag("night-letter-spacing")) { edit(shown.copy(letterSpacing = it)) }
+                                        modifier = Modifier.testTag("night-letter-spacing"), eInkStep = .01f, eInkCoarseStep = .05f,
+                                        valueFormatter = { "${(it * 100).roundToInt()}%" }) { edit(shown.copy(letterSpacing = it)) }
                                     EditorHint("0% 保持正常字距；稍微调高可以让文字更疏朗。")
                                     TogglePreference("沿用普通段距", "关闭后，单独调整夜间段落间的留白", draft.nightPreset.paragraphSpacing == null) {
                                         draft = draft.copy(nightPreset = draft.nightPreset.copy(paragraphSpacing = if(it) null else shown.resolvedParagraphSpacing))
                                     }
-                                    if(draft.nightPreset.paragraphSpacing != null) ReaderSlider("段落间距 ${shown.resolvedParagraphSpacing.roundToInt()} dp",
-                                        shown.resolvedParagraphSpacing, ReaderSettings.PARAGRAPH_SPACING_RANGE, modifier = Modifier.testTag("night-paragraph-spacing"), eInkStep = 1f) { edit(shown.copy(paragraphSpacing = it)) }
+                                    if(draft.nightPreset.paragraphSpacing != null) ReaderSlider("段落间距 ${shown.resolvedParagraphSpacing.roundToInt()} dp · 额外留白",
+                                        shown.resolvedParagraphSpacing, ReaderSettings.PARAGRAPH_SPACING_RANGE, modifier = Modifier.testTag("night-paragraph-spacing"),
+                                        eInkStep = 1f, eInkCoarseStep = 10f) { edit(shown.copy(paragraphSpacing = it)) }
                                 }
                             }
                         }

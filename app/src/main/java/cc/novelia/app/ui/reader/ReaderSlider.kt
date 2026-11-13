@@ -1,4 +1,4 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.reader
 
 import cc.novelia.app.ui.components.base.AppSlider
@@ -47,26 +47,53 @@ import kotlin.math.max
 
 @Composable internal fun ReaderSlider(label: String, value: Float, range: ClosedFloatingPointRange<Float>, modifier: Modifier = Modifier,
     enabled: Boolean = true, livePreviewStep: Float? = null, defaultValue: Float? = null,
-    onPreview: ((Float) -> Unit)? = null, eInkStep: Float? = null,
+    onPreview: ((Float) -> Unit)? = null, eInkStep: Float? = null, eInkCoarseStep: Float? = null,
+    valueFormatter: ((Float) -> String)? = null,
     onChange: (Float) -> Unit) {
     val reference = defaultValue?.takeIf { it.isFinite() }?.coerceIn(range)
     val name = label.substringBefore(' ')
-    val resetDescription = reference?.let { "恢复$name 默认值 ${formatPreferenceValue(it)}" }.orEmpty()
+    val formatValue = valueFormatter ?: ::formatPreferenceValue
+    val resetDescription = reference?.let { "恢复$name 默认值 ${formatValue(it)}" }.orEmpty()
     Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
         Text(label, style = MaterialTheme.typography.labelLarge)
         if(LocalEInkMode.current) {
             val step = eInkStep ?: when { range.endInclusive - range.start > 100f -> 20f; range.endInclusive - range.start > 10f -> 1f; else -> .05f }
-            Row(modifier.fillMaxWidth().semantics {
+            val controls = modifier.fillMaxWidth().semantics {
                 progressBarRangeInfo = ProgressBarRangeInfo(value.coerceIn(range), range)
                 if(!enabled) disabled()
                 setProgress { next -> if(enabled && next.isFinite()) { onChange(next.coerceIn(range)); true } else false }
-            }, horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                AppOutlinedButton(onClick = { onChange((value - step).coerceIn(range)) }, enabled = enabled && value > range.start, modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp)) { Icon(Icons.Outlined.Remove, "减小 $label") }
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(formatPreferenceValue(value), style = MaterialTheme.typography.labelLarge)
+            }
+            if(eInkCoarseStep != null) Column(controls, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text(formatValue(value), style = MaterialTheme.typography.labelLarge)
                     if(reference != null) AppTextButton(onClick = { onChange(reference) }, enabled = enabled,
                         modifier = Modifier.testTag("reader-default-$name").semantics { contentDescription = resetDescription }) {
-                        Text("默认 ${formatPreferenceValue(reference)}", style = MaterialTheme.typography.labelSmall)
+                        Text("默认 ${formatValue(reference)}", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+                FlowRow(Modifier.fillMaxWidth(), maxItemsInEachRow = 4,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(-eInkCoarseStep, -step, step, eInkCoarseStep).forEachIndexed { index, delta ->
+                        val quick = index == 0 || index == 3
+                        val description = if(quick) "${if(delta > 0) "快速增加" else "快速减少"} $label，步长 ${formatValue(abs(delta))}"
+                            else "${if(delta > 0) "增大" else "减小"} $label"
+                        AppOutlinedButton(onClick = {
+                            val next = (kotlin.math.round((value.toDouble() + delta) * 1_000_000) / 1_000_000).toFloat()
+                            onChange(next.coerceIn(range))
+                        }, enabled = enabled && if(delta > 0) value < range.endInclusive else value > range.start,
+                            modifier = Modifier.weight(1f).sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+                                .semantics { contentDescription = description }) {
+                            Text("${if(delta > 0) "+" else "−"}${formatValue(abs(delta))}")
+                        }
+                    }
+                }
+            } else Row(controls, horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                AppOutlinedButton(onClick = { onChange((value - step).coerceIn(range)) }, enabled = enabled && value > range.start, modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp)) { Icon(Icons.Outlined.Remove, "减小 $label") }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(formatValue(value), style = MaterialTheme.typography.labelLarge)
+                    if(reference != null) AppTextButton(onClick = { onChange(reference) }, enabled = enabled,
+                        modifier = Modifier.testTag("reader-default-$name").semantics { contentDescription = resetDescription }) {
+                        Text("默认 ${formatValue(reference)}", style = MaterialTheme.typography.labelSmall)
                     }
                 }
                 AppOutlinedButton(onClick = { onChange((value + step).coerceIn(range)) }, enabled = enabled && value < range.endInclusive, modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp)) { Icon(Icons.Outlined.Add, "增大 $label") }

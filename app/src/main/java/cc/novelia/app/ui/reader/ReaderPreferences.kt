@@ -119,13 +119,17 @@ import kotlin.math.roundToInt
                         if(!storedValue.nightReading) ReaderPreferenceSection("文字与主题", "普通阅读的字体、间距与配色", Icons.Outlined.TextFields) {
                             ReaderFontPreference(value, defaults, onChange)
                             ReaderSlider("字号 ${value.fontSize.toInt()}", value.fontSize, ReaderSettings.FONT_SIZE_RANGE,
-                                defaultValue = defaults?.fontSize, livePreviewStep = if(livePreview) .5f else null) { onChange(value.copy(fontSize = it)) }
-                            ReaderSlider("行距 ${"%.1f".format(value.lineHeight)}", value.lineHeight, ReaderSettings.LINE_HEIGHT_RANGE,
-                                modifier = Modifier.testTag("reader-line-height"), defaultValue = defaults?.lineHeight, livePreviewStep = if(livePreview) .05f else null) { onChange(value.copy(lineHeight = it)) }
-                            ReaderSlider("字距 ${"%.2f".format(value.letterSpacing)} em", value.letterSpacing, 0f..0.15f,
-                                modifier = Modifier.testTag("reader-letter-spacing"), defaultValue = defaults?.letterSpacing) { onChange(value.copy(letterSpacing = it)) }
-                            ReaderSlider("段距 ${value.resolvedParagraphSpacing.roundToInt()} dp", value.resolvedParagraphSpacing, ReaderSettings.PARAGRAPH_SPACING_RANGE,
-                                modifier = Modifier.testTag("reader-paragraph-spacing"), defaultValue = defaults?.resolvedParagraphSpacing, livePreviewStep = if(livePreview) 1f else null, eInkStep = 1f) { onChange(value.copy(paragraphSpacing = it)) }
+                                defaultValue = defaults?.fontSize, livePreviewStep = if(livePreview) .5f else null,
+                                eInkStep = 1f, eInkCoarseStep = 10f) { onChange(value.copy(fontSize = it)) }
+                            ReaderSlider("行距 ${"%.2f".format(value.lineHeight)} 倍字号", value.lineHeight, ReaderSettings.LINE_HEIGHT_RANGE,
+                                modifier = Modifier.testTag("reader-line-height"), defaultValue = defaults?.lineHeight, livePreviewStep = if(livePreview) .05f else null,
+                                eInkStep = .05f, eInkCoarseStep = .5f) { onChange(value.copy(lineHeight = it)) }
+                            ReaderSlider("字距 ${(value.letterSpacing * 100).roundToInt()}% 字号", value.letterSpacing, 0f..0.15f,
+                                modifier = Modifier.testTag("reader-letter-spacing"), defaultValue = defaults?.letterSpacing,
+                                eInkStep = .01f, eInkCoarseStep = .05f, valueFormatter = { "${(it * 100).roundToInt()}%" }) { onChange(value.copy(letterSpacing = it)) }
+                            ReaderSlider("段距 ${value.resolvedParagraphSpacing.roundToInt()} dp · 额外留白", value.resolvedParagraphSpacing, ReaderSettings.PARAGRAPH_SPACING_RANGE,
+                                modifier = Modifier.testTag("reader-paragraph-spacing"), defaultValue = defaults?.resolvedParagraphSpacing, livePreviewStep = if(livePreview) 1f else null,
+                                eInkStep = 1f, eInkCoarseStep = 10f) { onChange(value.copy(paragraphSpacing = it)) }
                             ChoiceRow("阅读主题", listOf("跟随应用", "纸张", "浅色", "深色", "黑白", "自定义"), ReaderSettings.THEMES.indexOf(value.resolvedTheme),
                                 defaultSelected = defaults?.let { ReaderSettings.THEMES.indexOf(it.resolvedTheme) }) { onChange(value.withTheme(ReaderSettings.THEMES[it])) }
                             if(value.resolvedTheme == "custom") ReaderThemeEditor(value, defaults, onChange)
@@ -239,11 +243,14 @@ import kotlin.math.roundToInt
                             if(value.prefetchChapters > 0) TogglePreference("仅 Wi-Fi 自动预读", "退出阅读或清理缓存时停止预读", value.prefetchWifiOnly, defaultValue = defaults?.prefetchWifiOnly) { onChange(value.copy(prefetchWifiOnly = it)) }
                         }
                         ReaderPreferenceGroup("进阶排版", "内容宽度、粗体、缩进与双语样式", expanded == "layout", { expanded = if(expanded == "layout") "" else "layout" }) {
-                            ReaderSlider("内容宽度 ${value.width.toInt()} dp", value.width, 300f..900f, defaultValue = defaults?.width) { onChange(value.copy(width = it)) }
+                            ReaderSlider("内容宽度 ${value.width.toInt()} dp", value.width, 300f..900f, defaultValue = defaults?.width,
+                                eInkStep = 20f, eInkCoarseStep = 100f) { onChange(value.copy(width = it)) }
                             ReaderSlider("左右页边距 ${value.resolvedHorizontalMargin.toInt()} dp", value.resolvedHorizontalMargin, 0f..64f,
-                                modifier = Modifier.testTag("reader-horizontal-margin"), defaultValue = defaults?.resolvedHorizontalMargin) { onChange(value.copy(horizontalMargin = it)) }
+                                modifier = Modifier.testTag("reader-horizontal-margin"), defaultValue = defaults?.resolvedHorizontalMargin,
+                                eInkStep = 1f, eInkCoarseStep = 10f) { onChange(value.copy(horizontalMargin = it)) }
                             ReaderSlider("上下页边距 ${value.resolvedVerticalMargin.toInt()} dp", value.resolvedVerticalMargin, 0f..64f,
-                                modifier = Modifier.testTag("reader-vertical-margin"), defaultValue = defaults?.resolvedVerticalMargin) { onChange(value.copy(verticalMargin = it)) }
+                                modifier = Modifier.testTag("reader-vertical-margin"), defaultValue = defaults?.resolvedVerticalMargin,
+                                eInkStep = 1f, eInkCoarseStep = 10f) { onChange(value.copy(verticalMargin = it)) }
                             if(storedValue.nightReading) AppTextButton(onClick = { editNight(2) }, modifier = Modifier.padding(horizontal = 12.dp)) {
                                 Text("在夜间预设中调整字体与文字外观")
                             }
