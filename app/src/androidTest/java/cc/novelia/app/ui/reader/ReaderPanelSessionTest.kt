@@ -9,6 +9,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
@@ -29,15 +30,17 @@ class ReaderPanelSessionTest {
     @Test fun independentBookSettingsExposeScopeDifferencesAndRestoreDefaultFollowing() {
         var independent by mutableStateOf(true)
         val defaults = ReaderSettings(fontSize = 16.629105f)
+        var normalizedDefaults = defaults
         var book by mutableStateOf(defaults.copy(fontSize = 24f, lineHeight = 2.1f, theme = "dark"))
         compose.setContent {
+            normalizedDefaults = defaults.inDp(LocalDensity.current)
             MaterialTheme {
                 ReaderPreferences(if(independent) book else defaults, independent, { independent = it }, defaultSettings = defaults) { book = it }
             }
         }
         compose.onNodeWithText("仅修改本书").assertIsDisplayed()
         compose.onNodeWithTag("reader-default-字号").performScrollTo().performClick()
-        compose.runOnIdle { assertEquals(defaults.fontSize, book.fontSize, 0f); assertEquals(2.1f, book.lineHeight, 0f); assertTrue(independent) }
+        compose.runOnIdle { assertEquals(normalizedDefaults.typographyDp!!.fontSize, book.typographyDp!!.fontSize, 0f); assertEquals(2.1f, book.lineHeight, 0f); assertTrue(independent) }
         compose.onNodeWithText("跟随应用").performScrollTo().performClick().assertIsSelected()
         compose.runOnIdle { assertEquals(defaults.resolvedTheme, book.resolvedTheme); assertEquals(2.1f, book.lineHeight, 0f) }
         compose.onNodeWithText("仅应用于这本书").assertIsDisplayed().performClick()

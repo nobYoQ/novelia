@@ -14,8 +14,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.em
 import cc.novelia.app.data.model.ReaderCustomColors
 import cc.novelia.app.data.model.ReaderSettings
@@ -28,6 +28,8 @@ private fun hex(value: Long) = "#%06X".format(value)
     showPreview: Boolean = true, showReset: Boolean = true,
     helperText: String = "点击打开取色盘，也可输入 #RRGGBB。工具栏透明度可在「界面」中调整。") {
     val palette = settings.resolvedCustomColors
+    val density = LocalDensity.current
+    val typography = settings.readerTypography(density)
     var editing by rememberSaveable { mutableStateOf<String?>(null) }
     fun update(field: String, color: Long) = onChange(settings.copy(customColors = when(field) {
         "text" -> palette.copy(text = color)
@@ -42,10 +44,11 @@ private fun hex(value: Long) = "#%06X".format(value)
                 Surface(color = colors.toolbar, contentColor = colors.foreground, modifier = Modifier.fillMaxWidth()) {
                     Text("阅读配色预览", Modifier.padding(12.dp), style = MaterialTheme.typography.labelLarge)
                 }
-                Text("这是一行句子", Modifier.padding(16.dp), fontSize = settings.fontSize.sp,
+                Text("这是一行句子", Modifier.padding(16.dp), fontSize = with(density) { typography.fontSize.dp.toSp() },
                     fontFamily = rememberReaderFont(settings).family,
-                    letterSpacing = settings.letterSpacing.em,
-                    lineHeight = (settings.fontSize * settings.lineHeight).sp)
+                    letterSpacing = (typography.letterSpacing / typography.fontSize).em,
+                    lineHeight = (1f + typography.lineSpacing / typography.fontSize).em,
+                    style = LocalTextStyle.current.copy(lineHeightStyle = ReaderLineHeightStyle))
             }
         }
         listOf(Triple("text", "字体颜色", palette.text), Triple("background", "背景颜色", palette.background),

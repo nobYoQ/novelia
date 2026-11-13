@@ -57,7 +57,7 @@ internal class ReaderPositionLayout(
     fontKey: Any = settings.fontFamily to settings.customFont,
 ): ReaderPositionLayout {
     val state = remember { ReaderPositionState(position, paragraphs, settings) }
-    val generation = remember(paragraphs, settings.fontSize, settings.lineHeight, settings.letterSpacing, settings.paragraphSpacing,
+    val generation = remember(paragraphs, settings.typographyDp, settings.fontSize, settings.lineHeight, settings.letterSpacing, settings.paragraphSpacing,
         settings.width, settings.resolvedIndentSize, settings.parallel, settings.weight, settings.paginationMode, state.viewportWidth, fontKey,
         settings.horizontalMargin, settings.verticalMargin, settings.showWideToc,
         settings.showEpubRuby, settings.epubFootnotePopup, settings.showEpubStyles) { Any() }

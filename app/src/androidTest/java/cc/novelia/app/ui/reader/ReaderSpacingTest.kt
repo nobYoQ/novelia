@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.data.model.Chapter
 import cc.novelia.app.data.model.ReaderSettings
+import cc.novelia.app.data.model.ReaderTypographyDp
 import cc.novelia.app.reader.*
 import cc.novelia.app.ui.theme.AppInteractionMode
 import cc.novelia.app.ui.theme.NoveliaTheme
@@ -29,23 +30,23 @@ import java.io.File
 class ReaderSpacingTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun lineHeightCanReachHalfInBothModesAndSurvivesReopeningPreferences() {
+    @Test fun extraLineSpacingCanReachZeroInBothModesAndSurvivesReopeningPreferences() {
         var settings by mutableStateOf(ReaderSettings())
         var showing by mutableStateOf(true)
         compose.setContent { AppInteractionMode(eInk = settings.eInkMode, reducedMotion = true) { NoveliaTheme("light") {
             if(showing) ReaderPreferences(settings) { settings = it }
         } } }
         compose.onNodeWithTag("reader-line-height").performScrollTo()
-            .performSemanticsAction(SemanticsActions.SetProgress) { it(.5f) }
-        compose.runOnIdle { assertEquals(.5f, settings.lineHeight, 0f) }
-        compose.onNodeWithText("行距 0.50 倍字号").performScrollTo().assertIsDisplayed()
-        compose.runOnIdle { settings = settings.withEInkMode(true).copy(lineHeight = .55f) }
+            .performSemanticsAction(SemanticsActions.SetProgress) { it(0f) }
+        compose.runOnIdle { assertEquals(0f, settings.typographyDp!!.lineSpacing, 0f) }
+        compose.onNodeWithText("行距 0 dp · 两行间额外留白").performScrollTo().assertIsDisplayed()
+        compose.runOnIdle { settings = settings.withEInkMode(true).copy(typographyDp = settings.typographyDp!!.copy(lineSpacing = 1f)) }
         compose.onNodeWithContentDescription("减小 行距", substring = true).performScrollTo().performClick()
-        compose.runOnIdle { assertEquals(.5f, settings.lineHeight, .0001f) }
+        compose.runOnIdle { assertEquals(0f, settings.typographyDp!!.lineSpacing, .0001f) }
         compose.onNodeWithContentDescription("减小 行距", substring = true).assertIsNotEnabled()
         compose.runOnIdle { showing = false }
         compose.runOnIdle { showing = true }
-        compose.onNodeWithText("行距 0.50 倍字号").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("行距 0 dp · 两行间额外留白").performScrollTo().assertIsDisplayed()
     }
 
     @Test fun chineseScrollParagraphsUseContentHeightAndTheSelectedGapWithoutJapaneseSlots() {
@@ -73,7 +74,7 @@ class ReaderSpacingTest {
         assertEquals(20f, bounds(1).top - bounds(0).bottom, 1f)
     }
 
-    @Test fun halfLineHeightOverlapsGlyphsAndMeasureCandidateLowerBounds() {
+    @Test fun dpLineSpacingKeepsChineseAndJapaneseBaselineDistancesConsistent() {
         val sample = "国語中文的字形"
         val paragraph = ReadingParagraph(0, listOf(TextPart(List(3) { sample }.joinToString("\n"), "日文")))
         var settings by mutableStateOf(ReaderSettings(mode = "jp", fontSize = 14f, lineHeight = 1f, indent = false))
@@ -86,9 +87,9 @@ class ReaderSpacingTest {
                 }
             }
         }
-        val results = mutableListOf("fontSize,multiplier,glyphHeight,scrollBaselineGap,pageBaselineGap")
-        for(fontSize in listOf(14f, 19f, 32f, 64f)) for(multiplier in listOf(.5f, .8f, .9f, 1f, 1.8f, 2.6f)) {
-            compose.runOnIdle { settings = settings.copy(fontSize = fontSize, lineHeight = multiplier) }
+        val results = mutableListOf("fontSizeDp,lineSpacingDp,glyphHeight,scrollBaselineGap,pageBaselineGap")
+        for(fontSize in listOf(14f, 19f, 32f, 64f)) for(gap in listOf(0f, 1f, 8f, 24f, 64f)) {
+            compose.runOnIdle { settings = settings.copy(typographyDp = ReaderTypographyDp(fontSize, gap)) }
             val layouts = mutableListOf<TextLayoutResult>()
             compose.onNodeWithText(paragraph.parts.single().text, useUnmergedTree = true)
                 .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
@@ -97,12 +98,9 @@ class ReaderSpacingTest {
             val bounds = Rect()
             layout.paint.getTextBounds(sample, 0, sample.length, bounds)
             val pageGap = layout.getLineBaseline(1) - layout.getLineBaseline(0)
-            assertEquals("中日文行高应跨模式一致：$fontSize/$multiplier", scrollGap, pageGap.toFloat(), 1f)
-            results += "$fontSize,$multiplier,${bounds.height()},$scrollGap,$pageGap"
-            if(multiplier == .5f) {
-                assertTrue("0.5 倍在滚动排版中会重叠", scrollGap < bounds.height())
-                assertTrue("0.5 倍在分页排版中会重叠", pageGap < bounds.height())
-            }
+            assertEquals("中日文行高应跨模式一致：$fontSize/$gap", scrollGap, pageGap.toFloat(), 1f)
+            assertEquals("行距只增加额外留白", fontSize + gap, scrollGap, 1f)
+            results += "$fontSize,$gap,${bounds.height()},$scrollGap,$pageGap"
         }
         File(InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null), "reader-line-height-probe.csv")
             .writeText(results.joinToString("\n"))

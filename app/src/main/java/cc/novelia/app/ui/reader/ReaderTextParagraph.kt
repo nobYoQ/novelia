@@ -16,9 +16,9 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.em
 import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.reader.*
@@ -32,6 +32,8 @@ import kotlin.math.roundToInt
     onNote: (String) -> Unit = {},
     onLayout: (Int, List<ReadingAnchorLine>) -> Unit) {
     val starts = remember(paragraph, settings.resolvedIndentSize, settings.parallel) { paragraphPartStarts(paragraph, settings) }
+    val density = LocalDensity.current
+    val typography = remember(settings.typographyDp, settings.fontSize, settings.lineHeight, settings.letterSpacing, density) { settings.readerTypography(density) }
     val latestLayout by rememberUpdatedState(onLayout)
     Column(Modifier.fillMaxWidth().combinedClickable(
         interactionSource = remember { MutableInteractionSource() }, indication = null,
@@ -79,10 +81,10 @@ import kotlin.math.roundToInt
             Text(highlighted,
                 modifier = Modifier.onGloballyPositioned { measurement.top = it.positionInParent().y.roundToInt(); reportLayout() },
                 onTextLayout = { measurement.layout = it; reportLayout() },
-                fontSize = readerPartFontSize(settings, part.secondary).sp,
-                lineHeight = settings.lineHeight.em,
+                fontSize = with(density) { typography.partFontSize(part.secondary).dp.toSp() },
+                lineHeight = (1f + typography.lineSpacing / typography.partFontSize(part.secondary)).em,
                 style = LocalTextStyle.current.copy(lineHeightStyle = ReaderLineHeightStyle),
-                letterSpacing = settings.letterSpacing.em,
+                letterSpacing = (typography.letterSpacing / typography.partFontSize(part.secondary)).em,
                 fontWeight = if(settings.weight) FontWeight.Bold else FontWeight.Normal,
                 fontFamily = fontFamily,
                 color = foreground.copy(alpha = if(part.secondary) settings.secondaryAlpha else 1f),

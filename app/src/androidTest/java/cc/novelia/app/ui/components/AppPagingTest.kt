@@ -190,9 +190,10 @@ class AppPagingTest {
             } }
         }
         compose.onNodeWithText("关闭面板").assertIsDisplayed()
+        val originalFontSize = reader.typographyDp!!.fontSize
         compose.onNode(hasContentDescription("增大 字号", substring = true)).performScrollTo().performClick()
-        compose.runOnIdle { assertEquals(20f, reader.fontSize, .01f) }
-        compose.onNodeWithText("翻页").performClick()
+        compose.runOnIdle { assertEquals(originalFontSize + 1f, reader.typographyDp!!.fontSize, .01f) }
+        compose.onNodeWithText("界面").performClick()
         compose.onNodeWithText("工具栏透明度", substring = true).performScrollTo()
         compose.onNodeWithTag("reader-toolbar-transparency").assertExists()
         compose.runOnIdle { eInk = false }

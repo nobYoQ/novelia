@@ -127,7 +127,17 @@ import kotlinx.serialization.encodeToString
  */
 @Composable private fun ReaderContent(c: AppController, ref: BookRef, chapterId: String, wide: Boolean, availableWidth: androidx.compose.ui.unit.Dp) {
     val local by c.store.state.collectAsStateWithLifecycle()
-    val storedSettings = local.bookSettings[ref.key] ?: local.reader
+    val persistedSettings = local.bookSettings[ref.key] ?: local.reader
+    val typographyDensity = LocalDensity.current
+    val storedSettings = remember(persistedSettings, typographyDensity) { persistedSettings.inDp(typographyDensity) }
+    LaunchedEffect(persistedSettings, storedSettings, ref.key) {
+        if(persistedSettings != storedSettings) c.store.update { state ->
+            val current = state.bookSettings[ref.key] ?: state.reader
+            if(current != persistedSettings) state
+            else if(state.bookSettings.containsKey(ref.key)) state.copy(bookSettings = state.bookSettings + (ref.key to storedSettings))
+            else state.copy(reader = storedSettings)
+        }
+    }
     val settings = storedSettings.readingAppearance()
     val windowInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
     val windowDensity = LocalDensity.current
@@ -865,8 +875,9 @@ import kotlinx.serialization.encodeToString
                         onClickLabel = "显示或收起阅读工具栏", onClick = tapNavigation::click)) {
                         if(chapterHeading(chapter.title, paragraphs) != null) {
                             Text(chapter.title, Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium.copy(lineHeightStyle = ReaderLineHeightStyle),
-                                fontSize = (settings.fontSize * 1.25f).sp,
-                                lineHeight = settings.lineHeight.em,
+                                fontSize = with(density) { (settings.typographyDp!!.fontSize * 1.25f).dp.toSp() },
+                                lineHeight = (1f + settings.typographyDp!!.lineSpacing / (settings.typographyDp!!.fontSize * 1.25f)).em,
+                                letterSpacing = (settings.typographyDp!!.letterSpacing / (settings.typographyDp!!.fontSize * 1.25f)).em,
                                 color = foreground, fontFamily = readerFont.family)
                             Spacer(Modifier.height(12.dp))
                         }

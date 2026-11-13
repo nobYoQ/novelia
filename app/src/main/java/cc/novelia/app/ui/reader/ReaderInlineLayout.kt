@@ -10,6 +10,7 @@ import android.text.StaticLayout
 import android.text.TextPaint
 import android.text.style.ReplacementSpan
 import android.text.style.LineHeightSpan
+import android.text.style.MetricAffectingSpan
 import android.text.style.StrikethroughSpan
 import android.text.style.StyleSpan
 import android.text.style.UnderlineSpan
@@ -20,6 +21,12 @@ import kotlin.math.max
 import kotlin.math.min
 
 internal class ReaderNoteSpan(val body: String) : UnderlineSpan()
+
+/** 辅文本字号和字距都使用绝对像素，避免缩小字号时连同字距一起缩小。 */
+internal class ReaderTextSizeSpan(private val size: Float, private val spacing: Float) : MetricAffectingSpan() {
+    override fun updateMeasureState(paint: TextPaint) { paint.textSize = size; paint.letterSpacing = spacing / size }
+    override fun updateDrawState(paint: TextPaint) = updateMeasureState(paint)
+}
 
 /** 与滚动正文使用同一像素行高；注音行至少保留字形和注音需要的高度。 */
 internal class ReaderLineHeightSpan(private val height: Int, private val preserveGlyphHeight: Boolean) : LineHeightSpan {
@@ -102,11 +109,11 @@ internal fun SpannableStringBuilder.addReaderInline(part: TextPart, offset: Int,
     }
 }
 
-internal fun readerNativeLayout(text: CharSequence, paint: TextPaint, width: Int, lineHeight: Float): StaticLayout {
+internal fun readerNativeLayout(text: CharSequence, paint: TextPaint, width: Int, lineSpacingPx: Float): StaticLayout {
     val ruby = text is Spanned && text.getSpans(0, text.length, ReaderRubySpan::class.java).isNotEmpty()
     val hasLineHeights = text is Spanned && text.getSpans(0, text.length, ReaderLineHeightSpan::class.java).isNotEmpty()
     val styled = if(hasLineHeights) text else SpannableStringBuilder(text).apply {
-        setSpan(ReaderLineHeightSpan(readerLineHeightPx(paint.textSize, lineHeight), ruby),
+        setSpan(ReaderLineHeightSpan(readerLineHeightPx(paint.textSize, lineSpacingPx), ruby),
             0, length, Spanned.SPAN_INCLUSIVE_EXCLUSIVE)
     }
     return StaticLayout.Builder.obtain(styled, 0, styled.length, paint, width.coerceAtLeast(1))

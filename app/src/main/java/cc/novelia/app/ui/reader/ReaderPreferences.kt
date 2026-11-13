@@ -23,12 +23,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.model.ReaderSettings
+import cc.novelia.app.data.model.ReaderTypographyDp
 import cc.novelia.app.data.model.readingAppearance
 import cc.novelia.app.data.model.withReadingAppearance
 import cc.novelia.app.reader.*
@@ -60,10 +62,14 @@ import kotlin.math.roundToInt
     onEditTapZones: (() -> Unit)? = null, onShowTapTutorial: (() -> Unit)? = null,
     onTextReplacements: (() -> Unit)? = null,
     onChange: (ReaderSettings) -> Unit) {
-    ReaderPreferencesContent(value.readingAppearance(), perBook, onPerBook, state, modifier, headerActions,
-        livePreview, defaultSettings?.copy(nightReading = value.nightReading)?.readingAppearance(),
-        onEditTapZones, onShowTapTutorial, onTextReplacements, value, onChange) { edited ->
-        onChange(value.withReadingAppearance(edited))
+    val density = LocalDensity.current
+    val dpValue = remember(value, density) { value.inDp(density) }
+    val latestChange by rememberUpdatedState(onChange)
+    LaunchedEffect(value, dpValue) { if(value != dpValue) latestChange(dpValue) }
+    ReaderPreferencesContent(dpValue.readingAppearance(), perBook, onPerBook, state, modifier, headerActions,
+        livePreview, defaultSettings?.inDp(density)?.copy(nightReading = dpValue.nightReading)?.readingAppearance(),
+        onEditTapZones, onShowTapTutorial, onTextReplacements, dpValue, onChange) { edited ->
+        onChange(dpValue.withReadingAppearance(edited))
     }
 }
 
@@ -73,6 +79,8 @@ import kotlin.math.roundToInt
     onShowTapTutorial: (() -> Unit)?, onTextReplacements: (() -> Unit)?, storedValue: ReaderSettings,
     onStoredChange: (ReaderSettings) -> Unit, onChange: (ReaderSettings) -> Unit) {
     val defaults = defaultSettings.takeIf { perBook == true }
+    val typography = requireNotNull(value.typographyDp)
+    val defaultTypography = defaults?.typographyDp
     var tab by state.tab
     var previewZones by remember { mutableStateOf(false) }
     var statusBarExpanded by rememberSaveable { mutableStateOf(false) }
@@ -118,15 +126,15 @@ import kotlin.math.roundToInt
                         key(perBook) { ReaderDisplayPreferences(storedValue, { editNight() }, onStoredChange) }
                         if(!storedValue.nightReading) ReaderPreferenceSection("文字与主题", "普通阅读的字体、间距与配色", Icons.Outlined.TextFields) {
                             ReaderFontPreference(value, defaults, onChange)
-                            ReaderSlider("字号 ${value.fontSize.toInt()}", value.fontSize, ReaderSettings.FONT_SIZE_RANGE,
-                                defaultValue = defaults?.fontSize, livePreviewStep = if(livePreview) .5f else null,
-                                eInkStep = 1f, eInkCoarseStep = 10f) { onChange(value.copy(fontSize = it)) }
-                            ReaderSlider("行距 ${"%.2f".format(value.lineHeight)} 倍字号", value.lineHeight, ReaderSettings.LINE_HEIGHT_RANGE,
-                                modifier = Modifier.testTag("reader-line-height"), defaultValue = defaults?.lineHeight, livePreviewStep = if(livePreview) .05f else null,
-                                eInkStep = .05f, eInkCoarseStep = .5f) { onChange(value.copy(lineHeight = it)) }
-                            ReaderSlider("字距 ${(value.letterSpacing * 100).roundToInt()}% 字号", value.letterSpacing, 0f..0.15f,
-                                modifier = Modifier.testTag("reader-letter-spacing"), defaultValue = defaults?.letterSpacing,
-                                eInkStep = .01f, eInkCoarseStep = .05f, valueFormatter = { "${(it * 100).roundToInt()}%" }) { onChange(value.copy(letterSpacing = it)) }
+                            ReaderSlider("字号 ${formatReaderDp(typography.fontSize)} dp", typography.fontSize, ReaderTypographyDp.FONT_SIZE_RANGE,
+                                modifier = Modifier.testTag("reader-font-size"), defaultValue = defaultTypography?.fontSize, livePreviewStep = if(livePreview) .5f else null,
+                                eInkStep = 1f, eInkCoarseStep = 10f) { onChange(value.copy(typographyDp = typography.copy(fontSize = it))) }
+                            ReaderSlider("行距 ${formatReaderDp(typography.lineSpacing)} dp · 两行间额外留白", typography.lineSpacing, ReaderTypographyDp.LINE_SPACING_RANGE,
+                                modifier = Modifier.testTag("reader-line-height"), defaultValue = defaultTypography?.lineSpacing, livePreviewStep = if(livePreview) 1f else null,
+                                eInkStep = 1f, eInkCoarseStep = 10f) { onChange(value.copy(typographyDp = typography.copy(lineSpacing = it))) }
+                            ReaderSlider("字距 ${formatReaderDp(typography.letterSpacing)} dp", typography.letterSpacing, ReaderTypographyDp.LETTER_SPACING_RANGE,
+                                modifier = Modifier.testTag("reader-letter-spacing"), defaultValue = defaultTypography?.letterSpacing,
+                                eInkStep = .1f, eInkCoarseStep = 1f) { onChange(value.copy(typographyDp = typography.copy(letterSpacing = it))) }
                             ReaderSlider("段距 ${value.resolvedParagraphSpacing.roundToInt()} dp · 额外留白", value.resolvedParagraphSpacing, ReaderSettings.PARAGRAPH_SPACING_RANGE,
                                 modifier = Modifier.testTag("reader-paragraph-spacing"), defaultValue = defaults?.resolvedParagraphSpacing, livePreviewStep = if(livePreview) 1f else null,
                                 eInkStep = 1f, eInkCoarseStep = 10f) { onChange(value.copy(paragraphSpacing = it)) }

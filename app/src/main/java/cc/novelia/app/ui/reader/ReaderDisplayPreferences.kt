@@ -11,6 +11,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.model.*
@@ -55,7 +56,7 @@ import kotlin.math.roundToInt
 }
 
 @Composable private fun ReaderNightPresetEntry(settings: ReaderSettings, onClick: () -> Unit) {
-    val builtIn = settings.nightPreset == ReaderNightPreset() && settings.nightBrightness == ReaderBrightness.night()
+    val builtIn = settings.nightPreset == settings.resetNightPreset().inDp(LocalDensity.current).nightPreset && settings.nightBrightness == ReaderBrightness.night()
     Surface(onClick = onClick, shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.secondaryContainer,
         modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 12.dp).testTag("reader-edit-night-preset")) {

@@ -18,10 +18,10 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.sp
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.data.model.ReaderCustomFont
 import cc.novelia.app.data.model.ReaderSettings
+import cc.novelia.app.data.model.ReaderTypographyDp
 import cc.novelia.app.reader.*
 import cc.novelia.app.ui.theme.NoveliaTheme
 import cc.novelia.app.ui.theme.AppInteractionMode
@@ -39,7 +39,8 @@ class ReaderFontTest {
     @Test fun scrollRichTextAndBothPagersKeepTheSameGlyphSizeWithSystemFontScaling() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         var scale by mutableFloatStateOf(1f)
-        var settings by mutableStateOf(ReaderSettings(fontFamily = "monospace", indent = false, fontSize = 32f))
+        var settings by mutableStateOf(ReaderSettings(fontFamily = "monospace", indent = false,
+            typographyDp = ReaderTypographyDp(32f, 12f, 1f)))
         var secondary by mutableStateOf(false)
         var textDensity: Density = Density(1f)
         var richLayout: android.text.StaticLayout? = null
@@ -60,8 +61,8 @@ class ReaderFontTest {
             }
         } }
         for(fontScale in listOf(1f, 1.3f, 2f)) for(size in listOf(32f, 64f)) for(isSecondary in listOf(false, true))
-            for(multiplier in listOf(.5f, 1f, 1.8f, 2.6f)) {
-            compose.runOnIdle { scale = fontScale; settings = settings.copy(fontSize = size, lineHeight = multiplier); secondary = isSecondary }
+            for(gap in listOf(0f, 12f, 48f)) {
+            compose.runOnIdle { scale = fontScale; settings = settings.copy(typographyDp = ReaderTypographyDp(size, gap, 1f)); secondary = isSecondary }
             val results = mutableListOf<TextLayoutResult>()
             compose.onNode(hasText(sample) and hasAnyAncestor(hasTestTag("font-plain")), useUnmergedTree = true)
                 .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(results) }
@@ -72,9 +73,11 @@ class ReaderFontTest {
                 native.getPrimaryHorizontal(1) - native.getPrimaryHorizontal(0), 1f)
             assertEquals("EPUB 字形应与滚动一致", scrollWidth,
                 richLayout!!.getPrimaryHorizontal(1) - richLayout!!.getPrimaryHorizontal(0), 1f)
-            assertEquals(with(textDensity) { readerPartFontSize(settings, isSecondary).sp.toPx() }, richLayout!!.paint.textSize, .01f)
-            val expected = readerLineHeightPx(with(textDensity) { readerPartFontSize(settings, isSecondary).sp.toPx() }, multiplier).toFloat()
-            assertEquals("滚动行高应按实际字号计算：$fontScale/$size/$isSecondary/$multiplier", expected,
+            val partSize = settings.typographyDp!!.partFontSize(isSecondary)
+            assertEquals(with(textDensity) { partSize.dp.toPx() }, richLayout!!.paint.textSize, .01f)
+            assertEquals("字距应保持固定 dp", with(textDensity) { 1.dp.toPx() }, richLayout!!.paint.textSize * richLayout!!.paint.letterSpacing, .01f)
+            val expected = readerLineHeightPx(with(textDensity) { partSize.dp.toPx() }, with(textDensity) { gap.dp.toPx() }).toFloat()
+            assertEquals("滚动行高应为字号加行距：$fontScale/$size/$isSecondary/$gap", expected,
                 results.single().getLineBaseline(1) - results.single().getLineBaseline(0), 1f)
             assertEquals("分页行高应与滚动一致", expected,
                 (native.getLineBaseline(1) - native.getLineBaseline(0)).toFloat(), 1f)
@@ -90,7 +93,7 @@ class ReaderFontTest {
             ReaderPreferences(settings, perBook = true, defaultSettings = defaults) { settings = it }
         } } }
         saveTestScreenshot("reader-font-entry-light.png")
-        compose.onNodeWithTag("reader-font-settings").performClick()
+        compose.onNodeWithTag("reader-font-settings").performScrollTo().performClick()
         compose.onNodeWithTag("reader-font-option-system").performScrollTo().performClick()
         compose.runOnIdle { assertEquals("system", settings.fontFamily); assertEquals(23f, settings.fontSize) }
         compose.onNodeWithTag("reader-font-option-system").assertIsSelected()
@@ -98,7 +101,7 @@ class ReaderFontTest {
         compose.onNodeWithTag("reader-font-preview").assertIsDisplayed()
         saveTestScreenshot("reader-font-options.png")
         compose.onNodeWithContentDescription("恢复默认阅读字体").performClick()
-        compose.runOnIdle { assertEquals(defaults, settings) }
+        compose.runOnIdle { assertEquals(defaults.copy(typographyDp = settings.typographyDp, nightPreset = settings.nightPreset), settings) }
         compose.onNodeWithText("完成").performClick()
         compose.onNodeWithTag("reader-font-settings").assertTextContains("衬线")
     }

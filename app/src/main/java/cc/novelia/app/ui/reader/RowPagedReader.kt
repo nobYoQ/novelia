@@ -114,7 +114,7 @@ private data class RowMeasurement(val input: RowMeasureInput, val chapter: Measu
         } else Constraints.Infinity
         val height = if(constraints.hasBoundedHeight) (constraints.maxHeight - verticalPadding).coerceAtLeast(1) else Constraints.Infinity
         val gap = with(density) { settings.resolvedParagraphSpacing.dp.toPx() }.roundToInt()
-        val typography = listOf(settings.fontSize, settings.lineHeight, settings.letterSpacing, settings.paragraphSpacing, settings.weight,
+        val typography = listOf(settings.readerTypography(density), settings.paragraphSpacing, settings.weight,
             settings.resolvedIndentSize, settings.parallel, settings.underline, settings.secondaryAlpha, font.typeface, font.loading,
             settings.showEpubRuby, settings.epubFootnotePopup, settings.showEpubStyles)
         val input = RowMeasureInput(paragraphs, chapterTitle, typography, width, height, density.density, density.fontScale)

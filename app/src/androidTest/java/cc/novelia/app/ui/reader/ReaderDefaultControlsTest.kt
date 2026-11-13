@@ -14,12 +14,14 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.data.model.ReaderSettings
+import cc.novelia.app.data.model.ReaderTypographyDp
 import cc.novelia.app.ui.theme.AppInteractionMode
 import cc.novelia.app.ui.theme.NoveliaTheme
 import org.junit.Assert.*
@@ -55,27 +57,27 @@ class ReaderDefaultControlsTest {
     }
 
     @Test fun eInkLetterSpacingStepsStayAccurateOnNarrowScreensWithLargeSystemText() {
-        var value by mutableFloatStateOf(.02f)
+        var value by mutableFloatStateOf(.4f)
         compose.setContent { AppInteractionMode(true, true) { NoveliaTheme("light") {
             CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides
                 androidx.compose.ui.unit.Density(androidx.compose.ui.platform.LocalDensity.current.density, 2f)) {
                 Surface(Modifier.width(320.dp).testTag("reader-step-preview")) {
-                    ReaderSlider("字距", value, 0f..0.15f, eInkStep = .01f, eInkCoarseStep = .05f,
-                        valueFormatter = { "${(it * 100).roundToInt()}%" }) { value = it }
+                    ReaderSlider("字距 ${formatReaderDp(value)} dp", value, ReaderTypographyDp.LETTER_SPACING_RANGE,
+                        eInkStep = .1f, eInkCoarseStep = 1f) { value = it }
                 }
             }
         } } }
         fun tap(label: String) = compose.onNodeWithContentDescription(label, substring = true)
             .assertIsDisplayed().assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp).performTouchInput { click() }
         tap("增大 字距")
-        compose.runOnIdle { assertEquals(.03f, value, .000001f) }
+        compose.runOnIdle { assertEquals(.5f, value, .000001f) }
         tap("快速增加 字距")
-        compose.runOnIdle { assertEquals(.08f, value, .000001f) }
+        compose.runOnIdle { assertEquals(1.5f, value, .000001f) }
         tap("减小 字距")
         tap("快速减少 字距")
-        compose.runOnIdle { assertEquals(.02f, value, .000001f) }
-        compose.onNodeWithText("+1%").assertIsDisplayed()
-        compose.onNodeWithText("+5%").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(.4f, value, .000001f) }
+        compose.onNodeWithText("+0.1").assertIsDisplayed()
+        compose.onNodeWithText("+1").assertIsDisplayed()
         capture("reader-eink-letter-spacing-steps.png", "reader-step-preview")
     }
 
@@ -84,7 +86,9 @@ class ReaderDefaultControlsTest {
     @Test fun inlineDefaultsStayVisibleAndResetOnlyTheirOwnSetting() {
         val defaults = ReaderSettings(fontSize = 16.629105f, theme = "paper", lineHeight = 1.7f)
         var settings by mutableStateOf(defaults.copy(fontSize = 22f, theme = "dark", lineHeight = 2.1f))
+        var normalizedDefaults = defaults
         compose.setContent {
+            normalizedDefaults = defaults.inDp(LocalDensity.current)
             AppInteractionMode(false, true) { NoveliaTheme("dark") {
                 Surface(Modifier.requiredWidth(360.dp).fillMaxHeight().testTag("reader-defaults-preview")) {
                     ReaderPreferences(settings, true, defaultSettings = defaults) { settings = it }
@@ -92,15 +96,16 @@ class ReaderDefaultControlsTest {
             } }
         }
         capture("ui-refinement-reader-defaults.png")
+        val originalSpacing = settings.typographyDp!!.lineSpacing
         compose.onNodeWithTag("reader-default-字号").performScrollTo().performTouchInput { click(center) }
-        compose.runOnIdle { assertEquals(defaults.fontSize, settings.fontSize, 0f); assertEquals(2.1f, settings.lineHeight, 0f) }
+        compose.runOnIdle { assertEquals(normalizedDefaults.typographyDp!!.fontSize, settings.typographyDp!!.fontSize, 0f); assertEquals(originalSpacing, settings.typographyDp!!.lineSpacing, 0f) }
         compose.onNodeWithTag("reader-default-行距").performScrollTo().performClick()
-        compose.runOnIdle { assertEquals(defaults.lineHeight, settings.lineHeight, 0f); assertEquals("dark", settings.theme) }
+        compose.runOnIdle { assertEquals(normalizedDefaults.typographyDp!!.lineSpacing, settings.typographyDp!!.lineSpacing, 0f); assertEquals("dark", settings.theme) }
         compose.onNodeWithText("纸张").performScrollTo()
             .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "默认选项"))
         capture("ui-refinement-reader-choices.png")
         compose.onNodeWithText("纸张").performClick().assertIsSelected()
-        compose.runOnIdle { assertEquals("paper", settings.theme); assertEquals(defaults.fontSize, settings.fontSize, 0f) }
+        compose.runOnIdle { assertEquals("paper", settings.theme); assertEquals(normalizedDefaults.typographyDp!!.fontSize, settings.typographyDp!!.fontSize, 0f) }
     }
 
     @Test fun defaultProgressCanRestoreEndpointsAndEInkUsesTheSameExactValue() {

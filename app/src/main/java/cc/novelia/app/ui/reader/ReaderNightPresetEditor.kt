@@ -25,7 +25,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
 import cc.novelia.app.data.model.*
 import cc.novelia.app.data.storage.appJson
@@ -40,22 +39,26 @@ internal val LocalReaderPresetDraft = staticCompositionLocalOf { false }
 /** 预设编辑有独立草稿；保存才写回，取消和关闭均还原临时亮度。 */
 @Composable internal fun ReaderNightPresetEditor(settings: ReaderSettings, perBook: Boolean, initialTab: Int = 0,
     onDismiss: () -> Unit, onSave: (ReaderNightPreset, ReaderBrightness) -> Unit) {
+    val density = LocalDensity.current
+    val initialSettings = remember(settings, density) { settings.inDp(density) }
     val draftSaver = remember {
         listSaver<ReaderSettings, String>(
             save = { listOf(appJson.encodeToString(it.nightPreset), appJson.encodeToString(it.nightBrightness)) },
-            restore = { values -> settings.copy(nightReading = true,
+            restore = { values -> initialSettings.copy(nightReading = true,
                 nightPreset = appJson.decodeFromString<ReaderNightPreset>(values[0]),
                 nightBrightness = appJson.decodeFromString<ReaderBrightness>(values[1])) })
     }
-    var draft by rememberSaveable(stateSaver = draftSaver) { mutableStateOf(settings.copy(nightReading = true)) }
+    var draft by rememberSaveable(stateSaver = draftSaver) { mutableStateOf(initialSettings.copy(nightReading = true)) }
     var tab by rememberSaveable { mutableIntStateOf(initialTab) }
     var resetUndo by remember { mutableStateOf<ReaderSettings?>(null) }
     val previewBrightness = LocalReaderBrightnessPreview.current
     val latestPreview by rememberUpdatedState(previewBrightness)
     DisposableEffect(Unit) { onDispose { latestPreview(null) } }
     val shown = draft.readingAppearance()
-    val changed = draft.nightPreset != settings.nightPreset || draft.nightBrightness != settings.nightBrightness
-    val builtIn = draft.nightPreset == ReaderNightPreset() && draft.nightBrightness == ReaderBrightness.night()
+    val typography = requireNotNull(shown.typographyDp)
+    val nightTypography = requireNotNull(draft.nightPreset.typographyDp)
+    val changed = draft.nightPreset != initialSettings.nightPreset || draft.nightBrightness != initialSettings.nightBrightness
+    val builtIn = draft.nightPreset == draft.resetNightPreset().inDp(density).nightPreset && draft.nightBrightness == ReaderBrightness.night()
     fun edit(value: ReaderSettings) { draft = draft.withReadingAppearance(value) }
     val maxHeight = LocalConfiguration.current.screenHeightDp.dp * .9f
     AppDialog(onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -98,7 +101,7 @@ internal val LocalReaderPresetDraft = staticCompositionLocalOf { false }
                                         customColors = ReaderCustomColors(palette.foreground.toArgb().toLong() and 0xFFFFFF,
                                             palette.background.toArgb().toLong() and 0xFFFFFF, palette.toolbar.toArgb().toLong() and 0xFFFFFF))
                                     ReaderThemeEditor(editable,
-                                        draft.resetNightPreset().readingAppearance(), ::edit, showPreview = false, showReset = false,
+                                        draft.resetNightPreset().inDp(density).readingAppearance(), ::edit, showPreview = false, showReset = false,
                                         helperText = "点击颜色即可调整，也可输入色值。修改后保存为自定义夜间配色。")
                                     EditorHeading("辅助显示")
                                     ReaderSlider("辅文本清晰度 ${(shown.secondaryAlpha * 100).roundToInt()}%", shown.secondaryAlpha, .45f..1f,
@@ -117,23 +120,22 @@ internal val LocalReaderPresetDraft = staticCompositionLocalOf { false }
                                             customFont = if(it) null else shown.customFont))
                                     }
                                     if(draft.nightPreset.fontFamily != null) ReaderFontPreference(shown, null, ::edit)
-                                    TogglePreference("沿用普通字号", "当前普通字号为 ${draft.fontSize.toInt()}", draft.nightPreset.fontSize == null) {
-                                        draft = draft.copy(nightPreset = draft.nightPreset.copy(fontSize = if(it) null else shown.fontSize))
+                                    TogglePreference("沿用普通字号", "当前普通字号为 ${formatReaderDp(draft.typographyDp!!.fontSize)} dp", nightTypography.fontSize == null) {
+                                        draft = draft.copy(nightPreset = draft.nightPreset.copy(typographyDp = nightTypography.copy(fontSize = if(it) null else typography.fontSize)))
                                     }
-                                    if(draft.nightPreset.fontSize != null) ReaderSlider("夜间字号 ${shown.fontSize.toInt()}", shown.fontSize, ReaderSettings.FONT_SIZE_RANGE,
-                                        modifier = Modifier.testTag("night-font-size"), eInkStep = 1f, eInkCoarseStep = 10f) { edit(shown.copy(fontSize = it)) }
+                                    if(nightTypography.fontSize != null) ReaderSlider("夜间字号 ${formatReaderDp(typography.fontSize)} dp", typography.fontSize, ReaderTypographyDp.FONT_SIZE_RANGE,
+                                        modifier = Modifier.testTag("night-font-size"), eInkStep = 1f, eInkCoarseStep = 10f) { edit(shown.copy(typographyDp = typography.copy(fontSize = it))) }
                                     TogglePreference("加粗文字", "内置预设使用正常字重，保持较柔和的观感", shown.weight) { edit(shown.copy(weight = it)) }
                                     EditorHeading("行距与字距")
-                                    TogglePreference("跟随普通行距", "在普通行距上增加 0.1 倍字号", draft.nightPreset.lineHeight == null) {
-                                        draft = draft.copy(nightPreset = draft.nightPreset.copy(lineHeight = if(it) null else shown.lineHeight))
+                                    TogglePreference("跟随普通行距", "继承普通行距，并调整 ${formatReaderDp(nightTypography.inheritedLineSpacingExtra)} dp 留白", nightTypography.lineSpacing == null) {
+                                        draft = draft.copy(nightPreset = draft.nightPreset.copy(typographyDp = nightTypography.copy(lineSpacing = if(it) null else typography.lineSpacing)))
                                     }
-                                    if(draft.nightPreset.lineHeight != null) ReaderSlider("夜间行距 ${"%.2f".format(shown.lineHeight)} 倍字号", shown.lineHeight,
-                                        ReaderSettings.MIN_LINE_HEIGHT..4f, modifier = Modifier.testTag("night-line-height"),
-                                        eInkStep = .05f, eInkCoarseStep = .5f) { edit(shown.copy(lineHeight = it)) }
-                                    ReaderSlider("额外字距 ${(shown.letterSpacing * 100).roundToInt()}% 字号", shown.letterSpacing, 0f..0.15f,
-                                        modifier = Modifier.testTag("night-letter-spacing"), eInkStep = .01f, eInkCoarseStep = .05f,
-                                        valueFormatter = { "${(it * 100).roundToInt()}%" }) { edit(shown.copy(letterSpacing = it)) }
-                                    EditorHint("0% 保持正常字距；稍微调高可以让文字更疏朗。")
+                                    if(nightTypography.lineSpacing != null) ReaderSlider("夜间行距 ${formatReaderDp(typography.lineSpacing)} dp · 两行间额外留白", typography.lineSpacing,
+                                        ReaderTypographyDp.LINE_SPACING_RANGE, modifier = Modifier.testTag("night-line-height"),
+                                        eInkStep = 1f, eInkCoarseStep = 10f) { edit(shown.copy(typographyDp = typography.copy(lineSpacing = it))) }
+                                    ReaderSlider("额外字距 ${formatReaderDp(typography.letterSpacing)} dp", typography.letterSpacing, ReaderTypographyDp.LETTER_SPACING_RANGE,
+                                        modifier = Modifier.testTag("night-letter-spacing"), eInkStep = .1f, eInkCoarseStep = 1f) { edit(shown.copy(typographyDp = typography.copy(letterSpacing = it))) }
+                                    EditorHint("0 dp 保持字体原本的字距；调高时增加固定留白。")
                                     TogglePreference("沿用普通段距", "关闭后，单独调整夜间段落间的留白", draft.nightPreset.paragraphSpacing == null) {
                                         draft = draft.copy(nightPreset = draft.nightPreset.copy(paragraphSpacing = if(it) null else shown.resolvedParagraphSpacing))
                                     }
@@ -148,7 +150,7 @@ internal val LocalReaderPresetDraft = staticCompositionLocalOf { false }
                     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                         if(resetUndo == null) AppTextButton(onClick = {
                             resetUndo = draft
-                            draft = draft.resetNightPreset()
+                            draft = draft.resetNightPreset().inDp(density)
                             previewBrightness(null)
                         }, modifier = Modifier.testTag("reader-reset-night-preset")) { Text("恢复内置预设") }
                         else AppTextButton(onClick = { draft = resetUndo!!; resetUndo = null; previewBrightness(null) },
@@ -180,6 +182,8 @@ internal val LocalReaderPresetDraft = staticCompositionLocalOf { false }
 }
 
 @Composable private fun ReaderNightPreview(settings: ReaderSettings) {
+    val density = LocalDensity.current
+    val typography = settings.readerTypography(density)
     val colors = nightReaderColors(settings)
     val compact = LocalConfiguration.current.screenHeightDp < 650 || LocalDensity.current.fontScale > 1.15f
     var expanded by rememberSaveable(compact) { mutableStateOf(!compact) }
@@ -200,10 +204,10 @@ internal val LocalReaderPresetDraft = staticCompositionLocalOf { false }
                 append("夜色渐深，故事仍在继续。\n")
                 withStyle(SpanStyle(color = colors.foreground.copy(alpha = settings.secondaryAlpha))) { append("辅文本：把光线放柔。") }
             }, Modifier.padding(14.dp),
-                fontFamily = rememberReaderFont(settings).family, fontSize = settings.fontSize.sp,
+                fontFamily = rememberReaderFont(settings).family, fontSize = with(density) { typography.fontSize.dp.toSp() },
                 fontWeight = if(settings.weight) FontWeight.Bold else FontWeight.Normal,
-                lineHeight = settings.lineHeight.em,
-                style = LocalTextStyle.current.copy(lineHeightStyle = ReaderLineHeightStyle), letterSpacing = settings.letterSpacing.em,
+                lineHeight = (1f + typography.lineSpacing / typography.fontSize).em,
+                style = LocalTextStyle.current.copy(lineHeightStyle = ReaderLineHeightStyle), letterSpacing = (typography.letterSpacing / typography.fontSize).em,
                 maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }

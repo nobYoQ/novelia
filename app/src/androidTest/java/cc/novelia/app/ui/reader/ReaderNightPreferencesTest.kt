@@ -51,7 +51,9 @@ class ReaderNightPreferencesTest {
         val ordinary = ReaderSettings(theme = "paper", fontSize = 24f, lineHeight = 1.6f,
             nightPreset = ReaderNightPreset(lineHeight = 2.3f, letterSpacing = .1f))
         var reader by mutableStateOf(ordinary)
+        var builtin = ReaderNightPreset()
         compose.setContent { NoveliaTheme("light") {
+            builtin = reader.resetNightPreset().inDp(LocalDensity.current).nightPreset
             Surface(Modifier.fillMaxSize().safeDrawingPadding()) { ReaderPreferences(reader) { reader = it } }
         } }
         compose.onNodeWithText("夜间阅读").assertIsDisplayed()
@@ -73,7 +75,7 @@ class ReaderNightPreferencesTest {
         compose.onNodeWithTag("reader-night-editor-save").assertIsEnabled().performClick()
         compose.runOnIdle {
             assertFalse(reader.nightReading)
-            assertEquals(ReaderNightPreset(), reader.nightPreset)
+            assertEquals(builtin, reader.nightPreset)
             assertEquals(ordinary.theme, reader.theme)
             assertEquals(ordinary.lineHeight, reader.lineHeight, 0f)
         }
@@ -131,19 +133,23 @@ class ReaderNightPreferencesTest {
     @Test fun unsavedPresetSurvivesStateRestorationWithoutChangingOrdinarySettings() {
         val ordinary = ReaderSettings(fontSize = 24f, lineHeight = 1.6f, nightPreset = ReaderNightPreset(letterSpacing = .1f))
         var reader by mutableStateOf(ordinary)
+        var normalizedOrdinary = ordinary
+        var builtin = ReaderNightPreset()
         val restoration = StateRestorationTester(compose)
         restoration.setContent { NoveliaTheme("light") {
+            normalizedOrdinary = ordinary.inDp(LocalDensity.current)
+            builtin = normalizedOrdinary.resetNightPreset().inDp(LocalDensity.current).nightPreset
             Surface(Modifier.fillMaxSize().safeDrawingPadding()) { ReaderPreferences(reader) { reader = it } }
         } }
         compose.onNodeWithTag("reader-edit-night-preset").performScrollTo().performClick()
         compose.onNodeWithTag("reader-reset-night-preset").performClick()
         restoration.emulateSavedInstanceStateRestore()
         compose.onNodeWithTag("reader-night-editor-save").assertIsEnabled()
-        compose.runOnIdle { assertEquals(ordinary, reader) }
+        compose.runOnIdle { assertEquals(normalizedOrdinary, reader) }
         compose.onNodeWithTag("reader-night-editor-save").performClick()
         compose.runOnIdle {
             assertFalse(reader.nightReading)
-            assertEquals(ReaderNightPreset(), reader.nightPreset)
+            assertEquals(builtin, reader.nightPreset)
             assertEquals(24f, reader.fontSize, 0f)
             assertEquals(1.6f, reader.lineHeight, 0f)
         }

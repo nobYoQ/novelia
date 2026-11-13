@@ -9,7 +9,6 @@ import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.StaticLayout
 import android.text.TextPaint
-import android.text.style.AbsoluteSizeSpan
 import android.text.style.CharacterStyle
 import android.text.style.UnderlineSpan
 import android.text.style.UpdateAppearance
@@ -46,7 +45,6 @@ import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import cc.novelia.app.data.model.Page
 import cc.novelia.app.data.model.Position
 import cc.novelia.app.data.model.ReaderSettings
@@ -168,16 +166,19 @@ private class SecondaryOpacity(private val alpha: Float) : CharacterStyle(), Upd
 internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: ReaderSettings, width: Int, height: Int, density: Density,
     readerTypeface: Typeface = Typeface.SANS_SERIF, title: String = "", checkCancelled: () -> Unit = {}): MeasuredEInkChapter {
     val layouts = mutableMapOf<Int, StaticLayout>()
+    val typography = settings.readerTypography(density)
+    val lineSpacingPx = with(density) { typography.lineSpacing.dp.toPx() }
+    val letterSpacingPx = with(density) { typography.letterSpacing.dp.toPx() }
     val lines = mutableListOf<PageLine>()
     chapterHeading(title, paragraphs)?.let { heading ->
         checkCancelled()
         val paint = TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-            textSize = with(density) { (settings.fontSize * 1.25f).sp.toPx() }
-            letterSpacing = settings.letterSpacing
+            textSize = with(density) { (typography.fontSize * 1.25f).dp.toPx() }
+            letterSpacing = letterSpacingPx / textSize
             color = android.graphics.Color.BLACK
             typeface = Typeface.create(readerTypeface, Typeface.BOLD)
         }
-        val layout = readerNativeLayout(heading, paint, width, settings.lineHeight)
+        val layout = readerNativeLayout(heading, paint, width, lineSpacingPx)
         layouts[CHAPTER_HEADING_PARAGRAPH] = layout
         for(line in 0 until layout.lineCount) {
             checkCancelled()
@@ -204,22 +205,22 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
                 text.addReaderInline(styledPart, bodyStart, width)
                 if (part.secondary) {
                     text.setSpan(SecondaryOpacity(settings.secondaryAlpha), start, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-                    text.setSpan(AbsoluteSizeSpan(with(density) { readerPartFontSize(settings, true).sp.roundToPx() }), start, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    text.setSpan(ReaderTextSizeSpan(with(density) { typography.partFontSize(true).dp.toPx() }, letterSpacingPx), start, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                     if (settings.underline) text.setSpan(UnderlineSpan(), start, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                 }
                 if(text.length > partStart) text.setSpan(ReaderLineHeightSpan(
-                    readerLineHeightPx(with(density) { readerPartFontSize(settings, part.secondary).sp.toPx() }, settings.lineHeight),
+                    readerLineHeightPx(with(density) { typography.partFontSize(part.secondary).dp.toPx() }, lineSpacingPx),
                     styledPart.inline.any { it.kind == cc.novelia.app.data.model.InlineKind.Ruby }),
                     partStart, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             }
             if (text.isEmpty()) text.append(" ")
             val paint = TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-                textSize = with(density) { settings.fontSize.sp.toPx() }
-                letterSpacing = settings.letterSpacing
+                textSize = with(density) { typography.fontSize.dp.toPx() }
+                letterSpacing = letterSpacingPx / textSize
                 color = android.graphics.Color.BLACK
                 typeface = Typeface.create(readerTypeface, if (settings.weight) Typeface.BOLD else Typeface.NORMAL)
             }
-            val layout = readerNativeLayout(text, paint, width, settings.lineHeight)
+            val layout = readerNativeLayout(text, paint, width, lineSpacingPx)
             layouts[index] = layout
             for (line in 0 until layout.lineCount) {
                 if (line % 32 == 0) checkCancelled()
@@ -377,7 +378,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
         val width = if(columns == 1) constraints.maxWidth.coerceAtLeast(1) else
             ((constraints.maxWidth - with(density) { gutter.roundToPx() }) / columns - with(density) { horizontalPadding.roundToPx() }).coerceAtLeast(1)
         val height = constraints.maxHeight.coerceAtLeast(1)
-        val typography = listOf(settings.fontSize, settings.lineHeight, settings.letterSpacing, settings.paragraphSpacing, settings.weight, settings.resolvedIndentSize, settings.parallel, settings.underline, settings.secondaryAlpha, font.typeface, font.loading,
+        val typography = listOf(settings.readerTypography(density), settings.paragraphSpacing, settings.weight, settings.resolvedIndentSize, settings.parallel, settings.underline, settings.secondaryAlpha, font.typeface, font.loading,
             settings.showEpubRuby, settings.epubFootnotePopup, settings.showEpubStyles)
         val input = EInkMeasureInput(paragraphs, chapterTitle, typography, width, height, density.density, density.fontScale, columns)
         val measured by produceState<EInkMeasurement?>(null, input) {

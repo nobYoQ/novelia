@@ -33,7 +33,7 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.text
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.model.InlineKind
 import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.reader.*
@@ -63,19 +63,20 @@ import kotlin.math.roundToInt
     annotations: List<ReadingTextMatch>, highlights: List<ReaderHighlightLayer>, onLayout: (StaticLayout, Int) -> Unit) {
     val density = LocalDensity.current
     val font = rememberReaderFont(settings)
+    val typography = settings.readerTypography(density)
     var top by remember { mutableIntStateOf(0) }
     val latestLayout by rememberUpdatedState(onLayout)
     BoxWithConstraints(Modifier.fillMaxWidth().onGloballyPositioned { top = it.positionInParent().y.roundToInt() }) {
         val indent = settings.indentText
-        val layout = remember(part, settings.fontSize, settings.lineHeight, settings.letterSpacing, settings.weight, indent, font.typeface, constraints.maxWidth, density) {
+        val layout = remember(part, typography, settings.weight, indent, font.typeface, constraints.maxWidth, density.density) {
             val text = SpannableStringBuilder(indent + part.text)
             text.addReaderInline(part, indent.length, constraints.maxWidth)
             val paint = TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-                textSize = with(density) { readerPartFontSize(settings, part.secondary).sp.toPx() }
-                letterSpacing = settings.letterSpacing
+                textSize = with(density) { typography.partFontSize(part.secondary).dp.toPx() }
+                letterSpacing = typography.letterSpacing / typography.partFontSize(part.secondary)
                 typeface = Typeface.create(font.typeface, if (settings.weight) Typeface.BOLD else Typeface.NORMAL)
             }
-            readerNativeLayout(text, paint, constraints.maxWidth, settings.lineHeight)
+            readerNativeLayout(text, paint, constraints.maxWidth, with(density) { typography.lineSpacing.dp.toPx() })
         }
         SideEffect { latestLayout(layout, top) }
         Canvas(Modifier.fillMaxWidth().height(with(density) { layout.height.toDp() })
