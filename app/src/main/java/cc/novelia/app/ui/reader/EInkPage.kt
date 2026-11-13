@@ -252,6 +252,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
     val font = rememberReaderFont(settings)
     var expandedImage by remember { mutableStateOf<Any?>(null) }
     val animate = !settings.eInkMode && !LocalEInkMode.current && !LocalReducedMotion.current && ValueAnimator.areAnimatorsEnabled()
+    val turnDuration = if(columns == 2) AppMotion.Quick else AppMotion.Standard
     var pageOffset by remember { mutableFloatStateOf(0f) }
     var dragAxis by remember { mutableIntStateOf(0) }
     var viewport by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
@@ -264,7 +265,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
     val latestPage by rememberUpdatedState(onPage)
     val canInteract = interactionEnabled && expandedImage == null
     // 页码、排版或交互状态改变后，不允许旧动画继续提交到新页面。
-    LaunchedEffect(state.pages, state.pageIndex, animate, canInteract) {
+    LaunchedEffect(state.pages, state.pageIndex, columns, animate, canInteract) {
         val from = previousPageIndex
         val direction = (state.pageIndex - from).coerceIn(-1, 1)
         val gestureCommitted = gestureTarget == state.pageIndex
@@ -281,7 +282,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
             outgoingPageIndex = from
             try {
                 androidx.compose.animation.core.animate(direction.toFloat(), 0f,
-                    animationSpec = tween(AppMotion.Standard, easing = FastOutSlowInEasing)) { value, _ -> incomingOffset = value }
+                    animationSpec = tween(turnDuration, easing = FastOutSlowInEasing)) { value, _ -> incomingOffset = value }
             } finally { outgoingPageIndex = null; incomingOffset = 0f }
         }
     }
@@ -296,7 +297,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
             val target = if(direction == 0) 0f else if(direction > 0) -1f else 1f
             transitionJob = dragScope.launch {
                 androidx.compose.animation.core.animate(start, target,
-                    animationSpec = tween(if(direction == 0) AppMotion.Quick else AppMotion.Standard,
+                    animationSpec = tween(if(direction == 0) AppMotion.Quick else turnDuration,
                         easing = FastOutSlowInEasing)) { value, _ -> pageOffset = value }
                 if(direction != 0) {
                     gestureTarget = state.pageIndex + direction * state.visiblePageCount
@@ -392,10 +393,11 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
                 val extent = (if(dragAxis == 0) constraints.maxWidth else constraints.maxHeight).toFloat()
                 val shift = if(animate) pageOffset * extent else 0f
                 val direction = when { shift < 0 -> 1; shift > 0 -> -1; else -> 0 }
-                @Composable fun body(firstPage: Int, offset: Float) {
+                @Composable fun body(firstPage: Int, offset: Float, opacity: Float = 1f) {
                     val spreadModifier = Modifier.fillMaxSize().graphicsLayer {
-                            translationX = if(dragAxis == 0) offset else 0f
-                            translationY = if(dragAxis == 1) offset else 0f
+                            translationX = if(columns == 1 && dragAxis == 0) offset else 0f
+                            translationY = if(columns == 1 && dragAxis == 1) offset else 0f
+                            alpha = opacity
                         }.background(background)
                     @Composable fun page(index: Int, modifier: Modifier) {
                         PageBody(chapter.pages.getOrNull(index), chapter, settings, foreground, highlightLayers, annotations, density, context,
@@ -414,7 +416,20 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
                     }
                 }
                 val outgoing = outgoingPageIndex
-                if(animate && outgoing != null) {
+                if(columns == 2) {
+                    // 折叠屏两侧的页框与中缝固定，正文在原位交叉淡化，不横跨折痕平移。
+                    // 底层保持不透明，顶层连同纸张背景淡入，避免叠加透明度使背景闪烁。
+                    if(animate && outgoing != null) {
+                        body(outgoing, 0f)
+                        body(state.pageIndex, 0f, (1f - abs(incomingOffset)).coerceIn(0f, 1f))
+                    } else {
+                        body(state.pageIndex, 0f)
+                        val neighbor = state.pageIndex + direction * state.visiblePageCount
+                        if(animate && direction != 0 && neighbor in chapter.pages.indices) {
+                            body(neighbor, 0f, abs(pageOffset).coerceIn(0f, 1f))
+                        }
+                    }
+                } else if(animate && outgoing != null) {
                     val pageDirection = (state.pageIndex - outgoing).coerceIn(-1, 1)
                     body(outgoing, (incomingOffset - pageDirection) * extent)
                     body(state.pageIndex, incomingOffset * extent)

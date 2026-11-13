@@ -47,21 +47,22 @@ class ReaderPageTurnFrameTest {
         File(instrumentation.targetContext.getExternalFilesDir(null), "page-turn-frames").apply { mkdirs() }
     }
 
-    private fun fixture(fullScreen: Boolean = false, content: List<ReadingParagraph> = paragraphs) {
+    private fun fixture(fullScreen: Boolean = false, content: List<ReadingParagraph> = paragraphs, pageColumns: Int = 1) {
         assertTrue("Device animations must be enabled", ValueAnimator.areAnimatorsEnabled())
         compose.setContent {
             MaterialTheme {
-                CompositionLocalProvider(LocalDensity provides Density(if (fullScreen) 4f else 2f), LocalReducedMotion provides false,
+                CompositionLocalProvider(LocalDensity provides Density(if(pageColumns == 2) 1f else if (fullScreen) 4f else 2f), LocalReducedMotion provides false,
                     LocalEInkMode provides false) {
                     Box(Modifier.fillMaxSize().background(Color(0xFF333333)), contentAlignment = Alignment.Center) {
-                        val viewport = if (fullScreen) Modifier.fillMaxSize() else Modifier.size(327.dp, 420.dp)
-                        EInkPage(content, settings, state, viewport.testTag("frame-reader"),
+                        val viewport = if(pageColumns == 2) Modifier.requiredSize(800.dp, 420.dp)
+                            else if (fullScreen) Modifier.fillMaxSize() else Modifier.size(327.dp, 420.dp)
+                        EInkPage(content, if(pageColumns == 2) settings.copy(tapPageTurn = false) else settings, state, viewport.testTag("frame-reader"),
                             imageModel = { null }, onToggleMenu = {}, onSelect = {},
                             onPage = { direction ->
-                                events += "${SystemClock.elapsedRealtime()},commit,${state.pageIndex},${state.pageIndex + direction}"
+                                events += "${SystemClock.elapsedRealtime()},commit,${state.pageIndex},${state.pageIndex + direction * state.visiblePageCount}"
                                 state.move(direction)
                             }, background = Color.White, foreground = Color.Black,
-                            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp))
+                            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp), pageColumns = pageColumns)
                     }
                 }
             }
@@ -123,6 +124,49 @@ class ReaderPageTurnFrameTest {
             assertTrue("自动翻页应经过中间帧", difference(middle, before, true) > .005)
             assertTrue("中间帧不能直接显示最终页面", difference(middle, after, true) > .005)
         } finally { compose.mainClock.autoAdvance = true }
+    }
+
+    @Test fun dualPageButtonsAndSwipesBlendAtTheSameCoordinates() {
+        fixture(pageColumns = 2)
+        val before = screenshot("dual-fade-before")
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.runOnIdle { state.move(1) }
+            compose.mainClock.advanceTimeBy(64)
+            val middle = screenshot("dual-fade-middle")
+            compose.mainClock.advanceTimeBy(300)
+            val after = screenshot("dual-fade-after")
+            assertEquals(2, state.pageIndex)
+            assertStationaryBlend(before, middle, after)
+
+            gesture("horizontal", forward = false)
+            compose.mainClock.advanceTimeBy(32)
+            val swipeMiddle = screenshot("dual-swipe-middle")
+            compose.mainClock.advanceTimeBy(300)
+            val returned = screenshot("dual-swipe-after")
+            assertEquals(0, state.pageIndex)
+            assertStationaryBlend(after, swipeMiddle, returned)
+            assertEquals(0.0, difference(before, returned, true), .001)
+        } finally { compose.mainClock.autoAdvance = true }
+    }
+
+    /** 原位混合的每个像素都应位于两张静止页面的颜色区间内；平移会在原本留白处产生文字。 */
+    private fun assertStationaryBlend(before: Bitmap, middle: Bitmap, after: Bitmap) {
+        assertTrue("双页翻页应经过中间帧", difference(middle, before, false) > .001)
+        assertTrue("中间帧不能直接显示最终页面", difference(middle, after, false) > .001)
+        val oldPixels = IntArray(before.width * before.height)
+        val middlePixels = IntArray(oldPixels.size)
+        val newPixels = IntArray(oldPixels.size)
+        before.getPixels(oldPixels, 0, before.width, 0, 0, before.width, before.height)
+        middle.getPixels(middlePixels, 0, middle.width, 0, 0, middle.width, middle.height)
+        after.getPixels(newPixels, 0, after.width, 0, 0, after.width, after.height)
+        val displaced = oldPixels.indices.count { index ->
+            val old = android.graphics.Color.red(oldPixels[index])
+            val next = android.graphics.Color.red(newPixels[index])
+            val value = android.graphics.Color.red(middlePixels[index])
+            value < minOf(old, next) - 4 || value > maxOf(old, next) + 4
+        }
+        assertTrue("正文与中缝应原位淡化，越界像素：$displaced", displaced.toDouble() / oldPixels.size < .001)
     }
 
     @Test fun changingParagraphNodeCountsDoesNotFlashAfterCommit() {
