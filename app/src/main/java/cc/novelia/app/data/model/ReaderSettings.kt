@@ -66,7 +66,8 @@ import kotlinx.serialization.Serializable
     val nightReading: Boolean? = null,
     val nightPreset: ReaderNightPreset? = null,
     val brightnessPreferences: ReaderBrightness? = null,
-    val nightBrightness: ReaderBrightness? = null
+    val nightBrightness: ReaderBrightness? = null,
+    val horizontalDualPage: Boolean? = null
 )
 
 /**
@@ -126,7 +127,9 @@ import kotlinx.serialization.Serializable
     val nightReading: Boolean = false,
     val nightPreset: ReaderNightPreset = ReaderNightPreset(),
     val brightnessPreferences: ReaderBrightness? = null,
-    val nightBrightness: ReaderBrightness = ReaderBrightness.night()
+    val nightBrightness: ReaderBrightness = ReaderBrightness.night(),
+    // 横向分页的可选子模式；窄窗口回退单页，其他分页方式保留此偏好但不启用。
+    val horizontalDualPage: Boolean = false
 ) {
     companion object {
         const val MIN_FONT_SIZE = 14f
@@ -240,7 +243,8 @@ import kotlinx.serialization.Serializable
         showEpubStyles = showEpubStyles,
         rowShowPartialLines = rowShowPartialLines,
         letterSpacing = letterSpacing, nightReading = nightReading, nightPreset = nightPreset,
-        brightnessPreferences = brightnessPreferences, nightBrightness = nightBrightness
+        brightnessPreferences = brightnessPreferences, nightBrightness = nightBrightness,
+        horizontalDualPage = horizontalDualPage
     )
     private fun withPagingState(state: ReaderPagingState) = copy(
         mode = state.mode ?: mode,
@@ -301,7 +305,8 @@ import kotlinx.serialization.Serializable
         nightReading = state.nightReading ?: nightReading,
         nightPreset = state.nightPreset ?: nightPreset,
         brightnessPreferences = state.brightnessPreferences ?: if(state.brightness != null) null else brightnessPreferences,
-        nightBrightness = state.nightBrightness ?: nightBrightness
+        nightBrightness = state.nightBrightness ?: nightBrightness,
+        horizontalDualPage = state.horizontalDualPage ?: horizontalDualPage
     )
     /**
      * 切换电子纸时分别记住两种模式的完整阅读配置。

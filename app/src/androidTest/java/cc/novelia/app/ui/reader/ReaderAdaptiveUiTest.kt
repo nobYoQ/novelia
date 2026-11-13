@@ -39,6 +39,26 @@ import org.junit.Rule
 import org.junit.Test
 
 class ReaderAdaptiveUiTest {
+    @Test fun horizontalDualPageUsesTheFullReadingAreaAndTheDirectoryStillOpens() = withReader(1024.dp) { app, ref, resize ->
+        compose.runOnIdle { app.store.update { it.copy(reader = it.reader.withPaginationMode("auto").copy(horizontalDualPage = true), readerTapTutorialSeen = true) } }
+        compose.waitUntil(15_000) { compose.onAllNodesWithTag("reader-dual-page", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("reader-hide-wide-toc").assertDoesNotExist()
+        compose.onNodeWithText("目录", substring = true).performClick()
+        compose.onNodeWithTag("reader-toc-chapter-first").assertIsDisplayed()
+        compose.onNodeWithText("关闭面板").performClick()
+        compose.onNodeWithTag("reader-page").performTouchInput { swipeLeft() }
+        compose.waitUntil(10_000) { (app.store.state.value.positions[ref.key]?.textOffset ?: 0) > 0 }
+        compose.waitForIdle()
+        saveTestScreenshot("reader-dual-page-flow.png")
+        val anchor = app.store.state.value.positions[ref.key]!!.textOffset
+        compose.runOnIdle { resize(390.dp) }
+        compose.waitUntil(15_000) { compose.onAllNodesWithTag("reader-single-page", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.runOnIdle { assertEquals(anchor, app.store.state.value.positions[ref.key]!!.textOffset) }
+        compose.runOnIdle { resize(1024.dp) }
+        compose.waitUntil(15_000) { compose.onAllNodesWithTag("reader-dual-page", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.runOnIdle { assertEquals(anchor, app.store.state.value.positions[ref.key]!!.textOffset) }
+    }
+
     @Test fun speechFollowsAutoPagesWithOptionsOpenAndWhilePaused() = withReader(390.dp) { app, ref, _ ->
         val oldPlayback = ReadAloudService.playback.value
         val oldStatus = ReadAloudService.status.value

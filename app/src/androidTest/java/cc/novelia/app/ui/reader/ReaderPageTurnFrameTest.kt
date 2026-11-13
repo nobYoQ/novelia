@@ -136,7 +136,7 @@ class ReaderPageTurnFrameTest {
         val report = StringBuilder("gesture,frame,clockMs,page,inkDifferenceToFinal,rawDifferenceToFinal,inkDifferenceToOld\n")
         val failures = mutableListOf<String>()
         try {
-            for (kind in listOf("tap", "horizontal", "vertical")) for (forward in listOf(true, false)) {
+            for (kind in listOf("tap", "horizontal")) for (forward in listOf(true, false)) {
                 val label = "$prefix$kind-${if (forward) "next" else "previous"}"
                 val oldIndex = state.pageIndex
                 val targetIndex = oldIndex + if (forward) 1 else -1

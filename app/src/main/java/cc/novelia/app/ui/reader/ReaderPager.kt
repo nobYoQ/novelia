@@ -13,6 +13,7 @@ internal interface ReaderPager {
     val pages: List<StaticPage>
     val pageIndex: Int
     val ready: Boolean
+    val visiblePageCount: Int get() = 1
 
     /** 视口首行所属的段落下标。 */
     val paragraph: Int

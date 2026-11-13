@@ -154,6 +154,10 @@ import kotlin.math.roundToInt
                                 else -> "整章连续排列，上下滑动浏览，不提前拆成独立页面。"
                             },
                                 Modifier.padding(horizontal = 20.dp, vertical = 4.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if(value.paginationMode == "auto") Box(Modifier.testTag("reader-dual-page-toggle")) {
+                                TogglePreference("宽屏双页", "阅读区域足够宽时并排显示两页，每次翻过两页；窗口变窄后自动恢复单页",
+                                    value.horizontalDualPage, defaultValue = defaults?.horizontalDualPage) { onChange(value.copy(horizontalDualPage = it)) }
+                            }
                             if(value.rowPagination) {
                                 TogglePreference("显示底部不完整行", "开启时保持连续滚动的观感；关闭后静止与横向翻页只显示底部完整行，可能留有空白。上下滚动中始终显示局部行。",
                                     value.rowShowPartialLines, defaultValue = defaults?.rowShowPartialLines) { onChange(value.copy(rowShowPartialLines = it)) }

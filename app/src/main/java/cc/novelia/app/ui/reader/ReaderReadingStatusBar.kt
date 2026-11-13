@@ -66,14 +66,16 @@ import kotlinx.coroutines.isActive
                             else {
                                 val total = state.pageCount.coerceAtLeast(1)
                                 val current = (state.pageIndex + 1).coerceIn(1, total)
-                                StatusText("$current / $total", foreground, cell.testTag("reader-page-counter").semantics {
-                                    contentDescription = "本章第${current}页，共${total}页"
+                                val last = (state.pageIndex + state.visiblePageCount).coerceIn(current, total)
+                                val range = if(current == last) "$current" else "$current–$last"
+                                StatusText("$range / $total", foreground, cell.testTag("reader-page-counter").semantics {
+                                    contentDescription = "本章第${range}页，共${total}页"
                                 }, align)
                             }
                         "progress" -> {
                             val percent = if(settings.staticPagination) {
                                 val total = state.pageCount.coerceAtLeast(1)
-                                ((state.pageIndex + 1).coerceIn(1, total).toLong() * 100 / total).toInt()
+                                ((state.pageIndex + state.visiblePageCount).coerceIn(1, total).toLong() * 100 / total).toInt()
                             } else (state.progress.safeFraction() * 100).toInt()
                             StatusText(if(settings.staticPagination && !state.pageReady) "本章 —" else "本章 $percent%",
                                 foreground, cell.testTag("reader-chapter-progress"), align)

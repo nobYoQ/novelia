@@ -6,6 +6,20 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ReaderPaginationModesTest {
+    @Test fun horizontalDualPageIsOptInAndPersistsWithoutAddingAPaginationMode() {
+        assertFalse(appJson.decodeFromString<ReaderSettings>("""{"paginationMode":"auto"}""").horizontalDualPage)
+        assertEquals(listOf("scroll", "auto", "row"), ReaderSettings.PAGINATION_MODES)
+        val enabled = ReaderSettings(paginationMode = "auto", horizontalDualPage = true)
+        val library = LibraryState(reader = enabled, bookSettings = mapOf("local/book" to enabled.copy(horizontalDualPage = false)))
+        assertEquals(library, appJson.decodeFromString<LibraryState>(appJson.encodeToString(library)))
+        val backup = SettingsBackup(reader = enabled)
+        assertEquals(backup, appJson.decodeFromString<SettingsBackup>(appJson.encodeToString(backup)))
+        assertTrue(enabled.withPaginationMode("row").withPaginationMode("scroll").withPaginationMode("auto").horizontalDualPage)
+        val ink = enabled.withEInkMode(true).copy(horizontalDualPage = false)
+        assertTrue(ink.withEInkMode(false).horizontalDualPage)
+        assertFalse(ink.withEInkMode(false).withEInkMode(true).horizontalDualPage)
+    }
+
     @Test fun partialLinePreferenceDefaultsOnAndSurvivesBookOverridesAndBackups() {
         val defaults = appJson.decodeFromString<ReaderSettings>("""{"paginationMode":"row"}""")
         assertTrue(defaults.rowShowPartialLines)

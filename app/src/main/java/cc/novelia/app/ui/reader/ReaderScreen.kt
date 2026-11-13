@@ -128,6 +128,16 @@ import kotlinx.serialization.encodeToString
     val local by c.store.state.collectAsStateWithLifecycle()
     val storedSettings = local.bookSettings[ref.key] ?: local.reader
     val settings = storedSettings.readingAppearance()
+    val windowInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
+    val windowDensity = LocalDensity.current
+    val windowDirection = androidx.compose.ui.platform.LocalLayoutDirection.current
+    val readingWidth = availableWidth - with(windowDensity) {
+        (windowInsets.getLeft(this, windowDirection) + windowInsets.getRight(this, windowDirection)).toDp()
+    }
+    val dualPage = readerUsesDualPage(settings, readingWidth.value)
+    // 双页使用完整阅读区，目录改用浮层；关闭子模式后恢复原有宽屏目录偏好。
+    val wideDirectory = wide && !dualPage
+    val inlineToc = wideDirectory && settings.showWideToc
     val readerFont = rememberReaderFont(settings)
     fun setWideToc(show: Boolean) {
         c.store.update { state ->
@@ -169,8 +179,8 @@ import kotlinx.serialization.encodeToString
         remember(ref, chapterId) { readerEntry?.savedStateHandle?.remove<Int>("readerTocIndex") ?: 0 },
         remember(ref, chapterId) { readerEntry?.savedStateHandle?.remove<Int>("readerTocOffset") ?: 0 }
     )
-    LaunchedEffect(toc, wide) {
-        if(toc && !wide) {
+    LaunchedEffect(toc, wideDirectory) {
+        if(toc && !wideDirectory) {
             // 由目录在数据就绪后统一定位，避免这里的顶部重置覆盖当前章定位。
             tocLocateRequest++
         }
@@ -230,7 +240,7 @@ import kotlinx.serialization.encodeToString
         if(settings.keepScreenOn || autoReading) activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         onDispose { activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
     }
-    BackHandler(preferences || (toc && !wide) || search || bookSearch) { preferences = false; toc = false; search = false; bookSearch = false }
+    BackHandler(preferences || (toc && !wideDirectory) || search || bookSearch) { preferences = false; toc = false; search = false; bookSearch = false }
     AsyncContent(listOf(ref, chapterId), load = { c.chapter(ref, chapterId, version > 0) }, refreshKey = version) { (chapter, cached), _ ->
         val knownChapterCount = maxOf(local.books.firstOrNull { it.book.ref == ref }?.book?.total ?: 0,
             local.updateSnapshots[ref.key]?.total ?: 0)
@@ -345,7 +355,7 @@ import kotlinx.serialization.encodeToString
         var seekTarget by remember { mutableStateOf<Float?>(null) }
         var seekFocused by remember { mutableStateOf(false) }
         val readingProgress by remember(scroll, eInk, settings.staticPagination, seekIndex, scrollLayouts) { derivedStateOf {
-            if(settings.staticPagination) eInk.pageIndex.toFloat() / (eInk.pages.size - 1).coerceAtLeast(1)
+            if(settings.staticPagination) eInk.pageIndex.toFloat() / (eInk.pages.lastIndex / eInk.visiblePageCount * eInk.visiblePageCount).coerceAtLeast(1)
             else if(!scroll.canScrollForward && scroll.canScrollBackward) 1f
             else if(scroll.firstVisibleItemIndex == 0) 0f
             else {
@@ -425,7 +435,7 @@ import kotlinx.serialization.encodeToString
         val density = LocalDensity.current
         val safeInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
         val direction = androidx.compose.ui.platform.LocalLayoutDirection.current
-        val statusWidth = availableWidth - (if(wide && settings.showWideToc) 293.dp else 0.dp) -
+        val statusWidth = availableWidth - (if(inlineToc) 293.dp else 0.dp) -
             with(density) { (safeInsets.getLeft(this, direction) + safeInsets.getRight(this, direction)).toDp() }
         // 限制文字宽度而非手势视口，宽屏两侧留白也交给同一个列表处理拖动。
         val bodyHorizontalPadding = ((statusWidth - settings.width.dp) / 2).coerceAtLeast(0.dp) + settings.resolvedHorizontalMargin.dp
@@ -531,7 +541,7 @@ import kotlinx.serialization.encodeToString
             readingLifecycle.lifecycle.addObserver(observer)
             onDispose { readingLifecycle.lifecycle.removeObserver(observer) }
         }
-        val contentPanelsClosed = !preferences && !editingTapZones && !search && (!toc || wide) && !autoReadSheet && !replacementsSheet && !bookSearch && !nextVolumePrompt && !chapterTitleOpen && selected == null && note == null
+        val contentPanelsClosed = !preferences && !editingTapZones && !search && (!toc || wideDirectory) && !autoReadSheet && !replacementsSheet && !bookSearch && !nextVolumePrompt && !chapterTitleOpen && selected == null && note == null
         val panelsClosed = contentPanelsClosed && !speechSheet && epubNote == null
         val showTapTutorial = settings.tapPageTurn && !local.readerTapTutorialSeen && panelsClosed && !leaving &&
             !chapterLoad.loading && chapterLoad.error == null && positionState.initialAnchorRestored && !positionState.restoringAnchor && seekTarget == null &&
@@ -770,7 +780,7 @@ import kotlinx.serialization.encodeToString
         val highlightLayers = rememberReaderHighlightLayers(if(search) activeMatch else spokenMatch ?: activeMatch,
             animate = !reducedMotion && !search)
         Row(Modifier.fillMaxSize().background(background).testTag(if(wide) "reader-wide-layout" else "reader-compact-layout")) {
-        if(wide && settings.showWideToc) {
+        if(inlineToc) {
             Surface(Modifier.width(292.dp).fillMaxHeight().windowInsetsPadding(safeInsets), color = MaterialTheme.colorScheme.surface) {
                 Column {
                 AppTextButton(onClick = { setWideToc(false) }, modifier = Modifier.align(Alignment.End).testTag("reader-hide-wide-toc")) { Text("收起目录") }
@@ -790,7 +800,7 @@ import kotlinx.serialization.encodeToString
             // 两种模式均使用固定正文视口；工具栏是同级浮层，
             // 不得给正文布局增加内边距或尺寸约束。
             val bodyInputEnabled = volumeKeysActive && !leaving && !chapterLoad.loading && !positionState.restoringAnchor && positionState.initialAnchorRestored && seekTarget == null
-            val openToc: () -> Unit = { if(wide) { setWideToc(true); tocQuery = ""; tocLocateRequest++ } else toc = true }
+            val openToc: () -> Unit = { if(wideDirectory) { setWideToc(true); tocQuery = ""; tocLocateRequest++ } else toc = true }
             val tapNavigation = rememberReaderTapNavigation(settings.tapPageTurn, bodyInputEnabled, { menu = !menu }, { page(it) }, settings.resolvedTapZoneMap, openToc)
             val chapterEnd: @Composable () -> Unit = {
                 Column(Modifier.fillMaxWidth().graphicsLayer { alpha = if(tapOverlayVisible) 0f else 1f }, horizontalAlignment = Alignment.CenterHorizontally) {
@@ -828,7 +838,7 @@ import kotlinx.serialization.encodeToString
                 background = background, foreground = foreground, activeMatch = if(search) activeMatch else spokenMatch ?: activeMatch, annotations = annotations,
                 highlightLayers = highlightLayers,
                 interactionEnabled = bodyInputEnabled, contentPadding = PaddingValues(horizontal = settings.resolvedHorizontalMargin.dp, vertical = settings.resolvedVerticalMargin.dp), onNavigate = openToc,
-                onNote = { pauseReadingAutomation(); epubNote = it }, chapterTitle = chapter.title)
+                onNote = { pauseReadingAutomation(); epubNote = it }, chapterTitle = chapter.title, pageColumns = if(dualPage) 2 else 1)
             } else LazyColumn(state = scroll, overscrollEffect = null, modifier = Modifier.testTag("reader-scroll")
                 .then(readerInteractionModifier { recordReadingInteraction(); pauseReadingAutomation() }).align(Alignment.TopCenter).fillMaxHeight()
                 .windowInsetsPadding(readingInsets).padding(bottom = persistentBottomHeight).fillMaxWidth()
@@ -910,7 +920,7 @@ import kotlinx.serialization.encodeToString
                     bookmarkEnabled = paragraphs.isNotEmpty(),
                     bookmarked = local.notes.any { it.bookmarked && it.key == ref.key && it.chapterId == chapterId && it.paragraph == paragraphs.getOrNull(firstParagraph)?.index },
                     progress = seekTarget ?: readingProgress, pageReady = eInk.ready, pageCount = eInk.pages.size,
-                    pageIndex = eInk.pageIndex, chapterTitle = chapter.title, wide = wide, cached = cached,
+                    pageIndex = eInk.pageIndex, visiblePageCount = eInk.visiblePageCount, chapterTitle = chapter.title, wide = wideDirectory, cached = cached,
                 ),
                 settings = settings, menu = menu, reducedMotion = reducedMotion, toolbarBackground = toolbarBackground,
                 foreground = foreground, readingStatusBarHeight = readingStatusBarHeight, statusColumns = statusColumns, modifier = Modifier.align(Alignment.BottomCenter),
@@ -918,7 +928,7 @@ import kotlinx.serialization.encodeToString
                 onHeightChanged = { bottomOverlayHeight = it }, onPage = { page(it) }, onSeek = { seekChapter(it) },
                 onSeekFocusChanged = { seekFocused = it }, onPreviousChapter = { chapter.prevId?.let { openChapter(it) } },
                 onNextChapter = { if(chapter.nextId != null) openChapter(chapter.nextId) else nextVolumePrompt = true },
-                onToc = { if(wide) { setWideToc(!settings.showWideToc); if(!settings.showWideToc) tocLocateRequest++ } else toc = true },
+                onToc = { if(wideDirectory) { setWideToc(!settings.showWideToc); if(!settings.showWideToc) tocLocateRequest++ } else toc = true },
                 onBookmark = { paragraphs.getOrNull(firstParagraph)?.let { saveBookmark(it) } }, onPreferences = { preferences = true },
                 onSpeechHeightChanged = { speechControlsHeight = it },
                 onPageButtonsHeightChanged = { pageButtonsHeight = it },
@@ -974,7 +984,7 @@ import kotlinx.serialization.encodeToString
         }
         if(chapterTitleOpen) ReaderChapterTitleDialog(chapter.title, onDismiss = { chapterTitleOpen = false }, onToc = {
             chapterTitleOpen = false
-            if(wide) { setWideToc(true); tocLocateRequest++ } else toc = true
+            if(wideDirectory) { setWideToc(true); tocLocateRequest++ } else toc = true
         })
         if(nextVolumePrompt && nextVolume != null) AppAlertDialog(onDismissRequest = { nextVolumePrompt = false }, title = { Text("本卷已读完") }, text = { Column { Text("按书架中的分卷顺序接续：${nextVolume.book.title}"); volumeError?.let { Text(it, color = MaterialTheme.colorScheme.error) } } }, confirmButton = { AppTextButton(onClick = { openNextVolume() }, enabled = !openingVolume) { Text(if(openingVolume) "正在打开…" else "阅读下一分卷") } }, dismissButton = { AppTextButton(onClick = { nextVolumePrompt = false }) { Text("稍后") } })
         if(bookSearch) ReaderSheet(onDismissRequest = { bookSearch = false }) {
@@ -991,7 +1001,7 @@ import kotlinx.serialization.encodeToString
                 }
             }
         }
-        if(toc && !wide) ReaderSheet(onDismissRequest = { toc = false }) {
+        if(toc && !wideDirectory) ReaderSheet(onDismissRequest = { toc = false }) {
             ReaderTocPane(c, ref, tocState, { scope.launch { tocState.ensureLoaded(chapterId, knownChapterCount, refresh = true) } }, chapterId, tocScroll, tocQuery, { tocQuery = it }, tocReversed, { tocReversed = it }, tocLocateRequest, { tocLocateRequest = 0; tocLocated = true },
                 { id -> if(id != chapterId) rememberReadingPlace(); toc = false; openChapter(id) }, Modifier.fillMaxHeight(.8f))
         }

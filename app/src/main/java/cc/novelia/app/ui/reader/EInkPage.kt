@@ -36,6 +36,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -63,6 +64,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import kotlinx.coroutines.launch
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.runtime.mutableFloatStateOf
@@ -81,6 +83,8 @@ import androidx.compose.runtime.mutableFloatStateOf
         private set
     override var ready by mutableStateOf(false)
         private set
+    override var visiblePageCount by mutableIntStateOf(1)
+        private set
     private var anchorParagraph = ((initial?.index ?: 0) - 1).coerceAtLeast(CHAPTER_HEADING_PARAGRAPH)
     private var anchorOffset = initial?.textOffset ?: 0
     private var sourceParagraph: Int? = null
@@ -92,9 +96,9 @@ import androidx.compose.runtime.mutableFloatStateOf
     /** 保存、切换模式和刷新使用请求的字符锚点；页首只用于当前页的显示与交互。 */
     override val anchor get() = ReadingRestoreAnchor(anchorParagraph, sourceParagraph, anchorOffset)
     override val canGoBack get() = pageIndex > 0
-    override val canGoForward get() = pageIndex + 1 < pages.size
+    override val canGoForward get() = pageIndex + visiblePageCount < pages.size
 
-    fun install(next: List<StaticPage>, paragraphs: List<ReadingParagraph> = content) {
+    fun install(next: List<StaticPage>, paragraphs: List<ReadingParagraph> = content, columns: Int = 1) {
         val previousParagraph = content.getOrNull(anchorParagraph)
         sourceParagraph?.let { source ->
             anchorParagraph = paragraphs.indexOfFirst { it.index >= source }.takeIf { it >= 0 }
@@ -106,9 +110,10 @@ import androidx.compose.runtime.mutableFloatStateOf
         content = paragraphs
         sourceParagraph = paragraphs.getOrNull(anchorParagraph)?.index
         pages = next
+        visiblePageCount = columns.coerceIn(1, 2)
         // 视口连续测量期间始终保留请求的字符位置；
         // 若每次对齐到临时页首，会逐步丢失原来的阅读位置。
-        pageIndex = pageForAnchor(next, anchorParagraph, anchorOffset)
+        pageIndex = spreadStart(pageForAnchor(next, anchorParagraph, anchorOffset), next.size, visiblePageCount)
         // 章末入口、缺失的独立标题等没有对应段落时，才回退到实际页首。
         if(anchorParagraph !in paragraphs.indices &&
             !(anchorParagraph == CHAPTER_HEADING_PARAGRAPH && next.firstOrNull()?.lines?.firstOrNull()?.paragraph == CHAPTER_HEADING_PARAGRAPH)) {
@@ -124,22 +129,29 @@ import androidx.compose.runtime.mutableFloatStateOf
     fun confirm(pages: List<StaticPage>) { if (this.pages === pages) ready = true }
     override fun move(direction: Int) {
         if (ready && pages.isNotEmpty()) {
-            pageIndex = (pageIndex + direction).coerceIn(0, pages.lastIndex)
+            pageIndex = spreadStart(pageIndex + direction * visiblePageCount, pages.size, visiblePageCount)
             anchorParagraph = paragraph
             anchorOffset = textOffset
             sourceParagraph = content.getOrNull(anchorParagraph)?.index
         }
     }
+    override fun seekPage(index: Int) {
+        if(!ready || pages.isEmpty()) return
+        pageIndex = spreadStart(index, pages.size, visiblePageCount)
+        anchorParagraph = paragraph
+        anchorOffset = textOffset
+        sourceParagraph = content.getOrNull(anchorParagraph)?.index
+    }
     override fun find(paragraph: Int, offset: Int, source: Int?) {
         anchorParagraph = paragraph
         anchorOffset = offset.coerceAtLeast(0)
         sourceParagraph = source ?: content.getOrNull(paragraph)?.index
-        pageIndex = pageForAnchor(pages, paragraph, anchorOffset)
+        pageIndex = spreadStart(pageForAnchor(pages, paragraph, anchorOffset), pages.size, visiblePageCount)
     }
 }
 
 internal data class MeasuredEInkChapter(val paragraphs: List<ReadingParagraph>, val layouts: Map<Int, StaticLayout>, val pages: List<StaticPage>)
-private data class EInkMeasureInput(val paragraphs: List<ReadingParagraph>, val title: String, val typography: List<Any>, val width: Int, val height: Int, val density: Float, val fontScale: Float)
+private data class EInkMeasureInput(val paragraphs: List<ReadingParagraph>, val title: String, val typography: List<Any>, val width: Int, val height: Int, val density: Float, val fontScale: Float, val columns: Int)
 private data class EInkMeasurement(val input: EInkMeasureInput, val chapter: MeasuredEInkChapter)
 
 /** 在当前主题画笔上应用辅文本透明度，不保存固定颜色。 */
@@ -229,8 +241,13 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
     highlightLayers: List<ReaderHighlightLayer> = listOfNotNull(activeMatch?.let { ReaderHighlightLayer(it, 1f) }),
     interactionEnabled: Boolean = true, contentPadding: PaddingValues = PaddingValues(0.dp), onNavigate: () -> Unit = {},
     onNote: (String) -> Unit = {}, chapterTitle: String = "",
+    pageColumns: Int = 1,
 ) {
     val density = LocalDensity.current
+    val layoutDirection = LocalLayoutDirection.current
+    val columns = pageColumns.coerceIn(1, 2)
+    val gutter = if(columns == 2) 16.dp else 0.dp
+    val horizontalPadding = contentPadding.calculateLeftPadding(layoutDirection) + contentPadding.calculateRightPadding(layoutDirection)
     val context = LocalContext.current
     val font = rememberReaderFont(settings)
     var expandedImage by remember { mutableStateOf<Any?>(null) }
@@ -258,7 +275,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
         outgoingPageIndex = null
         incomingOffset = 0f
         // 朗读、音量键和翻页按钮直接改变页码时，也走与手势一致的页面过渡。
-        if(animate && canInteract && !gestureCommitted && abs(state.pageIndex - from) == 1 && state.pages.getOrNull(from) != null) {
+        if(animate && canInteract && !gestureCommitted && abs(state.pageIndex - from) == state.visiblePageCount && state.pages.getOrNull(from) != null) {
             dragAxis = 0
             incomingOffset = direction.toFloat()
             outgoingPageIndex = from
@@ -270,7 +287,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
     }
     val settle: (Int) -> Unit = { direction ->
         transitionJob?.cancel()
-        val hasNeighbor = state.pages.getOrNull(state.pageIndex + direction) != null
+        val hasNeighbor = if(direction > 0) state.canGoForward else if(direction < 0) state.canGoBack else true
         if (!animate || (direction != 0 && !hasNeighbor)) {
             pageOffset = 0f
             if (direction != 0) latestPage(direction)
@@ -282,7 +299,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
                     animationSpec = tween(if(direction == 0) AppMotion.Quick else AppMotion.Standard,
                         easing = FastOutSlowInEasing)) { value, _ -> pageOffset = value }
                 if(direction != 0) {
-                    gestureTarget = state.pageIndex + direction
+                    gestureTarget = state.pageIndex + direction * state.visiblePageCount
                     latestPage(direction)
                 }
                 pageOffset = 0f
@@ -301,7 +318,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
         modifier.background(background).clipToBounds()
             .readerTapFeedback(tapNavigation, foreground, settings.eInkMode || LocalEInkMode.current)
             .readerTapNavigation(tapNavigation)
-            .pointerInput(settings.horizontalPageTurn, animate, canInteract) {
+            .pointerInput(settings.horizontalPageTurn, columns, animate, canInteract) {
                 if(!canInteract || !settings.horizontalPageTurn) return@pointerInput
                 var total = androidx.compose.ui.geometry.Offset.Zero
                 var axisLocked = false
@@ -340,21 +357,22 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
                         val delta = if(dragAxis == 0) amount.x else amount.y
                         if(extent > 0) {
                             val direction = if(pageOffset + delta / extent < 0) 1 else -1
-                            val resistance = if(state.pages.getOrNull(state.pageIndex + direction) == null) .15f else 1f
+                            val resistance = if(if(direction > 0) !state.canGoForward else !state.canGoBack) .15f else 1f
                             pageOffset = (pageOffset + delta * resistance / extent).coerceIn(-1f, 1f)
                         }
                     }
                 }
             }
             // 手势覆盖整个阅读区；限宽只作用于居中的正文和分页测量。
-            .wrapContentWidth(Alignment.CenterHorizontally).widthIn(max = settings.width.dp).fillMaxWidth()
-            .padding(contentPadding).clipToBounds()
+            .wrapContentWidth(Alignment.CenterHorizontally).widthIn(max = settings.width.dp * columns + gutter).fillMaxWidth()
+            .padding(if(columns == 1) contentPadding else PaddingValues(top = contentPadding.calculateTopPadding(), bottom = contentPadding.calculateBottomPadding())).clipToBounds()
     ) {
-        val width = constraints.maxWidth.coerceAtLeast(1)
+        val width = if(columns == 1) constraints.maxWidth.coerceAtLeast(1) else
+            ((constraints.maxWidth - with(density) { gutter.roundToPx() }) / columns - with(density) { horizontalPadding.roundToPx() }).coerceAtLeast(1)
         val height = constraints.maxHeight.coerceAtLeast(1)
         val typography = listOf(settings.fontSize, settings.lineHeight, settings.letterSpacing, settings.paragraphSpacing, settings.weight, settings.resolvedIndentSize, settings.parallel, settings.underline, settings.secondaryAlpha, font.typeface, font.loading,
             settings.showEpubRuby, settings.epubFootnotePopup, settings.showEpubStyles)
-        val input = EInkMeasureInput(paragraphs, chapterTitle, typography, width, height, density.density, density.fontScale)
+        val input = EInkMeasureInput(paragraphs, chapterTitle, typography, width, height, density.density, density.fontScale, columns)
         val measured by produceState<EInkMeasurement?>(null, input) {
             if(value != null) delay(120)
             if (!font.loading && width != Constraints.Infinity && height != Constraints.Infinity) {
@@ -362,7 +380,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
                     val jobContext = currentCoroutineContext()
                     measureEInkChapter(paragraphs, settings, width, height, density, font.typeface, chapterTitle) { jobContext.ensureActive() }
                 }
-                state.install(next.pages, next.paragraphs)
+                state.install(next.pages, next.paragraphs, columns)
                 value = EInkMeasurement(input, next)
             }
         }
@@ -370,30 +388,42 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
         SideEffect { if(chapter == null) state.invalidate() else state.confirm(chapter.pages) }
         if (chapter == null) Text("正在分页…", Modifier.align(Alignment.Center), color = foreground)
         else {
-            val page = state.current
-            BoxWithConstraints(Modifier.fillMaxSize().clipToBounds().onSizeChanged { viewport = it }) {
+            BoxWithConstraints(Modifier.fillMaxSize().testTag(if(columns == 2) "reader-dual-page" else "reader-single-page").clipToBounds().onSizeChanged { viewport = it }) {
                 val extent = (if(dragAxis == 0) constraints.maxWidth else constraints.maxHeight).toFloat()
                 val shift = if(animate) pageOffset * extent else 0f
                 val direction = when { shift < 0 -> 1; shift > 0 -> -1; else -> 0 }
-                @Composable fun body(content: StaticPage?, offset: Float) {
-                    PageBody(content, chapter, settings, foreground, highlightLayers, annotations, density, context,
-                        tapNavigation, onSelect, imageModel, { expandedImage = it }, constraints.maxHeight,
-                        { if (canInteract) { tapNavigation.cancel(); onNote(it) } },
-                        Modifier.fillMaxSize().graphicsLayer {
+                @Composable fun body(firstPage: Int, offset: Float) {
+                    val spreadModifier = Modifier.fillMaxSize().graphicsLayer {
                             translationX = if(dragAxis == 0) offset else 0f
                             translationY = if(dragAxis == 1) offset else 0f
-                        }.background(background))
+                        }.background(background)
+                    @Composable fun page(index: Int, modifier: Modifier) {
+                        PageBody(chapter.pages.getOrNull(index), chapter, settings, foreground, highlightLayers, annotations, density, context,
+                            tapNavigation, onSelect, imageModel, { expandedImage = it }, constraints.maxHeight,
+                            { if (canInteract) { tapNavigation.cancel(); onNote(it) } }, modifier)
+                    }
+                    if(columns == 1) page(firstPage, spreadModifier)
+                    else CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                        Row(spreadModifier) {
+                            page(firstPage, Modifier.weight(1f).fillMaxHeight().padding(horizontal = horizontalPadding / 2).clipToBounds().testTag("reader-left-page"))
+                            Box(Modifier.width(gutter).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                                Box(Modifier.width(1.dp).fillMaxHeight().background(foreground.copy(alpha = .12f)))
+                            }
+                            page(firstPage + 1, Modifier.weight(1f).fillMaxHeight().padding(horizontal = horizontalPadding / 2).clipToBounds().testTag("reader-right-page"))
+                        }
+                    }
                 }
                 val outgoing = outgoingPageIndex
                 if(animate && outgoing != null) {
                     val pageDirection = (state.pageIndex - outgoing).coerceIn(-1, 1)
-                    body(chapter.pages.getOrNull(outgoing), (incomingOffset - pageDirection) * extent)
-                    body(page, incomingOffset * extent)
+                    body(outgoing, (incomingOffset - pageDirection) * extent)
+                    body(state.pageIndex, incomingOffset * extent)
                 } else {
-                    if(direction != 0) chapter.pages.getOrNull(state.pageIndex + direction)?.let {
-                        body(it, shift + direction * extent)
+                    val neighbor = state.pageIndex + direction * state.visiblePageCount
+                    if(direction != 0 && neighbor >= 0 && neighbor < chapter.pages.size) {
+                        body(neighbor, shift + direction * extent)
                     }
-                    body(page, shift)
+                    body(state.pageIndex, shift)
                 }
             }
         }

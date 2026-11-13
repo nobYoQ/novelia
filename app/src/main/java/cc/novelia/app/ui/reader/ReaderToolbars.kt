@@ -127,6 +127,7 @@ internal data class ReaderBottomToolbarState(
     val chapterTitle: String,
     val wide: Boolean,
     val cached: Boolean,
+    val visiblePageCount: Int = 1,
 )
 
 @Composable internal fun ReaderBottomToolbar(

@@ -209,7 +209,7 @@ internal object WebDavValidation {
 
     private fun readerField(field: String, value: JsonElement) {
         if (field == "devicePreferences") {
-            require(value is JsonObject && value.keys.containsAll(deviceReaderFields - setOf("tapZoneMap", "showWideToc", "orientation", "nightReading", "brightnessPreferences", "nightBrightness")) && value.keys.all { it in WebDavSchema.devicePreferenceFields }) { "设备偏好原子组字段不完整" }
+            require(value is JsonObject && value.keys.containsAll(deviceReaderFields - setOf("tapZoneMap", "showWideToc", "orientation", "nightReading", "brightnessPreferences", "nightBrightness", "horizontalDualPage")) && value.keys.all { it in WebDavSchema.devicePreferenceFields }) { "设备偏好原子组字段不完整" }
             value.forEach { (deviceField, deviceValue) -> deviceReaderField(deviceField, deviceValue) }
             return
         }
@@ -252,7 +252,7 @@ internal object WebDavValidation {
     private fun deviceReaderField(field: String, value: JsonElement) {
         when (field) {
             "activeModeSettings" -> {
-                require(value is JsonObject && value.keys.containsAll(WebDavSchema.readerModeFields - setOf("indentSize", "rowShowPartialLines", "letterSpacing", "nightPreset", "nightReading", "brightnessPreferences", "nightBrightness")) &&
+                require(value is JsonObject && value.keys.containsAll(WebDavSchema.readerModeFields - setOf("indentSize", "rowShowPartialLines", "letterSpacing", "nightPreset", "nightReading", "brightnessPreferences", "nightBrightness", "horizontalDualPage")) &&
                     value.keys.all { it in WebDavSchema.readerModeFields }) { "当前阅读模式配置不完整" }
                 value.forEach { (property, propertyValue) ->
                     if(property in portableReaderFields) readerField(property, propertyValue)
