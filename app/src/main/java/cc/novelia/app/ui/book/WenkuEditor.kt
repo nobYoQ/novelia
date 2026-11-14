@@ -1,17 +1,19 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.book
 
-import cc.novelia.app.ui.components.base.AppButton
 import cc.novelia.app.ui.components.base.AppTextButton
-import cc.novelia.app.ui.components.base.AppIconButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
+import androidx.compose.material.icons.automirrored.outlined.Subject
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.WenkuDetail
@@ -25,11 +27,8 @@ import cc.novelia.app.ui.components.base.AsyncContent
 import cc.novelia.app.ui.components.base.ChoiceRow
 import cc.novelia.app.ui.components.base.EmptyState
 import cc.novelia.app.ui.components.base.Screen
-import cc.novelia.app.ui.components.base.SectionTitle
 import cc.novelia.app.ui.markdown.rememberDraftPersistence
 import cc.novelia.app.ui.navigation.AppController
-import java.time.LocalDate
-import java.time.ZoneOffset
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
 
@@ -39,10 +38,23 @@ import kotlinx.serialization.json.*
     if(id == null) WenkuForm(c, null, WenkuDetail())
     else AsyncContent(id, { c.api.get<WenkuDetail>("wenku/$id") }) { detail, _ -> WenkuForm(c, id, detail) }
 }
-@Composable private fun WenkuForm(c: AppController, id: String?, original: WenkuDetail) {
+@Composable internal fun WenkuForm(c: AppController, id: String?, original: WenkuDetail) {
     val draftKey = "wenku:${id ?: "new"}"
     val draft = remember(id) { c.store.state.value.drafts[draftKey]?.let { runCatching { appJson.decodeFromString<WenkuDetail>(it) }.getOrNull() } ?: original }
-    var title by rememberSaveable(id) { mutableStateOf(draft.title) }; var titleZh by rememberSaveable(id) { mutableStateOf(draft.titleZh) }; var authors by rememberSaveable(id) { mutableStateOf(draft.authors.joinToString("\n")) }; var artists by rememberSaveable(id) { mutableStateOf(draft.artists.joinToString("\n")) }; var intro by rememberSaveable(id) { mutableStateOf(draft.introduction) }; var cover by rememberSaveable(id) { mutableStateOf(draft.cover.orEmpty()) }; var tags by rememberSaveable(id) { mutableStateOf(draft.keywords.joinToString("\n")) }; var level by rememberSaveable(id) { mutableStateOf(draft.level) }; var volumes by remember { mutableStateOf(draft.volumes) }; var volumeEditor by remember { mutableStateOf<Int?>(null) }; var saving by remember { mutableStateOf(false) }; var duplicate by remember { mutableStateOf<List<WenkuOutline>?>(null) }; var ignoreDuplicate by remember { mutableStateOf(false) }
+    var title by rememberSaveable(id) { mutableStateOf(draft.title) }
+    var titleZh by rememberSaveable(id) { mutableStateOf(draft.titleZh) }
+    var authors by rememberSaveable(id) { mutableStateOf(draft.authors.joinToString("\n")) }
+    var artists by rememberSaveable(id) { mutableStateOf(draft.artists.joinToString("\n")) }
+    var intro by rememberSaveable(id) { mutableStateOf(draft.introduction) }
+    var cover by rememberSaveable(id) { mutableStateOf(draft.cover.orEmpty()) }
+    var tags by rememberSaveable(id) { mutableStateOf(draft.keywords.joinToString("\n")) }
+    var level by rememberSaveable(id) { mutableStateOf(draft.level) }
+    var volumes by remember(id) { mutableStateOf(draft.volumes) }
+    var volumeEditor by rememberSaveable(id) { mutableStateOf<Int?>(null) }
+    var saving by remember { mutableStateOf(false) }
+    var duplicate by remember { mutableStateOf<List<WenkuOutline>?>(null) }
+    var ignoreDuplicate by remember { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
     fun values() = WenkuDetail(title = title.trim(), titleZh = titleZh.trim(), cover = cover.trim().ifBlank { null }, authors = authors.lines().map(String::trim).filter(String::isNotBlank), artists = artists.lines().map(String::trim).filter(String::isNotBlank), keywords = tags.lines().map(String::trim).filter(String::isNotBlank), level = level, introduction = intro.trim(), volumes = volumes)
     val draftPersistence = rememberDraftPersistence(c.store, draftKey) { appJson.encodeToString(values()) }
     LaunchedEffect(title, titleZh, authors, artists, intro, cover, tags, level, volumes) { kotlinx.coroutines.delay(700); draftPersistence.save() }
@@ -61,28 +73,46 @@ import kotlinx.serialization.json.*
         val result = if(id == null) c.api.post("wenku", JsonObject(data)) else c.api.put("wenku/$id", JsonObject(data))
         draftPersistence.submittedSuccessfully(submittedDraft); c.back(); c.book(BookRef("wenku", id ?: result.trim().trim('"'))); c.message("文库条目已保存")
     } finally { saving = false } } }
-    Screen(if(id == null) "新建文库条目" else "编辑文库条目", c::back) { padding -> AppScrollColumn(modifier = Modifier.padding(padding), contentModifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text("草稿自动保存在此设备。保存会更新原站资料。", style = MaterialTheme.typography.bodySmall)
-        OutlinedTextField(title, { title = it }, label = { Text("原文标题") }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(titleZh, { titleZh = it }, label = { Text("中文标题") }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(authors, { authors = it }, label = { Text("作者，每行一位") }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(artists, { artists = it }, label = { Text("插画师，每行一位") }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(cover, { cover = it }, label = { Text("封面 HTTPS 链接") }, modifier = Modifier.fillMaxWidth())
-        val levels = listOf("一般向", "轻文学", "严肃向", "非小说", "成人向", "成人向女")
-        ChoiceRow("分类", levels, levels.indexOf(level)) { level = levels[it] }
-        OutlinedTextField(tags, { tags = it }, label = { Text("标签，每行一个") }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(intro, { intro = it }, label = { Text("简介") }, minLines = 6, modifier = Modifier.fillMaxWidth())
-        SectionTitle("出版分卷 ${volumes.size}", "添加分卷") { volumeEditor = -1 }
-        volumes.forEachIndexed { index, volume -> ListItem(headlineContent = { Text(volume.titleZh ?: volume.title) }, supportingContent = { Text(volume.asin) }, trailingContent = { Row { AppIconButton(onClick = { volumeEditor = index }) { Icon(Icons.Outlined.Edit, "编辑分卷") }; AppIconButton(onClick = { volumes = volumes.filterIndexed { i, _ -> i != index } }) { Icon(Icons.Outlined.DeleteOutline, "移除分卷信息") } } }) }
-        Text("日亚资料导入依赖原站扩展。本页支持手动填写已核实的出版资料。", style = MaterialTheme.typography.bodySmall)
-        AppButton(onClick = ::submit, enabled = !saving && title.isNotBlank() && titleZh.isNotBlank() && (cover.isBlank() || cover.startsWith("https://")), modifier = Modifier.fillMaxWidth()) { Text(if(saving) "保存中…" else "保存到原站") }
-    } }
+    val invalidCover = cover.isNotBlank() && !cover.startsWith("https://")
+    WenkuEditorPage(
+        title = if(id == null) "新建文库条目" else "编辑文库条目",
+        onBack = c::back,
+        saving = saving,
+        canSave = title.isNotBlank() && titleZh.isNotBlank() && !invalidCover,
+        saveHint = when {
+            title.isBlank() || titleZh.isBlank() -> "原文标题和中文标题为必填项"
+            invalidCover -> "请将封面链接改为 HTTPS，或留空"
+            else -> "保存会更新原站资料，请确认信息准确"
+        },
+        onSave = { focusManager.clearFocus(); submit() },
+    ) {
+        WenkuEditorSection("基本信息", Icons.AutoMirrored.Outlined.MenuBook) {
+            WenkuEditorField(title, { title = it }, "原文标题", Modifier.testTag("wenku-title"))
+            WenkuEditorField(titleZh, { titleZh = it }, "中文标题", Modifier.testTag("wenku-title-zh"))
+            WenkuEditorFieldPair(
+                first = { WenkuEditorField(authors, { authors = it }, "作者", hint = "每行一位") },
+                second = { WenkuEditorField(artists, { artists = it }, "插画师", hint = "选填，每行一位") },
+            )
+            WenkuEditorField(cover, { cover = it }, "封面链接", Modifier.testTag("wenku-cover"),
+                keyboardType = KeyboardType.Uri, isError = invalidCover,
+                hint = if(invalidCover) "请使用 HTTPS 链接" else "选填，支持 HTTPS 链接")
+        }
+        WenkuEditorSection("分类与简介", Icons.AutoMirrored.Outlined.Subject) {
+            val levels = listOf("一般向", "轻文学", "严肃向", "非小说", "成人向", "成人向女")
+            ChoiceRow("作品分类", levels, levels.indexOf(level)) { level = levels[it] }
+            WenkuEditorField(tags, { tags = it }, "标签", hint = "选填，每行一个")
+            WenkuEditorField(intro, { intro = it }, "作品简介", minLines = 5)
+        }
+        WenkuEditorVolumes(volumes, onAdd = { volumeEditor = -1 }, onEdit = { volumeEditor = it },
+            onRemove = { index -> volumes = volumes.filterIndexed { i, _ -> i != index } })
+    }
     volumeEditor?.let { index ->
-        val existing = volumes.getOrNull(index) ?: WenkuVolume()
-        var asin by remember(index) { mutableStateOf(existing.asin) }; var name by remember(index) { mutableStateOf(existing.title) }; var translated by remember(index) { mutableStateOf(existing.titleZh.orEmpty()) }; var image by remember(index) { mutableStateOf(existing.cover.orEmpty()) }; var publisher by remember(index) { mutableStateOf(existing.publisher.orEmpty()) }; var imprint by remember(index) { mutableStateOf(existing.imprint.orEmpty()) }; var date by remember(index) { mutableStateOf(existing.publishAt?.let { java.time.Instant.ofEpochSecond(it).atOffset(ZoneOffset.UTC).toLocalDate().toString() }.orEmpty()) }
-        AppAlertDialog(onDismissRequest = { volumeEditor = null }, title = { Text("出版分卷") }, text = { AppScrollColumn(contentModifier = Modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedTextField(asin, { asin = it.trim() }, label = { Text("ASIN") }); OutlinedTextField(name, { name = it }, label = { Text("原文卷名") }); OutlinedTextField(translated, { translated = it }, label = { Text("中文卷名") }); OutlinedTextField(image, { image = it }, label = { Text("封面 HTTPS 链接") }); OutlinedTextField(publisher, { publisher = it }, label = { Text("出版社") }); OutlinedTextField(imprint, { imprint = it }, label = { Text("文库品牌") }); OutlinedTextField(date, { date = it }, label = { Text("出版日期 YYYY-MM-DD") })
-        } }, confirmButton = { AppTextButton(onClick = { val timestamp = date.takeIf(String::isNotBlank)?.let { runCatching { LocalDate.parse(it).atStartOfDay().toEpochSecond(ZoneOffset.UTC) }.getOrNull() }; if(date.isNotBlank() && timestamp == null) { c.message("请填写有效的出版日期") } else { val volume = existing.copy(asin = asin, title = name, titleZh = translated.ifBlank { null }, cover = image.ifBlank { null }, publisher = publisher.ifBlank { null }, imprint = imprint.ifBlank { null }, publishAt = timestamp); volumes = if(index < 0) volumes + volume else volumes.toMutableList().apply { set(index, volume) }; volumeEditor = null } }, enabled = asin.isNotBlank() && name.isNotBlank() && (image.isBlank() || image.startsWith("https://"))) { Text("保存分卷") } }, dismissButton = { AppTextButton(onClick = { volumeEditor = null }) { Text("取消") } })
+        key(index) {
+            WenkuVolumeEditorDialog(volumes.getOrNull(index) ?: WenkuVolume(), onDismiss = { volumeEditor = null }) { volume ->
+                volumes = if(index < 0) volumes + volume else volumes.toMutableList().apply { set(index, volume) }
+                volumeEditor = null
+            }
+        }
     }
     duplicate?.let { matches ->
         AppAlertDialog(
