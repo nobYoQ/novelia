@@ -103,8 +103,7 @@ internal fun IllustrationViewer(model: Any, imageLabel: String = "插图", onDis
                         onError = { loading = false; failed = true },
                     ) }
                     if(loading) { if(reducedMotion) Text("正在加载${imageLabel}…") else CircularProgressIndicator(Modifier.size(32.dp), color = Color.White) }
-                    if(failed) Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("${imageLabel}暂时无法加载", color = Color.White)
+                    if(failed) IllustrationLoadError(model, Color.White, imageLabel) {
                         AppFilledTonalButton(onClick = { retry++ }) { Text("重试") }
                     }
                 }

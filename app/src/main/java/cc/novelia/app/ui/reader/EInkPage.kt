@@ -50,6 +50,7 @@ import cc.novelia.app.data.model.Position
 import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.reader.*
 import cc.novelia.app.ui.components.media.IllustrationViewer
+import cc.novelia.app.ui.components.media.IllustrationLoadError
 import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.LocalEInkMode
 import cc.novelia.app.ui.theme.LocalReducedMotion
@@ -510,8 +511,7 @@ internal fun PageBody(
                     onLongClickLabel = "放大查看插图", onLongClick = { onExpandImage(model) }), contentAlignment = Alignment.Center) {
                     AsyncImage(request, "小说插图", Modifier.fillMaxSize(), contentScale = ContentScale.Fit,
                         onLoading = { failed = false }, onSuccess = { failed = false }, onError = { failed = true })
-                    if(failed) Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("插图暂时无法加载", color = foreground)
+                    if(failed) IllustrationLoadError(model, foreground) {
                         AppTextButton(onClick = { retry++ }) { Text("重新加载插图", color = foreground) }
                     }
                 }

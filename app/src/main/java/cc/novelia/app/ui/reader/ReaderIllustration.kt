@@ -18,6 +18,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.reader.*
 import cc.novelia.app.ui.components.media.IllustrationViewer
+import cc.novelia.app.ui.components.media.IllustrationLoadError
 import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.appReducedMotion
 import cc.novelia.app.ui.components.media.RecoveringAsyncImage as AsyncImage
@@ -42,8 +43,7 @@ import coil.request.ImageRequest
             AsyncImage(request, "小说插图", Modifier.fillMaxSize(), contentScale = ContentScale.Fit,
                 onLoading = { loading = true; failed = false }, onSuccess = { loading = false; failed = false }, onError = { loading = false; failed = true })
             if(loading) { if(!animate) Text("正在加载插图…", color = foreground) else CircularProgressIndicator(Modifier.size(28.dp), color = foreground.copy(alpha = .65f), strokeWidth = 2.dp) }
-            if(failed) Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("插图暂时无法加载", style = MaterialTheme.typography.bodyMedium, color = foreground.copy(alpha = .7f))
+            if(failed) IllustrationLoadError(model, foreground) {
                 AppTextButton(onClick = { retry++ }) { Text("重新加载插图", color = foreground) }
             }
         }
