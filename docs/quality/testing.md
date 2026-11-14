@@ -53,7 +53,7 @@ Release 报告对应替换变体名。警告、失败和跳过分别记录。
 | 导入、下载、导出 | `files.FileImportRegressionTest`、`files.importing.DocumentImportBatchTest`、`files.importing.DocumentImportNameTest`、`files.downloads.DownloadFilesTest`、`files.exporting.PendingExportFilesTest` |
 | 阅读投影、分页、定位 | `reader.ReaderProjectionTest`、`reader.ReaderExactSearchTest`、`reader.StaticPaginationTest`、`ui.reader.ReaderChapterLoadTest` |
 | EPUB 注音、强调、脚注与文字范围 | `files.EpubInlineTest`、`reader.InlinePreparationTest`、`data.storage.LocalEpubReadingTest` |
-| 位置、历史、更新 | `data.library.ReadingProgressUpdatesTest`、`data.storage.LocalReadingProgressTest`、`data.updates.BookUpdateStateTest` |
+| 位置、历史、更新 | `data.library.ReadingProgressUpdatesTest`、`AutomaticReadingStatusTest`、`data.webdav.ReadingStatusSyncTest`、`data.storage.LocalReadingProgressTest`、`data.updates.BookUpdateStateTest` |
 | 应用版本与下载 | `data.appupdate.AppReleaseTest`、`AppReleaseDownloadCoordinatorTest`、`AppUpdateSettingsTest`（均在 data.appupdate） |
 | 搜索和标签 | `data.catalog.SearchExpressionBoundaryTest`、`NovelLocalFilterTest`、`KeywordLibraryTest`、`SavedSearchPresetTest`（均在 data.catalog） |
 | Markdown 和草稿 | `ui.markdown.SiteMarkdownTest`、`data.markdown.MarkdownLinkPasteTest`、`ui.markdown.EditorStateRegressionTest`、`ui.community.ArticleDraftsTest` |

@@ -15,6 +15,7 @@ import cc.novelia.app.data.model.Position
 import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.data.updates.BookUpdateInfo
 import cc.novelia.app.data.storage.LocalStore
+import cc.novelia.app.data.library.withReadingStatus
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Rule
@@ -28,6 +29,7 @@ class ReaderCompletionFlowTest {
     @Test fun finalScrollScreenCompletesTheBookWithChapterEndButtonsHidden() = verifyCompletion("scroll")
 
     @Test fun finalAutomaticPageCompletesTheBookWithoutChangingItsRestoreAnchor() = verifyCompletion("auto")
+    @Test fun manualStatusRemainsProtectedWhileReadingToTheFinalScreen() = verifyCompletion("scroll", manual = true)
 
     @Test fun alreadyCompletedBooksLoseOldBadgesWithoutReopeningButKeepFutureUpdates() {
         compose.waitUntil(15_000) { compose.onAllNodesWithText("本地文件").fetchSemanticsNodes().isNotEmpty() }
@@ -75,11 +77,11 @@ class ReaderCompletionFlowTest {
         }
     }
 
-    private fun verifyCompletion(mode: String) {
+    private fun verifyCompletion(mode: String, manual: Boolean = false) {
         compose.waitUntil(15_000) { compose.onAllNodesWithText("本地文件").fetchSemanticsNodes().isNotEmpty() }
         val app = compose.activity.application as NoveliaApplication
         val previous = app.store.state.value
-        val ref = BookRef("local", "completion-$mode-regression")
+        val ref = BookRef("local", "completion-$mode-$manual-regression")
         val title = "末屏进度测试 $mode"
         try {
             compose.runOnIdle {
@@ -89,6 +91,7 @@ class ReaderCompletionFlowTest {
                 app.store.saveDocument(LocalDocument(ref.id, title, "txt", listOf(
                     LocalChapter("last", "最后一章", listOf("旅人沿着森林小路前行，寻找远处的小镇。".repeat(90))))))
                 app.store.saveBook(BookCard(ref, title, total = 1))
+                if(manual) app.store.update { it.withReadingStatus(setOf(ref.key), "想读") }
                 app.store.update { state -> state.copy(
                     books = state.books.map { if(it.book.ref == ref) it.copy(hasUpdates = true) else it },
                     bookUpdates = state.bookUpdates + (ref.key to BookUpdateInfo(checkedAt = System.currentTimeMillis(),
@@ -99,6 +102,7 @@ class ReaderCompletionFlowTest {
             compose.onNodeWithText(title).performClick()
             compose.waitUntil(15_000) { app.store.state.value.positions[ref.key]?.chapterCount == 1 }
             compose.runOnIdle { assertFalse("长段落的开头不能被判为读完", app.store.state.value.positions.getValue(ref.key).chapterCompleted) }
+            compose.runOnIdle { assertNotEquals("仅进入末章不能标为读完", "读完", app.store.state.value.books.single { it.book.ref == ref }.status) }
             // 最新章刚打开就同步书架进度和更新标记，无需先翻到本章末屏。
             compose.onNodeWithContentDescription("返回").performClick()
             compose.onNodeWithTag("book-reading-progress-${ref.key}", useUnmergedTree = true)
@@ -121,6 +125,7 @@ class ReaderCompletionFlowTest {
                 compose.onNodeWithText("返回目录").assertDoesNotExist()
             }
             compose.waitUntil(10_000) { app.store.state.value.positions[ref.key]?.chapterCompleted == true }
+            if(!manual) compose.waitUntil(10_000) { app.store.state.value.books.single { it.book.ref == ref }.status == "读完" }
             val finalScreen = app.store.state.value.positions.getValue(ref.key)
             assertEquals("末屏仍应保存真实段落下标", 1, finalScreen.index)
             assertTrue("末屏必须保留段内位置", finalScreen.textOffset > 0)
@@ -132,7 +137,7 @@ class ReaderCompletionFlowTest {
             compose.onNode(hasText(title) and hasText("有更新")).assertDoesNotExist()
             compose.runOnIdle {
                 val saved = app.store.state.value.books.single { it.book.ref == ref }
-                assertEquals("在读", saved.status)
+                assertEquals(if(manual) "想读" else "读完", saved.status)
                 assertFalse(saved.hasUpdates)
                 assertEquals(0, app.store.state.value.bookUpdates[ref.key]?.newChapters ?: 0)
                 assertFalse(app.store.state.value.bookUpdates[ref.key]?.hasChanges == true)

@@ -10,7 +10,7 @@ import cc.novelia.app.data.updates.updateSnapshot
 /** 云端收藏可新增本地副本，但不得移动用户已有的手动收藏。 */
 fun LibraryState.withCloudFavoriteLocalCopy(book: BookCard): LibraryState {
     if(!autoSaveCloudFavoritesLocally || books.any { it.book.ref == book.ref }) return this
-    return copy(books = books + SavedBook(book))
+    return copy(books = books + newSavedBook(book))
 }
 
 /** 用户显式批量加入本地，不受自动副本开关影响；已有收藏的资料和分组保持不变。 */
@@ -49,7 +49,7 @@ private fun LibraryState.withImportedCloudFavorites(selected: List<BookCard>, ta
             if(book.ref.isLocal) it else it.copy(total = maxOf(it.total, baseline.total))
         }
         if(!book.ref.isLocal) snapshots[book.ref.key] = baseline
-        SavedBook(merged, destination(book))
+        newSavedBook(merged, destination(book))
     }
     return copy(books = books + added, folders = (folders + targetFolders).distinct(), updateSnapshots = snapshots)
 }

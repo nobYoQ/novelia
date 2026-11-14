@@ -28,7 +28,18 @@ import kotlinx.serialization.Serializable
 @Serializable data class SavedBook(val book: BookCard, val folder: String = "默认收藏", val pinned: Boolean = false, val status: String = "在读", val addedAt: Long = System.currentTimeMillis(), val hasUpdates: Boolean = false,
     val parentWenkuKey: String? = null, val volumesExpanded: Boolean = false, val volumeOrder: List<String> = emptyList(),
     val folderId: String? = null,
-    val sourceVolumeId: String? = null, val siteVolumeOrderDescending: Boolean = false)
+    val sourceVolumeId: String? = null, val siteVolumeOrderDescending: Boolean = false,
+    // 缺失代表旧版本来源不明，按手动保护；新书由 newSavedBook 显式开启自动管理。
+    val readingStatusControl: ReadingStatusControl? = null)
+
+/** revision 标识一次用户管理意图；自动阅读只能在同一意图下推进。 */
+@Serializable data class ReadingStatusControl(
+    val automatic: Boolean, val revision: String, val supersedes: Set<String> = emptySet(),
+    val knownChapterCount: Int = 0, val completedChapterCount: Int? = null) {
+    val valid: Boolean get() = revision.matches(Regex("[A-Za-z0-9._-]{1,128}")) && supersedes.size <= 10_000 &&
+        supersedes.all { it.matches(Regex("[A-Za-z0-9._-]{1,128}")) } && revision !in supersedes &&
+        knownChapterCount in 0..10_000_000 && (completedChapterCount == null || completedChapterCount in 1..knownChapterCount)
+}
 
 /** key 为 BookRef.key；text 可为空，此时仍是一条保留章节和段落位置的书签。 */
 @Serializable data class Note(val id: String, val key: String, val chapterId: String, val paragraph: Int, val quote: String, val text: String, val createdAt: Long = System.currentTimeMillis(), val bookTitle: String = "", val chapterTitle: String = "", val bookmarked: Boolean = true,
@@ -82,6 +93,8 @@ fun legacyFolderId(name: String): String = if(name == DEFAULT_FOLDER) DEFAULT_FO
     val shelfTapToRead: Boolean = false,
     // 书架打开位置仅保存在本机，云端收藏夹按账号隔离；不参与 WebDAV 同步。
     val rememberLastShelfFolder: Boolean = true, val lastShelfLocation: ShelfLocation = ShelfLocation(),
+    // 本机开关，普通设置备份保留；切换版本阻止关闭前的迟到阅读事件生效。
+    val autoReadingStatus: Boolean = true, val autoReadingStatusRevision: String = "",
     val edgeToolbar: EdgeToolbarSettings = EdgeToolbarSettings(),
     val autoSaveCloudFavoritesLocally: Boolean = true,
     // 文件清理仅为本机偏好，默认关闭，普通设置备份会保留这两个选项。

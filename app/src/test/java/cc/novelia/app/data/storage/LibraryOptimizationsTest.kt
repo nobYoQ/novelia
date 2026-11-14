@@ -48,8 +48,12 @@ class LibraryOptimizationsTest {
     @Test fun bulkStatusChangesOnlySelectedEntriesAndPreservesReadingData() {
         val original = library.copy(positions = mapOf(first.book.ref.key to Position("chapter", index = 4)))
         val changed = original.withReadingStatus(setOf(first.book.ref.key, web.book.ref.key, "local/missing"), "想读")
-        assertEquals(first.copy(status = "想读"), changed.books.first { it.book.ref == first.book.ref })
-        assertEquals(web.copy(status = "想读"), changed.books.first { it.book.ref == web.book.ref })
+        for(selected in listOf(first, web)) {
+            val actual = changed.books.first { it.book.ref == selected.book.ref }
+            assertEquals(selected.copy(status = "想读"), actual.copy(readingStatusControl = null))
+            assertFalse(actual.readingStatusControl!!.automatic)
+            assertTrue(actual.readingStatusControl!!.valid)
+        }
         assertEquals(second, changed.books.first { it.book.ref == second.book.ref })
         assertEquals(original.positions, changed.positions)
         assertThrows(IllegalArgumentException::class.java) { original.withReadingStatus(setOf(first.book.ref.key), "unknown") }

@@ -19,6 +19,10 @@ import cc.novelia.app.NoveliaApplication
 import cc.novelia.app.R
 import cc.novelia.app.data.auth.SessionBinding
 import cc.novelia.app.data.model.BookRef
+import cc.novelia.app.data.model.Position
+import cc.novelia.app.data.library.ReadingStatusToken
+import cc.novelia.app.data.library.readingStatusToken
+import cc.novelia.app.data.library.withReadingActivity
 import cc.novelia.app.data.model.Chapter
 import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.data.model.toReaderChapter
@@ -53,6 +57,8 @@ class ReadAloudService : Service() {
     private var segments = emptyList<SpeechSegment>()
     private var bookKey: String? = null
     private var chapterId: String? = null
+    private var readingStatusToken: ReadingStatusToken? = null
+    private var statusChapterIds: List<String> = emptyList()
     private var paragraphs = emptyList<String>(); private var index = 0; private var ready = false; private var paused = false; private var title = "朗读"; private var rate = 1f; private var language = Locale.SIMPLIFIED_CHINESE
     private val handler = Handler(Looper.getMainLooper())
     private val stopTimer = Runnable { stopPlayback(SLEEP_TIMER_FINISHED) }
@@ -78,7 +84,7 @@ class ReadAloudService : Service() {
         } }, selected)
         engine?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) { handler.post { if(!paused && isCurrentUtterance(utteranceId)) { status.value = "正在朗读：$title"; publishPlayback(true) } } }
-            override fun onDone(utteranceId: String?) { handler.post { if(!paused && isCurrentUtterance(utteranceId)) { index++; speak() } } }
+            override fun onDone(utteranceId: String?) { handler.post { if(!paused && isCurrentUtterance(utteranceId)) { recordReadingStatus(); index++; speak() } } }
             @Deprecated("Deprecated in Java") override fun onError(utteranceId: String?) { handler.post { if(isCurrentUtterance(utteranceId)) { status.value = "朗读失败，请检查系统语音包"; stopSelf() } } }
         })
     }
@@ -126,6 +132,7 @@ class ReadAloudService : Service() {
                             SpeechChapterSequence(request.chapterId, request.nextId, request.settings) { id -> loadChapter(ref, id, request) }
                         }
                         paragraphs = request.paragraphs; segments = request.segments; bookKey = request.ref?.key; chapterId = request.chapterId; loading = false
+                        readingStatusToken = null; statusChapterIds = request.statusChapterIds
                         publishPlayback(false)
                         configureAndSpeak()
                     } catch(e: CancellationException) { throw e }
@@ -171,8 +178,23 @@ class ReadAloudService : Service() {
         else if(!paused) {
             val id = "$activeRequest:$index:${++utteranceSequence}"
             currentUtterance = id
+            // 每个新句子捕获当前管理版本；句子开始后的手动修改会让其完成回调失效。
+            readingStatusToken = bookKey?.takeIf { statusChapterIds.isNotEmpty() }?.let { key ->
+                (application as NoveliaApplication).store.state.value.readingStatusToken(BookRef.fromKey(key))
+            }
             engine?.speak(paragraphs[index], TextToSpeech.QUEUE_FLUSH, null, id)
         }
+    }
+    private fun recordReadingStatus() {
+        val token = readingStatusToken ?: return
+        val key = bookKey ?: return
+        val id = chapterId ?: return
+        val chapterIndex = statusChapterIds.indexOf(id).takeIf { it >= 0 } ?: return
+        val app = application as NoveliaApplication
+        if(binding?.let { it != app.session.capture() } == true) return
+        val point = Position(id, chapterIndex = chapterIndex, chapterCount = statusChapterIds.size, paragraphCount = paragraphs.size)
+        app.store.update { it.withReadingActivity(BookRef.fromKey(key), token, point,
+            atChapterEnd = index == paragraphs.lastIndex, completeCatalog = true) }
     }
     private suspend fun loadChapter(ref: BookRef, id: String, request: SpeechRequest): Chapter {
         val app = application as NoveliaApplication
@@ -264,6 +286,7 @@ class ReadAloudService : Service() {
          */
         internal suspend fun start(context: Context, title: String, settings: ReaderSettings,
             ref: BookRef? = null, chapterId: String? = null, nextId: String? = null,
+            statusChapterIds: List<String> = emptyList(),
             content: () -> List<SpeechSegment>) {
             val generation = requestGeneration.incrementAndGet()
             val appContext = context.applicationContext
@@ -280,7 +303,8 @@ class ReadAloudService : Service() {
                     val queue = segments.map { it.text }
                     if(queue.isEmpty() && !(settings.speechContinueChapters && ref != null && nextId != null)) false
                     else {
-                        file.writeText(appJson.encodeToString(SpeechRequest(queue, settings, ref, chapterId, nextId, binding?.account, binding?.generation ?: 0, segments)), Charsets.UTF_8)
+                        file.writeText(appJson.encodeToString(SpeechRequest(queue, settings, ref, chapterId, nextId, binding?.account, binding?.generation ?: 0, segments,
+                            statusChapterIds)), Charsets.UTF_8)
                         true
                     }
                 }

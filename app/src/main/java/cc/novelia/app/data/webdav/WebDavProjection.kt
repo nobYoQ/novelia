@@ -155,7 +155,7 @@ object WebDavProjection {
             val book = json.encodeToJsonElement(BookCard.serializer(), portable).jsonObject.filterKeys { it in portableBookFields }
             put(saved.book.ref.key, mapOf("book" to JsonObject(book),
                 "folderId" to JsonPrimitive(saved.folderId ?: folderIds[saved.folder] ?: DEFAULT_FOLDER_ID),
-                "pinned" to JsonPrimitive(saved.pinned), "status" to JsonPrimitive(saved.status), "addedAt" to JsonPrimitive(saved.addedAt)).asObject())
+                "pinned" to JsonPrimitive(saved.pinned), "status" to WebDavReadingStatus.encode(saved), "addedAt" to JsonPrimitive(saved.addedAt)).asObject())
         }
     }
 
@@ -318,7 +318,9 @@ object WebDavProjection {
                 // 原站关系与本机分卷整理状态不由 WebDAV 改写。
                 book = book.copy(favored = old?.book?.favored, cloudReading = old?.book?.cloudReading),
                 folder = names.getValue(folderId), folderId = folderId, pinned = fields.getValue("pinned").jsonPrimitive.booleanOrNull!!,
-                status = fields.getValue("status").jsonPrimitive.content, addedAt = fields.getValue("addedAt").jsonPrimitive.longOrNull!!)
+                status = WebDavReadingStatus.status(fields.getValue("status")),
+                readingStatusControl = WebDavReadingStatus.control(fields.getValue("status")),
+                addedAt = fields.getValue("addedAt").jsonPrimitive.longOrNull!!)
         }
         return state.copy(books = localBooks + remote, folders = folders, folderIds = folderIds)
     }

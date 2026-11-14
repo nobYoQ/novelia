@@ -48,6 +48,10 @@ WebDAV 用用户自己的 HTTPS 服务，在设备之间合并选定的阅读资
 
 进度把章节与段落视为完整锚点，不能从不同设备各取一半。并发进度保留本机位置并展示候选；笔记正文并发修改也供用户选择。选择会生成观察了所有候选的新版本，供后续设备收敛。
 
+书架阅读分类与自动／手动管理信息作为同一原子组参加“本地收藏”同步。并发手动意图优先于自动推进；显式恢复自动管理会创建新的管理版本，旧版本的离线自动完成不能覆盖它。两端并发手动选择不同状态时，同步页保留候选供用户选择。自动记录的总开关只保存在本机和普通设置备份中，不随 WebDAV 开关另一台设备的行为；接收阅读进度也不会制造自动状态变化。
+
+缺少管理信息的旧文本状态仍可读取，并按手动保护处理。首次同步带管理信息的状态时，仅收藏文档升级为协议第 2 版，其他文档与数据集清单保持第 1 版。旧客户端会拒绝不认识的收藏文档并提示升级，不应混用旧客户端继续写收藏；各设备需升级到支持自动阅读状态的版本。
+
 布局或译文不同、正文变化时，以原文段落恢复并清除失效字符/像素偏移。普通 ZIP 备份移除设备身份和同步版本，恢复不会克隆另一台设备的身份。
 
 ## 同步过程与失败保护
@@ -78,7 +82,7 @@ WebDAV 用用户自己的 HTTPS 服务，在设备之间合并选定的阅读资
 
 ## 回归入口
 
-投影与应用入口保留在 [WebDavProjection.kt](../../app/src/main/java/cc/novelia/app/data/webdav/WebDavProjection.kt)；[WebDavSchema.kt](../../app/src/main/java/cc/novelia/app/data/webdav/WebDavSchema.kt) 集中记录前缀、字段集合及共享键规则，[WebDavValidation.kt](../../app/src/main/java/cc/novelia/app/data/webdav/WebDavValidation.kt) 校验键、字段值、全部并发候选和完整记录。原有调用仍通过 `WebDavProjection` 的校验入口委托，协议版本、序列化格式、限制和错误信息保持不变。新增同步字段时需同时核对投影、共享字段集合与校验规则。
+投影与应用入口保留在 [WebDavProjection.kt](../../app/src/main/java/cc/novelia/app/data/webdav/WebDavProjection.kt)；[WebDavSchema.kt](../../app/src/main/java/cc/novelia/app/data/webdav/WebDavSchema.kt) 集中记录前缀、字段集合及共享键规则，[WebDavValidation.kt](../../app/src/main/java/cc/novelia/app/data/webdav/WebDavValidation.kt) 校验键、字段值、全部并发候选和完整记录。原有调用仍通过 `WebDavProjection` 的校验入口委托，阅读状态原子组和合并规则见 `WebDavReadingStatus` 与 `ReadingStatusSyncTest`。新增同步字段时需同时核对投影、共享字段集合与校验规则。
 
 合并和投影看 `WebDavMergeTest`、`WebDavProjectionTest`；交换与落盘顺序看 `WebDavExchangeTest`；协议看 `WebDavClientTest`、`WebDavPropertiesTest`、`WebDavNutcloudCompatibilityTest`；载荷校验看 `WebDavPayloadTest`。位于 [WebDAV JVM 测试](../../app/src/test/java/cc/novelia/app/data/webdav)。
 

@@ -16,7 +16,8 @@ import kotlinx.serialization.Serializable
     val nextId: String? = null,
     val account: String? = null,
     val sessionGeneration: Long = 0,
-    val segments: List<SpeechSegment> = emptyList()
+    val segments: List<SpeechSegment> = emptyList(),
+    val statusChapterIds: List<String> = emptyList()
 )
 
 internal data class SpeechChapter(val id: String, val title: String, val paragraphs: List<String>, val segments: List<SpeechSegment> = emptyList())

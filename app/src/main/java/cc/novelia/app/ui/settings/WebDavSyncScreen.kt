@@ -165,6 +165,10 @@ internal fun WebDavReconnectDialog(working: Boolean, onDismiss: () -> Unit, onCo
 
 /** 将保留的进度/正文转为可阅读内容，避免把同步协议暴露在选择流程里。 */
 private fun readableCandidate(candidate: JsonElement, expanded: Boolean): String {
+    if(candidate is JsonObject && candidate["status"] is JsonPrimitive) {
+        val mode = if(candidate["automatic"]?.jsonPrimitive?.content == "true") "自动管理" else "手动固定"
+        return "阅读状态：${candidate.getValue("status").jsonPrimitive.content}\n$mode"
+    }
     val labels = mapOf("chapter" to "章节", "chapterId" to "章节", "chapterTitle" to "章节名", "paragraph" to "段落", "sourceParagraph" to "段落", "textOffset" to "文字位置", "offset" to "文字位置", "position" to "位置", "text" to "正文", "content" to "正文", "quote" to "摘录", "note" to "笔记", "title" to "章节名", "bookTitle" to "书名")
     val lines = mutableListOf<String>()
     fun content(value: String) = if(expanded || value.length <= 2000) value else value.take(2000) + "…（内容已折叠）"

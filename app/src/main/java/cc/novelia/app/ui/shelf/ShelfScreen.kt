@@ -44,6 +44,7 @@ import cc.novelia.app.data.library.ShelfBookType
 import cc.novelia.app.data.library.readingStatuses
 import cc.novelia.app.data.library.shelfGroups
 import cc.novelia.app.data.library.withReadingStatus
+import cc.novelia.app.data.library.withAutomaticReadingStatus
 import cc.novelia.app.data.library.withVolumeParent
 import cc.novelia.app.data.library.withWenkuVolumeOrder
 import cc.novelia.app.data.library.withWenkuVolumes
@@ -493,10 +494,15 @@ import kotlinx.coroutines.withContext
         state.folders.forEach { target -> AppTextButton(onClick = { c.store.update { it.moveShelfBooks(selection, target) }; bulkMove = false; managing = false; selection = emptySet() }) { Text(target) } }
     } }, confirmButton = {})
     if(bulkStatus) AppAlertDialog(onDismissRequest = { bulkStatus = false }, title = { Text("修改 ${selection.size} 本的阅读状态") }, text = { Column {
+        Text("手动选择后固定状态，自动阅读不会覆盖。", style = MaterialTheme.typography.bodySmall)
         readingStatuses.forEach { status -> AppTextButton(onClick = {
             c.store.update { it.withReadingStatus(selection, status) }
             bulkStatus = false; managing = false; selection = emptySet()
         }) { Text(status) } }
+        AppTextButton(onClick = {
+            c.store.update { it.withAutomaticReadingStatus(selection) }
+            bulkStatus = false; managing = false; selection = emptySet()
+        }) { Text("恢复自动管理") }
     } }, confirmButton = {})
     renamingDocument?.let { saved -> TextPrompt("重命名本地小说", "名称", saved.book.title, { renamingDocument = null }) { name ->
         c.action("小说已重命名") { withContext(Dispatchers.IO) { c.store.renameDocument(saved.book.ref.id, name) } }
@@ -506,6 +512,10 @@ import kotlinx.coroutines.withContext
         if(saved.hasUpdates) MenuRow("标记更新已读", "清除本书的更新提示", Icons.Outlined.DoneAll, { c.store.update { it.withAcknowledgedBookUpdates(saved.book.ref) }; selected = null })
         MenuRow(if(saved.pinned) "取消置顶" else "置顶", "在书架顶部显示", Icons.Outlined.PushPin, { c.store.update { it.copy(books = it.books.map { b -> if(b.book.ref == saved.book.ref) b.copy(pinned = !b.pinned) else b }) }; selected = null })
         ChoiceRow("阅读状态", readingStatuses, readingStatuses.indexOf(saved.status)) { status -> c.store.update { it.withReadingStatus(setOf(saved.book.ref.key), readingStatuses[status]) }; selected = null }
+        if(saved.readingStatusControl?.automatic != true) MenuRow("恢复自动管理", "当前为手动设置或旧版保留状态，自动阅读不会覆盖", Icons.Outlined.Sync, {
+            c.store.update { it.withAutomaticReadingStatus(setOf(saved.book.ref.key)) }; selected = null
+        }) else Text(if(state.autoReadingStatus) "阅读状态由自动管理；手动选择后将固定状态" else "自动记录已关闭，当前状态保留",
+            Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall)
         val parent = state.books.firstOrNull { it.book.ref.isWenku && it.book.ref.key == saved.parentWenkuKey }
         if(parent == null) ChoiceRow("收藏夹", state.folders, state.folders.indexOf(saved.folder)) { index -> c.store.saveBook(saved.book, state.folders[index]); selected = null }
         else Text("所属收藏夹：${parent.folder}", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = MaterialTheme.typography.bodyMedium)

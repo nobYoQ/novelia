@@ -62,7 +62,9 @@ class CloudFavoriteBatchTest {
         val imported = listOf(web.copy(updateAt = -1), wenku)
         val expected = imported.fold(before) { state, book -> state.withSavedBook(book, "默认收藏") }
         val result = before.withCloudFavoritesAddedLocally(imported, "默认收藏")
-        assertEquals(expected.books.map { it.copy(addedAt = 0) }, result.books.map { it.copy(addedAt = 0) })
+        fun comparable(saved: SavedBook) = saved.copy(addedAt = 0,
+            readingStatusControl = saved.readingStatusControl?.copy(revision = "new-book"))
+        assertEquals(expected.books.map(::comparable), result.books.map(::comparable))
         assertEquals(expected.updateSnapshots, result.updateSnapshots)
         assertEquals(30, result.books.first().book.total)
     }

@@ -128,7 +128,8 @@ data class SyncReplica(
                 }
                 document = document.copy(context = WebDavMerge.joinVector(document.context, observed))
             }
-            nextDocuments[domain] = document.copy(records = records.toSortedMap())
+            val statusV2 = domain == SyncDomain.FAVORITES && records.values.any { it.fields["status"]?.candidates?.any { value -> value.value is JsonObject } == true }
+            nextDocuments[domain] = document.copy(records = records.toSortedMap(), schemaVersion = if(statusV2) 2 else document.schemaVersion)
         }
         return copy(clock = nextClock, documents = nextDocuments)
     }

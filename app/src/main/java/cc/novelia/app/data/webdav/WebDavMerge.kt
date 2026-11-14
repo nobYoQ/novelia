@@ -36,9 +36,13 @@ object WebDavMerge {
     private val candidateOrder = compareBy<SyncValue>({ it.counter }, { it.writer }, { it.deleted }, { canonical(it.value) },
         { it.version.toSortedMap().entries.joinToString { entry -> "${entry.key}:${entry.value}" } })
 
-    private fun mergeCell(first: SyncCell, second: SyncCell): SyncCell {
+    private fun mergeCell(first: SyncCell, second: SyncCell, readingStatus: Boolean = false): SyncCell {
         val all = (first.candidates + second.candidates).distinct()
-        val maximal = all.filter { candidate -> all.none { other -> dominates(other.version, candidate.version) } }
+        val maximal = all.filter { candidate -> all.none { other ->
+            if(readingStatus && !other.deleted && !candidate.deleted) WebDavReadingStatus.supersedes(other, candidate) ||
+                dominates(other.version, candidate.version) && WebDavReadingStatus.canReplace(other, candidate)
+            else dominates(other.version, candidate.version)
+        } }
         require(maximal.size <= MAX_CANDIDATES) { "同时修改版本过多，请先解决同步冲突" }
         return SyncCell(maximal.sortedWith(candidateOrder))
     }
@@ -60,11 +64,11 @@ object WebDavMerge {
                 b == null -> a
                 else -> SyncRecord(key, mergeCell(a.existence, b.existence),
                     (a.fields.keys + b.fields.keys).sorted().associateWith { field ->
-                        mergeCell(a.fields[field] ?: SyncCell(), b.fields[field] ?: SyncCell())
+                        mergeCell(a.fields[field] ?: SyncCell(), b.fields[field] ?: SyncCell(), first.domain == SyncDomain.FAVORITES && field == "status")
                     })
             }
         }
-        return first.copy(records = records, context = joinVector(first.context, second.context)).also(::validate)
+        return first.copy(records = records, context = joinVector(first.context, second.context), schemaVersion = maxOf(first.schemaVersion, second.schemaVersion)).also(::validate)
     }
 
     /** 新设备默认词表不能撤销已有用户译名或分类（包括用户显式清空译名）。
@@ -118,16 +122,19 @@ object WebDavMerge {
     fun materialize(document: SyncDocument): Map<String, JsonObject> = document.records.toSortedMap().mapNotNull { (key, record) ->
         if (winner(record.existence, existence = true)?.deleted != false) return@mapNotNull null
         key to JsonObject(record.fields.toSortedMap().mapNotNull { (field, cell) ->
-            winner(cell)?.takeUnless { it.deleted }?.let { field to it.value }
+            (if(document.domain == SyncDomain.FAVORITES && field == "status") WebDavReadingStatus.winner(cell) else winner(cell))
+                ?.takeUnless { it.deleted }?.let { field to it.value }
         }.toMap())
     }.toMap()
 
     fun conflicts(document: SyncDocument): List<SyncConflict> = document.records.toSortedMap().flatMap { (key, record) ->
         if (winner(record.existence, existence = true)?.deleted != false) return@flatMap emptyList()
-        // 普通字段仍保留候选，以供诊断；需要用户选择的两类数据明确暴露。
+        // 普通字段保留候选供诊断；进度、笔记和并发手动分类供用户选择。
         record.fields.toSortedMap().mapNotNull { (field, cell) ->
             if ((document.domain == SyncDomain.NOTES && field == "text" ||
-                    document.domain == SyncDomain.PROGRESS && field == "position") &&
+                    document.domain == SyncDomain.PROGRESS && field == "position" ||
+                    document.domain == SyncDomain.FAVORITES && field == "status" && cell.candidates.filter { !it.deleted && !WebDavReadingStatus.automatic(it.value) }
+                        .map { WebDavReadingStatus.status(it.value) }.distinct().size > 1) &&
                 cell.candidates.map { it.deleted to it.value }.distinct().size > 1) SyncConflict(document.domain, key, field, cell.candidates) else null
         }
     }
@@ -142,13 +149,22 @@ object WebDavMerge {
         val observed = cell.candidates.fold(document.context) { vector, value -> joinVector(vector, value.version) }
         require(counter > (observed[deviceId] ?: 0) && counter > 0) { "冲突处理逻辑时钟无效" }
         val version = observed + (deviceId to counter)
-        val resolved = SyncCell(listOf(selected.copy(version = version, writer = deviceId, counter = counter)))
+        val selectedValue = if(document.domain == SyncDomain.FAVORITES && field == "status" && !selected.deleted) {
+            val control = WebDavReadingStatus.control(selected.value)
+            val next = (control ?: cc.novelia.app.data.model.ReadingStatusControl(false, "legacy")).copy(
+                revision = java.util.UUID.randomUUID().toString(),
+                supersedes = cell.candidates.filterNot { it.deleted }.flatMap {
+                    WebDavReadingStatus.control(it.value)?.supersedes.orEmpty() + WebDavReadingStatus.revision(it.value) }.toSet())
+            WebDavReadingStatus.encode(WebDavReadingStatus.status(selected.value), next)
+        } else selected.value
+        val resolved = SyncCell(listOf(selected.copy(value = selectedValue, version = version, writer = deviceId, counter = counter)))
         val updated = if (field == EXISTENCE) record.copy(existence = resolved) else record.copy(fields = record.fields + (field to resolved))
-        return document.copy(records = document.records + (recordKey to updated), context = joinVector(document.context, version))
+        return document.copy(records = document.records + (recordKey to updated), context = joinVector(document.context, version),
+            schemaVersion = if(document.domain == SyncDomain.FAVORITES && selectedValue is JsonObject) 2 else document.schemaVersion)
     }
 
     fun validate(document: SyncDocument, expectedDatasetId: String? = null) {
-        require(document.schemaVersion == 1) { "不支持的同步协议版本" }
+        require(document.schemaVersion == 1 || document.schemaVersion == 2 && document.domain == SyncDomain.FAVORITES) { "不支持的同步协议版本，请更新应用" }
         require(validId(document.datasetId) && (expectedDatasetId == null || document.datasetId == expectedDatasetId)) { "同步数据集标识不一致" }
         require(document.records.size <= MAX_RECORDS && document.context.size <= MAX_DEVICES) { "同步文件记录或设备数量超过限制" }
         fun vector(value: Map<String, Long>) {
@@ -168,6 +184,8 @@ object WebDavMerge {
                     require(!candidate.deleted || candidate.value == JsonNull) { "删除标记不能附带数据" }
                     if (existence) require(candidate.deleted || candidate.value == JsonPrimitive(true)) { "同步记录存在性无效" }
                     else if (!candidate.deleted) WebDavProjection.validateFieldValue(document.domain, key, field, candidate.value)
+                    if(document.domain == SyncDomain.FAVORITES && field == "status" && candidate.value is JsonObject)
+                        require(document.schemaVersion == 2) { "自动阅读状态需要收藏同步协议第 2 版" }
                 }
             }
             cell(record.existence, true, EXISTENCE)

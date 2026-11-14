@@ -1,6 +1,8 @@
 package cc.novelia.app.data.updates
 
 import cc.novelia.app.data.library.acknowledgeReadChapterUpdates
+import cc.novelia.app.data.library.newSavedBook
+import cc.novelia.app.data.library.withReadingStatusCatalog
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.LibraryState
@@ -15,9 +17,9 @@ fun LibraryState.withSavedBook(book: BookCard, folder: String = "默认收藏"):
         if(book.ref.isLocal) it else it.copy(total = maxOf(it.total, previous?.book?.total ?: 0, baseline.total))
     }
     return copy(
-        books = books.filterNot { it.book.ref == book.ref } + (previous?.copy(book = merged, folder = folder) ?: SavedBook(merged, folder)),
+        books = books.filterNot { it.book.ref == book.ref } + (previous?.copy(book = merged, folder = folder) ?: newSavedBook(merged, folder)),
         updateSnapshots = if(book.ref.isLocal) updateSnapshots else updateSnapshots + (book.ref.key to baseline)
-    )
+    ).withReadingStatusCatalog(book.ref)
 }
 
 /** 详情刷新和后台检查共用同一增量计算；较早开始的迟到请求不得回退基线。 */
@@ -35,7 +37,7 @@ fun LibraryState.withBookUpdate(book: BookCard, observedAt: Long): LibraryState 
         books = books.map { if(it.book.ref == ref) it.copy(book = book.withKnownUpdateTime(it.book), hasUpdates = it.hasUpdates || changes?.hasChanges == true) else it },
         updateSnapshots = updateSnapshots + (ref.key to snapshot),
         bookUpdates = if(changes == null) bookUpdates - ref.key else bookUpdates + (ref.key to changes)
-    ).acknowledgeReadChapterUpdates(ref, book.cloudReading?.account)
+    ).acknowledgeReadChapterUpdates(ref, book.cloudReading?.account).withReadingStatusCatalog(ref)
 }
 
 /** 手动确认只清除提示，保留译文缓存刷新时间和数量基线。 */

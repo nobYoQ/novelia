@@ -128,6 +128,7 @@ internal object LibraryBackupArchive {
         require(documentIds.size == manifest.documents.size && missing.size == manifest.missingDocuments.size && documentIds.intersect(missing).isEmpty()) { "备份文档索引重复" }
         require((documentIds + missing).all { id.matches(it) }) { "备份文档标识无效" }
         val state = manifest.library
+        require(state.books.all { it.readingStatusControl?.valid != false }) { "备份阅读状态管理信息无效" }
         require(state.pending.isEmpty() && state.downloads.isEmpty() && state.syncStatus.isEmpty() && state.syncReplica.documents.isEmpty()) { "备份不应包含账号队列、同步版本或运行中的任务" }
         require(state.books.map { it.book.ref.key }.distinct().size == state.books.size && state.notes.map { it.id }.distinct().size == state.notes.size) { "备份含重复的书籍或笔记标识" }
         require(state.theme in setOf("system", "light", "dark")) { "备份主题设置无效" }

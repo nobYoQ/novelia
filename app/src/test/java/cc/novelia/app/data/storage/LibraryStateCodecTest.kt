@@ -12,6 +12,21 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LibraryStateCodecTest {
+    @Test fun automaticReadingManagementAndDeviceSwitchSurvivePartitionedRestart() {
+        val directory = Files.createTempDirectory("reading-status-codec").toFile()
+        try {
+            fun codec() = LibraryStateCodec(directory, { it.readText(Charsets.UTF_8) }, { file, text -> file.writeText(text, Charsets.UTF_8) })
+            val ref = cc.novelia.app.data.model.BookRef("local", "status-book")
+            val saved = cc.novelia.app.data.model.SavedBook(cc.novelia.app.data.model.BookCard(ref, "手动保护"), status = "想读",
+                readingStatusControl = cc.novelia.app.data.model.ReadingStatusControl(false, "manual-revision", setOf("old-automatic")))
+            val state = LibraryState(books = listOf(saved), autoReadingStatus = false, autoReadingStatusRevision = "toggle-revision")
+            val running = codec()
+            val encoded = running.encode(state)
+            assertEquals(state, codec().decode(encoded))
+            val legacy = LibraryState(books = listOf(saved.copy(readingStatusControl = null)))
+            assertNull(codec().decode(appJson.encodeToString(legacy)).books.single().readingStatusControl)
+        } finally { directory.deleteRecursively() }
+    }
     @Test fun stickerPackSelectionSurvivesRestartAndOnlyChangesTheCorePartition() {
         val directory = Files.createTempDirectory("sticker-pack").toFile()
         try {

@@ -57,6 +57,7 @@ import cc.novelia.app.data.library.nextMountedVolume
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.Note
 import cc.novelia.app.data.model.Position
+import cc.novelia.app.data.library.readingStatusToken
 import cc.novelia.app.data.model.ReaderBrightness
 import cc.novelia.app.data.model.activeBrightness
 import cc.novelia.app.data.model.readingAppearance
@@ -562,13 +563,24 @@ import kotlinx.serialization.encodeToString
             blocked = !panelsClosed || showTapTutorial || leaving || !positionState.initialAnchorRestored,
             top = if(menu) topOverlayHeight else 0, bottom = bottomOverlayHeight)
         val volumeKeysActive = panelsClosed && !showTapTutorial
-        val recordReadingInteraction = rememberReaderReadingTime(c, ref.key,
+        val readingActivityEligible = panelsClosed && !showTapTutorial && !leaving && !chapterLoad.loading && chapterLoad.error == null &&
+            positionState.initialAnchorRestored && !positionState.restoringAnchor && positionState.pendingScrollRestore == null &&
+            positionState.previousLayoutGeneration === layoutGeneration && seekTarget == null &&
+            (if(settings.staticPagination) eInk.ready && eInk.pages.isNotEmpty() else scroll.layoutInfo.totalItemsCount > 0) && c.nav.currentBackStackEntry == readerEntry
+        val completeStatusCatalog = chapterProgress != null && !tocState.loading && tocState.error == null &&
+            chapterProgress.second >= knownChapterCount
+        val recordReadingStatusInteraction = rememberReaderReadingStatus(c, ref, chapterId, local.readingStatusToken(ref),
+            readingActivityEligible, completeStatusCatalog,
+            position = { savePosition(); c.store.state.value.positions[ref.key]?.takeIf { it.chapterId == chapterId } },
+            atChapterEnd = { chapter.nextId == null && if(settings.staticPagination) !eInk.canGoForward else !scroll.canScrollForward })
+        val recordReadingTimeInteraction = rememberReaderReadingTime(c, ref.key,
             local.books.firstOrNull { it.book.ref == ref }?.book?.title ?: chapter.novelTitleZh?.takeIf(String::isNotBlank) ?: chapter.novelTitleJp.orEmpty(),
             local.readingStatistics.revision,
             eligible = local.readingStatistics.enabled && !local.historyPaused && panelsClosed && !showTapTutorial && !leaving &&
                 !chapterLoad.loading && chapterLoad.error == null && positionState.initialAnchorRestored && !positionState.restoringAnchor &&
                 seekTarget == null && (!settings.staticPagination || eInk.ready) && c.nav.currentBackStackEntry == readerEntry,
             automatic = autoReading || (speechPlayback?.bookKey == ref.key && speechPlayback?.playing == true))
+        fun recordReadingInteraction() { recordReadingTimeInteraction(); recordReadingStatusInteraction() }
         LaunchedEffect(volumeKeysActive) { if(volumeKeysActive) runCatching { focus.requestFocus() } }
         fun openChapter(id: String, startAtEnd: Boolean = false, match: ReadingTextMatch? = null, inline: Boolean = false,
             restore: ReadingReturnPoint? = null, followingSpeech: Boolean = false, automatic: Boolean = false) {
@@ -1044,7 +1056,8 @@ import kotlinx.serialization.encodeToString
                 scope.launch {
                     try {
                         val jobContext = currentCoroutineContext()
-                        ReadAloudService.start(context, chapter.title, settings, ref, chapterId, chapter.nextId) {
+                        ReadAloudService.start(context, chapter.title, settings, ref, chapterId, chapter.nextId,
+                            statusChapterIds = if(completeStatusCatalog) tocState.toc.orEmpty().mapNotNull { it.chapterId } else emptyList()) {
                             speechSegments(chapter, settings, originalIndex) { jobContext.ensureActive() }
                         }
                     } catch(e: CancellationException) { throw e }

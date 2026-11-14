@@ -83,7 +83,7 @@ internal object WebDavValidation {
                     "book" -> validateBook(value, key)
                     "folderId" -> id(value)
                     "pinned" -> boolean(value)
-                    "status" -> enumText(value, setOf("在读", "读完", "想读"))
+                    "status" -> WebDavReadingStatus.validate(value)
                     "addedAt" -> nonnegativeLong(value)
                     else -> error("收藏包含不允许同步的字段")
                 }

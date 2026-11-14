@@ -80,8 +80,7 @@ enum class ShelfBookType(val label: String) { All("全部类型"), Wenku("文库
 val readingStatuses = listOf("想读", "在读", "读完")
 
 fun LibraryState.withReadingStatus(keys: Set<String>, status: String): LibraryState {
-    require(status in readingStatuses) { "不支持的阅读状态" }
-    return copy(books = books.map { if(it.book.ref.key in keys) it.copy(status = status) else it })
+    return withManualReadingStatus(keys, status)
 }
 
 /** 不匹配筛选条件的父项仅作分卷上下文显示，不应被批量全选。 */

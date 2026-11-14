@@ -19,6 +19,38 @@ import org.junit.Assert.*
 class SettingsCategoriesTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun automaticReadingSettingPreservesLegacyProtectionAndOffersExplicitBatchRestore() {
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
+        runBlocking { app.initialization.await() }
+        val original = app.store.state.value
+        try {
+            val book = cc.novelia.app.data.model.BookCard(cc.novelia.app.data.model.BookRef("syosetu", "settings-legacy-status"), "旧状态")
+            app.store.update { it.copy(autoReadingStatus = true, books = listOf(cc.novelia.app.data.model.SavedBook(book, status = "读完"))) }
+            val restoration = StateRestorationTester(compose)
+            restoration.setContent { NoveliaTheme("light") {
+                SettingsScreen(AppController(app, rememberNavController(), rememberCoroutineScope(), remember { SnackbarHostState() }), "LIBRARY")
+            } }
+            option("自动记录阅读状态").assertIsOn().performClick()
+            compose.runOnIdle {
+                assertFalse(app.store.state.value.autoReadingStatus)
+                assertEquals("读完", app.store.state.value.books.single().status)
+            }
+            option("自动记录阅读状态").assertIsOff().performClick()
+            compose.runOnIdle { assertNull(app.store.state.value.books.single().readingStatusControl) }
+            runBlocking { app.store.flush() }
+            restoration.emulateSavedInstanceStateRestore()
+            option("自动记录阅读状态").assertIsOn()
+            option("将已有书籍恢复自动管理").performClick()
+            compose.runOnIdle {
+                assertTrue(app.store.state.value.books.single().readingStatusControl!!.automatic)
+                assertEquals("想读", app.store.state.value.books.single().status)
+            }
+        } finally {
+            app.store.update { original }
+            runBlocking { app.store.flush() }
+        }
+    }
+
     @Test fun categoriesHideUnrelatedOptionsAndRestoreSelectedPage() {
         val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
         runBlocking { app.initialization.await() }

@@ -9,6 +9,6 @@ import cc.novelia.app.data.model.SavedBook
 fun LibraryState.withDownloadedVolume(volume: BookRef, source: BookCard): LibraryState {
     require(source.ref.isWenku) { "下载分卷必须归属文库小说" }
     val collected = if(books.any { it.book.ref == source.ref }) this
-        else copy(books = books + SavedBook(source.copy(favored = null, cloudReading = null)))
+        else copy(books = books + newSavedBook(source.copy(favored = null, cloudReading = null)))
     return collected.withVolumeParent(volume.key, source.ref.key)
 }

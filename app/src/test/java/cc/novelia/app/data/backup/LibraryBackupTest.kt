@@ -34,6 +34,22 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LibraryBackupTest {
+    @Test fun automaticReadingManagementBacksUpWithoutLosingManualProtectionOrDeviceSwitch() {
+        val root = temp()
+        try {
+            val saved = SavedBook(BookCard(BookRef("syosetu", "status-backup"), "手动状态"), status = "想读",
+                readingStatusControl = cc.novelia.app.data.model.ReadingStatusControl(false, "manual", setOf("automatic"), 10, 10))
+            val state = LibraryState(books = listOf(saved), autoReadingStatus = false)
+            val bytes = archive(mapOf("manifest.json" to appJson.encodeToString(manifest(state)).toByteArray(Charsets.UTF_8)))
+            val restored = LibraryBackupArchive.extract(ByteArrayInputStream(bytes), root).library
+            assertEquals(state, restored)
+            assertFalse(mergeLibraryBackup(LibraryState(), restored).autoReadingStatus)
+            assertEquals(saved, mergeLibraryBackup(LibraryState(), restored).books.single())
+            val invalid = state.copy(books = listOf(saved.copy(readingStatusControl = saved.readingStatusControl!!.copy(revision = ""))))
+            val invalidBytes = archive(mapOf("manifest.json" to appJson.encodeToString(manifest(invalid)).toByteArray(Charsets.UTF_8)))
+            fails { LibraryBackupArchive.extract(ByteArrayInputStream(invalidBytes), root) }
+        } finally { root.deleteRecursively() }
+    }
     @Test fun dpTypographyBacksUpBothProfilesAndRejectsInvalidDormantValues() {
         val reader = ReaderSettings().withDpTypography { it }.withEInkMode(true)
             .copy(typographyDp = ReaderTypographyDp(128f, 256f, 32f))

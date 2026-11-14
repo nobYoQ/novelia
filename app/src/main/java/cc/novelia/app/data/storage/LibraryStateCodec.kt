@@ -92,6 +92,7 @@ internal class LibraryStateCodec(
             notes = n, syncReplica = replica, drafts = d.drafts)
             .let { it.copy(edgeToolbar = it.edgeToolbar.normalized()) }
         state.syncReplica.validate()
+        require(state.books.all { it.readingStatusControl?.valid != false }) { "阅读状态管理信息无效" }
         state.readingStatistics.requireValid()
         // 整份快照校验成功后才更新缓存，失败主文件不能污染备用副本的加载。
         shelf.accept(s, hash("shelf")); reading.accept(r, hash("reading")); notes.accept(n, hash("notes"))
@@ -105,6 +106,7 @@ internal class LibraryStateCodec(
             .let { it.copy(edgeToolbar = it.edgeToolbar.normalized()) }.also { it.syncReplica.validate() }
         state.readingStatistics.requireValid()
         val hash = json[LEGACY_PAYLOAD]?.jsonPrimitive?.content
+        require(state.books.all { it.readingStatusControl?.valid != false }) { "阅读状态管理信息无效" }
         val result = if(hash == null) state else state.copy(drafts = drafts.decode(hash).drafts)
         // 旧草稿可能夹带已废弃文章字段；下次保存重编码，保留旧文件供回退。
         committedHashes = setOfNotNull(hash)
