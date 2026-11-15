@@ -64,7 +64,7 @@ internal fun StickerPackEditor(store: StickerPackStore, draft: StickerDraft, onB
         catch(e: CancellationException) { throw e }
         catch(e: Exception) { error = "草稿暂未保存：${e.friendlyMessage()}" }
     }
-    val singlePicker = rememberOpenDocumentPicker(DocumentPickerTypes.StickerImages) { uri ->
+    val singlePicker = rememberOpenDocumentPicker(DocumentPickerTypes.Images) { uri ->
         val slot = StickerSlot.entries.firstOrNull { it.key == pickingSlot }
         if(uri != null && slot != null) operation {
             store.addImages(draft.id, listOf(slot to {
@@ -73,7 +73,7 @@ internal fun StickerPackEditor(store: StickerPackStore, draft: StickerDraft, onB
             pickingSlot = null
         }
     }
-    val multiplePicker = rememberOpenMultipleDocumentsPicker(DocumentPickerTypes.StickerImages) { uris ->
+    val multiplePicker = rememberOpenMultipleDocumentsPicker(DocumentPickerTypes.Images) { uris ->
         if(uris.isNotEmpty()) operation {
             val names = withContext(Dispatchers.IO) {
                 uris.map { uri -> context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {

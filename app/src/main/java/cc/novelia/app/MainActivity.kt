@@ -66,6 +66,7 @@ import cc.novelia.app.ui.settings.WebDavSyncScreen
 import cc.novelia.app.ui.settings.WebDavServerScreen
 import cc.novelia.app.ui.settings.LibraryBackupScreen
 import cc.novelia.app.ui.settings.SettingsScreen
+import cc.novelia.app.ui.settings.CustomThemesScreen
 import cc.novelia.app.ui.settings.SystemTtsSettingsScreen
 import cc.novelia.app.ui.settings.ChapterCacheScreen
 import cc.novelia.app.ui.discover.KeywordLibraryScreen
@@ -293,6 +294,7 @@ class MainActivity : ComponentActivity() {
                             composable("forum-rules") { ForumRulesScreen(controller) }
                             composable("settings?section={section}") { entry -> SettingsScreen(controller, entry.arguments?.getString("section")) }
                             composable("sticker-packs") { cc.novelia.app.ui.settings.StickerPackScreen(controller) }
+                            composable("custom-themes") { CustomThemesScreen(controller) }
                             composable("edge-toolbar") { EdgeToolbarSettingsScreen(controller) }
                             composable("edge-toolbar-edit") { EdgeToolbarEditorScreen(controller) }
                             composable("backup") { LibraryBackupScreen(controller) }
