@@ -13,6 +13,7 @@ import androidx.activity.compose.ReportDrawnWhen
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -78,7 +79,11 @@ import cc.novelia.app.ui.theme.appPageEnterTransition
 import cc.novelia.app.ui.theme.appPageExitTransition
 import cc.novelia.app.ui.theme.NoveliaTheme
 import cc.novelia.app.ui.theme.LocalThemeWallpaper
+import cc.novelia.app.ui.theme.LocalAmoledBlack
+import cc.novelia.app.ui.theme.LocalThemePreset
 import cc.novelia.app.ui.theme.themePaper
+import cc.novelia.app.ui.theme.ThemeBar
+import cc.novelia.app.ui.theme.themeBarBackground
 import cc.novelia.app.ui.theme.appReducedMotion
 import cc.novelia.app.ui.tools.ToolsScreen
 import cc.novelia.app.ui.toolbar.*
@@ -209,6 +214,14 @@ class MainActivity : ComponentActivity() {
                 }) { padding ->
                     // NavHost 的尺寸不随当前路由改变；各根页面自己持有侧栏/底栏。
                     val bottomPadding = PaddingValues(bottom = padding.calculateBottomPadding())
+                    // 编辑页等二级页面也有系统导航区，延续底栏材质直到手势条。
+                    if (route?.startsWith("reader/") != true && LocalThemePreset.current?.bottomBar?.enabled == true &&
+                        !LocalAmoledBlack.current && bottomPadding.calculateBottomPadding() > 0.dp) {
+                        val edge = themeBarBackground(ThemeBar.Bottom, NavigationBarDefaults.containerColor)
+                        Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.BottomCenter) {
+                            Spacer(Modifier.fillMaxWidth().height(bottomPadding.calculateBottomPadding()).then(edge.modifier).background(edge.color))
+                        }
+                    }
                     Box(Modifier.fillMaxSize().padding(bottomPadding).consumeWindowInsets(bottomPadding)) {
                         val reducedMotion = appReducedMotion()
                         val travel = with(LocalDensity.current) { 24.dp.roundToPx() }

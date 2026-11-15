@@ -2,6 +2,7 @@ package cc.novelia.app.ui.theme
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.background
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -18,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -96,6 +98,27 @@ private fun DrawScope.drawPaper(painter: Painter, viewport: Size, origin: Offset
         }
     }
     if (overlay > 0f) drawRect(color.copy(alpha = overlay))
+}
+
+internal enum class ThemeBar { Top, Bottom }
+internal data class BarBackground(val modifier: Modifier, val color: Color)
+
+@Composable internal fun themeBarBackground(edge: ThemeBar, opaque: Color): BarBackground {
+    val preset = LocalThemePreset.current
+    val bar = if (edge == ThemeBar.Top) preset?.topBar else preset?.bottomBar
+    if (bar?.enabled != true || LocalAmoledBlack.current || LocalEInkMode.current) return BarBackground(Modifier, opaque)
+    val paper = MaterialTheme.colorScheme.background
+    val wallpaper = LocalThemeWallpaper.current
+    val painter = if (edge == ThemeBar.Top) wallpaper?.top else wallpaper?.bottom
+    val opacity = bar.opacity / 100f
+    if (painter == null || wallpaper == null) return BarBackground(Modifier, lerp(paper, opaque, opacity))
+    var position by remember { mutableStateOf(Offset.Zero) }
+    val glass = Modifier.onGloballyPositioned { position = it.positionInWindow() }.drawBehind {
+        val frame = wallpaper.viewport.bounds
+        if (!frame.isEmpty) drawPaper(painter, frame.size, frame.topLeft - position, paper, wallpaper.overlay)
+        drawRect(opaque.copy(alpha = opacity))
+    }
+    return BarBackground(glass, Color.Transparent)
 }
 
 private const val BLUR_EDGE = 640

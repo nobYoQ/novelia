@@ -4,7 +4,7 @@ package cc.novelia.app.ui.community
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.material3.PrimaryTabRow
+import cc.novelia.app.ui.components.base.AppPageTabs
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -70,7 +70,7 @@ import kotlinx.coroutines.launch
         snapshotFlow { pager.settledPage }.distinctUntilChanged().collect { select(it) }
     }
     Column(modifier.fillMaxSize()) {
-        PrimaryTabRow(pager.currentPage) {
+        AppPageTabs(pager.currentPage) {
             listOf("文章内容", "讨论 $commentCount").forEachIndexed { index, title ->
                 Tab(pager.currentPage == index, onClick = {
                     select(index)

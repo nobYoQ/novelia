@@ -4,7 +4,7 @@ package cc.novelia.app.ui.shelf
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.material3.PrimaryTabRow
+import cc.novelia.app.ui.components.base.AppPageTabs
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -39,7 +39,7 @@ import kotlinx.coroutines.launch
         }
     }
     Column(modifier.fillMaxSize()) {
-        PrimaryTabRow(pager.currentPage) {
+        AppPageTabs(pager.currentPage) {
             listOf("我的书架", "本地文件", "云端收藏").forEachIndexed { index, title ->
                 Tab(pager.currentPage == index, onClick = {
                     scope.launch {

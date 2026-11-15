@@ -1,5 +1,9 @@
 package cc.novelia.app.ui.settings
 
+import cc.novelia.app.ui.components.base.AppTopBar
+import cc.novelia.app.ui.theme.ThemeBar
+import cc.novelia.app.ui.theme.themeBarBackground
+
 import cc.novelia.app.ui.components.base.AppSwitch
 import cc.novelia.app.ui.theme.LocalSquareCorners
 import cc.novelia.app.ui.components.base.AppButton
@@ -42,12 +46,13 @@ internal fun WebDavPage(
 ) {
     Scaffold(
         containerColor = cc.novelia.app.ui.theme.pageContainerColor(), contentColor = MaterialTheme.colorScheme.onBackground,
-        topBar = { TopAppBar(
+        topBar = { AppTopBar(
             title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
             navigationIcon = { AppIconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "返回") } },
         ) },
         bottomBar = {
-            Surface(color = MaterialTheme.colorScheme.background) {
+            val bar = themeBarBackground(ThemeBar.Bottom, MaterialTheme.colorScheme.background)
+            Surface(modifier = bar.modifier, color = bar.color, contentColor = MaterialTheme.colorScheme.onBackground) {
                 Box(Modifier.fillMaxWidth().navigationBarsPadding().imePadding(), contentAlignment = Alignment.Center) {
                     AppButton(
                         onClick = onAction, enabled = actionEnabled,

@@ -1,6 +1,9 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.shelf
 
+import cc.novelia.app.ui.theme.ThemeBar
+import cc.novelia.app.ui.theme.themeBarBackground
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.DriveFileMove
@@ -57,7 +60,8 @@ import cc.novelia.app.ui.components.base.*
 }
 
 @Composable internal fun ShelfSelectionBar(tagPrefix: String, content: @Composable RowScope.() -> Unit) {
-    Surface(color = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.fillMaxWidth().testTag("$tagPrefix-selection-actions")) {
+    val bar = themeBarBackground(ThemeBar.Bottom, MaterialTheme.colorScheme.surfaceContainer)
+    Surface(color = bar.color, contentColor = MaterialTheme.colorScheme.onSurface, modifier = Modifier.fillMaxWidth().testTag("$tagPrefix-selection-actions").then(bar.modifier)) {
         Column {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .45f))
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),

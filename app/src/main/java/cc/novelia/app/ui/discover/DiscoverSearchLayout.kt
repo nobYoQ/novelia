@@ -1,6 +1,8 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.discover
 
+import cc.novelia.app.ui.components.base.AppTopBar
+
 import cc.novelia.app.ui.components.base.AppIconButton
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateContentSize
@@ -65,7 +67,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
     val scrollCollapse = rememberCloudFilterCollapse(true, editing, ::finishEditing)
     Scaffold(modifier = modifier, containerColor = cc.novelia.app.ui.theme.pageContainerColor(),
         contentColor = MaterialTheme.colorScheme.onBackground, topBar = {
-        TopAppBar(title = {
+        AppTopBar(title = {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("发现", maxLines = 1)
                 Surface(onClick = {

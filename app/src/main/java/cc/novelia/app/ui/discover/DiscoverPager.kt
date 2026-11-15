@@ -4,7 +4,7 @@ package cc.novelia.app.ui.discover
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
-import androidx.compose.material3.PrimaryTabRow
+import cc.novelia.app.ui.components.base.AppPageTabs
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -41,7 +41,7 @@ import kotlinx.coroutines.launch
 ) {
     val pages = rememberSaveableStateHolder()
     Column(modifier.fillMaxSize()) {
-        PrimaryTabRow(pager.currentPage) {
+        AppPageTabs(pager.currentPage) {
             listOf("为你发现", "网络小说", "文库小说").forEachIndexed { index, title ->
                 Tab(pager.currentPage == index, onClick = { onSelect(index) },
                     text = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },

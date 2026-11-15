@@ -1,6 +1,8 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.book
 
+import cc.novelia.app.ui.components.base.AppPageTabs
+
 import cc.novelia.app.ui.components.base.AppButton
 import cc.novelia.app.ui.components.base.AppTextButton
 import cc.novelia.app.ui.components.base.AppIconButton
@@ -297,7 +299,7 @@ import kotlinx.coroutines.withContext
         snapshotFlow { pager.settledPage }.distinctUntilChanged().drop(1).collect { select(it + firstPanel) }
     }
     Column(Modifier.fillMaxSize()) {
-        PrimaryTabRow(pager.currentPage) { titles.forEachIndexed { index, title ->
+        AppPageTabs(pager.currentPage) { titles.forEachIndexed { index, title ->
             Tab(pager.currentPage == index, onClick = { select(index + firstPanel); scope.launch {
                 if(reducedMotion) pager.scrollToPage(index) else pager.animateScrollToPage(index)
             } }, text = { Text(title) })

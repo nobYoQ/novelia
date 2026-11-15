@@ -1,6 +1,8 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.community
 
+import cc.novelia.app.ui.components.base.AppPageTabs
+
 import cc.novelia.app.ui.components.base.AppIconButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -30,8 +32,7 @@ import cc.novelia.app.data.community.ForumCategory
             categories.forEach { category -> Tab(category.slug == selected, { onSelect(category.slug) },
                 modifier = Modifier.widthIn(min = minimumWidth).testTag("forum-category-${category.slug}"), text = { Text(category.title) }) }
         }
-        if(equalWidths) PrimaryTabRow(index, tabs = tabs)
-        else PrimaryScrollableTabRow(index, edgePadding = 12.dp, tabs = tabs)
+        AppPageTabs(index, scrollable = !equalWidths, tabs = tabs)
     }
 }
 

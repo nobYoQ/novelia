@@ -17,11 +17,14 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.appReducedMotion
 import cc.novelia.app.ui.theme.LocalSquareCorners
+import cc.novelia.app.ui.theme.ThemeBar
+import cc.novelia.app.ui.theme.themeBarBackground
 
 /** 根页面内的选择操作栏接管手机底部导航，不影响其他路由或平板侧栏。 */
 internal val LocalRootSelectionMode = staticCompositionLocalOf<(Boolean) -> Unit> { {} }
@@ -59,33 +62,39 @@ internal fun RootDestinationLayout(
             containerColor = cc.novelia.app.ui.theme.pageContainerColor(), contentColor = MaterialTheme.colorScheme.onBackground,
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             bottomBar = {
-                if(!wide && !hideNavigation) NavigationBar(
-                    modifier = Modifier.onSizeChanged { size ->
-                        onNavigationBarHeightChanged(with(density) { size.height.toDp() })
-                    },
-                ) {
-                    tabs.forEach { (target, label, icon) ->
-                        val selected = route.startsWith(target)
-                        if(LocalSquareCorners.current) SquareNavigationItem(selected, { if(!selected) onNavigate(target) },
-                            icon, label, Modifier.weight(1f))
-                        else NavigationBarItem(selected, { if(!selected) onNavigate(target) },
-                            { NavigationIcon(icon, label, selected) }, label = { Text(label) })
+                if(!wide && !hideNavigation) {
+                    val bar = themeBarBackground(ThemeBar.Bottom, NavigationBarDefaults.containerColor)
+                    NavigationBar(containerColor = bar.color, contentColor = MaterialTheme.colorScheme.onSurface,
+                        modifier = bar.modifier.testTag("root-navigation").onSizeChanged { size ->
+                            onNavigationBarHeightChanged(with(density) { size.height.toDp() })
+                        },
+                    ) {
+                        tabs.forEach { (target, label, icon) ->
+                            val selected = route.startsWith(target)
+                            if(LocalSquareCorners.current) SquareNavigationItem(selected, { if(!selected) onNavigate(target) },
+                                icon, label, Modifier.weight(1f))
+                            else NavigationBarItem(selected, { if(!selected) onNavigate(target) },
+                                { NavigationIcon(icon, label, selected) }, label = { Text(label) })
+                        }
                     }
                 }
             },
         ) { padding ->
             Row(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
-                if(wide) NavigationRail(modifier = Modifier.onSizeChanged { size ->
-                    onNavigationRailWidthChanged(with(density) { size.width.toDp() })
-                }) {
-                    Spacer(Modifier.height(if(compactRail) 12.dp else 40.dp))
-                    tabs.forEach { (target, label, icon) ->
-                        val selected = route.startsWith(target)
-                        if(LocalSquareCorners.current) SquareNavigationItem(selected, { if(!selected) onNavigate(target) },
-                            icon, label, Modifier.width(80.dp), showLabel = !compactRail)
-                        else NavigationRailItem(selected, { if(!selected) onNavigate(target) },
-                            { NavigationIcon(icon, label, selected) },
-                            label = if(compactRail) null else { { Text(label) } })
+                if(wide) {
+                    val bar = themeBarBackground(ThemeBar.Bottom, NavigationRailDefaults.ContainerColor)
+                    NavigationRail(containerColor = bar.color, contentColor = MaterialTheme.colorScheme.onSurface, modifier = bar.modifier.testTag("root-navigation").onSizeChanged { size ->
+                        onNavigationRailWidthChanged(with(density) { size.width.toDp() })
+                    }) {
+                        Spacer(Modifier.height(if(compactRail) 12.dp else 40.dp))
+                        tabs.forEach { (target, label, icon) ->
+                            val selected = route.startsWith(target)
+                            if(LocalSquareCorners.current) SquareNavigationItem(selected, { if(!selected) onNavigate(target) },
+                                icon, label, Modifier.width(80.dp), showLabel = !compactRail)
+                            else NavigationRailItem(selected, { if(!selected) onNavigate(target) },
+                                { NavigationIcon(icon, label, selected) },
+                                label = if(compactRail) null else { { Text(label) } })
+                        }
                     }
                 }
                 Box(Modifier.weight(1f).fillMaxHeight()) {
