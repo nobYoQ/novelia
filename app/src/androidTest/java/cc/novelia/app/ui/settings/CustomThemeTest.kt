@@ -1,11 +1,13 @@
 package cc.novelia.app.ui.settings
 
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
+import android.view.accessibility.AccessibilityWindowInfo
 import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.activity.result.ActivityResultRegistry
 import androidx.activity.result.ActivityResultRegistryOwner
@@ -50,6 +52,47 @@ import org.junit.Test
 class CustomThemeTest {
     @get:Rule val compose = createComposeRule()
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
+
+    @Test fun themeNameKeepsKeyboardFocusAndSavesTheTypedName() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val automation = instrumentation.uiAutomation
+        val originalFlags = automation.serviceInfo.flags
+        val app = context.applicationContext as NoveliaApplication
+        runBlocking { app.initialization.await() }
+        val original = app.store.state.value
+        val preset = ThemePreset(UUID.randomUUID().toString(), "晨读")
+        try {
+            automation.serviceInfo = automation.serviceInfo.apply {
+                flags = flags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+            }
+            app.store.update { it.copy(themePresets = it.themePresets.saveAndSelect(preset)) }
+            compose.setContent {
+                NoveliaTheme("light") {
+                    val c = AppController(app, rememberNavController(), rememberCoroutineScope(), remember { SnackbarHostState() })
+                    CustomThemesScreen(c)
+                }
+            }
+            val manage = hasContentDescription("管理晨读")
+            compose.onNode(hasScrollToIndexAction()).performScrollToNode(manage)
+            compose.onNode(manage).performClick()
+            compose.onNodeWithText("编辑").performClick()
+            compose.onNodeWithTag("theme-editor-controls").performScrollToNode(hasSetTextAction())
+            val name = compose.onNode(hasSetTextAction())
+            name.performTouchInput { click() }
+            fun keyboardVisible() = automation.windows.any { it.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD }
+            compose.waitUntil(5_000) { keyboardVisible() }
+            name.assertIsFocused().performSemanticsAction(SemanticsActions.SetSelection) { it(2, 2, false) }
+            instrumentation.sendStringSync("2026")
+            name.assertIsFocused().assertTextContains("晨读2026")
+            assertTrue("输入时软键盘应保持展开", keyboardVisible())
+            compose.onNodeWithText("保存并使用").performTouchInput { click() }
+            compose.waitUntil(5_000) { app.store.state.value.themePresets.active == preset.copy(name = "晨读2026") }
+            compose.onNodeWithContentDescription("管理晨读2026").assertExists()
+        } finally {
+            automation.serviceInfo = automation.serviceInfo.apply { flags = originalFlags }
+            app.store.update { it.copy(theme = original.theme, themePresets = original.themePresets) }
+        }
+    }
 
     @Test fun monochromeDisplaysGrayArtworkAndRestoresTheOriginalColors() {
         val file = File.createTempFile("mono-color-", ".png", context.cacheDir)

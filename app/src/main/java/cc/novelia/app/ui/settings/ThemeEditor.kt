@@ -1,4 +1,4 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 
 package cc.novelia.app.ui.settings
 
@@ -122,7 +122,7 @@ private val presetSaver = Saver<ThemePreset, String>(
     val fields: LazyListScope.() -> Unit = {
         when (tab) {
             EditorTab.Colors -> {
-                item { OutlinedTextField(draft.name, { if (it.length <= ThemePreset.MAX_NAME) { draft = draft.copy(name = it); error = null } },
+                item(key = "theme-name") { OutlinedTextField(draft.name, { if (it.length <= ThemePreset.MAX_NAME) { draft = draft.copy(name = it); error = null } },
                     modifier = Modifier.fillMaxWidth(), label = { Text("主题名称") }, singleLine = true, enabled = !busy) }
                 item { ThemeColorControl("主题色", draft.accent, accentSwatches, onPick = { colorField = ColorField.Accent },
                     onSwatch = { draft = draft.copy(accent = it) }) }
@@ -181,9 +181,18 @@ private val presetSaver = Saver<ThemePreset, String>(
         BoxWithConstraints(Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.surface).imePadding()) {
             val fontScale = LocalDensity.current.fontScale
             val wide = maxWidth / fontScale >= 620.dp && maxHeight / fontScale >= 260.dp
+            val stackedPreview = !wide && !WindowInsets.isImeVisible
             val pin = maxHeight / fontScale >= 450.dp
-            val form: @Composable () -> Unit = {
-                Column(Modifier.fillMaxSize()) {
+            Row(Modifier.fillMaxSize()) {
+                if (wide) {
+                    Box(Modifier.weight(.46f).padding(horizontal = 16.dp, vertical = 8.dp)) { previewPanel() }
+                    VerticalDivider()
+                }
+                // 键盘改变可用高度时，表单和正在输入的文本框仍留在同一组合位置。
+                Column(Modifier.weight(if (wide) .54f else 1f).fillMaxHeight()) {
+                    if (stackedPreview && pin) {
+                        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) { previewPanel() }
+                    }
                     PrimaryTabRow(tab.ordinal) {
                         EditorTab.entries.forEach { entry ->
                             Tab(entry == tab, onClick = { changeTab(entry) }, text = { Text(entry.label) })
@@ -194,19 +203,11 @@ private val presetSaver = Saver<ThemePreset, String>(
                     key(tab) {
                         ProfileDetailList(Modifier.weight(1f).testTag("theme-editor-controls"),
                             contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            if (!wide && !pin) item { previewPanel() }
+                            if (stackedPreview && !pin) item(key = "theme-preview") { previewPanel() }
                             fields()
                         }
                     }
                 }
-            }
-            if (wide) Row(Modifier.fillMaxSize()) {
-                Box(Modifier.weight(.46f).padding(horizontal = 16.dp, vertical = 8.dp)) { previewPanel() }
-                VerticalDivider()
-                Box(Modifier.weight(.54f)) { form() }
-            } else Column(Modifier.fillMaxSize()) {
-                if (pin) Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) { previewPanel() }
-                Box(Modifier.weight(1f)) { form() }
             }
         }
     }
