@@ -144,6 +144,7 @@ class LibraryBackupFlowTest {
                 positions = mapOf(first.key to Position("c1", index = 1, offset = 7, textOffset = 3, updatedAt = 123)),
                 notes = listOf(Note("backup-note", first.key, "c1", 0, "正文", "读书笔记")),
                 bookSettings = mapOf(first.key to ReaderSettings(fontSize = 25f)),
+                theme = "monochrome",
                 readerThemePresets = mapOf("纸页" to ReaderThemePalette.from(ReaderSettings()),
                     "夜蓝" to ReaderThemePalette(ReaderCustomColors(0xDDEEFF, 0x101020, 0x202030), .6f)),
                 personalGlossaries = mapOf(first.key to mapOf("原文" to "译文")),
@@ -163,6 +164,7 @@ class LibraryBackupFlowTest {
             val persisted = LocalStore(targetContext)
             val restored = persisted.state.value
             assertEquals(source.state.value.readerThemePresets, restored.readerThemePresets)
+            assertEquals("monochrome", restored.theme)
             val restoredFirst = restored.books.single { it.book.title == "第一卷" }.book.ref
             val restoredSecond = restored.books.single { it.book.title == "第二卷" }.book.ref
             assertNotEquals(first.id, restoredFirst.id)

@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.components.media
 
+import cc.novelia.app.ui.theme.MonochromeColors
+
 import cc.novelia.app.ui.components.base.AppFilledTonalButton
 import cc.novelia.app.ui.components.base.AppIconButton
 import androidx.compose.foundation.background
@@ -69,7 +71,8 @@ internal fun IllustrationViewer(model: Any, imageLabel: String = "插图", onDis
                 }
             }
         }
-        Surface(Modifier.fillMaxSize(), color = Color(0xFF080B0A), contentColor = Color.White) {
+        val backdrop = if (MaterialTheme.colorScheme == MonochromeColors) Color.Black else Color(0xFF080B0A)
+        Surface(Modifier.fillMaxSize(), color = backdrop, contentColor = Color.White) {
             Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(imageLabel, Modifier.weight(1f).padding(start = 8.dp), style = MaterialTheme.typography.titleMedium)

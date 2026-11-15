@@ -39,7 +39,7 @@ internal fun LibraryState.settingsBackup() = SettingsBackup(
 internal fun SettingsBackup.requireValid() {
     themePresets?.requireValid()
     readerThemePresets?.requireValidReaderThemes()
-    require(edgeToolbar.valid && version == 1 && theme in listOf("system", "light", "dark") &&
+    require(edgeToolbar.valid && version == 1 && theme in APP_THEME_MODES &&
         (keywordLimit == null || keywordLimit > 0) && reader.modeConfigurations().all { r ->
             r.fontSize in ReaderSettings.FONT_SIZE_RANGE && r.lineHeight in ReaderSettings.LINE_HEIGHT_RANGE &&
                 r.paragraphSpacing in ReaderSettings.PARAGRAPH_SPACING_RANGE && r.width in 300f..900f &&

@@ -20,6 +20,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.model.ThemeBarGlass
 import cc.novelia.app.data.model.ThemePreset
 import cc.novelia.app.data.model.ThemePresets
+import cc.novelia.app.data.model.MONOCHROME_APP_THEME
+import cc.novelia.app.data.model.useAppPresets
 import cc.novelia.app.data.storage.appJson
 import cc.novelia.app.ui.account.ProfileDetailList
 import cc.novelia.app.ui.account.ProfileDetailScreen
@@ -32,8 +34,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
 
 @Composable internal fun CustomThemesScreen(c: AppController) {
-    val themes by remember(c) { c.store.state.map { it.themePresets }.distinctUntilChanged() }
-        .collectAsStateWithLifecycle(initialValue = remember(c) { c.store.state.value.themePresets })
+    val appearance by remember(c) { c.store.state.map { (it.theme == MONOCHROME_APP_THEME) to it.themePresets }.distinctUntilChanged() }
+        .collectAsStateWithLifecycle(initialValue = remember(c) { c.store.state.value.let { (it.theme == MONOCHROME_APP_THEME) to it.themePresets } })
+    val (monochrome, themes) = appearance
     var edit by rememberSaveable { mutableStateOf<String?>(null) }
     var deleting by rememberSaveable { mutableStateOf<String?>(null) }
 
@@ -46,7 +49,7 @@ import kotlinx.serialization.encodeToString
 
     fun select(id: String?) = c.store.update { state ->
         if (id == null || state.themePresets.items.any { it.id == id })
-            state.copy(themePresets = state.themePresets.copy(activeId = id)) else state
+            state.useAppPresets(state.themePresets.copy(activeId = id)) else state
     }
     val canAdd = themes.items.size < ThemePresets.MAX_PRESETS
     ProfileDetailScreen("自定义主题", c::back) { padding ->
@@ -65,12 +68,16 @@ import kotlinx.serialization.encodeToString
                 }
             }
             item {
-                ThemeRow("默认外观", "内置主题", 0x3E6B3B, themes.activeId == null, { select(null) })
+                ThemeRow("默认外观", "内置主题", 0x3E6B3B, !monochrome && themes.activeId == null, { select(null) })
+            }
+            item {
+                ThemeRow("黑白外观", "内置主题 · 白底黑字", 0x000000, monochrome,
+                    { c.store.update { it.copy(theme = MONOCHROME_APP_THEME) } })
             }
             items(themes.items, key = { it.id }) { preset ->
                 var menu by remember { mutableStateOf(false) }
                 ThemeRow(preset.name, if (preset.image == null) "纯色背景" else "图片背景", preset.accent,
-                    themes.activeId == preset.id, { select(preset.id) }) {
+                    !monochrome && themes.activeId == preset.id, { select(preset.id) }) {
                     Box {
                         AppIconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "管理${preset.name}") }
                         AppDropdownMenu(menu, { menu = false }) {
@@ -88,7 +95,7 @@ import kotlinx.serialization.encodeToString
         }
     }
     themes.items.firstOrNull { it.id == deleting }?.let { preset ->
-        val detail = if (themes.activeId == preset.id) "删除后将使用默认外观。" else "删除后无法撤销。"
+        val detail = if (!monochrome && themes.activeId == preset.id) "删除后将使用默认外观。" else "删除后无法撤销。"
         ConfirmDialog("删除「${preset.name}」？", detail, { deleting = null }, "删除") {
             c.action { c.store.customThemes.delete(preset.id) }
         }

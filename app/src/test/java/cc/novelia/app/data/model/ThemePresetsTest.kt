@@ -1,12 +1,28 @@
 package cc.novelia.app.data.model
 
 import cc.novelia.app.data.storage.appJson
+import cc.novelia.app.data.webdav.SyncDomain
+import cc.novelia.app.data.webdav.WebDavProjection
+import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.*
 import org.junit.Test
 
 class ThemePresetsTest {
     private val image = "a".repeat(64)
     private val forest = ThemePreset("forest", "雨林", accent = 0x007766, image = image, blur = 65)
+
+    @Test fun monochromeIsAPortableAppModeAndPreservesPersonalThemes() {
+        val presets = ThemePresets().saveAndSelect(forest)
+        val state = LibraryState(theme = MONOCHROME_APP_THEME, themePresets = presets)
+        val backup = appJson.decodeFromString<SettingsBackup>(appJson.encodeToString(SettingsBackup.serializer(), state.settingsBackup()))
+        backup.requireValid()
+        val restored = backup.applyTo(LibraryState())
+        assertEquals(MONOCHROME_APP_THEME, restored.theme)
+        assertEquals(presets, restored.themePresets)
+        WebDavProjection.validateField(SyncDomain.SETTINGS, "@global", "theme", JsonPrimitive(MONOCHROME_APP_THEME))
+        assertEquals("system", restored.useAppPresets(presets).theme)
+        assertEquals("dark", restored.copy(theme = "dark").useAppPresets(presets).theme)
+    }
 
     @Test fun editCopyAndDeleteKeepIndependentSelectionsAndShareOnlyTheImage() {
         val copy = forest.copy(id = "evening", name = "傍晚", blur = 10)

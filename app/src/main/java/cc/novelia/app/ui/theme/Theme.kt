@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import cc.novelia.app.data.model.ReaderSettings
+import cc.novelia.app.data.model.MONOCHROME_APP_THEME
 import cc.novelia.app.data.model.ThemePreset
 import java.io.File
 
@@ -99,6 +100,7 @@ internal fun readerColors(theme: String, appColors: ColorScheme): ReaderColors =
     "dark" -> ReaderDarkColors
     "monochrome" -> ReaderColors(Color.White, Color.Black, Color(0xFFE0E0E0))
     else -> when {
+        appColors == MonochromeColors -> ReaderColors(appColors.background, appColors.onBackground, appColors.surfaceContainerHigh)
         appColors.surface.luminance() > .5f -> ReaderLightColors
         appColors.surface == Color.Black -> ReaderDarkColors.copy(background = Color.Black, foreground = appColors.onSurface, toolbar = Color.Black)
         else -> ReaderDarkColors
@@ -120,9 +122,10 @@ internal fun readerColors(theme: String, appColors: ColorScheme): ReaderColors =
 }
 
 @Composable internal fun ReaderPageTheme(monochrome: Boolean, content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = if(monochrome) lightColorScheme(primary = Color.Black, onPrimary = Color.White,
+    val appColors = MaterialTheme.colorScheme
+    MaterialTheme(colorScheme = if(monochrome && appColors != MonochromeColors) lightColorScheme(primary = Color.Black, onPrimary = Color.White,
         surface = Color.White, onSurface = Color.Black, background = Color.White, onBackground = Color.Black,
-        secondaryContainer = Color.White, onSecondaryContainer = Color.Black, outline = Color.Black) else MaterialTheme.colorScheme,
+        secondaryContainer = Color.White, onSecondaryContainer = Color.Black, outline = Color.Black) else appColors,
         content = content)
 }
 
@@ -135,10 +138,15 @@ internal fun baseAppColors(dark: Boolean, amoled: Boolean) = when {
 @Composable fun NoveliaTheme(theme: String, squareCorners: Boolean = false, amoledBlack: Boolean = false,
     preset: ThemePreset? = null, imageFile: File? = null, content: @Composable () -> Unit) {
     val dark = theme == "dark" || (theme == "system" && isSystemInDarkTheme())
-    val custom = if (LocalEInkMode.current) null else preset
+    val monochrome = theme == MONOCHROME_APP_THEME
+    val custom = if (monochrome || LocalEInkMode.current) null else preset
     val black = dark && amoledBlack
-    val colors = remember(custom, dark, black) {
-        if (custom == null) baseAppColors(dark, black) else customColorScheme(custom, dark, black)
+    val colors = remember(monochrome, custom, dark, black) {
+        when {
+            monochrome -> MonochromeColors
+            custom != null -> customColorScheme(custom, dark, black)
+            else -> baseAppColors(dark, black)
+        }
     }
     val wallpaper = rememberThemeWallpaper(custom.takeUnless { black }, imageFile)
     val lightBars = colors.onSurface.luminance() < colors.surface.luminance()

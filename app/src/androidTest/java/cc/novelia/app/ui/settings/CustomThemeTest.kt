@@ -14,6 +14,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,6 +30,7 @@ import androidx.core.app.ActivityOptionsCompat
 import androidx.navigation.compose.*
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.NoveliaApplication
+import cc.novelia.app.ui.components.media.RecoveringAsyncImage
 import cc.novelia.app.data.backup.LibraryBackupService
 import cc.novelia.app.data.catalog.KeywordStore
 import cc.novelia.app.data.model.ThemePreset
@@ -48,6 +50,89 @@ import org.junit.Test
 class CustomThemeTest {
     @get:Rule val compose = createComposeRule()
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
+
+    @Test fun monochromeDisplaysGrayArtworkAndRestoresTheOriginalColors() {
+        val file = File.createTempFile("mono-color-", ".png", context.cacheDir)
+        val bitmap = Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888)
+        try {
+            bitmap.eraseColor(android.graphics.Color.RED)
+            file.outputStream().use { assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+            var theme by mutableStateOf("light")
+            compose.setContent {
+                NoveliaTheme(theme) { RecoveringAsyncImage(file, null, Modifier.size(48.dp).testTag("color-artwork")) }
+            }
+            fun awaitColor(match: (Color) -> Boolean) = compose.waitUntil(10_000) {
+                val image = compose.onNodeWithTag("color-artwork").captureToImage().toPixelMap()
+                match(image[image.width / 2, image.height / 2])
+            }
+            awaitColor { it == Color.Red }
+            compose.runOnIdle { theme = "monochrome" }
+            awaitColor { it.red in 0.1f..0.5f && it.red == it.green && it.green == it.blue }
+            compose.runOnIdle { theme = "light" }
+            awaitColor { it == Color.Red }
+        } finally { bitmap.recycle(); file.delete() }
+    }
+
+    @Test fun monochromeAppModeOverridesWallpaperAndWorksInEInk() {
+        val app = context.applicationContext as NoveliaApplication
+        runBlocking { app.initialization.await() }
+        val original = app.store.state.value
+        val preset = ThemePreset("mono-test", "彩色方案", accent = 0xAF2255, image = "a".repeat(64))
+        val file = File.createTempFile("mono-wallpaper-", ".png", context.cacheDir)
+        image(file)
+        var eInk by mutableStateOf(false)
+        var scheme = MonochromeColors
+        var hasPaper = false
+        var follow = Color.Transparent
+        fun choose(label: String) {
+            compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText(label))
+            compose.onNodeWithText(label).performClick()
+        }
+        try {
+            app.store.update { it.copy(theme = "dark", amoledBlack = true, themePresets = ThemePresets().saveAndSelect(preset)) }
+            compose.setContent {
+                val state by app.store.state.collectAsState()
+                AppInteractionMode(eInk, true) {
+                    NoveliaTheme(state.theme, amoledBlack = state.amoledBlack, preset = state.themePresets.active, imageFile = file) {
+                        val rendered = MaterialTheme.colorScheme
+                        val wallpaper = LocalThemeWallpaper.current
+                        SideEffect {
+                            scheme = rendered
+                            hasPaper = wallpaper != null
+                            follow = readerColors("system", rendered).background
+                        }
+                        val nav = rememberNavController()
+                        val c = AppController(app, nav, rememberCoroutineScope(), remember { SnackbarHostState() })
+                        NavHost(nav, startDestination = "settings") {
+                            composable("settings") { SettingsScreen(c, "APPEARANCE") }
+                            composable("custom-themes") { CustomThemesScreen(c) }
+                        }
+                    }
+                }
+            }
+            choose("黑白")
+            compose.onNodeWithText("黑白").assertIsSelected()
+            compose.runOnIdle {
+                assertEquals(Color.White, scheme.background)
+                assertEquals(Color.Black, scheme.onSurface)
+                assertEquals(Color.White, follow)
+                assertFalse(hasPaper)
+                assertEquals(preset, app.store.state.value.themePresets.active)
+                eInk = true
+            }
+            compose.runOnIdle { assertEquals(MonochromeColors, scheme); eInk = false }
+            choose("浅色")
+            compose.runOnIdle { assertTrue(hasPaper) }
+            choose("自定义主题")
+            choose("黑白外观")
+            compose.runOnIdle { assertEquals(MonochromeColors, scheme) }
+            choose("彩色方案")
+            compose.runOnIdle { assertEquals("system", app.store.state.value.theme); assertNotEquals(MonochromeColors, scheme) }
+        } finally {
+            app.store.update { it.copy(theme = original.theme, amoledBlack = original.amoledBlack, themePresets = original.themePresets) }
+            file.delete()
+        }
+    }
 
     private fun image(file: File) {
         val pixels = IntArray(128 * 128) { if (it % 128 < 64) android.graphics.Color.BLACK else android.graphics.Color.WHITE }

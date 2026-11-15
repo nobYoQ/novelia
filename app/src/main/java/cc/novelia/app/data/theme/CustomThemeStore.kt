@@ -3,6 +3,7 @@ package cc.novelia.app.data.theme
 import android.graphics.BitmapFactory
 import cc.novelia.app.data.model.ThemePreset
 import cc.novelia.app.data.model.ThemePresets
+import cc.novelia.app.data.model.useAppPresets
 import cc.novelia.app.data.storage.LocalStore
 import java.io.File
 import java.io.InputStream
@@ -95,7 +96,7 @@ internal class CustomThemeStore(private val library: LocalStore) {
         check(library.recoveryIssue.value == null) { "请先恢复受保护的本地资料" }
         val installed = preset.image?.let { hash -> install(hash, draftFile(session, hash)) }
         try {
-            library.update { it.copy(themePresets = it.themePresets.saveAndSelect(preset)) }
+            library.update { it.useAppPresets(it.themePresets.saveAndSelect(preset)) }
         } finally {
             if (installed != null && installed.name !in library.state.value.themePresets.images) installed.delete()
         }

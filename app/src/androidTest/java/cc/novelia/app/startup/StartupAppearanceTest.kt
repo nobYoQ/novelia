@@ -28,6 +28,10 @@ class StartupAppearanceTest {
         assertEquals("SystemAmoled", followingSystem.state.value.splashVariant)
         followingSystem.update(StartupAppearance("light", true))
         assertEquals("Light", followingSystem.state.value.splashVariant)
+        followingSystem.update(StartupAppearance("monochrome", true))
+        val monochrome = StartupAppearanceStore(preferences).state.value
+        assertEquals("Monochrome", monochrome.splashVariant)
+        assertEquals(cc.novelia.app.R.style.Theme_Novelia_Monochrome, monochrome.windowTheme)
     }
 
     @Test fun anUnknownCachedThemeFallsBackToFollowingTheSystem() {

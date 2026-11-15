@@ -2,6 +2,13 @@ package cc.novelia.app.data.model
 
 import kotlinx.serialization.Serializable
 
+internal const val MONOCHROME_APP_THEME = "monochrome"
+internal val APP_THEME_MODES = mapOf("system" to "跟随系统", "light" to "浅色", "dark" to "深色", MONOCHROME_APP_THEME to "黑白")
+
+internal fun LibraryState.useAppPresets(presets: ThemePresets) = copy(
+    theme = if (theme == MONOCHROME_APP_THEME) "system" else theme, themePresets = presets,
+)
+
 @Serializable
 data class ThemeBarGlass(val enabled: Boolean = false, val blur: Int = 65, val opacity: Int = 45) {
     val valid: Boolean get() = blur in 0..100 && opacity in 0..100

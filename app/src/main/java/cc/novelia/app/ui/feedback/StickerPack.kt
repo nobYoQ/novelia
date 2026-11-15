@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.feedback
 
+import cc.novelia.app.ui.theme.appImageColorFilter
+
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Image
 import androidx.compose.runtime.Composable
@@ -89,12 +91,13 @@ val LocalStickerPack = compositionLocalOf { StickerPacks.default }
 @Composable
 fun StickerIllustration(sticker: Sticker, modifier: Modifier = Modifier, pack: StickerPack = LocalStickerPack.current) {
     val file = pack.file(sticker)
+    val filter = appImageColorFilter()
     if(file == null) Image(painterResource(pack.drawable(sticker)), contentDescription = null,
-        modifier = modifier, contentScale = ContentScale.Fit)
+        modifier = modifier, contentScale = ContentScale.Fit, colorFilter = filter)
     else {
         val context = LocalContext.current
         val request = remember(context, file) { ImageRequest.Builder(context).data(file).crossfade(false).build() }
         AsyncImage(request, contentDescription = null, modifier = modifier, contentScale = ContentScale.Fit,
-            error = painterResource(pack.drawable(sticker)))
+            error = painterResource(pack.drawable(sticker)), colorFilter = filter)
     }
 }

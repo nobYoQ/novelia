@@ -34,6 +34,8 @@ import cc.novelia.app.data.model.settingsBackup
 import cc.novelia.app.data.model.requireValid
 import cc.novelia.app.data.model.applyTo
 import cc.novelia.app.data.model.SettingsBackup
+import cc.novelia.app.data.model.APP_THEME_MODES
+import cc.novelia.app.data.model.MONOCHROME_APP_THEME
 import cc.novelia.app.data.storage.appJson
 import cc.novelia.app.data.library.withAutoReadingStatus
 import cc.novelia.app.data.library.withAutomaticReadingStatus
@@ -150,8 +152,11 @@ private enum class SettingsSection(val title: String, val summary: String) {
         }
         if(section == SettingsSection.APPEARANCE) {
         item { ProfileSectionTitle("应用外观") }
-        item { ProfileChoiceRow("应用主题", listOf("跟随系统", "浅色", "深色"), listOf("system", "light", "dark").indexOf(state.theme)) { index -> c.store.update { it.copy(theme = listOf("system", "light", "dark")[index]) } } }
-        item { ProfileMenuRow("自定义主题", state.themePresets.active?.name ?: "默认外观", Icons.Outlined.Palette, { c.go("custom-themes") }) }
+        item { ProfileChoiceRow("应用主题", APP_THEME_MODES.values.toList(), APP_THEME_MODES.keys.indexOf(state.theme)) { index ->
+            c.store.update { it.copy(theme = APP_THEME_MODES.keys.elementAt(index)) }
+        } }
+        item { ProfileMenuRow("自定义主题", if (state.theme == MONOCHROME_APP_THEME) "黑白外观" else state.themePresets.active?.name ?: "默认外观",
+            Icons.Outlined.Palette, { c.go("custom-themes") }) }
         item { ProfileToggle("纯黑显示模式", "深色主题使用纯黑底色，卡片与弹层保留层次", state.amoledBlack) { value -> c.store.update { it.copy(amoledBlack = value) } } }
         item { ProfileToggle("fuck 圆角", "让整个应用变成直角", state.squareCorners) { value -> c.store.update { it.copy(squareCorners = value) } } }
         item { LauncherIconPreference(c.app.launcherIcons) }

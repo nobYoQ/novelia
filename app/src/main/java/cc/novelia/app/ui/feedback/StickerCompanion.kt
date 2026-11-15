@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import cc.novelia.app.ui.theme.MonochromeColors
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -149,7 +151,8 @@ fun StickerCompanion(modifier: Modifier = Modifier, visible: Boolean = true) {
 
 /** 最多保留两组独立爱心，下一次点击不会把正在飘走的爱心拉回原位。 */
 @Composable private fun BoxScope.ReactionHearts(animated: Boolean, onFinished: () -> Unit = {}) {
-    val heartColor = LocalStickerPack.current.heartColor
+    val scheme = MaterialTheme.colorScheme
+    val heartColor = if (scheme == MonochromeColors) scheme.primary else LocalStickerPack.current.heartColor
     val hearts = remember { Animatable(0f) }
     val finished by rememberUpdatedState(onFinished)
     LaunchedEffect(animated) {

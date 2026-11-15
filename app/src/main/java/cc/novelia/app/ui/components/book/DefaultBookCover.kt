@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.components.book
 
+import cc.novelia.app.ui.theme.MonochromeColors
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
@@ -34,7 +36,7 @@ internal fun DefaultBookCover(book: BookCard, modifier: Modifier = Modifier, sho
     val eInk = LocalEInkMode.current
     val dark = colors.surface.luminance() < .5f
     val accent = when {
-        eInk -> colors.onSurface
+        eInk || colors == MonochromeColors -> colors.onSurface
         book.ref.isLocal || book.ref.isWenku -> CoverAccents[variant]
         else -> webCoverPalette(book).accent
     }

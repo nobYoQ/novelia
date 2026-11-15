@@ -3,6 +3,7 @@ package cc.novelia.app.data.webdav
 import cc.novelia.app.data.catalog.KeywordCatalog
 import cc.novelia.app.data.catalog.KeywordLibrary
 import cc.novelia.app.data.model.DEFAULT_FOLDER
+import cc.novelia.app.data.model.APP_THEME_MODES
 import cc.novelia.app.data.model.DEFAULT_FOLDER_ID
 import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.data.model.ReaderTypographyDp
@@ -60,7 +61,7 @@ internal object WebDavValidation {
                 key == GLOBAL -> {
                     require(field in portableGlobalFields) { "设置包含不允许同步的字段" }
                     when (field) {
-                        "theme" -> enumText(value, setOf("system", "light", "dark"))
+                        "theme" -> enumText(value, APP_THEME_MODES.keys)
                         "keywordLimit" -> if (value != JsonNull) positiveInt(value)
                         else -> boolean(value)
                     }

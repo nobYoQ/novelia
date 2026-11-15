@@ -5,6 +5,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import cc.novelia.app.data.network.isRemoteImage
 import cc.novelia.app.ui.components.base.NetworkRecoveryEffect
+import cc.novelia.app.ui.theme.appImageColorFilter
 import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
 import coil.request.ImageRequest
@@ -20,7 +21,7 @@ import coil.request.ImageRequest
         NetworkRecoveryEffect(failure) { failure = null; retry++ }
     }
     key(retry) {
-        AsyncImage(model, contentDescription, modifier, contentScale = contentScale,
+        AsyncImage(model, contentDescription, modifier, contentScale = contentScale, colorFilter = appImageColorFilter(),
             onLoading = { failure = null; onLoading?.invoke(it) },
             onSuccess = { failure = null; onSuccess?.invoke(it) },
             onError = { failure = it.result.throwable; onError?.invoke(it) })

@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 
 internal const val LAUNCHER_SPLASH_THEME_META_DATA = "novelia.launcher.splashTheme"
-internal val LAUNCHER_SPLASH_VARIANTS = listOf("Light", "Dark", "Amoled", "SystemAmoled")
+internal val LAUNCHER_SPLASH_VARIANTS = listOf("Light", "Dark", "Amoled", "SystemAmoled", "Monochrome")
 
 internal fun LauncherIcon.splashThemeFor(appearance: StartupAppearance): Int =
     splashThemes[appearance.splashVariant]?.takeIf { it != 0 } ?: splashTheme

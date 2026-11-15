@@ -41,6 +41,7 @@ class LauncherSplashScreenTest {
             val resources = context.createConfigurationContext(configuration).resources
             val cases = listOf(
                 StartupAppearance("light", true) to light,
+                StartupAppearance("monochrome", true) to android.graphics.Color.WHITE,
                 StartupAppearance("dark", false) to dark,
                 StartupAppearance("dark", true) to black,
                 StartupAppearance("system", false) to if(systemDark) dark else light,

@@ -25,7 +25,8 @@ data class BundledLauncherIcon(val id: String, val title: String, val drawable: 
 
 object LauncherIconCatalog {
     val splashVariants = mapOf("" to "Theme.Novelia", "Light" to "Theme.Novelia.Light",
-        "Dark" to "Theme.Novelia.Dark", "Amoled" to "Theme.Novelia.Amoled", "SystemAmoled" to "Theme.Novelia.SystemAmoled")
+        "Dark" to "Theme.Novelia.Dark", "Amoled" to "Theme.Novelia.Amoled", "SystemAmoled" to "Theme.Novelia.SystemAmoled",
+        "Monochrome" to "Theme.Novelia.Monochrome")
 
     fun read(catalog: File, iconResources: File): List<BundledLauncherIcon> {
         val entries = JsonSlurper().parse(catalog, "UTF-8") as? List<*>

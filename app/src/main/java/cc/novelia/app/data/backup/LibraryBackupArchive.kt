@@ -4,6 +4,7 @@ import cc.novelia.app.data.catalog.KeywordEntry
 import cc.novelia.app.data.catalog.KeywordLibrary
 import cc.novelia.app.data.catalog.KeywordLibraryFormat
 import cc.novelia.app.data.model.LibraryState
+import cc.novelia.app.data.model.APP_THEME_MODES
 import cc.novelia.app.data.model.LocalDocument
 import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.data.model.requireValidReaderThemes
@@ -140,7 +141,7 @@ internal object LibraryBackupArchive {
         require(state.books.all { it.readingStatusControl?.valid != false }) { "备份阅读状态管理信息无效" }
         require(state.pending.isEmpty() && state.downloads.isEmpty() && state.syncStatus.isEmpty() && state.syncReplica.documents.isEmpty()) { "备份不应包含账号队列、同步版本或运行中的任务" }
         require(state.books.map { it.book.ref.key }.distinct().size == state.books.size && state.notes.map { it.id }.distinct().size == state.notes.size) { "备份含重复的书籍或笔记标识" }
-        require(state.theme in setOf("system", "light", "dark")) { "备份主题设置无效" }
+        require(state.theme in APP_THEME_MODES) { "备份主题设置无效" }
         state.themePresets.requireValid()
         state.readerThemePresets.requireValidReaderThemes()
         require(state.edgeToolbar.valid) { "备份边缘工具栏设置无效" }
