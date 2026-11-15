@@ -88,7 +88,7 @@ import kotlinx.coroutines.withContext
             item { ProfileDetailCard(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("导出阅读资料", style = MaterialTheme.typography.titleLarge)
-                    Text("保存书架、进度、笔记、阅读偏好、分卷设置、术语和标签。包含本地正文与插图。", style = MaterialTheme.typography.bodyMedium)
+                    Text("保存书架、进度、笔记、阅读偏好、分卷设置、术语和标签。包含本地正文、插图和自定义主题背景图片。", style = MaterialTheme.typography.bodyMedium)
                     AppButton(onClick = { export.launch("novelia-library-${java.time.LocalDate.now()}.zip") }, enabled = !busy) { Text("导出备份") }
                 }
             } }
@@ -107,6 +107,7 @@ import kotlinx.coroutines.withContext
                 ProfileDetailCard { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("备份检查通过", style = MaterialTheme.typography.titleMedium)
                     Text("创建于 ${DateFormat.getDateTimeInstance().format(Date(p.createdAt))}\n${p.books} 本书 · ${p.positions} 条进度 · ${p.notes} 条笔记\n${p.documents} 本本地正文 · ${p.keywords} 个标签\n正文与文件 ${"%.1f".format(p.bytes / 1024.0 / 1024.0)} MB${if (p.originalsIncluded) " · 包含已有原件" else ""}")
+                    if (p.themes > 0) Text("${p.themes} 套自定义主题 · ${p.themeImages} 张背景图")
                     if (p.missingDocuments > 0) Text("${p.missingDocuments} 本本地书的内容在备份时已缺失，只能恢复记录。", color = MaterialTheme.colorScheme.error)
                     Text("合并到当前资料：同一本书、同 ID 笔记、单书设置与标签翻译保留本机版本，阅读进度选择更新时间较新的一条。新资料会加入书架；空资料库同时恢复全局偏好。", style = MaterialTheme.typography.bodySmall)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

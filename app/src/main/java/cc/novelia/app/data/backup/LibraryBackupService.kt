@@ -34,8 +34,19 @@ class LibraryBackupService(private val store: LocalStore, private val keywords: 
         val exportStage = File(store.exportsDir, "backup-${UUID.randomUUID()}").apply { mkdirs() }
         try {
         val work = coroutineContext
-        val snapshot = store.state.value.forBackup()
         val files = linkedMapOf<String, File>()
+        // 固定图片快照，用户在备份期间替换或删除主题也不会让归档缺少文件。
+        val snapshot = store.customThemes.change {
+            val state = store.state.value.forBackup()
+            val themes = store.customThemes.withAvailableImages(state.themePresets)
+            themes.images.forEach { hash ->
+                work.ensureActive()
+                val copy = File(exportStage, "wallpaper-$hash")
+                store.customThemes.imageFile(hash).copyTo(copy)
+                files["theme-images/$hash"] = copy
+            }
+            state.copy(themePresets = themes)
+        }
         val documents = mutableListOf<String>(); val missing = mutableListOf<String>()
         localDocumentIds(snapshot).forEach { id ->
             work.ensureActive()
@@ -43,7 +54,7 @@ class LibraryBackupService(private val store: LocalStore, private val keywords: 
             val source = File(store.documentsDir, "$id.json")
             if (!source.isFile) { missing += id; return@forEach }
             val document = store.document(id) { work.ensureActive() }
-            // 归档保持自包含的版本 1 格式，旧版应用也可读取。
+            // 将分区文档还原为归档自包含的形式。
             val portableDocument = File(exportStage, "$id.json").apply { writeText(appJson.encodeToString(document), Charsets.UTF_8) }
             documents += id; files["documents/$id.json"] = portableDocument
             val images = document.chapters.flatMap { it.paragraphs }.filter { it.startsWith("novelia-image:") }.map { it.removePrefix("novelia-image:") }.toSet() + listOfNotNull(document.coverImage)
@@ -61,7 +72,8 @@ class LibraryBackupService(private val store: LocalStore, private val keywords: 
             if (saved.book.ref.isLocal) saved.copy(book = saved.book.copy(cover = null)) else saved
         })
         val vocabulary = keywords.exportLibrary()
-        val manifest = LibraryBackupManifest("novelia-library", 1, System.currentTimeMillis(), portable, documents,
+        val version = if (portable.themePresets.images.isEmpty()) 1 else 2
+        val manifest = LibraryBackupManifest("novelia-library", version, System.currentTimeMillis(), portable, documents,
             missing, includeOriginals, vocabulary.entries, files.mapValues { LibraryBackupArchive.digest(it.value) { work.ensureActive() } }, vocabulary.categories)
         LibraryBackupArchive.write(output, manifest, files) { work.ensureActive() }
         } finally { exportStage.deleteRecursively() }
@@ -161,8 +173,21 @@ class LibraryBackupService(private val store: LocalStore, private val keywords: 
                 work.ensureActive()
                 // 越过此边界后，即使页面关闭，也必须完成磁盘提交结果的报告。
                 withContext(NonCancellable) {
-                    store.commitRestore { latest -> mergeLibraryBackup(latest, imported) }
-                    committed = true
+                    store.customThemes.change {
+                        val pictures = mutableListOf<File>()
+                        try {
+                            imported.themePresets.images.forEach { hash ->
+                                val source = File(directory, "theme-images/$hash")
+                                store.customThemes.install(hash, source)?.let(pictures::add)
+                            }
+                            store.commitRestore { latest -> mergeLibraryBackup(latest, imported) }
+                            committed = true
+                        } finally {
+                            // 已有书库可能保留了自己的全局外观，只保留最终状态实际引用的图片。
+                            val keep = store.state.value.themePresets.images
+                            pictures.filterNot { it.name in keep }.forEach { it.delete() }
+                        }
+                    }
                     // 标签目录写入失败不影响已经提交成功的书库；
                     // 保留暂存数据供重试，合并可重复执行且已有翻译优先。
                     val catalogueError = runCatching { keywords.mergeLibrary(manifest.keywordLibrary()); keywords.flush() }.exceptionOrNull()
@@ -185,7 +210,8 @@ class LibraryBackupService(private val store: LocalStore, private val keywords: 
     }
     private fun previewOf(id: String, manifest: LibraryBackupManifest) = BackupPreview(id, manifest.createdAt,
         manifest.library.books.size, manifest.library.positions.size, manifest.library.notes.size, manifest.documents.size,
-        manifest.missingDocuments.size, manifest.keywords.size, manifest.assets.values.sumOf { it.bytes }, manifest.originalsIncluded)
+        manifest.missingDocuments.size, manifest.keywords.size, manifest.assets.values.sumOf { it.bytes }, manifest.originalsIncluded,
+        manifest.library.themePresets.items.size, manifest.library.themePresets.images.size)
 
     private companion object { val restoreLock = Mutex() }
 }

@@ -6,6 +6,8 @@ import cc.novelia.app.data.catalog.KeywordLibraryFormat
 import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.LocalDocument
 import cc.novelia.app.data.model.ReaderSettings
+import cc.novelia.app.data.theme.MAX_THEME_IMAGE_BYTES
+import cc.novelia.app.data.theme.validateThemeImage
 import cc.novelia.app.data.model.validFont
 import cc.novelia.app.data.model.validNightReading
 import cc.novelia.app.data.model.mergeDays
@@ -39,7 +41,7 @@ import kotlinx.serialization.encodeToString
 data class BackupPreview(
     val stagingId: String, val createdAt: Long, val books: Int, val positions: Int,
     val notes: Int, val documents: Int, val missingDocuments: Int, val keywords: Int,
-    val bytes: Long, val originalsIncluded: Boolean
+    val bytes: Long, val originalsIncluded: Boolean, val themes: Int = 0, val themeImages: Int = 0,
 )
 
 /**
@@ -56,9 +58,10 @@ internal object LibraryBackupArchive {
     private val id = Regex("[a-zA-Z0-9-]{1,128}")
     private val documentPath = Regex("documents/[a-zA-Z0-9-]{1,128}\\.(json|epub|txt|srt)")
     private val imagePath = Regex("documents/[a-zA-Z0-9-]{1,128}-images/[a-f0-9]{64}")
+    private val themeImagePath = Regex("theme-images/[a-f0-9]{64}")
 
     fun requireSafePath(path: String) {
-        require(path == MANIFEST || documentPath.matches(path) || imagePath.matches(path)) { "备份包含不安全或不支持的路径" }
+        require(path == MANIFEST || documentPath.matches(path) || imagePath.matches(path) || themeImagePath.matches(path)) { "备份包含不安全或不支持的路径" }
     }
 
     fun digest(file: File, checkCancelled: () -> Unit = {}): BackupAsset = file.inputStream().use { input ->
@@ -95,7 +98,12 @@ internal object LibraryBackupArchive {
                 val entry = zip.nextEntry ?: break
                 requireSafePath(entry.name)
                 require(!entry.isDirectory && names.add(entry.name) && names.size <= MAX_ENTRIES) { "备份包含重复路径或文件数量过多" }
-                val maximum = minOf(if (entry.name == MANIFEST) MAX_MANIFEST_BYTES else MAX_ENTRY_BYTES, MAX_TOTAL_BYTES - total)
+                val entryLimit = when {
+                    entry.name == MANIFEST -> MAX_MANIFEST_BYTES
+                    themeImagePath.matches(entry.name) -> MAX_THEME_IMAGE_BYTES
+                    else -> MAX_ENTRY_BYTES
+                }
+                val maximum = minOf(entryLimit, MAX_TOTAL_BYTES - total)
                 val target = File(staging, entry.name)
                 target.parentFile?.mkdirs()
                 target.outputStream().use { total += transfer(zip, it, maximum, checkCancelled) }
@@ -114,7 +122,7 @@ internal object LibraryBackupArchive {
         val manifestFile = File(staging, MANIFEST)
         require(manifestFile.length() <= MAX_MANIFEST_BYTES) { "备份索引过大" }
         val manifest = appJson.decodeFromString<LibraryBackupManifest>(manifestFile.readText(Charsets.UTF_8))
-        require(manifest.format == "novelia-library" && manifest.version == 1) { "不支持此备份格式或版本，请升级应用后重试" }
+        require(manifest.format == "novelia-library" && manifest.version in 1..2) { "不支持此备份格式或版本，请升级应用后重试" }
         require(manifest.assets.size <= MAX_ENTRIES && manifest.assets.values.sumOf { it.bytes } <= MAX_TOTAL_BYTES) { "备份体积过大" }
         extracted?.let { require(it == manifest.assets.keys) { "备份文件与索引不一致" } }
         manifest.assets.forEach { (path, asset) ->
@@ -132,6 +140,7 @@ internal object LibraryBackupArchive {
         require(state.pending.isEmpty() && state.downloads.isEmpty() && state.syncStatus.isEmpty() && state.syncReplica.documents.isEmpty()) { "备份不应包含账号队列、同步版本或运行中的任务" }
         require(state.books.map { it.book.ref.key }.distinct().size == state.books.size && state.notes.map { it.id }.distinct().size == state.notes.size) { "备份含重复的书籍或笔记标识" }
         require(state.theme in setOf("system", "light", "dark")) { "备份主题设置无效" }
+        state.themePresets.requireValid()
         require(state.edgeToolbar.valid) { "备份边缘工具栏设置无效" }
         require(state.keywordLimit == null || state.keywordLimit > 0) { "备份标签数量上限无效" }
         (listOf(state.reader) + state.bookSettings.values).flatMap { it.modeConfigurations() }.forEach { settings ->
@@ -164,6 +173,15 @@ internal object LibraryBackupArchive {
         require(state.downloadLinks.all { it.localBook.isLocal && id.matches(it.localBook.id) &&
             (it.sourceBook == null || (!it.sourceBook.isLocal && it.sourceBook.provider.isNotBlank() && it.sourceBook.id.isNotBlank())) }) { "下载副本关联无效" }
         val expected = mutableSetOf<String>()
+        state.themePresets.images.forEach { hash ->
+            val path = "theme-images/$hash"
+            val asset = manifest.assets[path]
+            require(manifest.version >= 2 && asset != null && asset.sha256 == hash && asset.bytes in 1..MAX_THEME_IMAGE_BYTES) {
+                "备份背景图片缺失或与主题不匹配"
+            }
+            validateThemeImage(File(staging, path))
+            expected += path
+        }
         documentIds.forEach { documentId ->
             checkCancelled()
             val path = "documents/$documentId.json"
