@@ -30,6 +30,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.layout.onSizeChanged
@@ -66,6 +67,9 @@ import cc.novelia.app.ui.theme.LocalReaderBrightnessPreview
 import cc.novelia.app.ui.theme.rememberReaderBrightness
 import cc.novelia.app.ui.theme.ApplyReaderWindowBrightness
 import cc.novelia.app.ui.theme.ReaderNightTheme
+import cc.novelia.app.ui.theme.LocalThemePreset
+import cc.novelia.app.ui.theme.LocalThemeWallpaper
+import cc.novelia.app.ui.theme.themePaper
 import cc.novelia.app.data.storage.appJson
 import cc.novelia.app.data.webdav.WebDavProjection
 import cc.novelia.app.reader.*
@@ -111,9 +115,12 @@ import kotlinx.serialization.encodeToString
     CompositionLocalProvider(LocalScreenPageButtons provides settings.showEInkScreenButtons,
         LocalReaderBrightness provides brightness, LocalReaderBrightnessPreview provides { brightnessPreview = it }) {
     ApplyReaderWindowBrightness(LocalContext.current.activityOrNull()?.window)
-    ReaderNightTheme(settings.nightReading) {
+    ReaderNightTheme(settings.nightReading, eInk = appEInk) {
     AppInteractionMode(appEInk, LocalReducedMotion.current || eInk) {
-        BoxWithConstraints(Modifier.fillMaxSize()) {
+        val shown = settings.readingAppearance()
+        val colors = readerColors(shown, MaterialTheme.colorScheme, LocalThemePreset.current != null)
+        val paper = LocalThemeWallpaper.current.takeIf { shown.resolvedTheme == "system" }
+        BoxWithConstraints(Modifier.fillMaxSize().themePaper(colors.background, paper)) {
             ReaderContent(c, ref, chapterId, wide = maxWidth >= 840.dp, availableWidth = maxWidth)
         }
     }
@@ -241,13 +248,16 @@ import kotlinx.serialization.encodeToString
             else state.copy(reader = value)
         }
     }
-    val colors = readerColors(settings, MaterialTheme.colorScheme)
+    val colors = readerColors(settings, MaterialTheme.colorScheme, LocalThemePreset.current != null)
     val reducedMotion = appReducedMotion()
     val focusManager = LocalFocusManager.current
-    val background = colors.background
+    // 跟随应用的图片由阅读器视口绘制，翻页和滚动只移动正文。
+    val background = if (settings.resolvedTheme == "system" && LocalThemeWallpaper.current != null) Color.Transparent else colors.background
     val foreground = colors.foreground
     val toolbarBackground = colors.toolbar.copy(alpha = 1f - settings.resolvedToolbarTransparency)
-    SideEffect { activity?.let { WindowCompat.getInsetsController(it.window, it.window.decorView).apply { isAppearanceLightStatusBars = background.luminance() > .5f; isAppearanceLightNavigationBars = background.luminance() > .5f } } }
+    val lightSystemBars = if (settings.resolvedTheme == "system" && LocalThemePreset.current != null)
+        colors.background.luminance() > foreground.luminance() else colors.background.luminance() > .5f
+    SideEffect { activity?.let { WindowCompat.getInsetsController(it.window, it.window.decorView).apply { isAppearanceLightStatusBars = lightSystemBars; isAppearanceLightNavigationBars = lightSystemBars } } }
     DisposableEffect(settings.keepScreenOn, autoReading) {
         if(settings.keepScreenOn || autoReading) activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         onDispose { activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }

@@ -83,8 +83,11 @@ private val ReaderLightColors = ReaderColors(Color(0xFFE8F2E5), Color(0xFF263C2B
 private val ReaderDarkColors = ReaderColors(DarkColors.surface, DarkColors.onSurface,
     lerp(DarkColors.surface, Color.Black, .55f))
 
-internal fun readerColors(settings: ReaderSettings, appColors: ColorScheme): ReaderColors =
-    if(settings.resolvedTheme == "custom") settings.resolvedCustomColors.let {
+internal fun readerColors(settings: ReaderSettings, appColors: ColorScheme, customApp: Boolean = false): ReaderColors =
+    if (customApp && settings.resolvedTheme == "system") {
+        ReaderColors(appColors.background, appColors.onBackground,
+            if (appColors.background == Color.Black) Color.Black else appColors.surfaceContainerHigh)
+    } else if(settings.resolvedTheme == "custom") settings.resolvedCustomColors.let {
         ReaderColors(Color(0xFF000000L or it.background), Color(0xFF000000L or it.text), Color(0xFF000000L or it.toolbar))
     } else readerColors(settings.resolvedTheme, appColors)
 
@@ -103,9 +106,16 @@ internal fun readerColors(theme: String, appColors: ColorScheme): ReaderColors =
 }
 
 /** 夜间阅读的主题作用域包括正文、目录及所有后续弹层，不改变应用主题。 */
-@Composable internal fun ReaderNightTheme(enabled: Boolean, content: @Composable () -> Unit) {
-    CompositionLocalProvider(LocalAmoledBlack provides (LocalAmoledBlack.current && !enabled)) {
-        MaterialTheme(colorScheme = if(enabled) DarkColors else MaterialTheme.colorScheme, content = content)
+@Composable internal fun ReaderNightTheme(enabled: Boolean, eInk: Boolean = false, content: @Composable () -> Unit) {
+    val colors = when {
+        enabled -> DarkColors
+        eInk && LocalThemePreset.current != null -> baseAppColors(LocalAppDark.current, LocalAmoledBlack.current)
+        else -> MaterialTheme.colorScheme
+    }
+    CompositionLocalProvider(LocalAmoledBlack provides (LocalAmoledBlack.current && !enabled),
+        LocalThemePreset provides LocalThemePreset.current.takeUnless { enabled || eInk },
+        LocalThemeWallpaper provides LocalThemeWallpaper.current.takeUnless { enabled || eInk }) {
+        MaterialTheme(colorScheme = colors, content = content)
     }
 }
 

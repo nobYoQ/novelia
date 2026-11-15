@@ -21,6 +21,8 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollDispatcher
@@ -320,12 +322,18 @@ private data class RowMeasurement(val input: RowMeasureInput, val chapter: Measu
                             navigation, { if(canInteract) { navigation.cancel(); onSelect(it) } }, imageModel,
                             { if(canInteract) { navigation.cancel(); expandedImage = it } }, height,
                             { if(canInteract) { navigation.cancel(); onNote(it) } },
-                            Modifier.fillMaxWidth().wrapContentHeight(Alignment.Top, unbounded = true).graphicsLayer { translationY = y }
+                            Modifier.fillMaxWidth().wrapContentHeight(Alignment.Top, unbounded = true).graphicsLayer {
+                                translationY = y
+                                compositingStrategy = if (fadingPartialLine && background == Color.Transparent)
+                                    CompositingStrategy.Offscreen else CompositingStrategy.Auto
+                            }
                                 .drawWithContent {
                                     drawContent()
                                     // 在同一份正文上渐隐尾行，完整行、段间距和正文交互不随动画重新排版。
                                     if(fadingPartialLine && partialLineTop < size.height) drawRect(
-                                        color = background, topLeft = Offset(0f, partialLineTop),
+                                        color = if (background == Color.Transparent) Color.Black else background,
+                                        blendMode = if (background == Color.Transparent) BlendMode.DstOut else BlendMode.SrcOver,
+                                        topLeft = Offset(0f, partialLineTop),
                                         size = Size(size.width, size.height - partialLineTop), alpha = 1f - partialLineAlpha.value)
                                 })
                         if(chapterEnd != null) Box(Modifier.fillMaxWidth().wrapContentHeight(Alignment.Top, unbounded = true)

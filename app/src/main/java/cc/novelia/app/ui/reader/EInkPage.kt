@@ -428,11 +428,12 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
                     // 折叠屏两侧的页框与中缝固定，正文在原位交叉淡化，不横跨折痕平移。
                     // 底层保持不透明，顶层连同纸张背景淡入，避免叠加透明度使背景闪烁。
                     if(animate && outgoing != null) {
-                        body(outgoing, 0f)
+                        body(outgoing, 0f, if (background == Color.Transparent) abs(incomingOffset).coerceIn(0f, 1f) else 1f)
                         body(state.pageIndex, 0f, (1f - abs(incomingOffset)).coerceIn(0f, 1f))
                     } else {
-                        body(state.pageIndex, 0f)
                         val neighbor = state.pageIndex + direction * state.visiblePageCount
+                        val fadeCurrent = background == Color.Transparent && animate && direction != 0 && neighbor in chapter.pages.indices
+                        body(state.pageIndex, 0f, if (fadeCurrent) (1f - abs(pageOffset)).coerceIn(0f, 1f) else 1f)
                         if(animate && direction != 0 && neighbor in chapter.pages.indices) {
                             body(neighbor, 0f, abs(pageOffset).coerceIn(0f, 1f))
                         }

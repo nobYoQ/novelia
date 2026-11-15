@@ -226,7 +226,7 @@ import kotlin.math.roundToInt
 /** 全局设置没有打开的正文时，使用相同编辑层在示例正文上配置。 */
 @Composable internal fun ReaderTapZonePreview(value: ReaderSettings, onSave: (ReaderTapZoneMap) -> Unit, onDismiss: () -> Unit) {
     AppDialog(onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        val colors = readerColors(value, MaterialTheme.colorScheme)
+        val colors = readerColors(value, MaterialTheme.colorScheme, cc.novelia.app.ui.theme.LocalThemePreset.current != null)
         Box(Modifier.fillMaxSize().safeDrawingPadding().background(colors.background)) {
             Text("阅读区域预览\n\n" + "风穿过树梢，旅人沿着小路向前走去。你可以透过半透明区域查看正文，并调整适合自己的点击范围。\n\n".repeat(18),
                 Modifier.fillMaxSize().padding(24.dp), color = colors.foreground, style = MaterialTheme.typography.bodyLarge)
