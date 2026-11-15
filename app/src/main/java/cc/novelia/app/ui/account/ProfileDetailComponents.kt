@@ -18,6 +18,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.ui.theme.LocalEInkMode
+import cc.novelia.app.ui.theme.wallpaperCardColor
 import cc.novelia.app.ui.components.base.AppLazyColumn
 import cc.novelia.app.ui.components.base.ChoiceRow
 import cc.novelia.app.ui.components.base.EmptyState
@@ -49,14 +50,16 @@ import cc.novelia.app.ui.components.base.Screen
     modifier: Modifier = Modifier,
     colors: CardColors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
     content: @Composable ColumnScope.() -> Unit,
-) = Card(modifier.fillMaxWidth(), shape = appRoundedCornerShape(28.dp), colors = colors, border = profileCardBorder(), content = content)
+) = Card(modifier.fillMaxWidth(), shape = appRoundedCornerShape(28.dp),
+    colors = colors.copy(containerColor = wallpaperCardColor(colors.containerColor)), border = profileCardBorder(), content = content)
 
 @Composable internal fun ProfileMenuRow(
     title: String, description: String, icon: ImageVector, onClick: () -> Unit,
     trailing: @Composable (() -> Unit)? = null,
 ) {
     Surface(onClick = onClick, modifier = Modifier.fillMaxWidth(), shape = appRoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow, border = profileCardBorder()) {
+        color = wallpaperCardColor(MaterialTheme.colorScheme.surfaceContainerLow), contentColor = MaterialTheme.colorScheme.onSurface,
+        border = profileCardBorder()) {
         Row(Modifier.heightIn(min = 80.dp).padding(18.dp), horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)

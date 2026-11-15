@@ -2,6 +2,8 @@
 
 package cc.novelia.app.ui.account
 
+import cc.novelia.app.ui.theme.wallpaperCardColor
+
 import cc.novelia.app.data.community.ForumRules
 import cc.novelia.app.ui.community.rememberForumCommentTime
 
@@ -81,7 +83,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
         }
     }
     Surface(modifier.fillMaxWidth().testTag("profile-account-card"), shape = appRoundedCornerShape(28.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow, border = profileCardBorder()) {
+        color = wallpaperCardColor(MaterialTheme.colorScheme.surfaceContainerLow), border = profileCardBorder()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(16.dp)) {

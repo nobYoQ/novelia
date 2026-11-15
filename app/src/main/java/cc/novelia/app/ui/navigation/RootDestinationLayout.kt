@@ -56,6 +56,7 @@ internal fun RootDestinationLayout(
         if(wide || hideNavigation) SideEffect { onNavigationBarHeightChanged(0.dp) }
         if(!wide) SideEffect { onNavigationRailWidthChanged(0.dp) }
         Scaffold(
+            containerColor = cc.novelia.app.ui.theme.pageContainerColor(), contentColor = MaterialTheme.colorScheme.onBackground,
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             bottomBar = {
                 if(!wide && !hideNavigation) NavigationBar(

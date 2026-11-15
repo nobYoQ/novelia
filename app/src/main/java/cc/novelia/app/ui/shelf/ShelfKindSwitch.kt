@@ -16,7 +16,7 @@ import androidx.compose.ui.unit.dp
 /** 同样的低对比底座与分段选中态；窄屏、大字模式下保持标签完整。 */
 @Composable internal fun ShelfKindSwitch(labels: List<String>, selectedIndex: Int, tag: String, onChange: (Int) -> Unit) {
     Surface(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp).testTag(tag),
-        shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+        shape = MaterialTheme.shapes.medium, color = cc.novelia.app.ui.theme.wallpaperCardColor(MaterialTheme.colorScheme.surfaceContainerLow)) {
         BoxWithConstraints(Modifier.padding(4.dp).selectableGroup()) {
             val fontScale = LocalDensity.current.fontScale
             val columns = (maxWidth / (64 * fontScale).dp).toInt().coerceIn(1, labels.size)

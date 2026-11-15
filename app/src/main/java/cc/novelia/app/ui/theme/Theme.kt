@@ -5,6 +5,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
@@ -17,6 +18,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import cc.novelia.app.data.model.ReaderSettings
+import cc.novelia.app.data.model.ThemePreset
+import java.io.File
 
 internal fun android.content.Context.activityOrNull(): android.app.Activity? {
     var current = this
@@ -70,6 +73,7 @@ private val AmoledColors = DarkColors.copy(
 
 /** 表达实际生效的纯黑主题，浅色模式下即使偏好已开启也保持 false。 */
 internal val LocalAmoledBlack = staticCompositionLocalOf { false }
+internal val LocalAppDark = staticCompositionLocalOf { false }
 
 /** 正文阅读配色独立于偏好设置和其他弹层使用的应用主题。 */
 internal data class ReaderColors(val background: Color, val foreground: Color, val toolbar: Color)
@@ -112,17 +116,27 @@ internal fun readerColors(theme: String, appColors: ColorScheme): ReaderColors =
         content = content)
 }
 
-@Composable fun NoveliaTheme(theme: String, squareCorners: Boolean = false, amoledBlack: Boolean = false, content: @Composable () -> Unit) {
+internal fun baseAppColors(dark: Boolean, amoled: Boolean) = when {
+    !dark -> LightColors
+    amoled -> AmoledColors
+    else -> DarkColors
+}
+
+@Composable fun NoveliaTheme(theme: String, squareCorners: Boolean = false, amoledBlack: Boolean = false,
+    preset: ThemePreset? = null, imageFile: File? = null, content: @Composable () -> Unit) {
     val dark = theme == "dark" || (theme == "system" && isSystemInDarkTheme())
-    val colors = when {
-        !dark -> LightColors
-        amoledBlack -> AmoledColors
-        else -> DarkColors
+    val custom = if (LocalEInkMode.current) null else preset
+    val black = dark && amoledBlack
+    val colors = remember(custom, dark, black) {
+        if (custom == null) baseAppColors(dark, black) else customColorScheme(custom, dark, black)
     }
+    val wallpaper = rememberThemeWallpaper(custom.takeUnless { black }, imageFile)
+    val lightBars = colors.onSurface.luminance() < colors.surface.luminance()
     val view = LocalView.current
     val activity = LocalContext.current.activityOrNull()
-    SideEffect { activity?.let { WindowCompat.getInsetsController(it.window, view).apply { isAppearanceLightStatusBars = !dark; isAppearanceLightNavigationBars = !dark } } }
-    CompositionLocalProvider(LocalSquareCorners provides squareCorners, LocalAmoledBlack provides (dark && amoledBlack)) {
+    SideEffect { activity?.let { WindowCompat.getInsetsController(it.window, view).apply { isAppearanceLightStatusBars = lightBars; isAppearanceLightNavigationBars = lightBars } } }
+    CompositionLocalProvider(LocalSquareCorners provides squareCorners, LocalAmoledBlack provides black,
+        LocalAppDark provides dark, LocalThemePreset provides custom, LocalThemeWallpaper provides wallpaper) {
     MaterialTheme(colorScheme = colors, shapes = if(squareCorners) SquareShapes else DefaultShapes, typography = Typography(
         headlineLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold, fontSize = 32.sp, lineHeight = 40.sp),
         titleLarge = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 22.sp, lineHeight = 30.sp),

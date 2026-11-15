@@ -26,6 +26,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.*
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.LibraryState
+import cc.novelia.app.data.model.ThemePreset
 import cc.novelia.app.files.importing.sharedDocumentUris
 import cc.novelia.app.launcher.observeLauncherSplashScreen
 import cc.novelia.app.ui.about.AboutScreen
@@ -76,6 +77,8 @@ import cc.novelia.app.ui.theme.AppInteractionMode
 import cc.novelia.app.ui.theme.appPageEnterTransition
 import cc.novelia.app.ui.theme.appPageExitTransition
 import cc.novelia.app.ui.theme.NoveliaTheme
+import cc.novelia.app.ui.theme.LocalThemeWallpaper
+import cc.novelia.app.ui.theme.themePaper
 import cc.novelia.app.ui.theme.appReducedMotion
 import cc.novelia.app.ui.tools.ToolsScreen
 import cc.novelia.app.ui.toolbar.*
@@ -92,10 +95,10 @@ import cc.novelia.app.startup.StartupScreen
 
 private data class AppAppearance(val theme: String, val amoledBlack: Boolean, val squareCorners: Boolean, val reducedMotion: Boolean, val eInk: Boolean, val eInkBooks: Set<String>,
     val screenButtons: Boolean, val hideStatusBar: Boolean, val bookStatusBars: Map<String, Boolean>,
-    val readerOrientation: String, val bookOrientations: Map<String, String>, val stickerPackId: String)
+    val readerOrientation: String, val bookOrientations: Map<String, String>, val stickerPackId: String, val preset: ThemePreset?)
 private fun LibraryState.appearance() = AppAppearance(theme, amoledBlack, squareCorners, reducedMotion || reader.eInkMode, reader.eInkMode,
     bookSettings.filterValues { it.eInkMode }.keys, reader.showEInkScreenButtons, reader.hideStatusBar, bookSettings.mapValues { it.value.hideStatusBar },
-    reader.resolvedOrientation, bookSettings.mapValues { it.value.resolvedOrientation }, stickerPackId)
+    reader.resolvedOrientation, bookSettings.mapValues { it.value.resolvedOrientation }, stickerPackId, themePresets.active)
 
 /**
  * Android 生命周期与 Compose 界面的连接点：等待应用初始化，装配主题、控制器和导航图。
@@ -135,7 +138,8 @@ class MainActivity : ComponentActivity() {
                 .collectAsStateWithLifecycle(initialValue = remember(app) { app.stickerPacks.state.value.packs })
             val stickerPacks = remember(localStickers) { StickerPacks.all + localStickers.map { it.asStickerPack() } }
             AppInteractionMode(appearance.eInk, appearance.reducedMotion) {
-            NoveliaTheme(appearance.theme, squareCorners = appearance.squareCorners, amoledBlack = appearance.amoledBlack) {
+            NoveliaTheme(appearance.theme, squareCorners = appearance.squareCorners, amoledBlack = appearance.amoledBlack,
+                preset = appearance.preset, imageFile = appearance.preset?.image?.let(app.store.customThemes::imageFile)) {
                 val nav = rememberNavController(); val scope = rememberCoroutineScope(); val snackbar = remember { SnackbarHostState() }
                 val source by app.bookSources.state.collectAsStateWithLifecycle()
                 val controller = remember(source.revision) { AppController(app, nav, scope, snackbar) }
@@ -197,7 +201,8 @@ class MainActivity : ComponentActivity() {
                 fun reportNavigationBarHeight(root: String): (Dp) -> Unit = { height ->
                     if(route?.startsWith(root) == true) navigationBarHeight = height
                 }
-                Scaffold(snackbarHost = {
+                Scaffold(modifier = Modifier.fillMaxSize().themePaper(MaterialTheme.colorScheme.background, LocalThemeWallpaper.current, anchorBars = true),
+                    containerColor = androidx.compose.ui.graphics.Color.Transparent, contentColor = MaterialTheme.colorScheme.onBackground, snackbarHost = {
                     Box(Modifier.padding(bottom = if(route in roots) navigationBarHeight else 0.dp)) {
                         StickerSnackbarHost(snackbar)
                     }

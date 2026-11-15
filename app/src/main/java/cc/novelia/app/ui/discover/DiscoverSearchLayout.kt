@@ -63,7 +63,8 @@ import cc.novelia.app.ui.theme.appReducedMotion
     }
     BackHandler(editing) { finishEditing() }
     val scrollCollapse = rememberCloudFilterCollapse(true, editing, ::finishEditing)
-    Scaffold(modifier = modifier, topBar = {
+    Scaffold(modifier = modifier, containerColor = cc.novelia.app.ui.theme.pageContainerColor(),
+        contentColor = MaterialTheme.colorScheme.onBackground, topBar = {
         TopAppBar(title = {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("发现", maxLines = 1)

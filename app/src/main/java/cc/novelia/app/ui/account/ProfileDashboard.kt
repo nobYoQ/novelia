@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.account
 
+import cc.novelia.app.ui.theme.wallpaperCardColor
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -124,7 +126,7 @@ import cc.novelia.app.ui.theme.LocalAmoledBlack
     container: Color, content: Color, shape: Shape, modifier: Modifier,
 ) {
     Card(onClick = { onNavigate(route) }, modifier = modifier.testTag("profile-$route"), shape = shape,
-        colors = CardDefaults.cardColors(containerColor = container, contentColor = content), border = profileCardBorder()) {
+        colors = CardDefaults.cardColors(containerColor = wallpaperCardColor(container), contentColor = content), border = profileCardBorder()) {
         Column(Modifier.fillMaxWidth().heightIn(min = 168.dp).padding(20.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Icon(icon, null, Modifier.size(28.dp))
@@ -141,7 +143,7 @@ import cc.novelia.app.ui.theme.LocalAmoledBlack
 @Composable private fun ProfileShortcuts(noteCount: Int, updateCount: Int, onNavigate: (String) -> Unit) {
     val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
     Surface(modifier = Modifier.testTag("profile-shortcuts"), shape = appRoundedCornerShape(28.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow, border = profileCardBorder()) {
+        color = wallpaperCardColor(MaterialTheme.colorScheme.surfaceContainerLow), border = profileCardBorder()) {
         BoxWithConstraints(Modifier.fillMaxWidth().padding(6.dp)) {
             val stacked = (maxWidth + 12.dp) / fontScale < 300.dp
             val shortcuts = listOf(
@@ -208,7 +210,7 @@ import cc.novelia.app.ui.theme.LocalAmoledBlack
 @Composable private fun ProfilePreferenceRow(title: String, subtitle: String, icon: ImageVector, route: String,
     onNavigate: (String) -> Unit, shape: Shape, minHeight: Dp = 80.dp) {
     Surface(onClick = { onNavigate(route) }, modifier = Modifier.fillMaxWidth().testTag("profile-$route"), shape = shape,
-        color = MaterialTheme.colorScheme.surfaceContainerLow, border = profileCardBorder()) {
+        color = wallpaperCardColor(MaterialTheme.colorScheme.surfaceContainerLow), border = profileCardBorder()) {
         Row(Modifier.heightIn(min = minHeight).padding(horizontal = 18.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             Icon(icon, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)

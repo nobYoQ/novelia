@@ -41,6 +41,7 @@ internal fun WebDavPage(
     content: @Composable (PaddingValues) -> Unit,
 ) {
     Scaffold(
+        containerColor = cc.novelia.app.ui.theme.pageContainerColor(), contentColor = MaterialTheme.colorScheme.onBackground,
         topBar = { TopAppBar(
             title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
             navigationIcon = { AppIconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "返回") } },
@@ -96,7 +97,8 @@ internal fun WebDavHero(title: String, description: String, icon: ImageVector) {
 internal fun WebDavCard(modifier: Modifier = Modifier, shape: Shape = appRoundedCornerShape(28.dp), content: @Composable () -> Unit) {
     Surface(
         modifier = modifier.fillMaxWidth(), shape = shape,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        color = cc.novelia.app.ui.theme.wallpaperCardColor(MaterialTheme.colorScheme.surfaceContainerLow),
+        contentColor = MaterialTheme.colorScheme.onSurface,
         border = if(LocalEInkMode.current) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null,
         content = content,
     )
