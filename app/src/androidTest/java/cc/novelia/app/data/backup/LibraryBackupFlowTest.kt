@@ -15,6 +15,8 @@ import cc.novelia.app.data.model.Note
 import cc.novelia.app.data.model.PendingAction
 import cc.novelia.app.data.model.Position
 import cc.novelia.app.data.model.ReaderSettings
+import cc.novelia.app.data.model.ReaderCustomColors
+import cc.novelia.app.data.model.ReaderThemePalette
 import cc.novelia.app.data.model.SavedBook
 import cc.novelia.app.data.storage.LocalStore
 import java.io.ByteArrayInputStream
@@ -142,6 +144,8 @@ class LibraryBackupFlowTest {
                 positions = mapOf(first.key to Position("c1", index = 1, offset = 7, textOffset = 3, updatedAt = 123)),
                 notes = listOf(Note("backup-note", first.key, "c1", 0, "正文", "读书笔记")),
                 bookSettings = mapOf(first.key to ReaderSettings(fontSize = 25f)),
+                readerThemePresets = mapOf("纸页" to ReaderThemePalette.from(ReaderSettings()),
+                    "夜蓝" to ReaderThemePalette(ReaderCustomColors(0xDDEEFF, 0x101020, 0x202030), .6f)),
                 personalGlossaries = mapOf(first.key to mapOf("原文" to "译文")),
                 pending = listOf(PendingAction("not-portable", "account", "PUT", "pending/path")),
                 downloads = listOf(DownloadEntry("running", "task", "task.epub", "https://example.test/task", status = "下载中", workId = "work-id"))) }
@@ -158,6 +162,7 @@ class LibraryBackupFlowTest {
             target.flush()
             val persisted = LocalStore(targetContext)
             val restored = persisted.state.value
+            assertEquals(source.state.value.readerThemePresets, restored.readerThemePresets)
             val restoredFirst = restored.books.single { it.book.title == "第一卷" }.book.ref
             val restoredSecond = restored.books.single { it.book.title == "第二卷" }.book.ref
             assertNotEquals(first.id, restoredFirst.id)

@@ -6,6 +6,7 @@ import cc.novelia.app.data.catalog.KeywordLibraryFormat
 import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.LocalDocument
 import cc.novelia.app.data.model.ReaderSettings
+import cc.novelia.app.data.model.requireValidReaderThemes
 import cc.novelia.app.data.theme.MAX_THEME_IMAGE_BYTES
 import cc.novelia.app.data.theme.validateThemeImage
 import cc.novelia.app.data.model.validFont
@@ -141,6 +142,7 @@ internal object LibraryBackupArchive {
         require(state.books.map { it.book.ref.key }.distinct().size == state.books.size && state.notes.map { it.id }.distinct().size == state.notes.size) { "备份含重复的书籍或笔记标识" }
         require(state.theme in setOf("system", "light", "dark")) { "备份主题设置无效" }
         state.themePresets.requireValid()
+        state.readerThemePresets.requireValidReaderThemes()
         require(state.edgeToolbar.valid) { "备份边缘工具栏设置无效" }
         require(state.keywordLimit == null || state.keywordLimit > 0) { "备份标签数量上限无效" }
         (listOf(state.reader) + state.bookSettings.values).flatMap { it.modeConfigurations() }.forEach { settings ->
@@ -237,6 +239,7 @@ internal fun mergeLibraryBackup(current: LibraryState, incoming: LibraryState): 
     val books = current.books + imported.books.filter { item -> current.books.none { it.book.ref == item.book.ref } }
     val booksByKey = books.associateBy { it.book.ref.key }
     val merged = base.copy(
+        readerThemePresets = imported.readerThemePresets + current.readerThemePresets,
         books = books.map { book -> book.copy(volumeOrder = (book.volumeOrder + imported.books.firstOrNull { it.book.ref == book.book.ref }?.volumeOrder.orEmpty()).distinct().filter { booksByKey[it]?.parentWenkuKey == book.book.ref.key }) },
         folders = (current.folders + imported.folders).distinct(),
         positions = (current.positions.keys + imported.positions.keys).associateWith { key -> listOfNotNull(current.positions[key], imported.positions[key]).maxBy { it.updatedAt } },

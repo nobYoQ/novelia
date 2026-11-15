@@ -36,6 +36,14 @@ import kotlin.math.roundToInt
 
 internal val LocalReaderPresetDraft = staticCompositionLocalOf { false }
 
+internal fun ReaderSettings.editableNightTheme(): ReaderSettings {
+    if (resolvedTheme == "custom") return this
+    val palette = nightReaderColors(this)
+    fun rgb(color: androidx.compose.ui.graphics.Color) = color.toArgb().toLong() and 0xFFFFFF
+    return withTheme("custom").copy(customColors = ReaderCustomColors(
+        rgb(palette.foreground), rgb(palette.background), rgb(palette.toolbar)))
+}
+
 /** 预设编辑有独立草稿；保存才写回，取消和关闭均还原临时亮度。 */
 @Composable internal fun ReaderNightPresetEditor(settings: ReaderSettings, perBook: Boolean, initialTab: Int = 0,
     onDismiss: () -> Unit, onSave: (ReaderNightPreset, ReaderBrightness) -> Unit) {
@@ -96,11 +104,7 @@ internal val LocalReaderPresetDraft = staticCompositionLocalOf { false }
                                 }
                                 1 -> {
                                     EditorHeading("背景与文字")
-                                    val palette = nightReaderColors(shown)
-                                    val editable = if(shown.resolvedTheme == "custom") shown else shown.copy(theme = "custom", monochrome = false,
-                                        customColors = ReaderCustomColors(palette.foreground.toArgb().toLong() and 0xFFFFFF,
-                                            palette.background.toArgb().toLong() and 0xFFFFFF, palette.toolbar.toArgb().toLong() and 0xFFFFFF))
-                                    ReaderThemeEditor(editable,
+                                    ReaderThemeEditor(shown.editableNightTheme(),
                                         draft.resetNightPreset().inDp(density).readingAppearance(), ::edit, showPreview = false, showReset = false,
                                         helperText = "点击颜色即可调整，也可输入色值。修改后保存为自定义夜间配色。")
                                     EditorHeading("辅助显示")

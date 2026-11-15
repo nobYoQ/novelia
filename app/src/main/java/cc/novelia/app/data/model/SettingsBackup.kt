@@ -18,9 +18,11 @@ import kotlinx.serialization.Serializable
     val hideLocalFavorites: Boolean = false, val hideCloudFavorites: Boolean = false,
     val forumDefaultCategory: String? = null, val forumSkipPinned: Boolean = false,
     val ttsEnginePackage: String? = null,
-    val themePresets: ThemePresets? = null)
+    val themePresets: ThemePresets? = null,
+    val readerThemePresets: Map<String, ReaderThemePalette>? = null)
 
 internal fun LibraryState.settingsBackup() = SettingsBackup(
+    readerThemePresets = readerThemePresets,
     reader = reader, theme = theme, themePresets = themePresets, reducedMotion = reducedMotion, squareCorners = squareCorners,
     amoledBlack = amoledBlack, stickerPackId = stickerPackId, discoverWenkuGrid = discoverWenkuGrid,
     rememberSavedSearchPage = rememberSavedSearchPage, shelfGrid = shelfGrid, localFilesGrid = localFilesGrid,
@@ -36,6 +38,7 @@ internal fun LibraryState.settingsBackup() = SettingsBackup(
 
 internal fun SettingsBackup.requireValid() {
     themePresets?.requireValid()
+    readerThemePresets?.requireValidReaderThemes()
     require(edgeToolbar.valid && version == 1 && theme in listOf("system", "light", "dark") &&
         (keywordLimit == null || keywordLimit > 0) && reader.modeConfigurations().all { r ->
             r.fontSize in ReaderSettings.FONT_SIZE_RANGE && r.lineHeight in ReaderSettings.LINE_HEIGHT_RANGE &&
@@ -48,6 +51,7 @@ internal fun SettingsBackup.requireValid() {
 }
 
 internal fun SettingsBackup.applyTo(state: LibraryState): LibraryState = state.copy(
+    readerThemePresets = readerThemePresets ?: state.readerThemePresets,
     reader = reader, theme = theme, themePresets = themePresets ?: state.themePresets,
     reducedMotion = reducedMotion, squareCorners = squareCorners, amoledBlack = amoledBlack, stickerPackId = stickerPackId,
     discoverWenkuGrid = discoverWenkuGrid, rememberSavedSearchPage = rememberSavedSearchPage, shelfGrid = shelfGrid,

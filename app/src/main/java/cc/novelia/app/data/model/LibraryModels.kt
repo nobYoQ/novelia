@@ -123,6 +123,7 @@ fun legacyFolderId(name: String): String = if(name == DEFAULT_FOLDER) DEFAULT_FO
     val ttsEnginePackage: String? = null,
     val readingStatistics: ReadingStatistics = ReadingStatistics(),
     val themePresets: ThemePresets = ThemePresets(),
+    val readerThemePresets: Map<String, ReaderThemePalette> = emptyMap(),
 )
 
 /** 收藏夹名称仅用于显示；改名时 ID 及所有本地分卷仍保持原关系。 */

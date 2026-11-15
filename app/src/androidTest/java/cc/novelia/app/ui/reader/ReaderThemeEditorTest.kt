@@ -29,6 +29,64 @@ import org.junit.Test
 class ReaderThemeEditorTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun namedThemesSaveSwitchOverwriteAndDeleteWithoutChangingAppliedColors() {
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as cc.novelia.app.NoveliaApplication
+        kotlinx.coroutines.runBlocking { app.initialization.await() }
+        val original = app.store.state.value.readerThemePresets
+        var reader by mutableStateOf(ReaderSettings(theme = "custom", toolbarTransparency = .35f))
+        val first = reader
+        val second = reader.copy(customColors = ReaderCustomColors(0x112233, 0x556677, 0x778899), toolbarTransparency = .7f)
+        fun save(name: String, button: String = "保存") {
+            compose.onNodeWithText("保存当前主题").performScrollTo().performClick()
+            compose.onNode(hasSetTextAction()).performTextReplacement(name)
+            compose.onNodeWithText(button).performClick()
+        }
+        fun openList() = compose.onNodeWithText("已存主题（2）").performScrollTo().performClick()
+        try {
+            app.store.update { it.copy(readerThemePresets = emptyMap()) }
+            compose.setContent { NoveliaTheme("light") { Surface(Modifier.fillMaxSize().safeDrawingPadding()) {
+                ReaderPreferences(reader) { reader = it }
+            } } }
+            save("晨光")
+            compose.runOnIdle { reader = second }
+            save("雨夜")
+            openList()
+            compose.onNodeWithText("晨光").performClick()
+            compose.runOnIdle {
+                assertEquals(first.customColors, reader.customColors)
+                assertEquals(.35f, reader.toolbarTransparency, 0f)
+            }
+            val nightBefore = reader.nightPreset
+            fun chooseInNightDraft() {
+                compose.onNodeWithTag("reader-edit-night-preset").performScrollTo().performClick()
+                compose.onNodeWithText("配色").performClick()
+                compose.onNode(hasText("已存主题（2）") and hasAnyAncestor(hasTestTag("reader-night-preset-editor")))
+                    .performScrollTo().performClick()
+                compose.onNodeWithText("雨夜").performClick()
+            }
+            chooseInNightDraft()
+            compose.onNodeWithTag("reader-night-editor-cancel").performClick()
+            compose.runOnIdle { assertEquals(nightBefore, reader.nightPreset) }
+            chooseInNightDraft()
+            compose.onNodeWithTag("reader-night-editor-save").performClick()
+            compose.runOnIdle {
+                assertEquals(second.customColors, reader.nightPreset.customColors)
+                assertEquals(.7f, reader.nightPreset.toolbarTransparency, 0f)
+                assertEquals(first.customColors, reader.customColors)
+            }
+            save("雨夜", "覆盖保存")
+            openList()
+            compose.onNodeWithContentDescription("删除晨光").performClick()
+            compose.onNodeWithText("删除").performClick()
+            compose.onNodeWithText("雨夜").performClick()
+            compose.runOnIdle {
+                assertEquals(setOf("雨夜"), app.store.state.value.readerThemePresets.keys)
+                assertEquals(first.customColors, reader.customColors)
+                assertEquals(.35f, reader.toolbarTransparency, 0f)
+            }
+        } finally { app.store.update { it.copy(readerThemePresets = original) } }
+    }
+
     @Test fun exactColorInputValidatesBeforeApplyingAndCanRestoreDefaults() {
         var reader by mutableStateOf(ReaderSettings(theme = "custom"))
         compose.setContent { NoveliaTheme("light") { Surface(Modifier.fillMaxSize().safeDrawingPadding()) { ReaderPreferences(reader) { reader = it } } } }

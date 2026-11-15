@@ -40,6 +40,14 @@ import kotlin.math.roundToInt
                 Switch(settings.nightReading, onCheckedChange = null)
             }
             ReaderNightPresetEntry(settings, onEditPreset)
+            if (settings.nightReading) {
+                val shown = settings.readingAppearance().editableNightTheme()
+                Box(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                    ReaderThemeLibrary(ReaderThemePalette.from(shown), onApply = {
+                        onChange(settings.withReadingAppearance(it.applyTo(shown)))
+                    })
+                }
+            }
         }
     }
     ReaderPreferenceSection("屏幕亮度", if(settings.nightReading) "正在调整夜间亮度 · 自动保存到夜间预设" else "正在调整普通亮度 · 自动保存", Icons.Outlined.Brightness6) {

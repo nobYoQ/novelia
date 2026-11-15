@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import cc.novelia.app.data.model.ReaderCustomColors
 import cc.novelia.app.data.model.ReaderSettings
+import cc.novelia.app.data.model.ReaderThemePalette
 import cc.novelia.app.ui.theme.readerColors
 
 private fun rgb(value: Long) = Color(0xFF000000L or value)
@@ -41,7 +42,7 @@ private fun hex(value: Long) = "#%06X".format(value)
         if(showPreview) Surface(color = colors.background, contentColor = colors.foreground, shape = MaterialTheme.shapes.medium,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), modifier = Modifier.fillMaxWidth().testTag("reader-color-preview")) {
             Column {
-                Surface(color = colors.toolbar, contentColor = colors.foreground, modifier = Modifier.fillMaxWidth()) {
+                Surface(color = colors.toolbar.copy(alpha = 1f - settings.resolvedToolbarTransparency), contentColor = colors.foreground, modifier = Modifier.fillMaxWidth()) {
                     Text("阅读配色预览", Modifier.padding(12.dp), style = MaterialTheme.typography.labelLarge)
                 }
                 Text("这是一行句子", Modifier.padding(16.dp), fontSize = with(density) { typography.fontSize.dp.toSp() },
@@ -51,6 +52,8 @@ private fun hex(value: Long) = "#%06X".format(value)
                     style = LocalTextStyle.current.copy(lineHeightStyle = ReaderLineHeightStyle))
             }
         }
+        ReaderThemeLibrary(ReaderThemePalette.from(settings), onApply = { onChange(it.applyTo(settings)) },
+            chooseOnly = LocalReaderPresetDraft.current)
         listOf(Triple("text", "字体颜色", palette.text), Triple("background", "背景颜色", palette.background),
             Triple("toolbar", "工具栏颜色", palette.toolbar)).forEach { (field, label, current) ->
             Surface(onClick = { editing = field }, shape = MaterialTheme.shapes.medium,
