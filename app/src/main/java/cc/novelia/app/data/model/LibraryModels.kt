@@ -121,7 +121,8 @@ fun legacyFolderId(name: String): String = if(name == DEFAULT_FOLDER) DEFAULT_FO
     val forumDefaultCategory: String? = null, val forumSkipPinned: Boolean = false,
     // 系统 TTS 引擎取决于本机安装情况；普通设置备份保留，WebDAV 不同步。
     val ttsEnginePackage: String? = null,
-    val readingStatistics: ReadingStatistics = ReadingStatistics()
+    val readingStatistics: ReadingStatistics = ReadingStatistics(),
+    val themePresets: ThemePresets = ThemePresets(),
 )
 
 /** 收藏夹名称仅用于显示；改名时 ID 及所有本地分卷仍保持原关系。 */

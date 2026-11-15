@@ -55,6 +55,7 @@ import kotlinx.serialization.encodeToString
  * 磁盘 IO，调用方应安排在后台线程。主状态损坏时进入保护模式，只有显式恢复可以解除。
  */
 class LocalStore(val context: Context, private val syncDevicePreferences: () -> Boolean = { false }) {
+    internal val customThemes = cc.novelia.app.data.theme.CustomThemeStore(this)
     private val stateFile = AtomicFile(File(context.filesDir, "library.json"))
     private val lastGoodFile = File(context.filesDir, "library-last-good.json")
     private val stateCodec = LibraryStateCodec(File(context.filesDir, "library-text"),
