@@ -1,5 +1,6 @@
 package cc.novelia.app.data.storage
 
+import cc.novelia.app.data.catalog.withSavedSearchPage
 import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.Position
 import java.nio.file.Files
@@ -12,6 +13,22 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LibraryStateCodecTest {
+    @Test fun automaticallyUpdatedSavedSearchPagesSurvivePartitionedRestart() {
+        val directory = Files.createTempDirectory("saved-search-pages").toFile()
+        try {
+            fun codec() = LibraryStateCodec(directory, { it.readText(Charsets.UTF_8) }, { file, text -> file.writeText(text, Charsets.UTF_8) })
+            val first = cc.novelia.app.data.catalog.SavedSearchPreset(id = "first", name = "第一套", query = "魔法")
+            val second = first.copy(id = "second", name = "第二套", lastPage = 4)
+            var state = LibraryState(rememberSavedSearchPage = true, savedSearchPresets = listOf(first, second))
+            val running = codec()
+            running.encode(state)
+            state = state.withSavedSearchPage(first.id, first, 5).withSavedSearchPage(first.id, first, 6)
+            val restored = codec().decode(running.encode(state))
+            assertTrue(restored.rememberSavedSearchPage)
+            assertEquals(listOf(6, 4), restored.savedSearchPresets.map { it.lastPage })
+        } finally { directory.deleteRecursively() }
+    }
+
     @Test fun automaticReadingManagementAndDeviceSwitchSurvivePartitionedRestart() {
         val directory = Files.createTempDirectory("reading-status-codec").toFile()
         try {

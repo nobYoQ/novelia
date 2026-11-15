@@ -87,6 +87,8 @@ fun legacyFolderId(name: String): String = if(name == DEFAULT_FOLDER) DEFAULT_FO
     val stickerPackId: String = DEFAULT_STICKER_PACK_ID,
     // 文库发现页布局是本机显示偏好，普通设置备份保留，WebDAV 不同步。
     val discoverWenkuGrid: Boolean = true,
+    // 保存搜索的页码是本机操作偏好，默认关闭；普通设置备份保留，WebDAV 不同步。
+    val rememberSavedSearchPage: Boolean = false,
     // 三个书架分区分别记住布局，兼容旧书库时保留列表；不参与 WebDAV 同步。
     val shelfGrid: Boolean = false, val localFilesGrid: Boolean = false, val cloudShelfGrid: Boolean = false,
     // 列表点击续读是本机操作偏好，默认关闭；普通设置备份保留，WebDAV 不同步。

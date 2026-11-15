@@ -18,6 +18,8 @@ data class SavedSearchPreset(
     val webLevel: Int = 0,
     val wenkuLevel: Int = 0,
     val localFilter: NovelLocalFilter = NovelLocalFilter(),
+    // 从 0 开始的浏览页码，不属于搜索条件。
+    val lastPage: Int = 0,
 ) {
     fun normalized() = copy(
         name = name.trim().take(80), query = if(category == 2) query.trim() else SearchExpression.append(query, localFilter.legacyTagExpression()),
@@ -26,10 +28,11 @@ data class SavedSearchPreset(
         type = type.coerceIn(0, 3), translate = translate.coerceIn(0, 2), sort = sort.coerceIn(0, 2),
         webLevel = webLevel.coerceIn(0, 2), wenkuLevel = wenkuLevel.coerceIn(0, 6),
         localFilter = localFilter.normalized(),
+        lastPage = lastPage.coerceAtLeast(0),
     )
 
     fun hasSameConditions(other: SavedSearchPreset): Boolean =
-        normalized().copy(id = "", name = "") == other.normalized().copy(id = "", name = "")
+        normalized().copy(id = "", name = "", lastPage = 0) == other.normalized().copy(id = "", name = "", lastPage = 0)
 
     fun summary(): String = normalized().let { value ->
         buildList {
@@ -45,6 +48,14 @@ data class SavedSearchPreset(
             } else add(listOf("全部小说", "轻小说", "轻文学", "文学", "非小说", "R18男性向", "R18女性向")[value.wenkuLevel])
         }.joinToString(" · ")
     }
+}
+
+/** 只推进当前应用的方案；临时修改条件、删除方案或关闭开关后不再写入。 */
+internal fun LibraryState.withSavedSearchPage(presetId: String, conditions: SavedSearchPreset, page: Int): LibraryState {
+    if(!rememberSavedSearchPage || presetId.isEmpty() || page < 0) return this
+    return copy(savedSearchPresets = savedSearchPresets.map { preset ->
+        if(preset.id == presetId && preset.hasSameConditions(conditions)) preset.copy(lastPage = page) else preset
+    })
 }
 
 /** 旧表达式以稳定 ID 迁移，可重复执行，且不会在备份合并后产生重复项。 */

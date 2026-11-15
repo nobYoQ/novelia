@@ -28,6 +28,7 @@ import cc.novelia.app.data.catalog.SearchExpression
 import cc.novelia.app.data.catalog.SavedSearchPreset
 import cc.novelia.app.data.catalog.NovelLocalFilter
 import cc.novelia.app.data.catalog.withMigratedSearchPresets
+import cc.novelia.app.data.catalog.withSavedSearchPage
 import cc.novelia.app.data.catalog.providers
 import cc.novelia.app.data.model.Page
 import cc.novelia.app.data.model.BookCard
@@ -68,6 +69,7 @@ import kotlinx.coroutines.sync.withPermit
         ?: if(initialQuery.isNotBlank()) 1 else 0) { 3 }
     val category = pager.currentPage
     var pageNumbers by rememberSaveable { mutableStateOf(listOf(0, 0, 0)) }
+    var activePresetIds by rememberSaveable { mutableStateOf(listOf("", "", "")) }
     var searchRevision by rememberSaveable { mutableIntStateOf(0) }
     var filterOpen by remember { mutableStateOf(false) }
     var assistantOpen by rememberSaveable { mutableStateOf(false) }
@@ -80,7 +82,9 @@ import kotlinx.coroutines.sync.withPermit
     val reducedMotion = appReducedMotion()
     val selectCategory = rememberDiscoverNavigation(pager) { searchEditing = false }
     fun setPage(section: Int, value: Int) { pageNumbers = pageNumbers.mapIndexed { index, page -> if(index == section) value else page } }
-    fun resetPages() { pageNumbers = listOf(0, 0, 0) }
+    fun setActivePreset(section: Int, id: String) { activePresetIds = activePresetIds.mapIndexed { index, current -> if(index == section) id else current } }
+    fun resetPage(section: Int) { setPage(section, 0); setActivePreset(section, "") }
+    fun resetPages() { pageNumbers = listOf(0, 0, 0); activePresetIds = listOf("", "", "") }
     val local by c.store.state.collectAsStateWithLifecycle(); val profile by c.session.profile.collectAsStateWithLifecycle()
     val visibility = rememberBookVisibility(local, profile?.username)
     val binding = c.session.capture()
@@ -94,12 +98,15 @@ import kotlinx.coroutines.sync.withPermit
         query = submitted, category = section, source = source, type = type, translate = translate, sort = sort,
         webLevel = webLevel, wenkuLevel = wenkuLevel, localFilter = localFilter).normalized()
     fun applyPreset(preset: SavedSearchPreset) {
-        val value = preset.normalized()
+        val state = c.store.state.value
+        val value = (state.savedSearchPresets.firstOrNull { it.id == preset.id } ?: preset).normalized()
         query = value.query; submitted = value.query; selectCategory(value.category)
         searchEditing = false
         source = value.source; type = value.type; translate = value.translate; sort = value.sort
         webLevel = value.webLevel; wenkuLevel = value.wenkuLevel; resetPages(); searchRevision++
         localFilter = value.localFilter
+        setPage(value.category, if(state.rememberSavedSearchPage) value.lastPage else 0)
+        setActivePreset(value.category, value.id)
         c.store.rememberSearch(value.query)
         if(value.category == 1) c.app.keywords.enqueueUsed(SearchExpression.tagsIn(value.query))
     }
@@ -134,9 +141,9 @@ import kotlinx.coroutines.sync.withPermit
                                 }
                             }
                             if(local.savedSearchPresets.isNotEmpty()) item(key = "saved-searches", contentType = "searches") { SectionTitle("保存的搜索", "管理") { searchListOpen = "saved" }; Row(Modifier.appHorizontalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) { local.savedSearchPresets.forEach { value -> AppActionChip(onClick = { applyPreset(value) }, label = { Text(value.name.take(20)) }) } } }
-                            item(key = "web-heading", contentType = "heading") { SectionTitle("热门网络小说", "更多") { sort = 1; setPage(1, 0); selectCategory(1) } }
+                            item(key = "web-heading", contentType = "heading") { SectionTitle("热门网络小说", "更多") { sort = 1; resetPage(1); selectCategory(1) } }
                             items(visibleWeb, key = { "web-${it.ref.key}" }, contentType = { "book" }) { DiscoverBookRow(it, { c.book(it.ref) }, if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(AppMotion.Quick), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit)), keywordLabels = keywordLabels) }
-                            item(key = "wenku-heading", contentType = "heading") { SectionTitle("文库新近更新", "更多") { setPage(2, 0); selectCategory(2) } }
+                            item(key = "wenku-heading", contentType = "heading") { SectionTitle("文库新近更新", "更多") { resetPage(2); selectCategory(2) } }
                             items(visibleWenku, key = { "wenku-${it.ref.key}" }, contentType = { "book" }) { DiscoverBookRow(it, { c.book(it.ref) }, if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(AppMotion.Quick), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit)), keywordLabels = keywordLabels) }
                             item(key = "refresh", contentType = "controls") { AppTextButton(onClick = refresh, Modifier.fillMaxWidth()) { Text("刷新推荐") } }
                         }
@@ -155,8 +162,8 @@ import kotlinx.coroutines.sync.withPermit
                     val filterCount = filterSummary.size + if(section == 1) listOf(type, sort).count { it != 0 } else 0
                     DiscoverToolbar(
                         filters = if(section == 1) listOf(
-                            QuickFilter("排序", listOf("更新", "点击", "相关"), sort) { sort = it; setPage(1, 0) },
-                            QuickFilter("状态", listOf("全部状态", "连载中", "已完结", "短篇"), type) { type = it; setPage(1, 0) },
+                            QuickFilter("排序", listOf("更新", "点击", "相关"), sort) { sort = it; resetPage(1) },
+                            QuickFilter("状态", listOf("全部状态", "连载中", "已完结", "短篇"), type) { type = it; resetPage(1) },
                         ) else emptyList(),
                         summary = filterSummary, filterCount = filterCount,
                         resultLabel = if(submitted.isBlank()) "浏览全部" else "搜索结果",
@@ -187,6 +194,17 @@ import kotlinx.coroutines.sync.withPermit
                             Page(it.pageNumber, enrichAuthors(it.items.map(WenkuOutline::card), c, local.blockedAuthors))
                         }
                     }, validate = { c.session.ensureCurrent(binding) }, revealContent = true, pullToRefreshEnabled = true) { result, refresh ->
+                        val isVisible = category == section && !pager.isScrollInProgress
+                        val presetId = activePresetIds[section]
+                        val presetConditions = currentPreset(section)
+                        LaunchedEffect(requestKey, result.pageNumber, isVisible, presetId, local.rememberSavedSearchPage) {
+                            if(isVisible) {
+                                // 仅成功显示的页才写回；搜索结果变少时先回到有效末页。
+                                val validPage = page.coerceIn(0, result.pageNumber.coerceAtLeast(1) - 1)
+                                if(validPage != page) setPage(section, validPage)
+                                else c.store.update { it.withSavedSearchPage(presetId, presetConditions, page) }
+                            }
+                        }
                         val books = remember(result.items, visibility) { result.items.filter(visibility::visible) }
                         val emptyContent: @Composable () -> Unit = {
                             Column {
@@ -227,17 +245,17 @@ import kotlinx.coroutines.sync.withPermit
                 AppTextButton(onClick = ::resetFilters) { Text("重置全部筛选") }
             }
             if(category == 1) {
-                WebSourceFilter(source) { source = it; setPage(1, 0) }
-                ChoiceRow("连载状态", listOf("全部", "连载中", "已完结", "短篇"), type) { type = it; setPage(1, 0) }
-                ChoiceRow("已有译文", listOf("全部", "GPT", "Sakura"), translate) { translate = it; setPage(1, 0) }
-                ChoiceRow("排序", listOf("更新", "点击", "相关"), sort) { sort = it; setPage(1, 0) }
-                if(profile?.canEdit == true) ChoiceRow("分级", listOf("全部", "一般向", "R18"), webLevel.coerceIn(0, 2)) { webLevel = it; setPage(1, 0) }
+                WebSourceFilter(source) { source = it; resetPage(1) }
+                ChoiceRow("连载状态", listOf("全部", "连载中", "已完结", "短篇"), type) { type = it; resetPage(1) }
+                ChoiceRow("已有译文", listOf("全部", "GPT", "Sakura"), translate) { translate = it; resetPage(1) }
+                ChoiceRow("排序", listOf("更新", "点击", "相关"), sort) { sort = it; resetPage(1) }
+                if(profile?.canEdit == true) ChoiceRow("分级", listOf("全部", "一般向", "R18"), webLevel.coerceIn(0, 2)) { webLevel = it; resetPage(1) }
                 HorizontalDivider(Modifier.padding(horizontal = 20.dp, vertical = 12.dp))
-                CharacterCountFilterFields(localFilter.characters) { localFilter = localFilter.copy(characters = it); setPage(1, 0) }
+                CharacterCountFilterFields(localFilter.characters) { localFilter = localFilter.copy(characters = it); resetPage(1) }
                 Text("按作品提供的字数筛选；首次查找会补取字数，可继续加载更多结果。",
                     Modifier.padding(horizontal = 20.dp).padding(bottom = 24.dp), style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
-            } else ChoiceRow("文库分类", if(profile?.canEdit == true) listOf("全部小说", "轻小说", "轻文学", "文学", "非小说", "R18男性向", "R18女性向") else listOf("全部小说", "轻小说", "轻文学", "文学", "非小说"), wenkuLevel.coerceIn(0, if(profile?.canEdit == true) 6 else 4)) { wenkuLevel = it; setPage(2, 0) }
+            } else ChoiceRow("文库分类", if(profile?.canEdit == true) listOf("全部小说", "轻小说", "轻文学", "文学", "非小说", "R18男性向", "R18女性向") else listOf("全部小说", "轻小说", "轻文学", "文学", "非小说"), wenkuLevel.coerceIn(0, if(profile?.canEdit == true) 6 else 4)) { wenkuLevel = it; resetPage(2) }
             DiscoverFilterHelp(onAssistant = if(category == 1) ({ filterOpen = false; assistantOpen = true }) else null,
                 onSyntax = { c.go("article/${ForumLinks.TUTORIAL_ID}"); filterOpen = false })
             Spacer(Modifier.height(24.dp))
@@ -280,8 +298,14 @@ import kotlinx.coroutines.sync.withPermit
     presetToSave?.let { preset -> SaveSearchPresetDialog(preset, onDismiss = { presetToSave = null }) { value ->
         c.action {
             check(c.store.recoveryIssue.value == null) { "本地资料处于恢复保护状态，暂时无法保存搜索" }
-            c.store.update { state -> state.copy(savedSearchPresets = state.savedSearchPresets.filterNot { it.id == value.id } + value) }
+            val isNew = c.store.state.value.savedSearchPresets.none { it.id == value.id }
+            c.store.update { state ->
+                // 重命名期间也可能完成加载，保留最新记录的页码。
+                val saved = value.copy(lastPage = state.savedSearchPresets.firstOrNull { it.id == value.id }?.lastPage ?: value.lastPage)
+                state.copy(savedSearchPresets = state.savedSearchPresets.filterNot { it.id == value.id } + saved)
+            }
             c.store.flush()
+            if(isNew && value.hasSameConditions(currentPreset(value.category))) setActivePreset(value.category, value.id)
             presetToSave = null
             c.message("已保存搜索组合：${value.name}")
         }

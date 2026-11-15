@@ -19,6 +19,28 @@ import org.junit.Assert.*
 class SettingsCategoriesTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun savedSearchPageSettingCanBeToggledAndRestored() {
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
+        runBlocking { app.initialization.await() }
+        val original = app.store.state.value.rememberSavedSearchPage
+        try {
+            app.store.update { it.copy(rememberSavedSearchPage = false) }
+            val restoration = StateRestorationTester(compose)
+            restoration.setContent { NoveliaTheme("light") {
+                SettingsScreen(AppController(app, rememberNavController(), rememberCoroutineScope(), remember { SnackbarHostState() }), "APPEARANCE")
+            } }
+            option("记住保存搜索的页码").assertIsOff().performClick()
+            compose.runOnIdle { assertTrue(app.store.state.value.rememberSavedSearchPage) }
+            runBlocking { app.store.flush() }
+            restoration.emulateSavedInstanceStateRestore()
+            option("记住保存搜索的页码").assertIsOn().performClick()
+            compose.runOnIdle { assertFalse(app.store.state.value.rememberSavedSearchPage) }
+        } finally {
+            app.store.update { it.copy(rememberSavedSearchPage = original) }
+            runBlocking { app.store.flush() }
+        }
+    }
+
     @Test fun automaticReadingSettingPreservesLegacyProtectionAndOffersExplicitBatchRestore() {
         val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
         runBlocking { app.initialization.await() }
