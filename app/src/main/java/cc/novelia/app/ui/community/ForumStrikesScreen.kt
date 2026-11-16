@@ -1,5 +1,6 @@
 package cc.novelia.app.ui.community
 
+import cc.novelia.app.ui.theme.withWallpaperOpacity
 import cc.novelia.app.ui.components.base.AppTextButton
 import cc.novelia.app.ui.components.base.AppLazyColumn
 import cc.novelia.app.ui.components.base.AsyncContent
@@ -73,7 +74,7 @@ import java.time.format.DateTimeFormatter
 @OptIn(ExperimentalLayoutApi::class)
 @Composable internal fun ForumStrikeCard(strike: ForumStrike) {
     val revoked = strike.revokedAt != null
-    OutlinedCard(Modifier.fillMaxWidth()) {
+    OutlinedCard(Modifier.fillMaxWidth(), colors = CardDefaults.outlinedCardColors().withWallpaperOpacity()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(strike.reason, style = MaterialTheme.typography.titleMedium)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

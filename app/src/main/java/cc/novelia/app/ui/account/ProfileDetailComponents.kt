@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.ui.theme.LocalEInkMode
 import cc.novelia.app.ui.theme.wallpaperCardColor
+import cc.novelia.app.ui.theme.withWallpaperOpacity
 import cc.novelia.app.ui.components.base.AppLazyColumn
 import cc.novelia.app.ui.components.base.ChoiceRow
 import cc.novelia.app.ui.components.base.EmptyState
@@ -51,7 +52,7 @@ import cc.novelia.app.ui.components.base.Screen
     colors: CardColors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
     content: @Composable ColumnScope.() -> Unit,
 ) = Card(modifier.fillMaxWidth(), shape = appRoundedCornerShape(28.dp),
-    colors = colors.copy(containerColor = wallpaperCardColor(colors.containerColor)), border = profileCardBorder(), content = content)
+    colors = colors.withWallpaperOpacity(), border = profileCardBorder(), content = content)
 
 @Composable internal fun ProfileMenuRow(
     title: String, description: String, icon: ImageVector, onClick: () -> Unit,

@@ -1,12 +1,19 @@
 package cc.novelia.app.ui.community
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.ColorPainter
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
@@ -18,6 +25,9 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.ui.theme.NoveliaTheme
+import cc.novelia.app.ui.theme.LocalThemeWallpaper
+import cc.novelia.app.ui.theme.ThemeWallpaper
+import cc.novelia.app.ui.theme.WallpaperViewport
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -25,6 +35,23 @@ import org.junit.Test
 
 class ForumPublishingNoticeTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun noticeShowsWallpaperThroughItsCardBackground() {
+        val wallpaper = ThemeWallpaper(ColorPainter(Color.White), null, null, 0f, .5f, WallpaperViewport())
+        var surfaceRed = 0f
+        compose.setContent {
+            NoveliaTheme("dark") {
+                val surface = MaterialTheme.colorScheme.surfaceContainer
+                SideEffect { surfaceRed = surface.red }
+                CompositionLocalProvider(LocalThemeWallpaper provides wallpaper) {
+                    Box(Modifier.background(Color.White)) { ForumPublishingNotice {} }
+                }
+            }
+        }
+        val pixels = compose.onNodeWithTag("forum-publishing-notice").captureToImage().toPixelMap()
+        val actual = pixels[pixels.width / 2, 2]
+        assertEquals("卡片底色应与白色壁纸各占一半", (1f + surfaceRed) / 2, actual.red, .012f)
+    }
 
     @Test fun noticeLinksKeepTheirForumCategorySearchAndRulesDestinations() {
         val opened = mutableListOf<String>()

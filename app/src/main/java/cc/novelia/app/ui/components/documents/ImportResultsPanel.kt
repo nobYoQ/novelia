@@ -1,6 +1,7 @@
 @file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.components.documents
 
+import cc.novelia.app.ui.theme.wallpaperCardColor
 import cc.novelia.app.ui.components.base.AppLinearProgressIndicator
 import cc.novelia.app.ui.components.base.AppTextButton
 import cc.novelia.app.ui.components.base.AppIconButton
@@ -69,7 +70,8 @@ import cc.novelia.app.ui.components.base.AppSheet
         onRead(ref)
     }
     Surface(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp).testTag("import-status"),
-        shape = appShape(MaterialTheme.shapes.medium), color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = appShape(MaterialTheme.shapes.medium), color = wallpaperCardColor(MaterialTheme.colorScheme.surfaceContainerLow),
+        contentColor = MaterialTheme.colorScheme.onSurface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
         Column {
             Row(Modifier.fillMaxWidth().padding(end = 4.dp), verticalAlignment = Alignment.CenterVertically) {

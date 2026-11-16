@@ -1,5 +1,6 @@
 package cc.novelia.app.ui.settings
 
+import cc.novelia.app.ui.theme.wallpaperCardColor
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
@@ -84,7 +85,8 @@ import kotlinx.coroutines.withContext
 
 @Composable private fun TtsEngineChoice(title: String, description: String, selected: Boolean, onSelect: () -> Unit) {
     Surface(Modifier.fillMaxWidth(), shape = appRoundedCornerShape(20.dp),
-        color = if(selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLow) {
+        color = wallpaperCardColor(if(selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLow),
+        contentColor = if(selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface) {
         Row(Modifier.selectable(selected, role = Role.RadioButton, onClick = onSelect).padding(18.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {

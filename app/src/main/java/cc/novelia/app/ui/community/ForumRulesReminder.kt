@@ -1,5 +1,6 @@
 package cc.novelia.app.ui.community
 
+import cc.novelia.app.ui.theme.wallpaperCardColor
 import cc.novelia.app.ui.components.base.AppTextButton
 import cc.novelia.app.ui.components.base.AppIconButton
 import androidx.compose.foundation.layout.*
@@ -24,7 +25,7 @@ import cc.novelia.app.ui.navigation.AppController
 
 @Composable internal fun ForumRulesNotice(visible: Boolean, onOpen: () -> Unit, onDismiss: () -> Unit) {
     if(!visible) return
-    Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.medium,
+    Surface(color = wallpaperCardColor(MaterialTheme.colorScheme.secondaryContainer), contentColor = MaterialTheme.colorScheme.onSecondaryContainer, shape = MaterialTheme.shapes.medium,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).testTag("forum-rules-notice")) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             AppTextButton(onClick = onOpen, modifier = Modifier.weight(1f)) { Text("发言请遵守《社区守则》") }

@@ -1,5 +1,6 @@
 package cc.novelia.app.ui.community
 
+import cc.novelia.app.ui.theme.wallpaperCardColor
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -37,7 +38,7 @@ import cc.novelia.app.data.community.ForumLinks
         link("社区守则", "/rules")
         append("，累计三次违规即出局。")
     }
-    Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.medium,
+    Surface(color = wallpaperCardColor(MaterialTheme.colorScheme.surfaceContainer), contentColor = MaterialTheme.colorScheme.onSurface, shape = MaterialTheme.shapes.medium,
         modifier = Modifier.fillMaxWidth().testTag("forum-publishing-notice")) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("发帖前请确认", style = MaterialTheme.typography.titleSmall)

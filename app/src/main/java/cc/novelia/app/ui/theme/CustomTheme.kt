@@ -1,6 +1,7 @@
 package cc.novelia.app.ui.theme
 
 import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.CardColors
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -81,3 +82,6 @@ private fun legible(color: Color, background: Color, card: Color): Color {
 
 @Composable internal fun wallpaperCardColor(color: Color): Color =
     LocalThemeWallpaper.current?.let { color.copy(alpha = it.cardOpacity) } ?: color
+
+@Composable internal fun CardColors.withWallpaperOpacity(): CardColors =
+    copy(containerColor = wallpaperCardColor(containerColor))

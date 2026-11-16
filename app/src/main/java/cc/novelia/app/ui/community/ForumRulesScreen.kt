@@ -1,5 +1,6 @@
 package cc.novelia.app.ui.community
 
+import cc.novelia.app.ui.theme.withWallpaperOpacity
 import cc.novelia.app.ui.components.base.AppLinearProgressIndicator
 import cc.novelia.app.ui.components.base.AppTextButton
 import cc.novelia.app.ui.components.base.AppIconButton
@@ -63,7 +64,8 @@ import kotlinx.coroutines.CancellationException
 /** 将网页权限表按操作展示，窄屏及大字号无需横向滚动即可读完每种账号权限。 */
 @Composable private fun ForumPermissionsContent(table: ForumRuleTable) {
     table.rows.forEachIndexed { index, permission ->
-        OutlinedCard(Modifier.fillMaxWidth().testTag("forum-rule-permission-$index")) {
+        OutlinedCard(Modifier.fillMaxWidth().testTag("forum-rule-permission-$index"),
+            colors = CardDefaults.outlinedCardColors().withWallpaperOpacity()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("${permission.site} · ${permission.operation}", style = MaterialTheme.typography.titleSmall)
                 permission.allowed.forEachIndexed { column, allowed ->
