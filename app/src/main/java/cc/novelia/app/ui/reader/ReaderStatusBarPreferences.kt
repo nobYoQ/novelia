@@ -25,7 +25,7 @@ import cc.novelia.app.ui.components.base.*
             val target = index + step
             if(index in items.indices && target in items.indices) onChange(items.toMutableList().apply { removeAt(index); add(target, item) })
         }
-        ListItem(modifier = Modifier.testTag("reader-status-option-$item").toggleable(selected, role = Role.Checkbox,
+        AppListItem(modifier = Modifier.testTag("reader-status-option-$item").toggleable(selected, role = Role.Checkbox,
             onValueChange = { onChange(if(it) items + item else items - item) }),
             leadingContent = { AppCheckbox(checked = selected, onCheckedChange = null) }, headlineContent = { Text(label) },
             trailingContent = { if(selected) Row {

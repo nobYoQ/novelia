@@ -1,6 +1,7 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.reader
 
+import cc.novelia.app.ui.components.base.AppListItem
 import cc.novelia.app.ui.components.base.AppLinearProgressIndicator
 import cc.novelia.app.ui.components.base.AppTextButton
 import androidx.compose.foundation.layout.*
@@ -154,7 +155,7 @@ private data class SearchScope(val toc: List<TocItem>, val document: LocalDocume
             Text("已搜索 ${found.scannedChapters} 章 · 找到 ${found.matches.size} 处匹配${if(found.truncated) " · 达到结果或正文上限，请缩小搜索词" else ""}", style = MaterialTheme.typography.labelMedium)
             AppLazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 24.dp)) {
                 items(found.matches, key = { "${it.chapterId}/${it.paragraph}/${it.part}/${it.start}" }) { match ->
-                    ListItem(headlineContent = { Text(match.chapterLabel) }, supportingContent = { Text(match.snippet) }, modifier = Modifier.motionClickable { onOpen(match) })
+                    AppListItem(headlineContent = { Text(match.chapterLabel) }, supportingContent = { Text(match.snippet) }, modifier = Modifier.motionClickable { onOpen(match) })
                 }
                 if(found.matches.isEmpty()) item { Text("搜索范围内没有匹配文字。", Modifier.padding(vertical = 16.dp)) }
             }

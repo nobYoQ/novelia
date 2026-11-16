@@ -6,6 +6,7 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.reader
 
+import cc.novelia.app.ui.components.base.AppListItem
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -150,7 +151,7 @@ import kotlin.math.roundToInt
             if(double) Text("设置双击动作后，该区域的单击会等待双击判断结束；选择“无响应”可恢复即时单击。",
                 Modifier.padding(horizontal = 20.dp, vertical = 4.dp), style = MaterialTheme.typography.bodySmall)
             ReaderTapAction.editable.forEach { action ->
-                ListItem(headlineContent = { Text(action.label(staticPagination)) }, supportingContent = { Text(action.actionHint()) },
+                AppListItem(headlineContent = { Text(action.label(staticPagination)) }, supportingContent = { Text(action.actionHint()) },
                     modifier = Modifier.clickable {
                         draft = draft.withRegionAction(cells, double, action)
                         selection = null

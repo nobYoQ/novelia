@@ -23,7 +23,7 @@ import cc.novelia.app.ui.theme.LocalEInkMode
 @Composable fun TogglePreference(title: String, subtitle: String, value: Boolean, defaultValue: Boolean?, onChange: (Boolean) -> Unit) {
     val scheme = MaterialTheme.colorScheme
     val changed = defaultValue != null && value != defaultValue
-    ListItem(headlineContent = { Text(title) }, supportingContent = if(subtitle.isNotBlank()) ({ Text(subtitle) }) else null, trailingContent = {
+    AppListItem(headlineContent = { Text(title) }, supportingContent = if(subtitle.isNotBlank()) ({ Text(subtitle) }) else null, trailingContent = {
         if(LocalEInkMode.current && !LocalSquareCorners.current) Icon(if(value) Icons.Outlined.ToggleOn else Icons.Outlined.ToggleOff, null, Modifier.size(48.dp),
             tint = if(changed || (defaultValue == null && value)) scheme.primary else scheme.onSurfaceVariant)
         else AppSwitch(value, onCheckedChange = null, colors = if(defaultValue == null) SwitchDefaults.colors() else SwitchDefaults.colors(

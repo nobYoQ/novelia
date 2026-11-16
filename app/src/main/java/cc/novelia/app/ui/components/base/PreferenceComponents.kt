@@ -68,7 +68,7 @@ import cc.novelia.app.ui.theme.motionClickable
     }
 }
 @Composable fun MenuRow(title: String, description: String, icon: ImageVector, onClick: () -> Unit, trailing: @Composable (() -> Unit)? = null) {
-    ListItem(headlineContent = { Text(title) }, supportingContent = { if(description.isNotEmpty()) Text(description) }, leadingContent = { Icon(icon, null, tint = MaterialTheme.colorScheme.primary) }, trailingContent = trailing, modifier = Modifier.motionClickable(onClick = onClick).heightIn(min = 64.dp))
+    AppListItem(headlineContent = { Text(title) }, supportingContent = { if(description.isNotEmpty()) Text(description) }, leadingContent = { Icon(icon, null, tint = MaterialTheme.colorScheme.primary) }, trailingContent = trailing, modifier = Modifier.motionClickable(onClick = onClick).heightIn(min = 64.dp))
 }
 @Composable fun TextPrompt(title: String, label: String, initial: String = "", onDismiss: () -> Unit, onSave: (String) -> Unit) {
     var text by remember { mutableStateOf(initial) }

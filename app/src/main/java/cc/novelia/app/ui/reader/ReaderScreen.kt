@@ -814,7 +814,9 @@ import kotlinx.serialization.encodeToString
             animate = !reducedMotion && !search)
         Row(Modifier.fillMaxSize().background(background).testTag(if(wide) "reader-wide-layout" else "reader-compact-layout")) {
         if(inlineToc) {
-            Surface(Modifier.width(292.dp).fillMaxHeight().windowInsetsPadding(safeInsets), color = MaterialTheme.colorScheme.surface) {
+            Surface(Modifier.width(292.dp).fillMaxHeight().windowInsetsPadding(safeInsets),
+                color = if (background == Color.Transparent) Color.Transparent else MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.onSurface) {
                 Column {
                 AppTextButton(onClick = { setWideToc(false) }, modifier = Modifier.align(Alignment.End).testTag("reader-hide-wide-toc")) { Text("收起目录") }
                 ReaderTocPane(c, ref, tocState, { scope.launch { tocState.ensureLoaded(chapterId, knownChapterCount, refresh = true) } }, chapterId, tocScroll, tocQuery, { tocQuery = it }, tocReversed, { tocReversed = it }, tocLocateRequest, { tocLocateRequest = 0; tocLocated = true }, { if(it != chapterId) rememberReadingPlace(); openChapter(it) })

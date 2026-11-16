@@ -1,6 +1,7 @@
 @file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.book
 
+import cc.novelia.app.ui.components.base.AppListItem
 import cc.novelia.app.ui.components.base.AppCheckbox
 import cc.novelia.app.ui.components.base.AppTextButton
 import cc.novelia.app.ui.components.base.AppOutlinedButton
@@ -110,7 +111,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
                     it.status == "已完成" && it.originBook() == book.ref && it.originVolumeId() == volume.volumeId
                 }
                 val motion = if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(AppMotion.Release), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit))
-                ListItem(
+                AppListItem(
                     headlineContent = { Text(volume.volumeId) },
                     supportingContent = { Text("Sakura ${volume.sakura} · GPT ${volume.gpt} · 有道 ${volume.youdao} / ${volume.total}${if(readable) " · 已下载，点击阅读" else if(!complete) " · 译文尚未完成" else ""}") },
                     trailingContent = {

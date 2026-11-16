@@ -1,6 +1,7 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.book
 
+import cc.novelia.app.ui.components.base.AppListItem
 import cc.novelia.app.ui.components.base.AppPageTabs
 
 import cc.novelia.app.ui.components.base.AppButton
@@ -25,6 +26,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -71,6 +73,8 @@ import cc.novelia.app.ui.shelf.bookFavoriteState
 import cc.novelia.app.ui.shelf.WenkuSiteOrderActions
 import cc.novelia.app.data.library.withCloudReadingMetadata
 import cc.novelia.app.ui.theme.AppMotion
+import cc.novelia.app.ui.theme.LocalThemePreset
+import cc.novelia.app.ui.theme.wallpaperCardColor
 import cc.novelia.app.ui.theme.appReducedMotion
 import cc.novelia.app.ui.theme.motionClickable
 import java.io.File
@@ -366,7 +370,20 @@ import kotlinx.coroutines.withContext
                 val item = entry.value
                 val itemMotion = if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(AppMotion.Release), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit))
                 if(item.chapterId == null) Box(itemMotion) { SectionTitle(item.title) }
-                else ListItem(headlineContent = { Text(item.title, color = if(item.chapterId == current) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) }, supportingContent = if(!ref.isLocal && item.chapterId in cachedIds) ({ Text("可离线阅读") }) else null, leadingContent = { Icon(if(item.chapterId == current) Icons.Outlined.Bookmark else Icons.Outlined.Article, null) }, trailingContent = { Icon(Icons.Outlined.ChevronRight, null) }, modifier = itemMotion.fillMaxWidth().motionClickable { onRead(item.chapterId) })
+                else {
+                    val isCurrent = item.chapterId == current
+                    val scheme = MaterialTheme.colorScheme
+                    val highlight = isCurrent && LocalThemePreset.current != null
+                    AppListItem(
+                        headlineContent = { Text(item.title, color = if (isCurrent && !highlight) scheme.primary else Color.Unspecified) },
+                        supportingContent = if (!ref.isLocal && item.chapterId in cachedIds) ({ Text("可离线阅读") }) else null,
+                        leadingContent = { Icon(if (isCurrent) Icons.Outlined.Bookmark else Icons.Outlined.Article, null) },
+                        trailingContent = { Icon(Icons.Outlined.ChevronRight, null) },
+                        containerColor = wallpaperCardColor(if (highlight) scheme.primaryContainer else ListItemDefaults.containerColor),
+                        contentColor = if (highlight) scheme.onPrimaryContainer else Color.Unspecified,
+                        modifier = itemMotion.fillMaxWidth().motionClickable { onRead(item.chapterId) },
+                    )
+                }
             }
             if(list.isEmpty()) item { EmptyState("没有匹配的章节", "可以修改搜索词，或刷新书籍目录。") }
         }

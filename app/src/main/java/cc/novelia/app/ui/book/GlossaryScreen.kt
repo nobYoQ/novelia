@@ -2,6 +2,7 @@
 
 package cc.novelia.app.ui.book
 
+import cc.novelia.app.ui.components.base.AppListItem
 import cc.novelia.app.ui.components.base.AppButton
 import cc.novelia.app.ui.components.base.AppTextButton
 import cc.novelia.app.ui.components.base.AppIconButton
@@ -100,7 +101,7 @@ import kotlinx.serialization.encodeToString
             OutlinedTextField(query, { query = it }, label = { Text("查找原文或译名") }, modifier = Modifier.fillMaxWidth().padding(20.dp), singleLine = true)
             AppLazyColumn(Modifier.weight(1f)) {
                 if(entries.isEmpty()) item { EmptyState("暂时没有匹配词条", "术语表用于统一作品中的人名和专有名词。", Icons.Outlined.Translate) }
-                items(entries, key = { it.key }) { item -> ListItem(headlineContent = { Text(item.key) }, supportingContent = { Text(item.value) }, trailingContent = { if(canEdit) Row { AppIconButton(onClick = { editing = item.key to item.value }) { Icon(Icons.Outlined.Edit, "编辑词条") }; AppIconButton(onClick = { data = data.orEmpty() - item.key }) { Icon(Icons.Outlined.DeleteOutline, "删除词条") } } }) }
+                items(entries, key = { it.key }) { item -> AppListItem(headlineContent = { Text(item.key) }, supportingContent = { Text(item.value) }, trailingContent = { if(canEdit) Row { AppIconButton(onClick = { editing = item.key to item.value }) { Icon(Icons.Outlined.Edit, "编辑词条") }; AppIconButton(onClick = { data = data.orEmpty() - item.key }) { Icon(Icons.Outlined.DeleteOutline, "删除词条") } } }) }
             }
             if(canEdit) AppButton(onClick = { c.action("术语表已保存") { saving = true; val submittedData = data.orEmpty().toMap(); val submittedOriginal = original; try { if(ref.isLocal) c.store.update { it.copy(personalGlossaries = it.personalGlossaries + (ref.key to submittedData)) } else { val latest = if(ref.isWenku) c.api.get<WenkuDetail>("wenku/${ref.id}").glossary else c.api.get<WebDetail>("novel/${ref.key}").glossary; if(latest != submittedOriginal) throw ApiException(409, "原站术语表已被他人更新，请重新进入此页后再编辑"); c.api.put(if(ref.isWenku) "wenku/${ref.id}/glossary" else "novel/${ref.key}/glossary", submittedData) }; original = submittedData } finally { saving = false } } }, enabled = data != null && data != original && !saving, modifier = Modifier.fillMaxWidth().padding(20.dp)) { Text(if(saving) "保存中…" else if(ref.isLocal) "保存到此设备" else "保存到原站") }
             else Text("维护术语表需要符合原站编辑权限；当前可浏览和导出。", Modifier.padding(20.dp), style = MaterialTheme.typography.bodySmall)

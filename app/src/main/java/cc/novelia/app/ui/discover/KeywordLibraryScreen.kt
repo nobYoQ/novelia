@@ -1,6 +1,8 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.discover
 
+import cc.novelia.app.ui.components.base.AppListItem
+import cc.novelia.app.ui.theme.wallpaperCardColor
 import cc.novelia.app.ui.components.base.AppButton
 import cc.novelia.app.ui.components.base.AppTextButton
 import cc.novelia.app.ui.components.base.AppOutlinedButton
@@ -179,10 +181,10 @@ class KeywordLibraryActions(
             listModifier = Modifier.testTag("keyword-category-list")) {
             items(reorder.order, key = { it }) { name ->
                 val dragging = reorder.draggedName == name
-                ListItem(headlineContent = { Text(name) }, supportingContent = { Text("${counts[name] ?: 0} 个标签") },
+                AppListItem(headlineContent = { Text(name) }, supportingContent = { Text("${counts[name] ?: 0} 个标签") },
                     modifier = Modifier.testTag("keyword-category-row-$name").zIndex(if(dragging) 1f else 0f)
                         .graphicsLayer { translationY = if(dragging) reorder.offset else 0f },
-                    colors = ListItemDefaults.colors(containerColor = if(dragging) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surface),
+                    containerColor = if(dragging) MaterialTheme.colorScheme.surfaceContainerHigh else wallpaperCardColor(MaterialTheme.colorScheme.surface),
                     leadingContent = { KeywordCategoryDragHandle(reorder, name) },
                     trailingContent = {
                         if(name == KeywordLibrary.OTHER) Text("默认归类", style = MaterialTheme.typography.labelSmall)

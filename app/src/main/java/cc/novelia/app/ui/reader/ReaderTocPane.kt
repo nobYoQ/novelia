@@ -1,5 +1,6 @@
 package cc.novelia.app.ui.reader
 
+import cc.novelia.app.ui.components.base.AppListItem
 import cc.novelia.app.ui.components.base.AppTextButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyListState
@@ -100,7 +101,7 @@ import kotlinx.coroutines.launch
                     val item = entry.value
                     val id = item.chapterId
                     if(id == null) SectionTitle(item.title)
-                    else ListItem(
+                    else AppListItem(
                         headlineContent = { Text(item.title, color = if(id == current) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) },
                         leadingContent = { Icon(if(id == current) Icons.Outlined.Bookmark else Icons.Outlined.Article, null) },
                         supportingContent = if(id == current || (!ref.isLocal && id in cachedIds)) ({

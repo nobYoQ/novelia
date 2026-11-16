@@ -1,6 +1,7 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.shelf
 
+import cc.novelia.app.ui.components.base.AppListItem
 import cc.novelia.app.ui.components.base.AppCheckbox
 import cc.novelia.app.ui.components.base.AppButton
 import androidx.compose.foundation.layout.*
@@ -26,14 +27,15 @@ import cc.novelia.app.ui.components.base.AppSheet
 import cc.novelia.app.ui.components.book.BookReadingProgressBar
 import cc.novelia.app.ui.components.book.bookRowStatus
 import cc.novelia.app.ui.theme.motionClickable
+import cc.novelia.app.ui.theme.wallpaperCardColor
 
 internal data class ShelfRowItem(val saved: SavedBook, val parent: SavedBook? = null, val volumeCount: Int = 0, val expanded: Boolean = false)
 
 @Composable internal fun MountedVolumeRow(saved: SavedBook, position: Position?, modifier: Modifier, onClick: () -> Unit, trailing: @Composable () -> Unit, dragHandle: (@Composable () -> Unit)? = null, indented: Boolean = true) {
     val line = MaterialTheme.colorScheme.outlineVariant
     val reading = bookRowStatus(saved.book, saved, position, null)
-    ListItem(headlineContent = { Text(saved.book.title, maxLines = 3) },
-        colors = ListItemDefaults.colors(containerColor = if(indented) MaterialTheme.colorScheme.surface else Color.Transparent),
+    AppListItem(headlineContent = { Text(saved.book.title, maxLines = 3) },
+        containerColor = if(indented) wallpaperCardColor(MaterialTheme.colorScheme.surface) else Color.Transparent,
         supportingContent = { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(if(!indented && position == null) reading.progressLabel else "${reading.progressLabel} · ${position?.title?.ifBlank { "继续阅读" } ?: "尚未开始阅读"}", maxLines = 2)
             if(indented || position != null || saved.status == "读完") BookReadingProgressBar(reading, Modifier.testTag("book-reading-progress-${saved.book.ref.key}"))
@@ -66,7 +68,7 @@ internal data class ShelfRowItem(val saved: SavedBook, val parent: SavedBook? = 
                 else if(filtered.isEmpty()) item { Text("没有匹配的本地分卷", Modifier.padding(20.dp)) }
                 items(filtered, key = { it.book.ref.key }) { volume ->
                     val key = volume.book.ref.key
-                    ListItem(headlineContent = { Text(volume.book.title) },
+                    AppListItem(headlineContent = { Text(volume.book.title) },
                         supportingContent = { Text(parents[volume.parentWenkuKey]?.let { "已挂载：${it.book.title}" } ?: "未挂载") },
                         trailingContent = { AppCheckbox(key in chosen, onCheckedChange = null) },
                         modifier = Modifier.testTag("mount-volume-$key").toggleable(key in chosen, role = Role.Checkbox) { checked ->
@@ -95,11 +97,11 @@ internal data class ShelfRowItem(val saved: SavedBook, val parent: SavedBook? = 
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp))
                 }
                 if(volume.parentWenkuKey != null) item {
-                    ListItem(headlineContent = { Text("取消挂载") }, supportingContent = { Text("保留分卷文件和阅读进度") }, modifier = Modifier.motionClickable { onSelect(null) })
+                    AppListItem(headlineContent = { Text("取消挂载") }, supportingContent = { Text("保留分卷文件和阅读进度") }, modifier = Modifier.motionClickable { onSelect(null) })
                 }
                 if(parents.isEmpty()) item { Text(if(query.isBlank()) "请先把目标文库小说加入「我的书架」。" else "没有匹配的文库收藏", Modifier.padding(20.dp)) }
                 items(parents, key = { it.book.ref.key }) { parent ->
-                    ListItem(headlineContent = { Text(parent.book.title) }, supportingContent = { Text(if(parent.book.ref.key == volume.parentWenkuKey) "当前所属文库" else parent.folder) },
+                    AppListItem(headlineContent = { Text(parent.book.title) }, supportingContent = { Text(if(parent.book.ref.key == volume.parentWenkuKey) "当前所属文库" else parent.folder) },
                         modifier = Modifier.testTag("volume-parent-${parent.book.ref.key}").motionClickable { onSelect(parent.book.ref.key) })
                 }
             }
