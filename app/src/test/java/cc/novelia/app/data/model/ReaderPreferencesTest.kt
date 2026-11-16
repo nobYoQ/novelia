@@ -182,6 +182,23 @@ class ReaderPreferencesTest {
         assertEquals(.5f, settings.withEInkMode(true).withEInkMode(false).lineHeight, 0f)
     }
 
+    @Test fun chapterPullDefaultsOnAndPersistsIndependentlyAcrossModesAndBackups() {
+        assertTrue(appJson.decodeFromString<ReaderSettings>("{}").pullToNextChapter)
+        val disabled = ReaderSettings(pullToNextChapter = false)
+        assertTrue(disabled.showScrollPageButtons)
+        assertFalse(disabled.withPaginationMode("row").withPaginationMode("scroll").pullToNextChapter)
+        val eInk = disabled.withEInkMode(true).copy(pullToNextChapter = true)
+        assertFalse(eInk.withEInkMode(false).pullToNextChapter)
+        assertTrue(eInk.withEInkMode(false).withEInkMode(true).pullToNextChapter)
+        // 旧电子纸快照缺少新字段时继承当前选择。
+        assertFalse(disabled.copy(eInkPreferences = ReaderPagingState()).withEInkMode(true).pullToNextChapter)
+        val library = LibraryState(reader = eInk, bookSettings = mapOf("local/book" to disabled))
+        assertEquals(library, appJson.decodeFromString<LibraryState>(appJson.encodeToString(library)))
+        val backup = SettingsBackup(reader = eInk)
+        assertEquals(backup, appJson.decodeFromString<SettingsBackup>(appJson.encodeToString(backup)))
+        assertTrue(cc.novelia.app.reader.readerSettingsDifferences(disabled, ReaderSettings()).any { it.label == "上拉加载下一章" })
+    }
+
     @Test fun scrollingPageButtonsSurviveModeSwitchesBackupsAndPerBookOverrides() {
         assertTrue(appJson.decodeFromString<ReaderSettings>("{}").showScrollPageButtons)
         val hidden = ReaderSettings(showScrollPageButtons = false, showPageButtons = true)

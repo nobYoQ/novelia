@@ -174,6 +174,10 @@ import kotlin.math.roundToInt
                                 TogglePreference("显示底部不完整行", "开启时保持连续滚动的观感；关闭后静止与横向翻页只显示底部完整行，可能留有空白。上下滚动中始终显示局部行。",
                                     value.rowShowPartialLines, defaultValue = defaults?.rowShowPartialLines) { onChange(value.copy(rowShowPartialLines = it)) }
                             }
+                            if(!value.staticPagination || value.rowPagination) {
+                                TogglePreference("上拉加载下一章", "读到章末后继续上拉，松手进入下一章；关闭后可使用章末按钮或工具栏切章",
+                                    value.pullToNextChapter, defaultValue = defaults?.pullToNextChapter) { onChange(value.copy(pullToNextChapter = it)) }
+                            }
                             TogglePreference("点击区域翻页", if(value.tapPageTurn) "在正文覆盖层调整区域大小，分别设置单击和双击动作" else "开启后可配置区域大小，以及翻页、目录和工具栏等点击动作",
                                 value.tapPageTurn, defaultValue = defaults?.tapPageTurn) { onChange(value.copy(tapPageTurn = it)) }
                             if(value.tapPageTurn) {
@@ -195,7 +199,7 @@ import kotlin.math.roundToInt
                             TogglePreference("音量键翻页", "音量键控制阅读位置", value.volumeKeys, defaultValue = defaults?.volumeKeys) { onChange(value.copy(volumeKeys = it)) }
                         }
                         ReaderPreferenceSection("滚动分页", "连续阅读时的章末操作", Icons.Outlined.UnfoldMore) {
-                            TogglePreference("章节末尾按钮", "连续滚动时显示章末的下一章、下一分卷或返回目录按钮；关闭后仍可上拉进入下一章", value.showScrollPageButtons, defaultValue = defaults?.showScrollPageButtons) { onChange(value.copy(showScrollPageButtons = it)) }
+                            TogglePreference("章节末尾按钮", "连续滚动和行带分页时显示章末的下一章、下一分卷或返回目录按钮；与上拉加载开关分别控制", value.showScrollPageButtons, defaultValue = defaults?.showScrollPageButtons) { onChange(value.copy(showScrollPageButtons = it)) }
                         }
                     }
                     2 -> {

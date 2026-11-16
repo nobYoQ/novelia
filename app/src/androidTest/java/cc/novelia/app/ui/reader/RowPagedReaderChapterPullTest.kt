@@ -27,13 +27,14 @@ class RowPagedReaderChapterPullTest {
     private var enabled by mutableStateOf(true)
     private var loading by mutableStateOf(false)
     private var hasNext by mutableStateOf(true)
+    private var pullEnabled by mutableStateOf(true)
 
     private fun reader(eInk: Boolean = false, long: Boolean = false) {
         val paragraphs = listOf(ReadingParagraph(7, listOf(TextPart("行带阅读正文。".repeat(if(long) 200 else 1), "local"))))
         compose.setContent { NoveliaTheme("light") {
             CompositionLocalProvider(LocalDensity provides Density(1f)) {
                 val pull = rememberReaderChapterOverscrollGesture()
-                RowPagedReader(paragraphs, ReaderSettings(paginationMode = "row", eInkMode = eInk), state,
+                RowPagedReader(paragraphs, ReaderSettings(paginationMode = "row", eInkMode = eInk, pullToNextChapter = pullEnabled), state,
                     Modifier.requiredSize(300.dp, 300.dp).testTag("row-page"),
                     imageModel = { null }, onToggleMenu = {}, onSelect = {}, onPage = state::move,
                     interactionEnabled = enabled && !loading, chapterPull = pull,
@@ -41,12 +42,26 @@ class RowPagedReaderChapterPullTest {
                     chapterEnd = {
                         Column {
                             Text("本章完")
-                            if(hasNext) ReaderChapterPullHint(pull.progress, pull.active, pull.ready, loading, Color.Black)
+                            if(hasNext && pullEnabled) ReaderChapterPullHint(pull.progress, pull.active, pull.ready, loading, Color.Black)
                         }
                     })
             }
         } }
         compose.waitUntil(10_000) { state.ready && state.endContentHeight > 0 }
+    }
+
+    @Test fun chapterPullPreferenceDisablesTheGestureAndCancelsAnActivePull() {
+        reader()
+        val page = compose.onNodeWithTag("row-page")
+        page.performTouchInput { down(center); moveBy(Offset(0f, -100f), 200) }
+        compose.onNodeWithText("松手加载下一章").assertIsDisplayed()
+        compose.runOnIdle { pullEnabled = false }
+        page.performTouchInput { up() }
+        page.performTouchInput { swipeUp() }
+        compose.onNodeWithTag("reader-chapter-pull-hint", useUnmergedTree = true).assertDoesNotExist()
+        compose.runOnIdle { assertEquals(0, turns); pullEnabled = true }
+        page.performTouchInput { down(center); moveBy(Offset(0f, -100f), 200); up() }
+        compose.runOnIdle { assertEquals(1, turns) }
     }
 
     @Test fun rowPullUsesTheSameHintMotionAndInlineLoadingAndOnlyTurnsOnRelease() {

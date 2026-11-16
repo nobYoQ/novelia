@@ -10,6 +10,31 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class WebDavProjectionTest {
+    @Test fun chapterPullSyncsAndLegacyRecordsKeepTheLocalChoice() {
+        val remote = LibraryState(reader = ReaderSettings(pullToNextChapter = false),
+            bookSettings = mapOf(web.key to ReaderSettings(pullToNextChapter = true)))
+        val docs = documents(remote)
+        val settings = docs.getValue(SyncDomain.SETTINGS)
+        WebDavProjection.validateRecords(settings)
+        val local = LibraryState(bookSettings = mapOf(web.key to ReaderSettings(pullToNextChapter = false)))
+        val restored = WebDavProjection.applyLibrary(local, docs, setOf(SyncDomain.SETTINGS))
+        assertFalse(restored.reader.pullToNextChapter)
+        assertTrue(restored.bookSettings.getValue(web.key).pullToNextChapter)
+        val legacy = settings.copy(records = settings.records.mapValues { (_, record) -> record.copy(fields = record.fields - "pullToNextChapter") })
+        WebDavProjection.validateRecords(legacy)
+        val kept = WebDavProjection.applyLibrary(local, mapOf(SyncDomain.SETTINGS to legacy), setOf(SyncDomain.SETTINGS))
+        assertTrue(kept.reader.pullToNextChapter)
+        assertFalse(kept.bookSettings.getValue(web.key).pullToNextChapter)
+        assertThrows(IllegalArgumentException::class.java) {
+            WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "pullToNextChapter", JsonPrimitive("false"))
+        }
+        val device = WebDavProjection.library(remote, includeDevicePreferences = true)
+            .getValue(SyncDomain.SETTINGS).getValue("@reader").getValue("devicePreferences") as JsonObject
+        val active = device.getValue("activeModeSettings") as JsonObject
+        WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "devicePreferences",
+            JsonObject(device + ("activeModeSettings" to JsonObject(active - "pullToNextChapter"))))
+    }
+
     @Test fun contentVisibilityPreferencesSyncAndLegacyRecordsKeepCurrentValues() {
         val original = LibraryState()
         val remote = original.copy(hideUnavailableComments = true, hideLocalFavorites = true, hideCloudFavorites = true)

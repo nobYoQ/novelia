@@ -30,7 +30,7 @@ internal fun readerSettingsDifferences(book: ReaderSettings, defaults: ReaderSet
         "分页模式" to if(staticPagination) "自动分页" else "连续滚动", "滚动翻页" to scrollPageTurn.label(),
         "显示底部不完整行" to rowShowPartialLines.label(),
         "左右翻页" to horizontalPageTurn.label(), "点击区域翻页" to tapPageTurn.label(), "翻页按钮" to showPageButtons.label(),
-        "章节末尾按钮" to showScrollPageButtons.label(), "阅读进度条" to showProgressBar.label(),
+        "章节末尾按钮" to showScrollPageButtons.label(), "上拉加载下一章" to pullToNextChapter.label(), "阅读进度条" to showProgressBar.label(),
         "底部阅读信息" to showReadingStatusBar.label(),
         "底栏内容顺序" to resolvedReadingStatusItems.joinToString(" → ") { cc.novelia.app.data.model.ReaderStatusItems.labels.getValue(it) }.ifEmpty { "无" },
         "列表与面板翻屏按钮" to showEInkScreenButtons.label(), "阅读时隐藏状态栏" to hideStatusBar.label(),

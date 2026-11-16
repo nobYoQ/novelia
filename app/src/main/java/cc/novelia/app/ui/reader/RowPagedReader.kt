@@ -103,7 +103,7 @@ private data class RowMeasurement(val input: RowMeasureInput, val chapter: Measu
     BoxWithConstraints(modifier.background(background).clipToBounds()
         .readerTapFeedback(navigation, foreground, settings.eInkMode || LocalEInkMode.current)
         .readerTapNavigation(navigation)
-        .readerChapterOverscroll(chapterPull, canInteract && onNextChapter != null,
+        .readerChapterOverscroll(chapterPull, canInteract && settings.pullToNextChapter && onNextChapter != null,
             atEnd = { state.ready && !state.canScrollForward }, onNextChapter = { onNextChapter?.invoke() })) {
         val horizontalPadding = with(density) {
             contentPadding.calculateLeftPadding(layoutDirection).roundToPx() + contentPadding.calculateRightPadding(layoutDirection).roundToPx()

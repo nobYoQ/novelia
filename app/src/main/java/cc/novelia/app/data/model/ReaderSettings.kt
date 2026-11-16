@@ -38,6 +38,7 @@ import kotlinx.serialization.Serializable
     val prefetchWifiOnly: Boolean? = null,
     val paragraphSpacing: Float? = null,
     val showScrollPageButtons: Boolean? = null,
+    val pullToNextChapter: Boolean? = null,
     val showProgressBar: Boolean? = null,
     val showReadingStatusBar: Boolean? = null,
     val speechContinueChapters: Boolean? = null,
@@ -92,6 +93,8 @@ import kotlinx.serialization.Serializable
     val paragraphSpacing: Float = 8f,
     // 连续阅读的章末导航独立于工具栏按钮。
     val showScrollPageButtons: Boolean = true,
+    // 连续滚动与行带分页的章末上拉，独立于章末按钮。
+    val pullToNextChapter: Boolean = true,
     // 章节进度条独立于翻页按钮。
     val showProgressBar: Boolean = true,
     // 两种阅读模式共用的常驻底栏，独立于展开工具栏时的进度滑条。
@@ -222,6 +225,7 @@ import kotlinx.serialization.Serializable
         prefetchWifiOnly = prefetchWifiOnly,
         paragraphSpacing = paragraphSpacing,
         showScrollPageButtons = showScrollPageButtons,
+        pullToNextChapter = pullToNextChapter,
         showProgressBar = showProgressBar,
         showReadingStatusBar = showReadingStatusBar,
         speechContinueChapters = speechContinueChapters,
@@ -282,6 +286,7 @@ import kotlinx.serialization.Serializable
         prefetchWifiOnly = state.prefetchWifiOnly ?: prefetchWifiOnly,
         paragraphSpacing = state.paragraphSpacing ?: paragraphSpacing,
         showScrollPageButtons = state.showScrollPageButtons ?: showScrollPageButtons,
+        pullToNextChapter = state.pullToNextChapter ?: pullToNextChapter,
         showProgressBar = state.showProgressBar ?: showProgressBar,
         showReadingStatusBar = state.showReadingStatusBar ?: showReadingStatusBar,
         speechContinueChapters = state.speechContinueChapters ?: speechContinueChapters,

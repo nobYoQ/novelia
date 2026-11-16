@@ -587,6 +587,27 @@ class ReaderToolbarOverlayTest {
         compose.onNodeWithText("下一页").assertDoesNotExist()
     }
 
+    @Test fun scrollingChapterPullCanBeDisabledWithoutHidingChapterButtons() = withReader(
+        ReaderSettings(),
+        listOf(LocalChapter("first", "第一章", listOf("短章正文。")), LocalChapter("second", "第二章", listOf("下一章正文。")))
+    ) { app, ref ->
+        compose.onNodeWithContentDescription("阅读设置").performClick()
+        compose.onNodeWithText("仅应用于这本书").performClick()
+        compose.onNodeWithText("翻页").performClick()
+        compose.onNodeWithText("上拉加载下一章").performScrollTo().performClick()
+        compose.onNodeWithText("关闭面板").performClick()
+        compose.runOnIdle {
+            assertTrue(app.store.state.value.reader.pullToNextChapter)
+            assertFalse(app.store.state.value.bookSettings.getValue(ref.key).pullToNextChapter)
+        }
+        scrollToChapterEnd()
+        compose.onNodeWithTag("reader-chapter-pull-hint", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithTag("reader-scroll").performTouchInput { swipeUp() }
+        assertChapterUnchanged(app, ref, "first")
+        compose.onNodeWithText("阅读下一章").assertIsDisplayed().performClick()
+        waitForChapter(app, ref, "second")
+    }
+
     @Test fun rowPaginationPullLoadsTheNextChapterWithTheSameFooterAndKeepsToolbarsHidden() = withReader(
         ReaderSettings(paginationMode = "row", showPageButtons = false),
         listOf(
@@ -1062,7 +1083,8 @@ class ReaderToolbarOverlayTest {
             block(app, ref)
         } finally {
             compose.mainClock.autoAdvance = true
-            compose.runOnIdle { app.store.update { previous } }
+            // 空闲等待失败时仍需恢复夹具，不能再次等待空闲而覆盖最初的异常。
+            InstrumentationRegistry.getInstrumentation().runOnMainSync { app.store.update { previous } }
         }
     }
 

@@ -838,7 +838,7 @@ import kotlinx.serialization.encodeToString
             val chapterEnd: @Composable () -> Unit = {
                 Column(Modifier.fillMaxWidth().graphicsLayer { alpha = if(tapOverlayVisible) 0f else 1f }, horizontalAlignment = Alignment.CenterHorizontally) {
                     HorizontalDivider(Modifier.padding(vertical = 24.dp)); Text("本章完", color = foreground.copy(alpha = .65f)); Spacer(Modifier.height(20.dp))
-                    if(chapter.nextId != null) ReaderChapterPullHint(chapterPull.progress, chapterPull.active, chapterPull.ready,
+                    if(chapter.nextId != null && settings.pullToNextChapter) ReaderChapterPullHint(chapterPull.progress, chapterPull.active, chapterPull.ready,
                         inlineChapterLoad && chapterLoad.loading, foreground, Modifier.padding(bottom = 8.dp))
                     if(settings.showScrollPageButtons) {
                         if(chapter.nextId != null) AppButton(onClick = { openChapter(chapter.nextId, inline = true) }, modifier = Modifier.heightIn(min = 48.dp), enabled = !leaving && !chapterLoad.loading) { Text("阅读下一章") }
@@ -883,7 +883,7 @@ import kotlinx.serialization.encodeToString
                 .clipToBounds()
                 .readerTapFeedback(tapNavigation, foreground, settings.eInkMode || eInkInteraction)
                 .readerTapNavigation(tapNavigation)
-                .readerChapterOverscroll(scroll, chapterPull, chapter.nextId != null && !leaving && !chapterLoad.loading && seekTarget == null && !positionState.restoringAnchor && volumeKeysActive) {
+                .readerChapterOverscroll(scroll, chapterPull, settings.pullToNextChapter && chapter.nextId != null && !leaving && !chapterLoad.loading && seekTarget == null && !positionState.restoringAnchor && volumeKeysActive) {
                     chapter.nextId?.let { openChapter(it, inline = true) }
                 }
                 .graphicsLayer { translationY = -chapterPullOffset }
