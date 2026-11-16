@@ -49,6 +49,7 @@ import cc.novelia.app.ui.components.base.AppDropdownMenu
 import cc.novelia.app.ui.components.base.AppLazyColumn
 import cc.novelia.app.ui.components.base.AsyncContent
 import cc.novelia.app.ui.components.base.CachedAsyncContent
+import cc.novelia.app.ui.components.base.ContentShareButton
 import cc.novelia.app.ui.components.book.BookCover
 import cc.novelia.app.ui.components.base.EmptyState
 import cc.novelia.app.ui.components.base.MenuRow
@@ -103,13 +104,14 @@ import kotlinx.coroutines.withContext
     val cacheGeneration by c.store.cacheGeneration.collectAsStateWithLifecycle()
     val cacheActions = rememberChapterCacheActions(c)
     val detailKey = c.detailKey(if(ref.isWenku) "wenku/${ref.id}" else "novel/${ref.key}").copy(generation = cacheGeneration)
+    var shareTitle by remember(detailKey) { mutableStateOf<String?>(null) }
     val refreshKey = version
     LaunchedEffect(ref, profile?.username) { favorite = null }
     var progressChoice by remember { mutableStateOf<Pair<ReadingDestination, ReadingDestination>?>(null) }
     var uploadBusy by remember { mutableStateOf(false) }
     val uploader = rememberOpenDocumentPicker(DocumentPickerTypes.Volumes) { uri -> uri?.let { c.action("分卷上传完成") { uploadBusy = true; try { withContext(Dispatchers.IO) { val (name, bytes) = readDocument(c, it); require(name.substringAfterLast('.').lowercase() in listOf("epub", "txt") && bytes.size <= 40 * 1024 * 1024) { "文库上传支持不超过 40 MB 的 EPUB / TXT" }; val file = File(c.app.cacheDir, "upload-${System.nanoTime()}"); try { file.writeBytes(bytes); c.api.uploadVolume(ref, name, file) } finally { file.delete() } }; version++ } finally { uploadBusy = false } } } }
     Screen(if(ref.isWenku) "文库详情" else "作品详情", onBack, actions = {
-        AppIconButton(onClick = { c.share(ref.url) }) { Icon(Icons.Outlined.Share, "分享作品") }
+        ContentShareButton(ref.url, shareTitle, "分享作品", c::share)
         Box { AppIconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "更多操作") }; AppDropdownMenu(menu, { menu = false }) {
             DropdownMenuItem({ Text("刷新资料") }, { version++; menu = false }, leadingIcon = { Icon(Icons.Outlined.Refresh, null) })
             if(!ref.isWenku) DropdownMenuItem({ Text("清理本书章节缓存") }, { menu = false; cacheActions.request(ref) },
@@ -125,6 +127,10 @@ import kotlinx.coroutines.withContext
             load = { c.detail<WenkuDetail>("wenku/${ref.id}", forceNetwork = version > 0 || c.uiResults.wenkuDetails.snapshot(detailKey) != null) },
             modifier = Modifier.padding(padding), validate = { c.session.ensureCurrent(detailKey.binding) }, revealContent = true) { detail, _ ->
             val book = remember(detail, ref) { detail.card(ref) }
+            DisposableEffect(detailKey, book.title) {
+                shareTitle = book.title
+                onDispose { shareTitle = null }
+            }
             val favoriteState = bookFavoriteState(ref, localSaved != null, detail.favored, profile?.username, state.pending,
                 localFolderName = localSaved?.folder, cloudFolders = cloudFolders)
             val relatedWebRefs = remember(detail.webIds) {
@@ -176,6 +182,10 @@ import kotlinx.coroutines.withContext
             load = { c.detail<WebDetail>("novel/${ref.key}", forceNetwork = version > 0 || c.uiResults.webDetails.snapshot(detailKey) != null) },
             modifier = Modifier.padding(padding), validate = { c.session.ensureCurrent(detailKey.binding) }, revealContent = true) { detail, _ ->
             val book = remember(detail, ref, profile?.username) { detail.card(ref, profile?.username) }
+            DisposableEffect(detailKey, book.title) {
+                shareTitle = book.title
+                onDispose { shareTitle = null }
+            }
             LaunchedEffect(book) {
                 c.store.update { it.withCloudReadingMetadata(listOf(book), c.session.profile.value?.username) }
                 withContext(Dispatchers.IO) { runCatching { c.store.registerCachedChapters(ref, book.title, detail.toc.mapNotNull { it.chapterId }) } }

@@ -2,12 +2,9 @@
 package cc.novelia.app.ui.community
 
 import cc.novelia.app.ui.components.base.AppTextButton
-import cc.novelia.app.ui.components.base.AppIconButton
 import cc.novelia.app.data.community.ForumLinks
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -23,6 +20,7 @@ import cc.novelia.app.data.storage.appJson
 import cc.novelia.app.ui.components.base.AppLazyColumn
 import cc.novelia.app.ui.components.base.AsyncContent
 import cc.novelia.app.ui.components.base.CachedAsyncContent
+import cc.novelia.app.ui.components.base.ContentShareButton
 import cc.novelia.app.ui.components.base.ConfirmDialog
 import cc.novelia.app.ui.components.base.Screen
 import cc.novelia.app.ui.components.base.displayDate
@@ -49,10 +47,16 @@ import kotlinx.coroutines.CancellationException
     }
     var tab by rememberSaveable(id) { mutableIntStateOf(0) }; var deletion by remember(id) { mutableStateOf<Article?>(null) }
     val tabState = rememberSaveableStateHolder()
-    Screen("文章", c::back, actions = { AppIconButton(onClick = { c.share(ForumLinks.articleUrl(id)) }) { Icon(Icons.Outlined.Share, "分享文章") } }) { padding ->
-        CachedAsyncContent(c.uiResults.articles, listOf(id, binding, profile?.userId, profile?.role, cacheGeneration),
+    val detailKey = listOf(id, binding, profile?.userId, profile?.role, cacheGeneration)
+    var shareTitle by remember(detailKey) { mutableStateOf<String?>(null) }
+    Screen("文章", c::back, actions = { ContentShareButton(ForumLinks.articleUrl(id), shareTitle, "分享文章", c::share) }) { padding ->
+        CachedAsyncContent(c.uiResults.articles, detailKey,
             load = { c.article(id) }, modifier = Modifier.padding(padding), revealContent = true,
             observeInvalidation = false, validate = { session.ensureCurrent(binding) }) { article, _ ->
+            DisposableEffect(detailKey, article.title) {
+                shareTitle = article.title
+                onDispose { shareTitle = null }
+            }
             val now = rememberForumModificationTime(article.createAt)
             val favorite = remember(article, binding) { ForumFavoriteState(article.forumFavorited) }
             // 留在文章层，切换讨论标签或列表回收按钮后仍保留操作结果。
