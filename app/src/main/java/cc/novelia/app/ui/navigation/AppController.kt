@@ -206,6 +206,7 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
         } else showBookDetails(ref)
     }
     fun showBookDetails(ref: BookRef) = go("book/${ref.provider}/${Uri.encode(ref.id)}")
+    fun returnToBookContents(ref: BookRef) = nav.returnToBookContents(ref)
     fun read(ref: BookRef, chapter: String) {
         // 从书架/详情重新开始阅读时重新检查目录；连续切章走下面的交接入口。
         synchronized(this) { readerToc = null }

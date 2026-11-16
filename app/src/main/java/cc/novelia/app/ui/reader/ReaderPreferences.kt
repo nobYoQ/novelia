@@ -199,7 +199,7 @@ import kotlin.math.roundToInt
                             TogglePreference("音量键翻页", "音量键控制阅读位置", value.volumeKeys, defaultValue = defaults?.volumeKeys) { onChange(value.copy(volumeKeys = it)) }
                         }
                         ReaderPreferenceSection("滚动分页", "连续阅读时的章末操作", Icons.Outlined.UnfoldMore) {
-                            TogglePreference("章节末尾按钮", "连续滚动和行带分页时显示章末的下一章、下一分卷或返回目录按钮；与上拉加载开关分别控制", value.showScrollPageButtons, defaultValue = defaults?.showScrollPageButtons) { onChange(value.copy(showScrollPageButtons = it)) }
+                            TogglePreference("章节末尾按钮", "连续滚动和行带分页时显示下一章、下一分卷或返回作品详情目录的按钮", value.showScrollPageButtons, defaultValue = defaults?.showScrollPageButtons) { onChange(value.copy(showScrollPageButtons = it)) }
                         }
                     }
                     2 -> {

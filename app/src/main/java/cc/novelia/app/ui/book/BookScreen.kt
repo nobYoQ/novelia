@@ -29,6 +29,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.SavedStateHandle
 import cc.novelia.app.data.catalog.BookLinks
 import cc.novelia.app.data.catalog.providers
 import cc.novelia.app.data.library.ReadingDestination
@@ -62,6 +63,7 @@ import cc.novelia.app.ui.components.book.rememberChapterCacheActions
 import cc.novelia.app.ui.downloads.DownloadSheet
 import cc.novelia.app.ui.markdown.format
 import cc.novelia.app.ui.navigation.AppController
+import cc.novelia.app.ui.navigation.SHOW_BOOK_CONTENTS
 import cc.novelia.app.ui.reader.ChapterCacheDialog
 import cc.novelia.app.ui.shelf.FavoriteSheet
 import cc.novelia.app.ui.components.book.LocalBookListPresentation
@@ -79,9 +81,14 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.withContext
 
-@Composable fun BookScreen(c: AppController, ref: BookRef, onBack: () -> Unit = c::back) {
+@Composable fun BookScreen(c: AppController, ref: BookRef, onBack: () -> Unit = c::back, navigationState: SavedStateHandle? = null) {
+    var tab by rememberSaveable(ref.key) { mutableIntStateOf(if(navigationState?.get<Boolean>(SHOW_BOOK_CONTENTS) == true) 1 else 0) }
+    val showContents = navigationState?.getStateFlow(SHOW_BOOK_CONTENTS, false)?.collectAsStateWithLifecycle()?.value == true
+    LaunchedEffect(showContents) {
+        if(showContents) { tab = 1; navigationState?.set(SHOW_BOOK_CONTENTS, false) }
+    }
     if(ref.isLocal) {
-        LocalBookDetailScreen(c, ref, onBack)
+        LocalBookDetailScreen(c, ref, onBack, tab) { tab = it }
         return
     }
     var menu by remember { mutableStateOf(false) }; var favorite by remember { mutableStateOf<Pair<BookCard, Boolean>?>(null) }; var download by remember { mutableStateOf<BookCard?>(null) }; var version by remember { mutableIntStateOf(0) }
@@ -123,7 +130,6 @@ import kotlinx.coroutines.withContext
             }
             var relatedWeb by rememberSaveable(ref.key) { mutableStateOf(false) }
             val refresh: () -> Unit = { version++ }
-            var tab by rememberSaveable(ref.key) { mutableIntStateOf(0) }
             val tabState = rememberSaveableStateHolder()
             AdaptiveBookDetail(tab, { tab = it }, listOf("简介", "分卷", "讨论"), tabState) { panel ->
                     when(panel) {
@@ -174,7 +180,6 @@ import kotlinx.coroutines.withContext
                 localFolderName = localSaved?.folder, cloudFolders = cloudFolders)
             val chapterCount = remember(detail.toc) { detail.toc.count { it.chapterId != null } }
             val refresh: () -> Unit = { version++ }
-            var tab by rememberSaveable(ref.key) { mutableIntStateOf(0) }
             val tabState = rememberSaveableStateHolder()
             val localDestination = remember(detail.toc, state.positions[ref.key]?.chapterId) { readingDestination(detail.toc, state.positions[ref.key]?.chapterId) }
             val cloudDestination = remember(detail.toc, detail.lastReadChapterId) { readingDestination(detail.toc, detail.lastReadChapterId) }
@@ -222,7 +227,7 @@ import kotlinx.coroutines.withContext
     download?.let { book -> DownloadSheet(c, book, emptyList()) { download = null } }
     progressChoice?.let { (localChapter, cloudChapter) -> AppAlertDialog(onDismissRequest = { progressChoice = null }, title = { Text("选择继续阅读的位置") }, text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { Text("本机与原站记录的章节不同，请选择这次从哪里继续。"); Text("本机：${localChapter.label}"); Text("原站：${cloudChapter.label}") } }, confirmButton = { AppTextButton(onClick = { progressChoice = null; c.read(ref, cloudChapter.chapterId) }) { Text("原站进度") } }, dismissButton = { AppTextButton(onClick = { progressChoice = null; c.read(ref, localChapter.chapterId) }) { Text("本机进度") } }) }
 }
-@Composable private fun LocalBookDetailScreen(c: AppController, ref: BookRef, onBack: () -> Unit) {
+@Composable private fun LocalBookDetailScreen(c: AppController, ref: BookRef, onBack: () -> Unit, tab: Int, onTab: (Int) -> Unit) {
     val state by c.store.state.collectAsStateWithLifecycle()
     Screen("本地书籍", onBack) { padding ->
         AsyncContent(ref, load = { withContext(Dispatchers.IO) { c.store.documentIndex(ref.id) } }, modifier = Modifier.padding(padding), revealContent = true) { document, _ ->
@@ -230,8 +235,7 @@ import kotlinx.coroutines.withContext
             val toc = remember(document) { document.chapters.map { TocItem(titleJp = it.title, chapterId = it.id) } }
             val savedPosition = state.positions[ref.key]
             val destination = remember(toc, savedPosition?.chapterId) { resumeDestination(toc, savedPosition?.chapterId, null) }
-            var tab by rememberSaveable(ref.key) { mutableIntStateOf(0) }
-            AdaptiveBookDetail(tab, { tab = it }, listOf("信息", "目录 ${toc.size}"), rememberSaveableStateHolder()) { panel ->
+            AdaptiveBookDetail(tab, onTab, listOf("信息", "目录 ${toc.size}"), rememberSaveableStateHolder()) { panel ->
                 if(panel == 0) AppLazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
                     item {
                         Row(Modifier.fillMaxWidth().padding(20.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -292,17 +296,20 @@ import kotlinx.coroutines.withContext
     panel: @Composable (Int) -> Unit,
 ) {
     val pager = rememberPagerState(initialPage = (selected - firstPanel).coerceIn(titles.indices)) { titles.size }
-    val scope = rememberCoroutineScope()
     val reducedMotion = appReducedMotion()
     val select by rememberUpdatedState(onSelect)
+    LaunchedEffect(selected, firstPanel) {
+        val target = (selected - firstPanel).coerceIn(titles.indices)
+        if(pager.currentPage != target || pager.currentPageOffsetFraction != 0f) {
+            if(reducedMotion) pager.scrollToPage(target) else pager.animateScrollToPage(target)
+        }
+    }
     LaunchedEffect(pager, firstPanel) {
         snapshotFlow { pager.settledPage }.distinctUntilChanged().drop(1).collect { select(it + firstPanel) }
     }
     Column(Modifier.fillMaxSize()) {
         AppPageTabs(pager.currentPage) { titles.forEachIndexed { index, title ->
-            Tab(pager.currentPage == index, onClick = { select(index + firstPanel); scope.launch {
-                if(reducedMotion) pager.scrollToPage(index) else pager.animateScrollToPage(index)
-            } }, text = { Text(title) })
+            Tab(pager.currentPage == index, onClick = { select(index + firstPanel) }, text = { Text(title) })
         } }
         HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth().testTag("book-detail-pager"),
             key = { it + firstPanel }) { index ->

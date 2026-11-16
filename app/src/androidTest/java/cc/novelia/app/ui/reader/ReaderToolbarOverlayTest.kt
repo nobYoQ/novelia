@@ -608,6 +608,20 @@ class ReaderToolbarOverlayTest {
         waitForChapter(app, ref, "second")
     }
 
+    @Test fun lastChapterReturnOpensTheBookDetailsContentsInsteadOfTheReaderDrawer() = withReader(
+        ReaderSettings(), listOf(LocalChapter("first", "末章测试", listOf("全书完。")))
+    ) { _, _ ->
+        scrollToChapterEnd()
+        compose.onNodeWithText("返回目录").assertIsDisplayed().performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("本地书籍").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("目录 1").assertIsSelected()
+        compose.onNodeWithTag("reader-scroll").assertDoesNotExist()
+        compose.onNodeWithText("末章测试").assertIsDisplayed()
+        compose.onNodeWithContentDescription("返回").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("本地文件").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("reader-scroll").assertDoesNotExist()
+    }
+
     @Test fun rowPaginationPullLoadsTheNextChapterWithTheSameFooterAndKeepsToolbarsHidden() = withReader(
         ReaderSettings(paginationMode = "row", showPageButtons = false),
         listOf(

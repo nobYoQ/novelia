@@ -279,7 +279,7 @@ class MainActivity : ComponentActivity() {
                                     onNavigationRailWidthChanged = reportNavigationRailWidth("profile"),
                                     onNavigationBarHeightChanged = reportNavigationBarHeight("profile")) { ProfileScreen(controller) }
                             }
-                            composable("book/{provider}/{id}") { BookScreen(controller, BookRef(it.arguments!!.getString("provider")!!, it.arguments!!.getString("id")!!)) }
+                            composable("book/{provider}/{id}") { BookScreen(controller, BookRef(it.arguments!!.getString("provider")!!, it.arguments!!.getString("id")!!), navigationState = it.savedStateHandle) }
                             composable("reader/{provider}/{id}/{chapter}") { ReaderScreen(controller, BookRef(it.arguments!!.getString("provider")!!, it.arguments!!.getString("id")!!), it.arguments!!.getString("chapter")!!) }
                             composable("article/{id}") {
                                 val id = it.arguments!!.getString("id")!!
