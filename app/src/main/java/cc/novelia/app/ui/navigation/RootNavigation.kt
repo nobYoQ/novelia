@@ -7,6 +7,7 @@ import cc.novelia.app.data.model.BookRef
 
 internal const val SHOW_SHELF_LIST = "showShelfList"
 internal const val DISCOVER_ROUTE = "discover?query={query}&category={category}"
+internal const val COMMUNITY_ROUTE = "community?category={category}&query={query}"
 internal const val SHOW_BOOK_CONTENTS = "showBookContents"
 
 /** 优先回到已有详情；直接进入阅读器时替换当前页，避免返回键再次进入末章。 */

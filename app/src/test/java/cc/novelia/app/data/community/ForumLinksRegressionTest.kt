@@ -15,6 +15,18 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ForumLinksRegressionTest {
+    @Test fun publishingNoticeCategoriesAndSearchOpenNativeCommunityWithoutLosingTheQuery() {
+        assertEquals("community?category=announcements", MarkdownLinks.nativeRoute("${ForumLinks.ORIGIN}/c/announcements"))
+        assertEquals("community?category=feedback", MarkdownLinks.nativeRoute("${ForumLinks.ORIGIN}/c/feedback/"))
+        assertEquals("community?category=novel&query=%E6%B1%82%E4%B9%A6%E9%9B%86%E4%B8%AD%E5%B8%96",
+            MarkdownLinks.nativeRoute("${ForumLinks.ORIGIN}/c/novel?q=%E6%B1%82%E4%B9%A6%E9%9B%86%E4%B8%AD%E5%B8%96"))
+        assertEquals("community?category=novel&query=A%20B%26C%2F100%25",
+            MarkdownLinks.nativeRoute("${ForumLinks.ORIGIN}/c/novel?q=A+B%26C%2F100%25"))
+        listOf("/c/novel?page=2", "/c/novel?q=test&page=2", "/c/novel?q=test#reply", "/c/novel/extra").forEach {
+            assertNull(it, MarkdownLinks.nativeRoute(ForumLinks.ORIGIN + it))
+        }
+    }
+
     @Test fun forumRulesUseNativePageAndPreserveOtherWebRoutes() {
         assertEquals("forum-rules", MarkdownLinks.nativeRoute("https://forum.novelia.cc/rules"))
         assertEquals("forum-blacklist", MarkdownLinks.nativeRoute("https://forum.novelia.cc/settings/blacklist"))

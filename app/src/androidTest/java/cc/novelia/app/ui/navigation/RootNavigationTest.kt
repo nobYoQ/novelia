@@ -6,6 +6,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.*
 import cc.novelia.app.data.model.BookRef
+import cc.novelia.app.data.markdown.MarkdownLinks
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -20,7 +21,7 @@ class RootNavigationTest {
             NavHost(nav, startDestination = "shelf") {
                 composable("shelf") { Text("书架") }
                 composable(DISCOVER_ROUTE) { Text("搜索") }
-                composable("community") { Text("社区") }
+                composable(COMMUNITY_ROUTE) { Text("社区") }
             }
         }
         val author = "作者 A&B / 100% + 新作"
@@ -72,4 +73,28 @@ class RootNavigationTest {
         }
     }
 
+    @Test fun publishingLinksPreserveCategoryAndEncodedSearchAndCanReturnToTheDraft() {
+        lateinit var nav: NavHostController
+        compose.setContent {
+            nav = rememberNavController()
+            NavHost(nav, startDestination = "compose") {
+                composable("compose") { Text("写一篇帖子") }
+                composable(COMMUNITY_ROUTE) { Text("社区") }
+            }
+        }
+        val query = "求书 A&B / 100% +"
+        compose.runOnIdle {
+            nav.currentBackStackEntry?.savedStateHandle?.set("draft", "未发布正文")
+            nav.navigate(requireNotNull(MarkdownLinks.nativeRoute("https://forum.novelia.cc/c/novel?q=${Uri.encode(query)}")))
+        }
+        compose.runOnIdle {
+            assertEquals("novel", nav.currentBackStackEntry?.arguments?.getString("category"))
+            assertEquals(query, nav.currentBackStackEntry?.arguments?.getString("query"))
+            nav.popBackStack()
+        }
+        compose.runOnIdle {
+            assertEquals("compose", nav.currentDestination?.route)
+            assertEquals("未发布正文", nav.currentBackStackEntry?.savedStateHandle?.get<String>("draft"))
+        }
+    }
 }

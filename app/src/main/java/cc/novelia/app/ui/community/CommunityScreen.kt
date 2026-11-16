@@ -45,7 +45,7 @@ import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.appReducedMotion
 import cc.novelia.app.ui.theme.motionClickable
 
-@Composable fun CommunityScreen(c: AppController) {
+@Composable fun CommunityScreen(c: AppController, initialCategory: String? = null, initialQuery: String = "") {
     ObserveForumLogin(c.session, c.forumSession)
     val cacheGeneration by c.store.cacheGeneration.collectAsStateWithLifecycle()
     val source = c.forumSession.capture()
@@ -57,20 +57,21 @@ import cc.novelia.app.ui.theme.motionClickable
         catch(_: SessionChangedException) { c.forumApi.categories() }
     }) { available, _ ->
         if(available.isEmpty()) EmptyState("论坛还没有分类", "测试站正在准备内容。", Icons.Outlined.Forum)
-        else ForumCommunity(c, available)
+        else ForumCommunity(c, available, initialCategory, initialQuery)
     }
 }
-@Composable private fun ForumCommunity(c: AppController, available: List<ForumCategory>) {
+@Composable private fun ForumCommunity(c: AppController, available: List<ForumCategory>, initialCategory: String?, initialQuery: String) {
     val state by c.store.state.collectAsStateWithLifecycle()
     // 新加载论坛页时应用默认分类；导航返回和页面恢复仍保留已有浏览状态。
-    var category by rememberSaveable { mutableStateOf(initialForumCategory(available, state.forumDefaultCategory)) }; var search by rememberSaveable { mutableStateOf("") }
+    var category by rememberSaveable { mutableStateOf(initialCategory?.takeIf { requested -> available.any { it.slug == requested } }
+        ?: initialForumCategory(available, state.forumDefaultCategory)) }; var search by rememberSaveable { mutableStateOf(initialQuery) }
     var pageNumbers by rememberSaveable { mutableStateOf(mapOf<String, Int>()) }
     var tagIds by rememberSaveable { mutableStateOf(mapOf<String, Long>()) }
     var source by rememberSaveable { mutableIntStateOf(0) }
     val pageKey = "$category:$source"
     fun setPage(value: Int) { pageNumbers = pageNumbers + (pageKey to value) }
     var sort by rememberSaveable { mutableStateOf(ForumSort.ACTIVE) }
-    var searchExpanded by rememberSaveable { mutableStateOf(false) }
+    var searchExpanded by rememberSaveable { mutableStateOf(initialQuery.isNotBlank()) }
     var tagsExpanded by rememberSaveable { mutableStateOf(false) }
     val tagId = tagIds[category]
     fun setTag(value: Long?) { tagIds = if(value == null) tagIds - category else tagIds + (category to value) }

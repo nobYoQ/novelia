@@ -4,6 +4,8 @@ import cc.novelia.app.data.catalog.BookLinks
 import cc.novelia.app.data.catalog.SiteLink
 import cc.novelia.app.data.catalog.SiteUrls
 import java.net.URI
+import java.net.URLDecoder
+import java.net.URLEncoder
 
 /** 原站 Markdown 链接可能使用根相对路径或省略协议的地址。 */
 object MarkdownLinks {
@@ -58,11 +60,25 @@ object MarkdownLinks {
         }
         if (!isInternal(resolved)) return null
         val uri = URI(resolved)
-        if (uri.host.equals("forum.novelia.cc", true)) return if(uri.rawQuery != null) null else when(uri.path.trimEnd('/')) {
-            "" -> "community"
-            "/rules" -> "forum-rules"
-            "/settings", "/settings/blacklist" -> "forum-blacklist"
-            else -> null
+        if (uri.host.equals("forum.novelia.cc", true)) {
+            val path = uri.path.trimEnd('/')
+            if(path.startsWith("/c/")) {
+                val category = path.removePrefix("/c/").takeIf { it.matches(Regex("[a-z0-9][a-z0-9-]{0,79}")) } ?: return null
+                val query = uri.rawQuery?.let { raw ->
+                    val parts = raw.split('=', limit = 2)
+                    // 未支持的分页或其他参数继续保留给网页，不能静默丢弃。
+                    if(parts.size != 2 || parts[0] != "q" || '&' in raw) return null
+                    runCatching { URLDecoder.decode(parts[1], "UTF-8") }.getOrNull() ?: return null
+                }
+                return "community?category=$category" + (query?.let { "&query=${URLEncoder.encode(it, "UTF-8").replace("+", "%20")}" } ?: "")
+            }
+            if(uri.rawQuery != null) return null
+            return when(path) {
+                "" -> "community"
+                "/rules" -> "forum-rules"
+                "/settings", "/settings/blacklist" -> "forum-blacklist"
+                else -> null
+            }
         }
         // 站点列表页使用 WebView，保留 URL 中的筛选和分页参数。
         if (uri.rawQuery != null) return null

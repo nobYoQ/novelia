@@ -55,6 +55,7 @@ import cc.novelia.app.ui.feedback.StickerPacks
 import cc.novelia.app.ui.feedback.asStickerPack
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.navigation.DISCOVER_ROUTE
+import cc.novelia.app.ui.navigation.COMMUNITY_ROUTE
 import cc.novelia.app.ui.navigation.RootDestinationLayout
 import cc.novelia.app.ui.navigation.switchRootTab
 import cc.novelia.app.ui.navigation.ObserveClipboardLinks
@@ -196,7 +197,7 @@ class MainActivity : ComponentActivity() {
                 ObserveDownloadCelebrations(controller, route)
                 cc.novelia.app.ui.feedback.ObserveAppUpdates(controller, show = route?.startsWith("reader/") != true)
                 ObserveClipboardLinks(controller, externalLinkPending = link != null || sharedDocuments.isNotEmpty())
-                val roots = listOf("shelf", DISCOVER_ROUTE, "community", "profile")
+                val roots = listOf("shelf", DISCOVER_ROUTE, COMMUNITY_ROUTE, "profile")
                 fun switchTab(target: String) { nav.switchRootTab(target) }
                 var navigationBarHeight by remember { mutableStateOf(0.dp) }
                 var navigationRailWidth by remember { mutableStateOf(0.dp) }
@@ -269,10 +270,12 @@ class MainActivity : ComponentActivity() {
                             }
                             composable("rank") { RankScreen(controller) }
                             composable("wenku-new") { WenkuEditorScreen(controller) }
-                            composable("community") {
+                            composable(COMMUNITY_ROUTE) { entry ->
                                 RootDestinationLayout("community", ::switchTab,
                                     onNavigationRailWidthChanged = reportNavigationRailWidth("community"),
-                                    onNavigationBarHeightChanged = reportNavigationBarHeight("community")) { CommunityScreen(controller) }
+                                    onNavigationBarHeightChanged = reportNavigationBarHeight("community")) {
+                                    CommunityScreen(controller, entry.arguments?.getString("category"), entry.arguments?.getString("query").orEmpty())
+                                }
                             }
                             composable("profile") {
                                 RootDestinationLayout("profile", ::switchTab,
