@@ -50,7 +50,7 @@ APK 归档到 `outputs/packages/debug/`，日志在 `outputs/logs/`。脚本不�
 | `./build.ps1 -Tasks @(...)` | 执行指定 Gradle 任务，不整理 APK 归档 |
 | `./scripts/prepare-release.ps1 ...` | 正式签名与发行附件，前提见[发布指南](../maintenance/releasing.md) |
 
-Debug 和本地 Release 都支持 `-Abi`、`-Offline` 和 `-Verify`。默认 ABI 为 `universal`，也可选 `arm64-v8a`、`armeabi-v7a`、`x86_64`、`x86`：
+Debug 和本地 Release 都支持 `-Abi`、`-Offline` 和 `-Verify`。默认的 `universal` 同时编译四种 ECH 架构。指定 `arm64-v8a`、`armeabi-v7a`、`x86_64` 或 `x86` 时，Go 只编译对应架构。单独构建 ECH 也可运行 `./scripts/build-ech.ps1 -Abi arm64-v8a`。各单架构产物分别保存在 `native/ech/build/<ABI>/`，切回同一架构时 Gradle 可复用已有 AAR。
 
 ```powershell
 ./scripts/build-release.ps1 -Abi arm64-v8a -Verify

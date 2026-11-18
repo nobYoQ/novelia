@@ -35,8 +35,18 @@ val echSources = fileTree(echRoot) {
 }
 val echScript = rootProject.file("gradle/ech-native.gradle.kts")
 val echBootstrap = rootProject.file("scripts/bootstrap-ech-go.ps1")
-val echAar = echRoot.resolve("build/novelia-ech.aar")
-val echSourcesJar = echRoot.resolve("build/novelia-ech-sources.jar")
+val echAbi = providers.gradleProperty("targetAbi").getOrElse("universal")
+val echArch = when (echAbi) {
+    "arm64-v8a" -> "arm64"
+    "armeabi-v7a" -> "arm"
+    "x86_64" -> "amd64"
+    "x86" -> "386"
+    "universal" -> null
+    else -> error("Unsupported targetAbi: $echAbi")
+}
+val echOutput = if (echArch == null) echRoot.resolve("build") else echRoot.resolve("build/$echAbi")
+val echAar = echOutput.resolve("novelia-ech.aar")
+val echSourcesJar = echOutput.resolve("novelia-ech-sources.jar")
 val echJavaHome = File(System.getProperty("java.home"))
 val echOffline = gradle.startParameter.isOffline
 
@@ -145,14 +155,15 @@ val installEchMobile = tasks.register("installEchMobile") {
     }
 }
 
-val buildEchNative = tasks.register("buildEchNative") {
+val buildEchNative = tasks.register("buildEchNative${(echArch ?: "universal").replaceFirstChar { it.uppercase() }}") {
     group = "build"
-    description = "Build the ECH Android AAR for all supported ABIs with the pinned NDK."
+    description = "Build the $echAbi ECH Android AAR with the pinned NDK."
     echInputs()
     dependsOn(testEchNative, installEchMobile)
     inputs.files(echSources).withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.files(installEchMobile).withPathSensitivity(PathSensitivity.NONE)
     inputs.property("sdkPath", echSdk.map { it.absolutePath })
+    inputs.property("targetAbi", echAbi)
     inputs.files(echNdk.map { it.resolve("source.properties") }).optional().withPathSensitivity(PathSensitivity.NONE)
     outputs.files(echAar, echSourcesJar)
     doLast {
@@ -165,11 +176,16 @@ val buildEchNative = tasks.register("buildEchNative") {
         val environment = echEnvironment() + mapOf("ANDROID_HOME" to echSdk.get().absolutePath, "ANDROID_NDK_HOME" to ndk.absolutePath)
         echAar.parentFile.mkdirs()
         runEchCommand(listOf(echTools.resolve("gopath/bin/gomobile$echExeSuffix").absolutePath,
-            "bind", "-target=android", "-androidapi=$echAndroidApi", "-javapkg=cc.novelia.nativeech",
+            "bind", "-target=" + (echArch?.let { "android/$it" } ?: "android"), "-androidapi=$echAndroidApi", "-javapkg=cc.novelia.nativeech",
             "-ldflags=-s -w", "-o", echAar.absolutePath, "."), environment)
     }
 }
 
 dependencies.add("implementation", files(echAar).builtBy(buildEchNative))
+tasks.register("buildEchNative") {
+    group = "build"
+    description = "Build the ECH AAR for the selected targetAbi."
+    dependsOn(buildEchNative)
+}
 tasks.named("check") { dependsOn(testEchNative) }
 tasks.named<Delete>("clean") { delete(echRoot.resolve("build")) }
