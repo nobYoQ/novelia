@@ -12,7 +12,7 @@
 
 进度报告记录变更分区字节数、主索引及备用副本的内容字节数，并提供旧式整快照编码的字节数/耗时参考。该参考不包含旧版原子写盘成本，不能据此宣称同倍率的耗时提升。TXT 很小，结果也不能代替插图 EPUB、真实整库备份或 UI 帧时间；Debug 仅用于验证场景和定位热点。
 
-`ReadingBenchmark` 测量应用冷启动和书架/外观设置导航的帧时间。`ReadingBaselineProfile.startup` 只收集启动路径，`localNavigation` 单独收集非启动路径，避免把设置页面放进 startup profile。设置入口不在首屏时会先滚动查找。
+`ReadingBenchmark` 测量应用冷启动和书架/外观设置导航的帧时间，通过「我的 → 设置 → 外观与操作」进入外观页。`ReadingBaselineProfile.startup` 只收集启动路径，`localNavigation` 单独收集非启动路径。
 
 [PerformanceScenarioTest](../app/src/androidTest/java/cc/novelia/app/performance/PerformanceScenarioTest.kt) 位于设备测试的 `performance/` 包，是独立的离线数据与排版测量：
 

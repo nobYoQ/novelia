@@ -19,14 +19,8 @@ private fun MacrobenchmarkScope.waitForShelf() {
 
 private fun MacrobenchmarkScope.openAppearance() {
     device.findObject(By.text("我的")).click()
-    var appearance = device.wait(Until.findObject(By.text("阅读与外观")), 1000)
-    repeat(8) {
-        if(appearance == null) {
-            device.swipe(device.displayWidth / 2, device.displayHeight * 3 / 4, device.displayWidth / 2, device.displayHeight / 3, 20)
-            appearance = device.wait(Until.findObject(By.text("阅读与外观")), 750)
-        }
-    }
-    checkNotNull(appearance) { "Reading appearance settings were not reachable" }.click()
+    checkNotNull(device.wait(Until.findObject(By.desc("设置")), 5000)) { "Settings were not reachable" }.click()
+    checkNotNull(device.wait(Until.findObject(By.text("外观与操作")), 5000)) { "Appearance settings were not reachable" }.click()
     assertTrue(device.wait(Until.hasObject(By.text("应用主题")), 5000))
 }
 
@@ -51,7 +45,9 @@ class ReadingBenchmark {
         repeat(4) { device.swipe(width / 2, height * 3 / 4, width / 2, height / 3, 20) }
         openAppearance()
         device.pressBack()
-        device.findObject(By.text("书架")).click()
+        checkNotNull(device.wait(Until.findObject(By.text("阅读与朗读")), 5000))
+        device.pressBack()
+        checkNotNull(device.wait(Until.findObject(By.text("书架")), 5000)).click()
         waitForShelf()
     }
 }
