@@ -2,6 +2,7 @@ package cc.novelia.app.data.webdav
 
 import cc.novelia.app.data.catalog.KeywordEntry
 import cc.novelia.app.data.catalog.KeywordLibrary
+import cc.novelia.app.data.library.withReadingPosition
 import cc.novelia.app.data.model.*
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -10,6 +11,25 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class WebDavProjectionTest {
+    @Test fun singleBookProgressProducesTheSameReplicaAsFullTracking() {
+        val other = BookRef("syosetu", "n2")
+        val old = Position("old", updatedAt = 1)
+        val initial = LibraryState(positions = listOf(web, other, local).associate { it.key to old },
+            readingHistory = mapOf(other.key to ReadingHistoryEntry(other.key, "他书", "old", "旧章", 1)),
+            bookSettings = mapOf(web.key to ReaderSettings(traditional = true)))
+        val domains = setOf(SyncDomain.PROGRESS, SyncDomain.HISTORY)
+        for(tracked in listOf(emptySet(), setOf(SyncDomain.PROGRESS), setOf(SyncDomain.HISTORY), domains)) {
+            val replica = initial.syncReplica.track(emptyMap(), WebDavProjection.library(initial, tracked), tracked)
+            for(migrated in listOf(false, true)) for(paused in listOf(false, true)) for(ref in listOf(web, local)) {
+                val before = initial.copy(syncReplica = replica, historyMigrated = migrated, historyPaused = paused)
+                val after = before.withReadingPosition(ref, Position("next", updatedAt = 2), "新进度")
+                val affected = WebDavProjection.affectedLibraryDomains(before, after)
+                val expected = replica.track(WebDavProjection.library(before, affected), WebDavProjection.library(after, affected), affected)
+                assertEquals(expected, WebDavProjection.trackLibrary(before, after, affected, false, ref.key))
+            }
+        }
+    }
+
     @Test fun localFavoriteCloudCopyPreferenceIsOptionalInOlderDocuments() {
         val original = LibraryState()
         val enabled = original.copy(autoSaveLocalFavoritesToCloud = true)

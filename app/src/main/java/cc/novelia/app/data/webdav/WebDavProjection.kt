@@ -67,11 +67,28 @@ object WebDavProjection {
             before.clipboardLinkHints != after.clipboardLinkHints || before.keywordLimit != after.keywordLimit) add(SyncDomain.SETTINGS)
     }
 
-    fun library(state: LibraryState, domains: Set<SyncDomain> = libraryDomains, includeDevicePreferences: Boolean = false): SyncProjection = domains.filter { it in libraryDomains }.associateWith { domain ->
+    internal fun trackLibrary(before: LibraryState, after: LibraryState, domains: Set<SyncDomain>,
+        includeDevicePreferences: Boolean, readingKey: String?): SyncReplica {
+        // 首次编辑和旧历史迁移仍需登记全部记录。其他域（例如同时更新的收藏）始终按原规则投影。
+        val key = readingKey?.takeIf { before.historyMigrated }
+        fun project(state: LibraryState) = libraryProjection(state, domains, includeDevicePreferences) { domain ->
+            key?.takeIf { domain in before.syncReplica.documents }
+        }
+        return before.syncReplica.track(project(before), project(after), domains)
+    }
+
+    fun library(state: LibraryState, domains: Set<SyncDomain> = libraryDomains, includeDevicePreferences: Boolean = false): SyncProjection =
+        libraryProjection(state, domains, includeDevicePreferences) { null }
+
+    private fun <T : Any> Map<String, T>.readingRecord(key: String?): Map<String, T> =
+        if (key == null) this else this[key]?.let { mapOf(key to it) }.orEmpty()
+
+    private fun libraryProjection(state: LibraryState, domains: Set<SyncDomain>, includeDevicePreferences: Boolean,
+        readingKey: (SyncDomain) -> String?): SyncProjection = domains.filter { it in libraryDomains }.associateWith { domain ->
         when (domain) {
             SyncDomain.SETTINGS -> settings(state, includeDevicePreferences)
             SyncDomain.FAVORITES -> favorites(state)
-            SyncDomain.PROGRESS -> state.positions.filterKeys(::isNetworkKey).mapValues { (key, value) ->
+            SyncDomain.PROGRESS -> state.positions.readingRecord(readingKey(domain)).filterKeys(::isNetworkKey).mapValues { (key, value) ->
                 val settings = state.bookSettings[key] ?: state.reader
                 val position = json.encodeToJsonElement(Position.serializer(), value).jsonObject.filterKeys { it in positionFields }.toMutableMap()
                 position["sourceParagraph"] = (value.sourceParagraph ?: (value.index - 1).coerceAtLeast(0)).let(::JsonPrimitive)
@@ -84,7 +101,7 @@ object WebDavProjection {
                 if (domain == SyncDomain.NOTES) fields["text"] = JsonPrimitive(note.text)
                 note.id to JsonObject(fields)
             }
-            SyncDomain.HISTORY -> state.readingHistory.filter { (key, value) -> isNetworkKey(key) && value.bookKey == key }
+            SyncDomain.HISTORY -> state.readingHistory.readingRecord(readingKey(domain)).filter { (key, value) -> isNetworkKey(key) && value.bookKey == key }
                 .mapValues { (_, value) -> json.encodeToJsonElement(ReadingHistoryEntry.serializer(), value).jsonObject }
             SyncDomain.KEYWORDS -> emptyMap()
         }

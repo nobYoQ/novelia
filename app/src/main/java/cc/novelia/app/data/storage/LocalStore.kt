@@ -124,7 +124,9 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
      * [transform] 应只计算新状态；编码和文件写入由单写入器异步处理。
      * 相同状态不触发写入，恢复保护期间直接忽略修改，界面可通过 [recoveryIssue] 提示用户。
      */
-    @Synchronized fun update(transform: (LibraryState) -> LibraryState) {
+    fun update(transform: (LibraryState) -> LibraryState) = update(null, transform)
+
+    @Synchronized private fun update(readingKey: String?, transform: (LibraryState) -> LibraryState) {
         // 调用方包括界面回调和阅读器销毁流程；恢复保护期间保持状态只读，
         // 避免在这些回调中抛异常，由持续显示的恢复提示说明原因。
         if (mutableRecoveryIssue.value != null) return
@@ -135,8 +137,7 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
         val domains = WebDavProjection.affectedLibraryDomains(before, raw)
         val next = if(domains.isEmpty()) raw.copy(syncReplica = before.syncReplica) else {
             val includeDevices = syncDevicePreferences()
-            raw.copy(syncReplica = before.syncReplica.track(
-                WebDavProjection.library(before, domains, includeDevices), WebDavProjection.library(raw, domains, includeDevices), domains))
+            raw.copy(syncReplica = WebDavProjection.trackLibrary(before, raw, domains, includeDevices, readingKey))
         }
         if (next == mutable.value) return
         persistence.submit(Revision(++revision, next))
@@ -250,7 +251,8 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
         }
     }
     fun rememberSearch(query: String) { if (query.isNotBlank()) update { it.copy(recentSearches = (listOf(query) + it.recentSearches.filterNot { old -> old == query }).take(20)) } }
-    fun savePosition(ref: BookRef, position: Position, bookTitle: String = "") = update { it.withReadingPosition(ref, position, bookTitle) }
+    fun savePosition(ref: BookRef, position: Position, bookTitle: String = "") =
+        update(ref.key) { it.withReadingPosition(ref, position, bookTitle) }
     fun chapterFile(ref: BookRef, chapter: String) = File(cacheDir, hashName("${ref.key}/$chapter") + ".json")
     /** 优先复用已解码章节；缺失或损坏的磁盘缓存按未命中处理，交由上层决定联网或提示。 */
     fun cachedChapter(ref: BookRef, chapter: String): Chapter? = synchronized(chapterLock) {
