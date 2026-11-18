@@ -4,6 +4,8 @@ import androidx.compose.runtime.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.*
@@ -44,11 +46,12 @@ class ReadingStatisticsUiTest {
         }))
         var theme by mutableStateOf("light")
         var fontScale by mutableFloatStateOf(1f)
+        var screenWidth by mutableStateOf(390.dp)
         compose.setContent {
             val density = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale)) {
                 NoveliaTheme(theme) { AppInteractionMode(false, true) {
-                    Box(Modifier.width(390.dp).fillMaxHeight()) {
+                    Box(Modifier.width(screenWidth).fillMaxHeight()) {
                         ReadingStatisticsView(stats, false, null, {}, {}, {})
                     }
                 } }
@@ -61,11 +64,22 @@ class ReadingStatisticsUiTest {
         compose.runOnIdle { theme = "dark" }
         compose.waitForIdle()
         saveTestScreenshot("reading-statistics-dark.png")
-        compose.runOnIdle { fontScale = 2f }
+        compose.runOnIdle {
+            fontScale = 2f
+            screenWidth = 320.dp
+        }
         compose.waitForIdle()
         compose.onNodeWithTag("reading-statistics-list").performScrollToNode(hasTestTag("reading-statistics-week"))
+        compose.onNodeWithText("柱状图").assertIsDisplayed().assertIsSelected()
+        compose.onNodeWithText("按月").assertIsDisplayed()
+        for (label in listOf("柱状图", "折线图", "日历")) {
+            val layouts = mutableListOf<TextLayoutResult>()
+            compose.onNodeWithText(label, useUnmergedTree = true)
+                .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+            assertEquals(label, 1, layouts.single().lineCount)
+        }
         saveTestScreenshot("reading-statistics-large-text.png")
-        compose.runOnIdle { stats = ReadingStatistics(enabled = false); fontScale = 1f }
+        compose.runOnIdle { stats = ReadingStatistics(enabled = false); fontScale = 1f; screenWidth = 390.dp }
         compose.onNodeWithTag("reading-statistics-list").performScrollToNode(hasText("还没有阅读时长"))
         compose.onNodeWithText("还没有阅读时长").assertIsDisplayed()
         saveTestScreenshot("reading-statistics-empty.png")
@@ -80,6 +94,8 @@ class ReadingStatisticsUiTest {
         val list = compose.onNodeWithTag("reading-statistics-list")
         fun choose(label: String) { list.performScrollToNode(hasText(label)); compose.onNodeWithText(label).performClick() }
         choose("按月"); choose("折线图")
+        compose.onNodeWithText("按月").assertIsSelected()
+        compose.onNodeWithText("折线图").assertIsSelected()
         list.performScrollToNode(hasTestTag("reading-trend-line"))
         list.performScrollToNode(hasContentDescription("上个月")); compose.onNodeWithContentDescription("上个月").performClick()
         choose("日历")
@@ -88,7 +104,10 @@ class ReadingStatisticsUiTest {
         compose.onNodeWithContentDescription(lastDay).performScrollTo().performClick()
         list.performScrollToNode(hasText("展开其他 2 本书")); compose.onNodeWithText("作品 1").assertDoesNotExist()
         choose("展开其他 2 本书"); list.performScrollToNode(hasText("作品 1"))
-        choose("收起其他书籍"); choose("饼图"); list.performScrollToNode(hasTestTag("reading-book-pie"))
+        choose("收起其他书籍"); choose("饼图")
+        compose.onNodeWithText("饼图").assertIsSelected()
+        list.performScrollToNode(hasTestTag("reading-book-pie"))
+        saveTestScreenshot("reading-statistics-books.png")
         list.performScrollToNode(hasText("其他书籍"))
     }
 }

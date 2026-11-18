@@ -53,16 +53,25 @@ import kotlinx.coroutines.isActive
                 else -> "已开启 · 仅统计此设备前台阅读"
             }, stats.enabled, onChange = onEnabled)
         }
-        item(key = "week") { ReadingTrendChart(report, today) }
-        item(key = "books") { Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("按书籍统计", Modifier.weight(1f).semantics { heading() }, style = MaterialTheme.typography.titleMedium)
-                Text("${books.size} 本", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+        item(key = "week") { ReadingTrendChart(report, today, scopeKey) }
+        item(key = "books") {
+            FlowRow(
+                Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                itemVerticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.padding(end = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("按书籍统计", Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
+                    Text("${books.size} 本", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (books.isNotEmpty()) {
+                    ReadingChoicePill(listOf("排行榜", "饼图"), if (pie) 1 else 0) { pie = it == 1 }
+                }
             }
-            if(books.isNotEmpty()) ChartChoices(listOf("排行榜", "饼图"), if(pie) 1 else 0) { pie = it == 1 }
-        } }
+        }
         if(books.isEmpty()) item { ProfileEmptyState("还没有阅读时长", "开始阅读后会自动累计；已读进度不会换算成阅读时长。") }
-        else if(pie) item(key = "pie") { ReadingBookPie(report) }
+        else if(pie) item(key = "pie") { key(scopeKey) { ReadingBookPie(report) } }
         else itemsIndexed(books.take(READING_RANK_LIMIT), key = { _, book -> "book-${book.key}" }) { index, book ->
             ReadingBookTimeRow(book.value, index + 1, report.totalMillis)
         }
@@ -120,6 +129,7 @@ import kotlinx.coroutines.isActive
 
 @Composable private fun ReadingBookTimeRow(entry: ReadingTimeEntry, rank: Int, totalMillis: Long) {
     val share = entry.millis.toFloat() / totalMillis.coerceAtLeast(1)
+    val progress = rememberReadingChartProgress()
     ProfileDetailCard {
         Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("$rank", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
@@ -127,7 +137,7 @@ import kotlinx.coroutines.isActive
                 Text(entry.title.ifBlank { "未命名作品" }, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text("${formatReadingTime(entry.millis)} · 占累计 ${entry.millis * 100 / totalMillis}%", style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
-                LinearProgressIndicator(progress = { share }, modifier = Modifier.fillMaxWidth().height(4.dp), drawStopIndicator = {})
+                LinearProgressIndicator(progress = { share * progress() }, modifier = Modifier.fillMaxWidth().height(4.dp), drawStopIndicator = {})
             }
         }
     }

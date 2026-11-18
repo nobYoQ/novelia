@@ -1,11 +1,15 @@
 package cc.novelia.app.ui.shelf
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
@@ -20,6 +24,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
@@ -29,18 +34,84 @@ import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.model.ReadingReport
 import cc.novelia.app.data.model.formatReadingTime
 import cc.novelia.app.ui.account.ProfileDetailCard
-import cc.novelia.app.ui.components.base.*
+import cc.novelia.app.ui.components.base.AppIconButton
+import cc.novelia.app.ui.theme.AppMotion
+import cc.novelia.app.ui.theme.MotionContent
+import cc.novelia.app.ui.theme.appReducedMotion
+import cc.novelia.app.ui.theme.appRoundedCornerShape
 import cc.novelia.app.ui.theme.inkOn
 import java.time.LocalDate
 import java.time.YearMonth
 
-@Composable internal fun ChartChoices(labels: List<String>, selected: Int, onSelect: (Int) -> Unit) {
-    AppChipFlowRow { labels.forEachIndexed { index, label ->
-        AppSelectionChip(index == selected, { onSelect(index) }, { Text(label) })
-    } }
+@Composable internal fun ReadingChoicePill(labels: List<String>, selected: Int, onSelect: (Int) -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    val shape = appRoundedCornerShape(50.dp)
+    Box {
+        Spacer(Modifier.matchParentSize().padding(vertical = 6.dp).background(scheme.surfaceContainerHighest, shape))
+        Row(Modifier.selectableGroup(), verticalAlignment = Alignment.CenterVertically) {
+            labels.forEachIndexed { index, label ->
+                val active = index == selected
+                Box(
+                    Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp).clip(shape)
+                        .selectable(active, role = Role.RadioButton, onClick = { onSelect(index) })
+                        .padding(horizontal = 2.dp, vertical = 8.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        label,
+                        Modifier.background(if (active) scheme.primaryContainer else scheme.surfaceContainerHighest, shape)
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                        color = if (active) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                }
+            }
+        }
+    }
 }
 
-@Composable internal fun ReadingTrendChart(report: ReadingReport, today: LocalDate) {
+@Composable private fun ReadingTrendTabs(selected: Int, onSelect: (Int) -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    Box(Modifier.fillMaxWidth()) {
+        HorizontalDivider(Modifier.align(Alignment.BottomCenter))
+        Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).height(IntrinsicSize.Min).selectableGroup()) {
+            listOf("柱状图", "折线图", "日历").forEachIndexed { index, label ->
+                val active = index == selected
+                Box(
+                    Modifier.weight(label.length.toFloat()).fillMaxHeight()
+                        .selectable(active, role = Role.Tab, onClick = { onSelect(index) }),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        label, Modifier.padding(horizontal = 2.dp, vertical = 10.dp),
+                        color = if (active) scheme.primary else scheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                    if (active) {
+                        HorizontalDivider(
+                            Modifier.align(Alignment.BottomCenter).fillMaxWidth(.6f),
+                            thickness = 2.dp, color = scheme.primary,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable internal fun rememberReadingChartProgress(): () -> Float {
+    val reducedMotion = appReducedMotion()
+    val progress = remember { Animatable(if (reducedMotion) 1f else 0f) }
+    LaunchedEffect(reducedMotion) {
+        if (reducedMotion) progress.snapTo(1f)
+        else progress.animateTo(1f, tween(AppMotion.Panel, easing = FastOutSlowInEasing))
+    }
+    return { if (reducedMotion) 1f else progress.value }
+}
+
+@Composable internal fun ReadingTrendChart(report: ReadingReport, today: LocalDate, scopeKey: String?) {
     var monthly by rememberSaveable { mutableStateOf(false) }
     var chart by rememberSaveable { mutableIntStateOf(0) }
     val thisMonth = YearMonth.from(today)
@@ -55,17 +126,26 @@ import java.time.YearMonth
     fun select(index: Int) { selectedDate = days[index].first.toEpochDay() }
     val (date, millis) = days[selected]
     ProfileDetailCard(Modifier.testTag("reading-statistics-week")) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("阅读趋势", Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
-            ChartChoices(listOf("近七天", "按月"), if(monthly) 1 else 0) { monthly = it == 1 }
-            if(monthly) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                itemVerticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("阅读趋势", Modifier.padding(end = 12.dp).semantics { heading() }, style = MaterialTheme.typography.titleMedium)
+                ReadingChoicePill(listOf("近七天", "按月"), if(monthly) 1 else 0) { monthly = it == 1 }
+            }
+            ReadingTrendTabs(chart) { chart = it }
+            if(monthly) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                 AppIconButton(onClick = { monthStart = month.minusMonths(1).atDay(1).toEpochDay() }, enabled = month > earliest) { Icon(Icons.Outlined.ChevronLeft, "上个月") }
-                Text("${month.year} 年 ${month.monthValue} 月", style = MaterialTheme.typography.titleSmall)
+                Text("${month.year} 年 ${month.monthValue} 月", Modifier.weight(1f, fill = false),
+                    textAlign = TextAlign.Center, style = MaterialTheme.typography.titleSmall)
                 AppIconButton(onClick = { monthStart = month.plusMonths(1).takeIf { it < thisMonth }?.atDay(1)?.toEpochDay() }, enabled = month < thisMonth) { Icon(Icons.Outlined.ChevronRight, "下个月") }
             }
-            ChartChoices(listOf("柱状图", "折线图", "日历"), chart) { chart = it }
-            if(chart == 2) ReadingCalendar(days, selected, ::select)
-            else ReadingTimePlot(days, selected, line = chart == 1, onSelect = ::select)
+            key(chart, monthly, first, last, scopeKey) {
+                if(chart == 2) MotionContent(Unit) { ReadingCalendar(days, selected, ::select) }
+                else ReadingTimePlot(days, selected, line = chart == 1, onSelect = ::select)
+            }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                 AppIconButton(onClick = { select(selected - 1) }, enabled = selected > 0) { Icon(Icons.Outlined.ChevronLeft, "前一天") }
                 Text("${date.monthValue} 月 ${date.dayOfMonth} 日 · ${formatReadingTime(millis)}", Modifier.weight(1f),
@@ -82,6 +162,7 @@ import java.time.YearMonth
     val scheme = MaterialTheme.colorScheme
     val minutes = ((days.maxOf { it.second } + 59_999) / 60_000).coerceAtLeast(1L)
     val peak = minutes * 60_000f
+    val progress = rememberReadingChartProgress()
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text("$minutes 分钟", style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
         Canvas(Modifier.fillMaxWidth().height(120.dp).testTag(if(line) "reading-trend-line" else "reading-trend-bars")
@@ -94,19 +175,25 @@ import java.time.YearMonth
                 val height = radius + (baseline - radius) * level / 2f
                 drawLine(scheme.outlineVariant, Offset(0f, height), Offset(size.width, height), 1.dp.toPx())
             }
-            for(index in days.indices) {
-                val position = point(index)
-                if(line) {
-                    if(index > 0) drawLine(scheme.primary, point(index - 1), position, 2.dp.toPx(), StrokeCap.Round)
-                    drawCircle(scheme.primary, if(index == selected) radius else radius * .6f, position)
-                } else {
+            val fraction = progress()
+            if (line) {
+                clipRect(right = size.width * fraction) {
+                    for (index in days.indices) {
+                        val position = point(index)
+                        if (index > 0) drawLine(scheme.primary, point(index - 1), position, 2.dp.toPx(), StrokeCap.Round)
+                        drawCircle(scheme.primary, if (index == selected) radius else radius * .6f, position)
+                    }
+                    drawCircle(scheme.primary, radius * 1.8f, point(selected), style = Stroke(1.dp.toPx()))
+                }
+            } else if (fraction > 0f) {
+                for (index in days.indices) {
+                    val position = point(index)
                     val width = (slot * .60f).coerceAtMost(32.dp.toPx())
-                    val height = (baseline - position.y).coerceAtLeast(2.dp.toPx())
+                    val height = (baseline - position.y).coerceAtLeast(2.dp.toPx()) * fraction
                     val color = if(index == selected) scheme.primary else if(days[index].second > 0) scheme.secondary else scheme.outlineVariant
                     drawRoundRect(color, Offset(position.x - width / 2, baseline - height), Size(width, height), CornerRadius(2.dp.toPx()))
                 }
             }
-            if(line) drawCircle(scheme.primary, radius * 1.8f, point(selected), style = Stroke(1.dp.toPx()))
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             for(date in listOf(days.first().first, days.last().first).distinct()) Text("${date.monthValue}/${date.dayOfMonth}", style = MaterialTheme.typography.labelSmall)
@@ -150,6 +237,7 @@ import java.time.YearMonth
     val scheme = MaterialTheme.colorScheme
     val colors = listOf(scheme.primary, lerp(scheme.primary, scheme.surface, .38f), scheme.tertiary,
         lerp(scheme.tertiary, scheme.surface, .58f), scheme.onSurface, scheme.outlineVariant)
+    val progress = rememberReadingChartProgress()
     ProfileDetailCard(Modifier.testTag("reading-book-pie")) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Box(Modifier.align(Alignment.CenterHorizontally).size(144.dp), contentAlignment = Alignment.Center) {
@@ -157,11 +245,15 @@ import java.time.YearMonth
                     val stroke = 22.dp.toPx()
                     val inset = Offset(stroke / 2, stroke / 2)
                     val ring = Size(size.width - stroke, size.height - stroke)
-                    var start = -90f
+                    val visibleAngle = 360f * progress()
+                    var start = 0f
                     for((index, slice) in slices.withIndex()) {
+                        if (start >= visibleAngle) break
                         val sweep = (slice.millis.toDouble() / report.totalMillis * 360).toFloat()
-                        drawArc(colors[index], start, sweep, false, inset, ring, style = Stroke(stroke))
-                        if(slices.size > 1) drawArc(scheme.surfaceContainerLow, start, minOf(1.5f, sweep / 8), false, inset, ring, style = Stroke(stroke))
+                        val revealed = minOf(sweep, visibleAngle - start)
+                        drawArc(colors[index], start - 90f, revealed, false, inset, ring, style = Stroke(stroke))
+                        if(slices.size > 1) drawArc(scheme.surfaceContainerLow, start - 90f,
+                            minOf(1.5f, sweep / 8, revealed), false, inset, ring, style = Stroke(stroke))
                         start += sweep
                     }
                 }
