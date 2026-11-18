@@ -120,19 +120,14 @@ internal data class ReaderBottomToolbarState(
     val nextIsVolume: Boolean,
     val bookmarkEnabled: Boolean,
     val bookmarked: Boolean,
-    val progress: Float,
-    val pageReady: Boolean,
-    val pageCount: Int,
-    val pageIndex: Int,
-    val chapterTitle: String,
+    val reading: ReaderBarState,
     val wide: Boolean,
     val cached: Boolean,
-    val visiblePageCount: Int = 1,
 )
 
 @Composable internal fun ReaderBottomToolbar(
     state: ReaderBottomToolbarState, settings: ReaderSettings, menu: Boolean, reducedMotion: Boolean,
-    toolbarBackground: Color, foreground: Color, readingStatusBarHeight: androidx.compose.ui.unit.Dp, statusColumns: Int,
+    toolbarBackground: Color, foreground: Color, readingStatusBarHeight: androidx.compose.ui.unit.Dp, statusColumns: Int, devices: ReaderBarDevices,
     modifier: Modifier, onHeightChanged: (Int) -> Unit,
     onPage: (Int) -> Unit, onSeek: (Float) -> Unit, onSeekFocusChanged: (Boolean) -> Unit,
     onPreviousChapter: () -> Unit, onNextChapter: () -> Unit, onToc: () -> Unit,
@@ -153,8 +148,8 @@ internal data class ReaderBottomToolbarState(
         ReaderOverlayVisibility(menu, Modifier, enter = if(reducedMotion) EnterTransition.None else fadeIn(tween(AppMotion.Quick)) + slideInVertically(tween(AppMotion.Standard)) { it }, exit = if(reducedMotion) ExitTransition.None else fadeOut(tween(AppMotion.Exit)) + slideOutVertically(tween(AppMotion.Release)) { it }) {
             Surface(color = toolbarBackground, contentColor = foreground) {
                 Column(if(persistentControls) Modifier else Modifier.navigationBarsPadding()) {
-                    if(settings.showProgressBar) ReaderSeekBar(state.progress,
-                        pageCount = if(settings.staticPagination && state.pageReady) state.pageCount else null,
+                    if(settings.showProgressBar) ReaderSeekBar(state.reading.progress,
+                        pageCount = if(settings.staticPagination && state.reading.pageReady) state.reading.pageCount else null,
                         enabled = state.seekEnabled,
                         foreground = foreground, onSeek = onSeek, modifier = Modifier.padding(top = 8.dp).onFocusChanged { onSeekFocusChanged(it.hasFocus) })
                     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -171,10 +166,10 @@ internal data class ReaderBottomToolbarState(
                 }
             }
         }
-        if(settings.visibleReadingStatusItems.isNotEmpty()) ReaderReadingStatusBar(state, settings, statusColumns, foreground,
+        if(settings.visibleReadingStatusItems.isNotEmpty()) ReaderReadingStatusBar(state.reading, settings, statusColumns, foreground,
             Modifier.fillMaxWidth().background(toolbarBackground)
                 .windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout).only(WindowInsetsSides.Horizontal))
-                .height(readingStatusBarHeight), onChapterTitle = onChapterTitle)
+                .height(readingStatusBarHeight), devices = devices, onChapterTitle = onChapterTitle)
         if(persistentControls) Spacer(Modifier.fillMaxWidth().background(toolbarBackground).navigationBarsPadding())
     }
 }

@@ -101,19 +101,25 @@ class WebDavProjectionTest {
         assertEquals(JsonPrimitive("row"), group["paginationMode"])
     }
     @Test fun statusItemOrderSyncsAndOldRecordsKeepCurrentChoices() {
-        val custom = ReaderSettings(readingStatusItems = listOf("battery", "time"))
+        val custom = ReaderSettings(readingStatusItems = listOf("battery", "book"), showTopReadingStatusBar = true, topReadingStatusItems = listOf("chapter", "time"))
         val docs = documents(LibraryState(reader = custom, bookSettings = mapOf(web.key to custom)))
         val settings = docs.getValue(SyncDomain.SETTINGS)
         WebDavProjection.validateRecords(settings)
-        val local = LibraryState(reader = ReaderSettings(readingStatusItems = listOf("chapter")))
+        val local = LibraryState(reader = ReaderSettings(readingStatusItems = listOf("chapter"), topReadingStatusItems = listOf("battery")))
         val restored = WebDavProjection.applyLibrary(local, docs, setOf(SyncDomain.SETTINGS))
         assertEquals(custom.readingStatusItems, restored.reader.readingStatusItems)
         assertEquals(custom.readingStatusItems, restored.bookSettings.getValue(web.key).readingStatusItems)
-        val legacy = settings.copy(records = settings.records.mapValues { (_, record) -> record.copy(fields = record.fields - "readingStatusItems") })
+        assertTrue(restored.reader.showTopReadingStatusBar)
+        assertEquals(custom.topReadingStatusItems, restored.bookSettings.getValue(web.key).topReadingStatusItems)
+        val legacy = settings.copy(records = settings.records.mapValues { (_, record) -> record.copy(fields = record.fields - setOf("readingStatusItems", "showTopReadingStatusBar", "topReadingStatusItems")) })
         WebDavProjection.validateRecords(legacy)
-        assertEquals(local.reader.readingStatusItems, WebDavProjection.applyLibrary(local, mapOf(SyncDomain.SETTINGS to legacy), setOf(SyncDomain.SETTINGS)).reader.readingStatusItems)
+        val retained = WebDavProjection.applyLibrary(local, mapOf(SyncDomain.SETTINGS to legacy), setOf(SyncDomain.SETTINGS)).reader
+        assertEquals(local.reader.readingStatusItems, retained.readingStatusItems)
+        assertEquals(local.reader.topReadingStatusItems, retained.topReadingStatusItems)
+        assertFalse(retained.showTopReadingStatusBar)
         listOf("[\"time\",\"time\"]", "[\"unknown\"]", "[1]").forEach { invalid ->
             assertThrows(IllegalArgumentException::class.java) { WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "readingStatusItems", Json.parseToJsonElement(invalid)) }
+            assertThrows(IllegalArgumentException::class.java) { WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "topReadingStatusItems", Json.parseToJsonElement(invalid)) }
         }
     }
     @Test fun legacyDevicePreferencesCanOmitTapZonesButNotExistingFields() {

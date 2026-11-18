@@ -59,6 +59,8 @@ import kotlinx.serialization.Serializable
     val textReplacements: Map<String, String>? = null,
     val textReplacementsEnabled: Boolean? = null,
     val readingStatusItems: List<String>? = null,
+    val showTopReadingStatusBar: Boolean? = null,
+    val topReadingStatusItems: List<String>? = null,
     val showEpubRuby: Boolean? = null,
     val epubFootnotePopup: Boolean? = null,
     val showEpubStyles: Boolean? = null,
@@ -119,6 +121,8 @@ import kotlinx.serialization.Serializable
     val autoReadSpeed: Float = 20f, val autoReadIntervalSeconds: Int = 15,
     val textReplacements: Map<String, String> = emptyMap(), val textReplacementsEnabled: Boolean = true,
     val readingStatusItems: List<String> = ReaderStatusItems.defaults,
+    val showTopReadingStatusBar: Boolean = false,
+    val topReadingStatusItems: List<String> = ReaderStatusItems.topDefaults,
     // 只影响附加显示；导入元数据、底文与阅读锚点始终保留。
     val showEpubRuby: Boolean = true,
     val epubFootnotePopup: Boolean = true,
@@ -168,9 +172,11 @@ import kotlinx.serialization.Serializable
     val resolvedAutoReadIntervalSeconds get() = autoReadIntervalSeconds.coerceIn(5, 120)
     val validAutoRead get() = autoReadSpeed in 5f..80f && autoReadIntervalSeconds in 5..120
     val validTextReplacements get() = validReaderTextReplacements(textReplacements)
-    val validReadingStatusItems get() = ReaderStatusItems.valid(readingStatusItems)
-    val resolvedReadingStatusItems get() = readingStatusItems.takeIf { validReadingStatusItems } ?: ReaderStatusItems.defaults
+    val validReadingStatusItems get() = ReaderStatusItems.valid(readingStatusItems) && ReaderStatusItems.valid(topReadingStatusItems)
+    val resolvedReadingStatusItems get() = readingStatusItems.takeIf(ReaderStatusItems::valid) ?: ReaderStatusItems.defaults
+    val resolvedTopReadingStatusItems get() = topReadingStatusItems.takeIf(ReaderStatusItems::valid) ?: ReaderStatusItems.topDefaults
     val visibleReadingStatusItems get() = if(showReadingStatusBar) resolvedReadingStatusItems.filter { it != "pages" || staticPagination } else emptyList()
+    val visibleTopReadingStatusItems get() = if(showTopReadingStatusBar) resolvedTopReadingStatusItems.filter { it != "pages" || staticPagination } else emptyList()
     val activeTextReplacements get() = textReplacements.takeIf { textReplacementsEnabled && validTextReplacements }.orEmpty()
     val resolvedToolbarTransparency get() = if(toolbarTransparency.isFinite()) toolbarTransparency.coerceIn(0f, 1f) else if(eInkMode) 0f else .25f
     val validToolbarTransparency get() = toolbarTransparency in 0f..1f &&
@@ -246,6 +252,8 @@ import kotlinx.serialization.Serializable
         textReplacements = textReplacements,
         textReplacementsEnabled = textReplacementsEnabled,
         readingStatusItems = readingStatusItems,
+        showTopReadingStatusBar = showTopReadingStatusBar,
+        topReadingStatusItems = topReadingStatusItems,
         showEpubRuby = showEpubRuby,
         epubFootnotePopup = epubFootnotePopup,
         showEpubStyles = showEpubStyles,
@@ -307,6 +315,8 @@ import kotlinx.serialization.Serializable
         textReplacements = state.textReplacements ?: textReplacements,
         textReplacementsEnabled = state.textReplacementsEnabled ?: textReplacementsEnabled,
         readingStatusItems = state.readingStatusItems ?: readingStatusItems,
+        showTopReadingStatusBar = state.showTopReadingStatusBar ?: showTopReadingStatusBar,
+        topReadingStatusItems = state.topReadingStatusItems ?: topReadingStatusItems,
         showEpubRuby = state.showEpubRuby ?: showEpubRuby,
         epubFootnotePopup = state.epubFootnotePopup ?: epubFootnotePopup,
         showEpubStyles = state.showEpubStyles ?: showEpubStyles,

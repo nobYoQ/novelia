@@ -24,10 +24,10 @@ import org.junit.Test
 
 class ReaderStatusBarUiTest {
     @get:Rule val compose = createComposeRule()
-    @Test fun footerItemsCanBeSelectedReorderedAndReset() {
+    @Test fun electronicPaperUsesButtonsToSelectReorderAndReset() {
         var items by mutableStateOf(ReaderStatusItems.defaults)
-        compose.setContent { NoveliaTheme("light") { AppInteractionMode(false, true) {
-            Column(Modifier.verticalScroll(rememberScrollState())) { ReaderStatusBarPreferences(items, ReaderStatusItems.defaults) { items = it } }
+        compose.setContent { NoveliaTheme("light") { AppInteractionMode(true, true) {
+            Column(Modifier.verticalScroll(rememberScrollState())) { ReaderStatusBarPreferences(ReaderSettings(readingStatusItems = items), false, null) { items = it } }
         } } }
         compose.onNodeWithTag("reader-status-option-battery").performScrollTo().performClick()
         repeat(4) { compose.onNodeWithContentDescription("电量 前移").performScrollTo().performClick() }
@@ -37,9 +37,30 @@ class ReaderStatusBarUiTest {
         compose.onNodeWithText("恢复默认底栏内容").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(ReaderStatusItems.defaults, items) }
     }
+
+    @Test fun draggingTopItemsUpdatesPreviewWithoutChangingTheFooter() {
+        var settings by mutableStateOf(ReaderSettings(showTopReadingStatusBar = true, topReadingStatusItems = listOf("book", "chapter"), readingStatusItems = listOf("battery")))
+        compose.setContent { NoveliaTheme("light") { AppInteractionMode(false, true) {
+            Column(Modifier.verticalScroll(rememberScrollState())) { ReaderStatusBarPreferences(settings, true, null) { settings = settings.copy(topReadingStatusItems = it) } }
+        } } }
+        compose.onNodeWithTag("preview-top-status-book-title").assertTextEquals("山海之间")
+        compose.onNodeWithTag("preview-bottom-status-battery").assertContentDescriptionEquals("正在充电，电量 86%")
+        compose.onNodeWithContentDescription("章节名 前移").assertDoesNotExist()
+        val height = compose.onNodeWithTag("reader-top-status-option-chapter").fetchSemanticsNode().boundsInRoot.height
+        compose.onNodeWithTag("reader-top-status-drag-chapter", useUnmergedTree = true).performScrollTo().performTouchInput {
+            swipe(center, center.copy(y = center.y - height * 1.2f))
+        }
+        compose.runOnIdle {
+            assertEquals(listOf("chapter", "book"), settings.topReadingStatusItems)
+            assertEquals(listOf("battery"), settings.readingStatusItems)
+        }
+        compose.onNodeWithTag("reader-top-status-option-book").performClick()
+        compose.onNodeWithTag("preview-top-status-book-title").assertDoesNotExist()
+        compose.onNodeWithTag("preview-bottom-status-battery").assertExists()
+    }
     @Test fun largeTextNarrowFooterKeepsAllItemsWithinItsBoundsAndHidesDisabledItems() {
-        var settings by mutableStateOf(ReaderSettings(paginationMode = "auto", readingStatusItems = ReaderStatusItems.labels.keys.toList()))
-        val state = ReaderBottomToolbarState(false, true, true, false, true, false, true, false, .5f, true, 20, 9, "长章节标题".repeat(20), false, true)
+        var settings by mutableStateOf(ReaderSettings(paginationMode = "auto", readingStatusItems = listOf("chapter", "book", "time", "battery", "pages", "progress")))
+        val state = ReaderBarState("长书名".repeat(30), "长章节标题".repeat(20), .5f, true, 20, 9)
         compose.setContent { NoveliaTheme("light") {
             val density = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(density.density, 2f)) {
@@ -50,6 +71,8 @@ class ReaderStatusBarUiTest {
         val bar = compose.onNodeWithTag("reader-reading-status-bar").fetchSemanticsNode().boundsInRoot
         val cells = tags.map { tag -> compose.onNodeWithTag(tag).assertIsDisplayed().fetchSemanticsNode().boundsInRoot }
         cells.forEach { assertTrue(it.left >= bar.left && it.right <= bar.right && it.top >= bar.top && it.bottom <= bar.bottom) }
+        val book = compose.onNodeWithTag("reader-status-book-title").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        assertTrue(cells.first().bottom <= book.top && book.bottom <= cells[1].top)
         assertTrue(cells.first().bottom <= cells[1].top)
         cells.drop(1).chunked(2).forEach { row ->
             assertEquals(row[0].top, row[1].top, 1f)
@@ -72,8 +95,7 @@ class ReaderStatusBarUiTest {
         val shortItems = listOf("time", "battery", "pages", "progress")
         var width by mutableStateOf(320.dp)
         var settings by mutableStateOf(ReaderSettings(paginationMode = "auto", readingStatusItems = listOf("chapter") + shortItems))
-        var state by mutableStateOf(ReaderBottomToolbarState(false, true, true, false, true, false, true, false,
-            1f, true, 9999, 9998, "长章节标题".repeat(20), false, true))
+        var state by mutableStateOf(ReaderBarState("书名", "长章节标题".repeat(20), 1f, true, 9999, 9998))
         compose.setContent { NoveliaTheme("light") {
             CompositionLocalProvider(LocalDensity provides Density(1f)) {
                 ReaderReadingStatusBar(state, settings, ReaderStatusItems.columns(width.value, 1f), Color.Black, Modifier.width(width))
@@ -110,11 +132,11 @@ class ReaderStatusBarUiTest {
 
     @Test fun crowdedFooterUsesAFullTitleRowAndOpensTheCompleteTitle() {
         val title = "第十二章　在漫长旅途尽头再次相逢".repeat(6)
-        val state = ReaderBottomToolbarState(false, true, true, false, true, false, true, false, .5f, true, 20, 9, title, false, true)
+        val state = ReaderBarState("书名", title, .5f, true, 20, 9)
         var showTitle by mutableStateOf(false)
         var tocOpened = false
         compose.setContent { NoveliaTheme("light") {
-            ReaderReadingStatusBar(state, ReaderSettings(paginationMode = "auto"), ReaderStatusItems.columns(360f, 1f),
+            ReaderReadingStatusBar(state, ReaderSettings(paginationMode = "auto", readingStatusItems = listOf("chapter", "time", "pages", "progress")), ReaderStatusItems.columns(360f, 1f),
                 Color.Black, Modifier.width(360.dp), onChapterTitle = { showTitle = true })
             if(showTitle) ReaderChapterTitleDialog(title, { showTitle = false }, { tocOpened = true; showTitle = false })
         } }

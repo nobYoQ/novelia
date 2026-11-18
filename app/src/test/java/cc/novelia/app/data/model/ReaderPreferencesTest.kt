@@ -26,7 +26,8 @@ class ReaderPreferencesTest {
             customFont = ReaderCustomFont("a".repeat(64), "测试字体"), horizontalMargin = 32f, verticalMargin = 24f,
             showWideToc = false, orientation = "portrait", autoReadSpeed = 30f, autoReadIntervalSeconds = 25,
             textReplacements = mapOf("原文" to "替换"), textReplacementsEnabled = false,
-            readingStatusItems = listOf("time"), showEpubRuby = false, epubFootnotePopup = false, showEpubStyles = false)
+            readingStatusItems = listOf("time"), showTopReadingStatusBar = true, topReadingStatusItems = listOf("book", "pages"),
+            showEpubRuby = false, epubFootnotePopup = false, showEpubStyles = false)
         fun ReaderSettings.active() = copy(beforeEInk = null, eInkPreferences = null)
         val saved = LibraryState(reader = ink, bookSettings = mapOf("local/book" to normal.withEInkMode(true).copy(fontSize = 30f)))
         val restored = appJson.decodeFromString<LibraryState>(appJson.encodeToString(saved))

@@ -130,6 +130,27 @@ class ReaderToolbarOverlayTest {
 
     @Test fun pagedStatusBarCanBeHiddenPerBookAndRestored() = verifyStatusBarPreference("auto")
 
+    @Test fun topBookBarAndBottomProgressStayVisibleWithoutRepaginatingForTheMenu() = verifyTopBar("auto")
+
+    @Test fun scrollingBodyAlsoReservesTopBarSpace() = verifyTopBar("scroll")
+
+    @Test fun rowPagingAlsoReservesTopBarSpace() = verifyTopBar("row")
+
+    private fun verifyTopBar(mode: String) = withReader(
+        ReaderSettings(paginationMode = mode, showTopReadingStatusBar = true, topReadingStatusItems = listOf("book"), readingStatusItems = listOf("progress"))
+    ) { _, _ ->
+        compose.onNodeWithTag("reader-top-status-book-title").assertIsDisplayed().assertTextEquals("工具栏覆盖测试")
+        val tag = if(mode == "scroll") "reader-scroll" else "reader-page"
+        val body = snapshot(tag)
+        val header = compose.onNodeWithTag("reader-top-reading-status-bar").fetchSemanticsNode().boundsInRoot
+        assertTrue(body.all { it.second.top >= header.bottom - 1f })
+        compose.onNodeWithTag(tag).performTouchInput { click(center) }
+        assertToolbarHidden()
+        compose.onNodeWithTag("reader-top-status-book-title").assertIsDisplayed()
+        compose.onNodeWithTag("reader-chapter-progress").assertIsDisplayed()
+        assertEquals(body, snapshot(tag))
+    }
+
     private fun verifyStatusBarPreference(mode: String) = withReader(
         ReaderSettings(paginationMode = mode, showPageButtons = false)
     ) { app, ref ->

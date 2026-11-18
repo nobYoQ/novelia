@@ -157,7 +157,7 @@ internal object LibraryBackupArchive {
             require(settings.validSpeechTimer) { "备份朗读时长无效" }
             require(settings.validIndentSize) { "备份缩进格数无效" }
             require(settings.validTextReplacements) { "备份文字替换规则无效" }
-            require(settings.validReadingStatusItems) { "备份阅读底栏配置无效" }
+            require(settings.validReadingStatusItems) { "备份阅读信息栏配置无效" }
             require(settings.validToolbarTransparency) { "备份工具栏透明度无效" }
             require(settings.fontSize in 10f..ReaderSettings.MAX_FONT_SIZE && settings.lineHeight in ReaderSettings.MIN_LINE_HEIGHT..4f && settings.width in 200f..2000f &&
                 settings.engines.size == 3 && settings.engines.toSet() == setOf("sakura", "gpt", "youdao") && settings.speechRate in .1f..5f &&

@@ -96,8 +96,7 @@ class ReaderDualPageUiTest {
 
     @Test fun footerShowsBothPagesAndReachesOneHundredPercentOnTheLastSpread() {
         val settings = ReaderSettings(paginationMode = "auto", horizontalDualPage = true, readingStatusItems = listOf("pages", "progress"))
-        val state = ReaderBottomToolbarState(false, false, true, false, false, false, false, false,
-            1f, true, 8, 6, "章节", false, true, visiblePageCount = 2)
+        val state = ReaderBarState("书名", "章节", 1f, true, 8, 6, visiblePageCount = 2)
         compose.setContent { NoveliaTheme("light") {
             ReaderReadingStatusBar(state, settings, 2, Color.Black, Modifier.width(360.dp))
         } }

@@ -83,7 +83,7 @@ import kotlin.math.roundToInt
     val defaultTypography = defaults?.typographyDp
     var tab by state.tab
     var previewZones by remember { mutableStateOf(false) }
-    var statusBarExpanded by rememberSaveable { mutableStateOf(false) }
+    var expandedBar by rememberSaveable { mutableStateOf("") }
     var nightEditorOpen by rememberSaveable { mutableStateOf(false) }
     var nightEditorTab by rememberSaveable { mutableIntStateOf(0) }
     fun editNight(tab: Int = 0) { nightEditorTab = tab; nightEditorOpen = true }
@@ -211,10 +211,20 @@ import kotlin.math.roundToInt
                                 defaultValue = defaults?.showWideToc) { onChange(value.copy(showWideToc = it)) }
                             TogglePreference("屏幕常亮", "仅在阅读器中生效", value.keepScreenOn, defaultValue = defaults?.keepScreenOn) { onChange(value.copy(keepScreenOn = it)) }
                         }
-                        ReaderPreferenceSection("工具栏", "底栏信息、进度与透明度", Icons.Outlined.Tune) {
-                            TogglePreference("底部阅读信息", "选择显示内容并调整顺序，关闭后保留配置", value.showReadingStatusBar, defaultValue = defaults?.showReadingStatusBar) { onChange(value.copy(showReadingStatusBar = it)) }
-                            if(value.showReadingStatusBar) ReaderPreferenceGroup("底栏内容与顺序", value.resolvedReadingStatusItems.joinToString(" · ") { cc.novelia.app.data.model.ReaderStatusItems.labels.getValue(it) }.ifEmpty { "未选择内容" }, statusBarExpanded, { statusBarExpanded = !statusBarExpanded }) {
-                                ReaderStatusBarPreferences(value.resolvedReadingStatusItems, defaults?.resolvedReadingStatusItems ?: cc.novelia.app.data.model.ReaderStatusItems.defaults) { onChange(value.copy(readingStatusItems = it)) }
+                        ReaderPreferenceSection("工具栏", "顶底栏信息、进度与透明度", Icons.Outlined.Tune) {
+                            for(top in listOf(true, false)) {
+                                val edge = if(top) "顶" else "底"
+                                val enabled = if(top) value.showTopReadingStatusBar else value.showReadingStatusBar
+                                TogglePreference("${edge}部阅读信息", "", enabled, defaultValue = defaults?.let { if(top) it.showTopReadingStatusBar else it.showReadingStatusBar }) {
+                                    onChange(if(top) value.copy(showTopReadingStatusBar = it) else value.copy(showReadingStatusBar = it))
+                                }
+                                if(enabled) {
+                                    val items = if(top) value.resolvedTopReadingStatusItems else value.resolvedReadingStatusItems
+                                    ReaderPreferenceGroup("${edge}栏内容与顺序", items.joinToString(" · ") { cc.novelia.app.data.model.ReaderStatusItems.labels.getValue(it) }.ifEmpty { "无" },
+                                        expandedBar == edge, { expandedBar = if(expandedBar == edge) "" else edge }) {
+                                        ReaderStatusBarPreferences(value, top, defaults) { onChange(if(top) value.copy(topReadingStatusItems = it) else value.copy(readingStatusItems = it)) }
+                                    }
+                                }
                             }
                             TogglePreference("阅读时隐藏状态栏", "隐藏顶部时间、电量和 Wi-Fi 等图标；从顶部下滑可临时显示，退出阅读后恢复", value.hideStatusBar, defaultValue = defaults?.hideStatusBar) { onChange(value.copy(hideStatusBar = it)) }
                             TogglePreference("阅读进度条", "展开工具栏时显示，可快速跳转本章位置", value.showProgressBar, defaultValue = defaults?.showProgressBar) { onChange(value.copy(showProgressBar = it)) }

@@ -187,7 +187,7 @@ internal object WebDavValidation {
         document.records.forEach { (key, record) ->
             if(WebDavMerge.winner(record.existence, existence = true)?.deleted != false) return@forEach
             val required = when (document.domain) {
-                SyncDomain.SETTINGS -> if (key == GLOBAL) portableGlobalFields - optionalGlobalFields else if (key.startsWith(BLOCKED)) setOf("kind", "value") else portableReaderFields - setOf("customColors", "showReadingStatusBar", "horizontalMargin", "verticalMargin", "autoReadSpeed", "autoReadIntervalSeconds", "textReplacements", "textReplacementsEnabled", "readingStatusItems", "showEpubRuby", "epubFootnotePopup", "showEpubStyles", "indentSize", "rowShowPartialLines", "letterSpacing", "nightPreset", "typographyDp", "pullToNextChapter")
+                SyncDomain.SETTINGS -> if (key == GLOBAL) portableGlobalFields - optionalGlobalFields else if (key.startsWith(BLOCKED)) setOf("kind", "value") else portableReaderFields - WebDavSchema.optionalReaderFields
                 SyncDomain.FAVORITES -> if (key == ORDER) setOf("ids") else if (key.startsWith(FOLDER)) setOf("name") else setOf("book", "folderId", "pinned", "status", "addedAt")
                 SyncDomain.KEYWORDS -> if (key == ORDER) orderFields else if (key.startsWith(CATEGORY)) categoryFields else keywordEntryFields
                 SyncDomain.PROGRESS -> setOf("position")
@@ -198,7 +198,7 @@ internal object WebDavValidation {
             // 老版同步快照可能缺少新增偏好，保留本机选择；字段存在时仍完整校验。
             val optional = when {
                 document.domain == SyncDomain.SETTINGS && key == GLOBAL -> optionalGlobalFields
-                document.domain == SyncDomain.SETTINGS && (key == READER || key.startsWith(BOOK_SETTING)) -> setOf("devicePreferences", "customColors", "showReadingStatusBar", "horizontalMargin", "verticalMargin", "autoReadSpeed", "autoReadIntervalSeconds", "textReplacements", "textReplacementsEnabled", "readingStatusItems", "showEpubRuby", "epubFootnotePopup", "showEpubStyles", "indentSize", "rowShowPartialLines", "letterSpacing", "nightPreset", "typographyDp", "pullToNextChapter")
+                document.domain == SyncDomain.SETTINGS && (key == READER || key.startsWith(BOOK_SETTING)) -> WebDavSchema.optionalReaderFields + "devicePreferences"
                 document.domain == SyncDomain.NOTES || document.domain == SyncDomain.BOOKMARKS -> setOf("selection")
                 else -> emptySet()
             }
@@ -243,7 +243,7 @@ internal object WebDavValidation {
             "speechMinutes" -> nonnegativeInt(value, ReaderSettings.MAX_SPEECH_MINUTES)
             "indentSize" -> nonnegativeInt(value, ReaderSettings.INDENT_SIZE_RANGE.last)
             "speechLanguage" -> enumText(value, setOf("auto", "zh", "jp"))
-            "readingStatusItems" -> require(cc.novelia.app.data.model.ReaderStatusItems.valid(arrayStrings(value))) { "阅读底栏配置无效" }
+            "readingStatusItems", "topReadingStatusItems" -> require(cc.novelia.app.data.model.ReaderStatusItems.valid(arrayStrings(value))) { "阅读信息栏配置无效" }
             "textReplacements" -> {
                 require(value is JsonObject && value.values.all { it is JsonPrimitive && it.isString }) { "文字替换规则格式无效" }
                 require(cc.novelia.app.data.model.validReaderTextReplacements(value.mapValues { it.value.jsonPrimitive.content })) { "文字替换规则超出范围" }
