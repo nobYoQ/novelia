@@ -57,7 +57,7 @@ import kotlin.math.roundToInt
 
 private data class RowMeasureInput(val paragraphs: List<ReadingParagraph>, val title: String,
     val typography: List<Any>, val width: Int, val height: Int, val density: Float, val fontScale: Float)
-private data class RowMeasurement(val input: RowMeasureInput, val chapter: MeasuredEInkChapter)
+private class RowMeasurement(val input: RowMeasureInput, val chapter: MeasuredEInkChapter, val geometry: RowPaginationLayout)
 
 /**
  * 第三种阅读模式：纵向连续移动，落定到完整行；横向从当前行翻一屏。
@@ -125,12 +125,13 @@ private data class RowMeasurement(val input: RowMeasureInput, val chapter: Measu
             if(!font.loading && width != Constraints.Infinity && height != Constraints.Infinity) {
                 val next = withContext(Dispatchers.Default) {
                     val coroutine = currentCoroutineContext()
-                    measureEInkChapter(paragraphs, settings, width, height, density, font.typeface, chapterTitle) {
-                        coroutine.ensureActive()
-                    }
+                    val checkCancelled = { coroutine.ensureActive() }
+                    val measuredLines = measureChapterLines(paragraphs, settings, width, height, density, font.typeface, chapterTitle, checkCancelled)
+                    val geometry = RowPaginationLayout(measuredLines.lines, height, gap, checkCancelled)
+                    RowMeasurement(input, MeasuredEInkChapter(paragraphs, measuredLines.layouts, geometry.pages), geometry)
                 }
-                state.install(next.pages, next.paragraphs, height, gap)
-                value = RowMeasurement(input, next)
+                state.install(next.geometry, paragraphs)
+                value = next
             }
         }
         val chapter = measured?.takeIf { it.input == input && state.isMeasured(it.chapter.pages) }?.chapter

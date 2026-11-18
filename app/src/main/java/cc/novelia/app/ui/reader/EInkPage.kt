@@ -150,6 +150,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 }
 
 internal data class MeasuredEInkChapter(val paragraphs: List<ReadingParagraph>, val layouts: Map<Int, StaticLayout>, val pages: List<StaticPage>)
+internal class MeasuredChapterLines(val layouts: Map<Int, StaticLayout>, val lines: List<PageLine>)
 private data class EInkMeasureInput(val paragraphs: List<ReadingParagraph>, val title: String, val typography: List<Any>, val width: Int, val height: Int, val density: Float, val fontScale: Float, val columns: Int)
 private data class EInkMeasurement(val input: EInkMeasureInput, val chapter: MeasuredEInkChapter)
 
@@ -166,6 +167,14 @@ private class SecondaryOpacity(private val alpha: Float) : CharacterStyle(), Upd
  */
 internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: ReaderSettings, width: Int, height: Int, density: Density,
     readerTypeface: Typeface = Typeface.SANS_SERIF, title: String = "", checkCancelled: () -> Unit = {}): MeasuredEInkChapter {
+    val measured = measureChapterLines(paragraphs, settings, width, height, density, readerTypeface, title, checkCancelled)
+    val paired = paragraphs.indices.filterTo(mutableSetOf()) { paragraphs[it].parts.size > 1 }
+    val gap = with(density) { settings.resolvedParagraphSpacing.dp.roundToPx() }
+    return MeasuredEInkChapter(paragraphs, measured.layouts, paginateLines(measured.lines, height, gap, paired, checkCancelled))
+}
+
+internal fun measureChapterLines(paragraphs: List<ReadingParagraph>, settings: ReaderSettings, width: Int, height: Int,
+    density: Density, readerTypeface: Typeface, title: String, checkCancelled: () -> Unit): MeasuredChapterLines {
     val layouts = mutableMapOf<Int, StaticLayout>()
     val typography = settings.readerTypography(density)
     val lineSpacingPx = with(density) { typography.lineSpacing.dp.toPx() }
@@ -229,9 +238,7 @@ internal fun measureEInkChapter(paragraphs: List<ReadingParagraph>, settings: Re
             }
         }
     }
-    val pairedParagraphs = paragraphs.indices.filterTo(mutableSetOf()) { paragraphs[it].parts.size > 1 }
-    return MeasuredEInkChapter(paragraphs, layouts,
-        paginateLines(lines, height, with(density) { settings.resolvedParagraphSpacing.dp.roundToPx() }, pairedParagraphs, checkCancelled))
+    return MeasuredChapterLines(layouts, lines)
 }
 
 /**

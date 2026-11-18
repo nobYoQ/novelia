@@ -1,7 +1,7 @@
 package cc.novelia.app.reader
 
 /** 行带的纯几何模型。页码仅用于进度展示，阅读和翻页始终使用实际行起点。 */
-internal class RowPaginationLayout(val lines: List<PageLine>, val height: Int, val gap: Int) {
+internal class RowPaginationLayout(val lines: List<PageLine>, val height: Int, val gap: Int, checkCancelled: () -> Unit = {}) {
     init { require(height > 0 && gap >= 0) }
     private val tops = FloatArray(lines.size)
     val totalHeight: Float
@@ -12,6 +12,7 @@ internal class RowPaginationLayout(val lines: List<PageLine>, val height: Int, v
     init {
         var y = 0f
         lines.forEachIndexed { i, line ->
+            if(i % 256 == 0) checkCancelled()
             require(line.height > 0)
             if(i > 0 && line.paragraph != lines[i - 1].paragraph) y += gap
             tops[i] = y
@@ -19,10 +20,17 @@ internal class RowPaginationLayout(val lines: List<PageLine>, val height: Int, v
         }
         totalHeight = y
         val starts = mutableListOf<Int>()
+        val measuredPages = mutableListOf<StaticPage>()
         var row = 0
-        while(row < lines.size) { starts += row; row = screenEnd(row) }
+        while(row < lines.size) {
+            checkCancelled()
+            val end = screenEnd(row)
+            starts += row
+            measuredPages += StaticPage(lines.subList(row, end))
+            row = end
+        }
         pageStarts = starts
-        pages = starts.map { StaticPage(lines.subList(it, screenEnd(it))) }.ifEmpty { listOf(StaticPage(emptyList())) }
+        pages = measuredPages.ifEmpty { listOf(StaticPage(emptyList())) }
         maxScrollTop = maxOf((totalHeight - height).coerceAtLeast(0f), top(starts.lastOrNull() ?: 0))
     }
 
@@ -76,9 +84,18 @@ internal class RowPaginationLayout(val lines: List<PageLine>, val height: Int, v
 
     fun rowFor(paragraph: Int, offset: Int): Int {
         if(lines.isEmpty()) return 0
-        val exact = lines.indexOfFirst { it.paragraph == paragraph && (it.image || offset >= it.start && offset < it.end) }
+        val exact = lines.binarySearch {
+            when {
+                it.paragraph != paragraph -> it.paragraph.compareTo(paragraph)
+                it.image -> 0
+                offset >= it.end -> -1
+                offset < it.start -> 1
+                else -> 0
+            }
+        }
         if(exact >= 0) return exact
-        return lines.indexOfLast { it.paragraph <= paragraph }.coerceAtLeast(0)
+        val after = lines.binarySearch { if(it.paragraph <= paragraph) -1 else 1 }
+        return (-after - 2).coerceAtLeast(0)
     }
 
     fun nearestRow(top: Float): Int {

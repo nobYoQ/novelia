@@ -22,7 +22,6 @@ import cc.novelia.app.reader.*
         private set
     private var requested by mutableStateOf(ReadingRestoreAnchor((initial?.index ?: 0) - 1, initial?.sourceParagraph, initial?.textOffset ?: 0))
     private var content = emptyList<ReadingParagraph>()
-    private var measuredPages: List<StaticPage>? = null
     private val history = mutableListOf<Int>()
     private var verticallyPositioned by mutableStateOf(false)
     override val pages get() = layout?.pages.orEmpty()
@@ -51,22 +50,21 @@ import cc.novelia.app.reader.*
         }
     }
 
-    fun install(next: List<StaticPage>, paragraphs: List<ReadingParagraph>, height: Int, gap: Int) {
+    fun install(geometry: RowPaginationLayout, paragraphs: List<ReadingParagraph>) {
         val previous = content.getOrNull(requested.paragraph)
         val paragraph = requested.sourceIndex?.let { source ->
-            paragraphs.indexOfFirst { it.index >= source }.takeIf { it >= 0 } ?: paragraphs.lastIndex.coerceAtLeast(0)
+            val index = paragraphs.binarySearchBy(source) { it.index }
+            if(index >= 0) index else (-index - 1).coerceAtMost(paragraphs.lastIndex).coerceAtLeast(0)
         } ?: requested.paragraph
         val offset = if(previous != null && previous.parts != paragraphs.getOrNull(paragraph)?.parts) 0 else requested.textOffset
         content = paragraphs
         requested = ReadingRestoreAnchor(paragraph, paragraphs.getOrNull(paragraph)?.index, offset)
-        val geometry = RowPaginationLayout(next.flatMap { it.lines }, height, gap)
         layout = geometry
-        measuredPages = next
         val target = if(paragraph > (geometry.lines.lastOrNull()?.paragraph ?: 0)) geometry.pageStarts.lastOrNull() ?: 0
             else geometry.rowFor(paragraph, offset)
         viewportTop = geometry.top(target)
         if(verticallyPositioned && endContentHeight > 0) viewportTop = viewportTop.coerceAtMost(maxScrollTop)
-        if(geometry.lines.none { it.paragraph == paragraph }) captureAnchor()
+        if(geometry.lines.getOrNull(target)?.paragraph != paragraph) captureAnchor()
         scrolling = false
         history.clear()
         transitionFrom = null
@@ -74,7 +72,7 @@ import cc.novelia.app.reader.*
         ready = true
     }
 
-    fun isMeasured(next: List<StaticPage>) = measuredPages === next
+    fun isMeasured(next: List<StaticPage>) = layout?.pages === next
     fun confirm(next: List<StaticPage>) { if(isMeasured(next)) ready = true }
     override fun invalidate() { ready = false }
 

@@ -9,7 +9,18 @@ class RowPagingStateTest {
     private val content = listOf(ReadingParagraph(7, listOf(TextPart("正文".repeat(300), "local"))))
     private fun lines(count: Int = 25, height: Int = 20, chars: Int = 10) = List(count) { PageLine(0, it * chars, (it + 1) * chars, height) }
     private fun state(count: Int = 25) = RowPagingState(null).apply {
-        install(paginateLines(lines(count), 200, 0), content, 200, 0)
+        install(RowPaginationLayout(lines(count), 200, 0), content)
+    }
+
+    @Test fun rowLookupPreservesExactAndFallbackAnchors() {
+        val rows = listOf(PageLine(-1, 0, 3, 20), PageLine(0, 0, 7, 20), PageLine(0, 7, 15, 20),
+            PageLine(2, 0, 0, 100, image = true), PageLine(4, 0, 8, 20))
+        val layout = RowPaginationLayout(rows, 100, 5)
+        for(paragraph in -2..5) for(offset in listOf(-1, 0, 3, 7, 8, 15, 100)) {
+            val exact = rows.indexOfFirst { it.paragraph == paragraph && (it.image || offset in it.start until it.end) }
+            val expected = if(exact >= 0) exact else rows.indexOfLast { it.paragraph <= paragraph }.coerceAtLeast(0)
+            assertEquals(expected, layout.rowFor(paragraph, offset))
+        }
     }
 
     @Test fun scrollingThenPagingUsesTheActualScreenAndReturnsToItsStart() {
@@ -34,7 +45,7 @@ class RowPagingStateTest {
         assertEquals(60, original.anchor.textOffset)
         val reopened = RowPagingState(Position("chapter", original.anchor.paragraph + 1,
             textOffset = original.anchor.textOffset, sourceParagraph = original.anchor.sourceIndex))
-        reopened.install(original.pages, content, 200, 0)
+        reopened.install(original.layout!!, content)
         assertEquals(6, reopened.row)
         assertEquals(original.viewportTop, reopened.viewportTop, 0f)
     }
@@ -69,7 +80,7 @@ class RowPagingStateTest {
         state.find(0, 47, 7)
         repeat(4) {
             val next = lines(50, chars = if(it % 2 == 0) 6 else 10)
-            state.install(paginateLines(next, 150, 12), content, 150, 12)
+            state.install(RowPaginationLayout(next, 150, 12), content)
             assertEquals(47, state.anchor.textOffset)
             val visible = state.layout!!.lines[state.row]
             assertTrue(47 in visible.start until visible.end)
@@ -78,10 +89,10 @@ class RowPagingStateTest {
 
     @Test fun chapterEndSentinelLandsAtTheLastScreenAndEmptyChaptersRemainUsable() {
         val state = RowPagingState(Position("chapter", Int.MAX_VALUE))
-        state.install(paginateLines(lines(), 200, 0), content, 200, 0)
+        state.install(RowPaginationLayout(lines(), 200, 0), content)
         assertEquals(20, state.row)
         assertFalse(state.canGoForward)
-        state.install(listOf(StaticPage(emptyList())), emptyList(), 200, 0)
+        state.install(RowPaginationLayout(emptyList(), 200, 0), emptyList())
         assertTrue(state.ready)
         assertEquals(1, state.pages.size)
         assertFalse(state.canGoBack || state.canGoForward)
@@ -216,7 +227,7 @@ class RowPagingStateTest {
 
     @Test fun aPartialLeadingLineAtTheEndStillCountsAsTheLastPage() {
         val state = RowPagingState(null)
-        state.install(paginateLines(lines(3, height = 120), 200, 0), content, 200, 0)
+        state.install(RowPaginationLayout(lines(3, height = 120), 200, 0), content)
         state.updateEndContentHeight(40)
         state.beginScroll()
         state.scrollBy(Float.MAX_VALUE)
@@ -284,7 +295,7 @@ class RowPagingStateTest {
 
     @Test fun partialLineChoiceKeepsPageStartsHistoryAndAnchorsUnchanged() {
         val state = RowPagingState(null).apply {
-            install(paginateLines(lines(), 205, 0), content, 205, 0)
+            install(RowPaginationLayout(lines(), 205, 0), content)
             beginScroll()
             scrollBy(60f)
             finishScroll()
