@@ -133,7 +133,7 @@ class MainActivity : ComponentActivity() {
             ReportDrawnWhen { initialized }
             if (!initialized) {
                 val appearance by app.startupAppearance.state.collectAsStateWithLifecycle()
-                NoveliaTheme(appearance.theme, amoledBlack = appearance.amoledBlack) { StartupScreen(startup, app.startup::retry) }
+                StartupScreen(appearance, startup, app.startup::retry)
                 return@setContent
             }
             LaunchedEffect(app) {

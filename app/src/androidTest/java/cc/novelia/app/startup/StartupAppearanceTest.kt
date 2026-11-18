@@ -1,6 +1,9 @@
 package cc.novelia.app.startup
 
 import android.content.Context
+import cc.novelia.app.data.model.LibraryState
+import cc.novelia.app.data.model.ThemePreset
+import cc.novelia.app.data.model.ThemePresets
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.After
 import org.junit.Assert.*
@@ -40,5 +43,19 @@ class StartupAppearanceTest {
         assertEquals(StartupAppearance("system", true), cache.state.value)
         cache.update(StartupAppearance("dark", false))
         assertEquals(StartupAppearance("dark", false), StartupAppearanceStore(preferences).state.value)
+    }
+
+    @Test fun coldStartRetainsOnlyTheActiveColorsAndClearsThemWhenSuppressed() {
+        val preset = ThemePreset("sea", "海", 0x166284, 0xEBFAFF, 0x102130, image = "a".repeat(64))
+        val state = LibraryState(themePresets = ThemePresets(listOf(preset), preset.id))
+        val store = StartupAppearanceStore(preferences)
+        store.update(state.startupAppearance())
+        val colors = requireNotNull(StartupAppearanceStore(preferences).state.value.palette)
+        assertEquals(listOf(preset.accent, preset.lightBackground, preset.darkBackground), listOf(colors.accent, colors.lightBackground, colors.darkBackground))
+        assertNull(colors.image)
+        for(disabled in listOf(state.copy(themePresets = ThemePresets()), state.copy(theme = "monochrome"), state.copy(reader = state.reader.withEInkMode(true)))) {
+            store.update(state.startupAppearance()); store.update(disabled.startupAppearance())
+            assertNull(StartupAppearanceStore(preferences).state.value.palette)
+        }
     }
 }

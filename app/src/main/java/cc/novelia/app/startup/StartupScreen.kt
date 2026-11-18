@@ -13,8 +13,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.ui.components.base.AppScrollColumn
+import cc.novelia.app.ui.theme.NoveliaTheme
 
-@Composable internal fun StartupScreen(progress: StartupProgress, onRetry: () -> Unit) {
+@Composable internal fun StartupScreen(appearance: StartupAppearance, progress: StartupProgress, onRetry: () -> Unit) {
+    NoveliaTheme(appearance.theme, amoledBlack = appearance.amoledBlack, preset = appearance.palette) { StartupContent(progress, onRetry) }
+}
+
+@Composable private fun StartupContent(progress: StartupProgress, onRetry: () -> Unit) {
     Surface(Modifier.fillMaxSize()) {
         Box(Modifier.fillMaxSize().safeDrawingPadding(), contentAlignment = Alignment.Center) {
             AppScrollColumn(modifier = Modifier.widthIn(max = 440.dp).fillMaxWidth(),

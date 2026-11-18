@@ -56,7 +56,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 import cc.novelia.app.startup.StartupLoader
 import cc.novelia.app.startup.StartupStep
-import cc.novelia.app.startup.StartupAppearance
+import cc.novelia.app.startup.startupAppearance
 import cc.novelia.app.startup.StartupAppearanceStore
 
 /**
@@ -109,7 +109,7 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
     internal val startupAppearance by lazy { StartupAppearanceStore(this) }
     val initialization by lazy { applicationScope.async {
         startup.load(listOf(
-            StartupStep.LIBRARY to { startupAppearance.update(StartupAppearance(store.state.value.theme, store.state.value.amoledBlack)) },
+            StartupStep.LIBRARY to { startupAppearance.update(store.state.value.startupAppearance()) },
             StartupStep.CONNECTION to { bookSources; session; api; Unit }
         ))
     } }
@@ -153,7 +153,7 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
         applicationScope.launch { store.cacheGeneration.collect { uiResults.clear() } }
         applicationScope.launch {
             initialization.await()
-            store.state.map { StartupAppearance(it.theme, it.amoledBlack) }.distinctUntilChanged()
+            store.state.map { it.startupAppearance() }.distinctUntilChanged()
                 .collect { startupAppearance.update(it) }
         }
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
