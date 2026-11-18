@@ -22,22 +22,35 @@ fun LibraryState.withSavedBook(book: BookCard, folder: String = "默认收藏"):
     ).withReadingStatusCatalog(book.ref)
 }
 
+internal class AppliedBookUpdate(val state: LibraryState, val delta: BookUpdateInfo? = null) {
+    fun shouldNotify(ref: BookRef): Boolean {
+        val change = delta ?: return false
+        val unread = state.bookUpdates[ref.key]
+        return change.copy(newChapters = if((unread?.newChapters ?: 0) > 0) change.newChapters else 0,
+            translations = change.translations.filterKeys { (unread?.translations?.get(it) ?: 0) > 0 })
+            .relevantTo(state.bookSettings[ref.key] ?: state.reader)
+    }
+}
+
+fun LibraryState.withBookUpdate(book: BookCard, observedAt: Long) = applyBookUpdate(book, observedAt).state
+
 /** 详情刷新和后台检查共用同一增量计算；较早开始的迟到请求不得回退基线。 */
-fun LibraryState.withBookUpdate(book: BookCard, observedAt: Long): LibraryState {
+internal fun LibraryState.applyBookUpdate(book: BookCard, observedAt: Long): AppliedBookUpdate {
     val ref = book.ref
-    val saved = books.firstOrNull { it.book.ref == ref } ?: return this
-    if(ref.isLocal) return this
+    val saved = books.firstOrNull { it.book.ref == ref } ?: return AppliedBookUpdate(this)
+    if(ref.isLocal) return AppliedBookUpdate(this)
     val previous = updateSnapshots[ref.key] ?: saved.book.updateSnapshot()
-    if(observedAt < previous.checkedAt) return this
+    if(observedAt < previous.checkedAt) return AppliedBookUpdate(this)
     val snapshot = book.updateSnapshot(observedAt)
     val delta = detectBookUpdate(previous, snapshot, ref.isWenku)
     val prior = bookUpdates[ref.key]
     val changes = if(delta.hasChanges) prior?.accumulate(delta) ?: delta else prior
-    return copy(
+    val next = copy(
         books = books.map { if(it.book.ref == ref) it.copy(book = book.withKnownUpdateTime(it.book), hasUpdates = it.hasUpdates || changes?.hasChanges == true) else it },
         updateSnapshots = updateSnapshots + (ref.key to snapshot),
         bookUpdates = if(changes == null) bookUpdates - ref.key else bookUpdates + (ref.key to changes)
     ).acknowledgeReadChapterUpdates(ref, book.cloudReading?.account).withReadingStatusCatalog(ref)
+    return AppliedBookUpdate(next, delta.takeIf { it.hasChanges })
 }
 
 /** 手动确认只清除提示，保留译文缓存刷新时间和数量基线。 */

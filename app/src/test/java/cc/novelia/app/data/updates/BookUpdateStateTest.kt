@@ -15,6 +15,20 @@ class BookUpdateStateTest {
     private val ref = BookRef("syosetu", "updates")
     private val book = BookCard(ref, "更新测试", total = 10, translations = mapOf("gpt" to 10))
 
+    @Test fun thisCheckOnlyCountsFreshChangesIncludingThoseOutsideNotificationPreferences() {
+        val updated = book.copy(translations = mapOf("gpt" to 11))
+        val first = LibraryState().withSavedBook(book).applyBookUpdate(updated, 30)
+        assertNotNull(first.delta)
+        assertFalse(first.shouldNotify(ref))
+        assertTrue(first.state.books.single().hasUpdates)
+        val unchanged = first.state.applyBookUpdate(updated, 40)
+        assertNull(unchanged.delta)
+        assertTrue(unchanged.state.books.single().hasUpdates)
+        val next = updated.copy(total = 11)
+        assertNull(unchanged.state.applyBookUpdate(next, 20).delta)
+        assertTrue(unchanged.state.applyBookUpdate(next, 50).shouldNotify(ref))
+    }
+
     @Test fun detailsAndWorkerAccumulateExactlyOnceAcrossPersistenceAndFolderMoves() {
         val initial = LibraryState().withSavedBook(book)
         val refreshed = initial.withSavedBook(book.copy(total = 12), "追更")

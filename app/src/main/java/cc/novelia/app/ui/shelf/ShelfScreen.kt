@@ -55,7 +55,6 @@ import cc.novelia.app.data.model.createShelfFolder
 import cc.novelia.app.data.model.renameShelfFolder
 import cc.novelia.app.data.model.deleteShelfFolder
 import cc.novelia.app.data.model.restoredShelfLocation
-import cc.novelia.app.data.updates.UpdateWorker
 import cc.novelia.app.ui.components.base.AppAlertDialog
 import cc.novelia.app.ui.components.base.AppLazyColumn
 import cc.novelia.app.ui.components.base.AppScrollColumn
@@ -213,7 +212,6 @@ import kotlinx.coroutines.withContext
         AppIconButton(onClick = { if(profile == null) c.go("login") else favoriteSync = true },
             enabled = !batchWorking && !cloudBusy) { Icon(Icons.Outlined.CloudSync, "云端与本地收藏同步") }
         AppIconButton(onClick = { c.go("updates") }) { Icon(Icons.Outlined.NewReleases, "查看书架更新") }
-        AppIconButton(onClick = { UpdateWorker.checkNow(c.app); c.message("已开始检查书架更新") }) { Icon(Icons.Outlined.Sync, "检查更新") }
         AppIconButton(onClick = { c.go("history") }) { Icon(Icons.Outlined.History, "阅读历史") }
         AppIconButton(onClick = importLocalFiles, enabled = !importing) { Icon(Icons.Outlined.FileOpen, "导入本地文件") }
     }) { padding ->
