@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="app/launcher-icons/res/drawable-nodpi/launcher_xingchuan_green_01_artwork.png" alt="星川绿~" width="160">
+  <img src="app/launcher-icons/res/drawable-nodpi/launcher_xingchuan_green_01_artwork.webp" alt="星川绿~" width="160">
   <h1>Novelia</h1>
   <p>
     面向 <a href="https://n.novelia.cc/">轻小说机翻机器人</a> 的原生 Android 客户端<br>

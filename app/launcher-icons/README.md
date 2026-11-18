@@ -18,7 +18,7 @@
 
 ## 星川绿素材
 
-仓库根目录的 `.local/assets/launcher-icons/` 保存本机原始素材，不提交到 Git，也不直接参与资源打包。三张图片均为带透明通道的正方形；正式资源保留原始像素，以 Android 合法文件名复制到本目录的 `res/drawable-nodpi/`，使用自适应图标 XML 包装：
+仓库根目录的 `.local/assets/launcher-icons/` 保存本机原始素材。打包使用 `res/drawable-nodpi/` 中的 WebP 和自适应图标 XML。下表中的两张 PNG 按原始分辨率无损编码，保留完整 RGBA 像素。
 
 | 原始素材 | 尺寸 | 设置中的名称 | 稳定 id / 图标 XML |
 | --- | --- | --- | --- |
