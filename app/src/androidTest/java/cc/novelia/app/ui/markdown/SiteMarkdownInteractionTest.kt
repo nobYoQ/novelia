@@ -126,26 +126,6 @@ class SiteMarkdownInteractionTest {
             "::: details 折叠节\n## 隐藏标题\n\n[返回目录](#目录)\n\n" + filler + ":::\n\n" + filler,
             documentUrl = page, articleList = true)
         val initialEntry = nav.currentBackStackEntry!!.id
-        fun tapVisible(label: String) {
-            var target = Offset.Zero
-            val bounds = compose.onNodeWithTag("anchor-list").fetchSemanticsNode().boundsInWindow
-            compose.runOnIdle {
-                val view = textView()
-                val position = IntArray(2).also(view::getLocationOnScreen)
-                // 存在多个返回链接，选择当前可见的那个。
-                val indices = Regex(Regex.escape(label)).findAll(view.text).map { it.range.first }
-                val index = indices.first { start ->
-                    val line = view.layout.getLineForOffset(start)
-                    val y = position[1] + view.totalPaddingTop + view.layout.getLineTop(line)
-                    y >= bounds.top && y < bounds.bottom
-                }
-                val line = view.layout.getLineForOffset(index)
-                target = Offset(position[0] + view.totalPaddingLeft + view.layout.getPrimaryHorizontal(index) + 5 - bounds.left,
-                    position[1] + view.totalPaddingTop + (view.layout.getLineTop(line) + view.layout.getLineBottom(line)) / 2f - bounds.top)
-            }
-            compose.onNodeWithTag("anchor-list").performTouchInput { click(target) }
-            compose.waitForIdle()
-        }
         fun assertAtHeading(slug: String) {
             val bounds = compose.onNodeWithTag("anchor-list").fetchSemanticsNode().boundsInWindow
             compose.runOnIdle {
@@ -166,6 +146,50 @@ class SiteMarkdownInteractionTest {
             tapVisible("返回目录")
             assertAtHeading("目录")
         }
+    }
+
+    @Test fun returningFromANovelKeepsNestedBookListsOpenAtTheLinkWithoutOpeningTheirNamesakes() {
+        val filler = "书单条目\n\n".repeat(45)
+        show(":::: details 外层书单\n\n::: details 分组\n\n[定位小说](#阅读位置)\n\n" + filler +
+            "## 阅读位置\n\n[前往小说](https://n.novelia.cc/wenku/abc123)\n\n" + filler +
+            ":::\n::::\n\n::: details 分组\n未打开的书单\n:::", documentUrl = "https://forum.novelia.cc/p/42", articleList = true)
+        tapVisible("外层书单")
+        tapVisible("分组")
+        tapVisible("定位小说")
+        val linkPosition = visiblePoint("前往小说")
+        tapVisible("前往小说")
+        compose.onNodeWithText("站内书籍").assertIsDisplayed()
+        compose.runOnIdle { nav.popBackStack() }
+        compose.waitForIdle()
+        assertEquals(linkPosition.y, visiblePoint("前往小说").y, 2f)
+        compose.runOnIdle {
+            assertTrue(textView().text.contains("▼ 外层书单"))
+            assertTrue(textView().text.contains("▼ 分组"))
+            assertTrue(textView().text.contains("▶ 分组"))
+            assertFalse(textView().text.contains("未打开的书单"))
+        }
+    }
+
+    private fun visiblePoint(label: String): Offset {
+        val bounds = compose.onNodeWithTag("anchor-list").fetchSemanticsNode().boundsInWindow
+        return compose.runOnIdle {
+            val view = textView()
+            val position = IntArray(2).also(view::getLocationOnScreen)
+            val index = Regex(Regex.escape(label)).findAll(view.text).map { it.range.first }.first { start ->
+                val line = view.layout.getLineForOffset(start)
+                val top = position[1] + view.totalPaddingTop + view.layout.getLineTop(line)
+                top >= bounds.top && top < bounds.bottom
+            }
+            val line = view.layout.getLineForOffset(index)
+            Offset(position[0] + view.totalPaddingLeft + view.layout.getPrimaryHorizontal(index) + 5 - bounds.left,
+                position[1] + view.totalPaddingTop + (view.layout.getLineTop(line) + view.layout.getLineBottom(line)) / 2f - bounds.top)
+        }
+    }
+
+    private fun tapVisible(label: String) {
+        val target = visiblePoint(label)
+        compose.onNodeWithTag("anchor-list").performTouchInput { click(target) }
+        compose.waitForIdle()
     }
 
     @Test fun pageAnchorUsesTheCurrentArticleAddress() {
@@ -300,7 +324,7 @@ class SiteMarkdownInteractionTest {
         }
         instrumentation.addMonitor(monitor)
         try {
-            show("[外部链接](https://example.com/a)\n\n裸网址 https://example.org/b，中文分隔。\n\n!![剧透链接](/forum/abc123)!!\n\n[书籍](/wenku/abc123)\n\n[章节](/novel/syosetu/n1234/5)\n\n[站内工具](/workspace/sakura)")
+            show("[外部链接](https://example.com/a)\n\n裸网址 https://example.org/b，中文分隔。\n\n!![剧透链接](https://forum.novelia.cc/p/123)!!\n\n[书籍](/wenku/abc123)\n\n[章节](/novel/syosetu/n1234/5)\n\n[站内工具](/workspace/sakura)")
             tap("外部链接")
             compose.runOnIdle { assertEquals(listOf("https://example.com/a"), captured) }
             tap("https://example.org/b")
@@ -308,7 +332,7 @@ class SiteMarkdownInteractionTest {
             tap("剧透链接")
             compose.runOnIdle { assertEquals("sample", nav.currentDestination?.route) }
             tap("剧透链接")
-            compose.onNodeWithText("站内帖子：abc123").assertIsDisplayed()
+            compose.onNodeWithText("站内帖子：f-123").assertIsDisplayed()
             compose.runOnIdle { nav.popBackStack() }
             tap("书籍")
             compose.onNodeWithText("站内书籍").assertIsDisplayed()

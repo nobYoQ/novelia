@@ -9,6 +9,8 @@ import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.toArgb
@@ -27,7 +29,10 @@ import io.noties.markwon.image.ImagesPlugin
 import io.noties.markwon.image.destination.ImageDestinationProcessor
 import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
+import org.commonmark.node.AbstractVisitor
+import org.commonmark.node.CustomBlock
 import org.commonmark.node.Heading
+import org.commonmark.node.Node
 
 @Composable internal fun rememberMarkdownRenderer(c: AppController, documentUrl: String? = null): Markwon {
     val context = LocalContext.current
@@ -54,7 +59,10 @@ import org.commonmark.node.Heading
     val color = MaterialTheme.colorScheme.onSurface.toArgb()
     val linkColor = MaterialTheme.colorScheme.primary.toArgb()
     val markwon = renderer ?: rememberMarkdownRenderer(c, documentUrl)
-    val document = remember(markwon, text) { try { markwon.parse(text) } catch (_: RuntimeException) { null } }
+    val document = key(documentUrl, text) {
+        val parsed = remember(markwon) { try { markwon.parse(text) } catch (_: RuntimeException) { null } }
+        if(parsed == null) null else rememberSaveable(parsed, saver = remember(parsed) { disclosureSaver(parsed) }) { parsed }
+    }
     val anchors = remember(document) { document?.let(::MarkdownAnchors) }
     var anchorRequest by remember(document) { mutableStateOf<AnchorRequest?>(null) }
     val bringIntoView = remember { BringIntoViewRequester() }
@@ -123,6 +131,19 @@ import org.commonmark.node.Heading
 }
 
 private class AnchorRequest(val view: SpoilerTextView, val heading: Heading?)
+
+private fun disclosureSaver(document: Node): Saver<Node, IntArray> {
+    val blocks = buildList {
+        document.accept(object : AbstractVisitor() {
+            override fun visit(customBlock: CustomBlock) {
+                if(customBlock is DetailsNode) add(customBlock)
+                visitChildren(customBlock)
+            }
+        })
+    }
+    return Saver(save = { blocks.indices.filter { blocks[it].expanded }.takeIf { it.isNotEmpty() }?.toIntArray() },
+        restore = { opened -> opened.forEach { blocks.getOrNull(it)?.expanded = true }; document })
+}
 
 private suspend fun View.awaitMarkdownLayout() {
     if (isLaidOut && !isLayoutRequested) return
