@@ -79,6 +79,8 @@ import cc.novelia.app.ui.components.base.rememberDebouncedQuery
 import cc.novelia.app.ui.feedback.Sticker
 import cc.novelia.app.ui.markdown.format
 import cc.novelia.app.ui.navigation.AppController
+import cc.novelia.app.ui.navigation.applyFavoriteSync
+import cc.novelia.app.ui.navigation.previewFavoriteSync
 import cc.novelia.app.ui.navigation.LocalRootSelectionMode
 import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.appReducedMotion
@@ -90,6 +92,7 @@ import kotlinx.coroutines.withContext
     sharedDocuments: List<Uri> = emptyList(), onSharedDocumentsConsumed: (List<Uri>) -> Unit = {}) {
     val state by c.store.state.collectAsStateWithLifecycle()
     val profile by c.session.profile.collectAsStateWithLifecycle()
+    var favoriteSync by rememberSaveable(profile?.username) { mutableStateOf(false) }
     var tab by rememberSaveable { mutableIntStateOf(state.restoredShelfLocation().tab) }
     var folderId by rememberSaveable { mutableStateOf(state.restoredShelfLocation().localFolderId) }
     val folder = state.folders.firstOrNull { state.folderIds[it] == folderId } ?: "全部"
@@ -207,6 +210,8 @@ import kotlinx.coroutines.withContext
             onSingleBook = chosen.singleOrNull()?.let { single -> { selected = single } })
     }
     Screen("书架", actions = {
+        AppIconButton(onClick = { if(profile == null) c.go("login") else favoriteSync = true },
+            enabled = !batchWorking && !cloudBusy) { Icon(Icons.Outlined.CloudSync, "云端与本地收藏同步") }
         AppIconButton(onClick = { c.go("updates") }) { Icon(Icons.Outlined.NewReleases, "查看书架更新") }
         AppIconButton(onClick = { UpdateWorker.checkNow(c.app); c.message("已开始检查书架更新") }) { Icon(Icons.Outlined.Sync, "检查更新") }
         AppIconButton(onClick = { c.go("history") }) { Icon(Icons.Outlined.History, "阅读历史") }
@@ -218,7 +223,8 @@ import kotlinx.coroutines.withContext
                 DocumentImportPanel(importModel, c::book)
             }) { page ->
             val active = page == tab
-            if(page == 2) CloudShelf(c, onOpenBook, selectedBookKey, active = active, onSelectionStateChanged = updateCloudSelection) else BoxWithConstraints(Modifier.fillMaxSize()) {
+            if(page == 2) CloudShelf(c, onOpenBook, selectedBookKey, active = active, observeInvalidation = !favoriteSync,
+                onSelectionStateChanged = updateCloudSelection) else BoxWithConstraints(Modifier.fillMaxSize()) {
                 // 邻页预组合时按自己的分区生成列表，不能复用当前选中页的数据或修剪其批量选择。
                 val baseGroups = if(page == 0) shelfGroups else remember(state.books, state.positions, folder, settledQuery, sort, fileType, readingStatus) {
                     state.shelfGroups(localOnly = true, folder = folder, query = settledQuery, sort = sort,
@@ -447,6 +453,14 @@ import kotlinx.coroutines.withContext
         onDetails = { volumeSheetKey = null; onOpenBook(volumeGroup.saved.book.ref) },
         onMount = { volumeManager = volumeGroup.saved }, onManageBook = { selected = it }, onReorder = commitVolumeOrder,
         actions = { selectionActions(false, volumeGroup.volumes.filter { it.book.ref.key in selection }) })
+    if(favoriteSync) {
+        val binding = c.session.capture()
+        binding.account?.let { account -> key(binding) {
+            FavoriteSyncSheet(account, onCheck = { priority, status -> c.previewFavoriteSync(binding, priority, status) },
+                onApply = { plan, status, progress -> c.applyFavoriteSync(binding, plan, status, progress) },
+                onDismiss = { favoriteSync = false }, onFinished = { favoriteSync = false; c.message(it) })
+        } }
+    }
     if(createFolder) TextPrompt("新建收藏夹", "名称", onDismiss = { createFolder = false }) { name -> c.action { c.store.update { it.createShelfFolder(name.trim()) } } }
     if(renameFolder) TextPrompt("重命名收藏夹", "名称", folder, { renameFolder = false }) { name -> val previous = folder; c.action { c.store.update { it.renameShelfFolder(previous, name.trim()) } } }
     if(deleteFolder) ConfirmDialog("删除收藏夹？", "其中的书籍会移入默认收藏，文件不会删除。", { deleteFolder = false }, confirmLabel = "删除收藏夹") { val previous = folder; c.action { c.store.update { it.deleteShelfFolder(previous) }; folderId = null } }

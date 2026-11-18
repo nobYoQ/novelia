@@ -63,6 +63,7 @@ object WebDavProjection {
             before.hideUnavailableComments != after.hideUnavailableComments || before.hideLocalFavorites != after.hideLocalFavorites ||
             before.hideCloudFavorites != after.hideCloudFavorites ||
             before.autoCollapseCloudFilters != after.autoCollapseCloudFilters || before.autoSaveCloudFavoritesLocally != after.autoSaveCloudFavoritesLocally ||
+            before.autoSaveLocalFavoritesToCloud != after.autoSaveLocalFavoritesToCloud ||
             before.clipboardLinkHints != after.clipboardLinkHints || before.keywordLimit != after.keywordLimit) add(SyncDomain.SETTINGS)
     }
 
@@ -97,6 +98,7 @@ object WebDavProjection {
             "hideLocalFavorites" to JsonPrimitive(state.hideLocalFavorites), "hideCloudFavorites" to JsonPrimitive(state.hideCloudFavorites),
             "autoCollapseCloudFilters" to JsonPrimitive(state.autoCollapseCloudFilters),
             "autoSaveCloudFavoritesLocally" to JsonPrimitive(state.autoSaveCloudFavoritesLocally),
+            "autoSaveLocalFavoritesToCloud" to JsonPrimitive(state.autoSaveLocalFavoritesToCloud),
             "clipboardLinkHints" to JsonPrimitive(state.clipboardLinkHints), "keywordLimit" to (state.keywordLimit?.let(::JsonPrimitive) ?: JsonNull)
         ).asObject())
         put(READER, reader(state.reader, includeDevicePreferences))
@@ -271,6 +273,7 @@ object WebDavProjection {
             hideLocalFavorites = bool("hideLocalFavorites", state.hideLocalFavorites), hideCloudFavorites = bool("hideCloudFavorites", state.hideCloudFavorites),
             autoCollapseCloudFilters = bool("autoCollapseCloudFilters", state.autoCollapseCloudFilters),
             autoSaveCloudFavoritesLocally = bool("autoSaveCloudFavoritesLocally", state.autoSaveCloudFavoritesLocally),
+            autoSaveLocalFavoritesToCloud = bool("autoSaveLocalFavoritesToCloud", state.autoSaveLocalFavoritesToCloud),
             clipboardLinkHints = bool("clipboardLinkHints", state.clipboardLinkHints),
             keywordLimit = if (values != null && "keywordLimit" in values) values["keywordLimit"]?.jsonPrimitive?.intOrNull else state.keywordLimit,
             reader = globalReader, bookSettings = bookSettings)

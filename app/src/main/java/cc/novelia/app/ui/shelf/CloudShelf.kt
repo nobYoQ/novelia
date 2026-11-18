@@ -34,6 +34,7 @@ import cc.novelia.app.data.network.cloudFavorites
 import cc.novelia.app.data.network.allCloudFavorites
 import cc.novelia.app.data.network.cloudFolderChoices
 import cc.novelia.app.data.network.resolveCloudFavoriteFolders
+import cc.novelia.app.data.sync.pendingFavoriteAction
 import cc.novelia.app.ui.components.base.AsyncContent
 import cc.novelia.app.ui.components.base.CachedAsyncContent
 import cc.novelia.app.ui.components.base.rememberCachedListState
@@ -44,16 +45,18 @@ import cc.novelia.app.ui.components.base.TextPrompt
 import cc.novelia.app.ui.components.base.friendlyMessage
 import cc.novelia.app.ui.navigation.AppController
 
-@Composable fun CloudShelf(c: AppController, onOpenBook: (BookRef) -> Unit = c::book, selectedBookKey: String? = null, active: Boolean = true, onSelectionStateChanged: (Boolean, Boolean) -> Unit = { _, _ -> }) {
+@Composable fun CloudShelf(c: AppController, onOpenBook: (BookRef) -> Unit = c::book, selectedBookKey: String? = null, active: Boolean = true,
+    observeInvalidation: Boolean = true, onSelectionStateChanged: (Boolean, Boolean) -> Unit = { _, _ -> }) {
     val profile by c.session.profile.collectAsStateWithLifecycle()
     if (profile == null) {
         EmptyState("连接你的云端书架", "登录原站账号，访问网络小说和文库收藏。", Icons.Outlined.CloudQueue, "登录", { c.go("login") })
         return
     }
-    key(profile!!.username) { CloudShelfAccount(c, profile!!.username, onOpenBook, selectedBookKey, active, onSelectionStateChanged) }
+    key(profile!!.username) { CloudShelfAccount(c, profile!!.username, onOpenBook, selectedBookKey, active, observeInvalidation, onSelectionStateChanged) }
 }
 
-@Composable private fun CloudShelfAccount(c: AppController, account: String, onOpenBook: (BookRef) -> Unit, selectedBookKey: String?, active: Boolean, onSelectionStateChanged: (Boolean, Boolean) -> Unit) {
+@Composable private fun CloudShelfAccount(c: AppController, account: String, onOpenBook: (BookRef) -> Unit, selectedBookKey: String?, active: Boolean,
+    observeInvalidation: Boolean, onSelectionStateChanged: (Boolean, Boolean) -> Unit) {
     val local by c.store.state.collectAsStateWithLifecycle()
     val cacheGeneration by c.store.cacheGeneration.collectAsStateWithLifecycle()
     val binding = c.session.capture()
@@ -135,7 +138,7 @@ import cc.novelia.app.ui.navigation.AppController
         val filterHeight = maxHeight * .9f
         // 已有收藏夹时静默更新辅助数据，仅书籍列表显示刷新提示，避免上下两条加载条。
         CachedAsyncContent(c.uiResults.folders, foldersKey, load = { c.api.get<CloudFolders>("user/favored") }, refreshKey = refreshKey,
-            observeInvalidation = !bulkBusy, validate = { c.session.ensureCurrent(binding) }, showRefreshIndicator = false) { folders, _ ->
+            observeInvalidation = observeInvalidation && !bulkBusy, validate = { c.session.ensureCurrent(binding) }, showRefreshIndicator = false) { folders, _ ->
             val realFolders = if (kind == 0) folders.favoredWeb else folders.favoredWenku
             val choices = cloudFolderChoices(realFolders)
             val current = CloudShelfLocation(kind, folderId).resolveFolder(choices)
@@ -178,7 +181,7 @@ import cc.novelia.app.ui.navigation.AppController
                     val gridState = rememberCachedListState(c.uiResults.cloudPages, requestKey, "grid")
                     CachedAsyncContent(c.uiResults.cloudPages, requestKey, refreshKey = refreshKey, modifier = Modifier.weight(1f), load = {
                         c.api.cloudFavorites(kind == 1, current.id, page, sort, filter)
-                    }, observeInvalidation = !bulkBusy, validate = { c.session.ensureCurrent(binding) },
+                    }, observeInvalidation = observeInvalidation && !bulkBusy, validate = { c.session.ensureCurrent(binding) },
                         onLoaded = { pageCount = it.items.size }) { result, retry ->
                         LaunchedEffect(result.items, account) {
                             if(c.session.profile.value?.username != account) return@LaunchedEffect
@@ -198,7 +201,8 @@ import cc.novelia.app.ui.navigation.AppController
                                 if(cancelling) AppTextButton(onClick = { if(canAct()) c.action {
                                     val restoreFolder = book.favored?.takeIf { it != ALL_CLOUD_FAVORITES && it.isNotBlank() }
                                         ?: current.id.takeUnless { it == ALL_CLOUD_FAVORITES }
-                                    if(restoreFolder != null) { c.addCloudFavorite(displayed, restoreFolder); version++ }
+                                    val folder = realFolders.firstOrNull { it.id == restoreFolder }
+                                    if(folder != null) { c.addCloudFavorite(displayed, folder, binding); version++ }
                                     else { c.pendingFavoriteCloud = true; c.pendingFavorite = book }
                                 } }) { Text("撤销") }
                             })

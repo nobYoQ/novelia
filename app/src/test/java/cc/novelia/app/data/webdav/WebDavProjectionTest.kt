@@ -10,6 +10,19 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class WebDavProjectionTest {
+    @Test fun localFavoriteCloudCopyPreferenceIsOptionalInOlderDocuments() {
+        val original = LibraryState()
+        val enabled = original.copy(autoSaveLocalFavoritesToCloud = true)
+        assertEquals(setOf(SyncDomain.SETTINGS), WebDavProjection.affectedLibraryDomains(original, enabled))
+        val docs = documents(enabled)
+        val settings = docs.getValue(SyncDomain.SETTINGS)
+        WebDavProjection.validateRecords(settings)
+        assertTrue(WebDavProjection.applyLibrary(original, docs, setOf(SyncDomain.SETTINGS)).autoSaveLocalFavoritesToCloud)
+        val legacy = settings.copy(records = settings.records.mapValues { (_, record) -> record.copy(fields = record.fields - "autoSaveLocalFavoritesToCloud") })
+        WebDavProjection.validateRecords(legacy)
+        assertTrue(WebDavProjection.applyLibrary(enabled, mapOf(SyncDomain.SETTINGS to legacy), setOf(SyncDomain.SETTINGS)).autoSaveLocalFavoritesToCloud)
+    }
+
     @Test fun chapterPullSyncsAndLegacyRecordsKeepTheLocalChoice() {
         val remote = LibraryState(reader = ReaderSettings(pullToNextChapter = false),
             bookSettings = mapOf(web.key to ReaderSettings(pullToNextChapter = true)))

@@ -99,6 +99,7 @@ fun legacyFolderId(name: String): String = if(name == DEFAULT_FOLDER) DEFAULT_FO
     val autoReadingStatus: Boolean = true, val autoReadingStatusRevision: String = "",
     val edgeToolbar: EdgeToolbarSettings = EdgeToolbarSettings(),
     val autoSaveCloudFavoritesLocally: Boolean = true,
+    val autoSaveLocalFavoritesToCloud: Boolean = false,
     // 文件清理仅为本机偏好，默认关闭，普通设置备份会保留这两个选项。
     val deleteDownloadAfterImport: Boolean = false, val deleteLocalCopyOnShelfRemoval: Boolean = false,
     val pending: List<PendingAction> = emptyList(), val updateNotifications: Boolean = false,

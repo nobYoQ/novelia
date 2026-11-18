@@ -3,6 +3,7 @@ package cc.novelia.app.data.library
 import cc.novelia.app.data.auth.SessionChangedException
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.network.ApiException
+import cc.novelia.app.data.network.cloudFavoritePath
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -30,11 +31,8 @@ suspend fun removeCloudFavorites(
         validate()
         try {
             authenticationError?.let { throw it }
-            require(!book.ref.isLocal) { "本地文件没有云端收藏关系" }
             // all 聚合收藏夹也接受按小说删除，网络小说保留 provider/id 两段标识。
-            val path = if(book.ref.isWenku) "user/favored-wenku/$folderId/${book.ref.id}"
-                else "user/favored-web/$folderId/${book.ref.key}"
-            val pending = remove(path)
+            val pending = remove(book.ref.cloudFavoritePath(folderId))
             validate()
             if(pending) queued += book.ref.key else removed += book.ref.key
         } catch(error: CancellationException) {

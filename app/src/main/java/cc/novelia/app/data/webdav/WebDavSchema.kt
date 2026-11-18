@@ -34,8 +34,8 @@ internal object WebDavSchema {
     val devicePreferenceFields = deviceReaderFields + "activeModeSettings"
     val portableGlobalFields = setOf("theme", "reducedMotion", "historyPaused", "hideNovelComments",
         "hideUnavailableComments", "hideLocalFavorites", "hideCloudFavorites",
-        "autoCollapseCloudFilters", "autoSaveCloudFavoritesLocally", "clipboardLinkHints", "keywordLimit")
-    val optionalGlobalFields = setOf("hideUnavailableComments", "hideLocalFavorites", "hideCloudFavorites")
+        "autoCollapseCloudFilters", "autoSaveCloudFavoritesLocally", "autoSaveLocalFavoritesToCloud", "clipboardLinkHints", "keywordLimit")
+    val optionalGlobalFields = setOf("hideUnavailableComments", "hideLocalFavorites", "hideCloudFavorites", "autoSaveLocalFavoritesToCloud")
     val portableBookFields = setOf("ref", "title", "originalTitle", "cover", "subtitle", "tags", "translated", "total",
         "updateAt", "translations", "volumeIds", "authors", "novelType", "attentions", "totalCharacters")
     val positionFields = setOf("chapterId", "sourceParagraph", "textOffset", "title", "updatedAt", "anchorSource", "chapterIndex",

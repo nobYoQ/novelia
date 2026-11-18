@@ -24,6 +24,7 @@ import cc.novelia.app.ui.components.base.EmptyState
 import cc.novelia.app.ui.components.base.MenuRow
 import cc.novelia.app.ui.components.base.TextPrompt
 import cc.novelia.app.ui.navigation.AppController
+import cc.novelia.app.ui.navigation.addLocalFavorite
 import cc.novelia.app.ui.navigation.loginForFavorite
 
 @Composable fun FavoriteSheet(c: AppController, book: BookCard, initialCloud: Boolean = false, dismiss: () -> Unit) {
@@ -38,7 +39,7 @@ import cc.novelia.app.ui.navigation.loginForFavorite
             Text(book.title, Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.bodyMedium, maxLines = 2)
             if(!cloud) {
                 val currentFolder = state.books.firstOrNull { it.book.ref == book.ref }?.folder
-                state.folders.forEach { folder -> MenuRow(folder, if(folder == currentFolder) "当前本地收藏夹" else "本地收藏", if(folder == currentFolder) Icons.Outlined.FolderSpecial else Icons.Outlined.Folder, { c.store.saveBook(book, folder); c.message("已加入 $folder"); dismiss() }) }
+                state.folders.forEach { folder -> MenuRow(folder, if(folder == currentFolder) "当前本地收藏夹" else "本地收藏", if(folder == currentFolder) Icons.Outlined.FolderSpecial else Icons.Outlined.Folder, { c.addLocalFavorite(book, folder); dismiss() }) }
                 if(currentFolder != null) MenuRow("取消本地收藏",
                     if(book.ref.isLocal && state.deleteLocalCopyOnShelfRemoval) "同时删除导入副本，无法撤销；原文件不受影响" else "保留文件和阅读记录，移除后可撤销",
                     Icons.Outlined.BookmarkRemove, {
@@ -83,7 +84,7 @@ import cc.novelia.app.ui.navigation.loginForFavorite
                         val selected = folder.id == favoriteState.cloudFolder
                         MenuRow(folder.title, if(selected) "当前云端收藏夹" else "与原站同步", if(selected) Icons.Outlined.BookmarkAdded else Icons.Outlined.CloudQueue, {
                             c.action {
-                                val queued = c.addCloudFavorite(book, folder.id)
+                                val queued = c.addCloudFavorite(book, folder, detailKey.binding)
                                 dismiss()
                                 if(!queued) c.message("已加入云端收藏")
                             }
@@ -104,6 +105,6 @@ import cc.novelia.app.ui.navigation.loginForFavorite
     }
     if(create) TextPrompt(if(cloud) "新建云端收藏夹" else "新建收藏夹", "名称", onDismiss = { create = false }) { name ->
         if(cloud) c.action { c.api.post(if(book.ref.isWenku) "user/favored-wenku" else "user/favored-web", mapOf("title" to name)); version++ }
-        else { c.store.update { it.copy(folders = (it.folders + name).distinct()) }; c.store.saveBook(book, name); c.message("已加入 $name"); dismiss() }
+        else { c.addLocalFavorite(book, name); dismiss() }
     }
 }

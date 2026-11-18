@@ -50,6 +50,7 @@ internal fun screenPageDistance(viewport: Int, overlap: Float): Float =
     horizontalAlignment: Alignment.Horizontal = Alignment.Start,
     listModifier: Modifier = Modifier,
     onPageTurn: (Int) -> Unit = {},
+    fillHeight: Boolean = true,
     content: LazyListScope.() -> Unit
 ) {
     val eInk = LocalEInkMode.current
@@ -65,7 +66,7 @@ internal fun screenPageDistance(viewport: Int, overlap: Float): Float =
     Column(modifier) {
         LazyColumn(state = state, contentPadding = contentPadding, verticalArrangement = verticalArrangement,
             horizontalAlignment = horizontalAlignment, userScrollEnabled = !eInk,
-            modifier = listModifier.weight(1f).then(if (sheetEnd != null) Modifier.nestedScroll(sheetEnd) else Modifier).screenPageInput(eInk, page = page,
+            modifier = listModifier.weight(1f, fill = fillHeight).then(if (sheetEnd != null) Modifier.nestedScroll(sheetEnd) else Modifier).screenPageInput(eInk, page = page,
                 scroll = { amount -> scope.launch { state.scrollBy(amount) }; Unit }), content = content)
         if(eInk && LocalScreenPageButtons.current && (state.canScrollBackward || state.canScrollForward)) ScreenPageButtons(state.canScrollBackward, state.canScrollForward, page)
     }

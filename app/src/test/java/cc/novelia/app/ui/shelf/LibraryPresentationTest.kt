@@ -1,5 +1,6 @@
 package cc.novelia.app.ui.shelf
 
+import cc.novelia.app.data.sync.pendingFavoriteAction
 import cc.novelia.app.data.library.withoutBook
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef

@@ -3,12 +3,7 @@ package cc.novelia.app.ui.shelf
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.CloudFolders
 import cc.novelia.app.data.model.PendingAction
-import cc.novelia.app.data.sync.pendingBookKey
-
-internal fun pendingFavoriteAction(pending: List<PendingAction>, account: String, ref: BookRef): PendingAction? {
-    val prefix = if(ref.isWenku) "user/favored-wenku/" else "user/favored-web/"
-    return pending.lastOrNull { it.account == account && it.method in listOf("PUT", "DELETE") && it.path.startsWith(prefix) && pendingBookKey(it) == ref.key }
-}
+import cc.novelia.app.data.sync.pendingFavoriteAction
 
 internal data class BookFavoriteState(val local: Boolean, val cloudFolder: String?, val pendingMethod: String? = null,
     val localFolderName: String? = null, val cloudFolderName: String? = null) {

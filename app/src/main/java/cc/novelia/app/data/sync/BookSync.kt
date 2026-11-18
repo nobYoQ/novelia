@@ -1,5 +1,6 @@
 package cc.novelia.app.data.sync
 
+import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.PendingAction
 
@@ -13,6 +14,11 @@ internal fun pendingBookKey(action: PendingAction): String? {
         "favored-wenku" -> if (segments.size == 4) "wenku/${segments[3]}" else null
         else -> null
     }
+}
+
+internal fun pendingFavoriteAction(pending: List<PendingAction>, account: String, ref: BookRef): PendingAction? {
+    val prefix = if(ref.isWenku) "user/favored-wenku/" else "user/favored-web/"
+    return pending.lastOrNull { it.account == account && it.method in listOf("PUT", "DELETE") && it.path.startsWith(prefix) && pendingBookKey(it) == ref.key }
 }
 
 internal fun LibraryState.updateCloudPending(transform: (List<PendingAction>) -> List<PendingAction>): LibraryState {

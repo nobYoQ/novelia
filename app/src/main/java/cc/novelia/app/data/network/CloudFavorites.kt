@@ -2,6 +2,7 @@ package cc.novelia.app.data.network
 
 import cc.novelia.app.data.catalog.providers
 import cc.novelia.app.data.model.BookCard
+import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.Folder
 import cc.novelia.app.data.model.Page
 import cc.novelia.app.data.model.WebOutline
@@ -10,6 +11,13 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 
 const val ALL_CLOUD_FAVORITES = "all"
+
+internal fun cloudFavoriteCollection(wenku: Boolean) = if(wenku) "user/favored-wenku" else "user/favored-web"
+
+internal fun BookRef.cloudFavoritePath(folderId: String): String {
+    require(!isLocal) { "本地文件没有云端收藏关系" }
+    return "${cloudFavoriteCollection(isWenku)}/$folderId/${if(isWenku) id else key}"
+}
 
 fun cloudFolderChoices(folders: List<Folder>): List<Folder> =
     if (folders.size > 1) listOf(Folder(ALL_CLOUD_FAVORITES, "全部收藏")) + folders else folders

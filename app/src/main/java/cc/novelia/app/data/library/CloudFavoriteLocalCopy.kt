@@ -1,16 +1,35 @@
 package cc.novelia.app.data.library
 
 import cc.novelia.app.data.model.BookCard
+import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.CloudFolders
+import cc.novelia.app.data.model.DEFAULT_FOLDER
 import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.SavedBook
 import cc.novelia.app.data.model.withKnownUpdateTime
+import cc.novelia.app.data.sync.pendingFavoriteAction
 import cc.novelia.app.data.updates.updateSnapshot
 
 /** 云端收藏可新增本地副本，但不得移动用户已有的手动收藏。 */
-fun LibraryState.withCloudFavoriteLocalCopy(book: BookCard): LibraryState {
-    if(!autoSaveCloudFavoritesLocally || books.any { it.book.ref == book.ref }) return this
-    return copy(books = books + newSavedBook(book))
+fun LibraryState.withCloudFavoriteLocalCopy(book: BookCard, cloudFolderTitle: String? = null): LibraryState {
+    if(!autoSaveCloudFavoritesLocally || book.ref.isLocal || books.any { it.book.ref == book.ref }) return this
+    val folder = cloudFolderTitle?.trim()?.takeIf { it in folders } ?: DEFAULT_FOLDER
+    return copy(books = books + newSavedBook(book, folder))
+}
+
+internal enum class CloudCopyResult { LocalOnly, LoginRequired, AlreadySaved, Saved, Queued }
+
+internal suspend fun LibraryState.copyLocalFavoriteToCloud(ref: BookRef, folder: String, account: String?,
+    currentFolder: suspend () -> String?, cloudFolders: suspend () -> CloudFolders, save: suspend (String) -> Boolean): CloudCopyResult {
+    if(!autoSaveLocalFavoritesToCloud || ref.isLocal) return CloudCopyResult.LocalOnly
+    if(account == null) return CloudCopyResult.LoginRequired
+    val exists = when(pendingFavoriteAction(pending, account, ref)?.method) {
+        "PUT" -> true
+        "DELETE" -> false
+        else -> !currentFolder().isNullOrBlank()
+    }
+    if(exists) return CloudCopyResult.AlreadySaved
+    return if(save(cloudFolders().autoCopyFolder(ref, folder))) CloudCopyResult.Queued else CloudCopyResult.Saved
 }
 
 /** 用户显式批量加入本地，不受自动副本开关影响；已有收藏的资料和分组保持不变。 */
@@ -32,6 +51,10 @@ fun LibraryState.withCloudFavoritesAddedByCloudFolders(selected: List<BookCard>,
         }
         book.ref.key to title
     }
+    return withGroupedCloudFavorites(selected, destinations)
+}
+
+internal fun LibraryState.withGroupedCloudFavorites(selected: List<BookCard>, destinations: Map<String, String>): LibraryState {
     val moved = copy(books = books.map { saved ->
         val folder = destinations[saved.book.ref.key] ?: saved.parentWenkuKey?.let(destinations::get)
         if(folder == null || folder == saved.folder) saved else saved.copy(folder = folder)

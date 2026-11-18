@@ -177,7 +177,8 @@ private enum class SettingsSection(val title: String, val summary: String) {
         }
         item { ProfileToggle("点击书架列表直接续读", "书架和云端收藏列表：点封面打开详情，点其余区域从本机进度续读；无进度或网格模式保持原行为", state.shelfTapToRead) { value -> c.store.update { it.copy(shelfTapToRead = value) } } }
         item { ProfileToggle("记住上次打开的收藏夹", "重新打开应用时恢复上次的书架分区和收藏夹", state.rememberLastShelfFolder) { value -> c.store.update { it.copy(rememberLastShelfFolder = value) } } }
-        item { ProfileToggle("云端收藏同时保存到本地", "仅影响之后的云端收藏；关闭不会移除已有本地收藏", state.autoSaveCloudFavoritesLocally) { value -> c.store.update { it.copy(autoSaveCloudFavoritesLocally = value) } } }
+        item { ProfileToggle("云端收藏同时保存到本地", "新增本地副本时优先放入同名收藏夹，没有则放入默认收藏；已有本地收藏不移动", state.autoSaveCloudFavoritesLocally) { value -> c.store.update { it.copy(autoSaveCloudFavoritesLocally = value) } } }
+        item { ProfileToggle("本地收藏同时保存到云端", "登录后收藏网络或文库小说时，优先保存到云端同名收藏夹，没有则放入默认收藏夹；已有云端收藏不移动", state.autoSaveLocalFavoritesToCloud) { value -> c.store.update { it.copy(autoSaveLocalFavoritesToCloud = value) } } }
         item { ProfileToggle("书架更新提醒", "约每 6 小时检查，系统调度可能延后", state.updateNotifications) { value -> c.store.update { it.copy(updateNotifications = value) }; UpdateWorker.schedule(c.app, value); if(value && Build.VERSION.SDK_INT >= 33) notifications.launch(android.Manifest.permission.POST_NOTIFICATIONS) } }
         item { ProfileToggle("移出书架时删除本地副本", "仅删除本地小说或分卷的导入副本，原文件不受影响；删除后无法撤销", state.deleteLocalCopyOnShelfRemoval) { value -> c.store.update { it.copy(deleteLocalCopyOnShelfRemoval = value) } } }
         item { ProfileSectionTitle("下载与文件清理") }

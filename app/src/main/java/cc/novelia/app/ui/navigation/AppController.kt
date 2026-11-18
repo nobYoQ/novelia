@@ -28,6 +28,7 @@ import cc.novelia.app.data.markdown.MarkdownLinks
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.CloudFolders
+import cc.novelia.app.data.model.Folder
 import cc.novelia.app.data.model.Page
 import cc.novelia.app.data.model.Chapter
 import cc.novelia.app.data.model.toReaderChapter
@@ -41,6 +42,7 @@ import cc.novelia.app.data.library.withCloudFavoriteLocalCopy
 import cc.novelia.app.data.library.CloudBookMetadataLoader
 import cc.novelia.app.data.library.HistoryCatalogLoader
 import cc.novelia.app.data.network.ApiException
+import cc.novelia.app.data.network.cloudFavoritePath
 import cc.novelia.app.data.storage.appJson
 import cc.novelia.app.data.storage.hashName
 import cc.novelia.app.data.sync.CloudSyncStatus
@@ -364,8 +366,8 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
      * 提交绑定当前账号的云端意图，并把队列变换和失败信息接入 LocalStore。
      * 返回 true 表示仍待同步，不能当作远端已更新；返回 false 才表示此次发送成功。
      */
-    suspend fun cloudMutation(method: String, path: String, body: String? = null, contentType: String = "application/json", notifyQueued: Boolean = true): Boolean {
-        val binding = session.capture()
+    suspend fun cloudMutation(method: String, path: String, body: String? = null, contentType: String = "application/json", notifyQueued: Boolean = true,
+        binding: SessionBinding = session.capture()): Boolean {
         val account = binding.account ?: throw ApiException(401, "请先登录")
         val action = PendingAction(UUID.randomUUID().toString(), account, method, path, body, contentType)
         val queued = api.cloudMutations.submit(action, { transform -> store.update { it.updateCloudPending(transform) } }, { session.ensureCurrent(binding) }, onQueuedFailure = { error ->
@@ -384,13 +386,12 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
         return queued
     }
     /** 显式云端收藏操作可同时为同一本书创建可选的本地副本。 */
-    suspend fun addCloudFavorite(book: BookCard, folderId: String): Boolean {
-        val binding = session.capture()
-        val path = if(book.ref.isWenku) "user/favored-wenku/$folderId/${book.ref.id}"
-            else "user/favored-web/$folderId/${book.ref.key}"
-        val queued = cloudMutation("PUT", path)
-        session.ensureCurrent(binding)
-        store.update { it.withCloudFavoriteLocalCopy(book) }
+    suspend fun addCloudFavorite(book: BookCard, folder: Folder, binding: SessionBinding = session.capture()): Boolean {
+        val queued = cloudMutation("PUT", book.ref.cloudFavoritePath(folder.id), binding = binding)
+        store.update {
+            session.ensureCurrent(binding)
+            it.withCloudFavoriteLocalCopy(book, folder.title)
+        }
         return queued
     }
     fun syncBook(ref: BookRef) {

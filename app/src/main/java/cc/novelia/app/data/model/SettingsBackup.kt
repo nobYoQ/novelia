@@ -6,6 +6,7 @@ import kotlinx.serialization.Serializable
 @Serializable data class SettingsBackup(val version: Int = 1, val reader: ReaderSettings = ReaderSettings(), val theme: String = "system", val reducedMotion: Boolean = false, val blockedBooks: Set<String> = emptySet(), val blockedTags: Set<String> = emptySet(), val blockedAuthors: Set<String> = emptySet(), val blockedUsers: Set<String> = emptySet(), val hideNovelComments: Boolean = false, val wifiOnly: Boolean = false, val autoCollapseCloudFilters: Boolean = true, val autoSaveCloudFavoritesLocally: Boolean = true, val clipboardLinkHints: Boolean = true, val keywordLimit: Int? = null,
     val deleteDownloadAfterImport: Boolean = false, val deleteLocalCopyOnShelfRemoval: Boolean = false,
     val autoCheckAppUpdates: Boolean = true, val squareCorners: Boolean = false, val amoledBlack: Boolean = false,
+    val autoSaveLocalFavoritesToCloud: Boolean = false,
     val discoverWenkuGrid: Boolean = true,
     val rememberSavedSearchPage: Boolean = false,
     val stickerPackId: String = DEFAULT_STICKER_PACK_ID,
@@ -34,6 +35,7 @@ internal fun LibraryState.settingsBackup() = SettingsBackup(
     forumDefaultCategory = forumDefaultCategory, forumSkipPinned = forumSkipPinned, ttsEnginePackage = ttsEnginePackage,
     forumDefaultSort = forumDefaultSort, forumDefaultTagIds = forumDefaultTagIds,
     wifiOnly = wifiOnly, autoCollapseCloudFilters = autoCollapseCloudFilters, autoSaveCloudFavoritesLocally = autoSaveCloudFavoritesLocally,
+    autoSaveLocalFavoritesToCloud = autoSaveLocalFavoritesToCloud,
     clipboardLinkHints = clipboardLinkHints, autoCheckAppUpdates = autoCheckAppUpdates, keywordLimit = keywordLimit,
     deleteDownloadAfterImport = deleteDownloadAfterImport, deleteLocalCopyOnShelfRemoval = deleteLocalCopyOnShelfRemoval,
 )
@@ -64,6 +66,7 @@ internal fun SettingsBackup.applyTo(state: LibraryState): LibraryState = state.c
     forumDefaultCategory = forumDefaultCategory, forumSkipPinned = forumSkipPinned, ttsEnginePackage = ttsEnginePackage,
     forumDefaultSort = forumDefaultSort, forumDefaultTagIds = forumDefaultTagIds,
     wifiOnly = wifiOnly, autoCollapseCloudFilters = autoCollapseCloudFilters, autoSaveCloudFavoritesLocally = autoSaveCloudFavoritesLocally,
+    autoSaveLocalFavoritesToCloud = autoSaveLocalFavoritesToCloud,
     clipboardLinkHints = clipboardLinkHints, autoCheckAppUpdates = autoCheckAppUpdates, keywordLimit = keywordLimit,
     deleteDownloadAfterImport = deleteDownloadAfterImport, deleteLocalCopyOnShelfRemoval = deleteLocalCopyOnShelfRemoval,
 ).withAutoReadingStatus(autoReadingStatus)
