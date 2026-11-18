@@ -119,6 +119,7 @@ fun legacyFolderId(name: String): String = if(name == DEFAULT_FOLDER) DEFAULT_FO
     val forumRulesReminderDismissed: Boolean = false,
     // 论坛浏览偏好保存在本机和普通设置备份中，不参与 WebDAV 同步。
     val forumDefaultCategory: String? = null, val forumSkipPinned: Boolean = false,
+    val forumDefaultSort: String = "active", val forumDefaultTagIds: Map<String, Long> = emptyMap(),
     // 系统 TTS 引擎取决于本机安装情况；普通设置备份保留，WebDAV 不同步。
     val ttsEnginePackage: String? = null,
     val readingStatistics: ReadingStatistics = ReadingStatistics(),

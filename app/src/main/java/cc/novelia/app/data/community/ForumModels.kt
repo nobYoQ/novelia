@@ -63,7 +63,10 @@ enum class ForumSort(val apiValue: String, val label: String) {
 
     // 保留 newest 的协议兼容；菜单和已保存的筛选状态只使用当前可见选项。
     val visibleSort get() = if(this == NEWEST) ACTIVE else this
-    companion object { val visibleEntries = entries.filterNot { it == NEWEST } }
+    companion object {
+        val visibleEntries = entries.filterNot { it == NEWEST }
+        fun fromPreference(value: String): ForumSort = visibleEntries.firstOrNull { it.apiValue == value } ?: ACTIVE
+    }
 }
 
 /** 接口一次返回完整列表（最多 1000 人），没有用户名字段。 */

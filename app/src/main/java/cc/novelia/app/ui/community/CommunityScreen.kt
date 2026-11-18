@@ -66,11 +66,11 @@ import cc.novelia.app.ui.theme.motionClickable
     var category by rememberSaveable { mutableStateOf(initialCategory?.takeIf { requested -> available.any { it.slug == requested } }
         ?: initialForumCategory(available, state.forumDefaultCategory)) }; var search by rememberSaveable { mutableStateOf(initialQuery) }
     var pageNumbers by rememberSaveable { mutableStateOf(mapOf<String, Int>()) }
-    var tagIds by rememberSaveable { mutableStateOf(mapOf<String, Long>()) }
+    var tagIds by rememberSaveable { mutableStateOf(initialForumTagIds(available, state.forumDefaultTagIds)) }
     var source by rememberSaveable { mutableIntStateOf(0) }
     val pageKey = "$category:$source"
     fun setPage(value: Int) { pageNumbers = pageNumbers + (pageKey to value) }
-    var sort by rememberSaveable { mutableStateOf(ForumSort.ACTIVE) }
+    var sort by rememberSaveable { mutableStateOf(ForumSort.fromPreference(state.forumDefaultSort)) }
     var searchExpanded by rememberSaveable { mutableStateOf(initialQuery.isNotBlank()) }
     var tagsExpanded by rememberSaveable { mutableStateOf(false) }
     val tagId = tagIds[category]
@@ -144,14 +144,15 @@ import cc.novelia.app.ui.theme.motionClickable
                 val active = pageCategory.slug == category
                 val feedSource = if(active) source else 0
                 val feedPage = pageNumbers["${pageCategory.slug}:$feedSource"] ?: 0
-                val feedTagId = tagIds[pageCategory.slug]?.takeIf { id -> pageCategory.tags.any { it.id == id } }
+                val feedTagId = if(feedSource == 0) pageCategory.availableTagId(tagIds[pageCategory.slug]) else null
+                val feedSort = if(feedSource == 0) sort.visibleSort else ForumSort.ACTIVE
                 val settledSearch = rememberDebouncedQuery(search)
-                val requestKey = listOf(pageCategory.slug, feedPage, settledSearch, feedSource, sort, feedTagId,
+                val requestKey = listOf(pageCategory.slug, feedPage, settledSearch, feedSource, feedSort, feedTagId,
                     forumBinding, profile?.role, blacklistRevision, cacheGeneration)
                 val scroll = rememberCachedListState(c.forumPages, requestKey)
                 var pinnedScrollRefresh by rememberSaveable(requestKey) { mutableIntStateOf(0) }
                 CachedAsyncContent(c.forumPages, requestKey, load = {
-                    when(feedSource) { 1 -> c.forumApi.favorites(feedPage); 2 -> c.forumApi.myPosts(feedPage); else -> c.forumApi.posts(feedPage, pageCategory.slug, settledSearch, sort.visibleSort.apiValue, listOfNotNull(feedTagId)) }
+                    when(feedSource) { 1 -> c.forumApi.favorites(feedPage); 2 -> c.forumApi.myPosts(feedPage); else -> c.forumApi.posts(feedPage, pageCategory.slug, settledSearch, feedSort.apiValue, listOfNotNull(feedTagId)) }
                 }, validate = { c.forumSession.ensureCurrent(forumBinding) }, onLoaded = {
                     // 顶部刷新后显示新插入的帖子，不让旧首项的稳定 key 把视口推到下方。
                     if(!scroll.canScrollBackward) { scroll.requestScrollToItem(0); pinnedScrollRefresh++ }
@@ -170,9 +171,14 @@ import cc.novelia.app.ui.theme.motionClickable
     }
     if(draftBoxOpen) AppSheet(onDismissRequest = { draftBoxOpen = false }) { ArticleDraftBox(c) { draftBoxOpen = false } }
     if(optionsOpen) AppSheet(onDismissRequest = { optionsOpen = false }) {
-        ForumOptions(available, state.forumDefaultCategory, state.forumSkipPinned,
+        ForumOptions(available, category, state.forumDefaultCategory, state.forumSkipPinned,
+            ForumSort.fromPreference(state.forumDefaultSort), state.forumDefaultTagIds,
             onDefaultCategory = { value -> c.store.update { it.copy(forumDefaultCategory = value) } },
             onSkipPinned = { value -> c.store.update { it.copy(forumSkipPinned = value) } },
+            onDefaultSort = { sort -> c.store.update { it.copy(forumDefaultSort = sort.apiValue) } },
+            onDefaultTag = { slug, tag -> c.store.update {
+                it.copy(forumDefaultTagIds = if(tag == null) it.forumDefaultTagIds - slug else it.forumDefaultTagIds + (slug to tag))
+            } },
             onClose = { optionsOpen = false })
     }
 }

@@ -17,6 +17,7 @@ import kotlinx.serialization.Serializable
     val hideUnavailableComments: Boolean = false,
     val hideLocalFavorites: Boolean = false, val hideCloudFavorites: Boolean = false,
     val forumDefaultCategory: String? = null, val forumSkipPinned: Boolean = false,
+    val forumDefaultSort: String = "active", val forumDefaultTagIds: Map<String, Long> = emptyMap(),
     val ttsEnginePackage: String? = null,
     val themePresets: ThemePresets? = null,
     val readerThemePresets: Map<String, ReaderThemePalette>? = null)
@@ -31,6 +32,7 @@ internal fun LibraryState.settingsBackup() = SettingsBackup(
     blockedTags = blockedTags, blockedAuthors = blockedAuthors, blockedUsers = blockedUsers, hideNovelComments = hideNovelComments,
     hideUnavailableComments = hideUnavailableComments, hideLocalFavorites = hideLocalFavorites, hideCloudFavorites = hideCloudFavorites,
     forumDefaultCategory = forumDefaultCategory, forumSkipPinned = forumSkipPinned, ttsEnginePackage = ttsEnginePackage,
+    forumDefaultSort = forumDefaultSort, forumDefaultTagIds = forumDefaultTagIds,
     wifiOnly = wifiOnly, autoCollapseCloudFilters = autoCollapseCloudFilters, autoSaveCloudFavoritesLocally = autoSaveCloudFavoritesLocally,
     clipboardLinkHints = clipboardLinkHints, autoCheckAppUpdates = autoCheckAppUpdates, keywordLimit = keywordLimit,
     deleteDownloadAfterImport = deleteDownloadAfterImport, deleteLocalCopyOnShelfRemoval = deleteLocalCopyOnShelfRemoval,
@@ -60,6 +62,7 @@ internal fun SettingsBackup.applyTo(state: LibraryState): LibraryState = state.c
     blockedTags = blockedTags, blockedAuthors = blockedAuthors, blockedUsers = blockedUsers, hideNovelComments = hideNovelComments,
     hideUnavailableComments = hideUnavailableComments, hideLocalFavorites = hideLocalFavorites, hideCloudFavorites = hideCloudFavorites,
     forumDefaultCategory = forumDefaultCategory, forumSkipPinned = forumSkipPinned, ttsEnginePackage = ttsEnginePackage,
+    forumDefaultSort = forumDefaultSort, forumDefaultTagIds = forumDefaultTagIds,
     wifiOnly = wifiOnly, autoCollapseCloudFilters = autoCollapseCloudFilters, autoSaveCloudFavoritesLocally = autoSaveCloudFavoritesLocally,
     clipboardLinkHints = clipboardLinkHints, autoCheckAppUpdates = autoCheckAppUpdates, keywordLimit = keywordLimit,
     deleteDownloadAfterImport = deleteDownloadAfterImport, deleteLocalCopyOnShelfRemoval = deleteLocalCopyOnShelfRemoval,

@@ -24,6 +24,7 @@ import cc.novelia.app.data.community.ForumCategory
 import cc.novelia.app.data.community.ForumPage
 import cc.novelia.app.data.community.ForumPost
 import cc.novelia.app.data.community.ForumSort
+import cc.novelia.app.data.community.ForumTag
 import cc.novelia.app.data.storage.LocalStore
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.theme.AppInteractionMode
@@ -37,7 +38,8 @@ import org.junit.Test
 
 class ForumOptionsUiTest {
     @get:Rule val compose = createComposeRule()
-    private val categories = listOf(ForumCategory(2, "announcements"), ForumCategory(100, "novel"), ForumCategory(3, "feedback"))
+    private val categories = listOf(ForumCategory(2, "announcements"), ForumCategory(100, "novel", listOf(ForumTag(41, "推书"))),
+        ForumCategory(3, "feedback", listOf(ForumTag(9, "建议"))))
 
     @Test fun defaultAppliesOnFreshLoadAndSkipPinnedScrollsCachedPostsWithoutHidingThem() {
         val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
@@ -46,15 +48,18 @@ class ForumOptionsUiTest {
         val loadVersion = mutableIntStateOf(0)
         try {
             app.store.update { it.copy(forumDefaultCategory = "novel", forumSkipPinned = false,
+                forumDefaultSort = "views", forumDefaultTagIds = mapOf("novel" to 41L),
                 forumRulesReminderDismissed = true) }
             val binding = app.forumSession.capture()
             val cacheGeneration = app.store.cacheGeneration.value
             app.uiResults.categories.put(listOf("forum-categories", binding.source, binding.sourceRevision, cacheGeneration), categories)
             for(category in categories) {
                 val posts = (1L..14L).map { post(category, it, if(it <= 4) (it - 1).toInt() else null) }
-                val requestKey = listOf(category.slug, 0, "", 0, ForumSort.ACTIVE, null, binding,
-                    app.forumSession.profile.value?.role, app.forumBlacklistRevision.value, cacheGeneration)
-                app.uiResults.forumPages.put(requestKey, ForumPage(14, posts))
+                for(tagId in listOfNotNull(category.tags.firstOrNull()?.id) + listOf(null)) {
+                    val requestKey = listOf(category.slug, 0, "", 0, ForumSort.VIEWS, tagId, binding,
+                        app.forumSession.profile.value?.role, app.forumBlacklistRevision.value, cacheGeneration)
+                    app.uiResults.forumPages.put(requestKey, ForumPage(14, posts))
+                }
             }
             val restoration = StateRestorationTester(compose)
             restoration.setContent {
@@ -64,6 +69,11 @@ class ForumOptionsUiTest {
                 NoveliaTheme(theme) { key(loadVersion.intValue) { CommunityScreen(controller) } }
             }
             compose.onNodeWithTag("forum-category-novel").assertIsSelected()
+            compose.onNodeWithText("浏览最多").assertIsDisplayed()
+            compose.onNodeWithTag("forum-tag-toggle").performClick()
+            compose.onNode(hasText("推书") and hasAnyAncestor(hasTestTag("forum-tag-filter"))).assertIsSelected()
+            compose.onNodeWithText("全部标签").performClick().assertIsSelected()
+            compose.onNodeWithTag("forum-tag-toggle").performClick()
             compose.onNodeWithText("novel-置顶帖子-1").assertIsDisplayed()
             compose.onNodeWithTag("forum-options-toggle").performClick()
             screenshot("options-panel-$theme")
@@ -75,11 +85,17 @@ class ForumOptionsUiTest {
             compose.onNodeWithTag("forum-category-feedback").performClick().assertIsSelected()
             restoration.emulateSavedInstanceStateRestore()
             compose.onNodeWithTag("forum-category-feedback").assertIsSelected()
+            compose.onNodeWithTag("forum-category-novel").performClick()
+            compose.onNodeWithTag("forum-tag-toggle").performClick()
+            compose.onNodeWithText("全部标签").assertIsSelected()
             compose.runOnIdle { loadVersion.intValue++ }
             compose.onNodeWithTag("forum-category-novel").assertIsSelected()
+            compose.onNodeWithTag("forum-tag-toggle").performClick()
+            compose.onNode(hasText("推书") and hasAnyAncestor(hasTestTag("forum-tag-filter"))).assertIsSelected()
             compose.onNodeWithText("novel-普通帖子-5").assertIsDisplayed()
         } finally {
             app.store.update { it.copy(forumDefaultCategory = before.forumDefaultCategory, forumSkipPinned = before.forumSkipPinned,
+                forumDefaultSort = before.forumDefaultSort, forumDefaultTagIds = before.forumDefaultTagIds,
                 forumRulesReminderDismissed = before.forumRulesReminderDismissed) }
             runBlocking { app.store.flush() }
             app.uiResults.categories.clear()
@@ -147,7 +163,7 @@ class ForumOptionsUiTest {
         compose.runOnIdle { assertEquals(0, scroll.firstVisibleItemIndex) }
     }
 
-    @Test fun categoryAndSkipPinnedCanBeChangedAndSurviveStoreReload() {
+    @Test fun defaultSortAndCategorySpecificTagsSurviveStoreReloadAlongsideOtherOptions() {
         val target = InstrumentationRegistry.getInstrumentation().targetContext
         val directory = File(target.cacheDir, "forum-options-${UUID.randomUUID()}").apply { mkdirs() }
         val context = object : ContextWrapper(target) { override fun getFilesDir() = directory }
@@ -155,17 +171,30 @@ class ForumOptionsUiTest {
         try {
             compose.setContent { NoveliaTheme("light") {
                 val state by store.state.collectAsState()
-                ForumOptions(categories, state.forumDefaultCategory, state.forumSkipPinned,
+                ForumOptions(categories, "novel", state.forumDefaultCategory, state.forumSkipPinned,
+                    ForumSort.fromPreference(state.forumDefaultSort), state.forumDefaultTagIds,
                     { value -> store.update { it.copy(forumDefaultCategory = value) } },
-                    { value -> store.update { it.copy(forumSkipPinned = value) } }, {})
+                    { value -> store.update { it.copy(forumSkipPinned = value) } },
+                    { value -> store.update { it.copy(forumDefaultSort = value.apiValue) } },
+                    { slug, id -> store.update { it.copy(forumDefaultTagIds = if(id == null) it.forumDefaultTagIds - slug else it.forumDefaultTagIds + (slug to id)) } }, {})
             } }
             compose.onNodeWithText("默认顺序").assertIsSelected()
             compose.onNodeWithText("小说讨论").performScrollTo().performClick().assertIsSelected()
+            compose.onNodeWithText("最近活跃").performScrollTo().assertIsSelected()
+            compose.onNodeWithText("评论最多").performScrollTo().performClick().assertIsSelected()
+            compose.onNodeWithText("推书").performScrollTo().performClick().assertIsSelected()
+            compose.onNodeWithText("分类：小说讨论").performScrollTo().performClick()
+            compose.onNode(hasText("意见反馈") and hasAnyAncestor(isPopup())).performClick()
+            compose.onNodeWithText("建议").performScrollTo().performClick().assertIsSelected()
             compose.onNodeWithText("跳过置顶").performScrollTo().performClick()
             runBlocking { store.flush() }
             val restored = LocalStore(context).state.value
             assertEquals("novel", restored.forumDefaultCategory)
             assertTrue(restored.forumSkipPinned)
+            assertEquals("comments", restored.forumDefaultSort)
+            assertEquals(mapOf("novel" to 41L, "feedback" to 9L), restored.forumDefaultTagIds)
+            compose.onNodeWithText("全部标签").performScrollTo().performClick()
+            compose.runOnIdle { assertEquals(mapOf("novel" to 41L), store.state.value.forumDefaultTagIds) }
             compose.onNodeWithText("默认顺序").performScrollTo().performClick().assertIsSelected()
             compose.onNodeWithText("跳过置顶").performScrollTo().performClick()
             runBlocking { store.flush() }
