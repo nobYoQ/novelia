@@ -7,9 +7,7 @@ import kotlinx.coroutines.flow.asStateFlow
 
 internal enum class StartupStep(val title: String, val description: String) {
     LIBRARY("读取书库", "恢复书架、阅读位置与本地设置"),
-    CONNECTION("准备连接", "读取书源线路、同步配置与本地会话"),
-    KEYWORDS("整理标签", "加载标签译名与分类，整理书架标签"),
-    INTERFACE("准备界面", "初始化图片缓存与页面服务"),
+    CONNECTION("准备连接", "读取书源线路与小说会话"),
     READY("准备完成", "即将进入书架")
 }
 

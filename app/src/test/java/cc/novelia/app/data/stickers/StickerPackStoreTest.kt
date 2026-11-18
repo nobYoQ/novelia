@@ -51,7 +51,9 @@ class StickerPackStoreTest {
         val copy = store.importArchive(ByteArrayInputStream(output.toByteArray()))
         assertNotEquals(first.id, copy.id)
         assertEquals(first.manifest.title, copy.manifest.title)
-        val restarted = newStore(root).also { it.load() }
+        val restarted = newStore(root)
+        // 首屏扫描尚未启动时，恢复的操作也应先看见所有已安装贴纸。
+        restarted.exportArchive(first.id, ByteArrayOutputStream())
         assertEquals(setOf(first.id, copy.id), restarted.state.value.packs.map { it.id }.toSet())
         assertEquals("#123ABC", restarted.state.value.packs.first().manifest.heartColor)
         store.remove(first.id)

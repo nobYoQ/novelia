@@ -33,19 +33,27 @@ class StickerPackStore(private val root: File, private val imageType: (File) -> 
     private val mutex = Mutex()
     @Serializable private data class DraftRecord(val originalId: String?, val manifest: StickerPackManifest)
 
-    private suspend fun <T> disk(block: suspend () -> T): T = withContext(Dispatchers.IO) { mutex.withLock { block() } }
+    private suspend fun <T> disk(block: suspend () -> T): T = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            // 恢复到编辑页时，第一次操作可能早于首帧后的扫描。
+            if(!mutableState.value.ready) readIndex()
+            block()
+        }
+    }
 
-    suspend fun load() = disk {
+    suspend fun load() = withContext(Dispatchers.IO) { mutex.withLock { readIndex() } }
+
+    private fun readIndex() {
         val errors = mutableListOf<String>()
         fun <T> readOrSkip(block: () -> T): T? = try { block() }
             catch(e: Exception) { errors += e.message ?: "文件无法读取"; null }
-        val packs = File(root, "packs").listFiles().orEmpty().filter { it.isDirectory && LOCAL_STICKER_ID.matches(it.name) }
+        val packs = readOrSkip { File(root, "packs").listFiles() }.orEmpty().filter { it.isDirectory && LOCAL_STICKER_ID.matches(it.name) }
             .mapNotNull { directory -> readOrSkip {
                 val manifest = readManifest(directory)
                 require(manifest.id == directory.name) { "贴纸集 ID 与目录不一致" }
                 LocalStickerPack(manifest, directory)
             } }
-        val drafts = File(root, "drafts").listFiles().orEmpty().filter { it.isDirectory && STICKER_DRAFT_ID.matches(it.name) }
+        val drafts = readOrSkip { File(root, "drafts").listFiles() }.orEmpty().filter { it.isDirectory && STICKER_DRAFT_ID.matches(it.name) }
             .mapNotNull { directory -> readOrSkip { readDraft(directory.name) } }
         mutableState.value = StickerLibrary(packs.sortedBy { it.manifest.title }, drafts, ready = true,
             error = if(errors.isEmpty()) null else "有 ${errors.size} 个贴纸集或草稿无法读取：${errors.first()}")

@@ -17,25 +17,24 @@ class StartupLoaderTest {
         val load = launch {
             loader.load(listOf(
                 StartupStep.LIBRARY to { observed += loader.progress.value.step },
-                StartupStep.KEYWORDS to {
+                StartupStep.CONNECTION to {
                     observed += loader.progress.value.step
                     if(++attempts == 1) error("synthetic startup failure")
-                },
-                StartupStep.INTERFACE to { observed += loader.progress.value.step }
+                }
             ))
         }
         runCurrent()
         assertFalse(load.isCompleted)
         assertTrue(loader.progress.value.failed)
         assertFalse(loader.progress.value.ready)
-        assertEquals(StartupStep.KEYWORDS, loader.progress.value.step)
+        assertEquals(StartupStep.CONNECTION, loader.progress.value.step)
         loader.retry()
         loader.retry()
         runCurrent()
         assertTrue(load.isCompleted)
         assertTrue(loader.progress.value.ready)
         assertFalse(loader.progress.value.failed)
-        assertEquals(listOf(StartupStep.LIBRARY, StartupStep.KEYWORDS, StartupStep.LIBRARY, StartupStep.KEYWORDS, StartupStep.INTERFACE), observed)
+        assertEquals(listOf(StartupStep.LIBRARY, StartupStep.CONNECTION, StartupStep.LIBRARY, StartupStep.CONNECTION), observed)
     }
 
     @Test fun cancellationDoesNotBecomeRetryableStartupFailure() = runTest {

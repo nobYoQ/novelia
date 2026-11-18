@@ -13,10 +13,10 @@ class StartupScreenTest {
     @get:Rule val compose = createComposeRule()
 
     @Test fun currentLoadingStepAndRetryAreVisible() {
-        var progress by mutableStateOf(StartupProgress(StartupStep.KEYWORDS))
+        var progress by mutableStateOf(StartupProgress(StartupStep.CONNECTION))
         var retries = 0
         compose.setContent { NoveliaTheme("light") { StartupScreen(progress) { retries++ } } }
-        compose.onNodeWithTag("startup-current-step").assertTextEquals(StartupStep.KEYWORDS.description)
+        compose.onNodeWithTag("startup-current-step").assertTextEquals(StartupStep.CONNECTION.description)
         compose.onNodeWithText("正在加载").assertIsDisplayed()
         saveTestScreenshot("problem-startup-loading.png")
         compose.runOnIdle { progress = progress.copy(failed = true) }

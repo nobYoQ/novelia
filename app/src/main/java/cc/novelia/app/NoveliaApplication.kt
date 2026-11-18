@@ -34,12 +34,12 @@ import cc.novelia.app.data.updates.UpdateWorker
 import cc.novelia.app.launcher.LauncherIconManager
 import coil.ImageLoader
 import coil.ImageLoaderFactory
-import coil.imageLoader
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
@@ -110,11 +110,25 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
     val initialization by lazy { applicationScope.async {
         startup.load(listOf(
             StartupStep.LIBRARY to { startupAppearance.update(StartupAppearance(store.state.value.theme, store.state.value.amoledBlack)) },
-            StartupStep.CONNECTION to { webDavConfig; bookSources; session; forumSession; Unit },
-            StartupStep.KEYWORDS to { keywords.observe(store.state.value.books.flatMap { it.book.tags }); Unit },
-            StartupStep.INTERFACE to { api; forumApi; novelCommentApi; imageLoader.diskCache; stickerPacks.load(); Unit }
+            StartupStep.CONNECTION to { bookSources; session; api; Unit }
         ))
     } }
+    // 后台同步也可以先于 Activity 启动。两种入口共享同一次书架标签收集。
+    private val shelfKeywordScan = applicationScope.async(start = CoroutineStart.LAZY) {
+        initialization.await()
+        keywords.enqueueObservation(store.state.value.books.flatMap { it.book.tags })
+    }
+    private val stickerScan = applicationScope.launch(start = CoroutineStart.LAZY) { stickerPacks.load() }
+
+    internal fun onFirstContentFrame() {
+        shelfKeywordScan.start()
+        stickerScan.start()
+    }
+
+    internal suspend fun awaitShelfKeywords() {
+        shelfKeywordScan.await()
+        keywords.flushObservations()
+    }
     internal val launcherIcons by lazy { LauncherIconManager(this) }
 
     private fun novelChanged(mutation: cc.novelia.app.data.network.MetadataMutation) {

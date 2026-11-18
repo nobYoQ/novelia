@@ -72,6 +72,7 @@ class KeywordStore(context: Context, private val entryLimit: () -> Int? = { null
     }
 
     fun enqueueObservation(originals: Collection<String>) = observations.enqueue(originals)
+    internal fun flushObservations() = observations.flush()
     fun enqueueUsed(originals: Collection<String>) = uses.enqueue(originals)
     fun observe(originals: Collection<String>) = change { it.withEntries(KeywordCatalog.observe(it.entries, originals, entryLimit())) }
     fun markUsed(originals: Collection<String>) {

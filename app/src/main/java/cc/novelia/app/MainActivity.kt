@@ -136,6 +136,10 @@ class MainActivity : ComponentActivity() {
                 NoveliaTheme(appearance.theme, amoledBlack = appearance.amoledBlack) { StartupScreen(startup, app.startup::retry) }
                 return@setContent
             }
+            LaunchedEffect(app) {
+                withFrameNanos { }
+                app.onFirstContentFrame()
+            }
             // 将完整书库投影成外观状态，阅读进度等频繁更新不会使整个导航容器随之刷新。
             val appearance by remember(app) { app.store.state.map { it.appearance() }.distinctUntilChanged() }
                 .collectAsStateWithLifecycle(initialValue = remember(app) { app.store.state.value.appearance() })

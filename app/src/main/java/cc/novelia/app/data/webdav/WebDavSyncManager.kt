@@ -79,7 +79,7 @@ class WebDavSyncManager(private val app: NoveliaApplication) {
             val binding = app.webDavConfig.config.value
             running(recordSuccess = false) {
                 require(binding.selected.isNotEmpty()) { "请至少选择一项同步内容" }
-                ready()
+                ready(binding.selected)
                 val client = client(binding)
                 // 已绑定目录丢失时先交给用户处理，不在查看资料时悄悄重建。
                 if(!binding.bound) client.ensureDirectory()
@@ -106,7 +106,7 @@ class WebDavSyncManager(private val app: NoveliaApplication) {
         mutex.withLock {
             val binding = app.webDavConfig.config.value
             running {
-                ready()
+                ready(binding.selected)
                 require(binding.selected.isNotEmpty()) { "请至少选择一项同步内容" }
                 val client = client(binding)
                 client.testConnection()
@@ -142,6 +142,7 @@ class WebDavSyncManager(private val app: NoveliaApplication) {
             }
             // 等待另一轮同步时，网络和配置都可能改变；必须以取得锁后的状态再次判断。
             if(!manual && !automaticNetworkAvailable(binding)) return@withLock
+            if(SyncDomain.KEYWORDS in binding.selected) app.awaitShelfKeywords()
             // 锁内重新规划，前台、Worker 和轮询排队后不会重复做同一轮全量检查。
             val domains = if(manual) binding.selected else automaticPolicy.domains(binding, pendingDomains(binding))
             if(domains.isEmpty()) return@withLock
@@ -250,9 +251,10 @@ class WebDavSyncManager(private val app: NoveliaApplication) {
         writeRuntime()
     }
 
-    private suspend fun ready() {
+    private suspend fun ready(domains: Set<SyncDomain> = emptySet()) {
         app.initialization.await()
         require(app.store.recoveryIssue.value == null) { "请先恢复受保护的本地资料，再进行同步" }
+        if(SyncDomain.KEYWORDS in domains) app.awaitShelfKeywords()
         app.store.flush()
     }
 
