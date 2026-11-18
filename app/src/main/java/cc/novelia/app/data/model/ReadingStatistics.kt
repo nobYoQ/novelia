@@ -15,12 +15,7 @@ import kotlinx.serialization.Serializable
 ) {
     val totalMillis get() = days.values.sumOf { books -> books.values.sumOf { it.millis } }
     fun dayMillis(date: LocalDate) = days[date.toString()].orEmpty().values.sumOf { it.millis }
-    fun streak(today: LocalDate): Int {
-        var date = if(dayMillis(today) > 0) today else today.minusDays(1)
-        var count = 0
-        while(dayMillis(date) > 0 && count < 730) { count++; date = date.minusDays(1) }
-        return count
-    }
+    fun streak(today: LocalDate) = readingStreak(today) { dayMillis(it) > 0 }
     internal val nextRevision get() = if(revision == Long.MAX_VALUE) 0 else revision + 1
     fun cleared() = copy(revision = nextRevision, days = emptyMap())
     fun withEnabled(value: Boolean) = if(value == enabled) this else copy(enabled = value, revision = nextRevision)

@@ -70,4 +70,25 @@ class ReadingStatisticsUiTest {
         compose.onNodeWithText("还没有阅读时长").assertIsDisplayed()
         saveTestScreenshot("reading-statistics-empty.png")
     }
+
+    @Test fun chartChoicesShareThePeriodAndRemainingBooksExpandSeparately() {
+        val today = LocalDate.now()
+        val previousMonth = today.withDayOfMonth(1).minusDays(1)
+        val stats = ReadingStatistics(days = mapOf(today.toString() to (1..7).associate { "local/$it" to ReadingTimeEntry("作品 $it", it * 60_000L) },
+            previousMonth.toString() to mapOf("local/7" to ReadingTimeEntry("作品 7", 3_600_000))))
+        compose.setContent { NoveliaTheme("light") { ReadingStatisticsView(stats, false, null, {}, {}, {}) } }
+        val list = compose.onNodeWithTag("reading-statistics-list")
+        fun choose(label: String) { list.performScrollToNode(hasText(label)); compose.onNodeWithText(label).performClick() }
+        choose("按月"); choose("折线图")
+        list.performScrollToNode(hasTestTag("reading-trend-line"))
+        list.performScrollToNode(hasContentDescription("上个月")); compose.onNodeWithContentDescription("上个月").performClick()
+        choose("日历")
+        list.performScrollToNode(hasTestTag("reading-trend-calendar"))
+        val lastDay = "${previousMonth.monthValue} 月 ${previousMonth.dayOfMonth} 日，1 小时 0 分钟"
+        compose.onNodeWithContentDescription(lastDay).performScrollTo().performClick()
+        list.performScrollToNode(hasText("展开其他 2 本书")); compose.onNodeWithText("作品 1").assertDoesNotExist()
+        choose("展开其他 2 本书"); list.performScrollToNode(hasText("作品 1"))
+        choose("收起其他书籍"); choose("饼图"); list.performScrollToNode(hasTestTag("reading-book-pie"))
+        list.performScrollToNode(hasText("其他书籍"))
+    }
 }

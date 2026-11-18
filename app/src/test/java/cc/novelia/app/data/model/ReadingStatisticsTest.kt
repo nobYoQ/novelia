@@ -48,4 +48,27 @@ class ReadingStatisticsTest {
         assertEquals("1 小时 1 分钟", formatReadingTime(3_660_000))
         assertThrows(IllegalArgumentException::class.java) { stats.copy(days = mapOf("2026-10-30" to mapOf("local/a" to ReadingTimeEntry("A", -1)))).requireValid() }
     }
+
+    @Test fun reportUsesTheSameFilteredDaysForTotalsCalendarAndBookShares() {
+        val today = LocalDate.of(2024, 3, 1)
+        val stats = ReadingStatistics(days = mapOf(
+            "2024-03-01" to mapOf("1" to ReadingTimeEntry("新书名", 90_000)),
+            "2024-02-28" to mapOf("7" to ReadingTimeEntry("书 7", 1_000)),
+            "2024-02-29" to (1..7).associate { "$it" to ReadingTimeEntry("书 $it", it * 60_000L) }))
+        val all = ReadingReport(stats, null)
+        assertEquals(stats.totalMillis, all.totalMillis)
+        assertEquals(7, all.books.size)
+        assertEquals(3, all.streak(today))
+        assertEquals(all.books.take(5).map { it.value }, all.bookSlices().dropLast(1))
+        assertEquals(ReadingTimeEntry("其他书籍", 270_000), all.bookSlices().last())
+        assertEquals(all.totalMillis, all.bookSlices().sumOf { it.millis })
+        val book = ReadingReport(stats, "1")
+        assertEquals(listOf(0L, 60_000L, 90_000L), book.series(today.minusDays(2), today).map { it.second })
+        assertEquals(2, book.daily.size)
+        assertEquals(75_000L, book.activeDayAverage)
+        assertEquals(2, book.streak(today.plusDays(1)))
+        assertEquals(listOf(ReadingTimeEntry("新书名", 150_000)), book.bookSlices())
+        val missing = ReadingReport(stats, "missing")
+        assertTrue(missing.bookSlices().isEmpty()); assertEquals(0L, missing.activeDayAverage)
+    }
 }

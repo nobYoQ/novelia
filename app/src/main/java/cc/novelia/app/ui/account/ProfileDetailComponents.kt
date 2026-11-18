@@ -44,8 +44,9 @@ import cc.novelia.app.ui.components.base.Screen
     contentPadding: PaddingValues = PaddingValues(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 24.dp),
     verticalArrangement: Arrangement.Vertical = Arrangement.spacedBy(12.dp),
     state: androidx.compose.foundation.lazy.LazyListState = cc.novelia.app.ui.components.base.rememberContentLazyListState(),
+    listModifier: Modifier = Modifier,
     content: LazyListScope.() -> Unit,
-) = AppLazyColumn(modifier.fillMaxWidth(), state = state, contentPadding = contentPadding, verticalArrangement = verticalArrangement, content = content)
+) = AppLazyColumn(modifier.fillMaxWidth(), state = state, contentPadding = contentPadding, verticalArrangement = verticalArrangement, listModifier = listModifier, content = content)
 
 @Composable internal fun ProfileDetailCard(
     modifier: Modifier = Modifier,

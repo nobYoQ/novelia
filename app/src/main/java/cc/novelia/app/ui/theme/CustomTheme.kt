@@ -62,7 +62,7 @@ private fun contrast(a: Color, b: Color): Float {
     return (max(x, y) + .05f) / (min(x, y) + .05f)
 }
 
-private fun inkOn(color: Color) = if (contrast(color, Color.Black) >= contrast(color, Color.White)) Color.Black else Color.White
+internal fun inkOn(color: Color) = if (contrast(color, Color.Black) >= contrast(color, Color.White)) Color.Black else Color.White
 
 private fun legible(color: Color, background: Color, card: Color): Color {
     fun readable(value: Color) = contrast(value, background) >= 4.5f && contrast(value, card) >= 4.5f
