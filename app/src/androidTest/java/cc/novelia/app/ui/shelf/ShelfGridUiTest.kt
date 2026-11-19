@@ -59,7 +59,11 @@ class ShelfGridUiTest {
         app.store.update { it.copy(books = listOf(parent) + volumes + books.drop(8), positions = if(withProgress)
             mapOf(volumes[2].book.ref.key to Position("chapter-4", title = "第 4 章 月台来信", chapterIndex = 3, chapterCount = 10, updatedAt = 300)) else emptyMap()) }
     }
-    private fun openVolumes() = compose.onNodeWithTag("shelf-grid-volumes-${parent.book.ref.key}").performClick()
+    private fun openVolumes() {
+        // 横向窗口的封面可能比首屏可用高度更高，分卷入口需要滚动后才可点击。
+        compose.onNodeWithTag("shelf-grid-volumes-${parent.book.ref.key}")
+            .performScrollTo().assertIsDisplayed().performClick()
+    }
 
     @Test fun switchingLayoutsPreservesTheVisibleBookAndEachSectionPreference() {
         show(reduced = false)
