@@ -21,4 +21,17 @@ class ShelfLayoutSettingsTest {
             assertEquals(WebDavProjection.library(legacy), WebDavProjection.library(state))
         }
     }
+
+    @Test fun gridColumnPreferenceDefaultsToAutomaticAndRoundTripsLocally() {
+        val legacy = json.decodeFromString<LibraryState>("{}")
+        assertEquals(ShelfGridDensity.Auto, legacy.shelfGridDensity)
+        assertEquals(ShelfGridDensity.Auto, json.decodeFromString<SettingsBackup>("{}").shelfGridDensity)
+        for(density in ShelfGridDensity.entries) {
+            val state = legacy.copy(shelfGridDensity = density)
+            assertEquals(density, json.decodeFromString<LibraryState>(json.encodeToString(state)).shelfGridDensity)
+            val backup = json.decodeFromString<SettingsBackup>(json.encodeToString(state.settingsBackup()))
+            assertEquals(density, backup.applyTo(legacy).shelfGridDensity)
+            assertEquals(WebDavProjection.library(legacy), WebDavProjection.library(state))
+        }
+    }
 }

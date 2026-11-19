@@ -43,6 +43,7 @@ import cc.novelia.app.data.updates.UpdateWorker
 import cc.novelia.app.ui.account.ProfileDetailList
 import cc.novelia.app.ui.components.base.AppSheet
 import cc.novelia.app.ui.account.ProfileChoiceRow
+import cc.novelia.app.data.model.ShelfGridDensity
 import cc.novelia.app.ui.components.base.ConfirmDialog
 import cc.novelia.app.ui.account.ProfileMenuRow
 import cc.novelia.app.ui.account.ProfileSummary
@@ -174,6 +175,11 @@ private enum class SettingsSection(val title: String, val summary: String) {
             ProfileMenuRow("将已有书籍恢复自动管理", "重新判断所有手动设置和旧版保留状态，不改变阅读位置", Icons.Outlined.Sync, {
                 c.store.update { it.withAutomaticReadingStatus(it.books.filter { book -> book.readingStatusControl?.automatic != true }.map { book -> book.book.ref.key }.toSet()) }
             })
+        }
+        item {
+            ProfileChoiceRow("书架网格列数", ShelfGridDensity.entries.map { it.label }, state.shelfGridDensity.ordinal) { index ->
+                c.store.update { it.copy(shelfGridDensity = ShelfGridDensity.entries[index]) }
+            }
         }
         item { ProfileToggle("点击书架列表直接续读", "书架和云端收藏列表：点封面打开详情，点其余区域从本机进度续读；无进度或网格模式保持原行为", state.shelfTapToRead) { value -> c.store.update { it.copy(shelfTapToRead = value) } } }
         item { ProfileToggle("记住上次打开的收藏夹", "重新打开应用时恢复上次的书架分区和收藏夹", state.rememberLastShelfFolder) { value -> c.store.update { it.copy(rememberLastShelfFolder = value) } } }

@@ -40,7 +40,8 @@ class ShelfGridUiTest {
         runBlocking { app.initialization.await() }
         assertNull("Use an anonymous dedicated test emulator", app.session.profile.value)
         before = app.store.state.value
-        app.store.update { it.copy(books = books, positions = emptyMap(), shelfGrid = true, localFilesGrid = false, cloudShelfGrid = false) }
+        app.store.update { it.copy(books = books, positions = emptyMap(), shelfGrid = true, localFilesGrid = false, cloudShelfGrid = false,
+            shelfGridDensity = ShelfGridDensity.Auto) }
     }
     @After fun restore() { app.store.update { before } }
     private fun show(reduced: Boolean = true, eInk: Boolean = false, fontScale: Float = 1f) {
@@ -76,6 +77,19 @@ class ShelfGridUiTest {
         compose.onNodeWithTag("local-layout-toggle").performClick()
         compose.onNodeWithTag("shelf-books-grid").assertIsDisplayed()
         compose.runOnIdle { assertTrue(app.store.state.value.shelfGrid); assertTrue(app.store.state.value.localFilesGrid); assertFalse(app.store.state.value.cloudShelfGrid) }
+    }
+
+    @Test fun customColumnsReflowBothLocalGridSections() {
+        app.store.update { it.copy(localFilesGrid = true, shelfGridDensity = ShelfGridDensity.Three) }
+        show()
+        fun assertThreeInTheFirstRow() {
+            val first = book(0).getUnclippedBoundsInRoot().top
+            assertEquals(first, book(2).getUnclippedBoundsInRoot().top)
+            assertTrue(book(3).getUnclippedBoundsInRoot().top > first)
+        }
+        assertThreeInTheFirstRow()
+        compose.onNodeWithText("本地文件").performClick()
+        assertThreeInTheFirstRow()
     }
 
     @Test fun gridDraggingUsesBothColumnsBacktracksAndAutoScrolls() {

@@ -38,7 +38,8 @@ import cc.novelia.app.ui.components.book.bookRowStatus
     BoxWithConstraints(Modifier.fillMaxSize()) {
     val density = LocalDensity.current
     val keys = books.map { it.ref.key }
-    val columns = shelfGridColumns(maxWidth)
+    val columns = shelfGridColumns(maxWidth, local.shelfGridDensity)
+    val compactGridCards = compactShelfGridCards(maxWidth, columns)
     val gridRows = remember(books, columns) { books.chunked(columns) }
     val layout = rememberShelfLayoutState(grid, keys, keys, columns, listState = listState, restoredGridState = gridState)
     val gridHit = rememberShelfGridHitTest(layout.grid, gridRows.map { row -> row.map { it.ref.key } }, columns)
@@ -78,7 +79,7 @@ import cc.novelia.app.ui.components.book.bookRowStatus
                                 onClick(if(managing) "切换选择" else "打开书籍") { open(); true }
                                 if(active && !busy) onLongClick("选择${book.title}") { dragSelection.selectOne(book.ref.key); true }
                             }, selecting = managing, selected = if(managing) book.ref.key in selection else book.ref.key == selectedBookKey, enabled = !busy,
-                            footer = if(!managing) ({ actions(displayed) { !dragSelection.dragging && !busy } }) else null)
+                            compact = compactGridCards, footer = if(!managing) ({ actions(displayed) { !dragSelection.dragging && !busy } }) else null)
                     } }
                     repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
                 }

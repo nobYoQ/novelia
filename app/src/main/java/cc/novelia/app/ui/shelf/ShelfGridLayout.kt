@@ -26,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import cc.novelia.app.data.model.BookCard
+import cc.novelia.app.data.model.ShelfGridDensity
 import cc.novelia.app.ui.components.base.*
 import cc.novelia.app.ui.components.book.BookCover
 import cc.novelia.app.ui.components.book.BookRowStatus
@@ -46,8 +47,15 @@ internal fun shelfVolumeProgressLabel(parentTitle: String, volumeTitle: String, 
         if(grid) "切换为列表布局" else "切换为网格布局") }
 }
 
-@Composable internal fun shelfGridColumns(width: Dp): Int =
-    ((width - 28.dp) / (172.dp * LocalDensity.current.fontScale.coerceIn(1f, 1.3f))).toInt().coerceAtLeast(2)
+@Composable internal fun shelfGridColumns(width: Dp, density: ShelfGridDensity): Int {
+    val fontScale = LocalDensity.current.fontScale.coerceIn(1f, 1.3f)
+    val preferred = density.columns ?: return ((width - 28.dp) / (172.dp * fontScale)).toInt().coerceAtLeast(2)
+    val fitting = ((width - 28.dp) / (64.dp * fontScale + 12.dp)).toInt().coerceAtLeast(2)
+    return preferred.coerceAtMost(fitting)
+}
+
+@Composable internal fun compactShelfGridCards(width: Dp, columns: Int): Boolean =
+    (width - 40.dp - 12.dp * (columns - 1)) / columns < 120.dp * LocalDensity.current.fontScale.coerceIn(1f, 1.3f)
 
 @Composable internal fun ShelfLayoutTransition(grid: Boolean, modifier: Modifier = Modifier, content: @Composable (Boolean) -> Unit) {
     if(appReducedMotion()) Box(modifier) { content(grid) }
@@ -124,6 +132,7 @@ internal class ShelfLayoutState(val list: LazyListState, val grid: LazyListState
     selecting: Boolean = false, selected: Boolean = false, enabled: Boolean = true,
     pinned: Boolean = false, onToggle: () -> Unit = onOpen,
     volumeLabel: String? = null, onVolumes: (() -> Unit)? = null, progressLabel: String? = null,
+    compact: Boolean = false,
     footer: @Composable (() -> Unit)? = null,
 ) {
     val eInk = LocalEInkMode.current
@@ -136,12 +145,13 @@ internal class ShelfLayoutState(val list: LazyListState, val grid: LazyListState
             val backdrop = if(eInk) Modifier.background(Color.Black) else Modifier.background(
                 Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .9f))))
             Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().then(backdrop)
-                .padding(start = 10.dp, end = 10.dp, top = if(eInk) 8.dp else 32.dp, bottom = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                .padding(start = if(compact) 6.dp else 10.dp, end = if(compact) 6.dp else 10.dp,
+                    top = if(compact) 4.dp else if(eInk) 8.dp else 32.dp, bottom = if(compact) 4.dp else 10.dp),
+                verticalArrangement = Arrangement.spacedBy(if(compact) 2.dp else 4.dp)) {
                 Text(book.title, color = Color.White, style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold, maxLines = if(largeText) 2 else 3, overflow = TextOverflow.Ellipsis)
+                    fontWeight = FontWeight.SemiBold, maxLines = if(compact || largeText) 2 else 3, overflow = TextOverflow.Ellipsis)
                 Text(progressLabel ?: status.progressLabel, color = Color.White.copy(alpha = .9f),
-                    style = MaterialTheme.typography.labelSmall, maxLines = if(largeText) 1 else 2, overflow = TextOverflow.Ellipsis)
+                    style = MaterialTheme.typography.labelSmall, maxLines = if(compact || largeText) 1 else 2, overflow = TextOverflow.Ellipsis)
             }
             if(selecting && selected) Box(Modifier.matchParentSize().background(MaterialTheme.colorScheme.primary.copy(alpha = .25f)))
             if(selecting) Surface(Modifier.align(Alignment.TopEnd).padding(4.dp), shape = MaterialTheme.shapes.small,
@@ -159,7 +169,7 @@ internal class ShelfLayoutState(val list: LazyListState, val grid: LazyListState
             .testTag("shelf-grid-volumes-${book.ref.key}").semantics { onClick(label = "打开分卷面板", action = null) }, enabled = !selecting,
             shape = MaterialTheme.shapes.small, contentPadding = PaddingValues(horizontal = 6.dp)) {
             Text(volumeLabel, Modifier.weight(1f), style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Icon(Icons.AutoMirrored.Outlined.ViewList, null, Modifier.size(18.dp))
+            if(!compact) Icon(Icons.AutoMirrored.Outlined.ViewList, null, Modifier.size(18.dp))
         }
         footer?.invoke()
     }

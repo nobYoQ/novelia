@@ -232,7 +232,8 @@ import kotlinx.coroutines.withContext
                 val groups = if(filterCharacters) baseGroups.filter { characterFilter.matches(characterCounts.count(it.saved.book)) } else baseGroups
                 val books = remember(groups) { groups.flatMap { (if(it.matchesFilters) listOf(it.saved) else emptyList()) + it.volumes } }
                 val grid = if(page == 0) state.shelfGrid else state.localFilesGrid
-                val columns = shelfGridColumns(maxWidth)
+                val columns = shelfGridColumns(maxWidth, state.shelfGridDensity)
+                val compactGridCards = compactShelfGridCards(maxWidth, columns)
                 val gridRows = remember(groups, columns) { groups.chunked(columns) }
                 val selectableKeys = remember(books, groups, grid) {
                     (if(grid) groups.filter { it.matchesFilters }.map { it.saved } else books).map { it.book.ref.key }.toSet()
@@ -346,7 +347,7 @@ import kotlinx.coroutines.withContext
                                                 focus.clearFocus()
                                                 managing = false; selection = emptySet(); volumeMatches = if(filteringVolumes) group.volumes.map { it.book.ref.key }.toSet() else null
                                                 volumeSheetKey = key
-                                            }) else null, progressLabel = progress)
+                                            }) else null, progressLabel = progress, compact = compactGridCards)
                                     } }
                                     repeat(columns - groupRow.size) { Spacer(Modifier.weight(1f)) }
                                 }
