@@ -46,7 +46,7 @@ internal data class FavoriteSyncPlan(val priority: FavoriteSyncPriority, val cha
 }
 
 internal fun LibraryState.planFavoriteSync(priority: FavoriteSyncPriority, cloud: CloudFavoriteFolderImport): FavoriteSyncPlan {
-    val localBooks = books.filterNot { it.book.ref.isLocal }.associateBy { it.book.ref }
+    val localBooks = books.filter { it.book.ref.isOnline }.associateBy { it.book.ref }
     val cloudBooks = cloud.books.associateBy { it.ref }
     val choices = mapOf(false to cloud.folders.choices(false), true to cloud.folders.choices(true))
     val localFolders = folders.toSet()

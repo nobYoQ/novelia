@@ -50,8 +50,8 @@ data class BookDeletionPlan(val books: Set<BookRef>, val downloadIds: Set<String
 fun LibraryState.bookDeletionPlan(refs: Set<BookRef> = emptySet(), downloadIds: Set<String> = emptySet(), includeSourceBooks: Boolean = true): BookDeletionPlan {
     val targets = refs.toMutableSet()
     val ids = downloadIds.toMutableSet()
-    val sourceBooks = refs.filterNot { it.isLocal }.toSet() + if(includeSourceBooks) downloadLinks
-        .filter { it.localBook in refs || it.downloadId in downloadIds }.mapNotNull { it.sourceBook?.takeUnless { source -> source.isWenku || source.isLocal } }.toSet() else emptySet()
+    val sourceBooks = refs.filter { it.isOnline }.toSet() + if(includeSourceBooks) downloadLinks
+        .filter { it.localBook in refs || it.downloadId in downloadIds }.mapNotNull { it.sourceBook?.takeIf { source -> source.isWebNovel } }.toSet() else emptySet()
     targets += sourceBooks
     val sourceKeys = sourceBooks.map { it.key }.toSet()
     val mounted = books.filter { it.parentWenkuKey in sourceKeys }
@@ -59,7 +59,8 @@ fun LibraryState.bookDeletionPlan(refs: Set<BookRef> = emptySet(), downloadIds: 
     // 同一分卷的其他格式/译文也属于这个分卷，未导入的下载同样需要清理。
     val volumes = downloadLinks.filter { (it.localBook in refs || it.sourceBook in sourceBooks || it.downloadId in ids) && it.sourceBook?.isWenku == true }
         .map { it.sourceBook to it.volumeId }.toSet() + books.filter { (it.book.ref in refs || it in mounted) && it.parentWenkuKey != null && it.sourceVolumeId != null }
-        .map { BookRef.fromKey(it.parentWenkuKey!!) to it.sourceVolumeId } + downloads.filter { it.id in ids && it.originBook()?.isWenku == true }
+        .mapNotNull { saved -> BookRef.fromKey(saved.parentWenkuKey!!).takeIf { it.isWenku }?.let { it to saved.sourceVolumeId } } +
+        downloads.filter { it.id in ids && it.originBook()?.isWenku == true }
         .map { it.originBook() to it.originVolumeId() }
     ids += downloads.filter { it.originBook() in sourceBooks || (it.originBook()?.isWenku == true && (it.originBook() to it.originVolumeId()) in volumes) }.map { it.id }
     targets += books.filter { saved -> saved.parentWenkuKey != null &&

@@ -115,7 +115,7 @@ private fun rememberHistoryCatalogs(c: AppController, books: List<BookCard>, bin
                 val ref = source.ref
                 val catalog = localCatalogs[ref]
                 val book = catalog?.book ?: source
-                val parent = saved?.parentWenkuKey?.let(booksByKey::get)?.book?.takeIf { ref.isLocal && it.ref.isWenku }
+                val parent = saved?.parentWenkuKey?.let(booksByKey::get)?.book?.takeIf { ref.isLocal && it.ref.isVolumeParent }
                 val position = state.positions[key]?.takeIf { it.chapterId == entry.chapterId }
                 val chapter = entry.chapterTitle.takeIf(String::isNotBlank)
                     ?: position?.title?.takeIf(String::isNotBlank)

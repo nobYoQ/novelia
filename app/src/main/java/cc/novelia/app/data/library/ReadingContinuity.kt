@@ -37,7 +37,7 @@ fun LibraryState.withCloudReadingMetadata(cards: List<BookCard>, account: String
     })
 }
 
-/** 按书架当前分卷顺序继续阅读，只选择同一文库父书目下已挂载的下一份本地文件。 */
+/** 按书架当前分卷顺序继续阅读，只选择同一父书目下已挂载的下一份本地文件。 */
 fun LibraryState.nextMountedVolume(ref: BookRef): SavedBook? {
     val parentKey = books.firstOrNull { it.book.ref == ref }?.parentWenkuKey ?: return null
     val volumes = shelfGroups(localOnly = false, folder = "全部", query = "", sort = 0)

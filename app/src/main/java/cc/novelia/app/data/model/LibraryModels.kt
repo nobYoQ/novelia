@@ -22,7 +22,7 @@ import kotlinx.serialization.Serializable
     val anchorTextHash: String? = null)
 
 /**
- * 本地书架条目，不代表当前账号的云端收藏关系。parentWenkuKey 将本地文件挂到文库父书目，
+ * 本地书架条目，不代表当前账号的云端收藏关系。parentWenkuKey 保留旧字段名，指向文库或本地总集，
  * volumeOrder 保存父书目的显式分卷顺序，缺失或失效引用由分卷整理逻辑处理。
  */
 @Serializable data class SavedBook(val book: BookCard, val folder: String = "默认收藏", val pinned: Boolean = false, val status: String = "在读", val addedAt: Long = System.currentTimeMillis(), val hasUpdates: Boolean = false,

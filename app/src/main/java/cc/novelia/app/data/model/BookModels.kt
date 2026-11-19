@@ -23,8 +23,15 @@ import kotlinx.serialization.Transient
     val key: String get() = "$provider/$id"
     val isWenku get() = provider == "wenku"
     val isLocal get() = provider == "local"
+    val isLocalSeries get() = provider == "local-series"
+    val isVolumeParent get() = isWenku || isLocalSeries
+    val isOnline get() = !isLocal && !isLocalSeries
+    val isWebNovel get() = isOnline && !isWenku
     val url get() = if (isWenku) "https://n.novelia.cc/wenku/$id" else "https://n.novelia.cc/novel/$key"
-    companion object { fun fromKey(key: String): BookRef = key.split('/', limit = 2).let { BookRef(it[0], it.getOrElse(1) { "" }) } }
+    companion object {
+        fun fromKey(key: String): BookRef = key.split('/', limit = 2).let { BookRef(it[0], it.getOrElse(1) { "" }) }
+        internal fun newLocalSeries() = BookRef("local-series", java.util.UUID.randomUUID().toString())
+    }
 }
 
 /** 列表与书架共用的轻量摘要，不包含章节正文；云端阅读摘要带有独立的账号归属。 */

@@ -37,7 +37,7 @@ import kotlinx.coroutines.flow.map
         .collectAsStateWithLifecycle(initialValue = remember(c.store) { c.store.state.value.books })
     LaunchedEffect(selectedKey, books) {
         val ref = selectedKey?.let { BookRef.fromKey(it) } ?: return@LaunchedEffect
-        if(ref.isLocal) {
+        if(!ref.isOnline) {
             // 等书库完成加载后，再检查恢复的选中项；
             // 等待结束后读取最新状态，避免使用组合开始时的旧快照。
             c.app.initialization.await()

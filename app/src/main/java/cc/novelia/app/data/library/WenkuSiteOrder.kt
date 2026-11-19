@@ -63,7 +63,7 @@ fun LibraryState.withWenkuSiteOrder(parentKey: String, siteIds: List<String>, de
         if(descending) -order else order
     }
     val ordered = matched + volumes.filter { ranks[it.book.ref.key] == null }
-    return withWenkuVolumeOrder(parentKey, ordered.map { it.book.ref.key }).let { state ->
+    return withVolumeOrder(parentKey, ordered.map { it.book.ref.key }).let { state ->
         state.copy(books = state.books.map { saved ->
             if(saved.book.ref.key == parentKey) saved.copy(siteVolumeOrderDescending = descending,
                 book = saved.book.copy(volumeIds = siteIds)) else saved

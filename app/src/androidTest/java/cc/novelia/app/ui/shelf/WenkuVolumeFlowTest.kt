@@ -9,8 +9,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.MainActivity
 import cc.novelia.app.NoveliaApplication
 import cc.novelia.app.data.library.withVolumeParent
-import cc.novelia.app.data.library.withWenkuVolumeOrder
-import cc.novelia.app.data.library.withWenkuVolumes
+import cc.novelia.app.data.library.withVolumeOrder
+import cc.novelia.app.data.library.withMountedVolumes
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.DownloadEntry
@@ -46,7 +46,7 @@ class WenkuVolumeFlowTest {
         val expected = legacy.copy(chapterIndex = 1, chapterCount = 2, paragraphCount = 4)
         compose.runOnIdle {
             app.store.saveDocument(document)
-            app.store.update { it.withWenkuVolumes(parentRef.key, setOf(volumeRef.key))
+            app.store.update { it.withMountedVolumes(parentRef.key, setOf(volumeRef.key))
                 .copy(positions = mapOf(volumeRef.key to legacy)) }
         }
         compose.waitUntil(10_000) { app.store.state.value.positions[volumeRef.key] == expected }
@@ -124,7 +124,7 @@ class WenkuVolumeFlowTest {
     }
 
     @Test fun searchFindsCollapsedVolumesAndUncheckingKeepsLocalFiles() = withShelf { app ->
-        compose.runOnIdle { app.store.update { state -> state.withWenkuVolumes(parentRef.key, setOf(volumeRef.key, secondRef.key)).let { mounted ->
+        compose.runOnIdle { app.store.update { state -> state.withMountedVolumes(parentRef.key, setOf(volumeRef.key, secondRef.key)).let { mounted ->
             mounted.copy(books = mounted.books.map { if(it.book.ref == parentRef) it.copy(volumesExpanded = false) else it }, theme = "dark")
         } } }
         compose.onNodeWithTag("local-search-toggle").performClick()
@@ -151,7 +151,7 @@ class WenkuVolumeFlowTest {
 
     @Test fun expansionAnimatesAndReducedMotionMakesBothDirectionsImmediate() = withShelf { app ->
         compose.runOnIdle { app.store.update { state ->
-            val mounted = state.withWenkuVolumes(parentRef.key, setOf(volumeRef.key))
+            val mounted = state.withMountedVolumes(parentRef.key, setOf(volumeRef.key))
             mounted.copy(books = mounted.books.filterNot { it.book.ref == secondRef })
         } }
         scrollTo(hasTestTag(disclosure))
@@ -195,8 +195,8 @@ class WenkuVolumeFlowTest {
 
     @Test fun dragVolumesBothWaysPersistsWithAndWithoutReducedMotion() = withShelf { app ->
         for(reduced in listOf(false, true)) {
-            compose.runOnIdle { app.store.update { it.withWenkuVolumes(parentRef.key, setOf(volumeRef.key, secondRef.key))
-                .withWenkuVolumeOrder(parentRef.key, listOf(volumeRef.key, secondRef.key)).copy(reducedMotion = reduced, theme = if(reduced) "dark" else "light") } }
+            compose.runOnIdle { app.store.update { it.withMountedVolumes(parentRef.key, setOf(volumeRef.key, secondRef.key))
+                .withVolumeOrder(parentRef.key, listOf(volumeRef.key, secondRef.key)).copy(reducedMotion = reduced, theme = if(reduced) "dark" else "light") } }
             scrollTo(hasTestTag("volume-drag-${volumeRef.key}"))
             compose.waitForIdle()
             dragSibling(volumeRef.key, 1)
@@ -226,7 +226,7 @@ class WenkuVolumeFlowTest {
         compose.runOnIdle { app.store.update { state ->
             state.copy(books = state.books.filterNot { it.book.ref.isLocal } + keys.mapIndexed { index, key ->
                 SavedBook(BookCard(BookRef("local", key.substringAfter('/')), "第${index + 1}卷 长篇故事"), parentWenkuKey = parentRef.key)
-            }).withWenkuVolumes(parentRef.key, keys.toSet()).withWenkuVolumeOrder(parentRef.key, keys)
+            }).withMountedVolumes(parentRef.key, keys.toSet()).withVolumeOrder(parentRef.key, keys)
         } }
         repeat(2) { attempt ->
             scrollTo(hasTestTag("volume-drag-${keys.first()}"))
@@ -282,7 +282,7 @@ class WenkuVolumeFlowTest {
             compose.runOnUiThread { compose.activity.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
             compose.waitUntil(10_000) { compose.activity.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE }
         }
-        compose.runOnIdle { app.store.update { it.withWenkuVolumes(parentRef.key, setOf(volumeRef.key, secondRef.key))
+        compose.runOnIdle { app.store.update { it.withMountedVolumes(parentRef.key, setOf(volumeRef.key, secondRef.key))
             .copy(reader = it.reader.withEInkMode(true)) } }
         pageTo(hasTestTag("volume-down-${volumeRef.key}"))
         compose.onNodeWithTag("volume-drag-${volumeRef.key}").assertDoesNotExist()

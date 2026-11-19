@@ -33,7 +33,7 @@ import kotlinx.serialization.Serializable
 
 internal fun LibraryState.readingTimeKeys(ref: BookRef): Set<String> = buildSet {
     add(ref.key)
-    if(ref.isWenku) books.forEach { saved ->
+    if(ref.isVolumeParent) books.forEach { saved ->
         if(saved.book.ref.isLocal && saved.parentWenkuKey == ref.key) add(saved.book.ref.key)
     }
 }

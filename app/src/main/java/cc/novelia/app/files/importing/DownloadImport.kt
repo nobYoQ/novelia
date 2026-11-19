@@ -160,7 +160,7 @@ suspend fun importDownloadedDocument(app: NoveliaApplication, entry: DownloadEnt
     result
 }
 
-/** 每次导入均补齐父文库并挂载，重复文件复用已有副本和阅读位置。 */
+/** 重复文件复用已有副本和阅读位置，保留已手动指定的本地总集。 */
 suspend fun importDownloadedDocument(store: LocalStore, entry: DownloadEntry, sourceCard: BookCard? = entry.sourceCard): BookRef =
     downloadedBookLock.withLock { importDownloadedDocumentResult(store, entry, sourceCard).ref }
 
@@ -170,6 +170,8 @@ private suspend fun importDownloadedDocumentResult(store: LocalStore, entry: Dow
     val result = importLocalDocument(store, store.downloadFile(entry), entry.fileName, entry.title, entry.contentMode(), onProgress)
     store.update { it.withDownloadLink(entry, result.ref) }
     entry.originBook()?.takeIf { it.isWenku }?.let { source -> store.update { state ->
+        val mountedParent = state.books.firstOrNull { it.book.ref == result.ref }?.parentWenkuKey
+        if(state.books.any { it.book.ref.isLocalSeries && it.book.ref.key == mountedParent }) return@update state
         val parent = state.books.firstOrNull { it.book.ref == source }?.book
             ?: sourceCard?.takeIf { it.ref == source }
             ?: BookCard(source, "文库小说 ${source.id}", subtitle = "文库小说")

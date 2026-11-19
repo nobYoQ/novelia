@@ -5,23 +5,27 @@ import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.SavedBook
 
 /**
- * 用给定集合替换某个文库条目的挂载分卷，只有已导入的本地书目可作为子卷。
+ * 用给定集合替换文库或本地总集的挂载分卷，只有已导入的本地书目可作为子卷。
  * 新挂载及脱离的分卷继承父条目文件夹，随后清理失效排序键；操作只改变书架关系，不改正文文件。
  */
-fun LibraryState.withWenkuVolumes(parentKey: String, volumeKeys: Set<String>): LibraryState {
-    val parent = books.firstOrNull { it.book.ref.key == parentKey && it.book.ref.isWenku }
-    require(parent != null) { "请先收藏目标文库小说" }
-    require(volumeKeys.all { key -> books.any { it.book.ref.key == key && it.book.ref.isLocal } }) { "只能挂载已导入的本地分卷" }
+fun LibraryState.withMountedVolumes(parentKey: String, volumeKeys: Set<String>): LibraryState {
+    val parent = books.firstOrNull { it.book.ref.key == parentKey && it.book.ref.isVolumeParent }
+    require(parent != null) { "挂载目标已不在书架" }
+    val localVolumes = books.filter { it.book.ref.isLocal }.associateBy { it.book.ref.key }
+    require(localVolumes.keys.containsAll(volumeKeys)) { "只能挂载已导入的本地分卷" }
+    val alreadyReading = parent.book.ref.isLocalSeries && parent.status == "想读" && autoReadingStatus &&
+        parent.readingStatusControl?.automatic == true && volumeKeys.any { it in positions }
     return copy(books = books.map { saved ->
         when {
-            saved.book.ref.key == parentKey -> saved.copy(volumesExpanded = volumeKeys.isNotEmpty())
+            saved.book.ref.key == parentKey -> saved.copy(volumesExpanded = volumeKeys.isNotEmpty(),
+                status = if(alreadyReading) "在读" else saved.status)
             saved.book.ref.key in volumeKeys -> saved.copy(parentWenkuKey = parentKey, folder = parent.folder)
             saved.parentWenkuKey == parentKey -> saved.copy(parentWenkuKey = null, folder = parent.folder)
             else -> saved
         }
     }).pruneVolumeOrders().let { mounted ->
-        val added = volumeKeys.any { key -> books.first { it.book.ref.key == key }.parentWenkuKey != parentKey }
-        if(added && parent.book.volumeIds.isNotEmpty()) mounted.withWenkuSiteOrder(parentKey,
+        val added = volumeKeys.any { key -> localVolumes.getValue(key).parentWenkuKey != parentKey }
+        if(added && parent.book.ref.isWenku && parent.book.volumeIds.isNotEmpty()) mounted.withWenkuSiteOrder(parentKey,
             siteVolumeIds(parent.book.volumeIds), parent.siteVolumeOrderDescending) else mounted
     }
 }
@@ -32,7 +36,7 @@ fun LibraryState.withVolumeParent(volumeKey: String, parentKey: String?): Librar
         if(saved.book.ref.key == volumeKey) saved.copy(parentWenkuKey = null, folder = books.firstOrNull { it.book.ref.key == saved.parentWenkuKey }?.folder ?: saved.folder) else saved
     }).pruneVolumeOrders()
     val siblings = books.filter { it.parentWenkuKey == parentKey }.map { it.book.ref.key }.toSet()
-    return withWenkuVolumes(parentKey, siblings + volumeKey)
+    return withMountedVolumes(parentKey, siblings + volumeKey)
 }
 
 fun LibraryState.withoutBook(ref: BookRef): LibraryState = withoutBooks(setOf(ref))
@@ -49,11 +53,11 @@ fun LibraryState.moveShelfBooks(keys: Set<String>, folder: String): LibraryState
     if(saved.book.ref.key in keys) saved.copy(folder = folder, parentWenkuKey = saved.parentWenkuKey?.takeIf { it in keys }) else saved
 }).pruneVolumeOrders()
 
-/** 保存同一父书目下的完整分卷顺序，不用于跨文库收藏移动书籍。 */
-fun LibraryState.withWenkuVolumeOrder(parentKey: String, volumeKeys: List<String>): LibraryState {
-    require(books.any { it.book.ref.key == parentKey && it.book.ref.isWenku }) { "请先收藏目标文库小说" }
+/** 保存同一父书目下的完整分卷顺序。 */
+fun LibraryState.withVolumeOrder(parentKey: String, volumeKeys: List<String>): LibraryState {
+    require(books.any { it.book.ref.key == parentKey && it.book.ref.isVolumeParent }) { "挂载目标已不在书架" }
     val siblings = books.filter { it.book.ref.isLocal && it.parentWenkuKey == parentKey }.map { it.book.ref.key }.toSet()
-    require(volumeKeys.size == siblings.size && volumeKeys.toSet() == siblings) { "只能调整同一文库下的分卷顺序" }
+    require(volumeKeys.size == siblings.size && volumeKeys.toSet() == siblings) { "只能调整同一作品下的分卷顺序" }
     return copy(books = books.map { if(it.book.ref.key == parentKey) it.copy(volumeOrder = volumeKeys.toList()) else it })
 }
 
@@ -75,7 +79,10 @@ private fun orderedVolumes(parent: SavedBook, volumes: List<SavedBook>): List<Sa
     }
 }
 
-enum class ShelfBookType(val label: String) { All("全部类型"), Wenku("文库小说"), Web("网络小说"), Local("本地小说") }
+internal fun LibraryState.mountedVolumes(parent: SavedBook): List<SavedBook> = orderedVolumes(parent,
+    books.filter { it.book.ref.isLocal && it.parentWenkuKey == parent.book.ref.key })
+
+enum class ShelfBookType(val label: String) { All("全部类型"), Wenku("文库小说"), Web("网络小说"), Local("本地小说"), Series("本地总集") }
 
 val readingStatuses = listOf("想读", "在读", "读完")
 
@@ -93,7 +100,7 @@ data class ShelfGroup(val saved: SavedBook, val volumes: List<SavedBook> = empty
  */
 fun LibraryState.shelfGroups(localOnly: Boolean, folder: String, query: String, sort: Int,
     type: ShelfBookType = ShelfBookType.All, status: String = "全部"): List<ShelfGroup> {
-    val parents = books.filter { it.book.ref.isWenku }.associateBy { it.book.ref.key }
+    val parents = books.filter { it.book.ref.isVolumeParent }.associateBy { it.book.ref.key }
     fun parentOf(saved: SavedBook) = if(saved.book.ref.isLocal) parents[saved.parentWenkuKey] else null
     val keyword = query.trim()
     fun matchesQuery(saved: SavedBook): Boolean = saved.book.let { book ->
@@ -102,9 +109,10 @@ fun LibraryState.shelfGroups(localOnly: Boolean, folder: String, query: String, 
     fun matchesStatus(saved: SavedBook) = status == "全部" || saved.status == status
     fun matchesType(saved: SavedBook) = when(type) {
         ShelfBookType.All -> true
-        ShelfBookType.Wenku -> saved.book.ref.isWenku || parentOf(saved) != null
-        ShelfBookType.Web -> !saved.book.ref.isWenku && !saved.book.ref.isLocal
+        ShelfBookType.Wenku -> saved.book.ref.isWenku || parentOf(saved)?.book?.ref?.isWenku == true
+        ShelfBookType.Web -> saved.book.ref.isWebNovel
         ShelfBookType.Local -> saved.book.ref.isLocal && parentOf(saved) == null
+        ShelfBookType.Series -> saved.book.ref.isLocalSeries || parentOf(saved)?.book?.ref?.isLocalSeries == true
     }
     val mounted = books.filter { parentOf(it) != null }.groupBy { it.parentWenkuKey }
     val groups = books.asSequence().filter { if(localOnly) it.book.ref.isLocal else parentOf(it) == null }

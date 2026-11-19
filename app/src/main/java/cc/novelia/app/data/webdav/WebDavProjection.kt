@@ -164,11 +164,11 @@ object WebDavProjection {
         val previous = state.syncReplica.documents[SyncDomain.FAVORITES]
         val included = folderIds.filter { (name, id) ->
             val deleted = previous?.records?.get(FOLDER + id)?.let { WebDavMerge.winner(it.existence, true)?.deleted } == true
-            !deleted || state.books.any { !it.book.ref.isLocal && (it.folderId == id || it.folder == name) }
+            !deleted || state.books.any { it.book.ref.isOnline && (it.folderId == id || it.folder == name) }
         }
         included.forEach { (name, id) -> put(FOLDER + id, mapOf("name" to JsonPrimitive(name)).asObject()) }
         put(ORDER, mapOf("ids" to strings(included.values.toList())).asObject())
-        state.books.filterNot { it.book.ref.isLocal }.sortedBy { it.book.ref.key }.forEach { saved ->
+        state.books.filter { it.book.ref.isOnline }.sortedBy { it.book.ref.key }.forEach { saved ->
             val portable = saved.book.copy(cover = saved.book.cover?.takeIf { it.startsWith("https://") || it.startsWith("http://") },
                 volumeIds = saved.book.volumeIds.filter { !it.startsWith("local/") && '/' !in it })
             val book = json.encodeToJsonElement(BookCard.serializer(), portable).jsonObject.filterKeys { it in portableBookFields }
@@ -321,8 +321,8 @@ object WebDavProjection {
         val order = orderedIds(records[ORDER], names.keys, DEFAULT_FOLDER_ID)
         val folders = order.map { names.getValue(it) }.toMutableList()
         val folderIds = names.entries.associate { it.value to it.key }.toMutableMap()
-        // 本地文件仍保留其文件、分卷挂载、收藏夹等关联资料。
-        val localBooks = state.books.filter { it.book.ref.isLocal }.map { saved ->
+        // 本地总集和文件保留其分卷挂载及收藏夹归属。
+        val localBooks = state.books.filterNot { it.book.ref.isOnline }.map { saved ->
             val id = saved.folderId ?: state.folderIds[saved.folder] ?: legacyFolderId(saved.folder)
             val folderName = names[id] ?: saved.folder
             if (folderName !in folders) { folders += folderName; folderIds[folderName] = id }
@@ -331,7 +331,7 @@ object WebDavProjection {
         val localByKey = state.books.associateBy { it.book.ref.key }
         val remote = records.filterKeys { !it.startsWith("@") }.map { (key, fields) ->
             val book = json.decodeFromJsonElement(BookCard.serializer(), fields.getValue("book"))
-            require(book.ref.key == key && !book.ref.isLocal) { "收藏书目身份不一致" }
+            require(book.ref.key == key && book.ref.isOnline) { "收藏书目身份不一致" }
             val folderId = fields.getValue("folderId").jsonPrimitive.content.takeIf { it in names } ?: DEFAULT_FOLDER_ID
             val old = localByKey[key]
             (old ?: cc.novelia.app.data.model.SavedBook(book)).copy(

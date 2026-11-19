@@ -38,9 +38,9 @@ import cc.novelia.app.ui.components.base.*
     var searchExpanded by rememberSaveable { mutableStateOf(false) }
     var folderMenu by remember { mutableStateOf(false) }
     var sortMenu by remember { mutableStateOf(false) }
-    val types = if(localFiles) listOf(ShelfBookType.All, ShelfBookType.Wenku, ShelfBookType.Local)
-        else listOf(ShelfBookType.All, ShelfBookType.Web, ShelfBookType.Wenku, ShelfBookType.Local)
-    val labels = if(localFiles) listOf("全部文件", "文库分卷", "本地小说") else listOf("全部", "网络小说", "文库小说", "本地小说")
+    val types = if(localFiles) listOf(ShelfBookType.All, ShelfBookType.Wenku, ShelfBookType.Local, ShelfBookType.Series)
+        else listOf(ShelfBookType.All, ShelfBookType.Web, ShelfBookType.Wenku, ShelfBookType.Local, ShelfBookType.Series)
+    val labels = if(localFiles) listOf("全部文件", "文库分卷", "本地小说", "总集分卷") else listOf("全部", "网络小说", "文库小说", "本地小说", "本地总集")
     val statuses = listOf("全部") + readingStatuses
     val sorts = listOf("最近阅读", "添加时间", "书名排序")
     val characterActive = !localFiles && type == ShelfBookType.Web && characters.active

@@ -47,7 +47,7 @@ internal object WebDavSchema {
 
     fun isNetworkKey(key: String): Boolean {
         val ref = BookRef.fromKey(key)
-        return !ref.isLocal && ref.provider.isNotBlank() && ref.provider.matches(Regex("[A-Za-z0-9_-]{1,80}")) &&
+        return ref.isOnline && ref.provider.isNotBlank() && ref.provider.matches(Regex("[A-Za-z0-9_-]{1,80}")) &&
             ref.id.isNotBlank() && ref.id.length <= 500 && ref.id.none(Char::isISOControl) && !ref.id.contains('/')
     }
 

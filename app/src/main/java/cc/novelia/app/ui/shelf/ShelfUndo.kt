@@ -33,7 +33,7 @@ internal fun restoreRemovedShelfBooks(current: LibraryState, before: List<SavedB
         }
     }
     val candidates = books + removed
-    val parents = candidates.filter { it.book.ref.isWenku }.map { it.book.ref.key }.toSet()
+    val parents = candidates.filter { it.book.ref.isVolumeParent }.map { it.book.ref.key }.toSet()
     val restored = candidates.map { saved ->
         // 等待撤销期间，其他操作可能已经移除了此分卷的父书目。
         saved.copy(parentWenkuKey = saved.parentWenkuKey?.takeIf { it in parents })

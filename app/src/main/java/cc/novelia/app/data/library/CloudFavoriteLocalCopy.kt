@@ -12,7 +12,7 @@ import cc.novelia.app.data.updates.updateSnapshot
 
 /** 云端收藏可新增本地副本，但不得移动用户已有的手动收藏。 */
 fun LibraryState.withCloudFavoriteLocalCopy(book: BookCard, cloudFolderTitle: String? = null): LibraryState {
-    if(!autoSaveCloudFavoritesLocally || book.ref.isLocal || books.any { it.book.ref == book.ref }) return this
+    if(!autoSaveCloudFavoritesLocally || !book.ref.isOnline || books.any { it.book.ref == book.ref }) return this
     val folder = cloudFolderTitle?.trim()?.takeIf { it in folders } ?: DEFAULT_FOLDER
     return copy(books = books + newSavedBook(book, folder))
 }
@@ -21,7 +21,7 @@ internal enum class CloudCopyResult { LocalOnly, LoginRequired, AlreadySaved, Sa
 
 internal suspend fun LibraryState.copyLocalFavoriteToCloud(ref: BookRef, folder: String, account: String?,
     currentFolder: suspend () -> String?, cloudFolders: suspend () -> CloudFolders, save: suspend (String) -> Boolean): CloudCopyResult {
-    if(!autoSaveLocalFavoritesToCloud || ref.isLocal) return CloudCopyResult.LocalOnly
+    if(!autoSaveLocalFavoritesToCloud || !ref.isOnline) return CloudCopyResult.LocalOnly
     if(account == null) return CloudCopyResult.LoginRequired
     val exists = when(pendingFavoriteAction(pending, account, ref)?.method) {
         "PUT" -> true
@@ -44,7 +44,7 @@ fun LibraryState.withCloudFavoritesAddedByCloudFolders(selected: List<BookCard>,
     val web = cloudFolders.favoredWeb.associate { it.id to it.title.trim() }
     val wenku = cloudFolders.favoredWenku.associate { it.id to it.title.trim() }
     val destinations = selected.distinctBy { it.ref }.associate { book ->
-        require(!book.ref.isLocal) { "本地文件没有云端收藏夹" }
+        require(book.ref.isOnline) { "本地书目没有云端收藏夹" }
         val title = (if(book.ref.isWenku) wenku else web)[book.favored]
         require(!title.isNullOrBlank() && title != "全部" && title.none(Char::isISOControl)) {
             "无法匹配「${book.title}」的云端收藏夹，请刷新云端收藏后重试"
@@ -69,9 +69,9 @@ private fun LibraryState.withImportedCloudFavorites(selected: List<BookCard>, ta
     val added = selected.distinctBy { it.ref }.filterNot { it.ref in existing }.map { book ->
         val baseline = snapshots[book.ref.key] ?: book.updateSnapshot()
         val merged = book.withKnownUpdateTime(null).let {
-            if(book.ref.isLocal) it else it.copy(total = maxOf(it.total, baseline.total))
+            if(book.ref.isOnline) it.copy(total = maxOf(it.total, baseline.total)) else it
         }
-        if(!book.ref.isLocal) snapshots[book.ref.key] = baseline
+        if(book.ref.isOnline) snapshots[book.ref.key] = baseline
         newSavedBook(merged, destination(book))
     }
     return copy(books = books + added, folders = (folders + targetFolders).distinct(), updateSnapshots = snapshots)

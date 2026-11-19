@@ -102,7 +102,8 @@ import kotlinx.coroutines.launch
                 listModifier = Modifier.testTag("volume-books").shelfDragSelection(drag, !busy)) {
                 if(shown.isEmpty()) item {
                     if(filtered) EmptyState("没有符合条件的分卷", "这部作品的本地分卷未匹配当前筛选，可显示全部后继续阅读。", action = "显示全部", onAction = { showAll = true })
-                    else EmptyState("尚未挂载本地分卷", "下载并导入分卷后，会显示在这里。也可以挂载已有的本地文件。", action = "管理挂载", onAction = onMount)
+                    else EmptyState("尚未挂载本地分卷", if(parent.book.ref.isLocalSeries) "可以把已导入的书籍添加为分卷。"
+                        else "下载并导入分卷后，会显示在这里。也可以挂载已有的本地文件。", action = "管理挂载", onAction = onMount)
                 }
                 items(reorder.rows, key = { it.saved.book.ref.key }) { row ->
                     val saved = row.saved
@@ -127,6 +128,7 @@ import kotlinx.coroutines.launch
                 }
             }
             if(managing) actions() else VolumeSheetFooter(recent, recent?.let { positions[it.book.ref.key] }, busy, compact,
+                detailsLabel = if(parent.book.ref.isLocalSeries) "总集详情" else "作品详情",
                 onContinue = { saved, position -> close { onContinue(saved, position) } },
                 onDetails = { close(onDetails) }, onMount = onMount)
         }
@@ -135,7 +137,7 @@ import kotlinx.coroutines.launch
 
 /** 阅读入口固定在列表外，滚动分卷时仍处于面板底部的拇指操作区。 */
 @Composable private fun VolumeSheetFooter(
-    recent: SavedBook?, position: Position?, busy: Boolean, compact: Boolean,
+    recent: SavedBook?, position: Position?, busy: Boolean, compact: Boolean, detailsLabel: String,
     onContinue: (SavedBook, Position) -> Unit, onDetails: () -> Unit, onMount: () -> Unit,
 ) {
     Surface(color = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
@@ -143,7 +145,7 @@ import kotlinx.coroutines.launch
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 AppTextButton(onDetails, enabled = !busy, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
-                    Icon(Icons.Outlined.Info, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("作品详情")
+                    Icon(Icons.Outlined.Info, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(detailsLabel)
                 }
                 AppTextButton(onMount, enabled = !busy, modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("volume-mount")) {
                     Icon(Icons.Outlined.LibraryAdd, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("管理挂载")

@@ -43,8 +43,8 @@ fun LibraryState.withAutomaticReadingStatus(keys: Set<String>): LibraryState = c
         val position = positions[saved.book.ref.key]
         val total = maxOf(saved.book.total, updateSnapshots[saved.book.ref.key]?.total ?: 0, position?.chapterCount ?: 0, control.knownChapterCount)
         val status = when {
-            !saved.book.ref.isWenku && total > 0 && (control.completedChapterCount ?: 0) >= total -> "读完"
-            position != null || saved.book.cloudReading?.hasHistory == true || saved.book.ref.isWenku &&
+            !saved.book.ref.isVolumeParent && total > 0 && (control.completedChapterCount ?: 0) >= total -> "读完"
+            position != null || saved.book.cloudReading?.hasHistory == true || saved.book.ref.isVolumeParent &&
                 books.any { it.parentWenkuKey == saved.book.ref.key && it.book.ref.key in positions } -> "在读"
             else -> "想读"
         }
@@ -59,7 +59,7 @@ fun LibraryState.withAutomaticReadingStatus(keys: Set<String>): LibraryState = c
 fun LibraryState.readingStatusToken(ref: BookRef): ReadingStatusToken? {
     if(!autoReadingStatus) return null
     val saved = books.firstOrNull { it.book.ref == ref } ?: return null
-    val parent = books.firstOrNull { it.book.ref.key == saved.parentWenkuKey && it.book.ref.isWenku }
+    val parent = books.firstOrNull { it.book.ref.key == saved.parentWenkuKey && it.book.ref.isVolumeParent }
     return ReadingStatusToken(saved.readingStatusControl?.revision, autoReadingStatusRevision,
         parent?.book?.ref?.key, parent?.readingStatusControl?.revision)
 }
@@ -73,7 +73,7 @@ fun LibraryState.withReadingActivity(ref: BookRef, token: ReadingStatusToken, po
     val control = saved.readingStatusControl
     val total = maxOf(saved.book.total, updateSnapshots[ref.key]?.total ?: 0, position.chapterCount ?: 0,
         control?.knownChapterCount ?: 0)
-    val completed = !ref.isWenku && atChapterEnd && completeCatalog && total > 0 && position.chapterCount == total && position.chapterIndex == total - 1
+    val completed = !ref.isVolumeParent && atChapterEnd && completeCatalog && total > 0 && position.chapterCount == total && position.chapterIndex == total - 1
     val next = if(control?.automatic == true) saved.copy(
         status = if(completed || saved.status == "读完" && (control.completedChapterCount ?: 0) >= total) "读完" else "在读",
         readingStatusControl = control.copy(knownChapterCount = total,

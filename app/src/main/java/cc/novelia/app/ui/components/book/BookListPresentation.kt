@@ -40,7 +40,7 @@ internal fun bookRowStatus(book: BookCard, saved: SavedBook?, position: Position
     val savedCloud = saved?.book?.cloudReading?.takeIf { it.account == account }
     val cloudRecord = book.cloudReading?.takeIf { it.account == account }?.withKnownChapter(savedCloud) ?: savedCloud
     val cloud = cloudRecord?.takeIf { it.hasHistory }
-    val unknownCloud = account != null && !book.ref.isLocal && !book.ref.isWenku && cloudRecord?.chapterResolved != true && cloud == null && position == null
+    val unknownCloud = account != null && book.ref.isWebNovel && cloudRecord?.chapterResolved != true && cloud == null && position == null
     val useCloud = cloud != null && (preferCloud || position == null || (cloud.lastReadAt ?: 0) > position.updatedAt / 1000 ||
         (cloud.lastReadAt == null && (cloud.chapterIndex ?: -1) > (position.chapterIndex ?: -1)))
     val count = maxOf(book.total, saved?.book?.total ?: 0, position?.chapterCount ?: 0)

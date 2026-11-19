@@ -37,14 +37,19 @@ internal fun DefaultBookCover(book: BookCard, modifier: Modifier = Modifier, sho
     val dark = colors.surface.luminance() < .5f
     val accent = when {
         eInk || colors == MonochromeColors -> colors.onSurface
-        book.ref.isLocal || book.ref.isWenku -> CoverAccents[variant]
+        !book.ref.isWebNovel -> CoverAccents[variant]
         else -> webCoverPalette(book).accent
     }
     val tint = if(eInk) colors.surface else lerp(colors.surface, accent, if(dark) .38f else .18f)
     Box(modifier.background(Brush.verticalGradient(listOf(tint, if(eInk) tint else lerp(colors.surface, accent, .08f))))) {
         Box(Modifier.fillMaxHeight().width(3.dp).background(accent.copy(alpha = .65f)))
         Column(Modifier.fillMaxSize().padding(start = 8.dp, end = 6.dp, top = 7.dp, bottom = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(if(book.ref.isLocal) "本地藏书" else if(book.ref.isWenku) "文库" else providers[book.ref.provider] ?: book.ref.provider,
+            Text(when {
+                book.ref.isLocalSeries -> "总集"
+                book.ref.isLocal -> "本地藏书"
+                book.ref.isWenku -> "文库"
+                else -> providers[book.ref.provider] ?: book.ref.provider
+            },
                 fontSize = 7.sp, lineHeight = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = colors.onSurfaceVariant)
             StickerIllustration(CoverStickers[variant % CoverStickers.size], Modifier.weight(1f).fillMaxWidth())
             if(showTitle) {

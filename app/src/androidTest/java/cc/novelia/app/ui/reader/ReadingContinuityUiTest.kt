@@ -5,8 +5,8 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import cc.novelia.app.MainActivity
 import cc.novelia.app.NoveliaApplication
-import cc.novelia.app.data.library.withWenkuVolumeOrder
-import cc.novelia.app.data.library.withWenkuVolumes
+import cc.novelia.app.data.library.withVolumeOrder
+import cc.novelia.app.data.library.withMountedVolumes
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.LocalChapter
@@ -41,7 +41,7 @@ class ReadingContinuityUiTest {
             app.store.saveBook(BookCard(parent, "测试丛书"))
             app.store.saveBook(BookCard(next, "第三卷"))
             app.store.saveBook(BookCard(later, "第二卷"))
-            app.store.update { it.withWenkuVolumes(parent.key, setOf(ref.key, next.key, later.key)).withWenkuVolumeOrder(parent.key, listOf(ref.key, next.key, later.key)) }
+            app.store.update { it.withMountedVolumes(parent.key, setOf(ref.key, next.key, later.key)).withVolumeOrder(parent.key, listOf(ref.key, next.key, later.key)) }
         }
         compose.onNodeWithContentDescription("下一章").performClick()
         compose.waitUntil(15_000) { app.store.state.value.positions[ref.key]?.chapterId == "second" }

@@ -91,6 +91,10 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.withContext
 
 @Composable fun BookScreen(c: AppController, ref: BookRef, onBack: () -> Unit = c::back, navigationState: SavedStateHandle? = null) {
+    if(ref.isLocalSeries) {
+        LocalSeriesScreen(c, ref, onBack)
+        return
+    }
     var tab by rememberSaveable(ref.key) { mutableIntStateOf(if(navigationState?.get<Boolean>(SHOW_BOOK_CONTENTS) == true) 1 else 0) }
     val showContents = navigationState?.getStateFlow(SHOW_BOOK_CONTENTS, false)?.collectAsStateWithLifecycle()?.value == true
     LaunchedEffect(showContents) {
@@ -348,7 +352,7 @@ import kotlinx.coroutines.withContext
     }
 }
 @Composable private fun Stat(label: String, value: String) { Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(value, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary); Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
-@Composable private fun BookHero(book: BookCard, subtitle: String, state: LibraryState, customCover: CustomBookCover?,
+@Composable internal fun BookHero(book: BookCard, subtitle: String, state: LibraryState, customCover: CustomBookCover?,
     bottomPadding: Dp = 20.dp, actions: (@Composable () -> Unit)? = null) {
     val cover: Any? = customCover?.file ?: book.cover?.takeIf { book.ref.isWenku && it.isNotBlank() }
     var expandedCover by remember(book.ref, cover, customCover) { mutableStateOf(false) }

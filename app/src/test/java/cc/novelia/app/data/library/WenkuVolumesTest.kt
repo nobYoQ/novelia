@@ -20,7 +20,7 @@ class WenkuVolumesTest {
     @Test fun mountingReassigningAndDetachingPreserveReadingData() {
         val position = Position("chapter", index = 3, textOffset = 42)
         val original = library().copy(positions = mapOf("local/1" to position))
-        val mounted = original.withWenkuVolumes(parent.book.ref.key, setOf("local/1", "local/2"))
+        val mounted = original.withMountedVolumes(parent.book.ref.key, setOf("local/1", "local/2"))
         assertTrue(mounted.books.first { it.book.ref == parent.book.ref }.volumesExpanded)
         assertEquals(parent.book.ref.key, mounted.books.first { it.book.ref.key == "local/1" }.parentWenkuKey)
         val reassigned = mounted.withVolumeParent("local/1", other.book.ref.key)
@@ -33,21 +33,21 @@ class WenkuVolumesTest {
     }
 
     @Test fun managerSelectionReplacesOnlyTheChosenParentsChildren() {
-        val original = library().withVolumeParent("local/10", other.book.ref.key).withWenkuVolumes(parent.book.ref.key, setOf("local/1", "local/2"))
-        val updated = original.withWenkuVolumes(parent.book.ref.key, setOf("local/2"))
+        val original = library().withVolumeParent("local/10", other.book.ref.key).withMountedVolumes(parent.book.ref.key, setOf("local/1", "local/2"))
+        val updated = original.withMountedVolumes(parent.book.ref.key, setOf("local/2"))
         assertNull(updated.books.first { it.book.ref.key == "local/1" }.parentWenkuKey)
         assertEquals(other.book.ref.key, updated.books.first { it.book.ref.key == "local/10" }.parentWenkuKey)
     }
 
     @Test fun invalidMountsAreRejected() {
-        assertThrows(IllegalArgumentException::class.java) { library().withWenkuVolumes("local/1", setOf("local/2")) }
-        assertThrows(IllegalArgumentException::class.java) { library().withWenkuVolumes(parent.book.ref.key, setOf(other.book.ref.key)) }
+        assertThrows(IllegalArgumentException::class.java) { library().withMountedVolumes("local/1", setOf("local/2")) }
+        assertThrows(IllegalArgumentException::class.java) { library().withMountedVolumes(parent.book.ref.key, setOf(other.book.ref.key)) }
         assertThrows(IllegalArgumentException::class.java) { library().withVolumeParent("local/missing", parent.book.ref.key) }
         assertThrows(IllegalArgumentException::class.java) { library().withVolumeParent("local/1", "wenku/missing") }
     }
 
     @Test fun groupsKeepLocalCopiesAccessibleAndNaturallyOrdered() {
-        val mounted = library().withWenkuVolumes(parent.book.ref.key, setOf("local/10", "local/2", "local/1"))
+        val mounted = library().withMountedVolumes(parent.book.ref.key, setOf("local/10", "local/2", "local/1"))
         val groups = mounted.shelfGroups(false, "全部", "", 2)
         assertEquals(2, groups.size)
         assertEquals(listOf("local/1", "local/2", "local/10"), groups.first { it.saved.book.ref == parent.book.ref }.volumes.map { it.book.ref.key })
@@ -93,8 +93,8 @@ class WenkuVolumesTest {
     }
 
     @Test fun manualOrderSurvivesSerializationSearchAndShelfSorting() {
-        val ordered = library().withWenkuVolumes(parent.book.ref.key, setOf("local/1", "local/2", "local/10"))
-            .withWenkuVolumeOrder(parent.book.ref.key, listOf("local/10", "local/1", "local/2"))
+        val ordered = library().withMountedVolumes(parent.book.ref.key, setOf("local/1", "local/2", "local/10"))
+            .withVolumeOrder(parent.book.ref.key, listOf("local/10", "local/1", "local/2"))
             .copy(positions = mapOf("local/2" to Position("chapter", updatedAt = 100)))
         val restored = appJson.decodeFromString<LibraryState>(appJson.encodeToString(ordered))
         for(sort in 0..2) {
@@ -107,17 +107,17 @@ class WenkuVolumesTest {
     }
 
     @Test fun newMountsAppendAndRemovedOrReassignedVolumesLeaveNoStaleOrder() {
-        val ordered = library().withWenkuVolumes(parent.book.ref.key, setOf("local/1", "local/2"))
-            .withWenkuVolumeOrder(parent.book.ref.key, listOf("local/2", "local/1"))
+        val ordered = library().withMountedVolumes(parent.book.ref.key, setOf("local/1", "local/2"))
+            .withVolumeOrder(parent.book.ref.key, listOf("local/2", "local/1"))
         val added = ordered.withVolumeParent("local/10", parent.book.ref.key)
         assertEquals(listOf("local/2", "local/1", "local/10"), added.shelfGroups(false, "长篇", "", 0).single().volumes.map { it.book.ref.key })
-        assertEquals(added, added.withWenkuVolumes(parent.book.ref.key, setOf("local/10", "local/1", "local/2")))
+        assertEquals(added, added.withMountedVolumes(parent.book.ref.key, setOf("local/10", "local/1", "local/2")))
         for(removed in listOf(
             added.withVolumeParent("local/2", other.book.ref.key),
             added.withVolumeParent("local/2", null),
             added.withoutBook(BookRef("local", "2")),
             added.moveShelfBooks(setOf("local/2"), "独立阅读"),
-            added.withWenkuVolumes(parent.book.ref.key, setOf("local/1", "local/10"))
+            added.withMountedVolumes(parent.book.ref.key, setOf("local/1", "local/10"))
         )) {
             assertEquals(listOf("local/1"), removed.books.first { it.book.ref == parent.book.ref }.volumeOrder)
             assertEquals(listOf("local/1", "local/10"), removed.shelfGroups(false, "全部", "青空", 0).single().volumes.map { it.book.ref.key })
@@ -125,12 +125,12 @@ class WenkuVolumesTest {
     }
 
     @Test fun invalidOrdersCannotDropDuplicateOrStealVolumes() {
-        val mounted = library().withWenkuVolumes(parent.book.ref.key, setOf("local/1", "local/2"))
+        val mounted = library().withMountedVolumes(parent.book.ref.key, setOf("local/1", "local/2"))
             .withVolumeParent("local/10", other.book.ref.key)
         for(keys in listOf(emptyList(), listOf("local/1"), listOf("local/1", "local/1"), listOf("local/1", "local/10"), listOf("local/1", "local/missing"))) {
-            assertThrows(IllegalArgumentException::class.java) { mounted.withWenkuVolumeOrder(parent.book.ref.key, keys) }
+            assertThrows(IllegalArgumentException::class.java) { mounted.withVolumeOrder(parent.book.ref.key, keys) }
         }
-        assertThrows(IllegalArgumentException::class.java) { mounted.withWenkuVolumeOrder("wenku/missing", emptyList()) }
-        assertThrows(IllegalArgumentException::class.java) { mounted.withWenkuVolumeOrder("local/1", emptyList()) }
+        assertThrows(IllegalArgumentException::class.java) { mounted.withVolumeOrder("wenku/missing", emptyList()) }
+        assertThrows(IllegalArgumentException::class.java) { mounted.withVolumeOrder("local/1", emptyList()) }
     }
 }

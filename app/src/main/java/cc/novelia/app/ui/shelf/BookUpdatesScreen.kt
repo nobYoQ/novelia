@@ -49,7 +49,7 @@ import cc.novelia.app.ui.navigation.AppController
 @Composable internal fun BookUpdatesView(state: LibraryState, manual: ShelfCheckStatus?, requested: Boolean,
     onBack: () -> Unit, onCheck: () -> Unit, onBook: (BookRef) -> Unit, onRead: (BookRef) -> Unit) {
     val books = remember(state.books, state.bookUpdates) { state.books.filter { it.hasUpdates }.sortedByDescending { state.bookUpdates[it.book.ref.key]?.checkedAt ?: 0 } }
-    val hasOnlineBooks = remember(state.books) { state.books.any { !it.book.ref.isLocal } }
+    val hasOnlineBooks = remember(state.books) { state.books.any { it.book.ref.isOnline } }
     val last = ShelfCheckReport.decode(state.drafts[ShelfCheckReport.KEY])
     val status = when {
         manual?.active == true -> manual

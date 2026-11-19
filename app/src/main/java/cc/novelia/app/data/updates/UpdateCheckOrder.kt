@@ -7,7 +7,7 @@ import cc.novelia.app.data.model.SavedBook
  * 本地文件不检查远端更新；游标缺失或书目已删除时，从当前在线列表首项开始。
  */
 internal fun booksForUpdate(books: List<SavedBook>, lastCheckedKey: String?): List<SavedBook> {
-    val online = books.filterNot { it.book.ref.isLocal }
+    val online = books.filter { it.book.ref.isOnline }
     val resumeAt = online.indexOfFirst { it.book.ref.key == lastCheckedKey } + 1
     return online.drop(resumeAt) + online.take(resumeAt)
 }

@@ -43,11 +43,12 @@ import cc.novelia.app.ui.components.base.CharacterCountFilterSaver
 import cc.novelia.app.data.library.ShelfBookType
 import cc.novelia.app.data.library.readingStatuses
 import cc.novelia.app.data.library.shelfGroups
+import cc.novelia.app.data.library.createLocalSeries
 import cc.novelia.app.data.library.withReadingStatus
 import cc.novelia.app.data.library.withAutomaticReadingStatus
 import cc.novelia.app.data.library.withVolumeParent
-import cc.novelia.app.data.library.withWenkuVolumeOrder
-import cc.novelia.app.data.library.withWenkuVolumes
+import cc.novelia.app.data.library.withVolumeOrder
+import cc.novelia.app.data.library.withMountedVolumes
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.DownloadEntry
 import cc.novelia.app.data.model.SavedBook
@@ -112,6 +113,7 @@ import kotlinx.coroutines.withContext
     var localExportOriginal by rememberSaveable { mutableStateOf(true) }
     var queueingDownloads by remember { mutableStateOf(false) }
     var volumeManager by remember { mutableStateOf<SavedBook?>(null) }
+    var createSeries by rememberSaveable { mutableStateOf(false) }
     var volumeSheetKey by rememberSaveable { mutableStateOf<String?>(null) }
     var volumeMatches by remember { mutableStateOf<Set<String>?>(null) }
     var volumeParentPicker by remember { mutableStateOf<SavedBook?>(null) }
@@ -178,12 +180,12 @@ import kotlinx.coroutines.withContext
     val commitVolumeOrder: (String, List<String>) -> Unit = { parent, keys ->
         c.store.update { current ->
             val siblings = current.books.filter { it.book.ref.isLocal && it.parentWenkuKey == parent }.map { it.book.ref.key }
-            if(current.books.none { it.book.ref.key == parent && it.book.ref.isWenku }) current
-            else current.withWenkuVolumeOrder(parent, keys.filter { it in siblings } + siblings.filter { it !in keys })
+            if(current.books.none { it.book.ref.key == parent && it.book.ref.isVolumeParent }) current
+            else current.withVolumeOrder(parent, keys.filter { it in siblings } + siblings.filter { it !in keys })
         }
     }
     val selectionActions: @Composable (Boolean, List<SavedBook>) -> Unit = { localFiles, chosen ->
-        val downloadable = chosen.filter { !it.book.ref.isLocal && !it.book.ref.isWenku }
+        val downloadable = chosen.filter { it.book.ref.isWebNovel }
         ShelfSelectionActions(chosen.size, localFiles, batchWorking, queueingDownloads,
             canDownload = downloadable.isNotEmpty(), onMove = { bulkMove = true }, onStatus = { bulkStatus = true },
             onDownload = {
@@ -214,6 +216,9 @@ import kotlinx.coroutines.withContext
         AppIconButton(onClick = { c.go("updates") }) { Icon(Icons.Outlined.NewReleases, "查看书架更新") }
         AppIconButton(onClick = { c.go("history") }) { Icon(Icons.Outlined.History, "阅读历史") }
         AppIconButton(onClick = importLocalFiles, enabled = !importing) { Icon(Icons.Outlined.FileOpen, "导入本地文件") }
+        if(tab == 0 && !managing) AppIconButton(onClick = { createSeries = true }, enabled = !batchWorking) {
+            Icon(Icons.Outlined.LibraryAdd, "新建本地总集")
+        }
     }) { padding ->
         ShelfPager(tab, { tab = it }, enabled = !batchWorking && !cloudBusy, modifier = Modifier.padding(padding),
             controls = {
@@ -327,7 +332,7 @@ import kotlinx.coroutines.withContext
                                             else { filtersExpanded = false; onOpenBook(saved.book.ref) }
                                         } }
                                         LaunchedEffect(active, saved.book.ref, profile?.username, state.syncStatus[profile?.username]?.lastSuccessAt) {
-                                            if(active && profile != null && !saved.book.ref.isLocal && !saved.book.ref.isWenku) {
+                                            if(active && profile != null && saved.book.ref.isWebNovel) {
                                                 try { c.refreshCloudReading(saved.book) }
                                                 catch(e: kotlinx.coroutines.CancellationException) { throw e }
                                                 catch(_: Exception) { /* 离线保留已有进度。 */ }
@@ -339,11 +344,11 @@ import kotlinx.coroutines.withContext
                                             if(selectionEnabled && key in selectableKeys) onLongClick("选择${saved.book.title}") { dragSelection.selectOne(key); true }
                                         }, selecting = pageManaging, selected = if(pageManaging) key in selection else key == selectedBookKey,
                                             enabled = !batchWorking && (!pageManaging || key in selectableKeys), pinned = saved.pinned,
-                                            volumeLabel = if(saved.book.ref.isWenku) {
+                                            volumeLabel = if(saved.book.ref.isVolumeParent) {
                                                 if(filteringVolumes && group.volumes.size != volumes.size) "匹配 ${group.volumes.size} / ${volumes.size} 卷"
                                                 else if(volumes.isEmpty()) "挂载分卷" else "本地 ${volumes.size} 卷"
                                             } else null,
-                                            onVolumes = if(saved.book.ref.isWenku) ({
+                                            onVolumes = if(saved.book.ref.isVolumeParent) ({
                                                 focus.clearFocus()
                                                 managing = false; selection = emptySet(); volumeMatches = if(filteringVolumes) group.volumes.map { it.book.ref.key }.toSet() else null
                                                 volumeSheetKey = key
@@ -354,7 +359,7 @@ import kotlinx.coroutines.withContext
                             } else items(reorder.rows, key = { it.saved.book.ref.key }, contentType = { if(it.parent == null) "book" else "volume" }) { row ->
                                 val saved = row.saved
                                 LaunchedEffect(active, saved.book.ref, profile?.username, state.syncStatus[profile?.username]?.lastSuccessAt) {
-                                    if(!active || profile == null || saved.book.ref.isLocal || saved.book.ref.isWenku) return@LaunchedEffect
+                                    if(!active || profile == null || !saved.book.ref.isWebNovel) return@LaunchedEffect
                                     try { c.refreshCloudReading(saved.book) }
                                     catch(e: kotlinx.coroutines.CancellationException) { throw e }
                                     catch(_: Exception) { /* 离线时保留已知的本地和云端位置。 */ }
@@ -408,7 +413,7 @@ import kotlinx.coroutines.withContext
                                         status = bookRowStatus(saved.book, saved, state.positions[saved.book.ref.key], state.bookUpdates[saved.book.ref.key], profile?.username),
                                         showCharacterCount = filterCharacters, compactMetadata = page == 0, trailing = trailing,
                                         onRead = onRead)
-                                    if(saved.book.ref.isWenku && (!pageManaging || dragSelection.dragging)) {
+                                    if(saved.book.ref.isVolumeParent && (!pageManaging || dragSelection.dragging)) {
                                         val rotation by animateFloatAsState(if(row.expanded) 180f else 0f, tween(if(reducedMotion) 0 else AppMotion.Standard), label = "wenku-volume-disclosure")
                                         AppTextButton(onClick = {
                                             if(row.volumeCount == 0) volumeManager = saved
@@ -460,6 +465,13 @@ import kotlinx.coroutines.withContext
                 onDismiss = { favoriteSync = false }, onFinished = { favoriteSync = false; c.message(it) })
         } }
     }
+    if(createSeries) TextPrompt("新建本地总集", "总集名称", onDismiss = { createSeries = false }) { name ->
+        c.action {
+            val ref = BookRef.newLocalSeries()
+            c.store.update { it.createLocalSeries(ref, name, folder) }
+            onOpenBook(ref)
+        }
+    }
     if(createFolder) TextPrompt("新建收藏夹", "名称", onDismiss = { createFolder = false }) { name -> c.action { c.store.update { it.createShelfFolder(name.trim()) } } }
     if(renameFolder) TextPrompt("重命名收藏夹", "名称", folder, { renameFolder = false }) { name -> val previous = folder; c.action { c.store.update { it.renameShelfFolder(previous, name.trim()) } } }
     if(deleteFolder) ConfirmDialog("删除收藏夹？", "其中的书籍会移入默认收藏，文件不会删除。", { deleteFolder = false }, confirmLabel = "删除收藏夹") { val previous = folder; c.action { c.store.update { it.deleteShelfFolder(previous) }; folderId = null } }
@@ -493,17 +505,21 @@ import kotlinx.coroutines.withContext
         }
     }
     permanentDeletion?.let { refs ->
-        ConfirmDialog("彻底删除 ${refs.size} 本书？", "移出所选书籍，删除其全部本地分卷、导入副本、对应下载任务和文件，以及本机阅读记录、笔记和单书设置。正在下载的任务会取消。导入前的原文件和原站收藏不受影响，此操作无法撤销。",
-            { permanentDeletion = null }, confirmLabel = "彻底删除") {
+        val onlySeries = refs.all { it.isLocalSeries }
+        val seriesMessage = "本地总集解散后，未单独选中删除的分卷会回到书架，保留文件和阅读进度。"
+        val message = if(onlySeries) seriesMessage else "移出所选书籍，删除其关联的本地分卷、导入副本、下载及本机阅读资料。导入前的原文件和原站收藏不受影响，此操作无法撤销。" +
+            if(refs.any { it.isLocalSeries }) "\n\n$seriesMessage" else ""
+        ConfirmDialog(if(onlySeries) "解散 ${refs.size} 个总集？" else "彻底删除 ${refs.size} 本书？", message,
+            { permanentDeletion = null }, confirmLabel = if(onlySeries) "解散总集" else "彻底删除") {
             batchWorking = true
-            c.action("书籍及关联文件已彻底删除") {
+            c.action(if(onlySeries) "总集已解散" else "所选书籍已处理") {
                 try { deleteBookFiles(c.app, refs); managing = false; selection = emptySet() }
                 finally { batchWorking = false }
             }
         }
     }
     if(bulkMove) AppAlertDialog(onDismissRequest = { bulkMove = false }, title = { Text("移入收藏夹") }, text = { AppScrollColumn {
-        if(state.books.any { it.book.ref.key in selection && it.parentWenkuKey != null && it.parentWenkuKey !in selection }) Text("单独移动分卷会取消其挂载；同时移动所属文库可保留挂载。", style = MaterialTheme.typography.bodySmall)
+        if(state.books.any { it.book.ref.key in selection && it.parentWenkuKey != null && it.parentWenkuKey !in selection }) Text("单独移动分卷会取消挂载。同时移动父项可保留挂载。", style = MaterialTheme.typography.bodySmall)
         state.folders.forEach { target -> AppTextButton(onClick = { c.store.update { it.moveShelfBooks(selection, target) }; bulkMove = false; managing = false; selection = emptySet() }) { Text(target) } }
     } }, confirmButton = {})
     if(bulkStatus) AppAlertDialog(onDismissRequest = { bulkStatus = false }, title = { Text("修改 ${selection.size} 本的阅读状态") }, text = { Column {
@@ -525,6 +541,9 @@ import kotlinx.coroutines.withContext
         if(saved.book.ref.isLocal) MenuRow("书籍详情", "查看阅读时长和管理封面", Icons.Outlined.Info, {
             selected = null; c.showBookDetails(saved.book.ref)
         })
+        if(saved.book.ref.isLocalSeries) MenuRow("总集详情", "编辑名称和封面", Icons.Outlined.Info, {
+            selected = null; onOpenBook(saved.book.ref)
+        })
         if(saved.hasUpdates) MenuRow("标记更新已读", "清除本书的更新提示", Icons.Outlined.DoneAll, { c.store.update { it.withAcknowledgedBookUpdates(saved.book.ref) }; selected = null })
         MenuRow(if(saved.pinned) "取消置顶" else "置顶", "在书架顶部显示", Icons.Outlined.PushPin, { c.store.update { it.copy(books = it.books.map { b -> if(b.book.ref == saved.book.ref) b.copy(pinned = !b.pinned) else b }) }; selected = null })
         ChoiceRow("阅读状态", readingStatuses, readingStatuses.indexOf(saved.status)) { status -> c.store.update { it.withReadingStatus(setOf(saved.book.ref.key), readingStatuses[status]) }; selected = null }
@@ -532,12 +551,12 @@ import kotlinx.coroutines.withContext
             c.store.update { it.withAutomaticReadingStatus(setOf(saved.book.ref.key)) }; selected = null
         }) else Text(if(state.autoReadingStatus) "阅读状态由自动管理；手动选择后将固定状态" else "自动记录已关闭，当前状态保留",
             Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall)
-        val parent = state.books.firstOrNull { it.book.ref.isWenku && it.book.ref.key == saved.parentWenkuKey }
+        val parent = state.books.firstOrNull { it.book.ref.isVolumeParent && it.book.ref.key == saved.parentWenkuKey }
         if(parent == null) ChoiceRow("收藏夹", state.folders, state.folders.indexOf(saved.folder)) { index -> c.store.saveBook(saved.book, state.folders[index]); selected = null }
         else Text("所属收藏夹：${parent.folder}", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = MaterialTheme.typography.bodyMedium)
-        if(saved.book.ref.isWenku) MenuRow("管理挂载分卷", "选择已导入的分卷，在本书下方展开阅读", Icons.Outlined.LibraryAdd, { selected = null; volumeManager = saved })
+        if(saved.book.ref.isVolumeParent) MenuRow("管理挂载分卷", "选择已导入的书籍作为分卷", Icons.Outlined.LibraryAdd, { selected = null; volumeManager = saved })
         if(saved.book.ref.isWenku && state.books.any { it.parentWenkuKey == saved.book.ref.key }) WenkuSiteOrderActions(c, saved.book.ref.key)
-        if(saved.book.ref.isLocal) MenuRow(if(parent == null) "挂载到文库小说" else "更换或取消挂载", parent?.let { "当前挂载：${it.book.title}" } ?: "归入指定的文库收藏", Icons.Outlined.DriveFileMove, { selected = null; volumeParentPicker = saved })
+        if(saved.book.ref.isLocal) MenuRow(if(parent == null) "挂载到文库或总集" else "更换或取消挂载", parent?.let { "当前挂载：${it.book.title}" } ?: "将本书添加为分卷", Icons.Outlined.DriveFileMove, { selected = null; volumeParentPicker = saved })
         if(saved.book.ref.isLocal) MenuRow("重命名", "修改本地小说或分卷名称", Icons.Outlined.Edit, { selected = null; renamingDocument = saved })
         if(saved.book.ref.isLocal) MenuRow("本地术语表", "维护此文件的专有名词", Icons.Outlined.Translate, { selected = null; c.go("glossary/${saved.book.ref.key}") })
         if(saved.book.ref.isLocal) MenuRow("导出原文件", "保留原格式；原件缺失时导出正文 TXT", Icons.Outlined.IosShare, { c.action {
@@ -561,17 +580,15 @@ import kotlinx.coroutines.withContext
             }
         })
         if(saved.book.ref.isLocal) MenuRow("删除本地小说", "删除导入副本及对应下载，保留阅读记录", Icons.Outlined.DeleteOutline, { selected = null; deletingDocument = saved })
-        MenuRow("彻底删除", if(saved.book.ref.isWenku) "移出书架并删除全部分卷、对应下载和阅读资料" else "移出书架并删除副本、对应下载和阅读资料", Icons.Outlined.DeleteForever, {
+        if(!saved.book.ref.isLocalSeries) MenuRow("彻底删除", if(saved.book.ref.isWenku) "移出书架并删除全部分卷、对应下载和阅读资料" else "移出书架并删除副本、对应下载和阅读资料", Icons.Outlined.DeleteForever, {
             selected = null; permanentDeletion = setOf(saved.book.ref)
         })
     } } }
     volumeManager?.let { parent -> WenkuVolumeManager(parent, state.books, { volumeManager = null }) { keys ->
-        c.store.update { it.withWenkuVolumes(parent.book.ref.key, keys) }
-        volumeManager = null
+        c.action { c.store.update { it.withMountedVolumes(parent.book.ref.key, keys) }; volumeManager = null }
     } }
     volumeParentPicker?.let { volume -> VolumeParentPicker(volume, state.books, { volumeParentPicker = null }) { parentKey ->
-        c.store.update { it.withVolumeParent(volume.book.ref.key, parentKey) }
-        volumeParentPicker = null
+        c.action { c.store.update { it.withVolumeParent(volume.book.ref.key, parentKey) }; volumeParentPicker = null }
     } }
     deletingDocument?.let { saved -> ConfirmDialog("删除「${saved.book.title}」？", "将删除导入副本及对应下载任务和文件，并移出书架。导入前的原文件和阅读记录保留。此操作无法撤销。", { deletingDocument = null }, confirmLabel = "删除本地小说") {
         c.action("本地小说及对应下载已删除") { deleteBookFiles(c.app, setOf(saved.book.ref), eraseReadingData = false) }

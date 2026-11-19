@@ -170,11 +170,11 @@ internal object LibraryBackupArchive {
         val books = state.books.associateBy { it.book.ref.key }
         state.books.forEach { book ->
             require(book.book.ref.provider.isNotBlank() && book.book.ref.id.isNotBlank()) { "备份书籍标识无效" }
-            book.parentWenkuKey?.let { parent -> require(book.book.ref.isLocal && books[parent]?.book?.ref?.isWenku == true) { "分卷挂载关系无效" } }
+            book.parentWenkuKey?.let { parent -> require(book.book.ref.isLocal && books[parent]?.book?.ref?.isVolumeParent == true) { "分卷挂载关系无效" } }
             require(book.volumeOrder.distinct().size == book.volumeOrder.size && book.volumeOrder.all { books[it]?.parentWenkuKey == book.book.ref.key }) { "分卷排序索引无效" }
         }
         require(state.downloadLinks.all { it.localBook.isLocal && id.matches(it.localBook.id) &&
-            (it.sourceBook == null || (!it.sourceBook.isLocal && it.sourceBook.provider.isNotBlank() && it.sourceBook.id.isNotBlank())) }) { "下载副本关联无效" }
+            (it.sourceBook == null || (it.sourceBook.isOnline && it.sourceBook.provider.isNotBlank() && it.sourceBook.id.isNotBlank())) }) { "下载副本关联无效" }
         val expected = mutableSetOf<String>()
         state.themePresets.images.forEach { hash ->
             val path = "theme-images/$hash"
