@@ -20,6 +20,7 @@ import cc.novelia.app.data.model.Profile
 import cc.novelia.app.ui.components.base.Screen
 import cc.novelia.app.ui.components.base.AppIconButton
 import cc.novelia.app.ui.navigation.RootDestinationLayout
+import cc.novelia.app.ui.navigation.RootNavigationLayout
 import cc.novelia.app.ui.theme.AppInteractionMode
 import cc.novelia.app.ui.theme.NoveliaTheme
 import org.junit.Assert.*
@@ -46,13 +47,13 @@ class ProfileLandscapeTest {
                         // Fixture dimensions describe app content, independent of the host emulator's system bars.
                         Surface(Modifier.requiredSize(width, height).consumeWindowInsets(WindowInsets.safeDrawing)
                             .testTag("profile-landscape-preview")) {
-                            RootDestinationLayout("profile", visits::add) {
+                            RootNavigationLayout("profile", visits::add) { _, _ -> RootDestinationLayout {
                                 Screen("我的", actions = {
                                     AppIconButton({ visits += "settings" }) { Icon(Icons.Outlined.Tune, "设置") }
                                 }) { padding ->
                                     ProfileDashboard(profile, 7, 2, 0, visits::add, {}, Modifier.padding(padding))
                                 }
-                            }
+                            } }
                         }
                     }
                 }

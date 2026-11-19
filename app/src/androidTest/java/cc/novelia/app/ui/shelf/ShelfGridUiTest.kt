@@ -14,7 +14,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.NoveliaApplication
 import cc.novelia.app.data.model.*
 import cc.novelia.app.ui.navigation.AppController
-import cc.novelia.app.ui.navigation.RootDestinationLayout
+import cc.novelia.app.ui.navigation.TestShelfRootLayout
 import cc.novelia.app.ui.theme.AppInteractionMode
 import cc.novelia.app.ui.theme.NoveliaTheme
 import kotlinx.coroutines.runBlocking
@@ -50,7 +50,7 @@ class ShelfGridUiTest {
             val nav = rememberNavController()
             val scope = rememberCoroutineScope()
             val c = remember(nav, scope) { AppController(app, nav, scope, SnackbarHostState()) }
-            RootDestinationLayout("shelf", {}) { ShelfScreen(c, onOpenBook = { opened += it }) }
+            TestShelfRootLayout { ShelfScreen(c, onOpenBook = { opened += it }) }
         } } } }
     }
     private fun book(i: Int) = compose.onNodeWithTag("shelf-book-${books[i].book.ref.key}")

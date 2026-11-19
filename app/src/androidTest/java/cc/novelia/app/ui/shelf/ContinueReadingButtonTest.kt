@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.DpRect
 import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.NoveliaApplication
@@ -34,6 +35,8 @@ import cc.novelia.app.data.model.Position
 import cc.novelia.app.data.model.SavedBook
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.navigation.RootDestinationLayout
+import cc.novelia.app.ui.navigation.RootNavigationLayout
+import cc.novelia.app.ui.navigation.LocalRootSelectionMode
 import cc.novelia.app.ui.theme.AppInteractionMode
 import cc.novelia.app.ui.theme.NoveliaTheme
 import kotlinx.coroutines.runBlocking
@@ -79,13 +82,19 @@ class ContinueReadingButtonTest {
                         val nav = rememberNavController()
                         val scope = rememberCoroutineScope()
                         val controller = remember(nav, scope) { AppController(app, nav, scope, SnackbarHostState()) }
+                        val entry by nav.currentBackStackEntryAsState()
+                        var selecting by remember { mutableStateOf(false) }
+                        val updateSelection: (Boolean) -> Unit = remember { { selecting = it } }
                         Box(Modifier.fillMaxSize().testTag("resume-test-root")) {
+                            RootNavigationLayout(entry?.destination?.route, { nav.navigate(it) }, hideBottomNavigation = selecting) { height, _ ->
+                            SideEffect { navigationHeight = height }
                             NavHost(nav, startDestination = "shelf", enterTransition = { EnterTransition.None },
                                 exitTransition = { ExitTransition.None }) {
                                 composable("shelf") {
-                                    RootDestinationLayout("shelf", { nav.navigate(it) },
-                                        onNavigationBarHeightChanged = { navigationHeight = it }) {
-                                        ShelfScreen(controller, onOpenBook = { opened += it })
+                                    RootDestinationLayout(hideBottomNavigation = selecting) {
+                                        CompositionLocalProvider(LocalRootSelectionMode provides updateSelection) {
+                                            ShelfScreen(controller, onOpenBook = { opened += it })
+                                        }
                                     }
                                 }
                                 composable("reader/{provider}/{id}/{chapter}") { entry ->
@@ -93,6 +102,7 @@ class ContinueReadingButtonTest {
                                         Modifier.testTag("resumed-destination"))
                                 }
                                 composable("discover") { Text("发现测试页") }
+                            }
                             }
                         }
                     }

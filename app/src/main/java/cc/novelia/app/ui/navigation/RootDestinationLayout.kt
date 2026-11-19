@@ -12,11 +12,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.SubcomposeLayout
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -24,82 +25,84 @@ import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.appReducedMotion
 import cc.novelia.app.ui.theme.LocalSquareCorners
 import cc.novelia.app.ui.theme.ThemeBar
+import cc.novelia.app.ui.theme.pageContainerColor
 import cc.novelia.app.ui.theme.themeBarBackground
 
 /** 根页面内的选择操作栏接管手机底部导航，不影响其他路由或平板侧栏。 */
 internal val LocalRootSelectionMode = staticCompositionLocalOf<(Boolean) -> Unit> { {} }
 
-/**
- * 导航栏属于根页面自身，与页面一起进退场。不能按当前路由在 NavHost 外增删导航栏：
- * 那会立刻改变仍在退场的页面尺寸，使书架重新排版，甚至跨过双栏布局的断点。
- * 系统底部边距由 NavHost 外的固定容器留出并消费，这里只增加应用导航栏占用的空间。
- */
+private val LocalRootNavigationPadding = compositionLocalOf<PaddingValues> { PaddingValues(0.dp) }
+
+/** 导航栏在转场容器之外绘制。先测量栏位，再为仍在转场的根页面保留相同的空间。 */
 @Composable
-internal fun RootDestinationLayout(
-    route: String,
+internal fun RootNavigationLayout(
+    route: String?,
     onNavigate: (String) -> Unit,
     hideBottomNavigation: Boolean = false,
-    onNavigationBarHeightChanged: (Dp) -> Unit = {},
-    onNavigationRailWidthChanged: (Dp) -> Unit = {},
-    content: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable (barHeight: Dp, railWidth: Dp) -> Unit,
 ) {
-    var selectionMode by remember { mutableStateOf(false) }
-    val updateSelectionMode: (Boolean) -> Unit = remember { { selectionMode = it } }
-    val hideNavigation = hideBottomNavigation || selectionMode
-    val tabs = listOf(
-        Triple("shelf", "书架", Icons.Outlined.CollectionsBookmark),
-        Triple("discover", "发现", Icons.Outlined.Explore),
-        Triple("community", "社区", Icons.Outlined.Forum),
-        Triple("profile", "我的", Icons.Outlined.PersonOutline),
-    )
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val wide = maxWidth >= 600.dp
-        val compactRail = maxHeight < 480.dp
-        val density = LocalDensity.current
-        if(wide || hideNavigation) SideEffect { onNavigationBarHeightChanged(0.dp) }
-        if(!wide) SideEffect { onNavigationRailWidthChanged(0.dp) }
-        Scaffold(
-            containerColor = cc.novelia.app.ui.theme.pageContainerColor(), contentColor = MaterialTheme.colorScheme.onBackground,
-            contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            bottomBar = {
-                if(!wide && !hideNavigation) {
-                    val bar = themeBarBackground(ThemeBar.Bottom, NavigationBarDefaults.containerColor)
-                    NavigationBar(containerColor = bar.color, contentColor = MaterialTheme.colorScheme.onSurface,
-                        modifier = bar.modifier.testTag("root-navigation").onSizeChanged { size ->
-                            onNavigationBarHeightChanged(with(density) { size.height.toDp() })
-                        },
-                    ) {
-                        tabs.forEach { (target, label, icon) ->
-                            val selected = route.startsWith(target)
-                            if(LocalSquareCorners.current) SquareNavigationItem(selected, { if(!selected) onNavigate(target) },
-                                icon, label, Modifier.weight(1f))
-                            else NavigationBarItem(selected, { if(!selected) onNavigate(target) },
-                                { NavigationIcon(icon, label, selected) }, label = { Text(label) })
-                        }
-                    }
-                }
-            },
-        ) { padding ->
-            Row(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
-                if(wide) {
-                    val bar = themeBarBackground(ThemeBar.Bottom, NavigationRailDefaults.ContainerColor)
-                    NavigationRail(containerColor = bar.color, contentColor = MaterialTheme.colorScheme.onSurface, modifier = bar.modifier.testTag("root-navigation").onSizeChanged { size ->
-                        onNavigationRailWidthChanged(with(density) { size.width.toDp() })
-                    }) {
-                        Spacer(Modifier.height(if(compactRail) 12.dp else 40.dp))
-                        tabs.forEach { (target, label, icon) ->
-                            val selected = route.startsWith(target)
-                            if(LocalSquareCorners.current) SquareNavigationItem(selected, { if(!selected) onNavigate(target) },
-                                icon, label, Modifier.width(80.dp), showLabel = !compactRail)
-                            else NavigationRailItem(selected, { if(!selected) onNavigate(target) },
-                                { NavigationIcon(icon, label, selected) },
-                                label = if(compactRail) null else { { Text(label) } })
-                        }
-                    }
-                }
-                Box(Modifier.weight(1f).fillMaxHeight()) {
-                    CompositionLocalProvider(LocalRootSelectionMode provides updateSelectionMode) { content() }
-                }
+    val tab = route?.substringBefore('?')
+    val isRoot = rootTabs.any { it.first == tab }
+    SubcomposeLayout(modifier.fillMaxSize()) { constraints ->
+        val wide = constraints.maxWidth >= 600.dp.roundToPx()
+        val compactRail = constraints.maxHeight < 480.dp.roundToPx()
+        val navigation = subcompose("navigation") { RootNavigation(tab, onNavigate, wide, compactRail) }
+            .single().measure(constraints.copy(minWidth = 0, minHeight = 0))
+        val barHeight = if(wide) 0.dp else navigation.height.toDp()
+        val railWidth = if(wide) navigation.width.toDp() else 0.dp
+        val showNavigation = isRoot && (wide || !hideBottomNavigation)
+        val pages = subcompose("pages") {
+            CompositionLocalProvider(LocalRootNavigationPadding provides PaddingValues(start = railWidth, bottom = barHeight)) {
+                Box(Modifier.fillMaxSize()) { content(if(showNavigation) barHeight else 0.dp, if(showNavigation) railWidth else 0.dp) }
+            }
+        }.single().measure(constraints)
+        layout(pages.width, pages.height) {
+            pages.placeRelative(0, 0)
+            if(showNavigation) navigation.placeRelative(0, if(wide) 0 else pages.height - navigation.height)
+        }
+    }
+}
+
+@Composable
+internal fun RootDestinationLayout(hideBottomNavigation: Boolean = false, content: @Composable () -> Unit) {
+    val padding = LocalRootNavigationPadding.current
+    val bottom = PaddingValues(bottom = if(hideBottomNavigation) 0.dp else padding.calculateBottomPadding())
+    val rail = PaddingValues(start = padding.calculateStartPadding(LocalLayoutDirection.current))
+    Box(Modifier.fillMaxSize().padding(rail).padding(bottom).consumeWindowInsets(bottom)
+        .clipToBounds().background(pageContainerColor())) { content() }
+}
+
+private val rootTabs = listOf(
+    Triple("shelf", "书架", Icons.Outlined.CollectionsBookmark),
+    Triple("discover", "发现", Icons.Outlined.Explore),
+    Triple("community", "社区", Icons.Outlined.Forum),
+    Triple("profile", "我的", Icons.Outlined.PersonOutline),
+)
+
+@Composable private fun RootNavigation(route: String?, onNavigate: (String) -> Unit, wide: Boolean, compactRail: Boolean) {
+    val colors = MaterialTheme.colorScheme
+    if(wide) {
+        val bar = themeBarBackground(ThemeBar.Bottom, NavigationRailDefaults.ContainerColor)
+        NavigationRail(containerColor = bar.color, contentColor = colors.onSurface, modifier = bar.modifier.testTag("root-navigation")) {
+            Spacer(Modifier.height(if(compactRail) 12.dp else 40.dp))
+            rootTabs.forEach { (target, label, icon) ->
+                val selected = route == target
+                if(LocalSquareCorners.current) SquareNavigationItem(selected, { if(!selected) onNavigate(target) },
+                    icon, label, Modifier.width(80.dp), showLabel = !compactRail)
+                else NavigationRailItem(selected, { if(!selected) onNavigate(target) },
+                    { NavigationIcon(icon, label, selected) }, label = if(compactRail) null else { { Text(label) } })
+            }
+        }
+    } else {
+        val bar = themeBarBackground(ThemeBar.Bottom, NavigationBarDefaults.containerColor)
+        NavigationBar(containerColor = bar.color, contentColor = colors.onSurface, modifier = bar.modifier.testTag("root-navigation")) {
+            rootTabs.forEach { (target, label, icon) ->
+                val selected = route == target
+                if(LocalSquareCorners.current) SquareNavigationItem(selected, { if(!selected) onNavigate(target) },
+                    icon, label, Modifier.weight(1f))
+                else NavigationBarItem(selected, { if(!selected) onNavigate(target) },
+                    { NavigationIcon(icon, label, selected) }, label = { Text(label) })
             }
         }
     }

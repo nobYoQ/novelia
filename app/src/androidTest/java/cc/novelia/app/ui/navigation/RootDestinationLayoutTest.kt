@@ -6,9 +6,10 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
@@ -16,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import cc.novelia.app.ui.theme.AppMotion
 import org.junit.Assert.*
@@ -32,6 +34,37 @@ class RootDestinationLayoutTest {
 
     @Test fun phoneShelfKeepsItsHeightWhenEnteringAndLeavingReader() = verifyTransition(390.dp)
 
+    @Test fun tabSwitchRetainsTheSameNavigationBarDuringThePageTransition() {
+        lateinit var nav: NavHostController
+        compose.setContent {
+            MaterialTheme {
+                Box(Modifier.requiredSize(390.dp, 640.dp)) {
+                    nav = rememberNavController()
+                    val entry by nav.currentBackStackEntryAsState()
+                    RootNavigationLayout(entry?.destination?.route, nav::switchRootTab) { _, _ ->
+                        NavHost(nav, startDestination = "shelf", enterTransition = { fadeIn(tween(AppMotion.Standard)) },
+                            exitTransition = { fadeOut(tween(AppMotion.Exit)) }) {
+                            composable("shelf") { RootDestinationLayout { } }
+                            composable("discover") { RootDestinationLayout { } }
+                        }
+                    }
+                }
+            }
+        }
+        val bar = compose.onNodeWithTag("root-navigation")
+        val original = bar.fetchSemanticsNode()
+        val position = original.boundsInRoot
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.onNode(hasText("发现") and hasClickAction() and hasAnyAncestor(hasTestTag("root-navigation"))).performClick()
+            compose.mainClock.advanceTimeBy(64)
+            compose.runOnIdle { assertEquals(setOf("shelf", "discover"), nav.visibleEntries.value.map { it.destination.route }.toSet()) }
+            val during = bar.fetchSemanticsNode()
+            assertEquals(original.id, during.id)
+            assertEquals(position, during.boundsInRoot)
+        } finally { compose.mainClock.autoAdvance = true }
+    }
+
     private fun verifyTransition(width: Dp) {
         lateinit var nav: NavHostController
         val rootSizes = mutableListOf<IntSize>()
@@ -44,13 +77,15 @@ class RootDestinationLayoutTest {
                         val bottomPadding = PaddingValues(bottom = padding.calculateBottomPadding())
                         Box(Modifier.fillMaxSize().padding(bottomPadding).consumeWindowInsets(bottomPadding)) {
                             nav = rememberNavController()
+                            val entry by nav.currentBackStackEntryAsState()
+                            RootNavigationLayout(entry?.destination?.route, nav::switchRootTab) { _, _ ->
                             NavHost(nav, startDestination = "shelf", modifier = Modifier.fillMaxSize(),
                                 enterTransition = { fadeIn(tween(AppMotion.Standard)) },
                                 exitTransition = { fadeOut(tween(AppMotion.Exit)) },
                                 popEnterTransition = { fadeIn(tween(AppMotion.Standard)) },
                                 popExitTransition = { fadeOut(tween(AppMotion.Exit)) }) {
                                 composable("shelf") {
-                                    RootDestinationLayout("shelf", nav::switchRootTab) {
+                                    RootDestinationLayout {
                                         BoxWithConstraints(Modifier.fillMaxSize().onSizeChanged { rootSizes += it }) {
                                             val expanded = maxWidth >= 840.dp
                                             SideEffect { expandedLayouts += expanded }
@@ -60,6 +95,7 @@ class RootDestinationLayoutTest {
                                 composable("reader") {
                                     Box(Modifier.fillMaxSize().onSizeChanged { readerSizes += it })
                                 }
+                            }
                             }
                         }
                     }
@@ -107,5 +143,15 @@ class RootDestinationLayoutTest {
             compose.mainClock.advanceTimeBy(300)
         }
         compose.mainClock.autoAdvance = true
+    }
+}
+
+@Composable internal fun TestShelfRootLayout(content: @Composable () -> Unit) {
+    var selecting by remember { mutableStateOf(false) }
+    val updateSelection: (Boolean) -> Unit = remember { { selecting = it } }
+    RootNavigationLayout("shelf", {}, hideBottomNavigation = selecting) { _, _ ->
+        RootDestinationLayout(hideBottomNavigation = selecting) {
+            CompositionLocalProvider(LocalRootSelectionMode provides updateSelection, content = content)
+        }
     }
 }

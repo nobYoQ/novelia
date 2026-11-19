@@ -17,8 +17,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.data.catalog.providers
 import cc.novelia.app.data.model.*
 import cc.novelia.app.data.network.CloudWebFilter
-import cc.novelia.app.ui.navigation.LocalRootSelectionMode
 import cc.novelia.app.ui.navigation.RootDestinationLayout
+import cc.novelia.app.ui.navigation.RootNavigationLayout
 import cc.novelia.app.ui.theme.AppInteractionMode
 import cc.novelia.app.ui.theme.NoveliaTheme
 import org.junit.Assert.*
@@ -50,9 +50,8 @@ class CloudShelfInteractionTest {
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, fontScale)) {
                 AppInteractionMode(false, reduced) { NoveliaTheme("dark") {
-                    Surface(Modifier.fillMaxSize()) { RootDestinationLayout("shelf", {}) {
-                        val mode = LocalRootSelectionMode.current
-                        SideEffect { mode(managing) }
+                    Surface(Modifier.fillMaxSize()) { RootNavigationLayout("shelf", {}, hideBottomNavigation = managing) { _, _ ->
+                        RootDestinationLayout(hideBottomNavigation = managing) {
                         Column(Modifier.fillMaxSize()) {
                             Text("书架", Modifier.padding(20.dp), style = MaterialTheme.typography.headlineLarge)
                             PrimaryTabRow(2) { listOf("我的书架", "本地文件", "云端收藏").forEachIndexed { index, title -> Tab(index == 2, {}, text = { Text(title) }) } }
@@ -71,7 +70,7 @@ class CloudShelfInteractionTest {
                                     { opened++ }, { local = true }, { busy = true }, {}, grid = grid)
                             }
                         }
-                    } }
+                    } } }
                     if(local) CloudFavoriteLocalSheet(listOf("默认收藏", "周末阅读"), selected.size, { local = false }) {
                         savedFolder = it; local = false
                     }
