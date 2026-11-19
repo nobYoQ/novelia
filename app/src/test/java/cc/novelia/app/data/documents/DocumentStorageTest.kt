@@ -7,6 +7,8 @@ import cc.novelia.app.data.model.LocalReadingContent
 import cc.novelia.app.data.storage.appJson
 import java.io.File
 import java.nio.file.Files
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import kotlinx.serialization.encodeToString
 import org.junit.Assert.*
 import org.junit.Test
@@ -48,6 +50,49 @@ class DocumentStorageTest {
             assertEquals(upgraded, storage.chapter(next, "c"))
             assertEquals(upgraded, storage.full(storage.index("book")).chapters.single())
             assertEquals("jp-zh", storage.full(next).downloadMode)
+        } finally { directory.deleteRecursively() }
+    }
+
+    @Test fun epubTitleUpgradeUpdatesTheEntireIndexAtomicallyWithoutRewritingChapterFiles() {
+        val directory = Files.createTempDirectory("epub-title-upgrade").toFile()
+        try {
+            val source = File(directory, "book.epub")
+            ZipOutputStream(source.outputStream()).use { zip ->
+                mapOf(
+                    "META-INF/container.xml" to "<container><rootfile full-path='book.opf'/></container>",
+                    "book.opf" to """<package><manifest>
+                        <item id="chapter/1" href="one.xhtml"/><item id="chapter/2" href="two.xhtml"/>
+                        </manifest><spine><itemref idref="chapter/1"/><itemref idref="chapter/2"/></spine></package>""",
+                    "one.xhtml" to "<html><head><title>卷名</title></head><body><h1>第一章</h1><p>正文甲</p></body></html>",
+                    "two.xhtml" to "<html><head><title>卷名</title></head><body><h1>第二章</h1><p>正文乙</p></body></html>",
+                ).forEach { (name, text) ->
+                    zip.putNextEntry(ZipEntry(name))
+                    zip.write(text.toByteArray(Charsets.UTF_8))
+                    zip.closeEntry()
+                }
+            }
+            val writes = mutableListOf<String>()
+            var failManifest = false
+            val storage = DocumentStorage(directory, { it.readText() }, { file, text ->
+                if (failManifest && file.name == "book.json") throw java.io.IOException("disk full")
+                writes += file.name
+                file.writeText(text)
+            })
+            val legacy = original.copy(format = "epub", chapters = original.chapters.map { it.copy(title = "卷名") })
+            val index = storage.save(legacy)
+            writes.clear()
+            failManifest = true
+            assertThrows(java.io.IOException::class.java) { storage.recoverEpubTitles(index, source) }
+            assertEquals(legacy, storage.full(storage.index("book")))
+
+            failManifest = false
+            val upgraded = storage.recoverEpubTitles(index, source)
+            assertEquals(listOf("book.json"), writes)
+            assertEquals(index.chapterFiles, upgraded.chapterFiles)
+            assertEquals(upgraded, storage.index("book"))
+            assertEquals(original.chapters, storage.full(upgraded).chapters)
+            assertSame(upgraded, storage.recoverEpubTitles(upgraded, source))
+            assertEquals(listOf("book.json"), writes)
         } finally { directory.deleteRecursively() }
     }
 

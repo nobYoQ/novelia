@@ -128,6 +128,31 @@ class LocalEpubReadingFlowTest {
         } }
     }
 
+    @Test fun legacyChapterTitleIsUpdatedOnOpeningTheTocWithoutMovingProgressOrNotes() = runBlocking {
+        withContext(Dispatchers.IO) { fixture { context, store ->
+            val bytes = epub("<h1>第一章</h1><p>这一段有阅读进度和笔记。</p>")
+            val parsed = DocumentTools.parse("卷.epub", bytes)
+            val original = parsed.chapters.single()
+            val old = parsed.copy(id = "old-titles", epubTitleVersion = 0, chapters = listOf(original.copy(title = "卷名")))
+            store.saveDocument(old)
+            store.documentSource(old.id, "epub").writeBytes(bytes)
+            val key = BookRef("local", old.id).key
+            val position = Position("c", index = 2, offset = 87, textOffset = 4, updatedAt = 123, sourceParagraph = 1)
+            val note = Note("note", key, "c", 1, "阅读进度", "保留这条笔记", selection = NoteSelection("原文", start = 4, end = 8))
+            store.update { it.copy(positions = mapOf(key to position), notes = listOf(note)) }
+
+            assertEquals("第一章", store.documentIndex(old.id).chapters.single().title)
+            assertEquals(original, store.documentChapter(old.id, "c"))
+            store.flush()
+
+            val reopened = LocalStore(context)
+            assertEquals("第一章", reopened.documentIndex(old.id).chapters.single().title)
+            assertEquals(original, reopened.documentChapter(old.id, "c"))
+            assertEquals(position, reopened.state.value.positions[key])
+            assertEquals(listOf(note), reopened.state.value.notes)
+        } }
+    }
+
     @Test fun rubyWhitespaceInExistingBilingualCacheIsRepairedBeforeLayoutAndSurvivesRestart() = runBlocking {
         withContext(Dispatchers.IO) { fixture { context, store ->
             val japanese = "地方勤務の聖騎士"

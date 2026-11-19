@@ -31,4 +31,6 @@ fun LocalChapter.toReaderChapter(novelTitle: String? = null, prevId: String? = n
     /** 以正文哈希寻址的章节文件索引；可移植格式和旧版完整文档中为空。 */
     val chapterFiles: Map<String, String> = emptyMap(),
     /** 下载请求的内容模式，用于结合 EPUB 原文标记识别对照段落。 */
-    val downloadMode: String? = null)
+    val downloadMode: String? = null,
+    /** EPUB 目录标题独立升级，可覆盖章节正文文件中的旧标题。 */
+    val epubTitleVersion: Int = 0)

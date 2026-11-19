@@ -18,7 +18,16 @@ class ReaderChapterHeadingTest {
         assertNull(chapterHeading("第一章 启程", listOf(title.copy(parts = listOf(TextPart("出発", "jp")) + title.parts))))
         val body = ReadingParagraph(1, listOf(TextPart("我们翻开了第一章 启程。", "local")))
         assertEquals("第一章 启程", chapterHeading("第一章 启程", listOf(body, title)))
-        assertEquals("第一章 启程", chapterHeading("第一章 启程", listOf(ReadingParagraph(0, emptyList(), localImageId = "cover"), title)))
+        val onlineImage = ReadingParagraph(0, emptyList(), imageUrl = "https://example.test/cover.png")
+        assertEquals("第一章 启程", chapterHeading("第一章 启程", listOf(onlineImage, title)))
+    }
+
+    @Test fun leadingLocalIllustrationHasNoSyntheticTitlePage() {
+        val illustration = ReadingParagraph(0, emptyList(), localImageId = "cover")
+        val body = ReadingParagraph(1, listOf(TextPart("正文", "local")))
+        assertNull(chapterHeading("插图", listOf(illustration)))
+        assertNull(chapterHeading("第一章", listOf(illustration, body)))
+        assertEquals("第一章", chapterHeading("第一章", listOf(body, illustration)))
     }
 
     @Test fun headingAndBodyAnchorsRemainSeparateAcrossPages() {

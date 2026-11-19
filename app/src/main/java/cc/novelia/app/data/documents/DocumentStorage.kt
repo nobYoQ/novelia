@@ -5,6 +5,8 @@ import cc.novelia.app.data.model.LocalDocument
 import cc.novelia.app.data.model.LocalReadingContent
 import cc.novelia.app.data.storage.appJson
 import cc.novelia.app.data.storage.hashName
+import cc.novelia.app.files.epub.EPUB_TITLE_VERSION
+import cc.novelia.app.files.epub.readEpubTitles
 import java.io.File
 import java.io.IOException
 import kotlinx.serialization.encodeToString
@@ -59,15 +61,26 @@ internal class DocumentStorage(
         return index
     }
 
-    /** 外置章节除校验哈希外还检查 ID 和标题，防止目录错配；旧格式直接使用内嵌正文。 */
+    /** 外置章节校验哈希和 ID；升级过的 EPUB 以目录中的标题为准。 */
     fun chapter(index: LocalDocument, chapterId: String): LocalChapter {
         val descriptor = index.chapters.firstOrNull { it.id == chapterId } ?: error("本地章节不存在")
         val hash = index.chapterFiles[chapterId] ?: return descriptor
         val text = read(chapterFile(index.id, hash))
         require(hashName(text) == hash) { "本地章节文件校验失败" }
-        return appJson.decodeFromString<LocalChapter>(text).also {
-            require(it.id == chapterId && it.title == descriptor.title) { "本地章节文件与目录不一致" }
-        }
+        val chapter = appJson.decodeFromString<LocalChapter>(text)
+        val indexHasEpubTitles = index.format == "epub" && index.epubTitleVersion > 0
+        require(chapter.id == chapterId && (indexHasEpubTitles || chapter.title == descriptor.title)) { "本地章节文件与目录不一致" }
+        return if (indexHasEpubTitles && chapter.title != descriptor.title) chapter.copy(title = descriptor.title) else chapter
+    }
+
+    /** 从原件恢复整本目录，只提交轻量索引，保留正文文件和所有定位标识。 */
+    fun recoverEpubTitles(index: LocalDocument, source: File): LocalDocument {
+        if (index.format != "epub" || index.epubTitleVersion >= EPUB_TITLE_VERSION || index.chapterFiles.isEmpty() || !source.isFile) return index
+        val titles = readEpubTitles(source, index.chapterFiles.keys)
+        if (titles.keys != index.chapterFiles.keys) return index
+        val next = index.copy(chapters = index.chapters.map { it.copy(title = titles.getValue(it.id)) }, epubTitleVersion = EPUB_TITLE_VERSION)
+        write(manifest(index.id), appJson.encodeToString(next))
+        return next
     }
 
     fun full(index: LocalDocument, checkCancelled: () -> Unit = {}): LocalDocument = index.copy(

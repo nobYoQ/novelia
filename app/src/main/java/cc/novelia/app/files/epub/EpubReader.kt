@@ -1,14 +1,12 @@
 package cc.novelia.app.files.epub
 
 import cc.novelia.app.data.model.LocalChapter
+import cc.novelia.app.files.DocumentTools
 import java.io.File
 import java.io.FilterInputStream
 import java.io.InputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
-import org.jsoup.Jsoup
-import org.jsoup.parser.Parser
-import cc.novelia.app.files.DocumentTools
 
 internal data class EpubContents(val chapters: List<LocalChapter>, val cover: String?)
 
@@ -25,24 +23,70 @@ internal fun readEpubFile(
     downloadMode: String? = null,
     chapterId: String? = null,
 ): EpubContents = ZipFile(file).use { zip ->
-    val entries = linkedMapOf<String, ZipEntry>()
-    var expanded = 0L
-    val enumeration = zip.entries()
-    var entryCount = 0
-    while (enumeration.hasMoreElements()) {
+    val archive = EpubArchive(zip, checkCancelled)
+    val book = readEpubPackage(archive::text, archive::navigationText, checkCancelled)
+    val imageHashes = mutableMapOf<String, String?>()
+    fun image(path: String?): String? {
+        if (path == null || imageSink == null) return null
+        return imageHashes.getOrPut(path) { archive.image(path, imageSink) }
+    }
+    val cover = if (chapterId == null) image(book.coverPath) else null
+    var textCharacters = 0L
+    val notes = EpubNotes(archive::text, checkCancelled)
+    val chapters = book.spine.mapNotNull { item ->
         checkCancelled()
-        val entry = enumeration.nextElement()
-        require(++entryCount <= 10_000) { "压缩包包含过多文件" }
-        val path = normalizeEpubPath(entry.name)
-        require(!entry.name.startsWith('/') && !entry.name.contains('\\') && path != null) { "压缩包路径无效" }
-        if (!entry.isDirectory) {
-            require(entry.size >= 0) { "压缩包文件大小无效" }
-            expanded += entry.size
-            require(expanded <= DocumentTools.MAX_EXPANDED) { "解压后文件过大" }
-            require(entries.put(path!!, entry) == null) { "压缩包包含重复路径" }
+        if (chapterId != null && item.id != chapterId) return@mapNotNull null
+        val html = archive.text(item.path) ?: return@mapNotNull null
+        parseEpubChapter(item.id, html, downloadMode,
+            image = { source -> image(resolveEpubResource(item.path.substringBeforeLast('/', ""), source)) },
+            checkCancelled = checkCancelled, onText = { paragraph ->
+                textCharacters += paragraph.length
+                require(textCharacters <= 16 * 1024 * 1024) { "EPUB 正文过长，请先拆分" }
+            }, note = { href, explicit -> notes.resolve(item.path, href, explicit) },
+            chapterTitle = { book.chapterTitle(item.path, it) })
+    }
+    EpubContents(chapters, cover)
+}
+
+/** 更新旧目录时只匹配原章节 ID，无需重新提取正文、注音或图片。 */
+internal fun readEpubTitles(file: File, chapterIds: Set<String>): Map<String, String> {
+    DocumentTools.requireImportSize(file.length())
+    return ZipFile(file).use { zip ->
+        val archive = EpubArchive(zip) {}
+        val book = readEpubPackage(archive::text, archive::navigationText)
+        buildMap {
+            for ((id, path) in book.spine) {
+                if (id !in chapterIds) continue
+                val title = book.tocTitle(path) ?: archive.text(path)?.let { book.chapterTitle(path, epubChapterDocument(it)) }
+                if (title != null) put(id, title)
+            }
         }
     }
-    fun open(entry: ZipEntry): InputStream = object : FilterInputStream(zip.getInputStream(entry)) {
+}
+
+private class EpubArchive(private val zip: ZipFile, private val checkCancelled: () -> Unit) {
+    private val entries = linkedMapOf<String, ZipEntry>()
+
+    init {
+        var expanded = 0L
+        val enumeration = zip.entries()
+        var entryCount = 0
+        while (enumeration.hasMoreElements()) {
+            checkCancelled()
+            val entry = enumeration.nextElement()
+            require(++entryCount <= 10_000) { "压缩包包含过多文件" }
+            val path = normalizeEpubPath(entry.name)
+            require(!entry.name.startsWith('/') && !entry.name.contains('\\') && path != null) { "压缩包路径无效" }
+            if (!entry.isDirectory) {
+                require(entry.size >= 0) { "压缩包文件大小无效" }
+                expanded += entry.size
+                require(expanded <= DocumentTools.MAX_EXPANDED) { "解压后文件过大" }
+                require(entries.put(path!!, entry) == null) { "压缩包包含重复路径" }
+            }
+        }
+    }
+
+    private fun open(entry: ZipEntry): InputStream = object : FilterInputStream(zip.getInputStream(entry)) {
         private var consumed = 0L
         private fun verify(count: Int): Int {
             checkCancelled()
@@ -63,58 +107,26 @@ internal fun readEpubFile(
     }
     fun text(path: String): String? {
         val entry = entries[path] ?: return null
-        require(entry.size <= 8 * 1024 * 1024) { "EPUB 单个正文或目录文件过大，请先拆分" }
-        return open(entry).use { DocumentTools.readBounded(it, 8 * 1024 * 1024, checkCancelled).toString(Charsets.UTF_8) }
+        require(entry.size <= MAX_EPUB_XML_BYTES) { "EPUB 单个正文或目录文件过大，请先拆分" }
+        return open(entry).use { decodeEpubXml(DocumentTools.readBounded(it, MAX_EPUB_XML_BYTES, checkCancelled)) }
     }
-    fun resource(base: String, href: String): String? {
-        if (href.contains(':') || href.startsWith('/')) return null
-        val decoded = java.net.URLDecoder.decode(href.replace("+", "%2B"), "UTF-8")
-        if (decoded.contains('\\') || decoded.startsWith('/')) return null
-        return normalizeEpubPath(if (base.isBlank()) decoded else "$base/$decoded")
-    }
-    val imageHashes = mutableMapOf<String, String?>()
-    fun image(path: String?): String? {
-        if (path == null || imageSink == null) return null
-        if (imageHashes.containsKey(path)) return imageHashes[path]
+
+    fun navigationText(path: String): String? = entries[path]?.takeIf { it.size <= MAX_EPUB_XML_BYTES }?.let { text(path) }
+
+    fun image(path: String, imageSink: (String, InputStream) -> Unit): String? {
         val entry = entries[path] ?: return null
         if (entry.size > 16 * 1024 * 1024) return null
         checkCancelled()
         val hash = open(entry).use { DocumentTools.digest(it, 16 * 1024 * 1024L, checkCancelled) }
         // 第二轮读取将图片流式写入磁盘，文件导入不保留图片 ByteArray 或 Base64。
         open(entry).use { imageSink(hash, it) }
-        imageHashes[path] = hash
         return hash
     }
-    val container = text("META-INF/container.xml") ?: error("EPUB 缺少 container.xml")
-    val opfPath = Jsoup.parse(container, "", Parser.xmlParser()).getElementsByTag("rootfile").firstOrNull()?.attr("full-path")
-        ?.let(::normalizeEpubPath) ?: error("EPUB 未指定内容文件")
-    val opf = Jsoup.parse(text(opfPath) ?: error("EPUB 缺少 OPF"), "", Parser.xmlParser())
-    val directory = opfPath.substringBeforeLast('/', "")
-    val manifest = opf.getElementsByTag("item").associate { it.attr("id") to it.attr("href") }
-    val coverId = opf.getElementsByTag("meta").firstOrNull { it.attr("name") == "cover" }?.attr("content")
-    val coverHref = opf.getElementsByTag("item").firstOrNull { it.attr("properties").split(' ').contains("cover-image") }?.attr("href") ?: manifest[coverId]
-    val cover = if (chapterId == null) coverHref?.let { image(resource(directory, it)) } else null
-    var textCharacters = 0L
-    val notes = EpubNotes(::text, checkCancelled)
-    val chapters = opf.getElementsByTag("itemref").mapNotNull { item ->
-        checkCancelled()
-        if (chapterId != null && item.attr("idref") != chapterId) return@mapNotNull null
-        val href = manifest[item.attr("idref")] ?: return@mapNotNull null
-        val path = resource(directory, href) ?: return@mapNotNull null
-        val html = text(path) ?: return@mapNotNull null
-        parseEpubChapter(item.attr("idref"), html, downloadMode,
-            image = { source -> image(resource(path.substringBeforeLast('/', ""), source)) },
-            checkCancelled = checkCancelled, onText = { paragraph ->
-                textCharacters += paragraph.length
-                require(textCharacters <= 16 * 1024 * 1024) { "EPUB 正文过长，请先拆分" }
-            }, note = { href, explicit -> notes.resolve(path, href, explicit) })
-    }
-    EpubContents(chapters, cover)
 }
 
 internal fun normalizeEpubPath(path: String): String? {
     val stack = mutableListOf<String>()
-    for (part in path.substringBefore('#').split('/')) when (part) {
+    for (part in path.split('/')) when (part) {
         "", "." -> Unit
         ".." -> if (stack.isEmpty()) return null else stack.removeAt(stack.lastIndex)
         else -> stack += part

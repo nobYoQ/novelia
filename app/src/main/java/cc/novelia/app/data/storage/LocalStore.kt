@@ -102,7 +102,7 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
     private val sourceIndexDelegate = lazy {
         val file = File(documentsDir, "source-index.json")
         val initial = runCatching { appJson.decodeFromString<Map<String, String>>(AtomicFile(file).openRead().bufferedReader(Charsets.UTF_8).use { it.readText() }) }.getOrDefault(emptyMap())
-        DocumentHashIndex(initial, { documentIndex(it).sourceHash }, { atomicText(file, appJson.encodeToString(it)) })
+        DocumentHashIndex(initial, { loadDocumentIndex(safeId(it)).sourceHash }, { atomicText(file, appJson.encodeToString(it)) })
     }
     private val sourceIndex by sourceIndexDelegate
     private var importBatchDepth = 0
@@ -374,13 +374,24 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
     /** 轻量章节目录，用于阅读导航、搜索规划和导出元数据。 */
     fun documentIndex(id: String): LocalDocument = synchronized(documentLock) {
         val key = safeId(id)
-        documentMemory[key] ?: documentStorage.index(key).also { documentMemory.put(key, it) }
+        val index = loadDocumentIndex(key)
+        if (index.format != "epub" || recoveryIssue.value != null) return index
+        val updated = try { documentStorage.recoverEpubTitles(index, documentSource(key, "epub")) }
+        catch (_: Exception) { return index }
+        if (updated !== index) {
+            documentMemory.put(key, updated)
+            localChapterMemory.clear()
+        }
+        updated
     }
+
+    private fun loadDocumentIndex(id: String): LocalDocument =
+        documentMemory[id] ?: documentStorage.index(id).also { documentMemory.put(id, it) }
     fun documentChapter(id: String, chapterId: String): LocalChapter = synchronized(documentLock) {
         val index = documentIndex(id)
         val key = "${index.id}/${index.chapterFiles[chapterId] ?: chapterId}"
         localChapterMemory[key] ?: recoverDocumentChapter(index, documentStorage.chapter(index, chapterId)).also {
-            val current = documentIndex(id)
+            val current = loadDocumentIndex(index.id)
             localChapterMemory.put("${current.id}/${current.chapterFiles[chapterId] ?: chapterId}", it)
         }
     }

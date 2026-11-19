@@ -5,7 +5,7 @@ import cc.novelia.app.data.model.LocalChapter
 import cc.novelia.app.data.model.LocalReadingContent
 import cc.novelia.app.data.model.InlineContent
 import cc.novelia.app.data.model.InlineKind
-import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.Node
 import org.jsoup.nodes.TextNode
@@ -20,9 +20,10 @@ internal fun parseEpubChapter(
     id: String, html: String, downloadMode: String?, image: (String) -> String?,
     checkCancelled: () -> Unit = {}, onText: (String) -> Unit = {},
     note: (String, Boolean) -> Pair<String, String>? = { _, _ -> null },
+    chapterTitle: (Document) -> String = { epubChapterTitle(it) },
 ): LocalChapter? {
-    val doc = Jsoup.parse(html)
-    doc.select("script,style,nav").remove()
+    val doc = epubChapterDocument(html)
+    val title = chapterTitle(doc)
     val ruby = prepareEpubRuby(doc, checkCancelled)
     val paragraphs = mutableListOf<String>()
     val inline = linkedMapOf<Int, List<InlineContent>>()
@@ -129,6 +130,5 @@ internal fun parseEpubChapter(
         used += all
     }
     val secondary = indices.filterKeys { it.opacity()?.let { opacity -> opacity < 1f } == true }.values.flatten()
-    val title = doc.selectFirst("h1,h2,h3,title")?.text()?.takeIf(String::isNotBlank) ?: "章节"
     return LocalChapter(id, title, paragraphs, LocalReadingContent(groups, secondary, inline, notes), EPUB_CONTENT_VERSION, downloadMode)
 }
