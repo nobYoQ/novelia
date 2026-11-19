@@ -845,7 +845,8 @@ import kotlinx.serialization.encodeToString
             // 不得给正文布局增加内边距或尺寸约束。
             val bodyInputEnabled = volumeKeysActive && !leaving && !chapterLoad.loading && !positionState.restoringAnchor && positionState.initialAnchorRestored && seekTarget == null
             val openToc: () -> Unit = { if(wideDirectory) { setWideToc(true); tocQuery = ""; tocLocateRequest++ } else toc = true }
-            val tapNavigation = rememberReaderTapNavigation(settings.tapPageTurn, bodyInputEnabled, { menu = !menu }, { page(it) }, settings.resolvedTapZoneMap, openToc)
+            val tapNavigation = rememberReaderTapNavigation(settings.tapPageTurn, bodyInputEnabled, { menu = !menu }, { page(it) },
+                settings.resolvedTapZoneMap, openToc, showFeedback = settings.tapPageTurnFeedbackEnabled(eInkInteraction))
             val chapterEnd: @Composable () -> Unit = {
                 Column(Modifier.fillMaxWidth().graphicsLayer { alpha = if(tapOverlayVisible) 0f else 1f }, horizontalAlignment = Alignment.CenterHorizontally) {
                     HorizontalDivider(Modifier.padding(vertical = 24.dp)); Text("本章完", color = foreground.copy(alpha = .65f)); Spacer(Modifier.height(20.dp))

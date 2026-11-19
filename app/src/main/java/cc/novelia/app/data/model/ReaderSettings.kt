@@ -71,7 +71,8 @@ import kotlinx.serialization.Serializable
     val brightnessPreferences: ReaderBrightness? = null,
     val nightBrightness: ReaderBrightness? = null,
     val horizontalDualPage: Boolean? = null,
-    val typographyDp: ReaderTypographyDp? = null
+    val typographyDp: ReaderTypographyDp? = null,
+    val tapPageTurnFeedback: Boolean? = null
 )
 
 /**
@@ -138,7 +139,8 @@ import kotlinx.serialization.Serializable
     val nightBrightness: ReaderBrightness = ReaderBrightness.night(),
     // 横向分页的可选子模式；窄窗口回退单页，其他分页方式保留此偏好但不启用。
     val horizontalDualPage: Boolean = false,
-    val typographyDp: ReaderTypographyDp? = null
+    val typographyDp: ReaderTypographyDp? = null,
+    val tapPageTurnFeedback: Boolean? = null
 ) {
     companion object {
         const val MIN_FONT_SIZE = 14f
@@ -190,6 +192,7 @@ import kotlinx.serialization.Serializable
     /** 解析后的点击分区方案；空值或损坏内容回退到默认四向翻页，保证阅读器始终可翻页。 */
     val resolvedTapZoneMap get() = if (tapZoneMap.isBlank()) cc.novelia.app.reader.ReaderTapZoneMap.Default
         else cc.novelia.app.reader.ReaderTapZoneMap.decode(tapZoneMap)
+    fun tapPageTurnFeedbackEnabled(eInk: Boolean = eInkMode) = tapPageTurnFeedback ?: !eInk
     fun withTheme(selected: String) = copy(theme = selected, monochrome = false)
     val rowPagination get() = paginationMode == "row"
     val staticPagination get() = paginationMode == "auto" || rowPagination
@@ -239,6 +242,7 @@ import kotlinx.serialization.Serializable
         showEInkScreenButtons = showEInkScreenButtons,
         hideStatusBar = hideStatusBar,
         tapPageTurn = tapPageTurn,
+        tapPageTurnFeedback = tapPageTurnFeedback,
         tapZoneMap = tapZoneMap,
         customColors = customColors,
         fontFamily = fontFamily,
@@ -302,6 +306,7 @@ import kotlinx.serialization.Serializable
         showEInkScreenButtons = state.showEInkScreenButtons ?: showEInkScreenButtons,
         hideStatusBar = state.hideStatusBar ?: hideStatusBar,
         tapPageTurn = state.tapPageTurn ?: tapPageTurn,
+        tapPageTurnFeedback = state.tapPageTurnFeedback,
         tapZoneMap = state.tapZoneMap ?: tapZoneMap,
         customColors = state.customColors ?: customColors,
         fontFamily = state.fontFamily ?: fontFamily,

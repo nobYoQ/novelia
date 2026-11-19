@@ -323,16 +323,17 @@ internal fun measureChapterLines(paragraphs: List<ReadingParagraph>, settings: R
         }
     }
     val latestSettle by rememberUpdatedState(settle)
+    val eInk = settings.eInkMode || LocalEInkMode.current
     val tapNavigation = rememberReaderTapNavigation(settings.tapPageTurn, canInteract, onToggleMenu, { direction ->
         if(transitionJob?.isActive != true) {
             dragAxis = 0
             pageOffset = 0f
             settle(direction)
         }
-    }, settings.resolvedTapZoneMap, onNavigate)
+    }, settings.resolvedTapZoneMap, onNavigate, showFeedback = settings.tapPageTurnFeedbackEnabled(eInk))
     BoxWithConstraints(
         modifier.background(background).clipToBounds()
-            .readerTapFeedback(tapNavigation, foreground, settings.eInkMode || LocalEInkMode.current)
+            .readerTapFeedback(tapNavigation, foreground, eInk)
             .readerTapNavigation(tapNavigation)
             .pointerInput(settings.horizontalPageTurn, columns, animate, canInteract) {
                 if(!canInteract || !settings.horizontalPageTurn) return@pointerInput

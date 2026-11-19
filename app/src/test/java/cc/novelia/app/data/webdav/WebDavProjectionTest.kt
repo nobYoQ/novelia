@@ -122,11 +122,14 @@ class WebDavProjectionTest {
             assertThrows(IllegalArgumentException::class.java) { WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "topReadingStatusItems", Json.parseToJsonElement(invalid)) }
         }
     }
-    @Test fun legacyDevicePreferencesCanOmitTapZonesButNotExistingFields() {
+    @Test fun legacyDevicePreferencesCanOmitTapZonesAndFeedbackButKeepRequiredFields() {
         val group = WebDavProjection.library(LibraryState(), includeDevicePreferences = true)
             .getValue(SyncDomain.SETTINGS).getValue("@reader").getValue("devicePreferences") as JsonObject
         WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "devicePreferences", group)
-        WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "devicePreferences", JsonObject(group - "tapZoneMap"))
+        val active = group.getValue("activeModeSettings") as JsonObject
+        val legacy = JsonObject(group - setOf("tapZoneMap", "tapPageTurnFeedback") +
+            ("activeModeSettings" to JsonObject(active - "tapPageTurnFeedback")))
+        WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "devicePreferences", legacy)
         assertThrows(IllegalArgumentException::class.java) {
             WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "devicePreferences", JsonObject(group - "brightness"))
         }

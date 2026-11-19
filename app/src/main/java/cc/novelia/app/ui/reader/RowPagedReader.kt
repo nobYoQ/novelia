@@ -97,11 +97,13 @@ private class RowMeasurement(val input: RowMeasureInput, val chapter: MeasuredEI
     var outgoingTop by remember { mutableStateOf<Float?>(null) }
     var incomingOffset by remember { mutableFloatStateOf(0f) }
     var gestureCommitted by remember { mutableStateOf(false) }
+    val eInk = settings.eInkMode || LocalEInkMode.current
     val navigation = rememberReaderTapNavigation(settings.tapPageTurn, canInteract, onToggleMenu,
-        { if(gestureJob?.isActive != true) latestPage(it) }, settings.resolvedTapZoneMap, onNavigate)
+        { if(gestureJob?.isActive != true) latestPage(it) }, settings.resolvedTapZoneMap, onNavigate,
+        showFeedback = settings.tapPageTurnFeedbackEnabled(eInk))
 
     BoxWithConstraints(modifier.background(background).clipToBounds()
-        .readerTapFeedback(navigation, foreground, settings.eInkMode || LocalEInkMode.current)
+        .readerTapFeedback(navigation, foreground, eInk)
         .readerTapNavigation(navigation)
         .readerChapterOverscroll(chapterPull, canInteract && settings.pullToNextChapter && onNextChapter != null,
             atEnd = { state.ready && !state.canScrollForward }, onNextChapter = { onNextChapter?.invoke() })) {

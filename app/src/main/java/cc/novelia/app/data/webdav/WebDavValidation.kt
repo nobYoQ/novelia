@@ -211,7 +211,7 @@ internal object WebDavValidation {
 
     private fun readerField(field: String, value: JsonElement) {
         if (field == "devicePreferences") {
-            require(value is JsonObject && value.keys.containsAll(deviceReaderFields - setOf("tapZoneMap", "showWideToc", "orientation", "nightReading", "brightnessPreferences", "nightBrightness", "horizontalDualPage", "typographyDp")) && value.keys.all { it in WebDavSchema.devicePreferenceFields }) { "设备偏好原子组字段不完整" }
+            require(value is JsonObject && value.keys.containsAll(deviceReaderFields - setOf("tapZoneMap", "showWideToc", "orientation", "nightReading", "brightnessPreferences", "nightBrightness", "horizontalDualPage", "typographyDp", "tapPageTurnFeedback")) && value.keys.all { it in WebDavSchema.devicePreferenceFields }) { "设备偏好原子组字段不完整" }
             value.forEach { (deviceField, deviceValue) -> deviceReaderField(deviceField, deviceValue) }
             return
         }
@@ -260,7 +260,7 @@ internal object WebDavValidation {
     private fun deviceReaderField(field: String, value: JsonElement) {
         when (field) {
             "activeModeSettings" -> {
-                require(value is JsonObject && value.keys.containsAll(WebDavSchema.readerModeFields - setOf("indentSize", "rowShowPartialLines", "letterSpacing", "nightPreset", "nightReading", "brightnessPreferences", "nightBrightness", "horizontalDualPage", "typographyDp", "pullToNextChapter")) &&
+                require(value is JsonObject && value.keys.containsAll(WebDavSchema.readerModeFields - setOf("indentSize", "rowShowPartialLines", "letterSpacing", "nightPreset", "nightReading", "brightnessPreferences", "nightBrightness", "horizontalDualPage", "typographyDp", "pullToNextChapter", "tapPageTurnFeedback")) &&
                     value.keys.all { it in WebDavSchema.readerModeFields }) { "当前阅读模式配置不完整" }
                 value.forEach { (property, propertyValue) ->
                     if(property in portableReaderFields) readerField(property, propertyValue)
@@ -277,6 +277,7 @@ internal object WebDavValidation {
             "prefetchChapters" -> nonnegativeInt(value, 20)
             // 点击分区方案的编码串：限长避免同步文件被塞入超大数据，内容本身在解析时再校验。
             "tapZoneMap" -> text(value, 2_048, true)
+            "tapPageTurnFeedback" -> if(value != JsonNull) boolean(value) else Unit
             "beforeEInk", "eInkPreferences" -> if (value != JsonNull) {
                 val fields = setOf("paginationMode", "scrollPageTurn", "horizontalPageTurn", "showPageButtons", "volumeKeys")
                 require(value is JsonObject && value.keys.containsAll(fields) && value.keys.all { it in WebDavSchema.readerModeFields }) { "阅读模式偏好组无效" }

@@ -40,6 +40,7 @@ import cc.novelia.app.ui.components.base.ChoiceRow
 import cc.novelia.app.ui.components.base.TogglePreference
 import cc.novelia.app.ui.markdown.format
 import cc.novelia.app.ui.theme.AppMotion
+import cc.novelia.app.ui.theme.LocalEInkMode
 import cc.novelia.app.ui.theme.appReducedMotion
 import cc.novelia.app.ui.theme.motionClickable
 import kotlin.math.roundToInt
@@ -181,6 +182,12 @@ import kotlin.math.roundToInt
                             TogglePreference("点击区域翻页", if(value.tapPageTurn) "在正文覆盖层调整区域大小，分别设置单击和双击动作" else "开启后可配置区域大小，以及翻页、目录和工具栏等点击动作",
                                 value.tapPageTurn, defaultValue = defaults?.tapPageTurn) { onChange(value.copy(tapPageTurn = it)) }
                             if(value.tapPageTurn) {
+                                val eInk = LocalEInkMode.current
+                                TogglePreference("点击翻页高亮", "点击翻页时短暂显示所点区域",
+                                    value.tapPageTurnFeedbackEnabled(value.eInkMode || eInk),
+                                    defaultValue = defaults?.let { it.tapPageTurnFeedbackEnabled(it.eInkMode || eInk) }) {
+                                    onChange(value.copy(tapPageTurnFeedback = it))
+                                }
                                 val currentMap = value.resolvedTapZoneMap
                                 AppTextButton(onClick = { if(onEditTapZones != null) onEditTapZones() else previewZones = true },
                                     modifier = Modifier.padding(horizontal = 12.dp).testTag("tap-zone-open-editor")) {

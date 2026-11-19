@@ -17,6 +17,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.ui.theme.LocalReducedMotion
 import cc.novelia.app.reader.ReaderTapAction
 import cc.novelia.app.reader.ReaderTapZoneMap
@@ -30,6 +31,7 @@ class ReaderTapFeedbackTest {
     private var reduced by mutableStateOf(false)
     private var eInk by mutableStateOf(false)
     private var enabled by mutableStateOf(true)
+    private var feedbackPreference by mutableStateOf<Boolean?>(null)
     private var dark by mutableStateOf(false)
     private var menus = 0
     private var pages = 0
@@ -38,7 +40,9 @@ class ReaderTapFeedbackTest {
         compose.setContent {
             MaterialTheme {
                 CompositionLocalProvider(LocalDensity provides Density(1f), LocalReducedMotion provides reduced) {
-                    navigation = rememberReaderTapNavigation(enabled, onToggleMenu = { menus++ }, onPage = { pages++ }, zoneMap = map)
+                    val settings = ReaderSettings(eInkMode = eInk, tapPageTurnFeedback = feedbackPreference)
+                    navigation = rememberReaderTapNavigation(enabled, onToggleMenu = { menus++ }, onPage = { pages++ }, zoneMap = map,
+                        showFeedback = settings.tapPageTurnFeedbackEnabled())
                     Box(Modifier.size(300.dp, 180.dp).testTag("feedback").background(if(dark) Color.Black else Color.White)
                         .readerTapFeedback(navigation, if(dark) Color.White else Color.Black, eInk).readerTapNavigation(navigation))
                 }
@@ -110,12 +114,19 @@ class ReaderTapFeedbackTest {
             val during = samples()
             assertEquals(1f, during.first(), .005f)
             assertTrue(during.last() < .98f)
+            compose.runOnIdle { feedbackPreference = false }
+            compose.mainClock.advanceTimeBy(32)
+            samples().forEach { assertEquals(1f, it, .005f) }
+            body.performTouchInput { click(Offset(width * .85f, centerY)) }
+            compose.mainClock.advanceTimeBy(32)
+            samples().forEach { assertEquals(1f, it, .005f) }
+            compose.runOnIdle { assertNull(navigation.feedback); assertEquals(3, pages) }
             compose.runOnIdle { enabled = false }
             compose.mainClock.advanceTimeBy(32)
             samples().forEach { assertEquals(1f, it, .005f) }
             body.performTouchInput { click(Offset(width * .85f, centerY)) }
             compose.mainClock.advanceTimeBy(32)
-            compose.runOnIdle { assertNull(navigation.feedback); assertEquals(1, menus); assertEquals(2, pages) }
+            compose.runOnIdle { assertNull(navigation.feedback); assertEquals(1, menus); assertEquals(3, pages) }
         } finally { compose.mainClock.autoAdvance = true }
     }
 
@@ -136,7 +147,12 @@ class ReaderTapFeedbackTest {
             compose.mainClock.advanceTimeBy(300)
             compose.waitUntil(3_000) { navigation.feedback == null }
             compose.runOnIdle { dark = false; eInk = true }
-            compose.mainClock.advanceTimeByFrame()
+            compose.mainClock.advanceTimeBy(32)
+            body.performTouchInput { click(Offset(width * .15f, centerY)) }
+            compose.mainClock.advanceTimeBy(32)
+            samples().forEach { assertEquals(1f, it, .005f) }
+            compose.runOnIdle { assertNull(navigation.feedback); assertEquals(2, pages); feedbackPreference = true }
+            compose.mainClock.advanceTimeBy(32)
             body.performTouchInput { click(Offset(width * .15f, centerY)) }
             compose.mainClock.advanceTimeBy(32)
             val pixels = body.captureToImage().toPixelMap()

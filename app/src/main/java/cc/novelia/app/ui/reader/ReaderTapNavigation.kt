@@ -41,6 +41,7 @@ import kotlinx.coroutines.launch
 internal class ReaderTapNavigation(private val scope: CoroutineScope) {
     private var tapPageTurn = false
     private var pageTurningEnabled = true
+    private var showFeedback = true
     private var onToggleMenu: () -> Unit = {}
     private var onPage: (Int) -> Unit = {}
     private var onNavigate: () -> Unit = {}
@@ -69,13 +70,15 @@ internal class ReaderTapNavigation(private val scope: CoroutineScope) {
 
     fun configure(tapPageTurn: Boolean, pageTurningEnabled: Boolean, onToggleMenu: () -> Unit, onPage: (Int) -> Unit,
         zoneMap: ReaderTapZoneMap = ReaderTapZoneMap.Default, onNavigate: () -> Unit = {},
-        doubleTapTimeout: Long = 300L, doubleTapMinTime: Long = 40L, doubleTapSlop: Float = 48f) {
+        doubleTapTimeout: Long = 300L, doubleTapMinTime: Long = 40L, doubleTapSlop: Float = 48f, showFeedback: Boolean = true) {
         if(this.tapPageTurn != tapPageTurn || this.pageTurningEnabled != pageTurningEnabled || this.zoneMap != zoneMap) {
             cancel()
             feedback = null
         }
         this.tapPageTurn = tapPageTurn
         this.pageTurningEnabled = pageTurningEnabled
+        this.showFeedback = showFeedback
+        if(!showFeedback) feedback = null
         this.onToggleMenu = onToggleMenu
         this.onPage = onPage
         this.zoneMap = zoneMap
@@ -144,11 +147,9 @@ internal class ReaderTapNavigation(private val scope: CoroutineScope) {
     private fun dispatch(cell: Int, kind: ReaderTapKind) {
         if(!pageTurningEnabled || !tapPageTurn) return
         val action = zoneMap.getActionByZone(cell % zoneMap.columns, cell / zoneMap.columns, kind)
-        // 只反馈已确认的区域单击；滑动、长按、控件及无障碍点击不会产生闪烁。
-        feedback = when(action) {
-            ReaderTapAction.PreviousPage, ReaderTapAction.NextPage -> ReaderTapFeedback(++feedbackId, zoneMap.regionFor(cell).bounds)
-            else -> null
-        }
+        // 仅对实际触发翻页的区域点击绘制反馈。
+        feedback = if(showFeedback && (action == ReaderTapAction.PreviousPage || action == ReaderTapAction.NextPage))
+            ReaderTapFeedback(++feedbackId, zoneMap.regionFor(cell).bounds) else null
         when(action) {
             ReaderTapAction.PreviousPage -> onPage(-1)
             ReaderTapAction.NextPage -> onPage(1)
@@ -163,14 +164,14 @@ internal data class ReaderTapFeedback(val id: Long, val bounds: List<ReaderTapRe
 
 @Composable internal fun rememberReaderTapNavigation(
     tapPageTurn: Boolean, pageTurningEnabled: Boolean = true, onToggleMenu: () -> Unit, onPage: (Int) -> Unit,
-    zoneMap: ReaderTapZoneMap = ReaderTapZoneMap.Default, onNavigate: () -> Unit = {}
+    zoneMap: ReaderTapZoneMap = ReaderTapZoneMap.Default, onNavigate: () -> Unit = {}, showFeedback: Boolean = true
 ): ReaderTapNavigation {
     val scope = rememberCoroutineScope()
     val navigation = remember(scope) { ReaderTapNavigation(scope) }
     val config = LocalViewConfiguration.current
     val doubleTapSlop = with(LocalDensity.current) { 48.dp.toPx() }
     SideEffect { navigation.configure(tapPageTurn, pageTurningEnabled, onToggleMenu, onPage, zoneMap, onNavigate,
-        config.doubleTapTimeoutMillis, config.doubleTapMinTimeMillis, doubleTapSlop) }
+        config.doubleTapTimeoutMillis, config.doubleTapMinTimeMillis, doubleTapSlop, showFeedback) }
     DisposableEffect(navigation) { onDispose { navigation.dispose() } }
     return navigation
 }
