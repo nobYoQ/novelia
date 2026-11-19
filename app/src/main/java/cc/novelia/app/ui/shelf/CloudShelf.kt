@@ -68,7 +68,6 @@ import cc.novelia.app.ui.navigation.AppController
     var folderId by rememberSaveable { mutableStateOf(local.restoredCloudShelfLocation(account).folderId) }
     var page by rememberSaveable { mutableIntStateOf(0) }
     var version by rememberSaveable { mutableIntStateOf(0) }
-    var orderFolders by rememberSaveable(kind) { mutableStateOf(false) }
     var create by remember { mutableStateOf(false) }
     var rename by remember { mutableStateOf<Folder?>(null) }
     var deleting by remember { mutableStateOf<Folder?>(null) }
@@ -92,7 +91,7 @@ import cc.novelia.app.ui.navigation.AppController
     DisposableEffect(onSelectionStateChanged) { onDispose { onSelectionStateChanged(false, false) } }
     BackHandler(active && managing) { if(!bulkBusy) { managing = false; selection = emptyMap() } }
     LaunchedEffect(active) {
-        if(!active) { managing = false; selection = emptyMap(); expanded = false; bulkLocal = null; bulkImport = null; bulkRemoval = null; orderFolders = false }
+        if(!active) { managing = false; selection = emptyMap(); expanded = false; bulkLocal = null; bulkImport = null; bulkRemoval = null }
     }
     // 行内重试或后台重试可能独立于本页菜单回调完成；
     // 成功后刷新远端结果，由 AsyncContent 保留当前视口。
@@ -176,7 +175,13 @@ import cc.novelia.app.ui.navigation.AppController
                     countLabel = pageCount?.let { "本页 $it 本" } ?: "加载中", maxHeight = filterHeight, active = active,
                     visible = !managing, modifier = Modifier.onSizeChanged { controlsHeight = it.height },
                     grid = local.cloudShelfGrid, onToggleLayout = { c.store.update { it.copy(cloudShelfGrid = !it.cloudShelfGrid) } },
-                    onOrderFolders = { orderFolders = true }) { close ->
+                    folderOrder = folderOrder, onOrderFolders = { order ->
+                        val isWenku = kind == 1
+                        c.action {
+                            c.session.ensureCurrent(binding)
+                            c.store.update { it.withCloudFavoriteFolderOrder(account, isWenku, order) }
+                        }
+                    }) { close ->
                     DropdownMenuItem({ Text("新建收藏夹") }, { close(); create = true }, leadingIcon = { Icon(Icons.Outlined.Add, null) })
                     if(editable != null) {
                         DropdownMenuItem({ Text("重命名收藏夹") }, { close(); rename = editable })
@@ -216,14 +221,6 @@ import cc.novelia.app.ui.navigation.AppController
                                 } }) { Text("撤销") }
                             })
                     }
-                }
-            }
-            if(active && orderFolders) FavoriteFolderOrderDialog(realFolders, CLOUD_DEFAULT_FOLDER_ID, folderOrder,
-                "原站顺序", onDismiss = { orderFolders = false }) { order ->
-                c.action {
-                    c.session.ensureCurrent(binding)
-                    c.store.update { it.withCloudFavoriteFolderOrder(account, kind == 1, order) }
-                    orderFolders = false
                 }
             }
         }

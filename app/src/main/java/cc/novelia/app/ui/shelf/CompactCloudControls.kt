@@ -18,7 +18,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.catalog.providers
+import cc.novelia.app.data.model.CLOUD_DEFAULT_FOLDER_ID
+import cc.novelia.app.data.model.FavoriteFolderOrder
 import cc.novelia.app.data.model.Folder
+import cc.novelia.app.data.network.ALL_CLOUD_FAVORITES
 import cc.novelia.app.data.network.CloudWebFilter
 import cc.novelia.app.ui.components.base.*
 import cc.novelia.app.ui.components.book.WebSourceOptions
@@ -30,10 +33,10 @@ import cc.novelia.app.ui.components.book.WebSourceOptions
     expanded: Boolean, onExpanded: (Boolean) -> Unit, countLabel: String, maxHeight: Dp,
     active: Boolean, visible: Boolean, modifier: Modifier = Modifier,
     grid: Boolean? = null, onToggleLayout: () -> Unit = {},
-    onOrderFolders: (() -> Unit)? = null,
+    folderOrder: FavoriteFolderOrder = FavoriteFolderOrder(), onOrderFolders: ((FavoriteFolderOrder) -> Unit)? = null,
     folderActions: @Composable ColumnScope.(close: () -> Unit) -> Unit,
 ) {
-    var folderMenu by remember { mutableStateOf(false) }
+    var folderMenu by remember(kind) { mutableStateOf(false) }
     var sortMenu by remember { mutableStateOf(false) }
     var searchExpanded by rememberSaveable(kind) { mutableStateOf(false) }
     val focus = LocalFocusManager.current
@@ -55,15 +58,10 @@ import cc.novelia.app.ui.components.book.WebSourceOptions
                     Icon(if(folderMenu) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, null, Modifier.size(18.dp))
                 }
                 AppDropdownMenu(folderMenu, { folderMenu = false }, Modifier.width(folderMenuWidth).testTag("cloud-folder-menu")) {
-                    if(onOrderFolders != null) {
-                        DropdownMenuItem({ Text("收藏夹排序") }, { folderMenu = false; onOrderFolders() },
-                            leadingIcon = { Icon(Icons.AutoMirrored.Outlined.Sort, null) })
-                        if(folders.isNotEmpty()) HorizontalDivider()
+                    FavoriteFolderMenu(folders, current?.id, { folderMenu = false; onFolder(it) },
+                        setOf(ALL_CLOUD_FAVORITES, CLOUD_DEFAULT_FOLDER_ID), folderOrder, "原站顺序", onOrderFolders) {
+                        folderActions { folderMenu = false }
                     }
-                    folders.forEach { item -> DropdownMenuItem({ Text(item.title) }, { folderMenu = false; onFolder(item.id) },
-                        trailingIcon = if(current?.id == item.id) ({ Icon(Icons.Outlined.Check, null) }) else null) }
-                    if(folders.isNotEmpty()) HorizontalDivider()
-                    folderActions { folderMenu = false }
                 }
             }
             if(kind == 0) ShelfSearchToggle(searchExpanded, filter.query.isNotBlank(), { searchExpanded = !searchExpanded; focus.clearFocus() }, "cloud")

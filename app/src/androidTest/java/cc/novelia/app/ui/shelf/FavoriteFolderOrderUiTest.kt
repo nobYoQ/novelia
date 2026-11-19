@@ -54,30 +54,26 @@ class FavoriteFolderOrderUiTest {
             val picker = compose.onNodeWithTag("local-folder-picker")
             fun menuItem(title: String) = compose.onNode(hasText(title) and hasAnyAncestor(hasTestTag("local-folder-menu")))
             fun assertMenuOrder(vararg titles: String) {
-                val tops = titles.map { menuItem(it).assertIsDisplayed().getUnclippedBoundsInRoot().top }
+                val tops = titles.map { menuItem(it).getUnclippedBoundsInRoot().top }
                 assertTrue(tops.zipWithNext().all { (first, second) -> first < second })
             }
-            fun openOrder() = menuItem("收藏夹排序").performClick()
-            fun applyOrder() { compose.onNodeWithText("应用排序").performClick(); picker.assertTextContains("Beta").performClick() }
-
             picker.performClick()
             assertMenuOrder("全部收藏夹", *creation.toTypedArray())
             menuItem("Beta").performClick()
             picker.performClick()
-            openOrder()
-            compose.onNodeWithText("按名称").performClick()
-            applyOrder()
+            menuItem("收藏夹排序").performClick()
+            menuItem("按名称").performClick().assertIsSelected()
             assertMenuOrder("全部收藏夹", DEFAULT_FOLDER, "Alpha", "Beta", "Zeta")
-            openOrder()
-            compose.onNodeWithText("手动排序").performClick()
-            compose.onNodeWithContentDescription("上移 Beta").performClick()
-            applyOrder()
+            menuItem("手动排序").performClick().assertIsSelected()
+            compose.onNode(hasContentDescription("上移 Beta") and hasAnyAncestor(hasTestTag("local-folder-menu")))
+                .performScrollTo().performClick()
             assertMenuOrder("全部收藏夹", DEFAULT_FOLDER, "Beta", "Alpha", "Zeta")
             assertEquals(FavoriteFolderSort.Manual, app.store.state.value.localFavoriteFolderOrder.sort)
-            openOrder()
-            compose.onNodeWithText("按创建顺序").performClick()
-            applyOrder()
+            menuItem("按创建顺序").performScrollTo().performClick().assertIsSelected()
             assertMenuOrder("全部收藏夹", *creation.toTypedArray())
+            menuItem("收藏夹排序").performClick()
+            menuItem("按名称").assertDoesNotExist()
+            picker.assertTextContains("Beta")
             assertEquals(creation, app.store.state.value.folders)
         } finally { app.store.update { before } }
     }
@@ -88,14 +84,11 @@ class FavoriteFolderOrderUiTest {
         compose.setContent {
             AppInteractionMode(eInk = false, reducedMotion = true) { NoveliaTheme("light") {
                 var order by remember { mutableStateOf(FavoriteFolderOrder()) }
-                var editing by remember { mutableStateOf(false) }
                 val folders = cloudFolderChoices(order.ordered(remote, default.id))
                 CompactCloudControls(folders, default, {}, "update", {}, kind = 0, filter = CloudWebFilter(), onApply = { _, _ -> },
                     query = "", onQuery = {}, onSubmit = {}, onClearQuery = {}, expanded = false, onExpanded = {},
-                    countLabel = "本页 0 本", maxHeight = 450.dp, active = true, visible = true, onOrderFolders = { editing = true }) { }
-                if(editing) FavoriteFolderOrderDialog(remote, default.id, order, "原站顺序", onDismiss = { editing = false }) {
-                    order = it; editing = false
-                }
+                    countLabel = "本页 0 本", maxHeight = 450.dp, active = true, visible = true,
+                    folderOrder = order, onOrderFolders = { order = it }) { }
             } }
         }
         val picker = compose.onNodeWithTag("cloud-folder-picker")
@@ -106,10 +99,9 @@ class FavoriteFolderOrderUiTest {
         picker.performClick()
         assertBefore("Zeta", "Alpha")
         menuItem("收藏夹排序").performClick()
-        compose.onNodeWithText("原站顺序").assertIsSelected()
-        compose.onNodeWithText("按名称").performClick()
-        compose.onNodeWithText("应用排序").performClick()
-        picker.assertTextContains(default.title).performClick()
+        menuItem("原站顺序").assertIsSelected()
+        menuItem("按名称").performClick().assertIsSelected()
+        picker.assertTextContains(default.title)
         assertBefore("全部收藏", default.title)
         assertBefore(default.title, "Alpha")
         assertBefore("Alpha", "Zeta")

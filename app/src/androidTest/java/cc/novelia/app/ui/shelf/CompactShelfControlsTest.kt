@@ -12,6 +12,8 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.catalog.CharacterCountFilter
 import cc.novelia.app.data.library.ShelfBookType
+import cc.novelia.app.data.model.DEFAULT_FOLDER_ID
+import cc.novelia.app.data.model.Folder
 import cc.novelia.app.ui.theme.AppInteractionMode
 import cc.novelia.app.ui.theme.NoveliaTheme
 import org.junit.Assert.*
@@ -35,7 +37,7 @@ class CompactShelfControlsTest {
                 AppInteractionMode(false, true) { NoveliaTheme("dark") {
                     Surface(Modifier.requiredWidth(320.dp).fillMaxHeight().testTag("controls-root")) {
                         Column {
-                            LocalShelfFilters(files, type, { type = it }, listOf("默认收藏", "周末阅读"), folder, { folder = it },
+                            LocalShelfFilters(files, type, { type = it }, listOf(Folder(DEFAULT_FOLDER_ID, "默认收藏"), Folder("weekend", "周末阅读")), folder, { folder = it },
                                 sort, { sort = it }, query, { query = it }, status, { status = it }, expanded, { expanded = it },
                                 580.dp, { created = true }, {}, {}, characters, { characters = it }, countLabel = "3 本 · 4 分卷")
                             Text("书籍区域", Modifier.testTag("book-content"))

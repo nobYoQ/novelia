@@ -20,19 +20,22 @@ import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.catalog.CharacterCountFilter
 import cc.novelia.app.data.library.ShelfBookType
 import cc.novelia.app.data.library.readingStatuses
+import cc.novelia.app.data.model.DEFAULT_FOLDER_ID
+import cc.novelia.app.data.model.FavoriteFolderOrder
+import cc.novelia.app.data.model.Folder
 import cc.novelia.app.ui.components.base.*
 
 /** 日常仅保留收藏夹/搜索/筛选，以及数量/排序；筛选草稿确认后才影响书架。 */
 @Composable internal fun LocalShelfFilters(
     localFiles: Boolean, type: ShelfBookType, onType: (ShelfBookType) -> Unit,
-    folders: List<String>, folder: String, onFolder: (String) -> Unit,
+    folders: List<Folder>, folder: String, onFolder: (String) -> Unit,
     sort: Int, onSort: (Int) -> Unit, query: String, onQuery: (String) -> Unit,
     status: String, onStatus: (String) -> Unit, expanded: Boolean, onExpanded: (Boolean) -> Unit,
     maxHeight: Dp, onCreateFolder: () -> Unit, onRenameFolder: () -> Unit, onDeleteFolder: () -> Unit,
     characters: CharacterCountFilter = CharacterCountFilter(), onCharacters: (CharacterCountFilter) -> Unit = {},
     countLabel: String = "", visible: Boolean = true, active: Boolean = true, modifier: Modifier = Modifier,
     grid: Boolean? = null, onToggleLayout: () -> Unit = {},
-    onOrderFolders: (() -> Unit)? = null,
+    folderOrder: FavoriteFolderOrder = FavoriteFolderOrder(), onOrderFolders: ((FavoriteFolderOrder) -> Unit)? = null,
     trailingContent: @Composable () -> Unit = {},
 ) {
     val focus = LocalFocusManager.current
@@ -61,21 +64,14 @@ import cc.novelia.app.ui.components.base.*
                     Icon(if(folderMenu) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, null, Modifier.size(18.dp))
                 }
                 AppDropdownMenu(folderMenu, { folderMenu = false }, Modifier.width(folderMenuWidth).testTag("local-folder-menu")) {
-                    if(onOrderFolders != null) {
-                        DropdownMenuItem({ Text("收藏夹排序") }, { folderMenu = false; onOrderFolders() },
-                            leadingIcon = { Icon(Icons.AutoMirrored.Outlined.Sort, null) })
-                        HorizontalDivider()
-                    }
-                    (listOf("全部") + folders).forEach { choice ->
-                        DropdownMenuItem(text = { Text(if(choice == "全部") "全部收藏夹" else choice) },
-                            onClick = { folderMenu = false; onFolder(choice) },
-                            trailingIcon = if(folder == choice) ({ Icon(Icons.Outlined.Check, null) }) else null)
-                    }
-                    HorizontalDivider()
-                    DropdownMenuItem({ Text("新建收藏夹") }, { folderMenu = false; onCreateFolder() }, leadingIcon = { Icon(Icons.Outlined.Add, null) })
-                    if(folder != "全部" && folder != "默认收藏") {
-                        DropdownMenuItem({ Text("重命名收藏夹") }, { folderMenu = false; onRenameFolder() })
-                        DropdownMenuItem({ Text("删除收藏夹") }, { folderMenu = false; onDeleteFolder() })
+                    FavoriteFolderMenu(listOf(Folder("", "全部收藏夹")) + folders, folders.firstOrNull { it.title == folder }?.id ?: "",
+                        { id -> folderMenu = false; onFolder(folders.firstOrNull { it.id == id }?.title ?: "全部") },
+                        setOf("", DEFAULT_FOLDER_ID), folderOrder, "按创建顺序", onOrderFolders) {
+                        DropdownMenuItem({ Text("新建收藏夹") }, { folderMenu = false; onCreateFolder() }, leadingIcon = { Icon(Icons.Outlined.Add, null) })
+                        if(folder != "全部" && folder != "默认收藏") {
+                            DropdownMenuItem({ Text("重命名收藏夹") }, { folderMenu = false; onRenameFolder() })
+                            DropdownMenuItem({ Text("删除收藏夹") }, { folderMenu = false; onDeleteFolder() })
+                        }
                     }
                 }
             }

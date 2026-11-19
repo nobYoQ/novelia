@@ -57,7 +57,7 @@ import cc.novelia.app.data.model.createShelfFolder
 import cc.novelia.app.data.model.renameShelfFolder
 import cc.novelia.app.data.model.deleteShelfFolder
 import cc.novelia.app.data.model.localFavoriteFolders
-import cc.novelia.app.data.model.orderedLocalFavoriteFolders
+import cc.novelia.app.data.model.Folder
 import cc.novelia.app.data.model.restoredShelfLocation
 import cc.novelia.app.ui.components.base.AppAlertDialog
 import cc.novelia.app.ui.components.base.AppLazyColumn
@@ -99,8 +99,10 @@ import kotlinx.coroutines.withContext
     var tab by rememberSaveable { mutableIntStateOf(state.restoredShelfLocation().tab) }
     var folderId by rememberSaveable { mutableStateOf(state.restoredShelfLocation().localFolderId) }
     val folder = state.folders.firstOrNull { state.folderIds[it] == folderId } ?: "全部"
-    val orderedFolders = remember(state.folders, state.folderIds, state.localFavoriteFolderOrder) { state.orderedLocalFavoriteFolders() }
-    var orderFolders by rememberSaveable { mutableStateOf(false) }
+    val folderChoices = remember(state.folders, state.folderIds, state.localFavoriteFolderOrder) {
+        state.localFavoriteFolderOrder.ordered(state.localFavoriteFolders(), DEFAULT_FOLDER_ID)
+    }
+    val orderedFolders = remember(folderChoices) { folderChoices.map(Folder::title) }
     var query by rememberSaveable { mutableStateOf("") }; var sort by rememberSaveable { mutableIntStateOf(0) }
     LaunchedEffect(tab, folderId, state.folderIds, state.rememberLastShelfFolder) {
         val validFolderId = folderId?.takeIf { it in state.folderIds.values }
@@ -291,13 +293,14 @@ import kotlinx.coroutines.withContext
                     val filterHeight = maxHeight * .9f
                     Column(Modifier.fillMaxSize()) {
                         LocalShelfFilters(page == 1, if(page == 0) bookType else fileType, { if(page == 0) bookType = it else fileType = it },
-                            orderedFolders, folder, { folderId = state.folderIds[it] }, sort, { sort = it }, query, { query = it }, readingStatus, { readingStatus = it },
+                            folderChoices, folder, { folderId = state.folderIds[it] }, sort, { sort = it }, query, { query = it }, readingStatus, { readingStatus = it },
                             filtersExpanded, { filtersExpanded = it }, filterHeight, { createFolder = true }, { renameFolder = true }, { deleteFolder = true },
                             characters = characterFilter, onCharacters = { characterFilter = it },
                             countLabel = "${groups.size} 本" + groups.sumOf { it.volumes.size }.takeIf { it > 0 }?.let { " · $it 分卷" }.orEmpty(),
                             visible = !pageManaging, active = active, modifier = Modifier.onSizeChanged { controlsHeight = it.height },
                             grid = grid, onToggleLayout = { c.store.update { if(page == 0) it.copy(shelfGrid = !it.shelfGrid) else it.copy(localFilesGrid = !it.localFilesGrid) } },
-                            onOrderFolders = { orderFolders = true }) {
+                            folderOrder = state.localFavoriteFolderOrder,
+                            onOrderFolders = { order -> c.store.update { it.copy(localFavoriteFolderOrder = order) } }) {
                             if(filterCharacters) Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                                 val unknown = countCandidates.count { characterCounts.count(it) == null }
                                 Text(if(characterCounts.loading) "正在补全字数…" else "$unknown 本字数未知", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
@@ -477,11 +480,6 @@ import kotlinx.coroutines.withContext
             c.store.update { it.createLocalSeries(ref, name, folder) }
             onOpenBook(ref)
         }
-    }
-    if(orderFolders) FavoriteFolderOrderDialog(state.localFavoriteFolders(), DEFAULT_FOLDER_ID, state.localFavoriteFolderOrder,
-        "按创建顺序", onDismiss = { orderFolders = false }) { order ->
-        c.store.update { it.copy(localFavoriteFolderOrder = order) }
-        orderFolders = false
     }
     if(createFolder) TextPrompt("新建收藏夹", "名称", onDismiss = { createFolder = false }) { name -> c.action { c.store.update { it.createShelfFolder(name.trim()) } } }
     if(renameFolder) TextPrompt("重命名收藏夹", "名称", folder, { renameFolder = false }) { name -> val previous = folder; c.action { c.store.update { it.renameShelfFolder(previous, name.trim()) } } }
