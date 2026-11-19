@@ -34,6 +34,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.SavedStateHandle
 import cc.novelia.app.data.catalog.BookLinks
 import cc.novelia.app.data.catalog.providers
+import cc.novelia.app.data.images.CustomBookCover
 import cc.novelia.app.data.library.ReadingDestination
 import cc.novelia.app.data.library.offlineRangeLabel
 import cc.novelia.app.data.library.readingDestination
@@ -106,6 +107,7 @@ import kotlinx.coroutines.withContext
     val cloudFolders = favoritePresentation.cloudFolders?.takeIf { favoritePresentation.account == profile?.username }
     val cacheGeneration by c.store.cacheGeneration.collectAsStateWithLifecycle()
     val cacheActions = rememberChapterCacheActions(c)
+    val coverActions = rememberBookCoverActions(c, ref)
     val detailKey = c.detailKey(if(ref.isWenku) "wenku/${ref.id}" else "novel/${ref.key}").copy(generation = cacheGeneration)
     var shareTitle by remember(detailKey) { mutableStateOf<String?>(null) }
     val refreshKey = version
@@ -120,6 +122,7 @@ import kotlinx.coroutines.withContext
             if(!ref.isWenku) DropdownMenuItem({ Text("清理本书章节缓存") }, { menu = false; cacheActions.request(ref) },
                 enabled = !cacheActions.busy, leadingIcon = { Icon(Icons.Outlined.DeleteOutline, null) })
             DropdownMenuItem({ Text("术语表") }, { c.go("glossary/${ref.key}"); menu = false }, leadingIcon = { Icon(Icons.Outlined.Translate, null) })
+            BookCoverMenuItems(coverActions) { menu = false }
             DropdownMenuItem({ Text("编辑书籍信息") }, { c.requireLogin { c.go("edit/${ref.key}") }; menu = false }, leadingIcon = { Icon(Icons.Outlined.Edit, null) })
             DropdownMenuItem({ Text("在原站打开") }, { c.external(ref.url); menu = false }, leadingIcon = { Icon(Icons.Outlined.OpenInNew, null) })
             BookLinks.source(ref)?.let { url -> DropdownMenuItem({ Text("打开书源") }, { c.external(url); menu = false }) }
@@ -147,7 +150,7 @@ import kotlinx.coroutines.withContext
             AdaptiveBookDetail(tab, { tab = it }, listOf("简介", "分卷", "讨论"), tabState) { panel ->
                     when(panel) {
                         0 -> AppLazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
-                            item { BookHero(book, "${detail.level} · ${detail.volumes.size} 卷", state) {
+                            item { BookHero(book, "${detail.level} · ${detail.volumes.size} 卷", state, coverActions.cover) {
                                 BookFavoriteActions(favoriteState, { favorite = book to false }, { favorite = book to true },
                                     onRelatedWeb = if(relatedWebRefs.isEmpty()) null else ({ relatedWeb = true }))
                             } }
@@ -207,7 +210,7 @@ import kotlinx.coroutines.withContext
             AdaptiveBookDetail(tab, { tab = it }, listOf("简介", "目录 $chapterCount", "讨论"), tabState) { panel ->
                     when(panel) {
                         0 -> AppLazyColumn(contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            item { BookHero(book, "${detail.type} · ${providers[ref.provider]}", state, bottomPadding = 0.dp) }
+                            item { BookHero(book, "${detail.type} · ${providers[ref.provider]}", state, coverActions.cover, bottomPadding = 0.dp) }
                             item { BookReadingActions(destination, continuing,
                                 favoriteState = favoriteState, onLocalFavorite = { favorite = book to false }, onCloudFavorite = { favorite = book to true },
                                 onRead = continueReading,
@@ -246,7 +249,14 @@ import kotlinx.coroutines.withContext
 }
 @Composable private fun LocalBookDetailScreen(c: AppController, ref: BookRef, onBack: () -> Unit, tab: Int, onTab: (Int) -> Unit) {
     val state by c.store.state.collectAsStateWithLifecycle()
-    Screen("本地书籍", onBack) { padding ->
+    val coverActions = rememberBookCoverActions(c, ref)
+    var menu by remember(ref) { mutableStateOf(false) }
+    Screen("本地书籍", onBack, actions = {
+        Box {
+            AppIconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "更多操作") }
+            AppDropdownMenu(menu, { menu = false }) { BookCoverMenuItems(coverActions) { menu = false } }
+        }
+    }) { padding ->
         AsyncContent(ref, load = { withContext(Dispatchers.IO) { c.store.documentIndex(ref.id) } }, modifier = Modifier.padding(padding), revealContent = true) { document, _ ->
             val book = state.books.firstOrNull { it.book.ref == ref }?.book ?: BookCard(ref, document.name, cover = document.coverImage, total = document.chapters.size)
             val toc = remember(document) { document.chapters.map { TocItem(titleJp = it.title, chapterId = it.id) } }
@@ -338,10 +348,10 @@ import kotlinx.coroutines.withContext
     }
 }
 @Composable private fun Stat(label: String, value: String) { Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(value, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary); Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
-@Composable private fun BookHero(book: BookCard, subtitle: String, state: LibraryState,
+@Composable private fun BookHero(book: BookCard, subtitle: String, state: LibraryState, customCover: CustomBookCover?,
     bottomPadding: Dp = 20.dp, actions: (@Composable () -> Unit)? = null) {
-    val cover = book.cover?.takeIf { book.ref.isWenku && it.isNotBlank() }
-    var expandedCover by remember(book.ref, cover) { mutableStateOf(false) }
+    val cover: Any? = customCover?.file ?: book.cover?.takeIf { book.ref.isWenku && it.isNotBlank() }
+    var expandedCover by remember(book.ref, cover, customCover) { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = bottomPadding), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             BookCover(book, Modifier.width(94.dp).height(134.dp).then(

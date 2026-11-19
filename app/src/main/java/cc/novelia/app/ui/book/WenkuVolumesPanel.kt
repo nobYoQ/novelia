@@ -140,7 +140,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
                     expandedCover = volume.coverHires?.takeIf(String::isNotBlank) ?: volume.cover?.takeIf(String::isNotBlank)
                 },
                     modifier = if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(AppMotion.Release), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit)),
-                    showReadingProgress = false, showBookMetadata = false)
+                    showReadingProgress = false, showBookMetadata = false, useCustomCover = false)
             }
             if(profile?.canEdit == true) item {
                 AppOutlinedButton(onClick = onUpload, enabled = !uploadBusy, modifier = Modifier.fillMaxWidth().padding(20.dp)) { Text(if(uploadBusy) "正在上传…" else "上传日文分卷") }

@@ -1,13 +1,13 @@
-package cc.novelia.app.data.stickers
+package cc.novelia.app.data.images
 
 import android.graphics.BitmapFactory
 import java.io.File
 
 /** 先检查尺寸，再按缩略图解码确认文件可用，避免为校验加载完整大图。 */
-internal fun validateStickerImage(file: File): String {
+internal fun validateRasterImage(file: File, maxDimension: Int): String {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeFile(file.absolutePath, bounds)
-    require(bounds.outWidth in 1..4096 && bounds.outHeight in 1..4096) { "图片尺寸需在 1–4096 像素之间" }
+    require(bounds.outWidth in 1..maxDimension && bounds.outHeight in 1..maxDimension) { "图片尺寸需在 1–$maxDimension 像素之间" }
     val extension = when(bounds.outMimeType) {
         "image/png" -> "png"
         "image/webp" -> "webp"

@@ -84,6 +84,7 @@ suspend fun deleteBookFiles(app: NoveliaApplication, refs: Set<BookRef> = emptyS
                 store.update { it.withDeletedBookRecords(plan.books, eraseReadingData, plan.linkIds) }
                 store.flush()
                 plan.books.filter { it.isLocal }.forEach { store.removeDocument(it.id) }
+                if(eraseReadingData) plan.books.filterNot { it.isLocal }.forEach(store.bookCovers::restoreDefault)
                 store.flush()
             }
         }

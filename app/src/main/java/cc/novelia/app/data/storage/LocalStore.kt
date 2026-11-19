@@ -56,6 +56,7 @@ import kotlinx.serialization.encodeToString
  */
 class LocalStore(val context: Context, private val syncDevicePreferences: () -> Boolean = { false }) {
     internal val customThemes = cc.novelia.app.data.theme.CustomThemeStore(this)
+    internal val bookCovers = cc.novelia.app.data.images.BookCoverStore(File(context.filesDir, "book-covers"), context.cacheDir)
     private val stateFile = AtomicFile(File(context.filesDir, "library.json"))
     private val lastGoodFile = File(context.filesDir, "library-last-good.json")
     private val stateCodec = LibraryStateCodec(File(context.filesDir, "library-text"),
@@ -453,6 +454,7 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
     fun removeDocument(id: String) = synchronized(documentLock) {
         check(recoveryIssue.value == null) { "本地资料已保护，请先前往资料备份与恢复" }
         val key = safeId(id)
+        bookCovers.restoreDefault(BookRef("local", key))
         documentMemory.remove(key)
         localChapterMemory.clear()
         sourceIndex.remove(key)

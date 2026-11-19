@@ -1,5 +1,6 @@
 package cc.novelia.app.data.stickers
 
+import cc.novelia.app.data.images.validateRasterImage
 import cc.novelia.app.data.storage.appJson
 import java.io.File
 import java.io.FileOutputStream
@@ -27,7 +28,7 @@ import kotlinx.serialization.encodeToString
  * 素材、草稿和已安装贴纸均保存在本机文件目录，不依赖临时 URI 授权。
  * 图片使用不可变文件名，最后原子替换清单；失败的导入/编辑不会覆盖已有贴纸集。
  */
-class StickerPackStore(private val root: File, private val imageType: (File) -> String = ::validateStickerImage) {
+class StickerPackStore(private val root: File, private val imageType: (File) -> String = { validateRasterImage(it, 4096) }) {
     private val mutableState = MutableStateFlow(StickerLibrary())
     val state = mutableState.asStateFlow()
     private val mutex = Mutex()

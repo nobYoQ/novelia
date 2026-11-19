@@ -522,6 +522,9 @@ import kotlinx.coroutines.withContext
     } }
     selected?.let { saved -> AppSheet(onDismissRequest = { selected = null }) { AppScrollColumn(modifier = Modifier.navigationBarsPadding(), contentModifier = Modifier.padding(bottom = 28.dp)) {
         Text(saved.book.title, Modifier.padding(20.dp), style = MaterialTheme.typography.titleLarge, maxLines = 2)
+        if(saved.book.ref.isLocal) MenuRow("书籍详情", "查看阅读时长和管理封面", Icons.Outlined.Info, {
+            selected = null; c.showBookDetails(saved.book.ref)
+        })
         if(saved.hasUpdates) MenuRow("标记更新已读", "清除本书的更新提示", Icons.Outlined.DoneAll, { c.store.update { it.withAcknowledgedBookUpdates(saved.book.ref) }; selected = null })
         MenuRow(if(saved.pinned) "取消置顶" else "置顶", "在书架顶部显示", Icons.Outlined.PushPin, { c.store.update { it.copy(books = it.books.map { b -> if(b.book.ref == saved.book.ref) b.copy(pinned = !b.pinned) else b }) }; selected = null })
         ChoiceRow("阅读状态", readingStatuses, readingStatuses.indexOf(saved.status)) { status -> c.store.update { it.withReadingStatus(setOf(saved.book.ref.key), readingStatuses[status]) }; selected = null }

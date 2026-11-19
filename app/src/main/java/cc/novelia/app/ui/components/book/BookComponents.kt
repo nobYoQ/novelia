@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -38,6 +39,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
 import cc.novelia.app.ui.theme.motionClickable
 import cc.novelia.app.ui.components.media.RecoveringAsyncImage as AsyncImage
 import coil.decode.DataSource
+import coil.request.ImageRequest
 import cc.novelia.app.ui.components.base.AppChipFlowRow
 import cc.novelia.app.ui.components.base.AppSelectionChip
 import cc.novelia.app.ui.components.keywords.KeywordEditorDialog
@@ -80,11 +82,18 @@ import cc.novelia.app.ui.components.keywords.KeywordEditorDialog
         categories = entries.categories, onSaveDetails = c.app.keywords::editEntry) }
 }
 
-@Composable fun BookCover(book: BookCard, modifier: Modifier = Modifier, showFallbackTitle: Boolean = true) {
-    val source = book.cover?.takeIf { it.isNotBlank() }
+@Composable fun BookCover(book: BookCard, modifier: Modifier = Modifier, showFallbackTitle: Boolean = true, useCustomCover: Boolean = true) {
+    val cover = if(useCustomCover) rememberCustomBookCover(book.ref) else null
+    val context = LocalContext.current
+    val customRequest = remember(context, cover) {
+        cover?.let { ImageRequest.Builder(context).data(it.file).memoryCacheKey("${it.file.absolutePath}:${it.revision}").build() }
+    }
+    var customFailed by remember(customRequest) { mutableStateOf(false) }
+    val custom = customRequest.takeUnless { customFailed }
+    val source = custom ?: book.cover?.takeIf { it.isNotBlank() }
     var loaded by remember(source) { mutableStateOf(false) }
     Box(modifier.width(76.dp).height(104.dp).clip(appRoundedCornerShape(12.dp)).semantics {
-        contentDescription = "${book.title} ${if(loaded) "封面" else "默认封面"}"
+        contentDescription = "${book.title} ${when { !loaded -> "默认封面"; custom != null -> "自定义封面"; else -> "封面" }}"
     }, contentAlignment = Alignment.Center) {
         DefaultBookCover(book, Modifier.matchParentSize().clearAndSetSemantics {}, showTitle = showFallbackTitle)
         if(source != null) {
@@ -102,7 +111,7 @@ import cc.novelia.app.ui.components.keywords.KeywordEditorDialog
                 contentScale = ContentScale.Crop,
                 onLoading = { loaded = false; memoryCached = false },
                 onSuccess = { memoryCached = it.result.dataSource == DataSource.MEMORY_CACHE; loaded = true },
-                onError = { loaded = false; memoryCached = false },
+                onError = { loaded = false; memoryCached = false; if(custom != null) customFailed = true },
             )
         }
     }
@@ -110,7 +119,7 @@ import cc.novelia.app.ui.components.keywords.KeywordEditorDialog
 @OptIn(ExperimentalLayoutApi::class)
 @Composable internal fun BookRow(book: BookCard, onClick: () -> Unit, modifier: Modifier = Modifier, status: BookRowStatus? = null, showReadingProgress: Boolean = true, showBookMetadata: Boolean = true, showCharacterCount: Boolean = false, compactMetadata: Boolean = false, trailing: @Composable (() -> Unit)? = null,
     /** 非封面区域点击时直接继续阅读；为空则整行都走 onClick（进详情）。 */
-    onRead: (() -> Unit)? = null) {
+    onRead: (() -> Unit)? = null, useCustomCover: Boolean = true) {
     val presentation = LocalBookListPresentation.current
     val saved = presentation.books[book.ref.key]
     val reading = status ?: bookRowStatus(book, saved, presentation.positions[book.ref.key], presentation.updates[book.ref.key], presentation.account)
@@ -136,7 +145,7 @@ import cc.novelia.app.ui.components.keywords.KeywordEditorDialog
     // 封面的 clickable 会先消费事件，所以点封面不会连带触发整行点击。
     Row(modifier.fillMaxWidth().motionClickable(onClick = onRead ?: onClick).padding(horizontal = 20.dp, vertical = if(compactMetadata) 10.dp else 12.dp),
         horizontalArrangement = Arrangement.spacedBy(if(compactMetadata) 12.dp else 16.dp), verticalAlignment = Alignment.CenterVertically) {
-        if(onRead == null) BookCover(book) else BookCover(book, Modifier.motionClickable(onClick = onClick))
+        BookCover(book, if(onRead == null) Modifier else Modifier.motionClickable(onClick = onClick), useCustomCover = useCustomCover)
         BoxWithConstraints(Modifier.weight(1f)) {
             val showDate = showBookMetadata && updated != null
             // 分屏列表远窄于整屏，日期应换行显示而非直接隐藏。
