@@ -32,6 +32,7 @@ import cc.novelia.app.ui.components.base.*
     characters: CharacterCountFilter = CharacterCountFilter(), onCharacters: (CharacterCountFilter) -> Unit = {},
     countLabel: String = "", visible: Boolean = true, active: Boolean = true, modifier: Modifier = Modifier,
     grid: Boolean? = null, onToggleLayout: () -> Unit = {},
+    onOrderFolders: (() -> Unit)? = null,
     trailingContent: @Composable () -> Unit = {},
 ) {
     val focus = LocalFocusManager.current
@@ -60,6 +61,11 @@ import cc.novelia.app.ui.components.base.*
                     Icon(if(folderMenu) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, null, Modifier.size(18.dp))
                 }
                 AppDropdownMenu(folderMenu, { folderMenu = false }, Modifier.width(folderMenuWidth).testTag("local-folder-menu")) {
+                    if(onOrderFolders != null) {
+                        DropdownMenuItem({ Text("收藏夹排序") }, { folderMenu = false; onOrderFolders() },
+                            leadingIcon = { Icon(Icons.AutoMirrored.Outlined.Sort, null) })
+                        HorizontalDivider()
+                    }
                     (listOf("全部") + folders).forEach { choice ->
                         DropdownMenuItem(text = { Text(if(choice == "全部") "全部收藏夹" else choice) },
                             onClick = { folderMenu = false; onFolder(choice) },

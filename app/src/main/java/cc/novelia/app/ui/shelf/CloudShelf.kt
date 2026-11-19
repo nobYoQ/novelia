@@ -24,10 +24,14 @@ import cc.novelia.app.data.library.withCloudFavoritesAddedByCloudFolders
 import cc.novelia.app.data.library.withCloudReadingMetadata
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
+import cc.novelia.app.data.model.CLOUD_DEFAULT_FOLDER_ID
 import cc.novelia.app.data.model.CloudFolders
 import cc.novelia.app.data.model.CloudShelfLocation
 import cc.novelia.app.data.model.restoredCloudShelfLocation
 import cc.novelia.app.data.model.Folder
+import cc.novelia.app.data.model.cloudFavoriteFolderOrder
+import cc.novelia.app.data.model.orderedLocalFavoriteFolders
+import cc.novelia.app.data.model.withCloudFavoriteFolderOrder
 import cc.novelia.app.data.network.ALL_CLOUD_FAVORITES
 import cc.novelia.app.data.network.CloudWebFilter
 import cc.novelia.app.data.network.cloudFavorites
@@ -64,6 +68,7 @@ import cc.novelia.app.ui.navigation.AppController
     var folderId by rememberSaveable { mutableStateOf(local.restoredCloudShelfLocation(account).folderId) }
     var page by rememberSaveable { mutableIntStateOf(0) }
     var version by rememberSaveable { mutableIntStateOf(0) }
+    var orderFolders by rememberSaveable(kind) { mutableStateOf(false) }
     var create by remember { mutableStateOf(false) }
     var rename by remember { mutableStateOf<Folder?>(null) }
     var deleting by remember { mutableStateOf<Folder?>(null) }
@@ -87,7 +92,7 @@ import cc.novelia.app.ui.navigation.AppController
     DisposableEffect(onSelectionStateChanged) { onDispose { onSelectionStateChanged(false, false) } }
     BackHandler(active && managing) { if(!bulkBusy) { managing = false; selection = emptyMap() } }
     LaunchedEffect(active) {
-        if(!active) { managing = false; selection = emptyMap(); expanded = false; bulkLocal = null; bulkImport = null; bulkRemoval = null }
+        if(!active) { managing = false; selection = emptyMap(); expanded = false; bulkLocal = null; bulkImport = null; bulkRemoval = null; orderFolders = false }
     }
     // 行内重试或后台重试可能独立于本页菜单回调完成；
     // 成功后刷新远端结果，由 AsyncContent 保留当前视口。
@@ -140,7 +145,10 @@ import cc.novelia.app.ui.navigation.AppController
         CachedAsyncContent(c.uiResults.folders, foldersKey, load = { c.api.get<CloudFolders>("user/favored") }, refreshKey = refreshKey,
             observeInvalidation = observeInvalidation && !bulkBusy, validate = { c.session.ensureCurrent(binding) }, showRefreshIndicator = false) { folders, _ ->
             val realFolders = if (kind == 0) folders.favoredWeb else folders.favoredWenku
-            val choices = cloudFolderChoices(realFolders)
+            val folderOrder = local.cloudFavoriteFolderOrder(account, kind == 1)
+            val choices = remember(realFolders, folderOrder) {
+                cloudFolderChoices(folderOrder.ordered(realFolders, CLOUD_DEFAULT_FOLDER_ID))
+            }
             val current = CloudShelfLocation(kind, folderId).resolveFolder(choices)
             // 分页器会预组合邻页，只有实际打开云端书架时才保存选择。
             LaunchedEffect(active, kind, current?.id, local.rememberLastShelfFolder) {
@@ -167,7 +175,8 @@ import cc.novelia.app.ui.navigation.AppController
                     onClearQuery = { query = ""; submitted = ""; page = 0 }, expanded = expanded, onExpanded = { expanded = it },
                     countLabel = pageCount?.let { "本页 $it 本" } ?: "加载中", maxHeight = filterHeight, active = active,
                     visible = !managing, modifier = Modifier.onSizeChanged { controlsHeight = it.height },
-                    grid = local.cloudShelfGrid, onToggleLayout = { c.store.update { it.copy(cloudShelfGrid = !it.cloudShelfGrid) } }) { close ->
+                    grid = local.cloudShelfGrid, onToggleLayout = { c.store.update { it.copy(cloudShelfGrid = !it.cloudShelfGrid) } },
+                    onOrderFolders = { orderFolders = true }) { close ->
                     DropdownMenuItem({ Text("新建收藏夹") }, { close(); create = true }, leadingIcon = { Icon(Icons.Outlined.Add, null) })
                     if(editable != null) {
                         DropdownMenuItem({ Text("重命名收藏夹") }, { close(); rename = editable })
@@ -209,13 +218,21 @@ import cc.novelia.app.ui.navigation.AppController
                     }
                 }
             }
+            if(active && orderFolders) FavoriteFolderOrderDialog(realFolders, CLOUD_DEFAULT_FOLDER_ID, folderOrder,
+                "原站顺序", onDismiss = { orderFolders = false }) { order ->
+                c.action {
+                    c.session.ensureCurrent(binding)
+                    c.store.update { it.withCloudFavoriteFolderOrder(account, kind == 1, order) }
+                    orderFolders = false
+                }
+            }
         }
     }
-    bulkLocal?.let { books -> CloudFavoriteLocalSheet(local.folders, books.size, { bulkLocal = null },
+    bulkLocal?.let { books -> CloudFavoriteLocalSheet(local.orderedLocalFavoriteFolders(), books.size, { bulkLocal = null },
         onCloudFolders = { importBooks(null, books) }) { folder ->
         importBooks(folder, books)
     } }
-    bulkImport?.let { wenku -> CloudFavoriteImportSheet(local.folders, wenku, { bulkImport = null },
+    bulkImport?.let { wenku -> CloudFavoriteImportSheet(local.orderedLocalFavoriteFolders(), wenku, { bulkImport = null },
         onCloudFolders = { importBooks(null, wenku = wenku) }) { folder ->
         importBooks(folder, wenku = wenku)
     } }

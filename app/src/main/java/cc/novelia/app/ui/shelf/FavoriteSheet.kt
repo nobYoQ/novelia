@@ -12,9 +12,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.model.BookCard
+import cc.novelia.app.data.model.CLOUD_DEFAULT_FOLDER_ID
 import cc.novelia.app.data.model.CloudFolders
 import cc.novelia.app.data.model.WebDetail
 import cc.novelia.app.data.model.WenkuDetail
+import cc.novelia.app.data.model.cloudFavoriteFolderOrder
+import cc.novelia.app.data.model.orderedLocalFavoriteFolders
 import cc.novelia.app.ui.components.base.AppLazyColumn
 import cc.novelia.app.ui.components.base.AppScrollColumn
 import cc.novelia.app.ui.components.base.AppSheet
@@ -39,7 +42,7 @@ import cc.novelia.app.ui.navigation.loginForFavorite
             Text(book.title, Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.bodyMedium, maxLines = 2)
             if(!cloud) {
                 val currentFolder = state.books.firstOrNull { it.book.ref == book.ref }?.folder
-                state.folders.forEach { folder -> MenuRow(folder, if(folder == currentFolder) "当前本地收藏夹" else "本地收藏", if(folder == currentFolder) Icons.Outlined.FolderSpecial else Icons.Outlined.Folder, { c.addLocalFavorite(book, folder); dismiss() }) }
+                state.orderedLocalFavoriteFolders().forEach { folder -> MenuRow(folder, if(folder == currentFolder) "当前本地收藏夹" else "本地收藏", if(folder == currentFolder) Icons.Outlined.FolderSpecial else Icons.Outlined.Folder, { c.addLocalFavorite(book, folder); dismiss() }) }
                 if(currentFolder != null) MenuRow("取消本地收藏",
                     if(book.ref.isLocal && state.deleteLocalCopyOnShelfRemoval) "同时删除导入副本，无法撤销；原文件不受影响" else "保留文件和阅读记录，移除后可撤销",
                     Icons.Outlined.BookmarkRemove, {
@@ -74,7 +77,9 @@ import cc.novelia.app.ui.navigation.loginForFavorite
                 c.session.ensureCurrent(binding)
                 folders to favored
             }, modifier = Modifier.heightIn(max = 360.dp)) { (data, favored), _ ->
-                val folders = if(book.ref.isWenku) data.favoredWenku else data.favoredWeb
+                val originalFolders = if(book.ref.isWenku) data.favoredWenku else data.favoredWeb
+                val order = detailKey.binding.account?.let { state.cloudFavoriteFolderOrder(it, book.ref.isWenku) }
+                val folders = remember(originalFolders, order) { order?.ordered(originalFolders, CLOUD_DEFAULT_FOLDER_ID) ?: originalFolders }
                 val favoriteState = bookFavoriteState(book.ref, false, favored, profile?.username, state.pending)
                 val path = if(book.ref.isWenku) "user/favored-wenku" else "user/favored-web"
                 val bookId = if(book.ref.isWenku) book.ref.id else book.ref.key

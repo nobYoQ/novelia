@@ -50,11 +50,14 @@ import cc.novelia.app.data.library.withVolumeParent
 import cc.novelia.app.data.library.withVolumeOrder
 import cc.novelia.app.data.library.withMountedVolumes
 import cc.novelia.app.data.model.BookRef
+import cc.novelia.app.data.model.DEFAULT_FOLDER_ID
 import cc.novelia.app.data.model.DownloadEntry
 import cc.novelia.app.data.model.SavedBook
 import cc.novelia.app.data.model.createShelfFolder
 import cc.novelia.app.data.model.renameShelfFolder
 import cc.novelia.app.data.model.deleteShelfFolder
+import cc.novelia.app.data.model.localFavoriteFolders
+import cc.novelia.app.data.model.orderedLocalFavoriteFolders
 import cc.novelia.app.data.model.restoredShelfLocation
 import cc.novelia.app.ui.components.base.AppAlertDialog
 import cc.novelia.app.ui.components.base.AppLazyColumn
@@ -96,6 +99,8 @@ import kotlinx.coroutines.withContext
     var tab by rememberSaveable { mutableIntStateOf(state.restoredShelfLocation().tab) }
     var folderId by rememberSaveable { mutableStateOf(state.restoredShelfLocation().localFolderId) }
     val folder = state.folders.firstOrNull { state.folderIds[it] == folderId } ?: "全部"
+    val orderedFolders = remember(state.folders, state.folderIds, state.localFavoriteFolderOrder) { state.orderedLocalFavoriteFolders() }
+    var orderFolders by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }; var sort by rememberSaveable { mutableIntStateOf(0) }
     LaunchedEffect(tab, folderId, state.folderIds, state.rememberLastShelfFolder) {
         val validFolderId = folderId?.takeIf { it in state.folderIds.values }
@@ -286,12 +291,13 @@ import kotlinx.coroutines.withContext
                     val filterHeight = maxHeight * .9f
                     Column(Modifier.fillMaxSize()) {
                         LocalShelfFilters(page == 1, if(page == 0) bookType else fileType, { if(page == 0) bookType = it else fileType = it },
-                            state.folders, folder, { folderId = state.folderIds[it] }, sort, { sort = it }, query, { query = it }, readingStatus, { readingStatus = it },
+                            orderedFolders, folder, { folderId = state.folderIds[it] }, sort, { sort = it }, query, { query = it }, readingStatus, { readingStatus = it },
                             filtersExpanded, { filtersExpanded = it }, filterHeight, { createFolder = true }, { renameFolder = true }, { deleteFolder = true },
                             characters = characterFilter, onCharacters = { characterFilter = it },
                             countLabel = "${groups.size} 本" + groups.sumOf { it.volumes.size }.takeIf { it > 0 }?.let { " · $it 分卷" }.orEmpty(),
                             visible = !pageManaging, active = active, modifier = Modifier.onSizeChanged { controlsHeight = it.height },
-                            grid = grid, onToggleLayout = { c.store.update { if(page == 0) it.copy(shelfGrid = !it.shelfGrid) else it.copy(localFilesGrid = !it.localFilesGrid) } }) {
+                            grid = grid, onToggleLayout = { c.store.update { if(page == 0) it.copy(shelfGrid = !it.shelfGrid) else it.copy(localFilesGrid = !it.localFilesGrid) } },
+                            onOrderFolders = { orderFolders = true }) {
                             if(filterCharacters) Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                                 val unknown = countCandidates.count { characterCounts.count(it) == null }
                                 Text(if(characterCounts.loading) "正在补全字数…" else "$unknown 本字数未知", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
@@ -472,6 +478,11 @@ import kotlinx.coroutines.withContext
             onOpenBook(ref)
         }
     }
+    if(orderFolders) FavoriteFolderOrderDialog(state.localFavoriteFolders(), DEFAULT_FOLDER_ID, state.localFavoriteFolderOrder,
+        "按创建顺序", onDismiss = { orderFolders = false }) { order ->
+        c.store.update { it.copy(localFavoriteFolderOrder = order) }
+        orderFolders = false
+    }
     if(createFolder) TextPrompt("新建收藏夹", "名称", onDismiss = { createFolder = false }) { name -> c.action { c.store.update { it.createShelfFolder(name.trim()) } } }
     if(renameFolder) TextPrompt("重命名收藏夹", "名称", folder, { renameFolder = false }) { name -> val previous = folder; c.action { c.store.update { it.renameShelfFolder(previous, name.trim()) } } }
     if(deleteFolder) ConfirmDialog("删除收藏夹？", "其中的书籍会移入默认收藏，文件不会删除。", { deleteFolder = false }, confirmLabel = "删除收藏夹") { val previous = folder; c.action { c.store.update { it.deleteShelfFolder(previous) }; folderId = null } }
@@ -520,7 +531,7 @@ import kotlinx.coroutines.withContext
     }
     if(bulkMove) AppAlertDialog(onDismissRequest = { bulkMove = false }, title = { Text("移入收藏夹") }, text = { AppScrollColumn {
         if(state.books.any { it.book.ref.key in selection && it.parentWenkuKey != null && it.parentWenkuKey !in selection }) Text("单独移动分卷会取消挂载。同时移动父项可保留挂载。", style = MaterialTheme.typography.bodySmall)
-        state.folders.forEach { target -> AppTextButton(onClick = { c.store.update { it.moveShelfBooks(selection, target) }; bulkMove = false; managing = false; selection = emptySet() }) { Text(target) } }
+        orderedFolders.forEach { target -> AppTextButton(onClick = { c.store.update { it.moveShelfBooks(selection, target) }; bulkMove = false; managing = false; selection = emptySet() }) { Text(target) } }
     } }, confirmButton = {})
     if(bulkStatus) AppAlertDialog(onDismissRequest = { bulkStatus = false }, title = { Text("修改 ${selection.size} 本的阅读状态") }, text = { Column {
         Text("手动选择后固定状态，自动阅读不会覆盖。", style = MaterialTheme.typography.bodySmall)
@@ -552,7 +563,7 @@ import kotlinx.coroutines.withContext
         }) else Text(if(state.autoReadingStatus) "阅读状态由自动管理；手动选择后将固定状态" else "自动记录已关闭，当前状态保留",
             Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall)
         val parent = state.books.firstOrNull { it.book.ref.isVolumeParent && it.book.ref.key == saved.parentWenkuKey }
-        if(parent == null) ChoiceRow("收藏夹", state.folders, state.folders.indexOf(saved.folder)) { index -> c.store.saveBook(saved.book, state.folders[index]); selected = null }
+        if(parent == null) ChoiceRow("收藏夹", orderedFolders, orderedFolders.indexOf(saved.folder)) { index -> c.store.saveBook(saved.book, orderedFolders[index]); selected = null }
         else Text("所属收藏夹：${parent.folder}", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = MaterialTheme.typography.bodyMedium)
         if(saved.book.ref.isVolumeParent) MenuRow("管理挂载分卷", "选择已导入的书籍作为分卷", Icons.Outlined.LibraryAdd, { selected = null; volumeManager = saved })
         if(saved.book.ref.isWenku && state.books.any { it.parentWenkuKey == saved.book.ref.key }) WenkuSiteOrderActions(c, saved.book.ref.key)

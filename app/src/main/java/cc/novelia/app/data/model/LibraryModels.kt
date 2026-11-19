@@ -70,6 +70,8 @@ fun legacyFolderId(name: String): String = if(name == DEFAULT_FOLDER) DEFAULT_FO
 @Serializable data class LibraryState(
     val books: List<SavedBook> = emptyList(), val folders: List<String> = listOf("默认收藏"),
     val folderIds: Map<String, String> = mapOf(DEFAULT_FOLDER to DEFAULT_FOLDER_ID),
+    val localFavoriteFolderOrder: FavoriteFolderOrder = FavoriteFolderOrder(),
+    val cloudFavoriteFolderOrders: Map<String, CloudFavoriteFolderOrders> = emptyMap(),
     val positions: Map<String, Position> = emptyMap(), val notes: List<Note> = emptyList(),
     val readingHistory: Map<String, ReadingHistoryEntry> = emptyMap(), val historyMigrated: Boolean = false,
     val downloads: List<DownloadEntry> = emptyList(), val blockedBooks: Set<String> = emptySet(), val blockedTags: Set<String> = emptySet(),
@@ -169,5 +171,6 @@ fun LibraryState.deleteShelfFolder(name: String): LibraryState {
     require(name in folders && name != DEFAULT_FOLDER) { "不能删除默认收藏夹" }
     val state = withStableFolderIds()
     return state.copy(folders = state.folders - name, folderIds = state.folderIds - name,
+        localFavoriteFolderOrder = state.localFavoriteFolderOrder.copy(manualIds = state.localFavoriteFolderOrder.manualIds - state.folderIds.getValue(name)),
         books = state.books.map { if(it.folder == name) it.copy(folder = DEFAULT_FOLDER, folderId = DEFAULT_FOLDER_ID) else it })
 }

@@ -30,6 +30,7 @@ import cc.novelia.app.ui.components.book.WebSourceOptions
     expanded: Boolean, onExpanded: (Boolean) -> Unit, countLabel: String, maxHeight: Dp,
     active: Boolean, visible: Boolean, modifier: Modifier = Modifier,
     grid: Boolean? = null, onToggleLayout: () -> Unit = {},
+    onOrderFolders: (() -> Unit)? = null,
     folderActions: @Composable ColumnScope.(close: () -> Unit) -> Unit,
 ) {
     var folderMenu by remember { mutableStateOf(false) }
@@ -54,6 +55,11 @@ import cc.novelia.app.ui.components.book.WebSourceOptions
                     Icon(if(folderMenu) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, null, Modifier.size(18.dp))
                 }
                 AppDropdownMenu(folderMenu, { folderMenu = false }, Modifier.width(folderMenuWidth).testTag("cloud-folder-menu")) {
+                    if(onOrderFolders != null) {
+                        DropdownMenuItem({ Text("收藏夹排序") }, { folderMenu = false; onOrderFolders() },
+                            leadingIcon = { Icon(Icons.AutoMirrored.Outlined.Sort, null) })
+                        if(folders.isNotEmpty()) HorizontalDivider()
+                    }
                     folders.forEach { item -> DropdownMenuItem({ Text(item.title) }, { folderMenu = false; onFolder(item.id) },
                         trailingIcon = if(current?.id == item.id) ({ Icon(Icons.Outlined.Check, null) }) else null) }
                     if(folders.isNotEmpty()) HorizontalDivider()
