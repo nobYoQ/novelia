@@ -43,7 +43,6 @@ import cc.novelia.app.ui.components.base.CharacterCountFilterSaver
 import cc.novelia.app.data.library.ShelfBookType
 import cc.novelia.app.data.library.readingStatuses
 import cc.novelia.app.data.library.shelfGroups
-import cc.novelia.app.data.library.createLocalSeries
 import cc.novelia.app.data.library.withReadingStatus
 import cc.novelia.app.data.library.withAutomaticReadingStatus
 import cc.novelia.app.data.library.withVolumeParent
@@ -60,6 +59,7 @@ import cc.novelia.app.data.model.localFavoriteFolders
 import cc.novelia.app.data.model.Folder
 import cc.novelia.app.data.model.restoredShelfLocation
 import cc.novelia.app.ui.components.base.AppAlertDialog
+import cc.novelia.app.ui.components.base.AppDropdownMenu
 import cc.novelia.app.ui.components.base.AppLazyColumn
 import cc.novelia.app.ui.components.base.AppScrollColumn
 import cc.novelia.app.ui.components.base.AppSheet
@@ -120,7 +120,7 @@ import kotlinx.coroutines.withContext
     var localExportOriginal by rememberSaveable { mutableStateOf(true) }
     var queueingDownloads by remember { mutableStateOf(false) }
     var volumeManager by remember { mutableStateOf<SavedBook?>(null) }
-    var createSeries by rememberSaveable { mutableStateOf(false) }
+    var addToShelf by remember(tab, managing) { mutableStateOf(false) }
     var volumeSheetKey by rememberSaveable { mutableStateOf<String?>(null) }
     var volumeMatches by remember { mutableStateOf<Set<String>?>(null) }
     var volumeParentPicker by remember { mutableStateOf<SavedBook?>(null) }
@@ -222,9 +222,16 @@ import kotlinx.coroutines.withContext
             enabled = !batchWorking && !cloudBusy) { Icon(Icons.Outlined.CloudSync, "云端与本地收藏同步") }
         AppIconButton(onClick = { c.go("updates") }) { Icon(Icons.Outlined.NewReleases, "查看书架更新") }
         AppIconButton(onClick = { c.go("history") }) { Icon(Icons.Outlined.History, "阅读历史") }
-        AppIconButton(onClick = importLocalFiles, enabled = !importing) { Icon(Icons.Outlined.FileOpen, "导入本地文件") }
-        if(tab == 0 && !managing) AppIconButton(onClick = { createSeries = true }, enabled = !batchWorking) {
-            Icon(Icons.Outlined.LibraryAdd, "新建本地总集")
+        if(tab == 0 && !managing) Box {
+            AppIconButton(onClick = { addToShelf = true }, enabled = !batchWorking) { Icon(Icons.Outlined.Add, "添加到书架") }
+            AppDropdownMenu(addToShelf, { addToShelf = false }) {
+                DropdownMenuItem({ Text("导入本地文件") }, { addToShelf = false; importLocalFiles() },
+                    enabled = !importing, leadingIcon = { Icon(Icons.Outlined.FileOpen, null) })
+                DropdownMenuItem({ Text("新建本地总集") }, { addToShelf = false; c.editLocalSeries(folderId = folderId) },
+                    leadingIcon = { Icon(Icons.Outlined.LibraryAdd, null) })
+            }
+        } else {
+            AppIconButton(onClick = importLocalFiles, enabled = !importing) { Icon(Icons.Outlined.FileOpen, "导入本地文件") }
         }
     }) { padding ->
         ShelfPager(tab, { tab = it }, enabled = !batchWorking && !cloudBusy, modifier = Modifier.padding(padding),
@@ -425,7 +432,10 @@ import kotlinx.coroutines.withContext
                                     if(saved.book.ref.isVolumeParent && (!pageManaging || dragSelection.dragging)) {
                                         val rotation by animateFloatAsState(if(row.expanded) 180f else 0f, tween(if(reducedMotion) 0 else AppMotion.Standard), label = "wenku-volume-disclosure")
                                         AppTextButton(onClick = {
-                                            if(row.volumeCount == 0) volumeManager = saved
+                                            if(row.volumeCount == 0) {
+                                                if(saved.book.ref.isLocalSeries) c.editLocalSeries(saved.book.ref, startAtVolumes = true)
+                                                else volumeManager = saved
+                                            }
                                             else if(filteringVolumes) collapsedSearchGroups = if(row.expanded) collapsedSearchGroups + saved.book.ref.key else collapsedSearchGroups - saved.book.ref.key
                                             else c.store.update { it.copy(books = it.books.map { book -> if(book.book.ref == saved.book.ref) book.copy(volumesExpanded = !row.expanded) else book }) }
                                         }, enabled = !pageManaging, modifier = Modifier.padding(start = 20.dp).testTag("wenku-volumes-${saved.book.ref.key}")
@@ -464,7 +474,13 @@ import kotlinx.coroutines.withContext
         onOpen = { volumeSheetKey = null; onOpenBook(it.book.ref) },
         onContinue = { saved, position -> volumeSheetKey = null; c.read(saved.book.ref, position.chapterId) },
         onDetails = { volumeSheetKey = null; onOpenBook(volumeGroup.saved.book.ref) },
-        onMount = { volumeManager = volumeGroup.saved }, onManageBook = { selected = it }, onReorder = commitVolumeOrder,
+        onMount = {
+            val parent = volumeGroup.saved
+            if(parent.book.ref.isLocalSeries) {
+                volumeSheetKey = null
+                c.editLocalSeries(parent.book.ref, startAtVolumes = true)
+            } else volumeManager = parent
+        }, onManageBook = { selected = it }, onReorder = commitVolumeOrder,
         actions = { selectionActions(false, volumeGroup.volumes.filter { it.book.ref.key in selection }) })
     if(favoriteSync) {
         val binding = c.session.capture()
@@ -473,13 +489,6 @@ import kotlinx.coroutines.withContext
                 onApply = { plan, status, progress -> c.applyFavoriteSync(binding, plan, status, progress) },
                 onDismiss = { favoriteSync = false }, onFinished = { favoriteSync = false; c.message(it) })
         } }
-    }
-    if(createSeries) TextPrompt("新建本地总集", "总集名称", onDismiss = { createSeries = false }) { name ->
-        c.action {
-            val ref = BookRef.newLocalSeries()
-            c.store.update { it.createLocalSeries(ref, name, folder) }
-            onOpenBook(ref)
-        }
     }
     if(createFolder) TextPrompt("新建收藏夹", "名称", onDismiss = { createFolder = false }) { name -> c.action { c.store.update { it.createShelfFolder(name.trim()) } } }
     if(renameFolder) TextPrompt("重命名收藏夹", "名称", folder, { renameFolder = false }) { name -> val previous = folder; c.action { c.store.update { it.renameShelfFolder(previous, name.trim()) } } }
@@ -550,8 +559,8 @@ import kotlinx.coroutines.withContext
         if(saved.book.ref.isLocal) MenuRow("书籍详情", "查看阅读时长和管理封面", Icons.Outlined.Info, {
             selected = null; c.showBookDetails(saved.book.ref)
         })
-        if(saved.book.ref.isLocalSeries) MenuRow("总集详情", "编辑名称和封面", Icons.Outlined.Info, {
-            selected = null; onOpenBook(saved.book.ref)
+        if(saved.book.ref.isLocalSeries) MenuRow("编辑总集", "修改资料和分卷", Icons.Outlined.Edit, {
+            selected = null; c.editLocalSeries(saved.book.ref)
         })
         if(saved.hasUpdates) MenuRow("标记更新已读", "清除本书的更新提示", Icons.Outlined.DoneAll, { c.store.update { it.withAcknowledgedBookUpdates(saved.book.ref) }; selected = null })
         MenuRow(if(saved.pinned) "取消置顶" else "置顶", "在书架顶部显示", Icons.Outlined.PushPin, { c.store.update { it.copy(books = it.books.map { b -> if(b.book.ref == saved.book.ref) b.copy(pinned = !b.pinned) else b }) }; selected = null })
@@ -561,9 +570,9 @@ import kotlinx.coroutines.withContext
         }) else Text(if(state.autoReadingStatus) "阅读状态由自动管理；手动选择后将固定状态" else "自动记录已关闭，当前状态保留",
             Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall)
         val parent = state.books.firstOrNull { it.book.ref.isVolumeParent && it.book.ref.key == saved.parentWenkuKey }
-        if(parent == null) ChoiceRow("收藏夹", orderedFolders, orderedFolders.indexOf(saved.folder)) { index -> c.store.saveBook(saved.book, orderedFolders[index]); selected = null }
-        else Text("所属收藏夹：${parent.folder}", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = MaterialTheme.typography.bodyMedium)
-        if(saved.book.ref.isVolumeParent) MenuRow("管理挂载分卷", "选择已导入的书籍作为分卷", Icons.Outlined.LibraryAdd, { selected = null; volumeManager = saved })
+        if(parent != null) Text("所属收藏夹：${parent.folder}", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = MaterialTheme.typography.bodyMedium)
+        else if(!saved.book.ref.isLocalSeries) ChoiceRow("收藏夹", orderedFolders, orderedFolders.indexOf(saved.folder)) { index -> c.store.saveBook(saved.book, orderedFolders[index]); selected = null }
+        if(saved.book.ref.isWenku) MenuRow("管理挂载分卷", "选择已导入的书籍作为分卷", Icons.Outlined.LibraryAdd, { selected = null; volumeManager = saved })
         if(saved.book.ref.isWenku && state.books.any { it.parentWenkuKey == saved.book.ref.key }) WenkuSiteOrderActions(c, saved.book.ref.key)
         if(saved.book.ref.isLocal) MenuRow(if(parent == null) "挂载到文库或总集" else "更换或取消挂载", parent?.let { "当前挂载：${it.book.title}" } ?: "将本书添加为分卷", Icons.Outlined.DriveFileMove, { selected = null; volumeParentPicker = saved })
         if(saved.book.ref.isLocal) MenuRow("重命名", "修改本地小说或分卷名称", Icons.Outlined.Edit, { selected = null; renamingDocument = saved })

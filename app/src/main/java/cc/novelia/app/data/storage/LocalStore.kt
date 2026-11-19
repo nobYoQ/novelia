@@ -13,6 +13,8 @@ import cc.novelia.app.data.chapters.clearChapterFreshness
 import cc.novelia.app.data.documents.DocumentHashIndex
 import cc.novelia.app.data.documents.DocumentStorage
 import cc.novelia.app.data.library.withoutBook
+import cc.novelia.app.data.library.LocalSeriesEdits
+import cc.novelia.app.data.library.withEditedLocalSeries
 import cc.novelia.app.data.library.withoutBooks
 import cc.novelia.app.data.library.withDeletedBookRecords
 import cc.novelia.app.data.library.withMigratedDownloadLinks
@@ -37,6 +39,7 @@ import cc.novelia.app.files.epub.EPUB_CONTENT_VERSION
 import cc.novelia.app.files.epub.contentMode
 import cc.novelia.app.files.epub.recoverEpubChapter
 import java.io.File
+import java.io.InputStream
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -126,6 +129,21 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
      * 相同状态不触发写入，恢复保护期间直接忽略修改，界面可通过 [recoveryIssue] 提示用户。
      */
     fun update(transform: (LibraryState) -> LibraryState) = update(null, transform)
+
+    internal suspend fun saveLocalSeries(
+        ref: BookRef, creating: Boolean, edits: LocalSeriesEdits,
+        cover: (() -> InputStream)?, restoreDefaultCover: Boolean,
+    ) {
+        fun save(coverFile: File?) = synchronized(this) {
+            check(recoveryIssue.value == null) { "本地资料已保护，请先前往资料备份与恢复" }
+            val edited = state.value.withEditedLocalSeries(ref, creating, edits)
+            if(coverFile != null) bookCovers.installValidatedCover(ref, coverFile)
+            else if(restoreDefaultCover) bookCovers.restoreDefault(ref)
+            update { edited }
+        }
+        if(cover != null) bookCovers.withValidatedCover(cover, ::save)
+        else withContext(Dispatchers.IO) { save(null) }
+    }
 
     @Synchronized private fun update(readingKey: String?, transform: (LibraryState) -> LibraryState) {
         // 调用方包括界面回调和阅读器销毁流程；恢复保护期间保持状态只读，

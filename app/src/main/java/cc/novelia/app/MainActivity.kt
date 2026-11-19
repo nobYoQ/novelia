@@ -35,6 +35,7 @@ import cc.novelia.app.ui.about.OpenSourceLicensesScreen
 import cc.novelia.app.ui.account.LoginScreen
 import cc.novelia.app.ui.account.ProfileScreen
 import cc.novelia.app.ui.book.BookScreen
+import cc.novelia.app.ui.book.localSeriesEditorDestination
 import cc.novelia.app.ui.book.EditBookScreen
 import cc.novelia.app.ui.book.GlossaryScreen
 import cc.novelia.app.ui.book.WenkuEditorScreen
@@ -287,6 +288,7 @@ class MainActivity : ComponentActivity() {
                                     onNavigationBarHeightChanged = reportNavigationBarHeight("profile")) { ProfileScreen(controller) }
                             }
                             composable("book/{provider}/{id}") { BookScreen(controller, BookRef(it.arguments!!.getString("provider")!!, it.arguments!!.getString("id")!!), navigationState = it.savedStateHandle) }
+                            localSeriesEditorDestination(controller)
                             composable("reader/{provider}/{id}/{chapter}") { ReaderScreen(controller, BookRef(it.arguments!!.getString("provider")!!, it.arguments!!.getString("id")!!), it.arguments!!.getString("chapter")!!) }
                             composable("article/{id}") {
                                 val id = it.arguments!!.getString("id")!!

@@ -208,6 +208,14 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
         } else showBookDetails(ref)
     }
     fun showBookDetails(ref: BookRef) = go("book/${ref.provider}/${Uri.encode(ref.id)}")
+    internal fun editLocalSeries(ref: BookRef? = null, folderId: String? = null, startAtVolumes: Boolean = false) {
+        val folder = folderId?.let { "&folder=${Uri.encode(it)}" }.orEmpty()
+        go("local-series/edit/${Uri.encode(ref?.id ?: NEW_LOCAL_SERIES)}?volumes=$startAtVolumes$folder", replaceTop = true)
+    }
+    internal fun selectCreatedSeries(ref: BookRef) {
+        nav.previousBackStackEntry?.savedStateHandle?.set(SELECT_SHELF_BOOK, ref.key)
+        back()
+    }
     fun returnToBookContents(ref: BookRef) = nav.returnToBookContents(ref)
     fun read(ref: BookRef, chapter: String) {
         // 从书架/详情重新开始阅读时重新检查目录；连续切章走下面的交接入口。

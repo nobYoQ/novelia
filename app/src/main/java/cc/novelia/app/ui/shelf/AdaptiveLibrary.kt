@@ -17,6 +17,7 @@ import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.ui.book.BookScreen
 import cc.novelia.app.ui.components.base.EmptyState
 import cc.novelia.app.ui.navigation.AppController
+import cc.novelia.app.ui.navigation.SELECT_SHELF_BOOK
 import cc.novelia.app.ui.navigation.SHOW_SHELF_LIST
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -26,6 +27,13 @@ import kotlinx.coroutines.flow.map
     sharedDocuments: List<Uri> = emptyList(), onSharedDocumentsConsumed: (List<Uri>) -> Unit = {},
     onCompactDetailChanged: (Boolean) -> Unit = {}) {
     var selectedKey by rememberSaveable { mutableStateOf<String?>(null) }
+    val requestedBook by navigationState.getStateFlow<String?>(SELECT_SHELF_BOOK, null).collectAsStateWithLifecycle()
+    LaunchedEffect(requestedBook) {
+        requestedBook?.let {
+            selectedKey = it
+            navigationState.set<String?>(SELECT_SHELF_BOOK, null)
+        }
+    }
     val showShelfList by navigationState.getStateFlow(SHOW_SHELF_LIST, false).collectAsStateWithLifecycle()
     LaunchedEffect(showShelfList) {
         if (showShelfList) {

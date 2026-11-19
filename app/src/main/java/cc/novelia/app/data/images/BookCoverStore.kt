@@ -38,6 +38,15 @@ internal class BookCoverStore(
     suspend fun replace(ref: BookRef, open: () -> InputStream) = withContext(Dispatchers.IO) {
         val key = hashName(ref.key)
         val revision = revisions.value[key] ?: 0L
+        withValidatedCover(open) { temporary ->
+            synchronized(this@BookCoverStore) {
+                check((revisions.value[key] ?: 0L) == revision) { "封面已变更，请重新选择图片" }
+                installValidatedCover(ref, temporary)
+            }
+        }
+    }
+
+    suspend fun withValidatedCover(open: () -> InputStream, apply: (File) -> Unit) = withContext(Dispatchers.IO) {
         cache.mkdirs()
         val temporary = File.createTempFile("cover-", ".tmp", cache)
         try {
@@ -58,15 +67,17 @@ internal class BookCoverStore(
             }
             validate(temporary)
             currentCoroutineContext().ensureActive()
-            synchronized(this@BookCoverStore) {
-                check((revisions.value[key] ?: 0L) == revision) { "封面已变更，请重新选择图片" }
-                directory.mkdirs()
-                Files.move(temporary.toPath(), File(directory, key).toPath(), ATOMIC_MOVE, REPLACE_EXISTING)
-                revisions.value += key to (revision + 1)
-            }
+            apply(temporary)
         } finally {
             temporary.delete()
         }
+    }
+
+    @Synchronized fun installValidatedCover(ref: BookRef, temporary: File) {
+        val key = hashName(ref.key)
+        directory.mkdirs()
+        Files.move(temporary.toPath(), File(directory, key).toPath(), ATOMIC_MOVE, REPLACE_EXISTING)
+        revisions.value += key to ((revisions.value[key] ?: 0L) + 1)
     }
 
     @Synchronized fun restoreDefault(ref: BookRef) {

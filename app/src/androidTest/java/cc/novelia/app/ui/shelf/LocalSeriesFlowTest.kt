@@ -16,16 +16,21 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.core.app.ActivityOptionsCompat
-import androidx.lifecycle.SavedStateHandle
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.NoveliaApplication
+import cc.novelia.app.data.model.DEFAULT_FOLDER
 import cc.novelia.app.data.model.Position
+import cc.novelia.app.data.model.createShelfFolder
 import cc.novelia.app.files.importing.importLocalDocument
+import cc.novelia.app.ui.book.localSeriesEditorDestination
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.theme.AppInteractionMode
 import cc.novelia.app.ui.theme.NoveliaTheme
 import java.io.File
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Rule
@@ -34,7 +39,7 @@ import org.junit.Test
 class LocalSeriesFlowTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun createsRenamesAndDissolvesASeriesWithIndependentVolumeCoversAndPositions() = runBlocking {
+    @Test fun createsEditsAndDissolvesASeriesWithIndependentVolumeCoversAndPositions() = runBlocking {
         val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
         app.initialization.await()
         val store = app.store
@@ -49,7 +54,8 @@ class LocalSeriesFlowTest {
         val first = books.first()
         val position = Position(store.documentIndex(first.id).chapters.first().id, index = 2, offset = 35, title = "原阅读位置")
         try {
-            store.update { it.copy(positions = it.positions + (first.key to position), rememberLastShelfFolder = false) }
+            store.update { it.copy(positions = it.positions + (first.key to position), rememberLastShelfFolder = false)
+                .createShelfFolder("总集试读") }
             store.bookCovers.replace(first) { image.inputStream() }
             val owner = object : ActivityResultRegistryOwner {
                 override val activityResultRegistry = object : ActivityResultRegistry() {
@@ -63,45 +69,106 @@ class LocalSeriesFlowTest {
                     val nav = rememberNavController()
                     val scope = rememberCoroutineScope()
                     val c = remember(nav, scope) { AppController(app, nav, scope, SnackbarHostState()) }
-                    val navigation = remember { SavedStateHandle() }
-                    CompositionLocalProvider(LocalActivityResultRegistryOwner provides owner) { AdaptiveLibraryScreen(c, navigation) }
+                    CompositionLocalProvider(LocalActivityResultRegistryOwner provides owner) {
+                        NavHost(nav, startDestination = "shelf") {
+                            composable("shelf") { AdaptiveLibraryScreen(c, it.savedStateHandle) }
+                            localSeriesEditorDestination(c)
+                        }
+                    }
                 } }
             }
-            compose.onNodeWithContentDescription("新建本地总集").performClick()
-            compose.onNode(hasSetTextAction()).performTextInput("测试总集")
-            compose.onNodeWithText("保存").performClick()
-            compose.onNodeWithTag("local-series-detail").assertIsDisplayed()
-            val parent = store.state.value.books.single { it.book.title == "测试总集" }.book.ref
-            compose.onNodeWithText("添加分卷").performClick()
-            books.forEach { ref ->
-                val tag = "mount-volume-${ref.key}"
-                compose.onNodeWithTag("wenku-volume-picker").performScrollToNode(hasTestTag(tag))
-                compose.onNodeWithTag(tag).performClick()
+            val editor = compose.onNodeWithTag("local-series-editor")
+            val detail = compose.onNodeWithTag("local-series-detail")
+            fun detailCover(key: String) = hasTestTag("volume-cover-$key") and hasAnyAncestor(hasTestTag("local-series-detail"))
+            fun editorItem(matcher: SemanticsMatcher): SemanticsNodeInteraction {
+                editor.performScrollToNode(matcher)
+                return compose.onNode(matcher).performScrollTo()
             }
-            compose.onNodeWithText("保存挂载（2）").performClick()
+            fun editorField(tag: String) = editorItem(hasTestTag(tag))
+            fun editorButton(label: String) = editorItem(hasText(label))
+            fun volumeAction(key: String, label: String) {
+                val action = hasContentDescription(label) and hasAnyAncestor(hasTestTag("edit-series-volume-$key"))
+                editor.performScrollToNode(action)
+                compose.onNode(action).assertIsDisplayed().performClick()
+            }
+            fun awaitDetail() {
+                compose.waitUntil(10_000) { compose.onAllNodesWithTag("local-series-detail").fetchSemanticsNodes().isNotEmpty() }
+                detail.assertIsDisplayed()
+            }
+            compose.onNodeWithTag("local-folder-picker").performClick()
+            compose.onNodeWithText("总集试读").performClick()
+            compose.onNodeWithContentDescription("添加到书架").performClick()
+            compose.onNodeWithText("导入本地文件").assertIsDisplayed()
+            compose.onNodeWithText("新建本地总集").performClick()
+            compose.onNodeWithTag("local-series-folder").assertTextContains("总集试读")
+            compose.onNodeWithText("选择封面").performClick()
+            editorField("local-series-title").performTextInput("测试总集")
+            editorField("local-series-authors").performTextInput("作者甲")
+            editorField("local-series-tags").performTextInput("奇幻，冒险")
+            editorField("local-series-description").performTextInput("总集简介一")
+            editorButton("添加分卷").performClick()
+            editorField("local-series-volume-search").performTextInput("总集测试卷")
+            books.forEach { ref ->
+                editorField("pick-series-volume-${ref.key}").performClick().assertIsOn()
+            }
+            editorButton("完成选择").performClick()
+            volumeAction(books[1].key, "上移 总集测试卷 2")
+            assertTrue(store.state.value.books.none { it.book.title == "测试总集" })
+            assertTrue(store.state.value.books.filter { it.book.ref in books }.all { it.parentWenkuKey == null })
+            compose.onNodeWithText("保存").performClick()
+            awaitDetail()
+            val parent = store.state.value.books.single { it.book.title == "测试总集" }
+            assertEquals("总集试读", parent.folder)
+            assertEquals("总集简介一", parent.seriesDescription)
+            assertEquals(listOf("作者甲"), parent.book.authors)
+            assertEquals(listOf("奇幻", "冒险"), parent.book.tags)
+            assertEquals(books.reversed().map { it.key }, parent.volumeOrder)
+            compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("测试总集 自定义封面", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithText("继续阅读 · 总集测试卷 1").assertIsDisplayed()
-            val firstCover = compose.onNodeWithTag("volume-cover-${first.key}", useUnmergedTree = true)
+            detail.performScrollToNode(hasText("总集简介一"))
+            compose.onNodeWithText("总集简介一").assertIsDisplayed()
+            detail.performScrollToNode(hasTestTag("shelf-volume-${books[1].key}"))
+            compose.onNode(detailCover(books[1].key), useUnmergedTree = true).assertIsDisplayed()
+            detail.performScrollToNode(hasTestTag("shelf-volume-${first.key}"))
+            val firstCover = detailCover(first.key)
             compose.waitUntil(10_000) {
-                compose.onAllNodes(hasTestTag("volume-cover-${first.key}") and hasContentDescription("总集测试卷 1 自定义封面"),
+                compose.onAllNodes(firstCover and hasContentDescription("总集测试卷 1 自定义封面"),
                     useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
             }
-            firstCover.assertIsDisplayed()
-            compose.onNodeWithTag("volume-cover-${books[1].key}", useUnmergedTree = true).assertIsDisplayed()
+            compose.onNode(firstCover, useUnmergedTree = true).assertIsDisplayed()
             assertEquals(position, store.state.value.positions[first.key])
 
-            compose.onNodeWithContentDescription("更多操作").performClick()
-            compose.onNodeWithText("更换封面").performClick()
-            compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("测试总集 自定义封面", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithContentDescription("更多操作").performClick()
-            compose.onNodeWithText("重命名总集").performClick()
-            compose.onNode(hasSetTextAction()).performTextReplacement("改名后的总集")
+            compose.onNodeWithText("编辑总集").performClick()
+            editorButton("恢复默认封面").performClick()
+            editorField("local-series-title").performTextReplacement("不会保存的名称")
+            compose.onNodeWithContentDescription("返回").performClick()
+            compose.onNodeWithText("放弃修改").performClick()
+            awaitDetail()
+            assertEquals("测试总集", store.state.value.books.single { it.book.ref == parent.book.ref }.book.title)
+            assertNotNull(store.bookCovers.observe(parent.book.ref).first())
+
+            detail.performScrollToNode(hasText("编辑分卷"))
+            compose.onNodeWithText("编辑分卷").performScrollTo().performClick()
+            compose.onNodeWithText("分卷 · 2").assertIsDisplayed()
+            volumeAction(books[1].key, "移出 总集测试卷 2")
+            editorButton("恢复默认封面").performClick()
+            editorField("local-series-folder").performClick()
+            compose.onNode(hasText(DEFAULT_FOLDER) and hasAnyAncestor(isPopup())).performClick()
+            editorField("local-series-title").performTextReplacement("改名后的总集")
             compose.onNodeWithText("保存").performClick()
-            assertEquals("改名后的总集", store.state.value.books.single { it.book.ref == parent }.book.title)
+            awaitDetail()
+            val updated = store.state.value.books.single { it.book.ref == parent.book.ref }
+            assertEquals("改名后的总集", updated.book.title)
+            assertEquals(DEFAULT_FOLDER, updated.folder)
+            assertEquals(DEFAULT_FOLDER, store.state.value.books.single { it.book.ref == first }.folder)
+            assertEquals(listOf(first.key), updated.volumeOrder)
+            assertNull(store.state.value.books.single { it.book.ref == books[1] }.parentWenkuKey)
+            assertNull(store.bookCovers.observe(parent.book.ref).first())
             assertEquals(position, store.state.value.positions[first.key])
             compose.onNodeWithContentDescription("更多操作").performClick()
             compose.onNodeWithText("解散总集").performClick()
             compose.onNodeWithText("解散总集").performClick()
-            compose.waitUntil(10_000) { store.state.value.books.none { it.book.ref == parent } }
+            compose.waitUntil(10_000) { store.state.value.books.none { it.book.ref == parent.book.ref } }
             assertTrue(store.state.value.books.filter { it.book.ref in books }.all { it.parentWenkuKey == null })
             assertEquals(position, store.state.value.positions[first.key])
             books.forEach { assertTrue(store.documentIndex(it.id).chapters.isNotEmpty()) }

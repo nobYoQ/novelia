@@ -2,9 +2,11 @@ package cc.novelia.app.data.library
 
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
+import cc.novelia.app.data.model.DEFAULT_FOLDER_ID
 import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.Position
 import cc.novelia.app.data.model.SavedBook
+import cc.novelia.app.data.model.createShelfFolder
 import cc.novelia.app.data.storage.appJson
 import cc.novelia.app.data.updates.booksForUpdate
 import cc.novelia.app.data.webdav.SyncDomain
@@ -21,17 +23,22 @@ class LocalSeriesTest {
     private val position = Position("chapter", index = 15, offset = 22, textOffset = 90)
     private val initial = LibraryState(books = listOf(wenku, first, second), positions = mapOf(first.book.ref.key to position))
     private val keys = setOf(first.book.ref.key, second.book.ref.key)
+    private val draft = LocalSeriesEdits(" 总集 ", "", "", "", DEFAULT_FOLDER_ID, keys.toList())
 
     @Test fun localSeriesGroupsExistingFilesAndRoundTripsWithoutRewritingTheirIdentityOrPosition() {
-        val created = initial.withMountedVolumes(wenku.book.ref.key, keys)
-            .createLocalSeries(ref, " 总集 ", "默认收藏")
-            .withMountedVolumes(ref.key, keys)
-            .renameLocalSeries(ref, "新名称")
-            .withVolumeOrder(ref.key, listOf(second.book.ref.key, first.book.ref.key))
+        val grouped = initial.withMountedVolumes(wenku.book.ref.key, keys).createShelfFolder("长篇")
+            .withEditedLocalSeries(ref, creating = true, draft)
+        val created = grouped.withEditedLocalSeries(ref, creating = false, draft.copy(
+            title = "新名称", authors = "作者甲、作者乙", tags = "奇幻，冒险,奇幻", description = " 第一部和第二部 ",
+            folderId = grouped.folderIds.getValue("长篇"), volumeKeys = listOf(second.book.ref.key, first.book.ref.key)))
         val restored = appJson.decodeFromString<LibraryState>(appJson.encodeToString(created))
         val group = restored.shelfGroups(false, "全部", "", 2, ShelfBookType.Series).single()
         assertEquals(ref, group.saved.book.ref)
         assertEquals("新名称", group.saved.book.title)
+        assertEquals(listOf("作者甲", "作者乙"), group.saved.book.authors)
+        assertEquals(listOf("奇幻", "冒险"), group.saved.book.tags)
+        assertEquals("第一部和第二部", group.saved.seriesDescription)
+        assertTrue((listOf(group.saved) + group.volumes).all { it.folder == "长篇" })
         assertEquals(listOf(second.book.ref, first.book.ref), group.volumes.map { it.book.ref })
         assertEquals(first.book.ref, restored.nextMountedVolume(second.book.ref)?.book?.ref)
         assertEquals(initial.positions, restored.positions)
@@ -42,7 +49,7 @@ class LocalSeriesTest {
     }
 
     @Test fun dissolvingAndOnlineSyncNeverTreatTheSeriesAsAContentSource() {
-        val mounted = initial.createLocalSeries(ref, "总集", "默认收藏").withMountedVolumes(ref.key, keys)
+        val mounted = initial.withEditedLocalSeries(ref, creating = true, draft)
         assertEquals(listOf(wenku), booksForUpdate(mounted.books, lastCheckedKey = null))
         val favorites = WebDavProjection.library(mounted).getValue(SyncDomain.FAVORITES)
         assertTrue(wenku.book.ref.key in favorites)
