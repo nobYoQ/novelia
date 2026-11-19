@@ -49,6 +49,21 @@ class ReadingStatisticsTest {
         assertThrows(IllegalArgumentException::class.java) { stats.copy(days = mapOf("2026-10-30" to mapOf("local/a" to ReadingTimeEntry("A", -1)))).requireValid() }
     }
 
+    @Test fun detailTotalsUseTheBookIdentityAndIncludeOnlyItsMountedLocalVolumes() {
+        val parent = BookRef("wenku", "parent")
+        val volume = BookRef("local", "volume")
+        val other = BookRef("local", "unrelated")
+        val state = LibraryState(books = listOf(SavedBook(BookCard(volume, "卷一"), parentWenkuKey = parent.key)))
+            .withReadingTime(parent.key, "文库", midnight, 10_000, 0, zone)
+            .withReadingTime(volume.key, "卷一", midnight, 50_000, 0, zone)
+            .withReadingTime(volume.key, "卷一", midnight + 86_400_000L, 70_000, 0, zone)
+            .withReadingTime(other.key, "无关书目", midnight, 30_000, 0, zone)
+
+        assertEquals(130_000L, state.readingStatistics.totalMillis(state.readingTimeKeys(parent)))
+        assertEquals(120_000L, state.readingStatistics.totalMillis(state.readingTimeKeys(volume)))
+        assertEquals(0L, state.readingStatistics.totalMillis(state.readingTimeKeys(BookRef("syosetu", "unread"))))
+    }
+
     @Test fun reportUsesTheSameFilteredDaysForTotalsCalendarAndBookShares() {
         val today = LocalDate.of(2024, 3, 1)
         val stats = ReadingStatistics(days = mapOf(

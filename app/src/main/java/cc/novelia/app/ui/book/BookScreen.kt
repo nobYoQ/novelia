@@ -40,6 +40,9 @@ import cc.novelia.app.data.library.readingDestination
 import cc.novelia.app.data.library.resumeDestination
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
+import cc.novelia.app.data.model.LibraryState
+import cc.novelia.app.data.model.formatReadingTime
+import cc.novelia.app.data.model.readingTimeKeys
 import cc.novelia.app.data.model.TocItem
 import cc.novelia.app.data.model.WebDetail
 import cc.novelia.app.data.model.WenkuDetail
@@ -144,7 +147,7 @@ import kotlinx.coroutines.withContext
             AdaptiveBookDetail(tab, { tab = it }, listOf("简介", "分卷", "讨论"), tabState) { panel ->
                     when(panel) {
                         0 -> AppLazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
-                            item { BookHero(book, "${detail.level} · ${detail.volumes.size} 卷") {
+                            item { BookHero(book, "${detail.level} · ${detail.volumes.size} 卷", state) {
                                 BookFavoriteActions(favoriteState, { favorite = book to false }, { favorite = book to true },
                                     onRelatedWeb = if(relatedWebRefs.isEmpty()) null else ({ relatedWeb = true }))
                             } }
@@ -204,7 +207,7 @@ import kotlinx.coroutines.withContext
             AdaptiveBookDetail(tab, { tab = it }, listOf("简介", "目录 $chapterCount", "讨论"), tabState) { panel ->
                     when(panel) {
                         0 -> AppLazyColumn(contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            item { BookHero(book, "${detail.type} · ${providers[ref.provider]}", bottomPadding = 0.dp) }
+                            item { BookHero(book, "${detail.type} · ${providers[ref.provider]}", state, bottomPadding = 0.dp) }
                             item { BookReadingActions(destination, continuing,
                                 favoriteState = favoriteState, onLocalFavorite = { favorite = book to false }, onCloudFavorite = { favorite = book to true },
                                 onRead = continueReading,
@@ -257,6 +260,7 @@ import kotlinx.coroutines.withContext
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                 BookDetailTitle(book.ref.key, book.title)
                                 Text("${document.format.uppercase()} · ${toc.size} 章", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                                BookReadingTime(state, ref)
                                 Text("已保存在此设备，可离线阅读。", style = MaterialTheme.typography.bodyMedium)
                             }
                         }
@@ -334,7 +338,8 @@ import kotlinx.coroutines.withContext
     }
 }
 @Composable private fun Stat(label: String, value: String) { Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(value, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary); Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
-@Composable private fun BookHero(book: BookCard, subtitle: String, bottomPadding: Dp = 20.dp, actions: (@Composable () -> Unit)? = null) {
+@Composable private fun BookHero(book: BookCard, subtitle: String, state: LibraryState,
+    bottomPadding: Dp = 20.dp, actions: (@Composable () -> Unit)? = null) {
     val cover = book.cover?.takeIf { book.ref.isWenku && it.isNotBlank() }
     var expandedCover by remember(book.ref, cover) { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = bottomPadding), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -343,11 +348,22 @@ import kotlinx.coroutines.withContext
                 if(cover != null) Modifier.combinedClickable(onClick = {},
                     onLongClickLabel = "放大查看封面", onLongClick = { expandedCover = true }) else Modifier
             ))
-            BookDetailTitles(book, subtitle, Modifier.weight(1f))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                BookDetailTitles(book, subtitle)
+                BookReadingTime(state, book.ref)
+            }
         }
         actions?.invoke()
     }
     if(expandedCover && cover != null) IllustrationViewer(cover, imageLabel = "封面") { expandedCover = false }
+}
+
+@Composable private fun BookReadingTime(state: LibraryState, ref: BookRef) {
+    val keys = remember(state.books, ref) { state.readingTimeKeys(ref) }
+    val elapsed = remember(state.readingStatistics.days, keys) { state.readingStatistics.totalMillis(keys) }
+    val value = if(elapsed > 0) formatReadingTime(elapsed) else "暂无记录"
+    Text("累计阅读时长 · $value", Modifier.testTag("book-reading-time"),
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 @Composable fun TocPanel(c: AppController, ref: BookRef, toc: List<TocItem>, current: String?,
     onContinue: (() -> Unit)? = null, onRead: (String) -> Unit) {

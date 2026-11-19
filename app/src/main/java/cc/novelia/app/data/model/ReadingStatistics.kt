@@ -14,6 +14,9 @@ import kotlinx.serialization.Serializable
     val days: Map<String, Map<String, ReadingTimeEntry>> = emptyMap(),
 ) {
     val totalMillis get() = days.values.sumOf { books -> books.values.sumOf { it.millis } }
+    internal fun totalMillis(bookKeys: Set<String>): Long = days.values.sumOf { books ->
+        bookKeys.sumOf { books[it]?.millis ?: 0L }
+    }
     fun dayMillis(date: LocalDate) = days[date.toString()].orEmpty().values.sumOf { it.millis }
     fun streak(today: LocalDate) = readingStreak(today) { dayMillis(it) > 0 }
     internal val nextRevision get() = if(revision == Long.MAX_VALUE) 0 else revision + 1
@@ -25,6 +28,13 @@ import kotlinx.serialization.Serializable
             require(day.length == 10 && LocalDate.parse(day).year in 1900..9999 && books.size <= 1000) { "阅读统计日期无效" }
             require(books.all { (key, entry) -> key.isNotBlank() && key.length <= 512 && entry.title.length <= 500 && entry.millis in 1..90_000_000L }) { "阅读统计记录无效" }
         }
+    }
+}
+
+internal fun LibraryState.readingTimeKeys(ref: BookRef): Set<String> = buildSet {
+    add(ref.key)
+    if(ref.isWenku) books.forEach { saved ->
+        if(saved.book.ref.isLocal && saved.parentWenkuKey == ref.key) add(saved.book.ref.key)
     }
 }
 
