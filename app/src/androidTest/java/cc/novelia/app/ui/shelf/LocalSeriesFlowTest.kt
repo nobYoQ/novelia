@@ -86,6 +86,12 @@ class LocalSeriesFlowTest {
             }
             fun editorField(tag: String) = editorItem(hasTestTag(tag))
             fun editorButton(label: String) = editorItem(hasText(label))
+            fun libraryTag(query: String, original: String): SemanticsNodeInteraction {
+                compose.onNodeWithTag("keyword-library-search").performTextReplacement(query)
+                val tag = "library-tag-$original"
+                compose.waitUntil(5_000) { compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty() }
+                return compose.onNodeWithTag(tag)
+            }
             fun volumeAction(key: String, label: String) {
                 val action = hasContentDescription(label) and hasAnyAncestor(hasTestTag("edit-series-volume-$key"))
                 editor.performScrollToNode(action)
@@ -104,7 +110,10 @@ class LocalSeriesFlowTest {
             compose.onNodeWithText("选择封面").performClick()
             editorField("local-series-title").performTextInput("测试总集")
             editorField("local-series-authors").performTextInput("作者甲")
-            editorField("local-series-tags").performTextInput("奇幻，冒险")
+            editorField("local-series-tags").performClick()
+            libraryTag("奇幻", "ファンタジー").assertIsNotSelected().performClick().assertIsSelected()
+            libraryTag("冒険", "冒険").performClick().assertIsSelected()
+            compose.onNodeWithText("完成").performClick()
             editorField("local-series-description").performTextInput("总集简介一")
             editorButton("添加分卷").performClick()
             editorField("local-series-volume-search").performTextInput("总集测试卷")
@@ -121,7 +130,7 @@ class LocalSeriesFlowTest {
             assertEquals("总集试读", parent.folder)
             assertEquals("总集简介一", parent.seriesDescription)
             assertEquals(listOf("作者甲"), parent.book.authors)
-            assertEquals(listOf("奇幻", "冒险"), parent.book.tags)
+            assertEquals(listOf("ファンタジー", "冒険"), parent.book.tags)
             assertEquals(books.reversed().map { it.key }, parent.volumeOrder)
             compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("测试总集 自定义封面", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithText("继续阅读 · 总集测试卷 1").assertIsDisplayed()
@@ -139,6 +148,10 @@ class LocalSeriesFlowTest {
             assertEquals(position, store.state.value.positions[first.key])
 
             compose.onNodeWithText("编辑总集").performClick()
+            editorField("local-series-tags").performClick()
+            libraryTag("奇幻", "ファンタジー").assertIsSelected().performClick().assertIsNotSelected()
+            compose.onNode(hasContentDescription("返回") and hasAnyAncestor(isDialog())).performClick()
+            editorField("local-series-tag-ファンタジー").assertIsSelected()
             editorButton("恢复默认封面").performClick()
             editorField("local-series-title").performTextReplacement("不会保存的名称")
             compose.onNodeWithContentDescription("返回").performClick()
@@ -155,10 +168,12 @@ class LocalSeriesFlowTest {
             editorField("local-series-folder").performClick()
             compose.onNode(hasText(DEFAULT_FOLDER) and hasAnyAncestor(isPopup())).performClick()
             editorField("local-series-title").performTextReplacement("改名后的总集")
+            editorField("local-series-tag-冒険").performClick()
             compose.onNodeWithText("保存").performClick()
             awaitDetail()
             val updated = store.state.value.books.single { it.book.ref == parent.book.ref }
             assertEquals("改名后的总集", updated.book.title)
+            assertEquals(listOf("ファンタジー"), updated.book.tags)
             assertEquals(DEFAULT_FOLDER, updated.folder)
             assertEquals(DEFAULT_FOLDER, store.state.value.books.single { it.book.ref == first }.folder)
             assertEquals(listOf(first.key), updated.volumeOrder)

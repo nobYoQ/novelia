@@ -11,9 +11,11 @@ internal const val LOCAL_SERIES_DESCRIPTION_LIMIT = 3000
 internal const val LOCAL_SERIES_LIST_FIELD_LIMIT = 300
 
 internal data class LocalSeriesEdits(
-    val title: String, val authors: String, val tags: String, val description: String,
+    val title: String, val authors: String, val tags: List<String>, val description: String,
     val folderId: String, val volumeKeys: List<String>,
 )
+
+internal fun localSeriesTagLength(tags: List<String>): Int = tags.sumOf { it.length } + (tags.size - 1).coerceAtLeast(0)
 
 internal fun LibraryState.withEditedLocalSeries(ref: BookRef, creating: Boolean, edits: LocalSeriesEdits): LibraryState {
     require(ref.isLocalSeries) { "只能编辑本地总集" }
@@ -25,15 +27,17 @@ internal fun LibraryState.withEditedLocalSeries(ref: BookRef, creating: Boolean,
     }
     val description = edits.description.trim()
     require(description.length <= LOCAL_SERIES_DESCRIPTION_LIMIT) { "简介不能超过 $LOCAL_SERIES_DESCRIPTION_LIMIT 个字符" }
-    require(edits.authors.length <= LOCAL_SERIES_LIST_FIELD_LIMIT && edits.tags.length <= LOCAL_SERIES_LIST_FIELD_LIMIT) {
-        "作者和标签各限 $LOCAL_SERIES_LIST_FIELD_LIMIT 个字符"
+    require(edits.authors.length <= LOCAL_SERIES_LIST_FIELD_LIMIT) { "作者不能超过 $LOCAL_SERIES_LIST_FIELD_LIMIT 个字符" }
+    val tags = edits.tags.distinct()
+    require(edits.tags == previous?.book?.tags || localSeriesTagLength(tags) <= LOCAL_SERIES_LIST_FIELD_LIMIT) {
+        "标签总长度不能超过 $LOCAL_SERIES_LIST_FIELD_LIMIT 个字符"
     }
     val folder = localFavoriteFolders().firstOrNull { it.id == edits.folderId }?.title ?: previous?.folder ?: DEFAULT_FOLDER
     val volumeKeys = edits.volumeKeys.toSet()
     require(volumeKeys.size == edits.volumeKeys.size) { "分卷不能重复" }
     val previousKeys = previous?.let { mountedVolumes(it) }.orEmpty().map { it.book.ref.key }
     val parent = (previous ?: newSavedBook(BookCard(ref, title, subtitle = "本地总集"), folder)).let {
-        it.copy(book = it.book.copy(title = title, authors = edits.authors.seriesList(), tags = edits.tags.seriesList()),
+        it.copy(book = it.book.copy(title = title, authors = edits.authors.seriesList(), tags = tags),
             seriesDescription = description)
     }
     val updated = copy(books = if(creating) books + parent else books.map { if(it.book.ref == ref) parent else it })

@@ -31,6 +31,7 @@ import cc.novelia.app.ui.theme.LocalEInkMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import cc.novelia.app.ui.components.base.AppAlertDialog
+import cc.novelia.app.ui.components.base.AppDialog
 import cc.novelia.app.ui.components.base.AppLazyColumn
 import cc.novelia.app.ui.components.base.AppSheet
 import cc.novelia.app.ui.components.base.ConfirmDialog
@@ -85,6 +86,22 @@ class KeywordLibraryActions(
     }
 }
 
+@Composable internal fun KeywordLibrarySelectionDialog(
+    library: KeywordLibrary, selected: List<String>, onDismiss: () -> Unit, onConfirm: (List<String>) -> Unit,
+    validateSelection: (List<String>) -> String?,
+) {
+    var draft by rememberSaveable { mutableStateOf(ArrayList(selected)) }
+    AppDialog(onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(Modifier.fillMaxSize().imePadding()) {
+            KeywordLibraryContent(library.entries, library.categories, onDismiss, { _, _ -> },
+                included = draft, onToggle = { entry ->
+                    val original = entry.original
+                    draft = ArrayList(if(original in draft) draft - original else draft + original)
+                }, onConfirmSelection = { onConfirm(draft) }, selectionError = validateSelection(draft))
+        }
+    }
+}
+
 @Composable fun KeywordLibraryContent(
     entries: List<KeywordEntry>, categories: List<String>, onBack: () -> Unit,
     onSaveTranslation: (String, String) -> Unit,
@@ -93,6 +110,8 @@ class KeywordLibraryActions(
     included: List<String> = emptyList(), excluded: List<String> = emptyList(), persistenceError: String? = null,
     onIncludeCategory: ((List<String>) -> Unit)? = null, onExcludeCategory: ((List<String>) -> Unit)? = null,
     onOpenLibrary: (() -> Unit)? = null,
+    onConfirmSelection: (() -> Unit)? = null,
+    selectionError: String? = null,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var category by rememberSaveable { mutableStateOf("全部") }
@@ -109,8 +128,14 @@ class KeywordLibraryActions(
         value = null
         value = withContext(Dispatchers.Default) { KeywordCatalog.suggestions(entries, settledQuery, activeCategory, entries.size) }
     }.value
-    Screen(if(onToggle != null) "浏览全部标签" else "标签库", onBack, actions = {
-        if(onOpenLibrary != null) AppTextButton(onClick = onOpenLibrary,
+    val title = when {
+        onConfirmSelection != null -> "选择标签"
+        onToggle != null -> "浏览全部标签"
+        else -> "标签库"
+    }
+    Screen(title, onBack, actions = {
+        if(onConfirmSelection != null) AppTextButton(onClick = onConfirmSelection, enabled = selectionError == null) { Text("完成") }
+        else if(onOpenLibrary != null) AppTextButton(onClick = onOpenLibrary,
             modifier = Modifier.heightIn(min = 48.dp).testTag("keyword-open-library")) { Text("前往标签库") }
         else if(actions != null) AppTextButton(onClick = { managing = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text("管理分类") }
     }) { padding ->
@@ -137,18 +162,26 @@ class KeywordLibraryActions(
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(when { results == null -> "正在检索…"; results!!.size == entries.size -> "${entries.size} 个标签";
                         else -> "${results!!.size} / ${entries.size} 个标签" }, Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
-                    if(included.isNotEmpty() || excluded.isNotEmpty()) Text("包含 ${included.size} · 排除 ${excluded.size}",
+                    if(onConfirmSelection != null) Text("已选 ${included.size}",
+                        style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    else if(included.isNotEmpty() || excluded.isNotEmpty()) Text("包含 ${included.size} · 排除 ${excluded.size}",
                         style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                 }
-                Text(if(onToggle != null) "点按标签依次包含、排除、恢复未选择，返回后应用。" else "点按标签编辑译名与分类",
+                Text(when {
+                    onConfirmSelection != null -> "点按标签选中或取消。"
+                    onToggle != null -> "点按标签依次包含、排除、恢复未选择，返回后应用。"
+                    else -> "点按标签编辑译名与分类"
+                },
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                selectionError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                 persistenceError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             }
             HorizontalDivider()
             if(results?.isEmpty() == true) EmptyState("没有匹配的标签", "换个关键词或分类试试。", Icons.Outlined.SearchOff)
             else key(settledQuery, activeCategory) {
                 KeywordTagCloud(results.orEmpty(), included, excluded,
-                    { if(onToggle != null) onToggle(it) else editing = it }, Modifier.weight(1f).fillMaxWidth(), selectionMode = onToggle != null)
+                    { if(onToggle != null) onToggle(it) else editing = it }, Modifier.weight(1f).fillMaxWidth(),
+                    searchableOnly = onToggle != null && onConfirmSelection == null)
             }
         }
     }

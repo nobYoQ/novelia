@@ -23,20 +23,20 @@ class LocalSeriesTest {
     private val position = Position("chapter", index = 15, offset = 22, textOffset = 90)
     private val initial = LibraryState(books = listOf(wenku, first, second), positions = mapOf(first.book.ref.key to position))
     private val keys = setOf(first.book.ref.key, second.book.ref.key)
-    private val draft = LocalSeriesEdits(" 总集 ", "", "", "", DEFAULT_FOLDER_ID, keys.toList())
+    private val draft = LocalSeriesEdits(" 总集 ", "", emptyList(), "", DEFAULT_FOLDER_ID, keys.toList())
 
     @Test fun localSeriesGroupsExistingFilesAndRoundTripsWithoutRewritingTheirIdentityOrPosition() {
         val grouped = initial.withMountedVolumes(wenku.book.ref.key, keys).createShelfFolder("长篇")
             .withEditedLocalSeries(ref, creating = true, draft)
         val created = grouped.withEditedLocalSeries(ref, creating = false, draft.copy(
-            title = "新名称", authors = "作者甲、作者乙", tags = "奇幻，冒险,奇幻", description = " 第一部和第二部 ",
+            title = "新名称", authors = "作者甲、作者乙", tags = listOf("奇幻，冒险", "旧版手填", "奇幻，冒险"), description = " 第一部和第二部 ",
             folderId = grouped.folderIds.getValue("长篇"), volumeKeys = listOf(second.book.ref.key, first.book.ref.key)))
         val restored = appJson.decodeFromString<LibraryState>(appJson.encodeToString(created))
         val group = restored.shelfGroups(false, "全部", "", 2, ShelfBookType.Series).single()
         assertEquals(ref, group.saved.book.ref)
         assertEquals("新名称", group.saved.book.title)
         assertEquals(listOf("作者甲", "作者乙"), group.saved.book.authors)
-        assertEquals(listOf("奇幻", "冒险"), group.saved.book.tags)
+        assertEquals(listOf("奇幻，冒险", "旧版手填"), group.saved.book.tags)
         assertEquals("第一部和第二部", group.saved.seriesDescription)
         assertTrue((listOf(group.saved) + group.volumes).all { it.folder == "长篇" })
         assertEquals(listOf(second.book.ref, first.book.ref), group.volumes.map { it.book.ref })

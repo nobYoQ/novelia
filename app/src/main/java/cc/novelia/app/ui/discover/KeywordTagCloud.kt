@@ -34,7 +34,7 @@ private data class MeasuredKeyword(val entry: KeywordEntry, val width: Int)
 @Composable internal fun KeywordTagCloud(
     entries: List<KeywordEntry>, included: List<String>, excluded: List<String>,
     onClick: (KeywordEntry) -> Unit, modifier: Modifier = Modifier,
-    selectionMode: Boolean = false,
+    searchableOnly: Boolean = false,
 ) {
     val density = LocalDensity.current
     val direction = LocalLayoutDirection.current
@@ -84,7 +84,7 @@ private data class MeasuredKeyword(val entry: KeywordEntry, val width: Int)
                             }
                             KeywordSelectionChip(entry.label, state, { onClick(entry) },
                                 modifier = Modifier.width(with(density) { width.toDp() }).testTag("library-tag-${entry.original}"),
-                                enabled = !selectionMode || KeywordCatalog.canSearch(entry.original), maxLines = 2)
+                                enabled = !searchableOnly || KeywordCatalog.canSearch(entry.original), maxLines = 2)
                         }
                     }
                 }

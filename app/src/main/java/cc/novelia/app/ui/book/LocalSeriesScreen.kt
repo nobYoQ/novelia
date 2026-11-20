@@ -41,6 +41,7 @@ import cc.novelia.app.ui.shelf.MountedVolumeRow
 
 @Composable internal fun LocalSeriesScreen(c: AppController, ref: BookRef, onBack: () -> Unit) {
     val state by c.store.state.collectAsStateWithLifecycle()
+    val keywordIndex by c.app.keywords.displayIndex.collectAsStateWithLifecycle()
     val parent = remember(state.books, ref) { state.books.firstOrNull { it.book.ref == ref } }
     val volumes = remember(state.books, parent) { parent?.let { state.mountedVolumes(it) }.orEmpty() }
     var menu by remember(ref) { mutableStateOf(false) }
@@ -73,7 +74,9 @@ import cc.novelia.app.ui.shelf.MountedVolumeRow
                         Text("继续阅读 · ${volume.book.title}", maxLines = 2)
                     }
                 } }
-                if(parent.book.tags.isNotEmpty()) item { MetaParagraph("标签", parent.book.tags.joinToString(" · ")) }
+                if(parent.book.tags.isNotEmpty()) item {
+                    MetaParagraph("标签", parent.book.tags.joinToString(" · ") { keywordIndex.labels[it] ?: it })
+                }
                 if(parent.seriesDescription.isNotBlank()) item { MetaParagraph("简介", parent.seriesDescription) }
                 item { SectionTitle("分卷目录", if(volumes.isEmpty()) "添加分卷" else "编辑分卷") { c.editLocalSeries(ref, startAtVolumes = true) } }
                 items(volumes, key = { it.book.ref.key }) { volume ->
