@@ -8,7 +8,9 @@ import java.io.InputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 
-internal data class EpubContents(val chapters: List<LocalChapter>, val cover: String?)
+internal data class EpubContents(val chapters: List<LocalChapter>, val cover: String?, val navigationIds: List<String> = emptyList())
+
+internal data class EpubDirectory(val titles: Map<String, String>, val navigationIds: List<String>)
 
 /**
  * 按 EPUB OPF 的 spine 顺序读取正文；ZIP 随机访问使内存中只需保留当前 XHTML 的解析树。
@@ -45,22 +47,23 @@ internal fun readEpubFile(
             }, note = { href, explicit -> notes.resolve(item.path, href, explicit) },
             chapterTitle = { book.chapterTitle(item.path, it) })
     }
-    EpubContents(chapters, cover)
+    EpubContents(chapters, cover, book.navigationIds(chapters.mapTo(hashSetOf()) { it.id }))
 }
 
 /** 更新旧目录时只匹配原章节 ID，无需重新提取正文、注音或图片。 */
-internal fun readEpubTitles(file: File, chapterIds: Set<String>): Map<String, String> {
+internal fun readEpubDirectory(file: File, chapterIds: Set<String>): EpubDirectory {
     DocumentTools.requireImportSize(file.length())
     return ZipFile(file).use { zip ->
         val archive = EpubArchive(zip) {}
         val book = readEpubPackage(archive::text, archive::navigationText)
-        buildMap {
+        val titles = buildMap {
             for ((id, path) in book.spine) {
                 if (id !in chapterIds) continue
                 val title = book.tocTitle(path) ?: archive.text(path)?.let { book.chapterTitle(path, epubChapterDocument(it)) }
                 if (title != null) put(id, title)
             }
         }
+        EpubDirectory(titles, book.navigationIds(titles.keys))
     }
 }
 

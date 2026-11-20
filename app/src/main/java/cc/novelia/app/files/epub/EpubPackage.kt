@@ -6,7 +6,7 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.parser.Parser
 
-internal const val EPUB_TITLE_VERSION = 1
+internal const val EPUB_TITLE_VERSION = 2
 internal const val MAX_EPUB_XML_BYTES = 8 * 1024 * 1024
 private val propertySeparator = Regex("\\s+")
 
@@ -17,16 +17,28 @@ internal class EpubPackage(
     val coverPath: String?,
     private val bookTitle: String?,
     private val toc: Map<String, String>,
+    private val navigationPaths: List<String>,
 ) {
     fun tocTitle(path: String): String? = toc[path]
 
-    fun chapterTitle(path: String, doc: Document): String = tocTitle(path) ?: epubChapterTitle(doc, bookTitle)
+    fun chapterTitle(path: String, doc: Document): String =
+        tocTitle(path) ?: epubChapterTitle(doc, bookTitle, path.substringAfterLast('/').substringBeforeLast('.'))
+
+    fun navigationIds(readableIds: Set<String>): List<String> {
+        val idsByPath = spine.asSequence().filter { it.id in readableIds }.distinctBy { it.path }.associate { it.path to it.id }
+        return navigationPaths.mapNotNull(idsByPath::get).ifEmpty { toc.keys.mapNotNull(idsByPath::get) }
+    }
 }
 
-internal fun epubChapterTitle(doc: Document, bookTitle: String? = null): String =
-    doc.body().select("h1,h2,h3,h4,h5,h6").firstNotNullOfOrNull { it.epubTitle() }
-        ?: doc.head().selectFirst("title")?.epubTitle()?.takeUnless { it == bookTitle }
-        ?: "章节"
+internal fun epubChapterTitle(doc: Document, bookTitle: String? = null, fileStem: String? = null): String {
+    doc.body().select("h1,h2,h3,h4,h5,h6").firstNotNullOfOrNull { it.epubTitle() }?.let { return it }
+    val title = doc.head().selectFirst("title")?.epubTitle() ?: return "章节"
+    return when (title) {
+        fileStem -> ""
+        bookTitle -> "章节"
+        else -> title
+    }
+}
 
 /** spine 决定阅读顺序，导航文件只为对应的 XHTML 提供目录标题。 */
 internal fun readEpubPackage(
@@ -65,7 +77,8 @@ internal fun readEpubPackage(
             nav?.select("ol > li > a[href]")?.forEach { addTitle(navPath, it.attr("href"), it) }
         }
     }
-    // EPUB 2 目录，以及 EPUB 3 没有可用 NAV 标题时的兼容目录。
+    val navPaths = toc.keys.toList()
+    // NCX 可补充章名；有 NAV 的书优先按 NAV 展示正式目录。
     val ncxPath = paths[spine?.attr("toc")] ?: paths[manifest.firstOrNull {
         it.attr("media-type") == "application/x-dtbncx+xml"
     }?.attr("id")]
@@ -83,7 +96,7 @@ internal fun readEpubPackage(
     val bookTitle = metadata?.children()?.firstOrNull { it.normalName().substringAfter(':') == "title" }?.epubTitle()
     val coverId = manifest.firstOrNull { it.hasEpubProperty("cover-image") }?.attr("id")
         ?: metadata?.getElementsByTag("meta")?.firstOrNull { it.attr("name") == "cover" }?.attr("content")
-    return EpubPackage(items, paths[coverId], bookTitle, toc)
+    return EpubPackage(items, paths[coverId], bookTitle, toc, navPaths)
 }
 
 private fun Element.hasEpubProperty(property: String) = property in attr("properties").split(propertySeparator)

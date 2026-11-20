@@ -6,7 +6,7 @@ import cc.novelia.app.data.model.LocalReadingContent
 import cc.novelia.app.data.storage.appJson
 import cc.novelia.app.data.storage.hashName
 import cc.novelia.app.files.epub.EPUB_TITLE_VERSION
-import cc.novelia.app.files.epub.readEpubTitles
+import cc.novelia.app.files.epub.readEpubDirectory
 import java.io.File
 import java.io.IOException
 import kotlinx.serialization.encodeToString
@@ -76,9 +76,10 @@ internal class DocumentStorage(
     /** 从原件恢复整本目录，只提交轻量索引，保留正文文件和所有定位标识。 */
     fun recoverEpubTitles(index: LocalDocument, source: File): LocalDocument {
         if (index.format != "epub" || index.epubTitleVersion >= EPUB_TITLE_VERSION || index.chapterFiles.isEmpty() || !source.isFile) return index
-        val titles = readEpubTitles(source, index.chapterFiles.keys)
-        if (titles.keys != index.chapterFiles.keys) return index
-        val next = index.copy(chapters = index.chapters.map { it.copy(title = titles.getValue(it.id)) }, epubTitleVersion = EPUB_TITLE_VERSION)
+        val directory = readEpubDirectory(source, index.chapterFiles.keys)
+        if (directory.titles.keys != index.chapterFiles.keys) return index
+        val next = index.copy(chapters = index.chapters.map { it.copy(title = directory.titles.getValue(it.id)) },
+            epubTitleVersion = EPUB_TITLE_VERSION, epubNavigationIds = directory.navigationIds)
         write(manifest(index.id), appJson.encodeToString(next))
         return next
     }

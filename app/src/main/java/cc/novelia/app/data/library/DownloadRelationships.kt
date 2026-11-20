@@ -81,6 +81,7 @@ fun LibraryState.withDeletedBookRecords(refs: Set<BookRef>, eraseReadingData: Bo
     return if(!eraseReadingData) removed else removed.copy(
         positions = positions - keys, readingHistory = readingHistory - keys, notes = notes.filterNot { it.key in keys },
         bookSettings = bookSettings - keys, personalGlossaries = personalGlossaries - keys,
+        epubTocIncludeUnlisted = epubTocIncludeUnlisted - keys,
         updateSnapshots = updateSnapshots - keys, bookUpdates = bookUpdates - keys,
     )
 }

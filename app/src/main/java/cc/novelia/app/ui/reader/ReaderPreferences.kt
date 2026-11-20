@@ -62,6 +62,7 @@ import kotlin.math.roundToInt
     defaultSettings: ReaderSettings? = null,
     onEditTapZones: (() -> Unit)? = null, onShowTapTutorial: (() -> Unit)? = null,
     onTextReplacements: (() -> Unit)? = null,
+    epubTocIncludeUnlisted: Boolean? = null, onEpubTocIncludeUnlisted: (Boolean) -> Unit = {},
     onChange: (ReaderSettings) -> Unit) {
     val density = LocalDensity.current
     val dpValue = remember(value, density) { value.inDp(density) }
@@ -69,7 +70,7 @@ import kotlin.math.roundToInt
     LaunchedEffect(value, dpValue) { if(value != dpValue) latestChange(dpValue) }
     ReaderPreferencesContent(dpValue.readingAppearance(), perBook, onPerBook, state, modifier, headerActions,
         livePreview, defaultSettings?.inDp(density)?.copy(nightReading = dpValue.nightReading)?.readingAppearance(),
-        onEditTapZones, onShowTapTutorial, onTextReplacements, dpValue, onChange) { edited ->
+        onEditTapZones, onShowTapTutorial, onTextReplacements, dpValue, onChange, epubTocIncludeUnlisted, onEpubTocIncludeUnlisted) { edited ->
         onChange(dpValue.withReadingAppearance(edited))
     }
 }
@@ -78,7 +79,8 @@ import kotlin.math.roundToInt
     state: ReaderPreferencesState, modifier: Modifier, headerActions: @Composable RowScope.() -> Unit,
     livePreview: Boolean, defaultSettings: ReaderSettings?, onEditTapZones: (() -> Unit)?,
     onShowTapTutorial: (() -> Unit)?, onTextReplacements: (() -> Unit)?, storedValue: ReaderSettings,
-    onStoredChange: (ReaderSettings) -> Unit, onChange: (ReaderSettings) -> Unit) {
+    onStoredChange: (ReaderSettings) -> Unit, epubTocIncludeUnlisted: Boolean?, onEpubTocIncludeUnlisted: (Boolean) -> Unit,
+    onChange: (ReaderSettings) -> Unit) {
     val defaults = defaultSettings.takeIf { perBook == true }
     val typography = requireNotNull(value.typographyDp)
     val defaultTypography = defaults?.typographyDp
@@ -216,6 +218,8 @@ import kotlin.math.roundToInt
                             Text("仅在阅读器中锁定方向，退出阅读后恢复跟随系统。", Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.bodySmall)
                             TogglePreference("宽屏显示目录", "平板和横屏时在正文旁显示目录，可随时收起", value.showWideToc,
                                 defaultValue = defaults?.showWideToc) { onChange(value.copy(showWideToc = it)) }
+                            if(epubTocIncludeUnlisted != null) TogglePreference("显示原书目录之外的条目",
+                                "仅对本书生效。额外条目可能是插图或正文续页。", epubTocIncludeUnlisted, onChange = onEpubTocIncludeUnlisted)
                             TogglePreference("屏幕常亮", "仅在阅读器中生效", value.keepScreenOn, defaultValue = defaults?.keepScreenOn) { onChange(value.copy(keepScreenOn = it)) }
                         }
                         ReaderPreferenceSection("工具栏", "顶底栏信息、进度与透明度", Icons.Outlined.Tune) {

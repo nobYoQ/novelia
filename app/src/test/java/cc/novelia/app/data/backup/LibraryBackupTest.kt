@@ -238,6 +238,7 @@ class LibraryBackupTest {
                 readingHistory = mapOf(local.key to ReadingHistoryEntry(local.key, "卷一", "chapter-1", "第一章", 123)),
                 notes = listOf(Note("n1", local.key, "chapter-1", 0, "正文", "笔记")),
                 bookSettings = mapOf(local.key to ReaderSettings(fontSize = 24f)),
+                epubTocIncludeUnlisted = mapOf(local.key to true),
                 personalGlossaries = mapOf(local.key to mapOf("word" to "译文")),
                 downloadLinks = listOf(cc.novelia.app.data.model.DownloadedBookLink("download", local, parent, "卷一.epub"))
             )
@@ -259,6 +260,10 @@ class LibraryBackupTest {
             assertEquals(ReadingHistoryEntry("local/new-volume", "卷一", "chapter-1", "第一章", 123), mapped.readingHistory["local/new-volume"])
             assertEquals("local/new-volume", mapped.notes.single().key)
             assertEquals(24f, mapped.bookSettings["local/new-volume"]!!.fontSize, 0f)
+            assertEquals(mapOf("local/new-volume" to true), mapped.epubTocIncludeUnlisted)
+            val preferenceOnly = LibraryState(epubTocIncludeUnlisted = mapOf("local/new-volume" to false))
+            assertEquals(setOf("new-volume"), localDocumentIds(preferenceOnly))
+            assertEquals(false, mergeLibraryBackup(preferenceOnly, mapped).epubTocIncludeUnlisted["local/new-volume"])
             assertEquals("译文", mapped.personalGlossaries["local/new-volume"]!!["word"])
             assertEquals(BookRef("local", "new-volume"), mapped.downloadLinks.single().localBook)
             assertEquals(parent, mapped.downloadLinks.single().sourceBook)

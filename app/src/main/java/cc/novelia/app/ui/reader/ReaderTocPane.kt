@@ -19,6 +19,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.model.BookRef
+import cc.novelia.app.data.model.navigationChapterId
 import cc.novelia.app.data.library.offlineRangeLabel
 import cc.novelia.app.ui.components.base.AppLazyColumn
 import cc.novelia.app.ui.components.base.EmptyState
@@ -48,12 +49,13 @@ import kotlinx.coroutines.launch
     locateRequest: Int,
     onLocated: () -> Unit,
     onRead: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    includeUnlisted: Boolean = false,
 ) {
     val reducedMotion = appReducedMotion()
     val scope = rememberCoroutineScope()
     Box(modifier.fillMaxSize().testTag("reader-toc-pane")) {
-        val toc = state.toc
+        val toc = state.visibleNavigation(includeUnlisted)
         if(toc == null) {
             if(state.error != null && !state.loading) EmptyState("暂时无法加载目录", state.error.friendlyMessage(), action = "重试", onAction = onRetry)
             else Column(Modifier.align(Alignment.Center).testTag("reader-toc-loading"), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -63,13 +65,15 @@ import kotlinx.coroutines.launch
             return@Box
         }
         val cachedIds = rememberCachedChapterIds(c.store, ref, toc)
+        val readingOrder = state.toc.orEmpty()
+        val selectedChapter = remember(readingOrder, toc, current) { navigationChapterId(readingOrder, toc, current) }
         val settledQuery = rememberDebouncedQuery(query)
         val indexed = remember(toc) { toc.withIndex().toList() }
         val entries = remember(indexed, settledQuery, reversed) {
             indexed.filter { it.value.title.contains(settledQuery, true) || it.value.titleJp.contains(settledQuery, true) }
                 .let { if(reversed) it.reversed() else it }
         }
-        val currentIndex = remember(entries, current) { entries.indexOfFirst { it.value.chapterId == current } }
+        val currentIndex = remember(entries, selectedChapter) { entries.indexOfFirst { it.value.chapterId != null && it.value.chapterId == selectedChapter } }
         suspend fun locate() {
             if(currentIndex >= 0) {
                 if(reducedMotion || abs(currentIndex - scroll.firstVisibleItemIndex) > 100) scroll.scrollToItem(currentIndex)
@@ -100,15 +104,16 @@ import kotlinx.coroutines.launch
                 items(entries, key = { it.value.chapterId?.let { id -> "chapter-$id" } ?: "section-${it.index}" }, contentType = { if(it.value.chapterId == null) "section" else "chapter" }) { entry ->
                     val item = entry.value
                     val id = item.chapterId
+                    val active = id != null && id == selectedChapter
                     if(id == null) SectionTitle(item.title)
                     else AppListItem(
-                        headlineContent = { Text(item.title, color = if(id == current) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) },
-                        leadingContent = { Icon(if(id == current) Icons.Outlined.Bookmark else Icons.Outlined.Article, null) },
-                        supportingContent = if(id == current || (!ref.isLocal && id in cachedIds)) ({
-                            Text(listOfNotNull("正在阅读".takeIf { id == current },
+                        headlineContent = { Text(item.title, color = if(active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) },
+                        leadingContent = { Icon(if(active) Icons.Outlined.Bookmark else Icons.Outlined.Article, null) },
+                        supportingContent = if(active || (!ref.isLocal && id in cachedIds)) ({
+                            Text(listOfNotNull("正在阅读".takeIf { active },
                                 "可离线阅读".takeIf { !ref.isLocal && id in cachedIds }).joinToString(" · "))
                         }) else null,
-                        modifier = Modifier.fillMaxWidth().testTag("reader-toc-chapter-$id").semantics { selected = id == current }.motionClickable { onRead(id) }
+                        modifier = Modifier.fillMaxWidth().testTag("reader-toc-chapter-$id").semantics { selected = active }.motionClickable { onRead(id) }
                     )
                 }
                 if(entries.isEmpty()) item { EmptyState("没有匹配的章节", "修改搜索词或清空搜索后重试。") }

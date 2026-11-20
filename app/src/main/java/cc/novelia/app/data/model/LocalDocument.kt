@@ -33,4 +33,29 @@ fun LocalChapter.toReaderChapter(novelTitle: String? = null, prevId: String? = n
     /** 下载请求的内容模式，用于结合 EPUB 原文标记识别对照段落。 */
     val downloadMode: String? = null,
     /** EPUB 目录标题独立升级，可覆盖章节正文文件中的旧标题。 */
-    val epubTitleVersion: Int = 0)
+    val epubTitleVersion: Int = 0,
+    /** 原 EPUB 的正式目录顺序，章节正文仍按 chapters 中的 spine 顺序阅读。 */
+    val epubNavigationIds: List<String> = emptyList())
+
+internal fun LocalDocument.readingOrderToc(): List<TocItem> = chapters.mapIndexed { index, chapter ->
+    TocItem(chapter.title.ifBlank { "第 ${index + 1} 节" }, chapterId = chapter.id)
+}
+
+internal fun LocalDocument.navigationToc(readingOrder: List<TocItem> = readingOrderToc()): List<TocItem> {
+    if (epubNavigationIds.isEmpty()) return readingOrder
+    val byId = readingOrder.associateBy { it.chapterId }
+    return epubNavigationIds.mapNotNull(byId::get).ifEmpty { readingOrder }
+}
+
+/** 正在阅读没有单列目录项的正文时，定位到前一个正式章节。 */
+internal fun navigationChapterId(readingOrder: List<TocItem>, navigation: List<TocItem>, current: String?): String? {
+    if (current == null || readingOrder === navigation) return current
+    val listedIds = navigation.mapNotNullTo(hashSetOf()) { it.chapterId }
+    var previous: String? = null
+    for (item in readingOrder) {
+        val id = item.chapterId ?: continue
+        if (id in listedIds) previous = id
+        if (id == current) return previous
+    }
+    return null
+}

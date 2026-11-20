@@ -43,6 +43,9 @@ import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.formatReadingTime
+import cc.novelia.app.data.model.navigationChapterId
+import cc.novelia.app.data.model.navigationToc
+import cc.novelia.app.data.model.readingOrderToc
 import cc.novelia.app.data.model.readingTimeKeys
 import cc.novelia.app.data.model.TocItem
 import cc.novelia.app.data.model.WebDetail
@@ -263,9 +266,12 @@ import kotlinx.coroutines.withContext
     }) { padding ->
         AsyncContent(ref, load = { withContext(Dispatchers.IO) { c.store.documentIndex(ref.id) } }, modifier = Modifier.padding(padding), revealContent = true) { document, _ ->
             val book = state.books.firstOrNull { it.book.ref == ref }?.book ?: BookCard(ref, document.name, cover = document.coverImage, total = document.chapters.size)
-            val toc = remember(document) { document.chapters.map { TocItem(titleJp = it.title, chapterId = it.id) } }
+            val readingOrder = remember(document) { document.readingOrderToc() }
+            val navigation = remember(document, readingOrder) { document.navigationToc(readingOrder) }
+            val toc = if(state.epubTocIncludeUnlisted[ref.key] == true) readingOrder else navigation
             val savedPosition = state.positions[ref.key]
-            val destination = remember(toc, savedPosition?.chapterId) { resumeDestination(toc, savedPosition?.chapterId, null) }
+            val destination = remember(readingOrder, savedPosition?.chapterId) { resumeDestination(readingOrder, savedPosition?.chapterId, null) }
+            val current = remember(readingOrder, toc, destination?.chapterId) { navigationChapterId(readingOrder, toc, destination?.chapterId) }
             AdaptiveBookDetail(tab, onTab, listOf("信息", "目录 ${toc.size}"), rememberSaveableStateHolder()) { panel ->
                 if(panel == 0) AppLazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
                     item {
@@ -273,7 +279,7 @@ import kotlinx.coroutines.withContext
                             BookCover(book, Modifier.width(94.dp).height(134.dp))
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                 BookDetailTitle(book.ref.key, book.title)
-                                Text("${document.format.uppercase()} · ${toc.size} 章", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                                Text("${document.format.uppercase()} · ${navigation.size} 章", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                                 BookReadingTime(state, ref)
                                 Text("已保存在此设备，可离线阅读。", style = MaterialTheme.typography.bodyMedium)
                             }
@@ -282,12 +288,16 @@ import kotlinx.coroutines.withContext
                     item {
                         AppButton(onClick = { destination?.let { c.read(ref, it.chapterId) } }, enabled = destination != null,
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
-                            Text(if(savedPosition == null) "开始阅读" else "继续阅读 · 第 ${destination?.number} 章")
+                            Text(when {
+                                savedPosition == null -> "开始阅读"
+                                navigation === readingOrder -> "继续阅读 · 第 ${destination?.number} 章"
+                                else -> "继续阅读"
+                            })
                         }
                         destination?.let { Text(it.title, Modifier.padding(horizontal = 24.dp, vertical = 12.dp), style = MaterialTheme.typography.bodyMedium) }
                     }
                     item { MenuRow("本地术语表", "维护此文件的专有名词", Icons.Outlined.Translate, { c.go("glossary/${ref.key}") }) }
-                } else TocPanel(c, ref, toc, destination?.chapterId) { c.read(ref, it) }
+                } else TocPanel(c, ref, toc, current) { c.read(ref, it) }
             }
         }
     }

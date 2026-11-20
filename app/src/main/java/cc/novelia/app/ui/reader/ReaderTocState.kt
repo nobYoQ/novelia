@@ -11,9 +11,14 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /** 同一本书的阅读会话共用目录；切章、重开面板和布局变化不重新加载已有目录。 */
-internal class ReaderTocState(private val load: suspend (forceNetwork: Boolean) -> List<TocItem>) {
-    var toc by mutableStateOf<List<TocItem>?>(null)
-        private set
+internal class ReaderTocState(private val load: suspend (forceNetwork: Boolean) -> ReaderTocSnapshot) {
+    private var snapshot by mutableStateOf<ReaderTocSnapshot?>(null)
+    val toc get() = snapshot?.readingOrder
+    val navigation get() = snapshot?.navigation
+    val hasUnlistedEntries get() = snapshot?.let { it.readingOrder.size > it.navigation.size } == true
+
+    fun visibleNavigation(includeUnlisted: Boolean) = if(includeUnlisted) toc else navigation
+
     var loading by mutableStateOf(false)
         private set
     var error by mutableStateOf<Exception?>(null)
@@ -36,12 +41,12 @@ internal class ReaderTocState(private val load: suspend (forceNetwork: Boolean) 
             val forceNetwork = refresh || toc != null
             val loaded = load(forceNetwork)
             currentCoroutineContext().ensureActive()
-            toc = loaded
+            snapshot = loaded
             // 初次读取可能命中旧磁盘快照；只有缺章或落后于已知总数时才补查一次。
             if(!forceNetwork && missing(chapterId, knownCount) != Missing(null, 0)) {
                 val updated = load(true)
                 currentCoroutineContext().ensureActive()
-                toc = updated
+                snapshot = updated
             }
             lastAttempt = missing(chapterId, knownCount)
         } catch(e: CancellationException) {
@@ -56,3 +61,5 @@ internal class ReaderTocState(private val load: suspend (forceNetwork: Boolean) 
         }
     }
 }
+
+internal data class ReaderTocSnapshot(val readingOrder: List<TocItem>, val navigation: List<TocItem> = readingOrder)

@@ -215,6 +215,7 @@ import kotlinx.serialization.encodeToString
     val bookCacheGeneration = bookCacheGenerations[ref.key] ?: 0L
     val profile by c.session.profile.collectAsStateWithLifecycle()
     val tocState = remember(c, ref, profile, c.session.capture(), cacheGeneration) { c.readerToc(ref) }
+    val epubTocIncludeUnlisted = ref.isLocal && local.epubTocIncludeUnlisted[ref.key] == true
     val enteredCacheGeneration = remember(ref, chapterId) { c.store.cacheGeneration.value }
     val enteredBookCacheGeneration = remember(ref, chapterId) { bookCacheGeneration }
     val readingLifecycle = LocalLifecycleOwner.current
@@ -828,7 +829,8 @@ import kotlinx.serialization.encodeToString
                 contentColor = MaterialTheme.colorScheme.onSurface) {
                 Column {
                 AppTextButton(onClick = { setWideToc(false) }, modifier = Modifier.align(Alignment.End).testTag("reader-hide-wide-toc")) { Text("收起目录") }
-                ReaderTocPane(c, ref, tocState, { scope.launch { tocState.ensureLoaded(chapterId, knownChapterCount, refresh = true) } }, chapterId, tocScroll, tocQuery, { tocQuery = it }, tocReversed, { tocReversed = it }, tocLocateRequest, { tocLocateRequest = 0; tocLocated = true }, { if(it != chapterId) rememberReadingPlace(); openChapter(it) })
+                ReaderTocPane(c, ref, tocState, { scope.launch { tocState.ensureLoaded(chapterId, knownChapterCount, refresh = true) } }, chapterId, tocScroll, tocQuery, { tocQuery = it }, tocReversed, { tocReversed = it }, tocLocateRequest, { tocLocateRequest = 0; tocLocated = true }, { if(it != chapterId) rememberReadingPlace(); openChapter(it) },
+                    includeUnlisted = epubTocIncludeUnlisted)
                 }
             }
             VerticalDivider(Modifier.fillMaxHeight())
@@ -1065,7 +1067,8 @@ import kotlinx.serialization.encodeToString
         }
         if(toc && !wideDirectory) ReaderSheet(onDismissRequest = { toc = false }) {
             ReaderTocPane(c, ref, tocState, { scope.launch { tocState.ensureLoaded(chapterId, knownChapterCount, refresh = true) } }, chapterId, tocScroll, tocQuery, { tocQuery = it }, tocReversed, { tocReversed = it }, tocLocateRequest, { tocLocateRequest = 0; tocLocated = true },
-                { id -> if(id != chapterId) rememberReadingPlace(); toc = false; openChapter(id) }, Modifier.fillMaxHeight(.8f))
+                { id -> if(id != chapterId) rememberReadingPlace(); toc = false; openChapter(id) }, Modifier.fillMaxHeight(.8f),
+                includeUnlisted = epubTocIncludeUnlisted)
         }
         if(autoReadSheet) ReaderAutoReadSheet(storedSettings, settings.staticPagination || eInkInteraction,
             onDismiss = { autoReadSheet = false }, onSettings = { value ->
@@ -1172,6 +1175,10 @@ import kotlinx.serialization.encodeToString
         ReaderPreferencesSheet(onDismissRequest = { preferences = false }) { expanded, onExpandedChange ->
             ReaderPreferences(storedSettings, local.bookSettings.containsKey(ref.key), { perBook -> c.store.update { it.copy(bookSettings = if(perBook) it.bookSettings + (ref.key to storedSettings) else it.bookSettings - ref.key) } },
                 state = preferenceState, modifier = Modifier.fillMaxSize(), livePreview = true, defaultSettings = local.reader,
+                epubTocIncludeUnlisted = epubTocIncludeUnlisted.takeIf { ref.isLocal && tocState.hasUnlistedEntries },
+                onEpubTocIncludeUnlisted = { visible -> c.store.update { state ->
+                    state.copy(epubTocIncludeUnlisted = state.epubTocIncludeUnlisted + (ref.key to visible))
+                } },
                 onEditTapZones = { preferences = false; editingTapZones = true },
                 onTextReplacements = { preferences = false; replacementsSheet = true; pauseReadingAutomation() },
                 onShowTapTutorial = { preferences = false; c.store.update { it.copy(readerTapTutorialSeen = false) } }, headerActions = {

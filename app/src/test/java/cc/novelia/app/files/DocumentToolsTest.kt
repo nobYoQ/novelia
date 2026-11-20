@@ -1,5 +1,10 @@
 package cc.novelia.app.files
 
+import cc.novelia.app.data.model.navigationToc
+import cc.novelia.app.data.model.readingOrderToc
+import cc.novelia.app.reader.ReadingParagraph
+import cc.novelia.app.reader.TextPart
+import cc.novelia.app.reader.chapterHeading
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -79,10 +84,39 @@ class DocumentToolsTest {
         val memory = DocumentTools.parse(file.name, bytes)
 
         assertEquals(listOf("one", "two", "three", "four"), disk.chapters.map { it.id })
+        assertEquals(listOf("one"), disk.epubNavigationIds)
+        assertEquals(disk.epubNavigationIds, memory.epubNavigationIds)
         assertEquals(listOf("第一章", "第二章", "第三章", "章节"), disk.chapters.map { it.title })
         assertEquals(listOf("正文小标题", "正文"), disk.chapters[0].paragraphs)
         assertEquals(listOf("第三章", "第三章的正文"), disk.chapters[2].paragraphs)
         assertEquals(disk.chapters, memory.chapters)
+    }
+
+    @Test fun epub2PublishesOnlyNcxEntriesWhileRetainingUnlistedSpineContent() {
+        val bytes = archive(mapOf(
+            "META-INF/container.xml" to "<container><rootfile full-path='book.opf'/></container>",
+            "book.opf" to """<package version="2.0"><manifest>
+                <item id="first" href="first.xhtml"/><item id="c1S" href="c1S.xhtml"/>
+                <item id="last" href="last.xhtml"/><item id="ncx" href="toc.ncx"/>
+                </manifest><spine toc="ncx"><itemref idref="first"/><itemref idref="c1S"/><itemref idref="last"/></spine></package>""",
+            "toc.ncx" to """<ncx><navMap>
+                <navPoint><navLabel><text>尾声</text></navLabel><content src="last.xhtml"/></navPoint>
+                <navPoint><navLabel><text>序章</text></navLabel><content src="first.xhtml#s"/></navPoint>
+                </navMap></ncx>""",
+            "first.xhtml" to "<p id='s'>开头</p>",
+            "c1S.xhtml" to "<html><head><title>c1S</title></head><body><p>接着读的正文</p></body></html>",
+            "last.xhtml" to "<p>结尾</p>",
+        ))
+        val file = folder.newFile("navigation.epub").apply { writeBytes(bytes) }
+        val doc = DocumentTools.parseFile(file.name, file, { _, _ -> })
+
+        assertEquals(listOf("first", "c1S", "last"), doc.readingOrderToc().map { it.chapterId })
+        assertEquals(listOf("尾声", "序章"), doc.navigationToc().map { it.title })
+        val continuation = doc.chapters[1]
+        assertEquals(listOf("接着读的正文"), continuation.paragraphs)
+        assertNull(chapterHeading(continuation.title, listOf(ReadingParagraph(0, listOf(TextPart(continuation.paragraphs.single(), "local"))))))
+        assertEquals(doc.navigationToc(), DocumentTools.parse(file.name, bytes).navigationToc())
+        assertEquals(doc.readingOrderToc(), doc.copy(epubNavigationIds = emptyList()).navigationToc())
     }
     @Test fun epubIllustrationsRemainInReadingOrder() {
         val bytes = archive(linkedMapOf(

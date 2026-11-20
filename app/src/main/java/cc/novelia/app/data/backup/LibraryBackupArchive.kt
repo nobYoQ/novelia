@@ -224,7 +224,9 @@ internal fun LibraryBackupManifest.keywordLibrary(): KeywordLibrary = keywordCat
     ?: KeywordLibrary.fromLegacy(keywords, addDefaults = false)
 
 internal fun localDocumentIds(state: LibraryState): Set<String> = (
-    state.books.map { it.book.ref.key } + state.positions.keys + state.readingHistory.keys + state.notes.map { it.key } + state.bookSettings.keys + state.personalGlossaries.keys + state.downloadLinks.map { it.localBook.key } + state.readingStatistics.days.values.flatMap { it.keys }
+    state.books.map { it.book.ref.key } + state.positions.keys + state.readingHistory.keys + state.notes.map { it.key } +
+        state.bookSettings.keys + state.epubTocIncludeUnlisted.keys + state.personalGlossaries.keys +
+        state.downloadLinks.map { it.localBook.key } + state.readingStatistics.days.values.flatMap { it.keys }
 ).filter { it.startsWith("local/") }.map { it.removePrefix("local/") }.toSet()
 
 internal fun LibraryState.forBackup(): LibraryState = copy(pending = emptyList(), downloads = emptyList(), syncStatus = emptyMap(), syncReplica = SyncReplica(deviceId = ""))
@@ -252,6 +254,7 @@ internal fun mergeLibraryBackup(current: LibraryState, incoming: LibraryState): 
         notes = current.notes + imported.notes.filter { note -> current.notes.none { it.id == note.id } },
         downloadLinks = (current.downloadLinks + imported.downloadLinks).distinct(),
         bookSettings = imported.bookSettings + current.bookSettings,
+        epubTocIncludeUnlisted = imported.epubTocIncludeUnlisted + current.epubTocIncludeUnlisted,
         personalGlossaries = (current.personalGlossaries.keys + imported.personalGlossaries.keys).associateWith { key -> imported.personalGlossaries[key].orEmpty() + current.personalGlossaries[key].orEmpty() },
         blockedBooks = current.blockedBooks + imported.blockedBooks, blockedTags = current.blockedTags + imported.blockedTags,
         blockedAuthors = current.blockedAuthors + imported.blockedAuthors,

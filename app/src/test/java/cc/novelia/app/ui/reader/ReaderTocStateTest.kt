@@ -1,6 +1,7 @@
 package cc.novelia.app.ui.reader
 
 import cc.novelia.app.data.model.TocItem
+import cc.novelia.app.data.model.navigationChapterId
 import java.io.IOException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -19,7 +20,7 @@ class ReaderTocStateTest {
     @Test fun concurrentReadersAndChapterChangesReuseTheSameDirectory() = runTest {
         val response = CompletableDeferred<List<TocItem>>()
         val requests = mutableListOf<Boolean>()
-        val state = ReaderTocState { force -> requests += force; response.await() }
+        val state = ReaderTocState { force -> requests += force; ReaderTocSnapshot(response.await()) }
         launch { state.ensureLoaded("first", 2) }
         launch { state.ensureLoaded("first", 2) }
         runCurrent()
@@ -33,12 +34,14 @@ class ReaderTocStateTest {
         }
         assertEquals(listOf(false), requests)
         assertSame(chapters, state.toc)
+        assertFalse(state.hasUnlistedEntries)
+        assertSame(chapters, state.visibleNavigation(true))
         assertFalse(state.loading)
     }
 
     @Test fun staleDiskDirectoryIsExtendedOnlyOnceAndSectionHeadingsDoNotCountAsChapters() = runTest {
         val requests = mutableListOf<Boolean>()
-        val state = ReaderTocState { force -> requests += force; if(force) chapters else chapters.dropLast(1) }
+        val state = ReaderTocState { force -> requests += force; ReaderTocSnapshot(if(force) chapters else chapters.dropLast(1)) }
         state.ensureLoaded("first", 2)
         assertEquals(listOf(false, true), requests)
         assertEquals(chapters, state.toc)
@@ -49,7 +52,7 @@ class ReaderTocStateTest {
     @Test fun missingChapterAndNewKnownCountRefreshWithoutClearingTheExistingList() = runTest {
         val requests = mutableListOf<Boolean>()
         val response = CompletableDeferred<List<TocItem>>()
-        val state = ReaderTocState { force -> requests += force; if(force) response.await() else chapters }
+        val state = ReaderTocState { force -> requests += force; ReaderTocSnapshot(if(force) response.await() else chapters) }
         state.ensureLoaded("first", 2)
         launch { state.ensureLoaded("third", 3) }
         runCurrent()
@@ -66,7 +69,7 @@ class ReaderTocStateTest {
 
     @Test fun unchangedServerGapDoesNotReloadOnEveryChapterButExplicitRefreshRetries() = runTest {
         val requests = mutableListOf<Boolean>()
-        val state = ReaderTocState { force -> requests += force; chapters }
+        val state = ReaderTocState { force -> requests += force; ReaderTocSnapshot(chapters) }
         state.ensureLoaded("first", 3)
         repeat(3) {
             state.ensureLoaded("second", 3)
@@ -79,7 +82,7 @@ class ReaderTocStateTest {
 
     @Test fun failedRefreshKeepsDirectoryAndCanBeRetried() = runTest {
         var fail = false
-        val state = ReaderTocState { if(fail) throw IOException("离线"); chapters }
+        val state = ReaderTocState { if(fail) throw IOException("离线"); ReaderTocSnapshot(chapters) }
         state.ensureLoaded("first", 2)
         fail = true
         state.ensureLoaded("first", 2, refresh = true)
@@ -94,7 +97,7 @@ class ReaderTocStateTest {
 
     @Test fun failedInitialLoadWaitsForExplicitRetry() = runTest {
         var requests = 0
-        val state = ReaderTocState { if(++requests == 1) throw IOException("离线"); chapters }
+        val state = ReaderTocState { if(++requests == 1) throw IOException("离线"); ReaderTocSnapshot(chapters) }
         state.ensureLoaded("first", 2)
         assertNull(state.toc)
         assertNotNull(state.error)
@@ -111,7 +114,7 @@ class ReaderTocStateTest {
         var requests = 0
         val state = ReaderTocState {
             requests++
-            withContext(NonCancellable) { response.await() }
+            ReaderTocSnapshot(withContext(NonCancellable) { response.await() })
         }
         val first = launch { state.ensureLoaded("first", 2) }
         runCurrent()
@@ -124,5 +127,21 @@ class ReaderTocStateTest {
         state.ensureLoaded("second", 2)
         assertEquals(2, requests)
         assertSame(chapters, state.toc)
+    }
+
+    @Test fun unlistedEpubSpineItemStillCountsForProgressAndLocatesItsLastNamedChapter() = runTest {
+        val continuation = TocItem("第 2 节", chapterId = "continuation")
+        val navigation = chapters.filter { it.chapterId != null }
+        val readingOrder = listOf(navigation.first(), continuation, navigation.last())
+        val requests = mutableListOf<Boolean>()
+        val state = ReaderTocState { force -> requests += force; ReaderTocSnapshot(readingOrder, navigation) }
+        state.ensureLoaded("continuation", 3)
+        assertEquals(listOf(false), requests)
+        assertEquals(readingOrder, state.toc)
+        assertTrue(state.hasUnlistedEntries)
+        assertEquals(navigation, state.visibleNavigation(false))
+        assertEquals(readingOrder, state.visibleNavigation(true))
+        assertEquals("continuation", navigationChapterId(readingOrder, state.visibleNavigation(true).orEmpty(), "continuation"))
+        assertEquals("first", navigationChapterId(readingOrder, navigation, "continuation"))
     }
 }

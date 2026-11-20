@@ -62,7 +62,7 @@ URI → 有界复制 → 来源哈希去重 → 解析
 
 | 格式 | 处理方式 |
 | --- | --- |
-| EPUB | 读取 container/OPF，按 spine 顺序取正文，从 NAV 或 NCX 取章名，缺失时从 XHTML 取标题；支持 UTF-8 和 UTF-16 |
+| EPUB | 读取 container/OPF，按 spine 顺序阅读正文，目录按 NAV 或 NCX 的条目显示。没有可用的正式目录时，按正文顺序生成目录。支持 UTF-8 和 UTF-16 |
 | TXT | UTF-16 BOM、严格 UTF-8、失败回退 GB18030；识别常见章标题，无标题长文按段数分章 |
 | SRT | 按空行保留字幕块、序号和时间戳，作为一个章节阅读 |
 

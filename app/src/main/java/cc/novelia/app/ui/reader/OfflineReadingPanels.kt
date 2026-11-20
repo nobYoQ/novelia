@@ -19,6 +19,7 @@ import cc.novelia.app.data.library.readingDestination
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.Chapter
 import cc.novelia.app.data.model.LocalDocument
+import cc.novelia.app.data.model.readingOrderToc
 import cc.novelia.app.data.model.toReaderChapter
 import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.data.model.TocItem
@@ -102,7 +103,7 @@ private data class SearchScope(val toc: List<TocItem>, val document: LocalDocume
         scope = withContext(Dispatchers.IO) {
             if(ref.isLocal) {
                 val document = c.store.documentIndex(ref.id)
-                SearchScope(document.chapters.map { TocItem(it.title, it.title, it.id) }, document, document.chapters.map { it.id }.toSet())
+                SearchScope(document.readingOrderToc(), document, document.chapters.map { it.id }.toSet())
             } else {
                 val account = c.session.capture().account ?: "guest"
                 // 阅读历史写入会使新鲜元数据失效；离线搜索仍可使用

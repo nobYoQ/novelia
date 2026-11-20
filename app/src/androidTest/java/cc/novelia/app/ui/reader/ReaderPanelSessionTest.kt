@@ -75,6 +75,28 @@ class ReaderPanelSessionTest {
         }
     }
 
+    @Test fun unlistedEpubDirectoryToggleIsIndependentOfDefaultReaderSettings() {
+        var extraEntries by mutableStateOf<Boolean?>(false)
+        var defaultSettings by mutableStateOf(ReaderSettings())
+        var independent by mutableStateOf(false)
+        compose.setContent {
+            MaterialTheme {
+                ReaderPreferences(defaultSettings, perBook = independent, onPerBook = { independent = it },
+                    epubTocIncludeUnlisted = extraEntries, onEpubTocIncludeUnlisted = { extraEntries = it }) { defaultSettings = it }
+            }
+        }
+        compose.onNodeWithText("界面").performClick()
+        val additionalToc = compose.onNodeWithText("显示原书目录之外的条目")
+        additionalToc.performScrollTo().assertIsOff()
+        compose.onNodeWithText("仅对本书生效。额外条目可能是插图或正文续页。").assertIsDisplayed()
+        val before = compose.runOnIdle { defaultSettings }
+        additionalToc.performClick().assertIsOn()
+        compose.runOnIdle { assertEquals(true, extraEntries); assertFalse(independent); assertEquals(before, defaultSettings) }
+        additionalToc.performClick().assertIsOff()
+        compose.runOnIdle { extraEntries = null }
+        additionalToc.assertDoesNotExist()
+    }
+
     @Test fun panelExpansionAnimatesAndReducedMotionTakesEffectImmediately() {
         assumeTrue(ValueAnimator.areAnimatorsEnabled())
         var reduced by mutableStateOf(false)

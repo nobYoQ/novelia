@@ -254,6 +254,7 @@ internal fun remapBackupLibrary(source: LibraryState, localIds: Map<String, Stri
         readingHistory = source.readingHistory.mapKeys { key(it.key) }.mapValues { (_, entry) -> entry.copy(bookKey = key(entry.bookKey)) },
         readingStatistics = source.readingStatistics.copy(days = source.readingStatistics.days.mapValues { (_, books) -> books.mapKeys { key(it.key) } }),
         bookSettings = source.bookSettings.mapKeys { key(it.key) }, personalGlossaries = source.personalGlossaries.mapKeys { key(it.key) },
+        epubTocIncludeUnlisted = source.epubTocIncludeUnlisted.mapKeys { key(it.key) },
         blockedBooks = source.blockedBooks.map(::key).toSet(),
         downloadLinks = source.downloadLinks.map { it.copy(localBook = BookRef.fromKey(key(it.localBook.key))) }
     )

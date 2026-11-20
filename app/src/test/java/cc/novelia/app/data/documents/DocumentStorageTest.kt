@@ -4,6 +4,7 @@ import cc.novelia.app.data.model.LocalChapter
 import cc.novelia.app.data.model.LocalDocument
 import cc.novelia.app.data.model.LocalBilingualGroup
 import cc.novelia.app.data.model.LocalReadingContent
+import cc.novelia.app.data.model.navigationToc
 import cc.novelia.app.data.storage.appJson
 import java.io.File
 import java.nio.file.Files
@@ -61,8 +62,10 @@ class DocumentStorageTest {
                 mapOf(
                     "META-INF/container.xml" to "<container><rootfile full-path='book.opf'/></container>",
                     "book.opf" to """<package><manifest>
-                        <item id="chapter/1" href="one.xhtml"/><item id="chapter/2" href="two.xhtml"/>
-                        </manifest><spine><itemref idref="chapter/1"/><itemref idref="chapter/2"/></spine></package>""",
+                        <item id="chapter/1" href="one.xhtml"/><item id="chapter/2" href="two.xhtml"/><item id="ncx" href="toc.ncx"/>
+                        </manifest><spine toc="ncx"><itemref idref="chapter/1"/><itemref idref="chapter/2"/></spine></package>""",
+                    "toc.ncx" to """<ncx><navMap><navPoint><navLabel><text>第一章</text></navLabel>
+                        <content src="one.xhtml"/></navPoint></navMap></ncx>""",
                     "one.xhtml" to "<html><head><title>卷名</title></head><body><h1>第一章</h1><p>正文甲</p></body></html>",
                     "two.xhtml" to "<html><head><title>卷名</title></head><body><h1>第二章</h1><p>正文乙</p></body></html>",
                 ).forEach { (name, text) ->
@@ -78,7 +81,7 @@ class DocumentStorageTest {
                 writes += file.name
                 file.writeText(text)
             })
-            val legacy = original.copy(format = "epub", chapters = original.chapters.map { it.copy(title = "卷名") })
+            val legacy = original.copy(format = "epub", chapters = original.chapters.map { it.copy(title = "卷名") }, epubTitleVersion = 1)
             val index = storage.save(legacy)
             writes.clear()
             failManifest = true
@@ -90,6 +93,7 @@ class DocumentStorageTest {
             assertEquals(listOf("book.json"), writes)
             assertEquals(index.chapterFiles, upgraded.chapterFiles)
             assertEquals(upgraded, storage.index("book"))
+            assertEquals(listOf("chapter/1"), upgraded.navigationToc().map { it.chapterId })
             assertEquals(original.chapters, storage.full(upgraded).chapters)
             assertSame(upgraded, storage.recoverEpubTitles(upgraded, source))
             assertEquals(listOf("book.json"), writes)

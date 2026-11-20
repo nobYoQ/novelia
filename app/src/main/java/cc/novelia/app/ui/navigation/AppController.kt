@@ -31,10 +31,11 @@ import cc.novelia.app.data.model.CloudFolders
 import cc.novelia.app.data.model.Folder
 import cc.novelia.app.data.model.Page
 import cc.novelia.app.data.model.Chapter
+import cc.novelia.app.data.model.navigationToc
+import cc.novelia.app.data.model.readingOrderToc
 import cc.novelia.app.data.model.toReaderChapter
 import cc.novelia.app.data.model.PendingAction
 import cc.novelia.app.data.model.WebDetail
-import cc.novelia.app.data.model.TocItem
 import cc.novelia.app.data.model.WenkuDetail
 import cc.novelia.app.data.updates.withBookUpdate
 import cc.novelia.app.data.library.withCloudReadingMetadata
@@ -54,6 +55,7 @@ import cc.novelia.app.ui.components.base.friendlyMessage
 import cc.novelia.app.ui.feedback.Sticker
 import cc.novelia.app.ui.feedback.StickerSnackbarVisuals
 import cc.novelia.app.ui.reader.ReaderTocState
+import cc.novelia.app.ui.reader.ReaderTocSnapshot
 import java.io.IOException
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
@@ -174,8 +176,11 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
         return ReaderTocState { forceNetwork ->
             withContext(Dispatchers.IO) {
                 session.ensureCurrent(key.binding)
-                val toc = if(ref.isLocal) store.documentIndex(ref.id).chapters.map { TocItem(it.title, it.title, it.id) }
-                    else detail<WebDetail>("novel/${ref.key}", forceNetwork).toc
+                val toc = if(ref.isLocal) {
+                    val document = store.documentIndex(ref.id)
+                    val readingOrder = document.readingOrderToc()
+                    ReaderTocSnapshot(readingOrder, document.navigationToc(readingOrder))
+                } else ReaderTocSnapshot(detail<WebDetail>("novel/${ref.key}", forceNetwork).toc)
                 session.ensureCurrent(key.binding)
                 check(key.generation == store.cacheGeneration.value) { "缓存已更新，请重新加载目录" }
                 toc
