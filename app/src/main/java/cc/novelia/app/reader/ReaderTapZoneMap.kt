@@ -252,6 +252,11 @@ data class ReaderTapZoneMap(
             ),
         )
 
+        internal val RightToLeft = Default.copy(singleActions = Default.singleActions.mapKeys { (cell, _) ->
+            val left = cell / DEFAULT_COLUMNS * DEFAULT_COLUMNS
+            left + DEFAULT_COLUMNS - 1 - cell % DEFAULT_COLUMNS
+        })
+
         private val legacyDefault = Default.copy(doubleActions = mapOf(
             0 to ReaderTapAction.Navigate, 1 to ReaderTapAction.Navigate, 2 to ReaderTapAction.Navigate,
             6 to ReaderTapAction.Menu, 7 to ReaderTapAction.Menu, 8 to ReaderTapAction.Menu,

@@ -1,5 +1,6 @@
 package cc.novelia.app.data.model
 
+import cc.novelia.app.reader.ReaderTapZoneMap
 import kotlinx.serialization.Serializable
 
 /** 不透明 RGB 配色作为一组保存和同步，避免混用不同设备的文字与背景颜色。 */
@@ -72,7 +73,9 @@ import kotlinx.serialization.Serializable
     val nightBrightness: ReaderBrightness? = null,
     val horizontalDualPage: Boolean? = null,
     val typographyDp: ReaderTypographyDp? = null,
-    val tapPageTurnFeedback: Boolean? = null
+    val tapPageTurnFeedback: Boolean? = null,
+    val horizontalRightToLeft: Boolean? = null,
+    val rowRightToLeft: Boolean? = null,
 )
 
 /**
@@ -140,7 +143,9 @@ import kotlinx.serialization.Serializable
     // 横向分页的可选子模式；窄窗口回退单页，其他分页方式保留此偏好但不启用。
     val horizontalDualPage: Boolean = false,
     val typographyDp: ReaderTypographyDp? = null,
-    val tapPageTurnFeedback: Boolean? = null
+    val tapPageTurnFeedback: Boolean? = null,
+    val horizontalRightToLeft: Boolean = false,
+    val rowRightToLeft: Boolean = false,
 ) {
     companion object {
         const val MIN_FONT_SIZE = 14f
@@ -156,6 +161,7 @@ import kotlinx.serialization.Serializable
         val SPEECH_TIMER_OPTIONS = listOf(0, 15, 30, 60)
         val PAGINATION_MODES = listOf("scroll", "auto", "row")
         val PAGINATION_LABELS = listOf("连续滚动", "横向分页", "行带分页")
+        val PAGE_DIRECTION_LABELS = listOf("从左到右", "从右到左")
         const val MAX_SPEECH_MINUTES = 1_440
         fun speechTimerLabel(minutes: Int) = if(minutes == 0) "不限时" else "$minutes 分钟"
     }
@@ -189,13 +195,21 @@ import kotlinx.serialization.Serializable
     // 兼容黑白模式尚未成为主题选项之前保存的设置。
     val resolvedTheme get() = if(monochrome) "monochrome" else theme
     val resolvedCustomColors get() = customColors.takeIf { it.valid } ?: ReaderCustomColors()
-    /** 解析后的点击分区方案；空值或损坏内容回退到默认四向翻页，保证阅读器始终可翻页。 */
-    val resolvedTapZoneMap get() = if (tapZoneMap.isBlank()) cc.novelia.app.reader.ReaderTapZoneMap.Default
-        else cc.novelia.app.reader.ReaderTapZoneMap.decode(tapZoneMap)
+    internal val defaultTapZoneMap get() = if (rightToLeftPageTurn) ReaderTapZoneMap.RightToLeft else ReaderTapZoneMap.Default
+    /** 默认布局跟随当前分页方向；已经配置的分区保留原动作。 */
+    val resolvedTapZoneMap get() = ReaderTapZoneMap.decode(tapZoneMap).let { if (it == ReaderTapZoneMap.Default) defaultTapZoneMap else it }
+    internal fun withTapZoneMap(map: ReaderTapZoneMap) = copy(tapZoneMap = if (map == defaultTapZoneMap) "" else ReaderTapZoneMap.encode(map))
     fun tapPageTurnFeedbackEnabled(eInk: Boolean = eInkMode) = tapPageTurnFeedback ?: !eInk
     fun withTheme(selected: String) = copy(theme = selected, monochrome = false)
     val rowPagination get() = paginationMode == "row"
     val staticPagination get() = paginationMode == "auto" || rowPagination
+    val rightToLeftPageTurn get() = when (paginationMode) {
+        "auto" -> horizontalRightToLeft
+        "row" -> rowRightToLeft
+        else -> false
+    }
+    /** 逻辑下一页从视口的哪一侧进入。 */
+    internal val pageTurnAxis get() = if (rightToLeftPageTurn) -1 else 1
     fun withPaginationMode(selected: String): ReaderSettings {
         require(selected in PAGINATION_MODES)
         // 从滚动阅读首次切换分页时提供可用手势；之后切换模式保留已有选择。
@@ -264,7 +278,8 @@ import kotlinx.serialization.Serializable
         rowShowPartialLines = rowShowPartialLines,
         letterSpacing = letterSpacing, nightReading = nightReading, nightPreset = nightPreset,
         brightnessPreferences = brightnessPreferences, nightBrightness = nightBrightness,
-        horizontalDualPage = horizontalDualPage, typographyDp = typographyDp
+        horizontalDualPage = horizontalDualPage, typographyDp = typographyDp,
+        horizontalRightToLeft = horizontalRightToLeft, rowRightToLeft = rowRightToLeft
     )
     private fun withPagingState(state: ReaderPagingState) = copy(
         mode = state.mode ?: mode,
@@ -331,7 +346,9 @@ import kotlinx.serialization.Serializable
         nightPreset = state.nightPreset ?: nightPreset,
         brightnessPreferences = state.brightnessPreferences ?: if(state.brightness != null) null else brightnessPreferences,
         nightBrightness = state.nightBrightness ?: nightBrightness,
-        horizontalDualPage = state.horizontalDualPage ?: horizontalDualPage
+        horizontalDualPage = state.horizontalDualPage ?: horizontalDualPage,
+        horizontalRightToLeft = state.horizontalRightToLeft ?: horizontalRightToLeft,
+        rowRightToLeft = state.rowRightToLeft ?: rowRightToLeft
     )
     /**
      * 切换电子纸时分别记住两种模式的完整阅读配置。

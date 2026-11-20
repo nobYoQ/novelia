@@ -259,6 +259,7 @@ internal fun measureChapterLines(paragraphs: List<ReadingParagraph>, settings: R
 ) {
     val density = LocalDensity.current
     val layoutDirection = LocalLayoutDirection.current
+    val pageTurnAxis = settings.pageTurnAxis
     val columns = pageColumns.coerceIn(1, 2)
     val gutter = if(columns == 2) 16.dp else 0.dp
     val horizontalPadding = contentPadding.calculateLeftPadding(layoutDirection) + contentPadding.calculateRightPadding(layoutDirection)
@@ -279,9 +280,9 @@ internal fun measureChapterLines(paragraphs: List<ReadingParagraph>, settings: R
     val latestPage by rememberUpdatedState(onPage)
     val canInteract = interactionEnabled && expandedImage == null
     // 页码、排版或交互状态改变后，不允许旧动画继续提交到新页面。
-    LaunchedEffect(state.pages, state.pageIndex, columns, animate, canInteract) {
+    LaunchedEffect(state.pages, state.pageIndex, columns, animate, canInteract, pageTurnAxis) {
         val from = previousPageIndex
-        val direction = (state.pageIndex - from).coerceIn(-1, 1)
+        val direction = (state.pageIndex - from).coerceIn(-1, 1) * pageTurnAxis
         val gestureCommitted = gestureTarget == state.pageIndex
         gestureTarget = null
         previousPageIndex = state.pageIndex
@@ -308,7 +309,7 @@ internal fun measureChapterLines(paragraphs: List<ReadingParagraph>, settings: R
             if (direction != 0) latestPage(direction)
         } else {
             val start = pageOffset
-            val target = if(direction == 0) 0f else if(direction > 0) -1f else 1f
+            val target = (-direction * pageTurnAxis).toFloat()
             transitionJob = dragScope.launch {
                 androidx.compose.animation.core.animate(start, target,
                     animationSpec = tween(if(direction == 0) AppMotion.Quick else turnDuration,
@@ -334,7 +335,7 @@ internal fun measureChapterLines(paragraphs: List<ReadingParagraph>, settings: R
         modifier.background(background).clipToBounds()
             .readerTapFeedback(tapNavigation, foreground, eInk)
             .readerTapNavigation(tapNavigation)
-            .pointerInput(settings.horizontalPageTurn, columns, animate, canInteract) {
+            .pointerInput(settings.horizontalPageTurn, columns, animate, canInteract, pageTurnAxis) {
                 if(!canInteract || !settings.horizontalPageTurn) return@pointerInput
                 var total = androidx.compose.ui.geometry.Offset.Zero
                 var axisLocked = false
@@ -353,7 +354,7 @@ internal fun measureChapterLines(paragraphs: List<ReadingParagraph>, settings: R
                         val speed = velocity.calculateVelocity().let { if(dragAxis == 0) it.x else it.y }
                         val fling = abs(speed) >= 750.dp.toPx() && abs(distance) >= viewConfiguration.touchSlop && speed * distance > 0f
                         val passed = abs(distance) >= 40.dp.toPx() || fling
-                        val direction = if((if(fling) speed else distance) < 0) 1 else -1
+                        val direction = swipePageDirection(if(fling) speed else distance, pageTurnAxis)
                         latestSettle(if(enabled && tapNavigation.canSwipe && passed) direction else 0)
                     }
                 ) { change, amount ->
@@ -372,8 +373,8 @@ internal fun measureChapterLines(paragraphs: List<ReadingParagraph>, settings: R
                         val extent = (if(dragAxis == 0) viewport.width else viewport.height).toFloat()
                         val delta = if(dragAxis == 0) amount.x else amount.y
                         if(extent > 0) {
-                            val direction = if(pageOffset + delta / extent < 0) 1 else -1
-                            val resistance = if(if(direction > 0) !state.canGoForward else !state.canGoBack) .15f else 1f
+                            val direction = swipePageDirection(pageOffset + delta / extent, pageTurnAxis)
+                            val resistance = if((direction > 0 && !state.canGoForward) || (direction < 0 && !state.canGoBack)) .15f else 1f
                             pageOffset = (pageOffset + delta * resistance / extent).coerceIn(-1f, 1f)
                         }
                     }
@@ -407,7 +408,7 @@ internal fun measureChapterLines(paragraphs: List<ReadingParagraph>, settings: R
             BoxWithConstraints(Modifier.fillMaxSize().testTag(if(columns == 2) "reader-dual-page" else "reader-single-page").clipToBounds().onSizeChanged { viewport = it }) {
                 val extent = (if(dragAxis == 0) constraints.maxWidth else constraints.maxHeight).toFloat()
                 val shift = if(animate) pageOffset * extent else 0f
-                val direction = when { shift < 0 -> 1; shift > 0 -> -1; else -> 0 }
+                val direction = swipePageDirection(shift, pageTurnAxis)
                 @Composable fun body(firstPage: Int, offset: Float, opacity: Float = 1f) {
                     val spreadModifier = Modifier.fillMaxSize().graphicsLayer {
                             translationX = if(columns == 1 && dragAxis == 0) offset else 0f
@@ -422,12 +423,14 @@ internal fun measureChapterLines(paragraphs: List<ReadingParagraph>, settings: R
                     }
                     if(columns == 1) page(firstPage, spreadModifier)
                     else CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                        val leftPage = firstPage + if(settings.rightToLeftPageTurn) 1 else 0
+                        val rightPage = firstPage + if(settings.rightToLeftPageTurn) 0 else 1
                         Row(spreadModifier) {
-                            page(firstPage, Modifier.weight(1f).fillMaxHeight().padding(horizontal = horizontalPadding / 2).clipToBounds().testTag("reader-left-page"))
+                            page(leftPage, Modifier.weight(1f).fillMaxHeight().padding(horizontal = horizontalPadding / 2).clipToBounds().testTag("reader-left-page"))
                             Box(Modifier.width(gutter).fillMaxHeight(), contentAlignment = Alignment.Center) {
                                 Box(Modifier.width(1.dp).fillMaxHeight().background(foreground.copy(alpha = .12f)))
                             }
-                            page(firstPage + 1, Modifier.weight(1f).fillMaxHeight().padding(horizontal = horizontalPadding / 2).clipToBounds().testTag("reader-right-page"))
+                            page(rightPage, Modifier.weight(1f).fillMaxHeight().padding(horizontal = horizontalPadding / 2).clipToBounds().testTag("reader-right-page"))
                         }
                     }
                 }
@@ -447,13 +450,13 @@ internal fun measureChapterLines(paragraphs: List<ReadingParagraph>, settings: R
                         }
                     }
                 } else if(animate && outgoing != null) {
-                    val pageDirection = (state.pageIndex - outgoing).coerceIn(-1, 1)
+                    val pageDirection = (state.pageIndex - outgoing).coerceIn(-1, 1) * pageTurnAxis
                     body(outgoing, (incomingOffset - pageDirection) * extent)
                     body(state.pageIndex, incomingOffset * extent)
                 } else {
                     val neighbor = state.pageIndex + direction * state.visiblePageCount
                     if(direction != 0 && neighbor >= 0 && neighbor < chapter.pages.size) {
-                        body(neighbor, shift + direction * extent)
+                        body(neighbor, shift + direction * pageTurnAxis * extent)
                     }
                     body(state.pageIndex, shift)
                 }

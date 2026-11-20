@@ -83,6 +83,24 @@ class ReaderDefaultControlsTest {
 
     @get:Rule val compose = createComposeRule()
 
+    @Test fun pageDirectionOptionsAppearUnderBothPagedModesAndKeepSeparateSelections() {
+        var settings by mutableStateOf(ReaderSettings())
+        compose.setContent { AppInteractionMode(false, true) { NoveliaTheme("light") {
+            Surface(Modifier.requiredWidth(360.dp).fillMaxHeight()) { ReaderPreferences(settings) { settings = it } }
+        } } }
+        compose.onNodeWithText("翻页").performClick()
+        compose.onNodeWithText("翻页方向").assertDoesNotExist()
+        compose.onNodeWithText("横向分页").performScrollTo().performClick()
+        compose.onNodeWithText("从右到左").performScrollTo().performClick().assertIsSelected()
+        compose.onNodeWithText("行带分页").performScrollTo().performClick()
+        compose.onNodeWithText("从左到右").performScrollTo().assertIsSelected()
+        compose.runOnIdle { assertTrue(settings.horizontalRightToLeft); assertFalse(settings.rowRightToLeft) }
+        compose.onNodeWithText("横向分页").performScrollTo().performClick()
+        compose.onNodeWithText("从右到左").performScrollTo().assertIsSelected()
+        compose.onNodeWithText("连续滚动").performScrollTo().performClick()
+        compose.onNodeWithText("翻页方向").assertDoesNotExist()
+    }
+
     @Test fun inlineDefaultsStayVisibleAndResetOnlyTheirOwnSetting() {
         val defaults = ReaderSettings(fontSize = 16.629105f, theme = "paper", lineHeight = 1.7f)
         var settings by mutableStateOf(defaults.copy(fontSize = 22f, theme = "dark", lineHeight = 2.1f))

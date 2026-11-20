@@ -47,7 +47,7 @@ class ReaderPageTurnFrameTest {
         File(instrumentation.targetContext.getExternalFilesDir(null), "page-turn-frames").apply { mkdirs() }
     }
 
-    private fun fixture(fullScreen: Boolean = false, content: List<ReadingParagraph> = paragraphs, pageColumns: Int = 1) {
+    private fun fixture(fullScreen: Boolean = false, content: List<ReadingParagraph> = paragraphs, pageColumns: Int = 1, rightToLeft: Boolean = false) {
         assertTrue("Device animations must be enabled", ValueAnimator.areAnimatorsEnabled())
         compose.setContent {
             MaterialTheme {
@@ -56,7 +56,7 @@ class ReaderPageTurnFrameTest {
                     Box(Modifier.fillMaxSize().background(Color(0xFF333333)), contentAlignment = Alignment.Center) {
                         val viewport = if(pageColumns == 2) Modifier.requiredSize(800.dp, 420.dp)
                             else if (fullScreen) Modifier.fillMaxSize() else Modifier.size(327.dp, 420.dp)
-                        EInkPage(content, if(pageColumns == 2) settings.copy(tapPageTurn = false) else settings, state, viewport.testTag("frame-reader"),
+                        EInkPage(content, settings.copy(tapPageTurn = pageColumns == 1, horizontalRightToLeft = rightToLeft), state, viewport.testTag("frame-reader"),
                             imageModel = { null }, onToggleMenu = {}, onSelect = {},
                             onPage = { direction ->
                                 events += "${SystemClock.elapsedRealtime()},commit,${state.pageIndex},${state.pageIndex + direction * state.visiblePageCount}"
@@ -148,6 +148,29 @@ class ReaderPageTurnFrameTest {
             assertStationaryBlend(after, swipeMiddle, returned)
             assertEquals(0.0, difference(before, returned, true), .001)
         } finally { compose.mainClock.autoAdvance = true }
+    }
+
+    @Test fun rightToLeftSwipesAndDefaultTapsUseTheSamePageOrder() {
+        fixture(rightToLeft = true)
+        gesture("horizontal", forward = false)
+        compose.runOnIdle { assertEquals(1, state.pageIndex) }
+        gesture("tap", forward = false)
+        compose.runOnIdle { assertEquals(2, state.pageIndex) }
+        gesture("horizontal", forward = true)
+        compose.runOnIdle { assertEquals(1, state.pageIndex) }
+        gesture("tap", forward = true)
+        compose.runOnIdle { assertEquals(0, state.pageIndex) }
+    }
+
+    @Test fun rightToLeftSpreadsPlaceTheFirstPageOnTheRightAndTurnTwoPagesAtATime() {
+        fixture(pageColumns = 2, rightToLeft = true)
+        val firstLine = hasText("第 001 行", substring = true)
+        compose.onNode(firstLine and hasAnyAncestor(hasTestTag("reader-right-page")), useUnmergedTree = true).assertIsDisplayed()
+        compose.onNode(firstLine and hasAnyAncestor(hasTestTag("reader-left-page")), useUnmergedTree = true).assertDoesNotExist()
+        gesture("horizontal", forward = false)
+        compose.runOnIdle { assertEquals(2, state.pageIndex) }
+        gesture("horizontal", forward = true)
+        compose.runOnIdle { assertEquals(0, state.pageIndex) }
     }
 
     /** 原位混合的每个像素都应位于两张静止页面的颜色区间内；平移会在原本留白处产生文字。 */

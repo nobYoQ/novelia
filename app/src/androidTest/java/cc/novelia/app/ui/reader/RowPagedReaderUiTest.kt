@@ -78,6 +78,26 @@ class RowPagedReaderUiTest {
         assertArrayEquals(original, pixels())
     }
 
+    @Test fun rightToLeftHorizontalTurnsReturnToTheSameRowAfterVerticalScrolling() {
+        val state = RowPagingState(null)
+        compose.setContent { NoveliaTheme("light") {
+            CompositionLocalProvider(LocalDensity provides Density(1f)) {
+                RowPagedReader(paragraphs, settings.copy(eInkMode = false, rowRightToLeft = true), state,
+                    Modifier.requiredSize(300.dp, 300.dp).testTag("right-to-left-row-page"),
+                    imageModel = { null }, onToggleMenu = {}, onSelect = {}, onPage = state::move)
+            }
+        } }
+        compose.waitUntil(10_000) { state.ready }
+        val page = compose.onNodeWithTag("right-to-left-row-page")
+        page.performTouchInput { swipe(center, center - Offset(0f, 115f), durationMillis = 650) }
+        compose.waitUntil(10_000) { state.row > 0 && !state.scrolling }
+        val previous = compose.runOnIdle { state.anchor }
+        page.performTouchInput { swipeRight() }
+        compose.runOnIdle { assertTrue(state.anchor.textOffset > previous.textOffset) }
+        page.performTouchInput { swipeLeft() }
+        compose.runOnIdle { assertEquals(previous, state.anchor) }
+    }
+
     @Test fun verticalPartialScrollThenHorizontalRoundTripKeepsTheActualAnchorWithoutAnimations() {
         val state = RowPagingState(null)
         var saved = -1

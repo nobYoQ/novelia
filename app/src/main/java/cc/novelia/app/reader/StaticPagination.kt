@@ -49,10 +49,19 @@ fun pageForAnchor(pages: List<StaticPage>, paragraph: Int, offset: Int): Int {
     return pages.indexOfLast { page -> page.lines.firstOrNull()?.let { it.paragraph <= paragraph } == true }.coerceAtLeast(0)
 }
 
-/** 保留纯函数形式的 Android 按键映射，便于回归验证遥控器和翻页器。 */
-fun readerKeyDirection(keyCode: Int, volumeKeys: Boolean): Int = when (keyCode) {
-    92, 19, 21 -> -1 // 上一页键、方向键上/左。
-    93, 20, 22, 62 -> 1 // 下一页键、方向键下/右、空格键。
+/** 将手指或页面的屏幕位移换成逻辑上一页／下一页。 */
+internal fun swipePageDirection(horizontalOffset: Float, pageTurnAxis: Int): Int = when {
+    horizontalOffset < 0f -> pageTurnAxis
+    horizontalOffset > 0f -> -pageTurnAxis
+    else -> 0
+}
+
+/** 上下方向键、翻页专用键和音量键使用逻辑页序。 */
+fun readerKeyDirection(keyCode: Int, volumeKeys: Boolean, pageTurnAxis: Int = 1): Int = when (keyCode) {
+    21 -> -pageTurnAxis
+    22 -> pageTurnAxis
+    92, 19 -> -1
+    93, 20, 62 -> 1
     24 -> if (volumeKeys) -1 else 0
     25 -> if (volumeKeys) 1 else 0
     else -> 0

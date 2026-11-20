@@ -96,7 +96,7 @@ import kotlin.math.roundToInt
             nightEditorOpen = false
         })
     if(previewZones) ReaderTapZonePreview(value, onSave = {
-        onChange(value.copy(tapZoneMap = ReaderTapZoneMap.encode(it)))
+        onChange(value.withTapZoneMap(it))
         previewZones = false
     }, onDismiss = { previewZones = false })
     Column(modifier) {
@@ -169,6 +169,17 @@ import kotlin.math.roundToInt
                                 else -> "整章连续排列，上下滑动浏览，不提前拆成独立页面。"
                             },
                                 Modifier.padding(horizontal = 20.dp, vertical = 4.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if(value.staticPagination) {
+                                ChoiceRow("翻页方向", ReaderSettings.PAGE_DIRECTION_LABELS, if(value.rightToLeftPageTurn) 1 else 0,
+                                    defaultSelected = defaults?.let {
+                                        val rightToLeft = if(value.rowPagination) it.rowRightToLeft else it.horizontalRightToLeft
+                                        if(rightToLeft) 1 else 0
+                                    }) { index ->
+                                    val rightToLeft = index == 1
+                                    onChange(if(value.rowPagination) value.copy(rowRightToLeft = rightToLeft)
+                                        else value.copy(horizontalRightToLeft = rightToLeft))
+                                }
+                            }
                             if(value.paginationMode == "auto") Box(Modifier.testTag("reader-dual-page-toggle")) {
                                 TogglePreference("宽屏双页", "阅读区域足够宽时并排显示两页，每次翻过两页；窗口变窄后自动恢复单页",
                                     value.horizontalDualPage, defaultValue = defaults?.horizontalDualPage) { onChange(value.copy(horizontalDualPage = it)) }
@@ -201,7 +212,8 @@ import kotlin.math.roundToInt
                                     modifier = Modifier.padding(horizontal = 12.dp)) { Text("查看点击分区教程") }
                             }
                             if(value.staticPagination) {
-                                TogglePreference("左右翻页", "向左滑动下一页，向右滑动上一页", value.horizontalPageTurn, defaultValue = defaults?.horizontalPageTurn) { onChange(value.copy(horizontalPageTurn = it)) }
+                                val hint = if(value.rightToLeftPageTurn) "向右滑动下一页，向左滑动上一页" else "向左滑动下一页，向右滑动上一页"
+                                TogglePreference("左右翻页", hint, value.horizontalPageTurn, defaultValue = defaults?.horizontalPageTurn) { onChange(value.copy(horizontalPageTurn = it)) }
                             }
                             TogglePreference("显示翻页按钮", if(value.staticPagination) "显示上一页、下一页按钮" else "显示上一屏、下一屏，每次移动约一屏正文", value.showPageButtons, defaultValue = defaults?.showPageButtons) { onChange(value.copy(showPageButtons = it)) }
                             TogglePreference("列表与面板翻屏按钮", "电子纸模式下显示目录、设置等面板的上一屏／下一屏；关闭后仍可滑动翻屏", value.showEInkScreenButtons, defaultValue = defaults?.showEInkScreenButtons) { onChange(value.copy(showEInkScreenButtons = it)) }

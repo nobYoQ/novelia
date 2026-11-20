@@ -874,7 +874,7 @@ import kotlinx.serialization.encodeToString
             VerticalDivider(Modifier.fillMaxHeight())
         }
         Box(Modifier.weight(1f).fillMaxHeight().background(background).focusRequester(focus).onPreviewKeyEvent { event ->
-            val direction = readerKeyDirection(event.nativeKeyEvent.keyCode, settings.volumeKeys)
+            val direction = readerKeyDirection(event.nativeKeyEvent.keyCode, settings.volumeKeys, settings.pageTurnAxis)
             if(volumeKeysActive && !seekFocused && direction != 0) {
                 if(event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) page(direction)
                 true
@@ -1074,7 +1074,7 @@ import kotlinx.serialization.encodeToString
             }
             if(editingTapZones) ReaderTapZoneEditor(settings.resolvedTapZoneMap, onSave = { map ->
                 c.store.update { current ->
-                    val value = (current.bookSettings[ref.key] ?: current.reader).copy(tapZoneMap = ReaderTapZoneMap.encode(map))
+                    val value = (current.bookSettings[ref.key] ?: current.reader).withTapZoneMap(map)
                     if(current.bookSettings.containsKey(ref.key)) current.copy(bookSettings = current.bookSettings + (ref.key to value))
                     else current.copy(reader = value)
                 }
@@ -1082,7 +1082,8 @@ import kotlinx.serialization.encodeToString
             }, onDismiss = { editingTapZones = false },
                 modifier = Modifier.align(Alignment.TopCenter).fillMaxHeight().windowInsetsPadding(bodyInsets)
                     .padding(bottom = persistentBottomHeight).fillMaxWidth(),
-                staticPagination = settings.staticPagination, eInk = settings.eInkMode || eInkInteraction)
+                staticPagination = settings.staticPagination, eInk = settings.eInkMode || eInkInteraction,
+                defaultMap = settings.defaultTapZoneMap)
         }
         }
         }

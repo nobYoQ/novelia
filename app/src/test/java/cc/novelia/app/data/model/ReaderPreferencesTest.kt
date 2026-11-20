@@ -1,11 +1,47 @@
 package cc.novelia.app.data.model
 
 import cc.novelia.app.data.storage.appJson
+import cc.novelia.app.reader.ReaderTapAction
+import cc.novelia.app.reader.ReaderTapZoneMap
 import kotlinx.serialization.encodeToString
 import org.junit.Assert.*
 import org.junit.Test
 
 class ReaderPreferencesTest {
+    @Test fun pageDirectionsAreIndependentAcrossPaginationModesAndReadingProfiles() {
+        val legacy = appJson.decodeFromString<ReaderSettings>("""{"paginationMode":"auto"}""")
+        assertFalse(legacy.rightToLeftPageTurn)
+        val normal = legacy.copy(horizontalRightToLeft = true)
+        assertTrue(normal.rightToLeftPageTurn)
+        assertFalse(normal.withPaginationMode("row").rightToLeftPageTurn)
+        assertFalse(normal.withPaginationMode("scroll").rightToLeftPageTurn)
+        val ink = normal.withEInkMode(true).withPaginationMode("row")
+            .copy(horizontalRightToLeft = false, rowRightToLeft = true)
+        val saved = appJson.decodeFromString<SettingsBackup>(appJson.encodeToString(SettingsBackup(reader = ink)))
+        val restored = requireNotNull(saved.reader)
+        assertTrue(restored.rightToLeftPageTurn)
+        assertFalse(restored.withPaginationMode("auto").rightToLeftPageTurn)
+        val regular = restored.withEInkMode(false)
+        assertTrue(regular.rightToLeftPageTurn)
+        assertFalse(regular.withPaginationMode("row").rightToLeftPageTurn)
+        assertTrue(regular.withEInkMode(true).rightToLeftPageTurn)
+    }
+
+    @Test fun defaultTapZonesFollowPageDirectionWithoutMovingCustomizedZones() {
+        val normal = ReaderSettings(paginationMode = "auto")
+        val rtl = normal.copy(horizontalRightToLeft = true)
+        assertEquals(ReaderTapAction.PreviousPage, normal.resolvedTapZoneMap.singleAt(0, 1))
+        assertEquals(ReaderTapAction.NextPage, rtl.resolvedTapZoneMap.singleAt(0, 1))
+        assertEquals(ReaderTapAction.PreviousPage, rtl.resolvedTapZoneMap.singleAt(2, 1))
+        assertEquals(ReaderTapAction.PreviousPage, rtl.resolvedTapZoneMap.singleAt(1, 0))
+        assertEquals(ReaderTapAction.NextPage, rtl.resolvedTapZoneMap.singleAt(1, 2))
+        assertEquals(ReaderTapAction.Menu, rtl.resolvedTapZoneMap.singleAt(1, 1))
+        assertEquals(rtl.resolvedTapZoneMap, rtl.copy(tapZoneMap = ReaderTapZoneMap.encode(ReaderTapZoneMap.Default)).resolvedTapZoneMap)
+        val edited = normal.resolvedTapZoneMap.withAction(0, 1, false, ReaderTapAction.Navigate)
+        assertEquals(edited, rtl.withTapZoneMap(edited).resolvedTapZoneMap)
+        assertEquals("", rtl.withTapZoneMap(rtl.defaultTapZoneMap).tapZoneMap)
+    }
+
     @Test fun readingModesRestoreIndependentConfigurationsAfterBackupAndRepeatedSwitches() {
         val normal = ReaderSettings(fontSize = 21f, theme = "dark", toolbarTransparency = .6f,
             fontFamily = "serif", lineHeight = 1.4f, tapPageTurn = true, hideStatusBar = true)

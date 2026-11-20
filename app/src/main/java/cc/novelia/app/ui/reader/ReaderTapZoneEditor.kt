@@ -48,6 +48,7 @@ import kotlin.math.roundToInt
 @Composable internal fun ReaderTapZoneEditor(
     map: ReaderTapZoneMap, onSave: (ReaderTapZoneMap) -> Unit, onDismiss: () -> Unit,
     modifier: Modifier = Modifier, staticPagination: Boolean = true, eInk: Boolean = false,
+    defaultMap: ReaderTapZoneMap = ReaderTapZoneMap.Default,
 ) {
     var draft by remember { mutableStateOf(map) }
     var double by remember { mutableStateOf(false) }
@@ -133,12 +134,12 @@ import kotlin.math.roundToInt
                         Text(if(individual) "合并区域" else "逐格编辑")
                     }
                     AppIconButton(onClick = { controlsVisible = false }) { Icon(Icons.Outlined.VisibilityOff, "隐藏配置控件以编辑边缘区域") }
-                    if(compact) AppTextButton(onClick = { draft = ReaderTapZoneMap.Default }, modifier = Modifier.testTag("tap-zone-reset")) { Text("重置") }
+                    if(compact) AppTextButton(onClick = { draft = defaultMap }, modifier = Modifier.testTag("tap-zone-reset")) { Text("重置") }
                 }
                 if(!compact) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(if(individual) "逐格修改后，相同动作会自动合并" else "相邻且单击、双击动作都相同的区域自动合并",
                         Modifier.weight(1f).padding(start = 8.dp), style = MaterialTheme.typography.bodySmall)
-                    AppTextButton(onClick = { draft = ReaderTapZoneMap.Default }, modifier = Modifier.testTag("tap-zone-reset")) { Text("恢复默认") }
+                    AppTextButton(onClick = { draft = defaultMap }, modifier = Modifier.testTag("tap-zone-reset")) { Text("恢复默认") }
                 }
             }
         }
@@ -231,7 +232,8 @@ import kotlin.math.roundToInt
         Box(Modifier.fillMaxSize().safeDrawingPadding().background(colors.background)) {
             Text("阅读区域预览\n\n" + "风穿过树梢，旅人沿着小路向前走去。你可以透过半透明区域查看正文，并调整适合自己的点击范围。\n\n".repeat(18),
                 Modifier.fillMaxSize().padding(24.dp), color = colors.foreground, style = MaterialTheme.typography.bodyLarge)
-            ReaderTapZoneEditor(value.resolvedTapZoneMap, onSave, onDismiss, staticPagination = value.staticPagination, eInk = value.eInkMode)
+            ReaderTapZoneEditor(value.resolvedTapZoneMap, onSave, onDismiss, staticPagination = value.staticPagination,
+                eInk = value.eInkMode, defaultMap = value.defaultTapZoneMap)
         }
     }
 }

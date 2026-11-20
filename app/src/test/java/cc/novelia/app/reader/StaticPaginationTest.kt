@@ -4,6 +4,19 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class StaticPaginationTest {
+    @Test fun horizontalInputCanBeMirroredWhileLogicalKeysRetainTheirActions() {
+        assertEquals(1, swipePageDirection(-60f, 1))
+        assertEquals(-1, swipePageDirection(60f, 1))
+        assertEquals(1, swipePageDirection(60f, -1))
+        assertEquals(-1, swipePageDirection(-60f, -1))
+        assertEquals(0, swipePageDirection(0f, -1))
+        assertEquals(1, readerKeyDirection(21, true, -1))
+        assertEquals(-1, readerKeyDirection(22, true, -1))
+        listOf(19, 20, 92, 93, 24, 25, 62).forEach { key ->
+            assertEquals(readerKeyDirection(key, true), readerKeyDirection(key, true, -1))
+        }
+    }
+
     @Test fun shortBilingualParagraphMovesAsAUnitInsteadOfLeavingAnOrphanTranslation() {
         val lines = listOf(PageLine(0, 0, 8, 30), PageLine(0, 8, 16, 30),
             PageLine(1, 0, 8, 30), PageLine(1, 8, 16, 30))

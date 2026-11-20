@@ -79,6 +79,7 @@ private class RowMeasurement(val input: RowMeasureInput, val chapter: MeasuredEI
 ) {
     val density = LocalDensity.current
     val layoutDirection = LocalLayoutDirection.current
+    val pageTurnAxis = settings.pageTurnAxis
     val context = LocalContext.current
     val font = rememberReaderFont(settings)
     var expandedImage by remember { mutableStateOf<Pair<Any, String?>?>(null) }
@@ -160,7 +161,8 @@ private class RowMeasurement(val input: RowMeasureInput, val chapter: MeasuredEI
                 derivedStateOf { !showPartialLines && animate && partialLineAlpha.value > 0f }
             }
             // 按键、按钮、自动阅读直接更新同一个行游标，也提供横向过渡。
-            LaunchedEffect(geometry, state.navigationRevision, canInteract, animate) {
+            var previousNavigationRevision by remember(geometry) { mutableIntStateOf(state.navigationRevision) }
+            LaunchedEffect(geometry, state.navigationRevision, canInteract, animate, pageTurnAxis) {
                 gestureJob?.cancel()
                 dragOffset = 0f
                 outgoingTop = null
@@ -168,10 +170,12 @@ private class RowMeasurement(val input: RowMeasureInput, val chapter: MeasuredEI
                 val from = state.transitionFrom
                 val committed = gestureCommitted
                 gestureCommitted = false
-                if(animate && canInteract && !committed && from != null && from != state.viewportTop) {
-                    val direction = if(state.viewportTop > from) 1f else -1f
+                val moved = state.navigationRevision != previousNavigationRevision
+                previousNavigationRevision = state.navigationRevision
+                if(animate && canInteract && !committed && moved && from != null && from != state.viewportTop) {
+                    val direction = (if(state.viewportTop > from) 1 else -1) * pageTurnAxis
                     outgoingTop = from
-                    incomingOffset = direction * width
+                    incomingOffset = direction * width.toFloat()
                     try {
                         animate(incomingOffset, 0f, animationSpec = tween(AppMotion.Standard, easing = FastOutSlowInEasing)) { value, _ -> incomingOffset = value }
                     } finally { outgoingTop = null; incomingOffset = 0f }
@@ -188,7 +192,7 @@ private class RowMeasurement(val input: RowMeasureInput, val chapter: MeasuredEI
                 }
                 gestureJob = scope.launch {
                     try {
-                        animate(dragOffset, -direction * width.toFloat(),
+                        animate(dragOffset, -direction * pageTurnAxis * width.toFloat(),
                             animationSpec = tween(if(direction == 0) AppMotion.Quick else AppMotion.Standard, easing = FastOutSlowInEasing)) { value, _ -> dragOffset = value }
                         if(direction != 0) { gestureCommitted = true; latestPage(direction) }
                     } finally { dragOffset = 0f }
@@ -254,7 +258,7 @@ private class RowMeasurement(val input: RowMeasureInput, val chapter: MeasuredEI
                         if(state.scrolling && gestureJob?.isActive != true) latestVerticalSettle(0f)
                     }
                 }
-                .pointerInput(geometry, canInteract, animate, settings.horizontalPageTurn) {
+                .pointerInput(geometry, canInteract, animate, settings.horizontalPageTurn, pageTurnAxis) {
                     if(!canInteract) return@pointerInput
                     var axis = -1
                     var total = Offset.Zero
@@ -281,7 +285,7 @@ private class RowMeasurement(val input: RowMeasureInput, val chapter: MeasuredEI
                             if(axis == 0 && settings.horizontalPageTurn) {
                                 val fling = abs(speed.x) >= 750.dp.toPx() && speed.x * total.x > 0f
                                 val passed = abs(total.x) >= 40.dp.toPx() || fling
-                                latestSettle(if(passed) if((if(fling) speed.x else total.x) < 0) 1 else -1 else 0)
+                                latestSettle(if(passed) swipePageDirection(if(fling) speed.x else total.x, pageTurnAxis) else 0)
                             } else if(axis == 1) {
                                 latestVerticalSettle(if(chapterPull.suppressFling) 0f else -speed.y)
                             }
@@ -303,7 +307,7 @@ private class RowMeasurement(val input: RowMeasureInput, val chapter: MeasuredEI
                             scrollDispatcher.dispatchPostScroll(consumed, remaining - consumed, NestedScrollSource.UserInput)
                         }
                         else if(animate) {
-                            val direction = if(total.x < 0f) 1 else -1
+                            val direction = swipePageDirection(total.x, pageTurnAxis)
                             dragOffset = (total.x * if(state.targetRow(direction) == null) .15f else 1f).coerceIn(-width.toFloat(), width.toFloat())
                         }
                     }
@@ -347,13 +351,13 @@ private class RowMeasurement(val input: RowMeasureInput, val chapter: MeasuredEI
                 }
                 val previous = outgoingTop
                 if(previous != null && animate) {
-                    val direction = if(state.viewportTop > previous) 1 else -1
+                    val direction = (if(state.viewportTop > previous) 1 else -1) * pageTurnAxis
                     body(previous, incomingOffset - direction * width)
                     body(state.viewportTop, incomingOffset)
                 } else {
                     val shift = if(animate) dragOffset else 0f
-                    val direction = if(shift < 0) 1 else -1
-                    if(shift != 0f) state.targetRow(direction)?.let { body(geometry.top(it), shift + direction * width) }
+                    val direction = swipePageDirection(shift, pageTurnAxis)
+                    if(direction != 0) state.targetRow(direction)?.let { body(geometry.top(it), shift + direction * pageTurnAxis * width) }
                     body(state.viewportTop, shift)
                 }
             }

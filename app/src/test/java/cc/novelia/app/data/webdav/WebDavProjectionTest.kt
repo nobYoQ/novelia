@@ -127,12 +127,31 @@ class WebDavProjectionTest {
             .getValue(SyncDomain.SETTINGS).getValue("@reader").getValue("devicePreferences") as JsonObject
         WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "devicePreferences", group)
         val active = group.getValue("activeModeSettings") as JsonObject
-        val legacy = JsonObject(group - setOf("tapZoneMap", "tapPageTurnFeedback") +
-            ("activeModeSettings" to JsonObject(active - "tapPageTurnFeedback")))
+        val newFields = setOf("tapPageTurnFeedback", "horizontalRightToLeft", "rowRightToLeft")
+        val legacy = JsonObject(group - (newFields + "tapZoneMap") +
+            ("activeModeSettings" to JsonObject(active - newFields)))
         WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "devicePreferences", legacy)
         assertThrows(IllegalArgumentException::class.java) {
             WebDavProjection.validateField(SyncDomain.SETTINGS, "@reader", "devicePreferences", JsonObject(group - "brightness"))
         }
+    }
+
+    @Test fun pageDirectionsSyncOnlyWithDevicePreferencesAndIncludeInactiveProfiles() {
+        val normal = ReaderSettings(paginationMode = "auto", horizontalRightToLeft = true)
+        val remote = normal.withEInkMode(true).withPaginationMode("row")
+            .copy(horizontalRightToLeft = false, rowRightToLeft = true)
+        val library = LibraryState(reader = remote)
+        val domain = setOf(SyncDomain.SETTINGS)
+        val projection = WebDavProjection.library(library, includeDevicePreferences = true)
+        val docs = SyncReplica(deviceId = "a").track(emptyMap(), projection).bind("dataset").documents
+        WebDavProjection.validateRecords(docs.getValue(SyncDomain.SETTINGS))
+        val local = LibraryState(reader = ReaderSettings(paginationMode = "auto", rowRightToLeft = false))
+        assertFalse(WebDavProjection.applyLibrary(local, docs, domain).reader.rightToLeftPageTurn)
+        val restored = WebDavProjection.applyLibrary(local, docs, domain, includeDevicePreferences = true).reader
+        assertTrue(restored.rightToLeftPageTurn)
+        assertFalse(restored.withPaginationMode("auto").rightToLeftPageTurn)
+        assertTrue(restored.withEInkMode(false).rightToLeftPageTurn)
+        assertFalse(restored.withEInkMode(false).withPaginationMode("row").rightToLeftPageTurn)
     }
     private val web = BookRef("syosetu", "n1")
     private val local = BookRef("local", "file1")

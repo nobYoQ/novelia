@@ -142,8 +142,16 @@ internal data class ReaderBottomToolbarState(
         if(settings.showPageButtons) Row(Modifier.fillMaxWidth().testTag("reader-page-buttons")
             .onSizeChanged { onPageButtonsHeightChanged(it.height) }
             .background(toolbarBackground).padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
-            AppOutlinedButton(onClick = { onPage(-1) }, colors = ButtonDefaults.outlinedButtonColors(contentColor = foreground, disabledContentColor = foreground.copy(alpha = .38f)), enabled = state.previousPageEnabled) { Text(if(settings.staticPagination) "上一页" else "上一屏") }
-            AppOutlinedButton(onClick = { onPage(1) }, colors = ButtonDefaults.outlinedButtonColors(contentColor = foreground, disabledContentColor = foreground.copy(alpha = .38f)), enabled = state.nextPageEnabled) { Text(if(settings.staticPagination) "下一页" else "下一屏") }
+            val directions = if(settings.rightToLeftPageTurn) 1 downTo -1 step 2 else -1..1 step 2
+            val unit = if(settings.staticPagination) "页" else "屏"
+            for(direction in directions) {
+                val previous = direction < 0
+                AppOutlinedButton(onClick = { onPage(direction) },
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = foreground, disabledContentColor = foreground.copy(alpha = .38f)),
+                    enabled = if(previous) state.previousPageEnabled else state.nextPageEnabled) {
+                    Text(if(previous) "上一$unit" else "下一$unit")
+                }
+            }
         }
         ReaderOverlayVisibility(menu, Modifier, enter = if(reducedMotion) EnterTransition.None else fadeIn(tween(AppMotion.Quick)) + slideInVertically(tween(AppMotion.Standard)) { it }, exit = if(reducedMotion) ExitTransition.None else fadeOut(tween(AppMotion.Exit)) + slideOutVertically(tween(AppMotion.Release)) { it }) {
             Surface(color = toolbarBackground, contentColor = foreground) {
