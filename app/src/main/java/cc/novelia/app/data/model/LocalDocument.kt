@@ -5,11 +5,19 @@ import kotlinx.serialization.Serializable
 /** 保留 EPUB 的原始段落下标；一个 p 内的 br 可以对应多段。 */
 @Serializable data class LocalBilingualGroup(val original: List<Int>, val translations: List<List<Int>>)
 
+@Serializable data class EpubLinkTarget(val chapterId: String, val fragment: String? = null)
+
+/** 按原书顺序保存的目录项；没有跳转目标的条目是分组标题。 */
+@Serializable data class EpubNavigationEntry(val title: String, val target: EpubLinkTarget?, val depth: Int)
+
 @Serializable data class LocalReadingContent(
     val groups: List<LocalBilingualGroup> = emptyList(),
     val secondary: List<Int> = emptyList(),
     val inline: Map<Int, List<InlineContent>> = emptyMap(),
     val notes: Map<String, String> = emptyMap(),
+    val links: Map<String, EpubLinkTarget> = emptyMap(),
+    val anchors: Map<String, Int> = emptyMap(),
+    val imageDescriptions: Map<Int, String> = emptyMap(),
 )
 
 @Serializable data class LocalChapter(val id: String, val title: String, val paragraphs: List<String>,
@@ -34,17 +42,68 @@ fun LocalChapter.toReaderChapter(novelTitle: String? = null, prevId: String? = n
     val downloadMode: String? = null,
     /** EPUB 目录标题独立升级，可覆盖章节正文文件中的旧标题。 */
     val epubTitleVersion: Int = 0,
-    /** 原 EPUB 的正式目录顺序，章节正文仍按 chapters 中的 spine 顺序阅读。 */
-    val epubNavigationIds: List<String> = emptyList())
+    /** 旧索引只记录有目录标题的章节 ID。 */
+    val epubNavigationIds: List<String> = emptyList(),
+    val epubNavigation: List<EpubNavigationEntry> = emptyList())
 
 internal fun LocalDocument.readingOrderToc(): List<TocItem> = chapters.mapIndexed { index, chapter ->
     TocItem(chapter.title.ifBlank { "第 ${index + 1} 节" }, chapterId = chapter.id)
 }
 
 internal fun LocalDocument.navigationToc(readingOrder: List<TocItem> = readingOrderToc()): List<TocItem> {
-    if (epubNavigationIds.isEmpty()) return readingOrder
+    if (epubNavigation.isEmpty() && epubNavigationIds.isEmpty()) return readingOrder
     val byId = readingOrder.associateBy { it.chapterId }
+    if (epubNavigation.isNotEmpty()) {
+        val entries = epubNavigation.mapNotNull { entry ->
+            val target = entry.target
+            if (target == null || target.chapterId in byId) {
+                TocItem(entry.title, chapterId = target?.chapterId, depth = entry.depth, epubFragment = target?.let { it.fragment.orEmpty() })
+            } else null
+        }
+        if (entries.any { it.chapterId != null }) return entries
+    }
+    if (epubNavigationIds.isEmpty()) return readingOrder
     return epubNavigationIds.mapNotNull(byId::get).ifEmpty { readingOrder }
+}
+
+/** 倒序只反转同级条目，分组标题仍在子项之前。 */
+internal fun List<IndexedValue<TocItem>>.reverseTocSiblings(): List<IndexedValue<TocItem>> {
+    if (none { it.value.depth > 0 }) return asReversed()
+    val children = mutableMapOf<Int, MutableList<IndexedValue<TocItem>>>()
+    val ancestors = ArrayDeque<IndexedValue<TocItem>>()
+    for (item in this) {
+        while (ancestors.lastOrNull()?.value?.depth?.let { it >= item.value.depth } == true) ancestors.removeLast()
+        children.getOrPut(ancestors.lastOrNull()?.index ?: -1) { mutableListOf() }.add(item)
+        ancestors.addLast(item)
+    }
+    return buildList {
+        val pending = ArrayDeque(children[-1].orEmpty())
+        while (pending.isNotEmpty()) {
+            val item = pending.removeLast()
+            add(item)
+            pending.addAll(children[item.index].orEmpty())
+        }
+    }
+}
+
+internal fun LocalDocument.navigationWithUnlisted(readingOrder: List<TocItem>, navigation: List<TocItem>): List<TocItem> {
+    if (epubNavigation.isEmpty() || readingOrder === navigation) return readingOrder
+    val lastListedIndex = navigation.withIndex().filter { it.value.chapterId != null }.associate { it.value.chapterId to it.index }
+    val unlistedByPrecedingEntry = mutableMapOf<Int, MutableList<TocItem>>()
+    var preceding = -1
+    for (item in readingOrder) {
+        val index = lastListedIndex[item.chapterId]
+        if (index != null) preceding = index
+        else unlistedByPrecedingEntry.getOrPut(preceding) { mutableListOf() }.add(item)
+    }
+    if (unlistedByPrecedingEntry.isEmpty()) return navigation
+    return buildList {
+        addAll(unlistedByPrecedingEntry[-1].orEmpty())
+        navigation.forEachIndexed { index, item ->
+            add(item)
+            unlistedByPrecedingEntry[index]?.forEach { add(it.copy(depth = item.depth)) }
+        }
+    }
 }
 
 /** 正在阅读没有单列目录项的正文时，定位到前一个正式章节。 */

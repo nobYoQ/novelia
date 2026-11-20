@@ -28,13 +28,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.text
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
-import cc.novelia.app.data.model.InlineKind
 import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.reader.*
 import kotlin.math.roundToInt
@@ -54,13 +52,14 @@ import kotlin.math.roundToInt
             } finally { position[0] = null }
         }
     }.combinedClickable(interactionSource = remember { MutableInteractionSource() }, indication = null,
-        onClickLabel = "查看脚注或显示阅读工具栏", onClick = { onClick(position[0]) },
+        onClickLabel = "打开脚注或链接，或显示阅读工具栏", onClick = { onClick(position[0]) },
         onLongClickLabel = "选择段落、分享或添加笔记", onLongClick = onLongClick)
 }
 
 @Composable internal fun ReaderInlineText(part: TextPart, settings: ReaderSettings, foreground: Color,
     onToggleMenu: () -> Unit, onSelect: () -> Unit, onNote: (String) -> Unit,
-    annotations: List<ReadingTextMatch>, highlights: List<ReaderHighlightLayer>, onLayout: (StaticLayout, Int) -> Unit) {
+    annotations: List<ReadingTextMatch>, highlights: List<ReaderHighlightLayer>, onLink: (String) -> Unit = {},
+    onLayout: (StaticLayout, Int) -> Unit) {
     val density = LocalDensity.current
     val font = rememberReaderFont(settings)
     val typography = settings.readerTypography(density)
@@ -82,13 +81,11 @@ import kotlin.math.roundToInt
         Canvas(Modifier.fillMaxWidth().height(with(density) { layout.height.toDp() })
             .semantics {
                 text = AnnotatedString(indent + part.text)
-                customActions = part.inline.filter { it.kind == InlineKind.Note }.map { mark ->
-                    CustomAccessibilityAction("查看脚注 ${part.text.substring(mark.start, mark.end)}") { onNote(mark.value); true }
-                }
+                customActions = (layout.text as? Spanned)?.readerAccessibilityActions(0, layout.text.length, onNote, onLink).orEmpty()
             }
             .readerInlineActions({ position ->
-                val note = position?.let { layout.noteAt(it.x, it.y) }
-                if (note != null) onNote(note) else onToggleMenu()
+                val action = position?.let { layout.inlineActionAt(it.x, it.y) }
+                if (action != null) action.activate(onNote, onLink) else onToggleMenu()
             }, onSelect)) {
             drawIntoCanvas { canvas ->
                 val native = canvas.nativeCanvas

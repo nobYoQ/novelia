@@ -28,7 +28,18 @@ internal fun Element.epubStyles(): List<InlineKind> = buildList {
     }
 }.distinct()
 
-internal fun Element.epubTypes() = attr("epub:type").split(Regex("\\s+")).toSet()
+private const val EPUB_NS = "http://www.idpf.org/2007/ops"
+private val epubTypeSeparator = Regex("\\s+")
+
+internal fun Element.epubTypes(): Set<String> {
+    val type = attributes().firstOrNull {
+        val prefix = it.key.substringBefore(':', "")
+        if (prefix.isEmpty() || it.key.substringAfter(':') != "type") return@firstOrNull false
+        val namespace = epubNamespace(prefix)
+        namespace == EPUB_NS || (prefix == "epub" && namespace == null)
+    }?.value ?: return emptySet()
+    return type.split(epubTypeSeparator).toSet()
+}
 internal fun Element.isEpubNote() = epubTypes().any { it in setOf("footnote", "endnote") } ||
     attr("role").split(' ').any { it in setOf("doc-footnote", "doc-endnote") }
 

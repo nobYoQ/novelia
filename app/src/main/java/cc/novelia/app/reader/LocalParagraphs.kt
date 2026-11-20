@@ -42,7 +42,11 @@ internal fun projectLocalParagraphs(chapter: Chapter, settings: ReaderSettings, 
         val marks = indices.flatMap { index ->
             val text = chapter.paragraphs[index]
             val mapped = chapter.localContent.inline[index].orEmpty().filter { it.validFor(text) }.mapNotNull { mark ->
-                val value = if (mark.kind == InlineKind.Note) chapter.localContent.notes[mark.value] ?: return@mapNotNull null else mark.value
+                val value = when (mark.kind) {
+                    InlineKind.Note -> chapter.localContent.notes[mark.value] ?: return@mapNotNull null
+                    InlineKind.Link -> mark.value.takeIf { it in chapter.localContent.links } ?: return@mapNotNull null
+                    else -> mark.value
+                }
                 mark.copy(start = mark.start + offset, end = mark.end + offset, value = value)
             }
             offset += text.length + 1
@@ -65,10 +69,12 @@ internal fun projectLocalParagraphs(chapter: Chapter, settings: ReaderSettings, 
                 }
                 add(ReadingParagraph(paragraph.index, parts))
             } else if (!consumed[paragraph.index]) {
+                val imageDescription = if (paragraph.localImageId != null) chapter.localContent.imageDescriptions[paragraph.index]
+                    ?.takeIf { it.length in 1..1024 && it.isNotBlank() } else null
                 add(paragraph.copy(parts = paragraph.parts.map {
                     part(listOf(paragraph.index), if (paragraph.index in secondary || settings.mode == "jp") "原文" else "本地正文",
                         paragraph.index in secondary)
-                }))
+                }, imageDescription = imageDescription))
             }
         }
     }

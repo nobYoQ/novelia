@@ -41,7 +41,6 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.text
 import androidx.compose.ui.semantics.customActions
-import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
@@ -255,7 +254,7 @@ internal fun measureChapterLines(paragraphs: List<ReadingParagraph>, settings: R
     annotations: List<ReadingTextMatch> = emptyList(),
     highlightLayers: List<ReaderHighlightLayer> = listOfNotNull(activeMatch?.let { ReaderHighlightLayer(it, 1f) }),
     interactionEnabled: Boolean = true, contentPadding: PaddingValues = PaddingValues(0.dp), onNavigate: () -> Unit = {},
-    onNote: (String) -> Unit = {}, chapterTitle: String = "",
+    onNote: (String) -> Unit = {}, chapterTitle: String = "", onLink: (String) -> Unit = {},
     pageColumns: Int = 1,
 ) {
     val density = LocalDensity.current
@@ -265,7 +264,7 @@ internal fun measureChapterLines(paragraphs: List<ReadingParagraph>, settings: R
     val horizontalPadding = contentPadding.calculateLeftPadding(layoutDirection) + contentPadding.calculateRightPadding(layoutDirection)
     val context = LocalContext.current
     val font = rememberReaderFont(settings)
-    var expandedImage by remember { mutableStateOf<Any?>(null) }
+    var expandedImage by remember { mutableStateOf<Pair<Any, String?>?>(null) }
     val animate = !settings.eInkMode && !LocalEInkMode.current && !LocalReducedMotion.current && ValueAnimator.areAnimatorsEnabled()
     val turnDuration = if(columns == 2) AppMotion.Quick else AppMotion.Standard
     var pageOffset by remember { mutableFloatStateOf(0f) }
@@ -417,8 +416,9 @@ internal fun measureChapterLines(paragraphs: List<ReadingParagraph>, settings: R
                         }.background(background)
                     @Composable fun page(index: Int, modifier: Modifier) {
                         PageBody(chapter.pages.getOrNull(index), chapter, settings, foreground, highlightLayers, annotations, density, context,
-                            tapNavigation, onSelect, imageModel, { expandedImage = it }, constraints.maxHeight,
-                            { if (canInteract) { tapNavigation.cancel(); onNote(it) } }, modifier)
+                            tapNavigation, onSelect, imageModel, { model, label -> expandedImage = model to label }, constraints.maxHeight,
+                            { if (canInteract) { tapNavigation.cancel(); onNote(it) } },
+                            { if (canInteract) { tapNavigation.cancel(); onLink(it) } }, modifier)
                     }
                     if(columns == 1) page(firstPage, spreadModifier)
                     else CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
@@ -460,7 +460,7 @@ internal fun measureChapterLines(paragraphs: List<ReadingParagraph>, settings: R
             }
         }
     }
-    expandedImage?.let { model -> IllustrationViewer(model) { expandedImage = null } }
+    expandedImage?.let { (model, description) -> IllustrationViewer(model, description = description) { expandedImage = null } }
 }
 
 /**
@@ -482,9 +482,10 @@ internal fun PageBody(
     tapNavigation: ReaderTapNavigation,
     onSelect: (ReadingParagraph) -> Unit,
     imageModel: (ReadingParagraph) -> Any?,
-    onExpandImage: (Any?) -> Unit,
+    onExpandImage: (Any, String?) -> Unit,
     viewportHeight: Int,
     onNote: (String) -> Unit,
+    onLink: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
 
@@ -517,8 +518,8 @@ internal fun PageBody(
                 Box(Modifier.fillMaxWidth().height(with(density) { viewportHeight.toDp() }).combinedClickable(
                     interactionSource = remember { MutableInteractionSource() }, indication = null,
                     onClick = tapNavigation::click,
-                    onLongClickLabel = "放大查看插图", onLongClick = { onExpandImage(model) }), contentAlignment = Alignment.Center) {
-                    AsyncImage(request, "小说插图", Modifier.fillMaxSize(), contentScale = ContentScale.Fit,
+                    onLongClickLabel = "放大查看插图", onLongClick = { if(model != null) onExpandImage(model, paragraph.imageDescription) }), contentAlignment = Alignment.Center) {
+                    AsyncImage(request, paragraph.imageDescription ?: "小说插图", Modifier.fillMaxSize(), contentScale = ContentScale.Fit,
                         onLoading = { failed = false }, onSuccess = { failed = false }, onError = { failed = true })
                     if(failed) IllustrationLoadError(model, foreground) {
                         AppTextButton(onClick = { retry++ }) { Text("重新加载插图", color = foreground) }
@@ -538,16 +539,13 @@ internal fun PageBody(
                         text = AnnotatedString(visibleText)
                         if(index == CHAPTER_HEADING_PARAGRAPH) heading()
                         val marked = layout.text as? Spanned
-                        customActions = marked?.getSpans(lines.first().start, lines.last().end, ReaderNoteSpan::class.java).orEmpty().map { note ->
-                            val label = marked!!.subSequence(marked.getSpanStart(note), marked.getSpanEnd(note))
-                            CustomAccessibilityAction("查看脚注 $label") { onNote(note.body); true }
-                        }
+                        customActions = marked?.readerAccessibilityActions(lines.first().start, lines.last().end, onNote, onLink).orEmpty()
                     }
                     .then(if(paragraph == null) Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null,
                         onClickLabel = "显示或收起阅读工具栏", onClick = tapNavigation::click)
                     else Modifier.readerInlineActions({ position ->
-                        val note = position?.let { layout.noteAt(it.x / drawScale, it.y / drawScale + top) }
-                        if (note != null) onNote(note) else tapNavigation.click()
+                        val action = position?.let { layout.inlineActionAt(it.x / drawScale, it.y / drawScale + top) }
+                        if (action != null) action.activate(onNote, onLink) else tapNavigation.click()
                     }, { onSelect(paragraph) }))) {
                     drawIntoCanvas { canvas ->
                         val native = canvas.nativeCanvas

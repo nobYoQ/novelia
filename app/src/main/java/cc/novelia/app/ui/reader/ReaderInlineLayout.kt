@@ -14,13 +14,27 @@ import android.text.style.MetricAffectingSpan
 import android.text.style.StrikethroughSpan
 import android.text.style.StyleSpan
 import android.text.style.UnderlineSpan
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import cc.novelia.app.data.model.InlineKind
 import cc.novelia.app.reader.TextPart
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
 
-internal class ReaderNoteSpan(val body: String) : UnderlineSpan()
+internal sealed class ReaderInlineActionSpan(val value: String, val label: String) : UnderlineSpan() {
+    fun activate(onNote: (String) -> Unit, onLink: (String) -> Unit) = when (this) {
+        is ReaderNoteSpan -> onNote(value)
+        is ReaderLinkSpan -> onLink(value)
+    }
+}
+internal class ReaderNoteSpan(body: String) : ReaderInlineActionSpan(body, "查看脚注")
+internal class ReaderLinkSpan(href: String) : ReaderInlineActionSpan(href, "跳转书内链接")
+
+internal fun Spanned.readerAccessibilityActions(start: Int, end: Int, onNote: (String) -> Unit, onLink: (String) -> Unit) =
+    getSpans(start, end, ReaderInlineActionSpan::class.java).map { span ->
+        val text = subSequence(getSpanStart(span), getSpanEnd(span))
+        CustomAccessibilityAction("${span.label} $text") { span.activate(onNote, onLink); true }
+    }
 
 /** 辅文本字号和字距都使用绝对像素，避免缩小字号时连同字距一起缩小。 */
 internal class ReaderTextSizeSpan(private val size: Float, private val spacing: Float) : MetricAffectingSpan() {
@@ -99,6 +113,7 @@ internal fun SpannableStringBuilder.addReaderInline(part: TextPart, offset: Int,
             InlineKind.Underline -> UnderlineSpan()
             InlineKind.Strike -> StrikethroughSpan()
             InlineKind.Note -> ReaderNoteSpan(mark.value)
+            InlineKind.Link -> ReaderLinkSpan(mark.value)
             InlineKind.Ruby -> {
                 if (mark.start < rubyEnd || '\n' in part.text.substring(mark.start, mark.end)) continue
                 rubyEnd = mark.end
@@ -134,14 +149,14 @@ internal fun StaticLayout.readerSelectionPath(start: Int, end: Int, path: androi
     getSelectionPath(left, right, path)
 }
 
-/** 点击必须落在注释字形的行和水平范围内，不能把行尾空白吸附到最近的脚注。 */
-internal fun StaticLayout.noteAt(x: Float, y: Float): String? {
+/** 点击必须落在链接或脚注字形的行和水平范围内。 */
+internal fun StaticLayout.inlineActionAt(x: Float, y: Float): ReaderInlineActionSpan? {
     if (y < 0 || y >= height || x < 0 || x >= width) return null
     val line = getLineForVertical(y.toInt())
     if (x < getLineLeft(line) || x > getLineRight(line)) return null
     val spans = text as? Spanned ?: return null
     val offset = getOffsetForHorizontal(line, x)
-    return spans.getSpans(maxOf(0, offset - 1), minOf(text.length, offset + 1), ReaderNoteSpan::class.java).firstOrNull { span ->
+    return spans.getSpans(maxOf(0, offset - 1), minOf(text.length, offset + 1), ReaderInlineActionSpan::class.java).firstOrNull { span ->
         val start = maxOf(spans.getSpanStart(span), getLineStart(line))
         val end = minOf(spans.getSpanEnd(span), getLineEnd(line))
         if (end <= start) false else {
@@ -151,5 +166,5 @@ internal fun StaticLayout.noteAt(x: Float, y: Float): String? {
             region.setPath(path, android.graphics.Region(0, 0, width, height))
             region.contains(x.toInt(), y.toInt())
         }
-    }?.body
+    }
 }

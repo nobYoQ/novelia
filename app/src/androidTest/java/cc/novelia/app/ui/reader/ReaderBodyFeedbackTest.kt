@@ -56,7 +56,7 @@ class ReaderBodyFeedbackTest {
                     LazyColumn(Modifier.size(327.dp, 420.dp).testTag("body").background(Color.White)
                         .readerTapFeedback(navigation, Color.Black, false).readerTapNavigation(navigation)) {
                         item {
-                            if(image) ReaderIllustration(illustration, Color.Black, navigation::click)
+                            if(image) ReaderIllustration(illustration, Color.Black, onToggleMenu = navigation::click)
                             else ReaderTextParagraph(
                                 ReadingParagraph(0, listOf(TextPart("沿着林间小路前行。".repeat(400), "gpt"))),
                                 settings, Unit, Color.Black, navigation::click, {}, null

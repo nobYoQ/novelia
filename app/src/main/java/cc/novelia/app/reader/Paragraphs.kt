@@ -9,7 +9,7 @@ import com.ibm.icu.text.Transliterator
 data class TextPart(val text: String, val source: String, val secondary: Boolean = false, val inline: List<InlineContent> = emptyList())
 /** index 保留原始段落编号；过滤空段后，它不一定等于投影结果的列表下标。 */
 data class ReadingParagraph(val index: Int, val parts: List<TextPart>, val fallback: Boolean = false, val imageUrl: String? = null, val localImageId: String? = null,
-    val replacementsSkipped: Boolean = false)
+    val replacementsSkipped: Boolean = false, val imageDescription: String? = null)
 
 private val localImageMarker = Regex("novelia-image:([a-f0-9]{64})")
 

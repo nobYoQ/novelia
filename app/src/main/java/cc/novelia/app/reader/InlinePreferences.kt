@@ -8,6 +8,7 @@ internal fun TextPart.withInlinePreferences(settings: ReaderSettings): TextPart 
     when (it.kind) {
         InlineKind.Ruby -> settings.showEpubRuby
         InlineKind.Note -> settings.epubFootnotePopup
+        InlineKind.Link -> true
         else -> settings.showEpubStyles
     }
 })

@@ -24,7 +24,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
 import cc.novelia.app.ui.components.media.RecoveringAsyncImage as AsyncImage
 import coil.request.ImageRequest
 
-@Composable internal fun ReaderIllustration(model: Any, foreground: Color, onToggleMenu: () -> Unit) {
+@Composable internal fun ReaderIllustration(model: Any, foreground: Color, description: String? = null, onToggleMenu: () -> Unit) {
     val context = LocalContext.current
     val animate = !appReducedMotion()
     var retry by remember(model) { mutableIntStateOf(0) }
@@ -40,7 +40,7 @@ import coil.request.ImageRequest
                 interactionSource = remember { MutableInteractionSource() }, indication = null,
                 onClickLabel = "显示或收起阅读工具栏", onClick = onToggleMenu,
                 onLongClickLabel = "放大查看插图", onLongClick = { expanded = true }), contentAlignment = Alignment.Center) {
-            AsyncImage(request, "小说插图", Modifier.fillMaxSize(), contentScale = ContentScale.Fit,
+            AsyncImage(request, description ?: "小说插图", Modifier.fillMaxSize(), contentScale = ContentScale.Fit,
                 onLoading = { loading = true; failed = false }, onSuccess = { loading = false; failed = false }, onError = { loading = false; failed = true })
             if(loading) { if(!animate) Text("正在加载插图…", color = foreground) else CircularProgressIndicator(Modifier.size(28.dp), color = foreground.copy(alpha = .65f), strokeWidth = 2.dp) }
             if(failed) IllustrationLoadError(model, foreground) {
@@ -48,5 +48,5 @@ import coil.request.ImageRequest
             }
         }
     }
-    if(expanded) IllustrationViewer(model) { expanded = false }
+    if(expanded) IllustrationViewer(model, description = description) { expanded = false }
 }

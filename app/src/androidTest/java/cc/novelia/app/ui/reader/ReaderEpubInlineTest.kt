@@ -105,11 +105,11 @@ class ReaderEpubInlineTest {
         val layout = measureEInkChapter(listOf(paragraph), settings, 300, 400, Density(1f), Typeface.DEFAULT).layouts.getValue(0)
         val x = (layout.getPrimaryHorizontal(2) + layout.getPrimaryHorizontal(5)) / 2
         val y = (layout.getLineTop(0) + layout.getLineBottom(0)) / 2f
-        assertEquals(note, layout.noteAt(x, y))
-        assertNull(layout.noteAt(-1f, y))
-        assertNull(layout.noteAt(299f, layout.height - 1f))
-        assertNull(layout.noteAt(x, -1f))
-        assertNull(layout.noteAt(x, layout.height + 1f))
+        assertEquals(note, (layout.inlineActionAt(x, y) as? ReaderNoteSpan)?.value)
+        assertNull(layout.inlineActionAt(-1f, y))
+        assertNull(layout.inlineActionAt(299f, layout.height - 1f))
+        assertNull(layout.inlineActionAt(x, -1f))
+        assertNull(layout.inlineActionAt(x, layout.height + 1f))
     }
 
     @Test fun bothModesOpenFootnotesWithoutTurningPagesAndLongPressStillSelects() {
@@ -194,6 +194,43 @@ class ReaderEpubInlineTest {
         visible.performTouchInput { click(point) }
         compose.onNodeWithText(note).assertIsDisplayed()
         compose.runOnIdle { assertEquals(0, turns) }
+    }
+
+    @Test fun bookLinksRespondToTapsInAllThreeReadingModes() {
+        val label = "前往下一章"
+        val href = "chapter.xhtml#section"
+        val content = ReadingParagraph(0, listOf(TextPart(label, "local", inline = listOf(InlineContent(0, label.length, InlineKind.Link, href)))))
+        val preferences = settings.copy(indent = false, indentSize = 0, epubFootnotePopup = false, showEpubStyles = false)
+        val fixed = EInkPageState(null)
+        val row = RowPagingState(null)
+        var mode by mutableStateOf("scroll")
+        val followed = mutableListOf<String>()
+        var otherTaps = 0
+        compose.setContent { AppInteractionMode(eInk = true, reducedMotion = true) { NoveliaTheme("light") {
+            CompositionLocalProvider(LocalDensity provides Density(1f)) {
+                Box(Modifier.requiredSize(300.dp, 300.dp)) {
+                    val openLink: (String) -> Unit = { followed += it }
+                    when (mode) {
+                        "auto" -> EInkPage(listOf(content), preferences, fixed, imageModel = { null },
+                            onToggleMenu = { otherTaps++ }, onSelect = {}, onPage = { otherTaps++ }, onLink = openLink)
+                        "row" -> RowPagedReader(listOf(content), preferences, row, imageModel = { null },
+                            onToggleMenu = { otherTaps++ }, onSelect = {}, onPage = { otherTaps++ }, onLink = openLink)
+                        else -> ReaderTextParagraph(content, preferences, preferences, Color.Black, { otherTaps++ }, {}, null,
+                            onLink = openLink) { _, _ -> }
+                    }
+                }
+            }
+        } } }
+        val layout = measureEInkChapter(listOf(content), preferences, 300, 300, Density(1f), Typeface.DEFAULT).layouts.getValue(0)
+        val point = Offset(layout.getPrimaryHorizontal(1), (layout.getLineTop(0) + layout.getLineBottom(0)) / 2f)
+        for (type in listOf("scroll", "auto", "row")) {
+            compose.runOnIdle { mode = type }
+            if(type == "auto") compose.waitUntil(10_000) { fixed.ready }
+            if(type == "row") compose.waitUntil(10_000) { row.ready }
+            compose.onNodeWithText(label, useUnmergedTree = true).performTouchInput { click(point) }
+            compose.runOnIdle { assertEquals(href, followed.last()); assertEquals(0, otherTaps) }
+        }
+        assertEquals(listOf(href, href, href), followed)
     }
 
     private fun capture(node: SemanticsNodeInteraction, name: String) {

@@ -55,11 +55,13 @@ import cc.novelia.app.data.chapters.ChapterOffline
 import cc.novelia.app.data.chapters.chapterFreshness
 import cc.novelia.app.data.library.nextMountedVolume
 import cc.novelia.app.data.model.BookRef
+import cc.novelia.app.data.model.EpubLinkTarget
 import cc.novelia.app.data.model.Note
 import cc.novelia.app.data.model.Position
 import cc.novelia.app.data.library.readingStatusToken
 import cc.novelia.app.data.model.ReaderBrightness
 import cc.novelia.app.data.model.ReaderStatusItems
+import cc.novelia.app.data.model.TocItem
 import cc.novelia.app.data.model.activeBrightness
 import cc.novelia.app.data.model.readingAppearance
 import cc.novelia.app.ui.theme.LocalReaderBrightness
@@ -343,11 +345,16 @@ import kotlinx.serialization.encodeToString
         }
         val position = remember(ref, chapterId) {
             val anchor = refreshAnchor
+            val epubFragment = readerEntry?.savedStateHandle?.remove<String>(READER_EPUB_FRAGMENT)
             val noteSource = readerEntry?.savedStateHandle?.remove<Int>("readerNoteSourceIndex")
             val noteAnchor = noteSource?.let { readingSourceAnchor(chapter, it) }
             val returned = readerEntry?.savedStateHandle?.remove<String>("readerRestorePosition")
                 ?.let { runCatching { appJson.decodeFromString<ReadingReturnPoint>(it).resolvedPosition(paragraphs, settings) }.getOrNull() }
-            if(noteArrivalMatch != null) Position(chapterId, noteArrivalMatch.paragraph + 1,
+            if(epubFragment != null) Position(chapterId, index = chapter.localContent?.anchors?.get(epubFragment)?.let { index ->
+                val source = readingSourceAnchor(chapter, index)
+                paragraphs.indexOfFirst { it.index >= source }.takeIf { it >= 0 }?.plus(1) ?: paragraphs.size
+            } ?: 0)
+            else if(noteArrivalMatch != null) Position(chapterId, noteArrivalMatch.paragraph + 1,
                 textOffset = noteArrivalMatch.textOffset(paragraphs[noteArrivalMatch.paragraph], settings))
             else if(noteAnchor != null) Position(chapterId,
                 paragraphs.indexOfFirst { it.index >= noteAnchor }
@@ -547,6 +554,7 @@ import kotlinx.serialization.encodeToString
                 if(target.returnPoint != null) set("readerRestorePosition", appJson.encodeToString(target.returnPoint))
                 else returnPointJson?.let { set("readerReturnPoint", it) }
                 if(target.startAtEnd) set("readerStartAtEnd", true)
+                target.epubFragment?.let { set(READER_EPUB_FRAGMENT, it) }
                 target.searchMatch?.let { match ->
                     set("readerSearchParagraph", match.paragraph)
                     set("readerSearchPart", match.part)
@@ -603,13 +611,43 @@ import kotlinx.serialization.encodeToString
         fun recordReadingInteraction() { recordReadingTimeInteraction(); recordReadingStatusInteraction() }
         LaunchedEffect(volumeKeysActive) { if(volumeKeysActive) runCatching { focus.requestFocus() } }
         fun openChapter(id: String, startAtEnd: Boolean = false, match: ReadingTextMatch? = null, inline: Boolean = false,
-            restore: ReadingReturnPoint? = null, followingSpeech: Boolean = false, automatic: Boolean = false) {
+            restore: ReadingReturnPoint? = null, followingSpeech: Boolean = false, automatic: Boolean = false, epubFragment: String? = null) {
             if(leaving || id == chapterId) return
             if(!followingSpeech && !automatic) pauseReadingAutomation()
             seekGeneration++; seekJob?.cancel(); seekTarget = null
             inlineChapterLoad = inline
-            chapterLoad.request(ReaderChapterTarget(id, startAtEnd, match, restore, automatic))
+            chapterLoad.request(ReaderChapterTarget(id, startAtEnd, match, restore, automatic, epubFragment))
         }
+        fun openEpubTarget(target: EpubLinkTarget) {
+            if(!ref.isLocal || leaving || chapterLoad.loading || positionState.restoringAnchor) return
+            if(tocState.toc?.none { it.chapterId == target.chapterId } == true) return
+            rememberReadingPlace()
+            if(target.chapterId != chapterId) {
+                openChapter(target.chapterId, epubFragment = target.fragment.orEmpty())
+                return
+            }
+            pauseReadingAutomation()
+            val source = chapter.localContent?.anchors?.get(target.fragment)?.let { readingSourceAnchor(chapter, it) }
+            val index = source?.let { anchor -> paragraphs.indexOfFirst { it.index >= anchor }.takeIf { it >= 0 } }
+            scope.launch {
+                if(settings.staticPagination) eInk.find(index ?: 0, 0, source)
+                else scroll.scrollToItem(index?.plus(1) ?: 0)
+                savePosition()
+            }
+        }
+        fun openEpubLink(href: String) {
+            chapter.localContent?.links?.get(href)?.let(::openEpubTarget)
+        }
+        fun openTocEntry(item: TocItem) {
+            val id = item.chapterId ?: return
+            val fragment = item.epubFragment
+            if(fragment != null) openEpubTarget(EpubLinkTarget(id, fragment))
+            else if(id != chapterId) {
+                rememberReadingPlace()
+                openChapter(id)
+            }
+        }
+        val tocSourceParagraph = if(ref.isLocal) paragraphs.getOrNull(firstParagraph)?.index else null
         fun returnToReadingPlace() {
             pauseReadingAutomation()
             val target = returnPoint ?: return
@@ -829,8 +867,8 @@ import kotlinx.serialization.encodeToString
                 contentColor = MaterialTheme.colorScheme.onSurface) {
                 Column {
                 AppTextButton(onClick = { setWideToc(false) }, modifier = Modifier.align(Alignment.End).testTag("reader-hide-wide-toc")) { Text("收起目录") }
-                ReaderTocPane(c, ref, tocState, { scope.launch { tocState.ensureLoaded(chapterId, knownChapterCount, refresh = true) } }, chapterId, tocScroll, tocQuery, { tocQuery = it }, tocReversed, { tocReversed = it }, tocLocateRequest, { tocLocateRequest = 0; tocLocated = true }, { if(it != chapterId) rememberReadingPlace(); openChapter(it) },
-                    includeUnlisted = epubTocIncludeUnlisted)
+                ReaderTocPane(c, ref, tocState, { scope.launch { tocState.ensureLoaded(chapterId, knownChapterCount, refresh = true) } }, chapterId, tocScroll, tocQuery, { tocQuery = it }, tocReversed, { tocReversed = it }, tocLocateRequest, { tocLocateRequest = 0; tocLocated = true }, ::openTocEntry,
+                    includeUnlisted = epubTocIncludeUnlisted, sourceParagraph = tocSourceParagraph, anchors = chapter.localContent?.anchors.orEmpty())
                 }
             }
             VerticalDivider(Modifier.fillMaxHeight())
@@ -882,7 +920,7 @@ import kotlinx.serialization.encodeToString
                     background = background, foreground = foreground, activeMatch = if(search) activeMatch else spokenMatch ?: activeMatch, annotations = annotations,
                     highlightLayers = highlightLayers,
                     interactionEnabled = bodyInputEnabled, contentPadding = PaddingValues(horizontal = settings.resolvedHorizontalMargin.dp, vertical = settings.resolvedVerticalMargin.dp), onNavigate = openToc,
-                    onNote = { pauseReadingAutomation(); epubNote = it }, chapterTitle = chapter.title,
+                    onNote = { pauseReadingAutomation(); epubNote = it }, chapterTitle = chapter.title, onLink = ::openEpubLink,
                     onSavePosition = { savePosition() }, chapterPull = chapterPull,
                     onNextChapter = chapter.nextId?.let { id -> { openChapter(id, inline = true) } }, chapterEnd = chapterEnd)
                 else EInkPage(paragraphs, settings, fixedPager, bodyModifier,
@@ -891,7 +929,8 @@ import kotlinx.serialization.encodeToString
                 background = background, foreground = foreground, activeMatch = if(search) activeMatch else spokenMatch ?: activeMatch, annotations = annotations,
                 highlightLayers = highlightLayers,
                 interactionEnabled = bodyInputEnabled, contentPadding = PaddingValues(horizontal = settings.resolvedHorizontalMargin.dp, vertical = settings.resolvedVerticalMargin.dp), onNavigate = openToc,
-                onNote = { pauseReadingAutomation(); epubNote = it }, chapterTitle = chapter.title, pageColumns = if(dualPage) 2 else 1)
+                onNote = { pauseReadingAutomation(); epubNote = it }, chapterTitle = chapter.title, onLink = ::openEpubLink,
+                pageColumns = if(dualPage) 2 else 1)
             } else LazyColumn(state = scroll, overscrollEffect = null, modifier = Modifier.testTag("reader-scroll")
                 .then(readerInteractionModifier { recordReadingInteraction(); pauseReadingAutomation() }).align(Alignment.TopCenter).fillMaxHeight()
                 .windowInsetsPadding(bodyInsets).padding(bottom = persistentBottomHeight).fillMaxWidth()
@@ -935,10 +974,11 @@ import kotlinx.serialization.encodeToString
                     val image = remember(ref, paragraph.imageUrl, paragraph.localImageId) {
                         paragraph.imageUrl ?: paragraph.localImageId?.takeIf { ref.isLocal }?.let { c.store.documentImage(ref.id, it) }
                     }
-                    if(image != null) ReaderIllustration(image, foreground, tapNavigation::click)
+                    if(image != null) ReaderIllustration(image, foreground, paragraph.imageDescription, onToggleMenu = tapNavigation::click)
                     else ReaderTextParagraph(paragraph, settings, layoutGeneration, foreground, tapNavigation::click, { selected = paragraph }, (if(search) activeMatch else spokenMatch ?: activeMatch)?.takeIf { it.paragraph == paragraphIndex }, fontFamily = readerFont.family,
                         annotations = annotations.filter { it.paragraph == paragraphIndex },
                         onNote = { if (bodyInputEnabled) { tapNavigation.cancel(); pauseReadingAutomation(); epubNote = it } },
+                        onLink = { if(bodyInputEnabled) { tapNavigation.cancel(); openEpubLink(it) } },
                         highlightLayers = highlightLayers.filter { it.match.paragraph == paragraphIndex }) { part, lines ->
                         val existing = scrollLayouts[paragraph.index] ?: ParagraphScrollLayout()
                         if(existing.parts[part] != lines) scrollLayouts[paragraph.index] = existing.copy(parts = existing.parts + (part to lines))
@@ -1067,8 +1107,8 @@ import kotlinx.serialization.encodeToString
         }
         if(toc && !wideDirectory) ReaderSheet(onDismissRequest = { toc = false }) {
             ReaderTocPane(c, ref, tocState, { scope.launch { tocState.ensureLoaded(chapterId, knownChapterCount, refresh = true) } }, chapterId, tocScroll, tocQuery, { tocQuery = it }, tocReversed, { tocReversed = it }, tocLocateRequest, { tocLocateRequest = 0; tocLocated = true },
-                { id -> if(id != chapterId) rememberReadingPlace(); toc = false; openChapter(id) }, Modifier.fillMaxHeight(.8f),
-                includeUnlisted = epubTocIncludeUnlisted)
+                { item -> toc = false; openTocEntry(item) }, Modifier.fillMaxHeight(.8f),
+                includeUnlisted = epubTocIncludeUnlisted, sourceParagraph = tocSourceParagraph, anchors = chapter.localContent?.anchors.orEmpty())
         }
         if(autoReadSheet) ReaderAutoReadSheet(storedSettings, settings.staticPagination || eInkInteraction,
             onDismiss = { autoReadSheet = false }, onSettings = { value ->

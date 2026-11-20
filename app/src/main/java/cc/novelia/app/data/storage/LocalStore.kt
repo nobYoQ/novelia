@@ -519,6 +519,9 @@ private fun paragraphsWeight(paragraphs: List<String>?): Long = paragraphs?.sumO
 private fun localContentWeight(content: LocalReadingContent?): Long = if (content == null) 0 else
     64L + content.inline.values.sumOf { marks -> 32L + marks.sumOf { 48L + textWeight(it.value) } } +
     content.notes.entries.sumOf { 48L + textWeight(it.key) + textWeight(it.value) } +
+    content.links.entries.sumOf { 72L + textWeight(it.key) + textWeight(it.value.chapterId) + textWeight(it.value.fragment) } +
+    content.anchors.keys.sumOf { 48L + textWeight(it) } +
+    content.imageDescriptions.values.sumOf { 48L + textWeight(it) } +
     content.secondary.size * 24L + content.groups.sumOf { group ->
         96L + group.original.size * 24L + group.translations.sumOf { 32L + it.size * 24L }
     }
@@ -528,4 +531,6 @@ private fun chapterWeight(chapter: Chapter): Long = 128 + textWeight(chapter.tit
     paragraphsWeight(chapter.gptParagraphs) + paragraphsWeight(chapter.sakuraParagraphs) + localContentWeight(chapter.localContent)
 private fun documentWeight(document: LocalDocument): Long = 128 + textWeight(document.name) +
     document.chapters.sumOf { 64 + textWeight(it.id) + textWeight(it.title) + paragraphsWeight(it.paragraphs) + localContentWeight(it.readingContent) } +
-    document.chapterFiles.entries.sumOf { 64 + textWeight(it.key) + textWeight(it.value) }
+    document.chapterFiles.entries.sumOf { 64 + textWeight(it.key) + textWeight(it.value) } +
+    document.epubNavigationIds.sumOf { textWeight(it) } +
+    document.epubNavigation.sumOf { 64 + textWeight(it.title) + textWeight(it.target?.chapterId) + textWeight(it.target?.fragment) }

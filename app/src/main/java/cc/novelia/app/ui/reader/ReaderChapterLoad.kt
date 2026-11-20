@@ -13,6 +13,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 
+internal const val READER_EPUB_FRAGMENT = "readerEpubFragment"
+
 /**
  * 一次跨章意图：普通跳转到章首，向前翻章可到末页，全书搜索可携带精确命中位置。
  * 目标与加载任务一起保存，重试继续使用同一意图。
@@ -22,7 +24,8 @@ internal data class ReaderChapterTarget(
     val startAtEnd: Boolean = false,
     val searchMatch: ReadingTextMatch? = null,
     val returnPoint: ReadingReturnPoint? = null,
-    val automatic: Boolean = false
+    val automatic: Boolean = false,
+    val epubFragment: String? = null,
 )
 
 /**

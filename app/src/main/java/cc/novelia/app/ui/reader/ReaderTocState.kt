@@ -15,9 +15,9 @@ internal class ReaderTocState(private val load: suspend (forceNetwork: Boolean) 
     private var snapshot by mutableStateOf<ReaderTocSnapshot?>(null)
     val toc get() = snapshot?.readingOrder
     val navigation get() = snapshot?.navigation
-    val hasUnlistedEntries get() = snapshot?.let { it.readingOrder.size > it.navigation.size } == true
+    val hasUnlistedEntries get() = snapshot?.hasUnlistedEntries == true
 
-    fun visibleNavigation(includeUnlisted: Boolean) = if(includeUnlisted) toc else navigation
+    fun visibleNavigation(includeUnlisted: Boolean) = if(includeUnlisted) snapshot?.withUnlisted else navigation
 
     var loading by mutableStateOf(false)
         private set
@@ -62,4 +62,12 @@ internal class ReaderTocState(private val load: suspend (forceNetwork: Boolean) 
     }
 }
 
-internal data class ReaderTocSnapshot(val readingOrder: List<TocItem>, val navigation: List<TocItem> = readingOrder)
+internal data class ReaderTocSnapshot(
+    val readingOrder: List<TocItem>,
+    val navigation: List<TocItem> = readingOrder,
+    val withUnlisted: List<TocItem> = readingOrder,
+) {
+    val hasUnlistedEntries = navigation !== readingOrder && navigation.mapNotNullTo(hashSetOf()) { it.chapterId }.let { listed ->
+        readingOrder.any { it.chapterId != null && it.chapterId !in listed }
+    }
+}

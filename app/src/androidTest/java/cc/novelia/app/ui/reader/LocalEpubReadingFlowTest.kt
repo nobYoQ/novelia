@@ -35,12 +35,17 @@ class LocalEpubReadingFlowTest {
         override fun getCacheDir() = File(root, "cache").apply { mkdirs() }
     }
 
-    private fun epub(body: String = "<p style='opacity:0.4;'>日本語</p><p>中文</p><p style='opacity:0.4;'>次の段</p><p>下一段</p>") = ByteArrayOutputStream().also { output -> ZipOutputStream(output).use { zip ->
-        mapOf(
+    private fun epub(body: String = "<p style='opacity:0.4;'>日本語</p><p>中文</p><p style='opacity:0.4;'>次の段</p><p>下一段</p>",
+        nav: String? = null, repeatSpine: Boolean = false) = ByteArrayOutputStream().also { output -> ZipOutputStream(output).use { zip ->
+        val navigation = if (nav == null) "" else "<item id='nav' href='nav.xhtml' properties='nav' media-type='application/xhtml+xml'/>"
+        val repeated = if (repeatSpine) "<itemref idref='c'/>" else ""
+        val files = mutableMapOf(
             "META-INF/container.xml" to "<container><rootfile full-path='book.opf'/></container>",
-            "book.opf" to "<package><manifest><item id='c' href='c.xhtml'/></manifest><spine><itemref idref='c'/></spine></package>",
+            "book.opf" to "<package><manifest><item id='c' href='c.xhtml'/>$navigation</manifest><spine><itemref idref='c'/>$repeated</spine></package>",
             "c.xhtml" to "<html><body>$body</body></html>",
-        ).forEach { (name, text) -> zip.putNextEntry(ZipEntry(name)); zip.write(text.toByteArray(Charsets.UTF_8)); zip.closeEntry() }
+        )
+        if (nav != null) files["nav.xhtml"] = "<html><body><nav epub:type='toc'>$nav</nav></body></html>"
+        files.forEach { (name, text) -> zip.putNextEntry(ZipEntry(name)); zip.write(text.toByteArray(Charsets.UTF_8)); zip.closeEntry() }
     } }.toByteArray()
 
     private fun entry() = DownloadEntry("download", "第一卷", "download.epub", "https://example.test/file?mode=jp-zh",
@@ -130,10 +135,13 @@ class LocalEpubReadingFlowTest {
 
     @Test fun legacyChapterTitleIsUpdatedOnOpeningTheTocWithoutMovingProgressOrNotes() = runBlocking {
         withContext(Dispatchers.IO) { fixture { context, store ->
-            val bytes = epub("<h1>第一章</h1><p>这一段有阅读进度和笔记。</p>")
+            val bytes = epub("<h1 id='first'>第一章</h1><p id='second'>这一段有阅读进度和笔记。</p>",
+                nav = """<ol><li><span>上卷</span><ol><li><a href="c.xhtml#first">第一章</a></li>
+                    <li><a href="c.xhtml#second">小节</a></li></ol></li></ol>""")
             val parsed = DocumentTools.parse("卷.epub", bytes)
             val original = parsed.chapters.single()
-            val old = parsed.copy(id = "old-titles", epubTitleVersion = 0, chapters = listOf(original.copy(title = "卷名")))
+            val old = parsed.copy(id = "old-titles", epubTitleVersion = 2, epubNavigation = emptyList(),
+                chapters = listOf(original.copy(title = "卷名", epubContentVersion = 4)))
             store.saveDocument(old)
             store.documentSource(old.id, "epub").writeBytes(bytes)
             val key = BookRef("local", old.id).key
@@ -141,15 +149,36 @@ class LocalEpubReadingFlowTest {
             val note = Note("note", key, "c", 1, "阅读进度", "保留这条笔记", selection = NoteSelection("原文", start = 4, end = 8))
             store.update { it.copy(positions = mapOf(key to position), notes = listOf(note)) }
 
-            assertEquals("第一章", store.documentIndex(old.id).chapters.single().title)
+            val index = store.documentIndex(old.id)
+            assertEquals("第一章", index.chapters.single().title)
+            assertEquals(listOf("上卷", "第一章", "小节"), index.navigationToc().map { it.title })
+            assertEquals(listOf(null, "first", "second"), index.navigationToc().map { it.epubFragment })
             assertEquals(original, store.documentChapter(old.id, "c"))
             store.flush()
 
             val reopened = LocalStore(context)
             assertEquals("第一章", reopened.documentIndex(old.id).chapters.single().title)
+            assertEquals(index.epubNavigation, reopened.documentIndex(old.id).epubNavigation)
             assertEquals(original, reopened.documentChapter(old.id, "c"))
             assertEquals(position, reopened.state.value.positions[key])
             assertEquals(listOf(note), reopened.state.value.notes)
+        } }
+    }
+
+    @Test fun repeatedSpineOccurrencesAreStoredAndCanBeAnnotatedSeparately() = runBlocking {
+        withContext(Dispatchers.IO) { fixture { context, store ->
+            val source = File(context.cacheDir, "重复章节.epub").apply { writeBytes(epub("<p>重复正文</p>", repeatSpine = true)) }
+            val ref = importLocalDocument(store, source).ref
+            val chapters = store.documentIndex(ref.id).chapters.map { it.id }
+            assertEquals(listOf("c", "c~2"), chapters)
+            val notes = chapters.map { chapter -> Note("note-$chapter", ref.key, chapter, 0, "重复正文", chapter) }
+            val position = Position(chapters.last(), index = 1, sourceParagraph = 0)
+            store.update { it.copy(notes = notes, positions = mapOf(ref.key to position)) }
+            store.flush()
+            val reopened = LocalStore(context)
+            assertEquals(position, reopened.state.value.positions[ref.key])
+            assertEquals(notes, reopened.state.value.notes)
+            assertEquals(listOf("重复正文"), reopened.documentChapter(ref.id, chapters.last()).paragraphs)
         } }
     }
 

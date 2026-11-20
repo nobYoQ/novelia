@@ -20,14 +20,18 @@ import androidx.navigation.compose.rememberNavController
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.NoveliaApplication
 import cc.novelia.app.data.model.BookRef
+import cc.novelia.app.data.model.EpubLinkTarget
+import cc.novelia.app.data.model.EpubNavigationEntry
 import cc.novelia.app.data.model.LocalChapter
 import cc.novelia.app.data.model.LocalDocument
+import cc.novelia.app.data.model.LocalReadingContent
 import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.data.model.toReaderChapter
 import cc.novelia.app.reader.ReadAloudService
 import cc.novelia.app.reader.SpeechPlayback
 import cc.novelia.app.reader.speechSegments
 import cc.novelia.app.ui.saveTestScreenshot
+import cc.novelia.app.ui.book.BookScreen
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.reader.ReaderScreen
 import cc.novelia.app.ui.theme.AppInteractionMode
@@ -491,6 +495,50 @@ class ReaderAdaptiveUiTest {
         compose.onNodeWithTag("reader-toc-chapter-second").assertIsDisplayed()
     }
 
+    @Test fun epubDirectoryJumpsToDistinctAnchorsInTheReaderAndBookDetails() {
+        fun body(id: String, title: String, anchors: Map<String, Int>) = LocalChapter(id, title,
+            List(32) { index -> "$title 正文第 ${index + 1} 段。".repeat(18) },
+            LocalReadingContent(anchors = anchors))
+        val document = LocalDocument("epub-toc-anchors-test", "目录锚点测试", "epub", listOf(
+            body("first", "第一章", mapOf("one" to 0, "two" to 12)),
+            body("second", "第二章", mapOf("three" to 9)),
+        ), epubNavigation = listOf(
+            EpubNavigationEntry("第一部", null, 0),
+            EpubNavigationEntry("小节一", EpubLinkTarget("first", "one"), 1),
+            EpubNavigationEntry("小节二", EpubLinkTarget("first", "two"), 1),
+            EpubNavigationEntry("小节三", EpubLinkTarget("second", "three"), 1),
+        ))
+        lateinit var controller: AppController
+        withReader(390.dp, onController = { controller = it }, document = document) { app, ref, _ ->
+            fun awaitAnchor(chapter: String, source: Int) {
+                compose.waitUntil(10_000) {
+                    app.store.state.value.positions[ref.key]?.let { it.chapterId == chapter && it.sourceParagraph == source } == true
+                }
+            }
+            fun openReaderDirectory() = compose.onNodeWithText("目录", substring = true).performClick()
+            fun openSection(title: String) {
+                val row = hasText(title) and hasClickAction()
+                compose.waitUntil(10_000) { compose.onAllNodes(row).fetchSemanticsNodes().isNotEmpty() }
+                compose.onNode(row).performClick()
+            }
+            openReaderDirectory()
+            compose.waitUntil(10_000) { compose.onAllNodesWithTag("reader-toc-list").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNode(hasScrollToIndexAction() and hasAnyAncestor(hasTestTag("reader-toc-list"))).performScrollToIndex(0)
+            compose.onNodeWithText("第一部").assertIsDisplayed()
+            openSection("小节二")
+            awaitAnchor("first", 12)
+            openReaderDirectory()
+            compose.onNode(hasText("小节二") and hasClickAction()).assertIsSelected()
+            openSection("小节三")
+            awaitAnchor("second", 9)
+            compose.runOnIdle { controller.showBookDetails(ref) }
+            compose.waitUntil(10_000) { compose.onAllNodesWithText("目录 4").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("目录 4").performClick()
+            openSection("小节二")
+            awaitAnchor("first", 12)
+        }
+    }
+
     @Test fun failedEndPullPreservesTheChapterAndRetriesAfterTheFileRecovers() = verifyFailedPull(eInk = false)
 
     @Test fun eInkFailedEndPullCanBeDismissedAndRetriedWithoutLosingText() = verifyFailedPull(eInk = true)
@@ -533,15 +581,16 @@ class ReaderAdaptiveUiTest {
     private fun scrollPosition(): Float = compose.onNodeWithTag("reader-scroll").fetchSemanticsNode()
         .config[SemanticsProperties.VerticalScrollAxisRange].value()
 
-    private fun withReader(initialWidth: Dp, eInk: Boolean = false, initialChapter: String = "first", onController: (AppController) -> Unit = {}, block: (NoveliaApplication, BookRef, (Dp) -> Unit) -> Unit) {
+    private fun withReader(initialWidth: Dp, eInk: Boolean = false, initialChapter: String = "first", onController: (AppController) -> Unit = {},
+        document: LocalDocument? = null, block: (NoveliaApplication, BookRef, (Dp) -> Unit) -> Unit) {
         val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
         runBlocking { app.initialization.await() }
         val previous = app.store.state.value
-        val ref = BookRef("local", "adaptive-reader-regression")
+        val ref = BookRef("local", document?.id ?: "adaptive-reader-regression")
         var width by mutableStateOf(initialWidth)
         lateinit var controller: AppController
         try {
-            app.store.saveDocument(LocalDocument(ref.id, "阅读布局测试", "txt", listOf(
+            app.store.saveDocument(document ?: LocalDocument(ref.id, "阅读布局测试", "txt", listOf(
                 LocalChapter("first", "第一章 林间", List(12) { paragraph -> "第${paragraph + 1}段，沿着森林小路走向远处的小镇。".repeat(80) }),
                 LocalChapter("second", "第二章 归途", listOf("恢复后的下一章正文。"))
             ) + (3..100).map { LocalChapter("extra-$it", "续章 $it", listOf("续章正文 $it")) }))
@@ -557,6 +606,9 @@ class ReaderAdaptiveUiTest {
                         Box(Modifier.fillMaxSize().wrapContentWidth(Alignment.Start, unbounded = true).requiredWidth(width)) {
                             NavHost(nav, startDestination = "home") {
                                 composable("home") { Text("测试书架") }
+                                composable("book/{provider}/{id}") { entry ->
+                                    BookScreen(controller, BookRef(entry.arguments?.getString("provider").orEmpty(), entry.arguments?.getString("id").orEmpty()))
+                                }
                                 composable("reader/{provider}/{book}/{chapter}") { entry ->
                                     ReaderScreen(controller, BookRef(entry.arguments?.getString("provider").orEmpty(), entry.arguments?.getString("book").orEmpty()), entry.arguments?.getString("chapter").orEmpty())
                                 }

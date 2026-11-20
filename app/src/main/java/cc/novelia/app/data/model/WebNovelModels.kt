@@ -14,7 +14,8 @@ import kotlinx.serialization.Serializable
         ?.let { CloudReadingProgress(it, lastReadAt = lastReadAt) })
 }
 
-@Serializable data class TocItem(val titleJp: String = "", val titleZh: String? = null, val chapterId: String? = null, val createAt: Long? = null) {
+@Serializable data class TocItem(val titleJp: String = "", val titleZh: String? = null, val chapterId: String? = null,
+    val createAt: Long? = null, val depth: Int = 0, val epubFragment: String? = null) {
     val title get() = titleZh?.takeIf { it.isNotBlank() } ?: titleJp
 }
 

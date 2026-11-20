@@ -64,10 +64,44 @@ class EpubInlineTest {
         assertEquals(chapter, DocumentTools.parseFile("book.epub", file, { _, _ -> }).chapters.single())
         assertEquals(mapOf("OPS/notes.xhtml#n 1" to "跨文件注释", "OPS/c.xhtml#local" to "本章说明"), chapter.readingContent.notes)
         assertEquals(listOf("[1]", "[2]"), marked(chapter, InlineKind.Note).map { it.first })
+        assertEquals(listOf("普通链接" to "#ordinary"), marked(chapter, InlineKind.Link))
+        assertEquals(EpubLinkTarget("c", "ordinary"), chapter.readingContent.links["#ordinary"])
+        assertEquals(2, chapter.readingContent.anchors["ordinary"])
         assertEquals(listOf("本章说明", "正文"), chapter.paragraphs.drop(1))
         assertEquals(chapter, appJson.decodeFromString<LocalChapter>(appJson.encodeToString(chapter)))
         val legacy = chapter.copy(readingContent = LocalReadingContent(), epubContentVersion = 2)
         assertEquals(chapter, recoverEpubChapter(file, legacy, null))
+    }
+
+    @Test fun epubDirectoryLinksKeepRelativeAndFragmentTargetsWithoutMakingExternalLinksClickable() {
+        val output = ByteArrayOutputStream()
+        ZipOutputStream(output).use { zip ->
+            mapOf(
+                "META-INF/container.xml" to "<container><rootfile full-path='OPS/book.opf'/></container>",
+                "OPS/book.opf" to """<package><manifest><item id="contents" href="nav/contents.xhtml" properties="nav"/>
+                    <item id="chapter" href="text/%E7%AB%A0.xhtml"/></manifest>
+                    <spine><itemref idref="contents"/><itemref idref="chapter"/></spine></package>""",
+                "OPS/nav/contents.xhtml" to """<nav epub:type="toc"><ol>
+                    <li><a href="../text/章.xhtml">章首</a></li>
+                    <li><a href="../text/%E7%AB%A0.xhtml#%E5%B0%8F%E8%8A%82">小节</a></li>
+                    <li><a href="https://example.test/#local">网页</a></li>
+                    <li><a href="../../../outside.xhtml">缺失</a></li>
+                    </ol></nav>""",
+                "OPS/text/章.xhtml" to "<p>前文</p><a name='小节'></a><p>目标段</p>",
+            ).forEach { (path, html) ->
+                zip.putNextEntry(ZipEntry(path)); zip.write(html.toByteArray(Charsets.UTF_8)); zip.closeEntry()
+            }
+        }
+        val bytes = output.toByteArray()
+        val file = folder.newFile("links.epub").apply { writeBytes(bytes) }
+        val disk = DocumentTools.parseFile("links.epub", file, { _, _ -> })
+        val contents = disk.chapters.first()
+        assertEquals(listOf("contents", "chapter"), disk.chapters.map { it.id })
+        assertEquals(listOf("章首", "小节", "网页", "缺失"), contents.paragraphs)
+        assertEquals(listOf("章首", "小节"), marked(contents, InlineKind.Link).map { it.first })
+        assertEquals(listOf(EpubLinkTarget("chapter"), EpubLinkTarget("chapter", "小节")), contents.readingContent.links.values.toList())
+        assertEquals(1, disk.chapters.last().readingContent.anchors["小节"])
+        assertEquals(disk.chapters, DocumentTools.parse("links.epub", bytes).chapters)
     }
 
     @Test fun nestedStylesAndPreformattedOffsetsRemainAttached() {

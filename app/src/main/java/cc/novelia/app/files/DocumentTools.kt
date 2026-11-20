@@ -13,12 +13,12 @@ import cc.novelia.app.files.epub.EPUB_TITLE_VERSION
 import cc.novelia.app.files.epub.EpubContents
 import cc.novelia.app.files.epub.EpubNotes
 import cc.novelia.app.files.epub.MAX_EPUB_XML_BYTES
+import cc.novelia.app.files.epub.chapterIds
 import cc.novelia.app.files.epub.decodeEpubXml
 import cc.novelia.app.files.epub.normalizeEpubPath
-import cc.novelia.app.files.epub.parseEpubChapter
+import cc.novelia.app.files.epub.readEpubContents
 import cc.novelia.app.files.epub.readEpubFile
 import cc.novelia.app.files.epub.readEpubPackage
-import cc.novelia.app.files.epub.resolveEpubResource
 
 /**
  * EPUB、TXT、SRT 的解析与转换工具，统一限制输入大小和压缩内容展开体积。
@@ -73,7 +73,7 @@ object DocumentTools {
         return LocalDocument(UUID.randomUUID().toString(), name.substringBeforeLast('.'), extension, contents.chapters,
             coverImage = contents.cover, sourceHash = sourceHash ?: file.inputStream().use { digest(it, checkCancelled = checkCancelled) },
             downloadMode = downloadMode, epubTitleVersion = if (extension == "epub") EPUB_TITLE_VERSION else 0,
-            epubNavigationIds = contents.navigationIds)
+            epubNavigationIds = contents.navigation.chapterIds(), epubNavigation = contents.navigation)
     }
     fun parse(name: String, bytes: ByteArray, downloadMode: String? = null): LocalDocument {
         require(bytes.size <= MAX_INPUT) { "文件超过 64 MB，请先拆分" }
@@ -87,7 +87,8 @@ object DocumentTools {
         require(contents.chapters.any { it.paragraphs.any(String::isNotBlank) }) { "文件没有可读取的正文" }
         return LocalDocument(UUID.randomUUID().toString(), name.substringBeforeLast('.'), extension, contents.chapters,
             images = images, coverImage = contents.cover, sourceHash = digest(bytes), downloadMode = downloadMode,
-            epubTitleVersion = if (extension == "epub") EPUB_TITLE_VERSION else 0, epubNavigationIds = contents.navigationIds)
+            epubTitleVersion = if (extension == "epub") EPUB_TITLE_VERSION else 0,
+            epubNavigationIds = contents.navigation.chapterIds(), epubNavigation = contents.navigation)
     }
     /** 优先按 BOM 判断 UTF-16，否则严格尝试 UTF-8；解码失败再回退 GB18030，最后移除 BOM。 */
     fun decodeText(bytes: ByteArray): String {
@@ -147,24 +148,18 @@ object DocumentTools {
     private fun digest(bytes: ByteArray) = java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
     private fun readEpub(bytes: ByteArray, images: MutableMap<String, String>, downloadMode: String? = null): EpubContents {
         val files = unzip(bytes)
-        fun text(path: String) = files[path]?.let(::decodeEpubXml)
+        fun text(path: String) = files[path]?.let {
+            require(it.size <= MAX_EPUB_XML_BYTES) { "EPUB 单个正文或目录文件过大，请先拆分" }
+            decodeEpubXml(it)
+        }
         fun limitedText(path: String) = files[path]?.takeIf { it.size <= MAX_EPUB_XML_BYTES }?.let(::decodeEpubXml)
-        val book = readEpubPackage(::text, ::limitedText)
+        val book = readEpubPackage(::text, ::limitedText, files::containsKey)
         fun image(path: String?): String? {
             val content = files[path] ?: return null
             if(content.size > 16 * 1024 * 1024) return null
             val hash = digest(content); images[hash] = java.util.Base64.getEncoder().encodeToString(content); return hash
         }
-        val cover = image(book.coverPath)
-        val notes = EpubNotes(::limitedText)
-        val chapters = book.spine.mapNotNull { (id, path) ->
-            val html = text(path) ?: return@mapNotNull null
-            parseEpubChapter(id, html, downloadMode,
-                image = { source -> image(resolveEpubResource(path.substringBeforeLast('/', ""), source)) },
-                note = { href, explicit -> notes.resolve(path, href, explicit) },
-                chapterTitle = { book.chapterTitle(path, it) })
-        }
-        return EpubContents(chapters, cover, book.navigationIds(chapters.mapTo(hashSetOf()) { it.id }))
+        return readEpubContents(book, ::text, ::image, EpubNotes(::limitedText), downloadMode)
     }
     fun epubToTxt(bytes: ByteArray) = parseEpub(bytes).joinToString("\n\n") { it.title + "\n\n" + it.paragraphs.filterNot { p -> p.startsWith("novelia-image:") }.joinToString("\n\n") }
     fun repairOcr(text: String, checkCancelled: () -> Unit = {}): String = buildString(text.length) {

@@ -72,7 +72,7 @@ private class RowMeasurement(val input: RowMeasureInput, val chapter: MeasuredEI
     activeMatch: ReadingTextMatch? = null, annotations: List<ReadingTextMatch> = emptyList(),
     highlightLayers: List<ReaderHighlightLayer> = listOfNotNull(activeMatch?.let { ReaderHighlightLayer(it, 1f) }),
     interactionEnabled: Boolean = true, contentPadding: PaddingValues = PaddingValues(0.dp),
-    onNavigate: () -> Unit = {}, onNote: (String) -> Unit = {}, chapterTitle: String = "",
+    onNavigate: () -> Unit = {}, onNote: (String) -> Unit = {}, chapterTitle: String = "", onLink: (String) -> Unit = {},
     onSavePosition: () -> Unit = {},
     chapterPull: ReaderChapterOverscrollGesture = rememberReaderChapterOverscrollGesture(),
     onNextChapter: (() -> Unit)? = null, chapterEnd: (@Composable () -> Unit)? = null,
@@ -81,7 +81,7 @@ private class RowMeasurement(val input: RowMeasureInput, val chapter: MeasuredEI
     val layoutDirection = LocalLayoutDirection.current
     val context = LocalContext.current
     val font = rememberReaderFont(settings)
-    var expandedImage by remember { mutableStateOf<Any?>(null) }
+    var expandedImage by remember { mutableStateOf<Pair<Any, String?>?>(null) }
     val animate = !settings.eInkMode && !LocalEInkMode.current && !LocalReducedMotion.current && ValueAnimator.areAnimatorsEnabled()
     val canInteract = interactionEnabled && expandedImage == null
     val chapterPullOffset = rememberReaderChapterPullOffset(chapterPull, settings.eInkMode || LocalEInkMode.current)
@@ -323,8 +323,9 @@ private class RowMeasurement(val input: RowMeasureInput, val chapter: MeasuredEI
                     Box(Modifier.fillMaxSize().graphicsLayer { translationX = x }.background(background).clipToBounds()) {
                         PageBody(slice, chapter, settings, foreground, highlightLayers, annotations, density, context,
                             navigation, { if(canInteract) { navigation.cancel(); onSelect(it) } }, imageModel,
-                            { if(canInteract) { navigation.cancel(); expandedImage = it } }, height,
+                            { model, label -> if(canInteract) { navigation.cancel(); expandedImage = model to label } }, height,
                             { if(canInteract) { navigation.cancel(); onNote(it) } },
+                            { if(canInteract) { navigation.cancel(); onLink(it) } },
                             Modifier.fillMaxWidth().wrapContentHeight(Alignment.Top, unbounded = true).graphicsLayer {
                                 translationY = y
                                 compositingStrategy = if (fadingPartialLine && background == Color.Transparent)
@@ -358,5 +359,5 @@ private class RowMeasurement(val input: RowMeasureInput, val chapter: MeasuredEI
             }
         }
     }
-    expandedImage?.let { IllustrationViewer(it) { expandedImage = null } }
+    expandedImage?.let { (model, description) -> IllustrationViewer(model, description = description) { expandedImage = null } }
 }

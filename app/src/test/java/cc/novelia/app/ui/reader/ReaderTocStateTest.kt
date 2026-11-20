@@ -144,4 +144,20 @@ class ReaderTocStateTest {
         assertEquals("continuation", navigationChapterId(readingOrder, state.visibleNavigation(true).orEmpty(), "continuation"))
         assertEquals("first", navigationChapterId(readingOrder, navigation, "continuation"))
     }
+
+    @Test fun severalAnchoredEntriesInOneChapterDoNotHideTheUnlistedChapterPreference() = runTest {
+        val chapter = TocItem("正文", chapterId = "main")
+        val illustration = TocItem("第 2 节", chapterId = "illustration")
+        val readingOrder = listOf(chapter, illustration)
+        val navigation = listOf(TocItem("第一部"),
+            chapter.copy(titleJp = "第一节", depth = 1, epubFragment = "one"),
+            chapter.copy(titleJp = "第二节", depth = 1, epubFragment = "two"))
+        val withUnlisted = navigation + illustration
+        val state = ReaderTocState { ReaderTocSnapshot(readingOrder, navigation, withUnlisted) }
+        state.ensureLoaded("main", 2)
+        assertTrue(state.hasUnlistedEntries)
+        assertEquals(navigation, state.visibleNavigation(false))
+        assertEquals(withUnlisted, state.visibleNavigation(true))
+        assertEquals(readingOrder, state.toc)
+    }
 }

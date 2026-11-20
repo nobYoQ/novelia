@@ -43,7 +43,7 @@ import kotlin.math.roundToInt
 import cc.novelia.app.ui.components.base.AppDialog
 
 @Composable
-internal fun IllustrationViewer(model: Any, imageLabel: String = "插图", onDismiss: () -> Unit) {
+internal fun IllustrationViewer(model: Any, imageLabel: String = "插图", description: String? = null, onDismiss: () -> Unit) {
     val context = LocalContext.current
     var retry by remember(model) { mutableIntStateOf(0) }
     // 限制图片解码内存，同时保留查看插图所需的分辨率。
@@ -94,7 +94,7 @@ internal fun IllustrationViewer(model: Any, imageLabel: String = "插图", onDis
                         })
                     }, contentAlignment = Alignment.Center) {
                     // Coil 将等价请求视为同一模型，重试需创建新的 painter。
-                    key(retry) { AsyncImage(request, "放大的小说${imageLabel}", Modifier.fillMaxSize().graphicsLayer {
+                    key(retry) { AsyncImage(request, description ?: "放大的小说${imageLabel}", Modifier.fillMaxSize().graphicsLayer {
                         scaleX = transform.scale; scaleY = transform.scale
                         translationX = transform.offset.x; translationY = transform.offset.y
                     }, contentScale = ContentScale.Fit,

@@ -1,6 +1,7 @@
 package cc.novelia.app.files.epub
 
 import cc.novelia.app.data.model.LocalChapter
+import cc.novelia.app.data.model.EpubNavigationEntry
 import cc.novelia.app.files.DocumentTools
 import java.io.File
 import java.io.FilterInputStream
@@ -8,9 +9,17 @@ import java.io.InputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 
-internal data class EpubContents(val chapters: List<LocalChapter>, val cover: String?, val navigationIds: List<String> = emptyList())
+internal data class EpubContents(
+    val chapters: List<LocalChapter>,
+    val cover: String?,
+    val navigation: List<EpubNavigationEntry> = emptyList(),
+)
 
-internal data class EpubDirectory(val titles: Map<String, String>, val navigationIds: List<String>)
+internal data class EpubDirectory(val titles: Map<String, String>, val navigation: List<EpubNavigationEntry>)
+
+internal fun List<EpubNavigationEntry>.chapterIds() = mapNotNull { it.target?.chapterId }.distinct()
+
+private const val UNAVAILABLE_CHAPTER = "无法显示此 EPUB 章节"
 
 /**
  * 按 EPUB OPF 的 spine 顺序读取正文；ZIP 随机访问使内存中只需保留当前 XHTML 的解析树。
@@ -24,30 +33,51 @@ internal fun readEpubFile(
     checkCancelled: () -> Unit = {},
     downloadMode: String? = null,
     chapterId: String? = null,
+    preserveLegacyBody: Boolean = false,
 ): EpubContents = ZipFile(file).use { zip ->
     val archive = EpubArchive(zip, checkCancelled)
-    val book = readEpubPackage(archive::text, archive::navigationText, checkCancelled)
+    val book = readEpubPackage(archive::text, archive::navigationText, archive::contains, checkCancelled)
     val imageHashes = mutableMapOf<String, String?>()
     fun image(path: String?): String? {
         if (path == null || imageSink == null) return null
         return imageHashes.getOrPut(path) { archive.image(path, imageSink) }
     }
+    readEpubContents(book, archive::text, ::image, EpubNotes(archive::text, checkCancelled), downloadMode, checkCancelled, chapterId, preserveLegacyBody)
+}
+
+internal fun readEpubContents(
+    book: EpubPackage,
+    text: (String) -> String?,
+    image: (String?) -> String?,
+    notes: EpubNotes,
+    downloadMode: String?,
+    checkCancelled: () -> Unit = {},
+    chapterId: String? = null,
+    preserveLegacyBody: Boolean = false,
+): EpubContents {
     val cover = if (chapterId == null) image(book.coverPath) else null
     var textCharacters = 0L
-    val notes = EpubNotes(archive::text, checkCancelled)
     val chapters = book.spine.mapNotNull { item ->
         checkCancelled()
         if (chapterId != null && item.id != chapterId) return@mapNotNull null
-        val html = archive.text(item.path) ?: return@mapNotNull null
+        val path = item.contentPath
+        val html = path?.let(text)
+        if (path == null || html == null) {
+            return@mapNotNull LocalChapter(item.id, book.tocTitle(item) ?: UNAVAILABLE_CHAPTER,
+                listOf("此章节使用当前阅读器无法打开的资源，且没有可读取的替代内容。"),
+                epubContentVersion = EPUB_CONTENT_VERSION, downloadMode = downloadMode)
+        }
+        val directory = path.substringBeforeLast('/', "")
         parseEpubChapter(item.id, html, downloadMode,
-            image = { source -> image(resolveEpubResource(item.path.substringBeforeLast('/', ""), source)) },
+            image = { source -> image(resolveEpubResource(directory, source)) },
             checkCancelled = checkCancelled, onText = { paragraph ->
                 textCharacters += paragraph.length
                 require(textCharacters <= 16 * 1024 * 1024) { "EPUB 正文过长，请先拆分" }
-            }, note = { href, explicit -> notes.resolve(item.path, href, explicit) },
-            chapterTitle = { book.chapterTitle(item.path, it) })
+            }, note = { href, explicit -> notes.resolve(path, href, explicit) },
+            chapterTitle = { book.chapterTitle(item, it) }, link = { book.linkTarget(path, it, item.sourcePath ?: path) },
+            preserveLegacyBody = preserveLegacyBody)
     }
-    EpubContents(chapters, cover, book.navigationIds(chapters.mapTo(hashSetOf()) { it.id }))
+    return EpubContents(chapters, cover, book.navigation(chapters.mapTo(hashSetOf()) { it.id }))
 }
 
 /** 更新旧目录时只匹配原章节 ID，无需重新提取正文、注音或图片。 */
@@ -55,15 +85,17 @@ internal fun readEpubDirectory(file: File, chapterIds: Set<String>): EpubDirecto
     DocumentTools.requireImportSize(file.length())
     return ZipFile(file).use { zip ->
         val archive = EpubArchive(zip) {}
-        val book = readEpubPackage(archive::text, archive::navigationText)
+        val book = readEpubPackage(archive::text, archive::navigationText, archive::contains)
         val titles = buildMap {
-            for ((id, path) in book.spine) {
-                if (id !in chapterIds) continue
-                val title = book.tocTitle(path) ?: archive.text(path)?.let { book.chapterTitle(path, epubChapterDocument(it)) }
-                if (title != null) put(id, title)
+            for (item in book.spine) {
+                if (item.id !in chapterIds) continue
+                val title = book.tocTitle(item) ?: item.contentPath?.let(archive::text)?.let {
+                    book.chapterTitle(item, epubChapterDocument(it))
+                }
+                put(item.id, title ?: UNAVAILABLE_CHAPTER)
             }
         }
-        EpubDirectory(titles, book.navigationIds(titles.keys))
+        EpubDirectory(titles, book.navigation(titles.keys))
     }
 }
 
@@ -115,6 +147,8 @@ private class EpubArchive(private val zip: ZipFile, private val checkCancelled: 
     }
 
     fun navigationText(path: String): String? = entries[path]?.takeIf { it.size <= MAX_EPUB_XML_BYTES }?.let { text(path) }
+
+    fun contains(path: String): Boolean = path in entries
 
     fun image(path: String, imageSink: (String, InputStream) -> Unit): String? {
         val entry = entries[path] ?: return null

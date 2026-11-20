@@ -6,6 +6,7 @@ import cc.novelia.app.data.model.LocalReadingContent
 import cc.novelia.app.data.storage.appJson
 import cc.novelia.app.data.storage.hashName
 import cc.novelia.app.files.epub.EPUB_TITLE_VERSION
+import cc.novelia.app.files.epub.chapterIds
 import cc.novelia.app.files.epub.readEpubDirectory
 import java.io.File
 import java.io.IOException
@@ -79,7 +80,7 @@ internal class DocumentStorage(
         val directory = readEpubDirectory(source, index.chapterFiles.keys)
         if (directory.titles.keys != index.chapterFiles.keys) return index
         val next = index.copy(chapters = index.chapters.map { it.copy(title = directory.titles.getValue(it.id)) },
-            epubTitleVersion = EPUB_TITLE_VERSION, epubNavigationIds = directory.navigationIds)
+            epubTitleVersion = EPUB_TITLE_VERSION, epubNavigationIds = directory.navigation.chapterIds(), epubNavigation = directory.navigation)
         write(manifest(index.id), appJson.encodeToString(next))
         return next
     }

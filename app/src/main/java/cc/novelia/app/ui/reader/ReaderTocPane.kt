@@ -19,7 +19,9 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.model.BookRef
+import cc.novelia.app.data.model.TocItem
 import cc.novelia.app.data.model.navigationChapterId
+import cc.novelia.app.data.model.reverseTocSiblings
 import cc.novelia.app.data.library.offlineRangeLabel
 import cc.novelia.app.ui.components.base.AppLazyColumn
 import cc.novelia.app.ui.components.base.EmptyState
@@ -48,9 +50,11 @@ import kotlinx.coroutines.launch
     onReversed: (Boolean) -> Unit,
     locateRequest: Int,
     onLocated: () -> Unit,
-    onRead: (String) -> Unit,
+    onRead: (TocItem) -> Unit,
     modifier: Modifier = Modifier,
     includeUnlisted: Boolean = false,
+    sourceParagraph: Int? = null,
+    anchors: Map<String, Int> = emptyMap(),
 ) {
     val reducedMotion = appReducedMotion()
     val scope = rememberCoroutineScope()
@@ -67,13 +71,23 @@ import kotlinx.coroutines.launch
         val cachedIds = rememberCachedChapterIds(c.store, ref, toc)
         val readingOrder = state.toc.orEmpty()
         val selectedChapter = remember(readingOrder, toc, current) { navigationChapterId(readingOrder, toc, current) }
-        val settledQuery = rememberDebouncedQuery(query)
-        val indexed = remember(toc) { toc.withIndex().toList() }
-        val entries = remember(indexed, settledQuery, reversed) {
-            indexed.filter { it.value.title.contains(settledQuery, true) || it.value.titleJp.contains(settledQuery, true) }
-                .let { if(reversed) it.reversed() else it }
+        val selectedEntry = remember(toc, selectedChapter, current, sourceParagraph, anchors) {
+            val candidates = toc.indices.filter { selectedChapter != null && toc[it].chapterId == selectedChapter }
+            val byAnchor = if (selectedChapter == current && sourceParagraph != null) {
+                candidates.mapNotNull { index ->
+                    val fragment = toc[index].epubFragment ?: return@mapNotNull null
+                    val anchor = if (fragment.isEmpty()) -1 else anchors[fragment] ?: return@mapNotNull null
+                    (index to anchor).takeIf { anchor <= sourceParagraph }
+                }.maxByOrNull { it.second }?.first
+            } else null
+            byAnchor ?: candidates.firstOrNull()
         }
-        val currentIndex = remember(entries, selectedChapter) { entries.indexOfFirst { it.value.chapterId != null && it.value.chapterId == selectedChapter } }
+        val settledQuery = rememberDebouncedQuery(query)
+        val indexed = remember(toc, reversed) { toc.withIndex().toList().let { if(reversed) it.reverseTocSiblings() else it } }
+        val entries = remember(indexed, settledQuery) {
+            indexed.filter { it.value.title.contains(settledQuery, true) || it.value.titleJp.contains(settledQuery, true) }
+        }
+        val currentIndex = remember(entries, selectedEntry) { entries.indexOfFirst { it.index == selectedEntry } }
         suspend fun locate() {
             if(currentIndex >= 0) {
                 if(reducedMotion || abs(currentIndex - scroll.firstVisibleItemIndex) > 100) scroll.scrollToItem(currentIndex)
@@ -101,11 +115,12 @@ import kotlinx.coroutines.launch
                 style = MaterialTheme.typography.labelMedium)
             HorizontalDivider()
             AppLazyColumn(state = scroll, modifier = Modifier.weight(1f).testTag("reader-toc-list")) {
-                items(entries, key = { it.value.chapterId?.let { id -> "chapter-$id" } ?: "section-${it.index}" }, contentType = { if(it.value.chapterId == null) "section" else "chapter" }) { entry ->
+                items(entries, key = { if(ref.isLocal) "entry-${it.index}" else it.value.chapterId?.let { id -> "chapter-$id" } ?: "section-${it.index}" }, contentType = { if(it.value.chapterId == null) "section" else "chapter" }) { entry ->
                     val item = entry.value
                     val id = item.chapterId
-                    val active = id != null && id == selectedChapter
-                    if(id == null) SectionTitle(item.title)
+                    val active = entry.index == selectedEntry
+                    val indent = (item.depth.coerceIn(0, 5) * 14).dp
+                    if(id == null) Box(Modifier.padding(start = indent).semantics { heading() }) { SectionTitle(item.title) }
                     else AppListItem(
                         headlineContent = { Text(item.title, color = if(active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) },
                         leadingContent = { Icon(if(active) Icons.Outlined.Bookmark else Icons.Outlined.Article, null) },
@@ -113,7 +128,7 @@ import kotlinx.coroutines.launch
                             Text(listOfNotNull("正在阅读".takeIf { active },
                                 "可离线阅读".takeIf { !ref.isLocal && id in cachedIds }).joinToString(" · "))
                         }) else null,
-                        modifier = Modifier.fillMaxWidth().testTag("reader-toc-chapter-$id").semantics { selected = active }.motionClickable { onRead(id) }
+                        modifier = Modifier.fillMaxWidth().padding(start = indent).testTag("reader-toc-chapter-$id").semantics { selected = active }.motionClickable { onRead(item) }
                     )
                 }
                 if(entries.isEmpty()) item { EmptyState("没有匹配的章节", "修改搜索词或清空搜索后重试。") }

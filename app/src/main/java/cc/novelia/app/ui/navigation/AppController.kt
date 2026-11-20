@@ -32,6 +32,7 @@ import cc.novelia.app.data.model.Folder
 import cc.novelia.app.data.model.Page
 import cc.novelia.app.data.model.Chapter
 import cc.novelia.app.data.model.navigationToc
+import cc.novelia.app.data.model.navigationWithUnlisted
 import cc.novelia.app.data.model.readingOrderToc
 import cc.novelia.app.data.model.toReaderChapter
 import cc.novelia.app.data.model.PendingAction
@@ -54,6 +55,7 @@ import cc.novelia.app.data.sync.updateCloudPending
 import cc.novelia.app.ui.components.base.friendlyMessage
 import cc.novelia.app.ui.feedback.Sticker
 import cc.novelia.app.ui.feedback.StickerSnackbarVisuals
+import cc.novelia.app.ui.reader.READER_EPUB_FRAGMENT
 import cc.novelia.app.ui.reader.ReaderTocState
 import cc.novelia.app.ui.reader.ReaderTocSnapshot
 import java.io.IOException
@@ -179,7 +181,8 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
                 val toc = if(ref.isLocal) {
                     val document = store.documentIndex(ref.id)
                     val readingOrder = document.readingOrderToc()
-                    ReaderTocSnapshot(readingOrder, document.navigationToc(readingOrder))
+                    val navigation = document.navigationToc(readingOrder)
+                    ReaderTocSnapshot(readingOrder, navigation, document.navigationWithUnlisted(readingOrder, navigation))
                 } else ReaderTocSnapshot(detail<WebDetail>("novel/${ref.key}", forceNetwork).toc)
                 session.ensureCurrent(key.binding)
                 check(key.generation == store.cacheGeneration.value) { "缓存已更新，请重新加载目录" }
@@ -222,10 +225,13 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
         back()
     }
     fun returnToBookContents(ref: BookRef) = nav.returnToBookContents(ref)
-    fun read(ref: BookRef, chapter: String) {
+    fun read(ref: BookRef, chapter: String, epubFragment: String? = null) {
         // 从书架/详情重新开始阅读时重新检查目录；连续切章走下面的交接入口。
         synchronized(this) { readerToc = null }
         goReader(ref, chapter)
+        if (ref.isLocal && epubFragment != null) {
+            nav.currentBackStackEntry?.savedStateHandle?.set(READER_EPUB_FRAGMENT, epubFragment)
+        }
     }
     private fun goReader(ref: BookRef, chapter: String) = go("reader/${ref.provider}/${ref.id}/${Uri.encode(chapter)}")
     internal suspend fun prepareReaderChapter(ref: BookRef, id: String): ReaderHandoff {

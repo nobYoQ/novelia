@@ -26,6 +26,17 @@ class IllustrationViewerTest {
         compose.onAllNodesWithContentDescription("放大插图").fetchSemanticsNodes().any { !it.config.contains(SemanticsProperties.Disabled) }
     }
 
+    @Test fun epubImageDescriptionIsAvailableBeforeAndAfterOpeningTheViewer() {
+        val description = "窓辺にいる猫"
+        compose.setContent { MaterialTheme {
+            ReaderIllustration(R.drawable.midori_reading, Color.Black, description) {}
+        } }
+        compose.onNodeWithContentDescription(description).assertIsDisplayed().performTouchInput { longClick() }
+        waitForImage()
+        compose.onNode(hasContentDescription(description) and hasAnyAncestor(hasTestTag("illustration-viewport")), useUnmergedTree = true)
+            .assertIsDisplayed()
+    }
+
     @Test fun longPressPinchPanDoubleTapAndCloseKeepSingleTapSeparate() {
         var taps = 0
         compose.setContent { MaterialTheme { ReaderIllustration(R.drawable.midori_reading, Color.Black) { taps++ } } }

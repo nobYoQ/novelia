@@ -28,6 +28,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -45,8 +47,10 @@ import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.formatReadingTime
 import cc.novelia.app.data.model.navigationChapterId
 import cc.novelia.app.data.model.navigationToc
+import cc.novelia.app.data.model.navigationWithUnlisted
 import cc.novelia.app.data.model.readingOrderToc
 import cc.novelia.app.data.model.readingTimeKeys
+import cc.novelia.app.data.model.reverseTocSiblings
 import cc.novelia.app.data.model.TocItem
 import cc.novelia.app.data.model.WebDetail
 import cc.novelia.app.data.model.WenkuDetail
@@ -268,7 +272,10 @@ import kotlinx.coroutines.withContext
             val book = state.books.firstOrNull { it.book.ref == ref }?.book ?: BookCard(ref, document.name, cover = document.coverImage, total = document.chapters.size)
             val readingOrder = remember(document) { document.readingOrderToc() }
             val navigation = remember(document, readingOrder) { document.navigationToc(readingOrder) }
-            val toc = if(state.epubTocIncludeUnlisted[ref.key] == true) readingOrder else navigation
+            val chapterCount = remember(navigation) { navigation.mapNotNull { it.chapterId }.distinct().size }
+            val toc = remember(document, readingOrder, navigation, state.epubTocIncludeUnlisted[ref.key]) {
+                if(state.epubTocIncludeUnlisted[ref.key] == true) document.navigationWithUnlisted(readingOrder, navigation) else navigation
+            }
             val savedPosition = state.positions[ref.key]
             val destination = remember(readingOrder, savedPosition?.chapterId) { resumeDestination(readingOrder, savedPosition?.chapterId, null) }
             val current = remember(readingOrder, toc, destination?.chapterId) { navigationChapterId(readingOrder, toc, destination?.chapterId) }
@@ -279,7 +286,7 @@ import kotlinx.coroutines.withContext
                             BookCover(book, Modifier.width(94.dp).height(134.dp))
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                 BookDetailTitle(book.ref.key, book.title)
-                                Text("${document.format.uppercase()} · ${navigation.size} 章", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                                Text("${document.format.uppercase()} · $chapterCount 章", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                                 BookReadingTime(state, ref)
                                 Text("已保存在此设备，可离线阅读。", style = MaterialTheme.typography.bodyMedium)
                             }
@@ -297,7 +304,9 @@ import kotlinx.coroutines.withContext
                         destination?.let { Text(it.title, Modifier.padding(horizontal = 24.dp, vertical = 12.dp), style = MaterialTheme.typography.bodyMedium) }
                     }
                     item { MenuRow("本地术语表", "维护此文件的专有名词", Icons.Outlined.Translate, { c.go("glossary/${ref.key}") }) }
-                } else TocPanel(c, ref, toc, current) { c.read(ref, it) }
+                } else TocPanel(c, ref, toc, current,
+                    onContinue = { destination?.let { c.read(ref, it.chapterId) } },
+                    onNavigateToEntry = { item -> item.chapterId?.let { c.read(ref, it, item.epubFragment) } }) { c.read(ref, it) }
             }
         }
     }
@@ -390,17 +399,18 @@ import kotlinx.coroutines.withContext
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 @Composable fun TocPanel(c: AppController, ref: BookRef, toc: List<TocItem>, current: String?,
-    onContinue: (() -> Unit)? = null, onRead: (String) -> Unit) {
+    onContinue: (() -> Unit)? = null, onNavigateToEntry: ((TocItem) -> Unit)? = null, onRead: (String) -> Unit) {
     var search by rememberSaveable(ref.key) { mutableStateOf("") }; var reversed by rememberSaveable(ref.key) { mutableStateOf(false) }
     var cacheDialog by remember(ref.key) { mutableStateOf(false) }
     val cacheActions = rememberChapterCacheActions(c)
     val cachedIds = rememberCachedChapterIds(c.store, ref, toc)
     val settledSearch = rememberDebouncedQuery(search)
-    val indexedToc = remember(toc) { toc.withIndex().toList() }
-    val list = remember(indexedToc, settledSearch, reversed) {
-        indexedToc.filter { it.value.title.contains(settledSearch, true) || it.value.titleJp.contains(settledSearch, true) }.let { if(reversed) it.reversed() else it }
+    val indexedToc = remember(toc, reversed) { toc.withIndex().toList().let { if(reversed) it.reverseTocSiblings() else it } }
+    val list = remember(indexedToc, settledSearch) {
+        indexedToc.filter { it.value.title.contains(settledSearch, true) || it.value.titleJp.contains(settledSearch, true) }
     }
-    val currentIndex = remember(list, current) { if(current == null) -1 else list.indexOfFirst { it.value.chapterId == current } }
+    val selectedEntry = remember(toc, current) { if(current == null) -1 else toc.indexOfFirst { it.chapterId == current } }
+    val currentIndex = remember(list, selectedEntry) { list.indexOfFirst { it.index == selectedEntry } }
     val hasChapters = remember(list) { list.any { it.value.chapterId != null } }
     val reducedMotion = appReducedMotion()
     val scroll = rememberLazyListState(); val scope = rememberCoroutineScope()
@@ -416,12 +426,13 @@ import kotlinx.coroutines.withContext
         }
         if(!ref.isLocal) Text(remember(toc, cachedIds) { offlineRangeLabel(toc, cachedIds) }, Modifier.padding(horizontal = 20.dp, vertical = 4.dp), style = MaterialTheme.typography.labelMedium)
         AppLazyColumn(state = scroll, modifier = Modifier.weight(1f), contentPadding = PaddingValues(bottom = 88.dp)) {
-            items(list, key = { it.value.chapterId?.let { id -> "chapter-$id" } ?: "section-${it.index}" }, contentType = { if(it.value.chapterId == null) "section" else "chapter" }) { entry ->
+            items(list, key = { if(ref.isLocal) "entry-${it.index}" else it.value.chapterId?.let { id -> "chapter-$id" } ?: "section-${it.index}" }, contentType = { if(it.value.chapterId == null) "section" else "chapter" }) { entry ->
                 val item = entry.value
                 val itemMotion = if(reducedMotion) Modifier else Modifier.animateItem(fadeInSpec = tween(AppMotion.Release), placementSpec = tween(AppMotion.Standard), fadeOutSpec = tween(AppMotion.Exit))
-                if(item.chapterId == null) Box(itemMotion) { SectionTitle(item.title) }
+                val indent = (item.depth.coerceIn(0, 5) * 14).dp
+                if(item.chapterId == null) Box(itemMotion.padding(start = indent).semantics { heading() }) { SectionTitle(item.title) }
                 else {
-                    val isCurrent = item.chapterId == current
+                    val isCurrent = entry.index == selectedEntry
                     val scheme = MaterialTheme.colorScheme
                     val highlight = isCurrent && LocalThemePreset.current != null
                     AppListItem(
@@ -431,7 +442,9 @@ import kotlinx.coroutines.withContext
                         trailingContent = { Icon(Icons.Outlined.ChevronRight, null) },
                         containerColor = wallpaperCardColor(if (highlight) scheme.primaryContainer else ListItemDefaults.containerColor),
                         contentColor = if (highlight) scheme.onPrimaryContainer else Color.Unspecified,
-                        modifier = itemMotion.fillMaxWidth().motionClickable { onRead(item.chapterId) },
+                        modifier = itemMotion.fillMaxWidth().padding(start = indent).motionClickable {
+                            if(onNavigateToEntry != null) onNavigateToEntry(item) else onRead(item.chapterId)
+                        },
                     )
                 }
             }
