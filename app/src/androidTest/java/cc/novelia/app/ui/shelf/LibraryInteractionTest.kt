@@ -130,6 +130,14 @@ class LibraryInteractionTest {
                 }
             }
         }
+        val panel = compose.onNodeWithTag("favorite-choice-panel")
+        val localBounds = panel.assertIsDisplayed().getUnclippedBoundsInRoot()
+        compose.onNodeWithText("原站云端").performClick()
+        compose.onNodeWithText("登录后继续收藏").assertIsDisplayed()
+        assertEquals(localBounds, panel.getUnclippedBoundsInRoot())
+        compose.onNodeWithText("此设备").performClick()
+        compose.onNodeWithText("此设备").assertIsSelected()
+        assertEquals(localBounds, panel.getUnclippedBoundsInRoot())
         compose.onNodeWithText("原站云端").performClick()
         compose.onNodeWithText("登录后继续", useUnmergedTree = true).performClick()
         compose.onNodeWithText("模拟完成登录验证").assertIsDisplayed()
