@@ -34,4 +34,15 @@ class ShelfLayoutSettingsTest {
             assertEquals(WebDavProjection.library(legacy), WebDavProjection.library(state))
         }
     }
+
+    @Test fun shelfButtonFollowsScrollByDefaultAndFixedModeSurvivesSettingsBackup() {
+        val legacy = json.decodeFromString<LibraryState>("{}")
+        assertTrue(legacy.shelfControlsFollowScroll)
+        assertTrue(json.decodeFromString<SettingsBackup>("{}").shelfControlsFollowScroll)
+        val fixed = legacy.copy(shelfControlsFollowScroll = false)
+        assertFalse(json.decodeFromString<LibraryState>(json.encodeToString(fixed)).shelfControlsFollowScroll)
+        val backup = json.decodeFromString<SettingsBackup>(json.encodeToString(fixed.settingsBackup()))
+        assertFalse(backup.applyTo(legacy).shelfControlsFollowScroll)
+        assertEquals(WebDavProjection.library(legacy), WebDavProjection.library(fixed))
+    }
 }

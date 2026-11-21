@@ -170,6 +170,34 @@ class ShelfControlsCollapseTest {
         }
     }
 
+    @Test fun fixedButtonStaysHalfVisibleAcrossScrollsAndStillTogglesTheToolbar() {
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
+        withShelf(reducedMotion = false) {
+            val toggle = compose.onNodeWithTag("shelf-controls-toggle")
+            val viewport = compose.onNodeWithTag("shelf-books")
+            fun assertFixed() {
+                toggle.assertHeightIsEqualTo(22.dp)
+                assertEquals(viewport.getUnclippedBoundsInRoot().top, toggle.getUnclippedBoundsInRoot().top)
+            }
+
+            toggle.assertHeightIsEqualTo(44.dp)
+            compose.runOnIdle { app.store.update { it.copy(shelfControlsFollowScroll = false) } }
+            assertFixed()
+            viewport.performTouchInput { swipeUp(durationMillis = 400) }
+            compose.onNodeWithTag("shelf-book-local/collapse-0").assertIsNotDisplayed()
+            assertFixed()
+            viewport.performTouchInput { swipeDown(durationMillis = 400) }
+            assertFixed()
+            toggle.performTouchInput { click(center) }
+            compose.onNodeWithTag("local-toolbar").assertDoesNotExist()
+            assertFixed()
+            toggle.performTouchInput { click(center) }
+            compose.onNodeWithTag("local-toolbar").assertIsDisplayed()
+            compose.runOnIdle { app.store.update { it.copy(shelfControlsFollowScroll = true) } }
+            toggle.assertHeightIsEqualTo(44.dp)
+        }
+    }
+
     private fun assertFloatingInset(viewport: SemanticsNodeInteraction, toggle: SemanticsNodeInteraction) {
         val viewportTop = viewport.getUnclippedBoundsInRoot().top
         assertEquals(6f, (toggle.getUnclippedBoundsInRoot().top - viewportTop).value, .5f)
@@ -227,7 +255,7 @@ class ShelfControlsCollapseTest {
             app.store.update { it.copy(books = List(60) { index -> SavedBook(
                 BookCard(BookRef("local", "collapse-$index"), "森林来信 ${index.toString().padStart(2, '0')}", authors = listOf("山川遥")), addedAt = 1L)
             }, positions = emptyMap(), shelfGrid = false, localFilesGrid = false, shelfControlsExpanded = true,
-                rememberLastShelfFolder = false) }
+                shelfControlsFollowScroll = true, rememberLastShelfFolder = false) }
             val restoration = StateRestorationTester(compose)
             restoration.setContent {
                 AppInteractionMode(eInk, reducedMotion) {

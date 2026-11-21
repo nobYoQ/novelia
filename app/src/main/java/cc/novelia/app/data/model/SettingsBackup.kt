@@ -22,7 +22,8 @@ import kotlinx.serialization.Serializable
     val forumDefaultSort: String = "active", val forumDefaultTagIds: Map<String, Long> = emptyMap(),
     val ttsEnginePackage: String? = null,
     val themePresets: ThemePresets? = null,
-    val readerThemePresets: Map<String, ReaderThemePalette>? = null)
+    val readerThemePresets: Map<String, ReaderThemePalette>? = null,
+    val shelfControlsFollowScroll: Boolean = true)
 
 internal fun LibraryState.settingsBackup() = SettingsBackup(
     readerThemePresets = readerThemePresets,
@@ -30,7 +31,8 @@ internal fun LibraryState.settingsBackup() = SettingsBackup(
     amoledBlack = amoledBlack, stickerPackId = stickerPackId, discoverWenkuGrid = discoverWenkuGrid,
     rememberSavedSearchPage = rememberSavedSearchPage, shelfGrid = shelfGrid, localFilesGrid = localFilesGrid,
     cloudShelfGrid = cloudShelfGrid, shelfGridDensity = shelfGridDensity, shelfTapToRead = shelfTapToRead, rememberLastShelfFolder = rememberLastShelfFolder,
-    autoReadingStatus = autoReadingStatus, edgeToolbar = edgeToolbar.normalized(), blockedBooks = blockedBooks,
+    shelfControlsFollowScroll = shelfControlsFollowScroll, autoReadingStatus = autoReadingStatus,
+    edgeToolbar = edgeToolbar.normalized(), blockedBooks = blockedBooks,
     blockedTags = blockedTags, blockedAuthors = blockedAuthors, blockedUsers = blockedUsers, hideNovelComments = hideNovelComments,
     hideUnavailableComments = hideUnavailableComments, hideLocalFavorites = hideLocalFavorites, hideCloudFavorites = hideCloudFavorites,
     forumDefaultCategory = forumDefaultCategory, forumSkipPinned = forumSkipPinned, ttsEnginePackage = ttsEnginePackage,
@@ -61,7 +63,8 @@ internal fun SettingsBackup.applyTo(state: LibraryState): LibraryState = state.c
     reducedMotion = reducedMotion, squareCorners = squareCorners, amoledBlack = amoledBlack, stickerPackId = stickerPackId,
     discoverWenkuGrid = discoverWenkuGrid, rememberSavedSearchPage = rememberSavedSearchPage, shelfGrid = shelfGrid,
     localFilesGrid = localFilesGrid, cloudShelfGrid = cloudShelfGrid, shelfGridDensity = shelfGridDensity, shelfTapToRead = shelfTapToRead,
-    rememberLastShelfFolder = rememberLastShelfFolder, edgeToolbar = edgeToolbar, blockedBooks = blockedBooks,
+    rememberLastShelfFolder = rememberLastShelfFolder, shelfControlsFollowScroll = shelfControlsFollowScroll,
+    edgeToolbar = edgeToolbar, blockedBooks = blockedBooks,
     blockedTags = blockedTags, blockedAuthors = blockedAuthors, blockedUsers = blockedUsers, hideNovelComments = hideNovelComments,
     hideUnavailableComments = hideUnavailableComments, hideLocalFavorites = hideLocalFavorites, hideCloudFavorites = hideCloudFavorites,
     forumDefaultCategory = forumDefaultCategory, forumSkipPinned = forumSkipPinned, ttsEnginePackage = ttsEnginePackage,

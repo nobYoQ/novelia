@@ -95,13 +95,16 @@ internal class ShelfControlsScroll(private val threshold: Float, private val ena
 }
 
 /** 与书目同层叠放，向上缩回时只绘制并命中书目上沿露出的部分。 */
-@Composable internal fun BoxScope.ShelfControlsToggle(expanded: Boolean, hasActiveFilters: Boolean, tucked: Boolean, onToggle: () -> Unit) {
+@Composable internal fun BoxScope.ShelfControlsToggle(
+    expanded: Boolean, hasActiveFilters: Boolean, tucked: Boolean, followScroll: Boolean, onToggle: () -> Unit,
+) {
     val colors = MaterialTheme.colorScheme
     val handleColor = lerp(colors.surfaceContainerHigh, colors.secondaryContainer, .7f)
     val reducedMotion = appReducedMotion()
-    val revealTarget = if(tucked) 0f else 1f
-    val reveal by animateFloatAsState(revealTarget,
-        tween(if(reducedMotion) 0 else AppMotion.Panel, easing = FastOutSlowInEasing), label = "shelf toolbar button")
+    val revealTarget = if(tucked || !followScroll) 0f else 1f
+    val reveal by if(followScroll && !reducedMotion) {
+        animateFloatAsState(revealTarget, tween(AppMotion.Panel, easing = FastOutSlowInEasing), label = "shelf toolbar button")
+    } else rememberUpdatedState(revealTarget)
     val direction = if(expanded) 1f else -1f
     val animatedDirection by animateFloatAsState(direction,
         tween(if(reducedMotion) 0 else AppMotion.Panel, easing = FastOutSlowInEasing), label = "shelf toolbar chevron")
@@ -116,7 +119,7 @@ internal class ShelfControlsScroll(private val threshold: Float, private val ena
     CompositionLocalProvider(LocalViewConfiguration provides handleConfiguration) {
         Canvas(Modifier.align(Alignment.TopCenter).width(44.dp)
             .layout { measurable, constraints ->
-                val fraction = if(reducedMotion) revealTarget else reveal
+                val fraction = reveal
                 val inset = (6.dp.toPx() * fraction).roundToInt().coerceAtMost(constraints.maxHeight)
                 val height = (22.dp.toPx() * (1f + fraction)).roundToInt().coerceAtMost(constraints.maxHeight - inset)
                 val button = measurable.measure(constraints.copy(minHeight = height, maxHeight = height))
@@ -133,7 +136,7 @@ internal class ShelfControlsScroll(private val threshold: Float, private val ena
                     else -> "已收起"
                 }
             }) {
-            val fraction = if(reducedMotion) revealTarget else reveal
+            val fraction = reveal
             val radius = size.width / 2f
             val circle = Offset(radius, size.height - radius)
             drawCircle(handleColor, radius - .5.dp.toPx(), circle)

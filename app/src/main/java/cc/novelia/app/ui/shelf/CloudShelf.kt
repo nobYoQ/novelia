@@ -168,7 +168,7 @@ import cc.novelia.app.ui.navigation.AppController
             var controlsHeight by remember { mutableIntStateOf(0) }
             val toolsExpanded = local.shelfControlsExpanded
             val showControlsToggle = active && !managing && !bulkBusy
-            val controlsScroll = rememberShelfControlsScroll(requestKey to local.cloudShelfGrid, showControlsToggle)
+            val controlsScroll = rememberShelfControlsScroll(requestKey to local.cloudShelfGrid, showControlsToggle && local.shelfControlsFollowScroll)
             Column(Modifier.fillMaxSize()) {
                 CompactCloudControls(choices, current, { folderId = it; page = 0 }, sort, { sort = it; page = 0 }, kind, filter,
                     onApply = { nextKind, next ->
@@ -234,7 +234,8 @@ import cc.novelia.app.ui.navigation.AppController
                         val scrollState = if(local.cloudShelfGrid) gridState else listState
                         Box(Modifier.matchParentSize()) {
                             ShelfControlsToggle(toolsExpanded, hasActiveFilters,
-                                tucked = controlsScroll.tucked && scrollState?.canScrollBackward == true) {
+                                tucked = controlsScroll.tucked && scrollState?.canScrollBackward == true,
+                                followScroll = local.shelfControlsFollowScroll) {
                                 c.store.update { it.copy(shelfControlsExpanded = !it.shelfControlsExpanded) }
                             }
                         }

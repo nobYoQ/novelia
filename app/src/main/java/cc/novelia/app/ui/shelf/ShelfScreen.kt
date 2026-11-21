@@ -275,7 +275,7 @@ import kotlinx.coroutines.withContext
                     parents = rows.mapNotNull { row -> row.parent?.let { row.saved.book.ref.key to it.book.ref.key } }.toMap())
                 val listState = layout.current(grid)
                 val showControlsToggle = active && !managing && !batchWorking
-                val controlsScroll = rememberShelfControlsScroll(listState, showControlsToggle)
+                val controlsScroll = rememberShelfControlsScroll(listState, showControlsToggle && state.shelfControlsFollowScroll)
                 val continueBook = recent?.takeIf { page == 0 && active && !pageManaging && volumeSheetKey == null }
                 val density = LocalDensity.current
                 val collapseThreshold = with(density) { 48.dp.roundToPx() }
@@ -327,7 +327,7 @@ import kotlinx.coroutines.withContext
                         ShelfLayoutTransition(grid, Modifier.weight(1f), overlay = {
                             if(showControlsToggle) ShelfControlsToggle(toolsExpanded,
                                 folder != "全部" || query.isNotBlank() || readingStatus != "全部" || pageType != ShelfBookType.All,
-                                tucked = controlsScroll.tucked && listState.canScrollBackward) {
+                                tucked = controlsScroll.tucked && listState.canScrollBackward, followScroll = state.shelfControlsFollowScroll) {
                                 c.store.update { it.copy(shelfControlsExpanded = !it.shelfControlsExpanded) }
                             }
                         }) { showGrid ->
