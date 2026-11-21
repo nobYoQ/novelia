@@ -66,7 +66,7 @@ internal data class ReaderChapterSearchState(
     onSpeech: () -> Unit, onAutoRead: () -> Unit, onReturnToReading: () -> Unit,
     onQueryChange: (String) -> Unit, onFind: (Int) -> Unit, onBookSearch: () -> Unit,
 ) {
-    ReaderOverlayVisibility(menu, modifier, enter = if(reducedMotion) EnterTransition.None else fadeIn(tween(AppMotion.Quick)) + slideInVertically(tween(AppMotion.Standard)) { -it }, exit = if(reducedMotion) ExitTransition.None else fadeOut(tween(AppMotion.Exit)) + slideOutVertically(tween(AppMotion.Release)) { -it }) {
+    ReaderToolbarVisibility(menu, modifier, reducedMotion, fromTop = true) {
         Surface(Modifier.testTag("reader-top-toolbar"), color = toolbarBackground, contentColor = foreground) {
         // 此高度仅用于把搜索结果放在浮层下方。
         Column(Modifier.onSizeChanged { onHeightChanged(it.height) }) {
@@ -155,7 +155,7 @@ internal data class ReaderBottomToolbarState(
                 }
             }
         }
-        ReaderOverlayVisibility(menu, Modifier, enter = if(reducedMotion) EnterTransition.None else fadeIn(tween(AppMotion.Quick)) + slideInVertically(tween(AppMotion.Standard)) { it }, exit = if(reducedMotion) ExitTransition.None else fadeOut(tween(AppMotion.Exit)) + slideOutVertically(tween(AppMotion.Release)) { it }) {
+        ReaderToolbarVisibility(menu, Modifier, reducedMotion, fromTop = false) {
             Surface(color = toolbarBackground, contentColor = foreground) {
                 Column(if(persistentControls) Modifier else Modifier.navigationBarsPadding()) {
                     if(settings.showProgressBar) ReaderSeekBar(state.reading.progress,
@@ -185,10 +185,19 @@ internal data class ReaderBottomToolbarState(
 }
 
 // 浮层显隐独立于外层自适应 Row 中会影响尺寸的扩展函数。
-@Composable private fun ReaderOverlayVisibility(
+@Composable internal fun ReaderToolbarVisibility(
     visible: Boolean,
     modifier: Modifier,
-    enter: EnterTransition,
-    exit: ExitTransition,
-    content: @Composable androidx.compose.animation.AnimatedVisibilityScope.() -> Unit
-) { AnimatedVisibility(visible, modifier, enter, exit, content = content) }
+    reducedMotion: Boolean,
+    fromTop: Boolean,
+    content: @Composable () -> Unit,
+) {
+    val direction = if (fromTop) -1 else 1
+    AnimatedVisibility(
+        visible, modifier,
+        enter = if (reducedMotion) EnterTransition.None
+            else fadeIn(tween(AppMotion.Quick)) + slideInVertically(tween(AppMotion.Standard)) { it * direction },
+        exit = if (reducedMotion) ExitTransition.None
+            else fadeOut(tween(AppMotion.Exit)) + slideOutVertically(tween(AppMotion.Release)) { it * direction },
+    ) { content() }
+}
