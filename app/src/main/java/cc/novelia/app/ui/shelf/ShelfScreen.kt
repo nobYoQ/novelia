@@ -74,9 +74,8 @@ import cc.novelia.app.ui.components.book.bookRowStatus
 import cc.novelia.app.ui.components.base.ChoiceRow
 import cc.novelia.app.ui.components.base.ConfirmDialog
 import cc.novelia.app.ui.components.documents.CreateBookDocument
-import cc.novelia.app.ui.components.documents.DocumentPickerFallback
-import cc.novelia.app.ui.components.documents.DocumentPickerTypes
-import cc.novelia.app.ui.components.documents.rememberOpenMultipleDocumentsPicker
+import cc.novelia.app.ui.components.documents.OpenBookDocuments
+import cc.novelia.app.ui.theme.MotionContent
 import cc.novelia.app.files.exporting.prepareLocalBookExport
 import cc.novelia.app.files.exporting.exportLocalBook
 import cc.novelia.app.files.downloads.deleteBookFiles
@@ -101,6 +100,7 @@ import kotlinx.coroutines.withContext
     val state by c.store.state.collectAsStateWithLifecycle()
     var medium by rememberSaveable { mutableStateOf(state.restoredShelfLocation().medium) }
     val panes = rememberSaveableStateHolder()
+    val importDetailsOpen = rememberSaveable { mutableStateOf(false) }
     val importModel = rememberDocumentImporter(c)
     val importState by importModel.state.collectAsStateWithLifecycle()
     var checked by remember { mutableStateOf(emptySet<BookRef>()) }
@@ -120,14 +120,20 @@ import kotlinx.coroutines.withContext
         c.store.update { if (it.rememberLastShelfFolder) it.copy(lastShelfLocation = it.lastShelfLocation.copy(medium = next)) else it }
     }
     LaunchedEffect(importState) { importModel.takeImportedMedium()?.let(::switchShelf) }
-    panes.SaveableStateProvider(medium.name) {
-        MediumShelf(c, medium, ::switchShelf, pending.isNotEmpty(), importModel, onOpenBook, selectedBookKey, sharedDocuments, onSharedDocumentsConsumed)
+    val rotation = animateFloatAsState(if (medium == BookMedium.Comic) 180f else 0f,
+        animationSpec = tween(if (appReducedMotion()) 0 else AppMotion.Panel), label = "书架切换")
+    MotionContent(medium, Modifier.fillMaxSize(), animateInitial = false) {
+        panes.SaveableStateProvider(medium.name) {
+            MediumShelf(c, medium, ::switchShelf, pending.isNotEmpty(), importModel, onOpenBook, selectedBookKey,
+                sharedDocuments, onSharedDocumentsConsumed, importDetailsOpen, rotation = { rotation.value })
+        }
     }
 }
 
 @Composable private fun MediumShelf(c: AppController, medium: BookMedium, switchShelf: (BookMedium) -> Unit,
     classifyingBooks: Boolean, importModel: DocumentImportViewModel, onOpenBook: (BookRef) -> Unit, selectedBookKey: String?,
-    sharedDocuments: List<Uri>, onSharedDocumentsConsumed: (List<Uri>) -> Unit) {
+    sharedDocuments: List<Uri>, onSharedDocumentsConsumed: (List<Uri>) -> Unit, importDetailsOpen: MutableState<Boolean>,
+    rotation: () -> Float) {
     val state by c.store.state.collectAsStateWithLifecycle()
     val profile by c.session.profile.collectAsStateWithLifecycle()
     var favoriteSync by rememberSaveable(profile?.username) { mutableStateOf(false) }
@@ -159,7 +165,6 @@ import kotlinx.coroutines.withContext
     var localExportOriginal by rememberSaveable { mutableStateOf(true) }
     var queueingDownloads by remember { mutableStateOf(false) }
     var volumeManager by remember { mutableStateOf<SavedBook?>(null) }
-    var addToShelf by remember(tab, managing) { mutableStateOf(false) }
     var volumeSheetKey by rememberSaveable { mutableStateOf<String?>(null) }
     var volumeMatches by remember { mutableStateOf<Set<String>?>(null) }
     var volumeParentPicker by remember { mutableStateOf<SavedBook?>(null) }
@@ -197,12 +202,8 @@ import kotlinx.coroutines.withContext
             onSharedDocumentsConsumed(sharedDocuments)
         }
     }
-    val importer = rememberOpenMultipleDocumentsPicker(DocumentPickerTypes.Books) { uris ->
-        importModel.start(uris)
-    }
-    val importLocalFiles = {
-        if(!importing) importer.launch()
-    }
+    val importer = rememberLauncherForActivityResult(OpenBookDocuments()) { uris -> importModel.start(uris) }
+    val importLocalFiles = { if (!importing) importer.launch(Unit) }
     val comicFolder = rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()) { tree ->
         if (tree != null) importModel.start(listOf(tree))
     }
@@ -272,7 +273,7 @@ import kotlinx.coroutines.withContext
     Scaffold(containerColor = cc.novelia.app.ui.theme.pageContainerColor(), contentColor = MaterialTheme.colorScheme.onBackground, topBar = {
         ShelfTopBar(medium = medium, switchEnabled = !batchWorking && !cloudBusy && !queueingDownloads,
             onSwitch = { switchShelf(if (comics) BookMedium.Novel else BookMedium.Comic) },
-            importEnabled = !importing && !batchWorking, onImport = { importMenu = true }, onHistory = { c.go("history") },
+            rotation = rotation, importEnabled = !importing && !batchWorking, onImport = { importMenu = true }, onHistory = { c.go("history") },
             onUpdates = { c.go("updates") },
             onFavoriteSync = if (!comics) ({ if(profile == null) c.go("login") else favoriteSync = true }) else null,
             favoriteSyncEnabled = !batchWorking && !cloudBusy,
@@ -281,8 +282,8 @@ import kotlinx.coroutines.withContext
         ShelfPager(tab, { tab = it }, enabled = !batchWorking && !cloudBusy, singlePage = comics,
             classifyingBooks = classifyingBooks, modifier = Modifier.padding(padding),
             controls = {
-                DocumentPickerFallback(importer, enabled = !importing)
-                DocumentImportPanel(importModel) { ref ->
+
+                DocumentImportPanel(importModel, importDetailsOpen) { ref ->
                     c.store.state.value.books.firstOrNull { it.book.ref == ref }?.let { switchShelf(it.book.shelfMedium) }
                     c.book(ref)
                 }
