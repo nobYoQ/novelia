@@ -136,3 +136,9 @@ internal fun navigationChapterId(readingOrder: List<TocItem>, navigation: List<T
 }
 private val imageParagraph = Regex("novelia-image:[a-f0-9]{64}")
 internal fun LocalChapter.hasOnlyImagePages() = paragraphs.isNotEmpty() && paragraphs.all(imageParagraph::matches)
+
+internal fun LocalDocument.bookMedium(readChapter: (String) -> LocalChapter): BookMedium = when {
+    format in comicArchiveFormats -> BookMedium.Comic
+    format == "epub" && (imageOnlyEpub ?: (chapters.isNotEmpty() && chapters.all { readChapter(it.id).hasOnlyImagePages() })) -> BookMedium.Comic
+    else -> BookMedium.Novel
+}

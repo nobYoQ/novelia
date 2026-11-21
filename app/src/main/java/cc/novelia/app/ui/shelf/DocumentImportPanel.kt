@@ -10,6 +10,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import cc.novelia.app.data.model.BookRef
+import cc.novelia.app.data.model.BookMedium
+import cc.novelia.app.data.model.shelfMedium
 import cc.novelia.app.data.storage.LocalStore
 import cc.novelia.app.files.*
 import cc.novelia.app.ui.components.documents.ImportResultsPanel
@@ -30,9 +32,11 @@ internal class DocumentImportViewModel(private val store: LocalStore) : ViewMode
     private val mutable = MutableStateFlow(DocumentImportState())
     val state: StateFlow<DocumentImportState> = mutable
     private var task: Job? = null
+    private var showImportedShelf = false
 
     fun start(uris: List<Uri>) {
         if (state.value.running || uris.isEmpty()) return
+        showImportedShelf = true
         mutable.value = DocumentImportState(uris.map { uri ->
             ImportItem(uri.toString(), uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() } ?: "导入文件")
         })
@@ -42,6 +46,16 @@ internal class DocumentImportViewModel(private val store: LocalStore) : ViewMode
     fun retryFailed() = run(true)
     fun resume() = run(false)
     fun pause() { task?.cancel() }
+
+    /** 同一批只自动定位一次；混合批次继续显示完整导入清单。 */
+    fun takeImportedMedium(): BookMedium? {
+        val batch = state.value
+        if (!showImportedShelf || batch.running || batch.items.any { it.status == ImportStatus.Pending || it.status == ImportStatus.Running }) return null
+        showImportedShelf = false
+        val keys = batch.items.mapNotNull { it.bookKey }.toSet()
+        return store.state.value.books.asSequence().filter { it.book.ref.key in keys }
+            .map { it.book.shelfMedium }.distinct().singleOrNull()
+    }
 
     // 关闭时清掉批次提示的来源，返回书架或重建页面后也不会再次显示；书籍仍留在书库。
     fun dismissResults() {

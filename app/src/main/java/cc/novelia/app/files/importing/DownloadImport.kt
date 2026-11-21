@@ -12,6 +12,8 @@ import cc.novelia.app.data.library.originBook
 import cc.novelia.app.data.library.originVolumeId
 import cc.novelia.app.data.library.withDownloadLink
 import cc.novelia.app.data.model.BookCard
+import cc.novelia.app.data.model.bookMedium
+import cc.novelia.app.data.storage.restoreBookMedia
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.DownloadEntry
 import cc.novelia.app.data.model.WenkuDetail
@@ -110,7 +112,10 @@ suspend fun importLocalDocument(store: LocalStore, file: File, name: String = fi
                 val document = store.documentIndex(it.id)
                 store.saveBook(BookCard(it, document.name,
                     cover = document.coverImage?.let { image -> store.documentImage(document.id, image).absolutePath },
-                    subtitle = "${document.format.uppercase()} · ${document.chapters.size} 章"))
+                    subtitle = "${document.format.uppercase()} · ${document.chapters.size} 章",
+                    medium = document.bookMedium { chapter -> store.documentChapter(it.id, chapter) }))
+            } else if (store.state.value.books.firstOrNull { saved -> saved.book.ref == it }?.book?.medium == null) {
+                store.restoreBookMedia(setOf(it))
             }
             return@withLock DocumentImportResult(it, false)
         }
@@ -133,7 +138,8 @@ suspend fun importLocalDocument(store: LocalStore, file: File, name: String = fi
                 store.saveDocument(document) { workContext.ensureActive() }
                 store.saveBook(BookCard(ref, document.name,
                     cover = document.coverImage?.let { store.documentImage(document.id, it).absolutePath },
-                    subtitle = "${document.format.uppercase()} · ${document.chapters.size} 章"))
+                    subtitle = "${document.format.uppercase()} · ${document.chapters.size} 章",
+                    medium = document.bookMedium { chapter -> store.documentChapter(ref.id, chapter) }))
                 DocumentImportResult(ref, true)
             } catch (error: Exception) {
                 // 本次生成的新 ID 不可能对应已有的阅读副本。

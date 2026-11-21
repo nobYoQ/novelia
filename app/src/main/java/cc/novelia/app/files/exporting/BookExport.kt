@@ -2,8 +2,8 @@ package cc.novelia.app.files.exporting
 
 import cc.novelia.app.data.storage.LocalStore
 import cc.novelia.app.data.model.comicMimeTypes
-import cc.novelia.app.data.model.comicArchiveFormats
-import cc.novelia.app.data.model.hasOnlyImagePages
+import cc.novelia.app.data.model.BookMedium
+import cc.novelia.app.data.model.bookMedium
 import java.io.OutputStream
 
 internal fun bookFileMimeType(fileName: String): String = when(val format = fileName.substringAfterLast('.', "").lowercase()) {
@@ -30,8 +30,7 @@ internal fun prepareLocalBookExport(store: LocalStore, id: String): LocalBookExp
     val doc = store.documentIndex(id)
     val original = store.documentSource(id, doc.format).isFile
     if (!original) {
-        val imageEpub = doc.format == "epub" && (doc.imageOnlyEpub ?: doc.chapters.all { store.documentChapter(id, it.id).hasOnlyImagePages() })
-        require(doc.format !in comicArchiveFormats && !imageEpub) { "缺少漫画原件，可通过阅读资料备份导出漫画页" }
+        require(doc.bookMedium { store.documentChapter(id, it) } != BookMedium.Comic) { "缺少漫画原件，可通过阅读资料备份导出漫画页" }
     }
     val format = if(original) doc.format else "txt"
     return LocalBookExport(localBookExportFileName(doc.name, doc.format, format), original)

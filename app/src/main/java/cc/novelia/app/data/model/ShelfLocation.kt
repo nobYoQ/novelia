@@ -7,6 +7,8 @@ import kotlinx.serialization.Serializable
     val tab: Int = 0,
     val localFolderId: String? = null,
     val cloud: Map<String, CloudShelfLocation> = emptyMap(),
+    val medium: BookMedium = BookMedium.Novel,
+    val comicFolderId: String? = null,
 )
 
 @Serializable data class CloudShelfLocation(val kind: Int = 0, val folderId: String = "") {
@@ -16,6 +18,7 @@ import kotlinx.serialization.Serializable
 fun LibraryState.restoredShelfLocation(): ShelfLocation = if(rememberLastShelfFolder) lastShelfLocation.copy(
     tab = lastShelfLocation.tab.takeIf { it in 0..2 } ?: 0,
     localFolderId = lastShelfLocation.localFolderId?.takeIf { it in folderIds.values },
+    comicFolderId = lastShelfLocation.comicFolderId?.takeIf { it in folderIds.values },
 ) else ShelfLocation()
 
 fun LibraryState.restoredCloudShelfLocation(account: String): CloudShelfLocation =
