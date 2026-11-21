@@ -65,6 +65,25 @@ class ShelfSwipeTest {
 
     @Test fun pagesRestoreTheirOwnScrollAndFilterState() = pageStateSurvives(false)
 
+    @Test fun comicShelfRestoresTheVisibleBookAfterClassificationFinishes() {
+        var classifying by mutableStateOf(false)
+        val restoration = StateRestorationTester(compose)
+        restoration.setContent {
+            ShelfPager(0, {}, true, Modifier.size(360.dp, 480.dp), singlePage = true, classifyingBooks = classifying) {
+                LazyColumn(Modifier.fillMaxSize().testTag("comic-list")) {
+                    items(40, key = { it }) { Text("漫画 $it", Modifier.fillMaxWidth().height(80.dp)) }
+                }
+            }
+        }
+        compose.onNodeWithTag("comic-list").performScrollToIndex(20)
+        compose.onNodeWithText("漫画 20").assertIsDisplayed()
+        compose.runOnIdle { classifying = true }
+        compose.onNodeWithTag("comic-list").assertDoesNotExist()
+        restoration.emulateSavedInstanceStateRestore()
+        compose.runOnIdle { classifying = false }
+        compose.onNodeWithText("漫画 20").assertIsDisplayed()
+    }
+
     @Test fun staticModeSupportsSwipesClicksAndRestoration() = pageStateSurvives(true)
 
     private fun pageStateSurvives(static: Boolean) {

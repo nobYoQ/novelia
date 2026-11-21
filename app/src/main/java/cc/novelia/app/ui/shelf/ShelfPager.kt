@@ -9,6 +9,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
@@ -19,19 +20,27 @@ import kotlinx.coroutines.launch
 /** 点击和滑动共用分页状态；分区落定后才退出批量整理，各页单独保存滚动和筛选控件。 */
 @Composable internal fun ShelfPager(
     selected: Int, onSelect: (Int) -> Unit, enabled: Boolean,
-    modifier: Modifier = Modifier, controls: @Composable () -> Unit = {}, singlePage: Boolean = false, header: @Composable () -> Unit = {},
+    modifier: Modifier = Modifier, controls: @Composable () -> Unit = {}, singlePage: Boolean = false,
+    classifyingBooks: Boolean = false, header: @Composable () -> Unit = {},
     content: @Composable (Int) -> Unit,
 ) {
+    val pages = rememberSaveableStateHolder()
+    val pageContent: @Composable (Int) -> Unit = { page ->
+        Box(Modifier.fillMaxSize().testTag("shelf-page-$page")) {
+            // 等书目归类后再挂载本地列表，避免临时空列表在测量时覆盖已保存的滚动位置。
+            if (classifyingBooks && page != 2) Text("正在整理已有书籍…", Modifier.align(Alignment.Center))
+            else pages.SaveableStateProvider(page) { content(page) }
+        }
+    }
     if (singlePage) {
         Column(modifier.fillMaxSize()) {
             header()
             controls()
-            Box(Modifier.weight(1f).fillMaxWidth()) { content(0) }
+            Box(Modifier.weight(1f).fillMaxWidth()) { pageContent(0) }
         }
         return
     }
     val pager = rememberPagerState(initialPage = selected.coerceIn(0, 2)) { 3 }
-    val pages = rememberSaveableStateHolder()
     val scope = rememberCoroutineScope()
     val reducedMotion = appReducedMotion()
     val focus = LocalFocusManager.current
@@ -64,10 +73,6 @@ import kotlinx.coroutines.launch
         }
         controls()
         HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth().testTag("shelf-pager"), userScrollEnabled = enabled,
-            key = { it }) { page ->
-            pages.SaveableStateProvider(page) {
-                Box(Modifier.fillMaxSize().testTag("shelf-page-$page")) { content(page) }
-            }
-        }
+            key = { it }) { page -> pageContent(page) }
     }
 }
