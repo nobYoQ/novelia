@@ -3,6 +3,7 @@ package cc.novelia.app.ui.shelf
 import android.app.Activity
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.net.Uri
 import androidx.activity.compose.LocalActivityResultRegistryOwner
@@ -22,14 +23,19 @@ import androidx.navigation.compose.rememberNavController
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.NoveliaApplication
 import cc.novelia.app.data.model.DEFAULT_FOLDER
+import cc.novelia.app.data.model.BookMedium
+import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.Position
 import cc.novelia.app.data.model.createShelfFolder
 import cc.novelia.app.files.importing.importLocalDocument
 import cc.novelia.app.ui.book.localSeriesEditorDestination
 import cc.novelia.app.ui.navigation.AppController
+import cc.novelia.app.ui.reader.ReaderScreen
 import cc.novelia.app.ui.theme.AppInteractionMode
 import cc.novelia.app.ui.theme.NoveliaTheme
 import java.io.File
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
@@ -38,6 +44,99 @@ import org.junit.Test
 
 class LocalSeriesFlowTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun mountsComicsAndUsesIndividualPagesForTheIssueAndSeriesCovers() = runBlocking {
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
+        app.initialization.await()
+        val store = app.store
+        val before = store.state.value
+        val inputs = List(2) { index -> File.createTempFile("mounted-comic-", ".cbz", app.cacheDir).apply {
+            ZipOutputStream(outputStream()).use { zip ->
+                val bitmap = Bitmap.createBitmap(48, 72, Bitmap.Config.ARGB_8888)
+                for ((page, color) in listOf(Color.GREEN, if (index == 0) Color.BLUE else Color.RED).withIndex()) {
+                    bitmap.eraseColor(color)
+                    zip.putNextEntry(ZipEntry("${page + 1}.png"))
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, zip)
+                    zip.closeEntry()
+                }
+                bitmap.recycle()
+            }
+        } }
+        val refs = mutableListOf<BookRef>()
+        var series: BookRef? = null
+        try {
+            inputs.forEachIndexed { index, file -> refs += importLocalDocument(store, file, title = "试读漫画第 ${index + 1} 话").ref }
+            store.update { it.copy(rememberLastShelfFolder = false) }
+            compose.setContent {
+                AppInteractionMode(eInk = false, reducedMotion = true) { NoveliaTheme("light") {
+                    val nav = rememberNavController()
+                    val scope = rememberCoroutineScope()
+                    val c = remember(nav, scope) { AppController(app, nav, scope, SnackbarHostState()) }
+                    NavHost(nav, startDestination = "shelf") {
+                        composable("shelf") { AdaptiveLibraryScreen(c, it.savedStateHandle) }
+                        localSeriesEditorDestination(c)
+                        composable("reader/{provider}/{id}/{chapter}") { entry ->
+                            val args = requireNotNull(entry.arguments)
+                            ReaderScreen(c, BookRef(requireNotNull(args.getString("provider")), requireNotNull(args.getString("id"))),
+                                requireNotNull(args.getString("chapter")))
+                        }
+                    }
+                } }
+            }
+            compose.onNodeWithTag("shelf-medium").performClick()
+            compose.onNodeWithContentDescription("添加到书架").performClick()
+            compose.onNodeWithText("新建漫画总集").performClick()
+            val editor = compose.onNodeWithTag("local-series-editor")
+            fun editorItem(matcher: SemanticsMatcher): SemanticsNodeInteraction {
+                editor.performScrollToNode(matcher)
+                return compose.onNode(matcher).performScrollTo()
+            }
+            editorItem(hasTestTag("local-series-title")).performTextInput("漫画试读总集")
+            editorItem(hasTestTag("local-series-authors")).performTextInput("绘者")
+            editorItem(hasText("添加单话")).performClick()
+            editorItem(hasTestTag("local-series-volume-search")).performTextInput("试读漫画")
+            refs.forEach { ref -> editorItem(hasTestTag("pick-series-volume-${ref.key}")).performClick().assertIsOn() }
+            compose.onNodeWithText("保存").performClick()
+            compose.waitUntil(10_000) { compose.onAllNodesWithTag("local-series-detail").fetchSemanticsNodes().isNotEmpty() }
+            val parent = store.state.value.books.single { it.book.title == "漫画试读总集" }
+            series = parent.book.ref
+            assertEquals(BookMedium.Comic, parent.book.medium)
+            assertEquals(listOf("绘者"), parent.book.authors)
+            assertEquals(refs.map { it.key }, parent.volumeOrder)
+            val firstIssue = hasTestTag("shelf-volume-${refs.first().key}") and hasAnyAncestor(hasTestTag("local-series-detail"))
+            compose.onNodeWithTag("local-series-detail").performScrollToNode(firstIssue)
+            compose.onNode(firstIssue).performClick()
+            compose.waitUntil(10_000) { compose.onAllNodesWithTag("comic-reader").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithContentDescription("第 1 页，共 2 页，显示阅读工具").performClick()
+            compose.onNodeWithContentDescription("下一页").performClick()
+            compose.waitUntil(10_000) { store.state.value.positions[refs.first().key]?.index == 2 }
+            fun chooseCover(label: String) {
+                compose.onNodeWithContentDescription("用本页设置封面").performClick()
+                compose.onNodeWithText(label).performClick()
+                compose.waitUntil(10_000) { compose.onAllNodesWithText("用本页设置封面").fetchSemanticsNodes().isEmpty() }
+            }
+            suspend fun coverColor(ref: BookRef): Int {
+                val file = requireNotNull(store.bookCovers.observe(ref).first()).file
+                val bitmap = requireNotNull(BitmapFactory.decodeFile(file.path))
+                return bitmap.getPixel(0, 0).also { bitmap.recycle() }
+            }
+            chooseCover("设为本话封面")
+            assertEquals(Color.BLUE, coverColor(refs.first()))
+            assertNull(store.bookCovers.observe(parent.book.ref).first())
+            compose.onNodeWithText("下一话").performClick()
+            compose.waitUntil(10_000) { store.state.value.positions[refs.last().key]?.index == 1 }
+            compose.onNodeWithContentDescription("第 1 页，共 2 页，显示阅读工具").performClick()
+            chooseCover("设为总集封面 · 漫画试读总集")
+            assertEquals(Color.GREEN, coverColor(parent.book.ref))
+            assertEquals(Color.BLUE, coverColor(refs.first()))
+            assertNull(store.bookCovers.observe(refs.last()).first())
+        } finally {
+            series?.let { store.bookCovers.restoreDefault(it) }
+            refs.forEach { store.removeDocument(it.id) }
+            store.update { before }
+            inputs.forEach { it.delete() }
+        }
+    }
 
     @Test fun createsEditsAndDissolvesASeriesWithIndependentVolumeCoversAndPositions() = runBlocking {
         val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication

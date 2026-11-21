@@ -84,7 +84,8 @@ import cc.novelia.app.ui.theme.appShape
                     AppIconButton(onClick = { add = true }, enabled = importEnabled) { Icon(Icons.Outlined.Add, "添加到书架") }
                     AppDropdownMenu(add, { add = false }) {
                         DropdownMenuItem({ Text("导入本地文件") }, { add = false; onImport() }, leadingIcon = { Icon(Icons.Outlined.FileOpen, null) })
-                        DropdownMenuItem({ Text("新建本地总集") }, { add = false; onCreateSeries() }, leadingIcon = { Icon(Icons.Outlined.LibraryAdd, null) })
+                        DropdownMenuItem({ Text(if (novel) "新建本地总集" else "新建漫画总集") }, { add = false; onCreateSeries() },
+                            leadingIcon = { Icon(Icons.Outlined.LibraryAdd, null) })
                     }
                 }
             }

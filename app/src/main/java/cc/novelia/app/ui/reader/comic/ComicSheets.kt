@@ -16,6 +16,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.ui.components.base.*
 import cc.novelia.app.ui.theme.appReducedMotion
 import kotlinx.coroutines.launch
@@ -35,7 +36,9 @@ import kotlinx.coroutines.launch
     }
 }
 
-@Composable internal fun ComicChapterSheet(sections: List<ComicSection>, current: Int, jump: (Int) -> Unit, close: () -> Unit) {
+@Composable internal fun ComicChapterSheet(sections: List<ComicSection>, current: Int, jump: (Int) -> Unit, close: () -> Unit,
+    coverRef: BookRef? = null, onSeriesDetails: (() -> Unit)? = null,
+) {
     AppSheet(onDismissRequest = close) {
         Column(Modifier.fillMaxWidth().comicPanelHeight().testTag("comic-chapter-panel")) {
             ComicSheetHeader("章节目录", "${sections.size} 话 · ${sections.sumOf { it.count }} 页", close)
@@ -47,6 +50,7 @@ import kotlinx.coroutines.launch
                     style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                 AppTextButton(onClick = { scope.launch { scroll.scrollToItem(current) } }) { Text("定位当前") }
             }
+            if (onSeriesDetails != null) AppTextButton(onSeriesDetails, Modifier.padding(horizontal = 12.dp)) { Text("总集目录") }
             HorizontalDivider()
             AppLazyColumn(state = scroll, modifier = Modifier.weight(1f), contentPadding = PaddingValues(12.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -59,13 +63,14 @@ import kotlinx.coroutines.launch
                         border = if (active) BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = .4f)) else null) {
                         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                            Surface(shape = MaterialTheme.shapes.medium,
+                            val number: @Composable () -> Unit = { Surface(shape = MaterialTheme.shapes.medium,
                                 color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,
                                 contentColor = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant) {
                                 Box(Modifier.sizeIn(minWidth = 40.dp, minHeight = 40.dp).padding(horizontal = 6.dp), contentAlignment = Alignment.Center) {
                                     Text((index + 1).toString().padStart(2, '0'), style = MaterialTheme.typography.labelLarge)
                                 }
-                            }
+                            } }
+                            if (coverRef == null) number() else ComicChapterCover(coverRef, section.id, section.title, fallback = number)
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(section.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                 Text("${section.count} 页${if (active) " · 正在阅读" else ""}", style = MaterialTheme.typography.bodySmall,

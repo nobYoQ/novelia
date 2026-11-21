@@ -99,11 +99,11 @@ internal fun LocalDocument.navigationToc(readingOrder: List<TocItem> = readingOr
     return epubNavigationIds.mapNotNull(byId::get).ifEmpty { readingOrder }
 }
 
-/** 有原书目录时按独立正文 ID 计数，纯插图页即使列在目录中也不会增加章数。 */
+/** 漫画按阅读器里的章节计数。文字 EPUB 按目录中的独立正文 ID 计数，排除插图页。 */
 internal fun LocalDocument.displayChapterCount(readChapter: (LocalChapter) -> LocalChapter = { it }): Int {
-    if(format != "epub") return chapters.size
+    if(format != "epub" || imageOnlyEpub == true) return chapters.size
     val listed = navigationToc().mapNotNullTo(hashSetOf()) { it.chapterId }
-    return chapters.count { descriptor ->
+    val textChapters = chapters.count { descriptor ->
         if(descriptor.id !in listed) return@count false
         val chapter = readChapter(descriptor)
         val paragraphs = chapter.paragraphs
@@ -116,6 +116,8 @@ internal fun LocalDocument.displayChapterCount(readChapter: (LocalChapter) -> Lo
                 !(hasImage && index == first && text.trim() == chapter.title.trim())
         }
     }
+    if(textChapters == 0 && imageOnlyEpub == null && chapters.all { readChapter(it).hasOnlyImagePages() }) return chapters.size
+    return textChapters
 }
 
 private fun localImageParagraph(text: String): Boolean =

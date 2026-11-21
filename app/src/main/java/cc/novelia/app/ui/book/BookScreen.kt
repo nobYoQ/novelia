@@ -45,6 +45,7 @@ import cc.novelia.app.data.library.offlineRangeLabel
 import cc.novelia.app.data.library.readingDestination
 import cc.novelia.app.data.library.resumeDestination
 import cc.novelia.app.data.model.BookCard
+import cc.novelia.app.data.model.BookMedium
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.formatReadingTime
@@ -54,6 +55,7 @@ import cc.novelia.app.data.model.navigationWithUnlisted
 import cc.novelia.app.data.model.readingOrderToc
 import cc.novelia.app.data.model.readingTimeKeys
 import cc.novelia.app.data.model.reverseTocSiblings
+import cc.novelia.app.data.model.shelfMedium
 import cc.novelia.app.data.model.TocItem
 import cc.novelia.app.data.model.WebDetail
 import cc.novelia.app.data.model.WenkuDetail
@@ -84,6 +86,7 @@ import cc.novelia.app.ui.markdown.format
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.navigation.contentsChapterKey
 import cc.novelia.app.ui.reader.ChapterCacheDialog
+import cc.novelia.app.ui.reader.comic.ComicChapterCover
 import cc.novelia.app.ui.shelf.FavoriteSheet
 import cc.novelia.app.ui.components.book.LocalBookListPresentation
 import cc.novelia.app.ui.shelf.bookFavoriteState
@@ -334,6 +337,7 @@ import kotlinx.coroutines.withContext
                     item { MenuRow("本地术语表", "维护此文件的专有名词", Icons.Outlined.Translate, { c.go("glossary/${ref.key}") }) }
                 } else TocPanel(c, ref, toc, current,
                     locateChapter = navigationChapterId(readingOrder, toc, locateChapter) ?: locateChapter, onLocated = onLocated,
+                    showComicChapterCovers = book.shelfMedium == BookMedium.Comic && (document.comicSeries || document.chapters.size > 1),
                     onContinue = { destination?.let { onRead(it.chapterId, null) } },
                     onNavigateToEntry = { item -> item.chapterId?.let { onRead(it, item.epubFragment) } }) { onRead(it, null) }
             }
@@ -429,7 +433,7 @@ import kotlinx.coroutines.withContext
 }
 @Composable fun TocPanel(c: AppController, ref: BookRef, toc: List<TocItem>, current: String?,
     onContinue: (() -> Unit)? = null, onNavigateToEntry: ((TocItem) -> Unit)? = null,
-    locateChapter: String? = null, onLocated: () -> Unit = {}, onRead: (String) -> Unit) {
+    locateChapter: String? = null, onLocated: () -> Unit = {}, showComicChapterCovers: Boolean = false, onRead: (String) -> Unit) {
     var search by rememberSaveable(ref.key) { mutableStateOf("") }; var reversed by rememberSaveable(ref.key) { mutableStateOf(false) }
     var cacheDialog by remember(ref.key) { mutableStateOf(false) }
     val cacheActions = rememberChapterCacheActions(c)
@@ -479,7 +483,10 @@ import kotlinx.coroutines.withContext
                     AppListItem(
                         headlineContent = { Text(item.title, color = if (isCurrent && !highlight) scheme.primary else Color.Unspecified) },
                         supportingContent = if (!ref.isLocal && item.chapterId in cachedIds) ({ Text("可离线阅读") }) else null,
-                        leadingContent = { Icon(if (isCurrent) Icons.Outlined.Bookmark else Icons.Outlined.Article, null) },
+                        leadingContent = {
+                            val icon: @Composable () -> Unit = { Icon(if (isCurrent) Icons.Outlined.Bookmark else Icons.Outlined.Article, null) }
+                            if (showComicChapterCovers) ComicChapterCover(ref, item.chapterId, item.title, icon) else icon()
+                        },
                         trailingContent = { Icon(Icons.Outlined.ChevronRight, null) },
                         containerColor = wallpaperCardColor(if (highlight) scheme.primaryContainer else ListItemDefaults.containerColor),
                         contentColor = if (highlight) scheme.onPrimaryContainer else Color.Unspecified,

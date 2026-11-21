@@ -1,6 +1,7 @@
 package cc.novelia.app.data.library
 
 import cc.novelia.app.data.model.BookCard
+import cc.novelia.app.data.model.BookMedium
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.DEFAULT_FOLDER
 import cc.novelia.app.data.model.LibraryState
@@ -12,7 +13,7 @@ internal const val LOCAL_SERIES_LIST_FIELD_LIMIT = 300
 
 internal data class LocalSeriesEdits(
     val title: String, val authors: String, val tags: List<String>, val description: String,
-    val folderId: String, val volumeKeys: List<String>,
+    val folderId: String, val volumeKeys: List<String>, val medium: BookMedium = BookMedium.Novel,
 )
 
 internal fun localSeriesTagLength(tags: List<String>): Int = tags.sumOf { it.length } + (tags.size - 1).coerceAtLeast(0)
@@ -36,7 +37,9 @@ internal fun LibraryState.withEditedLocalSeries(ref: BookRef, creating: Boolean,
     val volumeKeys = edits.volumeKeys.toSet()
     require(volumeKeys.size == edits.volumeKeys.size) { "分卷不能重复" }
     val previousKeys = previous?.let { mountedVolumes(it) }.orEmpty().map { it.book.ref.key }
-    val parent = (previous ?: newSavedBook(BookCard(ref, title, subtitle = "本地总集"), folder)).let {
+    val parent = (previous ?: newSavedBook(BookCard(ref, title,
+        subtitle = if (edits.medium == BookMedium.Comic) "漫画总集" else "本地总集",
+        medium = edits.medium.takeIf { it == BookMedium.Comic }), folder)).let {
         it.copy(book = it.book.copy(title = title, authors = edits.authors.seriesList(), tags = tags),
             seriesDescription = description)
     }

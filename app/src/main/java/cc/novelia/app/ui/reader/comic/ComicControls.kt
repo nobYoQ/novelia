@@ -55,7 +55,7 @@ import kotlin.math.roundToInt
 @Composable internal fun ComicControls(range: IntRange, page: Int, mode: ComicReadingMode, hasChapters: Boolean, wholeBook: Boolean,
     previousChapter: (() -> Unit)?, nextChapter: (() -> Unit)?, canBack: Boolean,
     canForward: Boolean, step: (Int) -> Unit, seek: (Int) -> Unit, onChapters: () -> Unit, onPages: () -> Unit,
-    onSettings: () -> Unit, onMode: (ComicReadingMode) -> Unit, modifier: Modifier) {
+    onSettings: () -> Unit, onMode: (ComicReadingMode) -> Unit, modifier: Modifier, onCover: (() -> Unit)? = null) {
     var pending by remember(range) { mutableStateOf<Int?>(null) }
     var modes by remember { mutableStateOf(false) }
     val rtl = mode == ComicReadingMode.RightToLeft
@@ -72,6 +72,7 @@ import kotlin.math.roundToInt
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text("${(pending ?: local) + 1} / $count", style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.primary)
+                if (onCover != null) AppIconButton(onClick = onCover) { Icon(Icons.Outlined.Image, "用本页设置封面") }
             }
             CompositionLocalProvider(LocalLayoutDirection provides if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr) {
                 Row(verticalAlignment = Alignment.CenterVertically) {

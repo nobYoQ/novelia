@@ -10,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import cc.novelia.app.data.library.withVolumeParent
 import cc.novelia.app.data.model.*
 import cc.novelia.app.files.comic.importComicSeries
 import cc.novelia.app.files.comic.seriesTree
@@ -39,9 +40,13 @@ import kotlinx.coroutines.*
                             val index = if (next == BookMedium.Comic) position.sourceParagraph?.plus(1) ?: position.index else position.index
                             current.positions + (ref.key to position.copy(index = index, offset = 0, textOffset = 0))
                         } else current.positions
-                        current.copy(positions = positions, books = current.books.map { item ->
+                        val updated = current.copy(positions = positions, books = current.books.map { item ->
                             if (item.book.ref == ref) item.copy(epubMediumOverride = choice, book = item.book.copy(medium = next)) else item
                         })
+                        val parent = current.books.firstOrNull { it.book.ref.key == old?.parentWenkuKey }
+                        if (next == BookMedium.Novel && parent?.book?.shelfMedium == BookMedium.Comic) {
+                            updated.withVolumeParent(ref.key, null)
+                        } else updated
                     }
                 })
             }

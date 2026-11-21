@@ -10,6 +10,7 @@ import cc.novelia.app.data.updates.withAcknowledgedBookUpdates
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
@@ -235,7 +236,8 @@ import kotlinx.coroutines.withContext
     }
     fun volumeLabel(group: ShelfGroup): String {
         val total = allVolumeGroups[group.saved.book.ref.key]?.volumes?.size ?: 0
-        return if(filteringVolumes && group.volumes.size != total) "匹配 ${group.volumes.size} / $total 卷" else "本地 $total 卷"
+        val unit = if (comics) "话" else "卷"
+        return if(filteringVolumes && group.volumes.size != total) "匹配 ${group.volumes.size} / $total $unit" else "本地 $total $unit"
     }
     fun fileAuthors(saved: SavedBook): List<String> = saved.book.authors.filter(String::isNotBlank).ifEmpty {
         allVolumeGroups[saved.parentWenkuKey]?.saved?.book?.authors.orEmpty().filter(String::isNotBlank)
@@ -282,7 +284,7 @@ import kotlinx.coroutines.withContext
             onUpdates = { c.go("updates") },
             onFavoriteSync = if (!comics) ({ if(profile == null) c.go("login") else favoriteSync = true }) else null,
             favoriteSyncEnabled = !batchWorking && !cloudBusy,
-            onCreateSeries = if (!comics && tab == 0 && !managing) ({ c.editLocalSeries(folderId = folderId) }) else null)
+            onCreateSeries = if (tab == 0 && !managing) ({ c.editLocalSeries(folderId = folderId, comic = comics) }) else null)
     }) { padding ->
         ShelfPager(tab, { tab = it }, enabled = !batchWorking && !cloudBusy, singlePage = comics,
             classifyingBooks = classifyingBooks, modifier = Modifier.padding(padding),
@@ -484,7 +486,7 @@ import kotlinx.coroutines.withContext
                                         onRead = onRead)
                                     if(saved.book.ref.isVolumeParent && !pageManaging) AppTextButton(onOpen, Modifier.padding(start = 12.dp)) {
                                         Text(volumeLabel(group))
-                                        Icon(Icons.Outlined.ChevronRight, "查看分卷", Modifier.size(18.dp))
+                                        Icon(Icons.Outlined.ChevronRight, if (comics) "查看单话" else "查看分卷", Modifier.size(18.dp))
                                     }
                                 }
                             }
@@ -601,7 +603,9 @@ import kotlinx.coroutines.withContext
         else if(!saved.book.ref.isLocalSeries) ChoiceRow("收藏夹", orderedFolders, orderedFolders.indexOf(saved.folder)) { index -> c.store.saveBook(saved.book, orderedFolders[index]); selected = null }
         if(saved.book.ref.isWenku) MenuRow("管理挂载分卷", "选择已导入的书籍作为分卷", Icons.Outlined.LibraryAdd, { selected = null; volumeManager = saved })
         if(saved.book.ref.isWenku && state.books.any { it.parentWenkuKey == saved.book.ref.key }) WenkuSiteOrderActions(c, saved.book.ref.key)
-        if(saved.book.ref.isLocal) MenuRow(if(parent == null) "挂载到文库或总集" else "更换或取消挂载", parent?.let { "当前挂载：${it.book.title}" } ?: "将本书添加为分卷", Icons.Outlined.DriveFileMove, { selected = null; volumeParentPicker = saved })
+        if(saved.book.ref.isLocal) MenuRow(if(parent != null) "更换或取消挂载" else if (comics) "挂载到漫画总集" else "挂载到文库或总集",
+            parent?.let { "当前挂载：${it.book.title}" } ?: if (comics) "将此漫画添加为一话" else "将本书添加为分卷",
+            Icons.Outlined.DriveFileMove, { selected = null; volumeParentPicker = saved })
         if(saved.book.ref.isLocal) MenuRow("重命名", "修改书名", Icons.Outlined.Edit, { selected = null; renamingDocument = saved })
         if(saved.book.ref.isLocal && !comics) MenuRow("本地术语表", "维护此文件的专有名词", Icons.Outlined.Translate, { selected = null; c.go("glossary/${saved.book.ref.key}") })
         if(saved.book.ref.isLocal) MenuRow("导出原文件", "导出保存在本机的书籍文件", Icons.Outlined.IosShare, { c.action {

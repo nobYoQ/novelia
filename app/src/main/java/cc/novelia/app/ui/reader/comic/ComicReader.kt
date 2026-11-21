@@ -24,6 +24,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.LayoutDirection
+import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.ComicPreferences
 import cc.novelia.app.data.model.ComicReadingMode
 import cc.novelia.app.reader.ComicPage
@@ -47,6 +48,8 @@ internal fun ComicReader(
     onDefaultMode: (ComicReadingMode) -> Unit, onPreferences: (ComicPreferences) -> Unit,
     onPosition: (Int, Int, Boolean) -> Unit, onBack: () -> Unit, onDetails: () -> Unit,
     modifier: Modifier = Modifier,
+    coverRef: BookRef? = null, onCover: ((Int) -> Unit)? = null,
+    previousVolume: (() -> Unit)? = null, nextVolume: (() -> Unit)? = null, onSeriesDetails: (() -> Unit)? = null,
 ) {
     var menu by rememberSaveable { mutableStateOf(false) }
     var chapters by rememberSaveable { mutableStateOf(false) }
@@ -87,10 +90,7 @@ internal fun ComicReader(
             val page by remember { derivedStateOf {
                 if (webtoon) layout[list.firstVisibleItemIndex].page else frames[pager.currentPage].first
             } }
-            val sectionIndex = remember(sections, page) {
-                val hit = sections.binarySearchBy(page) { it.first }
-                if (hit >= 0) hit else -hit - 2
-            }
+            val sectionIndex = remember(sections, page) { sections.sectionIndexAt(page) }
             val chapter = sections[sectionIndex]
             // 扫图 EPUB 经常每个 spine 只有一页，这时滑杆仍能定位整册。
             val progressRange = if (chapter.count == 1) pages.indices else chapter.first until chapter.first + chapter.count
@@ -126,7 +126,14 @@ internal fun ComicReader(
                 }
             }
             fun step(delta: Int) {
-                if (webtoon) scope.launch { list.scrollBy(delta * list.layoutInfo.viewportSize.height * .9f) }
+                val canStep = if (webtoon) {
+                    if (delta < 0) list.canScrollBackward else list.canScrollForward
+                } else pager.currentPage + delta in frames.indices
+                if (!canStep) {
+                    if (!pager.isScrollInProgress && !list.isScrollInProgress) {
+                        (if (delta < 0) previousVolume else nextVolume)?.invoke()
+                    }
+                } else if (webtoon) scope.launch { list.scrollBy(delta * list.layoutInfo.viewportSize.height * .9f) }
                 else scope.launch {
                     val next = (pager.currentPage + delta).coerceIn(frames.indices)
                     if (reduced) pager.scrollToPage(next) else pager.animateScrollToPage(next)
@@ -201,18 +208,20 @@ internal fun ComicReader(
                 ComicHeader(title, chapter, onBack, onDetails, Modifier)
             }
             ReaderToolbarVisibility(menu, Modifier.align(Alignment.BottomCenter), reduced, fromTop = false) {
-                ComicControls(progressRange, page, mode, hasChapters = sections.size > 1, wholeBook = progressRange == pages.indices,
-                    previousChapter = sections.getOrNull(sectionIndex - 1)?.let { section -> { seek(section.first) } },
-                    nextChapter = sections.getOrNull(sectionIndex + 1)?.let { section -> { seek(section.first) } },
-                    canBack = if (webtoon) list.canScrollBackward else pager.currentPage > 0,
-                    canForward = if (webtoon) list.canScrollForward else pager.currentPage < frames.lastIndex,
+                ComicControls(progressRange, page, mode, hasChapters = sections.size > 1 || onSeriesDetails != null, wholeBook = progressRange == pages.indices,
+                    previousChapter = sections.getOrNull(sectionIndex - 1)?.let { section -> { seek(section.first) } } ?: previousVolume,
+                    nextChapter = sections.getOrNull(sectionIndex + 1)?.let { section -> { seek(section.first) } } ?: nextVolume,
+                    canBack = previousVolume != null || if (webtoon) list.canScrollBackward else pager.currentPage > 0,
+                    canForward = nextVolume != null || if (webtoon) list.canScrollForward else pager.currentPage < frames.lastIndex,
                     step = ::step, seek = ::seek, onChapters = { chapters = true }, onPages = { overview = true },
+                    onCover = onCover?.takeIf { pages[page].text == null }?.let { setCover -> { setCover(page) } },
                     onSettings = { settings = true }, onMode = { next ->
                         save(position())
                         onPreferences(preferences.copy(mode = next))
                     }, modifier = Modifier)
             }
-            if (chapters) ComicChapterSheet(sections, sectionIndex, { seek(sections[it].first); chapters = false }, { chapters = false })
+            if (chapters) ComicChapterSheet(sections, sectionIndex, { seek(sections[it].first); chapters = false }, { chapters = false },
+                coverRef, onSeriesDetails?.let { details -> { chapters = false; details() } })
             if (overview) ComicOverview(pages, sections, page, { target -> seek(target); overview = false }, { overview = false })
         }
     }

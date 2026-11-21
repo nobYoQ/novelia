@@ -24,6 +24,8 @@ class BookMediumTest {
         assertEquals(BookMedium.Comic, doc.bookMedium { id -> LocalChapter(id, "", listOf(page)) })
         assertEquals(BookMedium.Comic, doc.copy(imageOnlyEpub = true).bookMedium { error("不需要正文") })
         assertEquals(BookMedium.Novel, doc.copy(imageOnlyEpub = false).bookMedium { error("不需要正文") })
+        assertEquals(2, doc.displayChapterCount { it.copy(paragraphs = listOf(page)) })
+        assertEquals(2, doc.copy(imageOnlyEpub = true).displayChapterCount { error("不需要正文") })
     }
 
     @Test fun legacyLocationStartsOnNovelShelfAndDisablingRestoreResetsTheShelf() {

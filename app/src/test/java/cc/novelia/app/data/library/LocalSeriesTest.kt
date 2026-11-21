@@ -1,12 +1,14 @@
 package cc.novelia.app.data.library
 
 import cc.novelia.app.data.model.BookCard
+import cc.novelia.app.data.model.BookMedium
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.DEFAULT_FOLDER_ID
 import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.Position
 import cc.novelia.app.data.model.SavedBook
 import cc.novelia.app.data.model.createShelfFolder
+import cc.novelia.app.data.model.shelfMedium
 import cc.novelia.app.data.storage.appJson
 import cc.novelia.app.data.updates.booksForUpdate
 import cc.novelia.app.data.webdav.SyncDomain
@@ -62,5 +64,24 @@ class LocalSeriesTest {
         val dissolved = mounted.withDeletedBookRecords(plan.books, eraseReadingData = true, plan.linkIds)
         assertEquals(initial.positions, dissolved.positions)
         assertEquals(initial.books, dissolved.books)
+    }
+
+    @Test fun comicSeriesGroupsComicsAndKeepsTheirIndividualPositionsAndOrder() {
+        val comic = first.copy(book = first.book.copy(medium = BookMedium.Comic))
+        val otherComic = second.copy(book = second.book.copy(medium = BookMedium.Comic))
+        val novel = SavedBook(BookCard(BookRef("local", "novel"), "小说"))
+        val source = initial.copy(books = listOf(comic, otherComic, novel))
+        val edits = draft.copy(medium = BookMedium.Comic, volumeKeys = listOf(otherComic.book.ref.key, comic.book.ref.key))
+        val created = source.withEditedLocalSeries(ref, creating = true, edits)
+        val restored = appJson.decodeFromString<LibraryState>(appJson.encodeToString(created))
+        val group = restored.shelfGroups(false, "全部", "", 2,
+            candidates = restored.books.filter { it.book.shelfMedium == BookMedium.Comic }).single()
+        assertEquals(ref, group.saved.book.ref)
+        assertEquals(listOf(otherComic.book.ref, comic.book.ref), group.volumes.map { it.book.ref })
+        assertEquals(source.positions, restored.positions)
+        assertThrows(IllegalArgumentException::class.java) { restored.withVolumeParent(novel.book.ref.key, ref.key) }
+        val detached = restored.withVolumeParent(comic.book.ref.key, null)
+        assertEquals(source.positions, detached.positions)
+        assertNull(detached.books.single { it.book == comic.book }.parentWenkuKey)
     }
 }
