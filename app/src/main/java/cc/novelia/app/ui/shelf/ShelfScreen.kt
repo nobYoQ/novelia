@@ -268,6 +268,8 @@ import kotlinx.coroutines.withContext
                     }
                 }
                 val pageManaging = active && managing && volumeSheetKey == null
+                val toolsExpanded = state.shelfControlsExpanded
+                val pageType = if(page == 0) bookType else fileType
                 val layout = rememberShelfLayoutState(grid, rows.map { it.saved.book.ref.key }, groups.map { it.saved.book.ref.key }, columns,
                     parents = rows.mapNotNull { row -> row.parent?.let { row.saved.book.ref.key to it.book.ref.key } }.toMap())
                 val listState = layout.current(grid)
@@ -299,14 +301,14 @@ import kotlinx.coroutines.withContext
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     val filterHeight = maxHeight * .9f
                     Column(Modifier.fillMaxSize()) {
-                        LocalShelfFilters(page == 1, if(page == 0) bookType else fileType, { if(page == 0) bookType = it else fileType = it },
+                        LocalShelfFilters(page == 1, pageType, { if(page == 0) bookType = it else fileType = it },
                             folderChoices, folder, { folderId = state.folderIds[it] }, sort, { sort = it }, query, { query = it }, readingStatus, { readingStatus = it },
                             filtersExpanded, { filtersExpanded = it }, filterHeight, { createFolder = true }, { renameFolder = true }, { deleteFolder = true },
                             characters = characterFilter, onCharacters = { characterFilter = it },
                             countLabel = "${groups.size} 本" + groups.sumOf { it.volumes.size }.takeIf { it > 0 }?.let { " · $it 分卷" }.orEmpty(),
                             visible = !pageManaging, active = active, modifier = Modifier.onSizeChanged { controlsHeight = it.height },
                             grid = grid, onToggleLayout = { c.store.update { if(page == 0) it.copy(shelfGrid = !it.shelfGrid) else it.copy(localFilesGrid = !it.localFilesGrid) } },
-                            folderOrder = state.localFavoriteFolderOrder,
+                            folderOrder = state.localFavoriteFolderOrder, collapsed = !toolsExpanded,
                             onOrderFolders = { order -> c.store.update { it.copy(localFavoriteFolderOrder = order) } }) {
                             if(filterCharacters) Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                                 val unknown = countCandidates.count { characterCounts.count(it) == null }
@@ -316,10 +318,15 @@ import kotlinx.coroutines.withContext
                         }
                         if(pageManaging) ShelfSelectionHeader(selection.size, !batchWorking,
                             // 长按尚未松手时保持列表起点，避免进入选择模式后书籍从手指下跳开。
-                            if(dragSelection.dragging) with(density) { controlsHeight.toDp() } else 48.dp,
+                            if(dragSelection.dragging) with(density) { (if(toolsExpanded) controlsHeight else 0).toDp() } else 48.dp,
                             onSelectAll = { selection = selectableKeys },
                             onFinish = { managing = false; selection = emptySet() })
-                        ShelfLayoutTransition(grid, Modifier.weight(1f)) { showGrid ->
+                        ShelfLayoutTransition(grid, Modifier.weight(1f), overlay = {
+                            if(active && !managing && !batchWorking) ShelfControlsToggle(toolsExpanded,
+                                folder != "全部" || query.isNotBlank() || readingStatus != "全部" || pageType != ShelfBookType.All) {
+                                c.store.update { it.copy(shelfControlsExpanded = !it.shelfControlsExpanded) }
+                            }
+                        }) { showGrid ->
                         AppLazyColumn(modifier = Modifier.fillMaxSize().onSizeChanged { if(showGrid == grid) listHeight = it.height },
                             listModifier = Modifier.testTag(if(showGrid) "shelf-books-grid" else "shelf-books")
                                 .shelfDragSelection(dragSelection, selectionEnabled && showGrid == grid), state = layout.current(showGrid),
@@ -327,7 +334,7 @@ import kotlinx.coroutines.withContext
                             contentPadding = PaddingValues(top = if(showGrid) 8.dp else 0.dp, bottom = if(continueBook != null)
                                 with(density) { continueHeight.toDp() } + 32.dp else 0.dp)) {
                             if(books.isEmpty()) item {
-                                if(query.isNotBlank() || folder != "全部" || readingStatus != "全部" || (if(page == 0) bookType else fileType) != ShelfBookType.All)
+                                if(query.isNotBlank() || folder != "全部" || readingStatus != "全部" || pageType != ShelfBookType.All)
                                     EmptyState("没有符合条件的小说", if(filterCharacters) "可以放宽字数范围、包含未知作品或继续补全字数。" else "试试其他书名、作者、类型或阅读状态。", action = "清除筛选", onAction = { query = ""; folderId = null; readingStatus = "全部"; bookType = ShelfBookType.All; fileType = ShelfBookType.All; characterFilter = CharacterCountFilter() })
                                 else EmptyState(if(page == 1) "把故事装进口袋" else "书架等你来填满", if(page == 1) "支持 EPUB、TXT 和 SRT，导入后即可离线阅读。" else "去发现喜欢的小说，或导入你已有的文件。", action = if(page == 1) "导入文件" else "去发现", onAction = { if(page == 1) importLocalFiles() else c.go("discover") }, sticker = Sticker.Welcome)
                             }

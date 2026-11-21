@@ -57,13 +57,17 @@ internal fun shelfVolumeProgressLabel(parentTitle: String, volumeTitle: String, 
 @Composable internal fun compactShelfGridCards(width: Dp, columns: Int): Boolean =
     (width - 40.dp - 12.dp * (columns - 1)) / columns < 120.dp * LocalDensity.current.fontScale.coerceIn(1f, 1.3f)
 
-@Composable internal fun ShelfLayoutTransition(grid: Boolean, modifier: Modifier = Modifier, content: @Composable (Boolean) -> Unit) {
-    if(appReducedMotion()) Box(modifier) { content(grid) }
-    else AnimatedContent(grid, modifier, transitionSpec = {
-        ((fadeIn(tween(AppMotion.Panel, delayMillis = 40)) + scaleIn(tween(AppMotion.Panel), initialScale = .96f)) togetherWith
-            (fadeOut(tween(AppMotion.Exit)) + scaleOut(tween(AppMotion.Exit), targetScale = .98f)))
-            .using(SizeTransform(clip = false))
-    }, label = "shelf-layout") { content(it) }
+@Composable internal fun ShelfLayoutTransition(grid: Boolean, modifier: Modifier = Modifier,
+    overlay: @Composable BoxScope.() -> Unit = {}, content: @Composable (Boolean) -> Unit) {
+    Box(modifier) {
+        if(appReducedMotion()) content(grid)
+        else AnimatedContent(grid, Modifier.fillMaxSize(), transitionSpec = {
+            ((fadeIn(tween(AppMotion.Panel, delayMillis = 40)) + scaleIn(tween(AppMotion.Panel), initialScale = .96f)) togetherWith
+                (fadeOut(tween(AppMotion.Exit)) + scaleOut(tween(AppMotion.Exit), targetScale = .98f)))
+                .using(SizeTransform(clip = false))
+        }, label = "shelf-layout") { content(it) }
+        Box(Modifier.matchParentSize(), content = overlay)
+    }
 }
 
 internal class ShelfLayoutState(val list: LazyListState, val grid: LazyListState) {

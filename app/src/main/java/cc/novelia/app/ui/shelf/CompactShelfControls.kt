@@ -36,6 +36,7 @@ import cc.novelia.app.ui.components.base.*
     countLabel: String = "", visible: Boolean = true, active: Boolean = true, modifier: Modifier = Modifier,
     grid: Boolean? = null, onToggleLayout: () -> Unit = {},
     folderOrder: FavoriteFolderOrder = FavoriteFolderOrder(), onOrderFolders: ((FavoriteFolderOrder) -> Unit)? = null,
+    collapsed: Boolean = false,
     trailingContent: @Composable () -> Unit = {},
 ) {
     val focus = LocalFocusManager.current
@@ -49,10 +50,12 @@ import cc.novelia.app.ui.components.base.*
     val sorts = listOf("最近阅读", "添加时间", "书名排序")
     val characterActive = !localFiles && type == ShelfBookType.Web && characters.active
     val count = (if(type != ShelfBookType.All) 1 else 0) + (if(status != "全部") 1 else 0) + (if(characterActive) 1 else 0)
-    LaunchedEffect(active, visible) {
-        if(!active || !visible) { folderMenu = false; sortMenu = false; onExpanded(false); focus.clearFocus() }
+    val showControls = visible && !collapsed
+    LaunchedEffect(active, showControls, collapsed) {
+        if(collapsed) searchExpanded = false
+        if(!active || !showControls) { folderMenu = false; sortMenu = false; onExpanded(false); focus.clearFocus() }
     }
-    if(visible) Column(modifier.fillMaxWidth().testTag("local-controls")) {
+    if(showControls) Column(modifier.fillMaxWidth().testTag("local-controls")) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp).testTag("local-toolbar"), verticalAlignment = Alignment.CenterVertically) {
             BoxWithConstraints(Modifier.weight(1f)) {
                 val folderMenuWidth = maxWidth
@@ -107,7 +110,7 @@ import cc.novelia.app.ui.components.base.*
             if(!searchExpanded && query.isNotBlank()) ShelfFilterChip("搜索：${query.trim()}", "local-clear-query") { onQuery("") }
         }
     }
-    if(expanded && visible && active) {
+    if(expanded && showControls && active) {
         var draftType by rememberSaveable { mutableStateOf(type) }
         var draftStatus by rememberSaveable { mutableStateOf(status) }
         var draftCharacters by rememberSaveable(stateSaver = CharacterCountFilterSaver) { mutableStateOf(characters) }

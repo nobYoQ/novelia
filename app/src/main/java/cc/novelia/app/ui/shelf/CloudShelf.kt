@@ -165,6 +165,7 @@ import cc.novelia.app.ui.navigation.AppController
             val cachedPage = c.uiResults.cloudPages.snapshot(requestKey)?.value
             var pageCount by remember(requestKey) { mutableStateOf(cachedPage?.items?.size) }
             var controlsHeight by remember { mutableIntStateOf(0) }
+            val toolsExpanded = local.shelfControlsExpanded
             Column(Modifier.fillMaxSize()) {
                 CompactCloudControls(choices, current, { folderId = it; page = 0 }, sort, { sort = it; page = 0 }, kind, filter,
                     onApply = { nextKind, next ->
@@ -175,7 +176,7 @@ import cc.novelia.app.ui.navigation.AppController
                     countLabel = pageCount?.let { "本页 $it 本" } ?: "加载中", maxHeight = filterHeight, active = active,
                     visible = !managing, modifier = Modifier.onSizeChanged { controlsHeight = it.height },
                     grid = local.cloudShelfGrid, onToggleLayout = { c.store.update { it.copy(cloudShelfGrid = !it.cloudShelfGrid) } },
-                    folderOrder = folderOrder, onOrderFolders = { order ->
+                    folderOrder = folderOrder, collapsed = !toolsExpanded, onOrderFolders = { order ->
                         val isWenku = kind == 1
                         c.action {
                             c.session.ensureCurrent(binding)
@@ -189,37 +190,48 @@ import cc.novelia.app.ui.navigation.AppController
                     }
                     DropdownMenuItem({ Text("刷新收藏夹") }, { close(); version++ }, leadingIcon = { Icon(Icons.Outlined.Refresh, null) })
                 }
-                if(current == null) EmptyState("创建第一个云端收藏夹", "收藏夹与原站同步。", action = "新建收藏夹", onAction = { create = true })
-                else {
-                    val listState = rememberCachedListState(c.uiResults.cloudPages, requestKey)
-                    val gridState = rememberCachedListState(c.uiResults.cloudPages, requestKey, "grid")
-                    CachedAsyncContent(c.uiResults.cloudPages, requestKey, refreshKey = refreshKey, modifier = Modifier.weight(1f), load = {
-                        c.api.cloudFavorites(kind == 1, current.id, page, sort, filter)
-                    }, observeInvalidation = observeInvalidation && !bulkBusy, validate = { c.session.ensureCurrent(binding) },
-                        onLoaded = { pageCount = it.items.size }) { result, retry ->
-                        LaunchedEffect(result.items, account) {
-                            if(c.session.profile.value?.username != account) return@LaunchedEffect
-                            c.store.update { it.withCloudReadingMetadata(result.items, account) }
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    if(current == null) EmptyState("创建第一个云端收藏夹", "收藏夹与原站同步。", action = "新建收藏夹", onAction = { create = true })
+                    else {
+                        val listState = rememberCachedListState(c.uiResults.cloudPages, requestKey)
+                        val gridState = rememberCachedListState(c.uiResults.cloudPages, requestKey, "grid")
+                        CachedAsyncContent(c.uiResults.cloudPages, requestKey, refreshKey = refreshKey, modifier = Modifier.fillMaxSize(), load = {
+                            c.api.cloudFavorites(kind == 1, current.id, page, sort, filter)
+                        }, observeInvalidation = observeInvalidation && !bulkBusy, validate = { c.session.ensureCurrent(binding) },
+                            onLoaded = { pageCount = it.items.size }) { result, retry ->
+                            LaunchedEffect(result.items, account) {
+                                if(c.session.profile.value?.username != account) return@LaunchedEffect
+                                c.store.update { it.withCloudReadingMetadata(result.items, account) }
+                            }
+                            CloudShelfBooks(result.items, local, account, listState, page, result.pageNumber, { page = it },
+                                managing, { managing = it; if(it) { expanded = false; focus.clearFocus() } }, selection, { selection = it },
+                                bulkBusy, bulkProgress, active, if(toolsExpanded) controlsHeight else 0, selectedBookKey,
+                                onOpenBook = { expanded = false; onOpenBook(it) }, onLocal = { bulkLocal = selection.values.toList() },
+                                onRemove = { bulkRemoval = current.id to selection.values.toList() }, onRetry = retry,
+                                onReadBook = { ref, chapter -> c.read(ref, chapter) },
+                                grid = local.cloudShelfGrid, gridState = gridState,
+                                onImportAll = { bulkImport = it }, progressLabel = importProgress,
+                                metadata = { rememberCloudBookMetadata(c, it, account, refreshKey) }, actions = { displayed, canAct ->
+                                    val book = displayed
+                                    val cancelling = pendingFavoriteAction(local.pending, account, book.ref)?.method == "DELETE"
+                                    if(cancelling) AppTextButton(onClick = { if(canAct()) c.action {
+                                        val restoreFolder = book.favored?.takeIf { it != ALL_CLOUD_FAVORITES && it.isNotBlank() }
+                                            ?: current.id.takeUnless { it == ALL_CLOUD_FAVORITES }
+                                        val folder = realFolders.firstOrNull { it.id == restoreFolder }
+                                        if(folder != null) { c.addCloudFavorite(displayed, folder, binding); version++ }
+                                        else { c.pendingFavoriteCloud = true; c.pendingFavorite = book }
+                                    } }) { Text("撤销") }
+                                })
                         }
-                        CloudShelfBooks(result.items, local, account, listState, page, result.pageNumber, { page = it },
-                            managing, { managing = it; if(it) { expanded = false; focus.clearFocus() } }, selection, { selection = it },
-                            bulkBusy, bulkProgress, active, controlsHeight, selectedBookKey,
-                            onOpenBook = { expanded = false; onOpenBook(it) }, onLocal = { bulkLocal = selection.values.toList() },
-                            onRemove = { bulkRemoval = current.id to selection.values.toList() }, onRetry = retry,
-                            onReadBook = { ref, chapter -> c.read(ref, chapter) },
-                            grid = local.cloudShelfGrid, gridState = gridState,
-                            onImportAll = { bulkImport = it }, progressLabel = importProgress,
-                            metadata = { rememberCloudBookMetadata(c, it, account, refreshKey) }, actions = { displayed, canAct ->
-                                val book = displayed
-                                val cancelling = pendingFavoriteAction(local.pending, account, book.ref)?.method == "DELETE"
-                                if(cancelling) AppTextButton(onClick = { if(canAct()) c.action {
-                                    val restoreFolder = book.favored?.takeIf { it != ALL_CLOUD_FAVORITES && it.isNotBlank() }
-                                        ?: current.id.takeUnless { it == ALL_CLOUD_FAVORITES }
-                                    val folder = realFolders.firstOrNull { it.id == restoreFolder }
-                                    if(folder != null) { c.addCloudFavorite(displayed, folder, binding); version++ }
-                                    else { c.pendingFavoriteCloud = true; c.pendingFavorite = book }
-                                } }) { Text("撤销") }
-                            })
+                    }
+                    if(active && !managing && !bulkBusy) {
+                        val hasActiveFilters = (choices.size > 1 && current?.id != ALL_CLOUD_FAVORITES) ||
+                            kind == 1 || filter != CloudWebFilter()
+                        Box(Modifier.matchParentSize()) {
+                            ShelfControlsToggle(toolsExpanded, hasActiveFilters) {
+                                c.store.update { it.copy(shelfControlsExpanded = !it.shelfControlsExpanded) }
+                            }
+                        }
                     }
                 }
             }

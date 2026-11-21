@@ -132,6 +132,8 @@ fun legacyFolderId(name: String): String = if(name == DEFAULT_FOLDER) DEFAULT_FO
     val readerThemePresets: Map<String, ReaderThemePalette> = emptyMap(),
     // 单本 EPUB 的目录范围与默认阅读偏好独立保存。
     val epubTocIncludeUnlisted: Map<String, Boolean> = emptyMap(),
+    // 三个书架分区共用本机的工具栏展开状态。
+    val shelfControlsExpanded: Boolean = true,
 )
 
 /** 收藏夹名称仅用于显示；改名时 ID 及所有本地分卷仍保持原关系。 */

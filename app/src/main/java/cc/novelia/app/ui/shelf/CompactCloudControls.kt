@@ -34,6 +34,7 @@ import cc.novelia.app.ui.components.book.WebSourceOptions
     active: Boolean, visible: Boolean, modifier: Modifier = Modifier,
     grid: Boolean? = null, onToggleLayout: () -> Unit = {},
     folderOrder: FavoriteFolderOrder = FavoriteFolderOrder(), onOrderFolders: ((FavoriteFolderOrder) -> Unit)? = null,
+    collapsed: Boolean = false,
     folderActions: @Composable ColumnScope.(close: () -> Unit) -> Unit,
 ) {
     var folderMenu by remember(kind) { mutableStateOf(false) }
@@ -45,8 +46,12 @@ import cc.novelia.app.ui.components.book.WebSourceOptions
     val levelLabels = listOf("全部", "一般向", "R18")
     val translateLabels = listOf("全部", "GPT", "Sakura")
     val count = if(kind == 0) listOf(sources.size != providers.size, filter.type != 0, filter.level != 0, filter.translate != 0).count { it } else 0
-    LaunchedEffect(active, visible) { if(!active || !visible) { folderMenu = false; sortMenu = false; onExpanded(false); focus.clearFocus() } }
-    if(visible) Column(modifier.fillMaxWidth().testTag("cloud-controls")) {
+    val showControls = visible && !collapsed
+    LaunchedEffect(active, showControls, collapsed) {
+        if(collapsed) searchExpanded = false
+        if(!active || !showControls) { folderMenu = false; sortMenu = false; onExpanded(false); focus.clearFocus() }
+    }
+    if(showControls) Column(modifier.fillMaxWidth().testTag("cloud-controls")) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp).testTag("cloud-toolbar"), verticalAlignment = Alignment.CenterVertically) {
             BoxWithConstraints(Modifier.weight(1f)) {
                 val folderMenuWidth = maxWidth
@@ -97,7 +102,7 @@ import cc.novelia.app.ui.components.book.WebSourceOptions
             if(!searchExpanded && filter.query.isNotBlank()) ShelfFilterChip("搜索：${filter.query}", "cloud-clear-query", onClearQuery)
         }
     }
-    if(expanded && visible && active) {
+    if(expanded && showControls && active) {
         var draftKind by rememberSaveable { mutableIntStateOf(kind) }
         var draftSource by rememberSaveable { mutableStateOf(filter.source) }
         var draftType by rememberSaveable { mutableIntStateOf(filter.type) }

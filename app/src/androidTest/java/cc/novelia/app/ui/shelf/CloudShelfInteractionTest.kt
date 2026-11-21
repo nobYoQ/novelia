@@ -38,6 +38,7 @@ class CloudShelfInteractionTest {
     private var query by mutableStateOf("")
     private var filter by mutableStateOf(CloudWebFilter())
     private var expanded by mutableStateOf(false)
+    private var toolsCollapsed by mutableStateOf(false)
     private var grid by mutableStateOf(false)
     private var local by mutableStateOf(false)
     private var created = false
@@ -60,7 +61,7 @@ class CloudShelfInteractionTest {
                                 { nextKind, next -> kind = nextKind; filter = next; managing = false; selected = emptyMap() },
                                 query, { query = it }, { filter = filter.copy(query = query.trim()) }, { query = ""; filter = filter.copy(query = "") },
                                 expanded, { expanded = it }, "本页 10 本", 580.dp, true, !managing, Modifier.onSizeChanged { height = it.height },
-                                grid = grid, onToggleLayout = { grid = !grid }) { close ->
+                                grid = grid, onToggleLayout = { grid = !grid }, collapsed = toolsCollapsed) { close ->
                                 DropdownMenuItem({ Text("新建收藏夹") }, { close(); created = true })
                             }
                             val state = key(page) { rememberLazyListState() }
@@ -90,7 +91,11 @@ class CloudShelfInteractionTest {
         compose.onNodeWithTag("cloud-search-toggle").performClick()
         compose.onNodeWithTag("cloud-search-field").performTextInput("森林")
         compose.onNodeWithTag("cloud-search-field").performImeAction()
-        compose.onNodeWithTag("cloud-search-toggle").performClick()
+        compose.runOnIdle { toolsCollapsed = true }
+        compose.onNodeWithTag("cloud-toolbar").assertDoesNotExist()
+        compose.onNodeWithTag("cloud-results-header").assertDoesNotExist()
+        compose.onNodeWithTag("cloud-search-field").assertDoesNotExist()
+        compose.runOnIdle { toolsCollapsed = false }
         compose.onNodeWithTag("cloud-clear-query").assertTextContains("搜索：森林")
         compose.onNodeWithTag("cloud-filter-toggle").performClick()
         compose.onNodeWithTag("cloud-source-toggle").assertDoesNotExist()
@@ -130,11 +135,16 @@ class CloudShelfInteractionTest {
     @Test fun longPressDragTapAndPageChangesKeepSelectionAndIconActionsWork() {
         show(reduced = false)
         val list = compose.onNodeWithTag("cloud-books")
+        val navigation = compose.onNodeWithTag("root-navigation")
+        val boundsBeforeSelection = navigation.getUnclippedBoundsInRoot()
+        val bottomNavigation = boundsBeforeSelection.right - boundsBeforeSelection.left >
+            boundsBeforeSelection.bottom - boundsBeforeSelection.top
         compose.onNodeWithContentDescription("取消云端收藏").assertDoesNotExist()
         val first = compose.onNodeWithTag("cloud-book-${books[0].ref.key}")
         first.performTouchInput { longClick() }
         compose.onNodeWithText("已选 1 本").assertIsDisplayed()
-        compose.onNodeWithContentDescription("发现", useUnmergedTree = true).assertDoesNotExist()
+        // 手机批量操作时隐藏底栏，宽屏继续显示侧栏。
+        if(bottomNavigation) navigation.assertIsNotDisplayed() else navigation.assertIsDisplayed()
         compose.runOnIdle { assertEquals(0, opened) }
         compose.onNodeWithTag("cloud-book-${books[1].ref.key}").performClick()
         compose.runOnIdle { assertEquals(2, selected.size) }
@@ -169,7 +179,7 @@ class CloudShelfInteractionTest {
         compose.onNodeWithTag("cloud-selection-clear").performClick()
         compose.onNodeWithTag("cloud-selection-remove").assertIsNotEnabled()
         compose.onNodeWithTag("cloud-selection-done").performClick()
-        compose.onNodeWithContentDescription("发现", useUnmergedTree = true).assertIsDisplayed()
+        navigation.assertIsDisplayed()
     }
 
     @Test fun largeTextKeepsCloudFilterChoicesAndIconActionsReachable() {

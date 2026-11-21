@@ -14,6 +14,7 @@ import cc.novelia.app.NoveliaApplication
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.SavedBook
+import cc.novelia.app.data.storage.LocalStore
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.theme.AppInteractionMode
 import cc.novelia.app.ui.theme.NoveliaTheme
@@ -24,6 +25,56 @@ import org.junit.Test
 
 class ShelfControlsCollapseTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun arrowFoldsBothRowsWithoutReservingSpaceAndRestoresLastChoice() {
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
+        withShelf { restoration ->
+            val toggle = compose.onNodeWithTag("shelf-controls-toggle")
+            val viewport = compose.onNodeWithTag("shelf-books")
+            val partition = compose.onNodeWithTag("shelf-page-0")
+            fun tabBounds() = (0..2).map { compose.onNodeWithTag("shelf-tab-$it").getUnclippedBoundsInRoot() }
+            val tabs = tabBounds()
+            toggle.assertWidthIsEqualTo(64.dp).assertHeightIsEqualTo(44.dp)
+            val expandedTop = viewport.getUnclippedBoundsInRoot().top
+            assertEquals(compose.onNodeWithTag("local-results-header").getUnclippedBoundsInRoot().bottom, expandedTop)
+            assertEquals(expandedTop, toggle.getUnclippedBoundsInRoot().top)
+
+            toggle.performTouchInput { click(center) }
+            compose.onNodeWithTag("local-toolbar").assertDoesNotExist()
+            compose.onNodeWithTag("local-results-header").assertDoesNotExist()
+            assertEquals(tabs, tabBounds())
+            val foldedTop = viewport.getUnclippedBoundsInRoot().top
+            assertEquals(partition.getUnclippedBoundsInRoot().top, foldedTop)
+            assertEquals(foldedTop, toggle.getUnclippedBoundsInRoot().top)
+            runBlocking { app.store.flush() }
+            assertFalse(LocalStore(app).state.value.shelfControlsExpanded)
+
+            compose.onNodeWithTag("shelf-tab-1").performClick()
+            compose.onNodeWithTag("local-toolbar").assertDoesNotExist()
+            restoration.emulateSavedInstanceStateRestore()
+            toggle.assertContentDescriptionEquals("展开书架工具栏").performClick()
+            compose.onNodeWithTag("local-toolbar").assertIsDisplayed()
+            compose.onNodeWithTag("shelf-tab-0").performClick()
+            assertEquals(expandedTop, viewport.getUnclippedBoundsInRoot().top)
+
+            compose.onNodeWithTag("local-search-toggle").performClick()
+            compose.onNodeWithTag("local-search-field").performTextInput("森林来信")
+            toggle.performClick()
+            compose.onNodeWithTag("local-search-field").assertDoesNotExist()
+            toggle.performClick()
+            compose.onNodeWithTag("local-clear-query").assertTextContains("森林来信", substring = true)
+            compose.onNodeWithTag("local-clear-query").performClick()
+            compose.onNodeWithTag("local-layout-toggle").performClick()
+            val grid = compose.onNodeWithTag("shelf-books-grid")
+            assertEquals(grid.getUnclippedBoundsInRoot().top, toggle.getUnclippedBoundsInRoot().top)
+            toggle.performTouchInput { click(center) }
+            assertEquals(partition.getUnclippedBoundsInRoot().top, grid.getUnclippedBoundsInRoot().top)
+            assertEquals(tabs, tabBounds())
+            toggle.performClick()
+            runBlocking { app.store.flush() }
+            assertTrue(LocalStore(app).state.value.shelfControlsExpanded)
+        }
+    }
 
     @Test fun compactLocalControlsKeepCommittedFiltersAndScrollPositionAcrossSheetsAndRestoration() {
         withShelf { restoration ->
@@ -76,7 +127,8 @@ class ShelfControlsCollapseTest {
         try {
             app.store.update { it.copy(books = List(60) { index -> SavedBook(
                 BookCard(BookRef("local", "collapse-$index"), "森林来信 ${index.toString().padStart(2, '0')}", authors = listOf("山川遥")), addedAt = 1L)
-            }, positions = emptyMap()) }
+            }, positions = emptyMap(), shelfGrid = false, localFilesGrid = false, shelfControlsExpanded = true,
+                rememberLastShelfFolder = false) }
             val restoration = StateRestorationTester(compose)
             restoration.setContent {
                 AppInteractionMode(eInk, true) {
