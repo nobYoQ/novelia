@@ -7,11 +7,12 @@ import androidx.core.view.WindowCompat
 import androidx.exifinterface.media.ExifInterface
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.model.BookRef
-import cc.novelia.app.data.model.LocalDocument
+import cc.novelia.app.data.model.ComicReadingMode
+import cc.novelia.app.data.model.comicArchiveFormats
+import cc.novelia.app.data.model.hasOnlyImagePages
 import cc.novelia.app.data.model.Position
+import cc.novelia.app.data.storage.LocalStore
 import cc.novelia.app.reader.ComicPage
-import cc.novelia.app.ui.components.base.AsyncContent
-import cc.novelia.app.ui.components.base.EmptyState
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.reader.readerInteractionModifier
 import cc.novelia.app.ui.reader.rememberReaderReadingTime
@@ -22,25 +23,38 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
-@Composable
-internal fun LocalComicReader(c: AppController, ref: BookRef, doc: LocalDocument, chapterId: String) {
-    val state by c.store.state.collectAsStateWithLifecycle()
-    val ordinal = doc.chapters.indexOfFirst { it.id == chapterId }.coerceAtLeast(0)
-    val chapter = doc.chapters.getOrNull(ordinal)
-    if (chapter == null) {
-        EmptyState("没有可阅读的漫画页", "请重新导入 CBZ 文件", action = "返回", onAction = c::back)
-        return
-    }
-    AsyncContent(ref to chapter.id, load = {
-        withContext(Dispatchers.IO) {
-            val paragraphs = c.store.documentChapter(ref.id, chapter.id).paragraphs
-            require(paragraphs.isNotEmpty()) { "这一章没有漫画页" }
-            paragraphs.map { marker ->
-                ensureActive()
-                readComicPage(c.store.documentImage(ref.id, marker.removePrefix("novelia-image:")))
-            }
+internal data class ComicSection(val id: String, val title: String, val first: Int, val count: Int)
+internal data class LocalComicVolume(val title: String, val pages: List<ComicPage>, val sections: List<ComicSection>)
+
+/** 纯图片 EPUB 跨 spine 连续翻页，保存位置时仍使用原书的章节 ID 与章内下标。 */
+internal suspend fun LocalStore.loadComicVolume(id: String): LocalComicVolume? = withContext(Dispatchers.IO) {
+    val doc = documentIndex(id)
+    if (doc.format !in comicArchiveFormats && (doc.format != "epub" || doc.imageOnlyEpub == false)) return@withContext null
+    val sections = mutableListOf<ComicSection>()
+    val hashes = mutableListOf<String>()
+    for (entry in doc.chapters) {
+        ensureActive()
+        val chapter = documentChapter(id, entry.id)
+        if (!chapter.hasOnlyImagePages()) {
+            if (doc.format == "epub") return@withContext null
+            throw IllegalArgumentException("漫画章节中的图片索引无效")
         }
-    }) { pages, _ ->
+        sections += ComicSection(entry.id, entry.title, hashes.size, chapter.paragraphs.size)
+        chapter.paragraphs.mapTo(hashes) { it.removePrefix("novelia-image:") }
+    }
+    require(hashes.isNotEmpty()) { "这一册没有漫画页" }
+    val pages = hashes.map { hash ->
+        ensureActive()
+        readComicPage(documentImage(id, hash))
+    }
+    LocalComicVolume(doc.name, pages, sections)
+}
+
+@Composable
+internal fun LocalComicReader(c: AppController, ref: BookRef, book: LocalComicVolume, chapterId: String) {
+    key(ref, chapterId) {
+        val state by c.store.state.collectAsStateWithLifecycle()
+        val chapter = remember(book, chapterId) { book.sections.firstOrNull { it.id == chapterId } ?: book.sections.first() }
         val activity = LocalContext.current.activityOrNull()
         DisposableEffect(activity) {
             val bars = activity?.window?.let { WindowCompat.getInsetsController(it, it.decorView) }
@@ -49,16 +63,21 @@ internal fun LocalComicReader(c: AppController, ref: BookRef, doc: LocalDocument
             onDispose { if (light != null) bars.isAppearanceLightStatusBars = light }
         }
         val saved = remember(ref, chapter.id) { state.positions[ref.key]?.takeIf { it.chapterId == chapter.id } }
-        val interact = rememberReaderReadingTime(c, ref.key, doc.name, state.readingStatistics.revision,
+        val interact = rememberReaderReadingTime(c, ref.key, book.title, state.readingStatistics.revision,
             eligible = state.readingStatistics.enabled && !state.historyPaused, automatic = false)
         ComicReader(
-            title = doc.name, pages = pages, mode = state.comicReadingMode,
-            initialPage = ((saved?.index ?: 1) - 1).coerceIn(pages.indices), initialOffset = saved?.offset ?: 0,
+            title = book.title, pages = book.pages, mode = state.comicReadingMode,
+            initialPage = chapter.first + ((saved?.index ?: 1) - 1).coerceIn(0, chapter.count - 1), initialOffset = saved?.offset ?: 0,
             onMode = { mode -> c.store.update { it.copy(comicReadingMode = mode) } },
             onPosition = { page, sourceY, completed ->
-                c.store.savePosition(ref, Position(chapter.id, page + 1, offset = sourceY, title = chapter.title,
-                    chapterIndex = ordinal, chapterCount = doc.chapters.size, paragraphCount = pages.size,
-                    chapterCompleted = completed), doc.name)
+                val hit = book.sections.binarySearchBy(page) { it.first }
+                val ordinal = if (hit >= 0) hit else -hit - 2
+                val section = book.sections[ordinal]
+                val within = page - section.first + 1
+                c.store.savePosition(ref, Position(section.id, within, offset = sourceY, title = section.title,
+                    chapterIndex = ordinal, chapterCount = book.sections.size, paragraphCount = section.count,
+                    chapterCompleted = completed || (ordinal < book.sections.lastIndex && within == section.count &&
+                        state.comicReadingMode != ComicReadingMode.Webtoon)), book.title)
             }, onBack = c::back, modifier = readerInteractionModifier(interact)
         )
     }
@@ -75,5 +94,6 @@ private fun readComicPage(file: File): ComicPage {
     val height = if (swap) bounds.outWidth else bounds.outHeight
     // 缺失、损坏或尺寸异常的单页保留原页码并显示加载失败状态。
     if (width <= 0 || height <= 0 || height.toLong() > width.toLong() * 512) return ComicPage(file, 3, 4)
-    return ComicPage(file, width, height, orientation)
+    return ComicPage(file, width, height, orientation,
+        regionDecodable = bounds.outMimeType in setOf("image/jpeg", "image/png", "image/webp"))
 }

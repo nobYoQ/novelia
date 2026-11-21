@@ -94,7 +94,16 @@ import kotlin.math.roundToInt
 private fun decodeStrip(page: ComicPage, strip: ComicStrip, width: Int): Bitmap {
     val limit = width.coerceIn(1, 2048)
     var sample = 1
-    while (page.width / sample > limit * 1.5f) sample *= 2
+    while (page.width / sample > minOf(limit * 1.5f, 2048f)) sample *= 2
+    if (!page.regionDecodable) {
+        // GIF/BMP 的平台解码器只能读取整帧。先限制位图内存，再取出当前可见区间。
+        while ((page.width.toLong() / sample) * (page.height.toLong() / sample) > 4_000_000) sample *= 2
+        val frame = BitmapFactory.decodeFile(page.file.path, BitmapFactory.Options().apply { inSampleSize = sample })
+            ?: throw IOException("无法解码漫画页")
+        val top = (strip.top.toLong() * frame.height / page.height).toInt().coerceAtMost(frame.height - 1)
+        val bottom = (strip.bottom.toLong() * frame.height / page.height).toInt().coerceIn(top + 1, frame.height)
+        return Bitmap.createBitmap(frame, 0, top, frame.width, bottom - top).also { if (it !== frame) frame.recycle() }
+    }
     val decoder = BitmapRegionDecoder.newInstance(page.file.path, false) ?: throw IOException("无法解码漫画页")
     return try {
         // 根据 EXIF 将显示方向上的纵向区间映射回原文件，解码后再校正方向。

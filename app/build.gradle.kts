@@ -136,6 +136,7 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("androidx.exifinterface:exifinterface:1.3.7")
+    implementation("me.zhanghai.android.libarchive:library:1.1.6")
     implementation("org.jsoup:jsoup:1.18.3")
     implementation("com.google.zxing:core:3.5.3")
     implementation("com.ibm.icu:icu4j:76.1")

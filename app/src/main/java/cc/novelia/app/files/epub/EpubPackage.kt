@@ -1,5 +1,7 @@
 package cc.novelia.app.files.epub
 
+import cc.novelia.app.files.comic.isRasterSpineImage
+
 import cc.novelia.app.data.model.EpubLinkTarget
 import cc.novelia.app.data.model.EpubNavigationEntry
 import java.net.URLDecoder
@@ -22,6 +24,7 @@ internal data class EpubSpineItem(
     val sourcePath: String?,
     val contentPath: String?,
     val linear: Boolean,
+    val rasterImage: Boolean = false,
 )
 
 internal class EpubPackage(
@@ -121,7 +124,8 @@ internal fun epubChapterTitle(doc: Document, bookTitle: String? = null, fileStem
 }
 
 private data class EpubManifestItem(val path: String?, val mediaType: String, val fallback: String) {
-    fun canReadAsChapter() = when (mediaType) {
+    fun isRaster() = path?.let { isRasterSpineImage(it, mediaType) } == true
+    fun canReadAsChapter() = if (isRaster()) true else when (mediaType) {
         "application/xhtml+xml", "text/html" -> true
         "" -> path?.substringAfterLast('.')?.lowercase() in setOf("xhtml", "html", "htm")
         else -> false
@@ -142,26 +146,26 @@ internal fun readEpubPackage(
         checkCancelled()
         item.attr("id") to EpubManifestItem(resolveEpubResource(directory, item.attr("href")), item.attr("media-type"), item.attr("fallback"))
     }
-    val resolved = mutableMapOf<String, String?>()
-    fun contentPath(id: String): String? {
+    val resolved = mutableMapOf<String, EpubManifestItem?>()
+    fun contentResource(id: String): EpubManifestItem? {
         val visited = linkedSetOf<String>()
         var current = id
-        var path: String? = null
+        var selected: EpubManifestItem? = null
         while (current.isNotEmpty() && visited.add(current)) {
             checkCancelled()
             if (current in resolved) {
-                path = resolved[current]
+                selected = resolved[current]
                 break
             }
             val item = resources[current] ?: break
             if (item.canReadAsChapter() && item.path != null && hasResource(item.path)) {
-                path = item.path
+                selected = item
                 break
             }
             current = item.fallback
         }
-        for (visitedId in visited) resolved[visitedId] = path
-        return path
+        for (visitedId in visited) resolved[visitedId] = selected
+        return selected
     }
     val spine = opf.epubChild("spine", OPF_NS)
     val usedIds = resources.keys.toMutableSet()
@@ -177,7 +181,8 @@ internal fun readEpubPackage(
             while (!usedIds.add(chapterId)) chapterId = "$id~${++occurrence}"
         }
         occurrences[id] = occurrence
-        EpubSpineItem(chapterId, resource.path, contentPath(id), item.attr("linear") != "no")
+        val content = contentResource(id)
+        EpubSpineItem(chapterId, resource.path, content?.path, item.attr("linear") != "no", content?.isRaster() == true)
     }
     val navPath = resources[manifest.firstOrNull { it.hasEpubProperty("nav") }?.attr("id")]?.path
     val ncxPath = resources[spine?.attr("toc")]?.path ?: resources.values.firstOrNull { it.mediaType == "application/x-dtbncx+xml" }?.path
