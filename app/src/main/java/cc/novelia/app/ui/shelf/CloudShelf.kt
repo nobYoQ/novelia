@@ -11,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -166,6 +167,8 @@ import cc.novelia.app.ui.navigation.AppController
             var pageCount by remember(requestKey) { mutableStateOf(cachedPage?.items?.size) }
             var controlsHeight by remember { mutableIntStateOf(0) }
             val toolsExpanded = local.shelfControlsExpanded
+            val showControlsToggle = active && !managing && !bulkBusy
+            val controlsScroll = rememberShelfControlsScroll(requestKey to local.cloudShelfGrid, showControlsToggle)
             Column(Modifier.fillMaxSize()) {
                 CompactCloudControls(choices, current, { folderId = it; page = 0 }, sort, { sort = it; page = 0 }, kind, filter,
                     onApply = { nextKind, next ->
@@ -191,10 +194,11 @@ import cc.novelia.app.ui.navigation.AppController
                     DropdownMenuItem({ Text("刷新收藏夹") }, { close(); version++ }, leadingIcon = { Icon(Icons.Outlined.Refresh, null) })
                 }
                 Box(Modifier.weight(1f).fillMaxWidth()) {
-                    if(current == null) EmptyState("创建第一个云端收藏夹", "收藏夹与原站同步。", action = "新建收藏夹", onAction = { create = true })
+                    val listState = if(current != null) rememberCachedListState(c.uiResults.cloudPages, requestKey) else null
+                    val gridState = if(current != null) rememberCachedListState(c.uiResults.cloudPages, requestKey, "grid") else null
+                    if(current == null || listState == null || gridState == null)
+                        EmptyState("创建第一个云端收藏夹", "收藏夹与原站同步。", action = "新建收藏夹", onAction = { create = true })
                     else {
-                        val listState = rememberCachedListState(c.uiResults.cloudPages, requestKey)
-                        val gridState = rememberCachedListState(c.uiResults.cloudPages, requestKey, "grid")
                         CachedAsyncContent(c.uiResults.cloudPages, requestKey, refreshKey = refreshKey, modifier = Modifier.fillMaxSize(), load = {
                             c.api.cloudFavorites(kind == 1, current.id, page, sort, filter)
                         }, observeInvalidation = observeInvalidation && !bulkBusy, validate = { c.session.ensureCurrent(binding) },
@@ -209,7 +213,7 @@ import cc.novelia.app.ui.navigation.AppController
                                 onOpenBook = { expanded = false; onOpenBook(it) }, onLocal = { bulkLocal = selection.values.toList() },
                                 onRemove = { bulkRemoval = current.id to selection.values.toList() }, onRetry = retry,
                                 onReadBook = { ref, chapter -> c.read(ref, chapter) },
-                                grid = local.cloudShelfGrid, gridState = gridState,
+                                grid = local.cloudShelfGrid, gridState = gridState, controlsScroll = controlsScroll,
                                 onImportAll = { bulkImport = it }, progressLabel = importProgress,
                                 metadata = { rememberCloudBookMetadata(c, it, account, refreshKey) }, actions = { displayed, canAct ->
                                     val book = displayed
@@ -224,11 +228,13 @@ import cc.novelia.app.ui.navigation.AppController
                                 })
                         }
                     }
-                    if(active && !managing && !bulkBusy) {
+                    if(showControlsToggle) {
                         val hasActiveFilters = (choices.size > 1 && current?.id != ALL_CLOUD_FAVORITES) ||
                             kind == 1 || filter != CloudWebFilter()
+                        val scrollState = if(local.cloudShelfGrid) gridState else listState
                         Box(Modifier.matchParentSize()) {
-                            ShelfControlsToggle(toolsExpanded, hasActiveFilters) {
+                            ShelfControlsToggle(toolsExpanded, hasActiveFilters,
+                                tucked = controlsScroll.tucked && scrollState?.canScrollBackward == true) {
                                 c.store.update { it.copy(shelfControlsExpanded = !it.shelfControlsExpanded) }
                             }
                         }

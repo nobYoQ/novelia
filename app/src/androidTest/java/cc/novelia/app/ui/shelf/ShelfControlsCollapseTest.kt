@@ -35,14 +35,14 @@ class ShelfControlsCollapseTest {
             val partition = compose.onNodeWithTag("shelf-page-0")
             fun tabBounds() = (0..2).map { compose.onNodeWithTag("shelf-tab-$it").getUnclippedBoundsInRoot() }
             val tabs = tabBounds()
-            toggle.assertWidthIsEqualTo(30.dp).assertHeightIsEqualTo(20.dp)
+            toggle.assertWidthIsEqualTo(44.dp).assertHeightIsEqualTo(44.dp)
             val expandedTop = viewport.getUnclippedBoundsInRoot().top
             assertEquals(compose.onNodeWithTag("local-results-header").getUnclippedBoundsInRoot().bottom, expandedTop)
-            assertEquals(expandedTop, toggle.getUnclippedBoundsInRoot().top)
+            assertFloatingInset(viewport, toggle)
 
             val target = toggle.fetchSemanticsNode().boundsInRoot
             viewport.performTouchInput {
-                click(Offset(center.x, target.height * 1.3f))
+                click(Offset(center.x, target.height * 1.35f))
                 click(Offset(center.x + target.width * .64f, target.height * .35f))
             }
             toggle.assertContentDescriptionEquals("收起书架工具栏")
@@ -53,7 +53,7 @@ class ShelfControlsCollapseTest {
             assertEquals(tabs, tabBounds())
             val foldedTop = viewport.getUnclippedBoundsInRoot().top
             assertEquals(partition.getUnclippedBoundsInRoot().top, foldedTop)
-            assertEquals(foldedTop, toggle.getUnclippedBoundsInRoot().top)
+            assertFloatingInset(viewport, toggle)
             runBlocking { app.store.flush() }
             assertFalse(LocalStore(app).state.value.shelfControlsExpanded)
 
@@ -74,7 +74,7 @@ class ShelfControlsCollapseTest {
             compose.onNodeWithTag("local-clear-query").performClick()
             compose.onNodeWithTag("local-layout-toggle").performClick()
             val grid = compose.onNodeWithTag("shelf-books-grid")
-            assertEquals(grid.getUnclippedBoundsInRoot().top, toggle.getUnclippedBoundsInRoot().top)
+            assertFloatingInset(grid, toggle)
             toggle.performTouchInput { click(center) }
             assertEquals(partition.getUnclippedBoundsInRoot().top, grid.getUnclippedBoundsInRoot().top)
             assertEquals(tabs, tabBounds())
@@ -96,14 +96,83 @@ class ShelfControlsCollapseTest {
                     toggle.performClick()
                     compose.mainClock.advanceTimeBy(96)
                     val during = currentTop()
-                    assertEquals(during, toggle.getUnclippedBoundsInRoot().top)
+                    assertFloatingInset(viewport, toggle)
                     compose.mainClock.advanceTimeBy(400)
                     val after = currentTop()
                     assertTrue("书目在过渡中应经过起点和终点之间", during > minOf(before, after) && during < maxOf(before, after))
-                    assertEquals(after, toggle.getUnclippedBoundsInRoot().top)
+                    assertFloatingInset(viewport, toggle)
                 } finally { compose.mainClock.autoAdvance = true }
             }
         }
+    }
+
+    @Test fun floatingButtonSlidesToHalfOnForwardScrollAndReturnsOnReverse() {
+        withShelf(reducedMotion = false) {
+            val toggle = compose.onNodeWithTag("shelf-controls-toggle")
+            fun visibleHeight() = toggle.getUnclippedBoundsInRoot().let { it.bottom - it.top }
+            for(tag in listOf("shelf-books", "shelf-books-grid")) {
+                val viewport = compose.onNodeWithTag(tag)
+                val top = viewport.getUnclippedBoundsInRoot().top
+                toggle.assertHeightIsEqualTo(44.dp)
+                assertFloatingInset(viewport, toggle)
+
+                fun startDrag(start: Float, end: Float) = viewport.performTouchInput {
+                    val x = width * .2f
+                    down(Offset(x, height * start))
+                    repeat(4) { step ->
+                        moveTo(Offset(x, height * (start + (end - start) * (step + 1) / 4f)), delayMillis = 16)
+                    }
+                }
+                fun releaseDrag() = viewport.performTouchInput { advanceEventTime(160); up() }
+
+                compose.mainClock.autoAdvance = false
+                try {
+                    startDrag(.85f, .25f)
+                    compose.mainClock.advanceTimeBy(96)
+                    val tucking = visibleHeight()
+                    assertTrue("$tag 缩回的中间高度为 $tucking", tucking > 22.dp && tucking < 44.dp)
+                    compose.mainClock.advanceTimeBy(400)
+                    toggle.assertHeightIsEqualTo(22.dp)
+                    assertEquals(top, toggle.getUnclippedBoundsInRoot().top)
+                    assertEquals(top, viewport.getUnclippedBoundsInRoot().top)
+                    releaseDrag()
+
+                    startDrag(.35f, .65f)
+                    compose.mainClock.advanceTimeBy(96)
+                    val returning = visibleHeight()
+                    assertTrue("$tag 滑出的中间高度为 $returning", returning > 22.dp && returning < 44.dp)
+                    compose.mainClock.advanceTimeBy(400)
+                    toggle.assertHeightIsEqualTo(44.dp)
+                    assertFloatingInset(viewport, toggle)
+                    assertEquals(top, viewport.getUnclippedBoundsInRoot().top)
+                    releaseDrag()
+                } finally { compose.mainClock.autoAdvance = true }
+
+                startDrag(.85f, .25f)
+                releaseDrag()
+                toggle.assertHeightIsEqualTo(22.dp).performTouchInput { click(center) }
+                compose.onNodeWithTag("local-toolbar").assertDoesNotExist()
+                toggle.performTouchInput { click(center) }
+                compose.onNodeWithTag("local-toolbar").assertIsDisplayed()
+                if(tag == "shelf-books") compose.onNodeWithTag("local-layout-toggle").performClick()
+            }
+        }
+    }
+
+    @Test fun eInkPageTurnsTuckAndRevealTheButtonImmediately() {
+        withShelf(eInk = true) {
+            val toggle = compose.onNodeWithTag("shelf-controls-toggle")
+            toggle.assertHeightIsEqualTo(44.dp)
+            compose.onNodeWithText("下一屏").performClick()
+            toggle.assertHeightIsEqualTo(22.dp)
+            compose.onNodeWithText("上一屏").performClick()
+            toggle.assertHeightIsEqualTo(44.dp)
+        }
+    }
+
+    private fun assertFloatingInset(viewport: SemanticsNodeInteraction, toggle: SemanticsNodeInteraction) {
+        val viewportTop = viewport.getUnclippedBoundsInRoot().top
+        assertEquals(6f, (toggle.getUnclippedBoundsInRoot().top - viewportTop).value, .5f)
     }
 
     @Test fun compactLocalControlsKeepCommittedFiltersAndScrollPositionAcrossSheetsAndRestoration() {

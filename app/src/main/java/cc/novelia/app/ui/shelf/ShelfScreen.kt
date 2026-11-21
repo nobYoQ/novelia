@@ -25,6 +25,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -273,6 +274,8 @@ import kotlinx.coroutines.withContext
                 val layout = rememberShelfLayoutState(grid, rows.map { it.saved.book.ref.key }, groups.map { it.saved.book.ref.key }, columns,
                     parents = rows.mapNotNull { row -> row.parent?.let { row.saved.book.ref.key to it.book.ref.key } }.toMap())
                 val listState = layout.current(grid)
+                val showControlsToggle = active && !managing && !batchWorking
+                val controlsScroll = rememberShelfControlsScroll(listState, showControlsToggle)
                 val continueBook = recent?.takeIf { page == 0 && active && !pageManaging && volumeSheetKey == null }
                 val density = LocalDensity.current
                 val collapseThreshold = with(density) { 48.dp.roundToPx() }
@@ -322,14 +325,17 @@ import kotlinx.coroutines.withContext
                             onSelectAll = { selection = selectableKeys },
                             onFinish = { managing = false; selection = emptySet() })
                         ShelfLayoutTransition(grid, Modifier.weight(1f), overlay = {
-                            if(active && !managing && !batchWorking) ShelfControlsToggle(toolsExpanded,
-                                folder != "全部" || query.isNotBlank() || readingStatus != "全部" || pageType != ShelfBookType.All) {
+                            if(showControlsToggle) ShelfControlsToggle(toolsExpanded,
+                                folder != "全部" || query.isNotBlank() || readingStatus != "全部" || pageType != ShelfBookType.All,
+                                tucked = controlsScroll.tucked && listState.canScrollBackward) {
                                 c.store.update { it.copy(shelfControlsExpanded = !it.shelfControlsExpanded) }
                             }
                         }) { showGrid ->
                         AppLazyColumn(modifier = Modifier.fillMaxSize().onSizeChanged { if(showGrid == grid) listHeight = it.height },
                             listModifier = Modifier.testTag(if(showGrid) "shelf-books-grid" else "shelf-books")
+                                .then(if(showGrid == grid) Modifier.nestedScroll(controlsScroll) else Modifier)
                                 .shelfDragSelection(dragSelection, selectionEnabled && showGrid == grid), state = layout.current(showGrid),
+                            onPageTurn = { if(showGrid == grid) controlsScroll.onPageTurn(it, listState) },
                             verticalArrangement = Arrangement.spacedBy(if(showGrid) 14.dp else 0.dp),
                             contentPadding = PaddingValues(top = if(showGrid) 8.dp else 0.dp, bottom = if(continueBook != null)
                                 with(density) { continueHeight.toDp() } + 32.dp else 0.dp)) {

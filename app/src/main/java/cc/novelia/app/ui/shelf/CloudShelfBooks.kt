@@ -10,6 +10,7 @@ import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
@@ -32,6 +33,7 @@ import cc.novelia.app.ui.components.book.bookRowStatus
     onReadBook: ((BookRef, String) -> Unit)? = null,
     grid: Boolean = false,
     gridState: LazyListState? = null,
+    controlsScroll: ShelfControlsScroll? = null,
     metadata: @Composable (BookCard) -> BookCard = { it }, actions: @Composable (BookCard, () -> Boolean) -> Unit = { _, _ -> },
     onImportAll: ((Boolean) -> Unit)? = null, progressLabel: String? = null,
 ) {
@@ -63,7 +65,9 @@ import cc.novelia.app.ui.components.book.bookRowStatus
             verticalArrangement = Arrangement.spacedBy(if(showGrid) 14.dp else 0.dp),
             contentPadding = PaddingValues(top = if(showGrid) 8.dp else 0.dp, bottom = 12.dp),
             listModifier = Modifier.testTag(if(showGrid) "cloud-books-grid" else "cloud-books")
-                .shelfDragSelection(dragSelection, active && !busy && showGrid == grid)) {
+                .then(if(controlsScroll != null && showGrid == grid) Modifier.nestedScroll(controlsScroll) else Modifier)
+                .shelfDragSelection(dragSelection, active && !busy && showGrid == grid),
+            onPageTurn = { if(showGrid == grid) controlsScroll?.onPageTurn(it, layout.current(showGrid)) }) {
             if(books.isEmpty()) item {
                 EmptyState("没有匹配的收藏", "可调整筛选、切换收藏夹，或在书籍详情中添加云端收藏。", action = "重新加载", onAction = onRetry)
             }
