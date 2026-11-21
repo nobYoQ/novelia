@@ -105,6 +105,8 @@ import cc.novelia.app.ui.web.SiteWebScreen
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
+import cc.novelia.app.data.model.BookMedium
+import cc.novelia.app.data.model.shelfMedium
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
@@ -231,8 +233,14 @@ class MainActivity : ComponentActivity() {
                 val entry by nav.currentBackStackEntryAsState(); val route = entry?.destination?.route
                 val reading = route?.startsWith("reader/") == true
                 val readingKey = if (reading) "${entry?.arguments?.getString("provider")}/${entry?.arguments?.getString("id")}" else null
+                val comic = if (readingKey?.startsWith("local/") == true) {
+                    val comicFlow = remember(app, readingKey) { app.store.state.map { state ->
+                        state.books.firstOrNull { it.book.ref.key == readingKey }?.book?.shelfMedium == BookMedium.Comic
+                    }.distinctUntilChanged() }
+                    comicFlow.collectAsStateWithLifecycle(initialValue = false).value
+                } else false
                 cc.novelia.app.ui.reader.ReadingSystemBars(reading = reading,
-                    hideStatusBar = appearance.bookStatusBars[readingKey] ?: appearance.hideStatusBar)
+                    hideStatusBar = comic || (appearance.bookStatusBars[readingKey] ?: appearance.hideStatusBar))
                 cc.novelia.app.ui.reader.ReaderOrientation(reading,
                     appearance.bookOrientations[readingKey] ?: appearance.readerOrientation)
                 ObserveDownloadCelebrations(controller, route)

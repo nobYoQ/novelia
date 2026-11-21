@@ -130,28 +130,31 @@ class ShelfGridUiTest {
     }
 
     @Test fun compactTitleKeepsSwitchAndImportVisibleAtLargeFontSize() {
-        var checked = false
+        var synced = false
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, 1.8f)) {
                 Box(Modifier.width(320.dp)) {
                     ShelfTopBar(BookMedium.Novel, switchEnabled = false, onSwitch = {},
-                        importEnabled = true, onImport = {}, onHistory = {}, onUpdates = {}, onCheckUpdates = { checked = true })
+                        importEnabled = true, onImport = {}, onHistory = {}, onUpdates = {}, onFavoriteSync = { synced = true })
                 }
             }
         }
-        compose.onNodeWithTag("shelf-medium").assertIsDisplayed().assertIsNotEnabled().assertTextEquals("小说")
+        val switch = compose.onNodeWithTag("shelf-medium").assertIsDisplayed().assertIsNotEnabled().assertTextEquals("小说")
+        fun SemanticsNodeInteraction.centerY() = getUnclippedBoundsInRoot().let { (it.top.value + it.bottom.value) / 2 }
+        assertEquals(compose.onNodeWithText("书架").centerY(), switch.centerY(), 1f)
         compose.onNodeWithContentDescription("导入本地文件").assertIsDisplayed()
         compose.onNodeWithContentDescription("书架操作").performClick()
-        compose.onNodeWithText("检查更新").performClick()
-        compose.runOnIdle { assertTrue(checked) }
+        compose.onNodeWithText("云端与本地收藏同步").performClick()
+        compose.runOnIdle { assertTrue(synced) }
     }
 
     @Test fun importChoicesExplainFilesAndFolderStructureBeforeOpeningPicker() {
         show(reduced = false)
-        val toolbarImport = compose.onNodeWithContentDescription("导入本地文件")
+        val toolbarImport = compose.onNodeWithContentDescription("添加到书架")
         toolbarImport.assertIsDisplayed()
         cc.novelia.app.ui.saveTestScreenshot("shelf-title-switch.png")
         toolbarImport.performClick()
+        compose.onNodeWithText("导入本地文件").performClick()
         compose.onNodeWithText("ZIP/CBZ、RAR/CBR、7z/CB7 和 TAR/CBT", substring = true).assertIsDisplayed()
         compose.onNodeWithText("第一卷/001.jpg", substring = true).assertIsDisplayed()
         compose.onNodeWithText("作品/第02话.cbz", substring = true).assertIsDisplayed()

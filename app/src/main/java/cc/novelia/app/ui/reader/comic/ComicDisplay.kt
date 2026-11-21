@@ -1,3 +1,4 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.reader.comic
 
 import android.graphics.Bitmap
@@ -14,7 +15,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
+import cc.novelia.app.ui.components.base.AppSheet
 import cc.novelia.app.data.model.*
 import cc.novelia.app.reader.ComicPage
 import coil.compose.AsyncImage
@@ -57,30 +58,31 @@ private val pageIO = Dispatchers.IO.limitedParallelism(4)
 
 @Composable internal fun ComicOverview(pages: List<ComicPage>, sections: List<ComicSection>, selected: Int,
     select: (Int) -> Unit, close: () -> Unit) {
-    Dialog(onDismissRequest = close) {
-        Surface(shape = MaterialTheme.shapes.large) {
-            Column(Modifier.fillMaxWidth().fillMaxHeight(.82f).padding(12.dp)) {
-                Text("页缩略图", style = MaterialTheme.typography.titleLarge)
-                val grid = rememberLazyGridState(initialFirstVisibleItemIndex = selected)
-                LazyVerticalGrid(GridCells.Adaptive(80.dp), Modifier.weight(1f), state = grid,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(pages.size) { index ->
-                        val page = pages[index]
-                        Column(Modifier.clickable { select(index) }.padding(3.dp)) {
-                            val tile = Modifier.fillMaxWidth().aspectRatio(.72f).background(MaterialTheme.colorScheme.surfaceVariant)
-                            if (page.text != null) Box(tile) { Text(page.text, Modifier.padding(4.dp), maxLines = 5, overflow = TextOverflow.Ellipsis) }
-                            else ResolvedPage(page, index, tile) { p ->
-                                val ctx = LocalContext.current
-                                AsyncImage(remember(p.file, ctx) { ImageRequest.Builder(ctx).data(p.file).size(192, 260).build() },
-                                    "跳到第 " + (index + 1) + " 页", Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
-                            }
-                            val section = sections.lastOrNull { it.first <= index }
-                            val label = if (sections.size > 1 && section != null) section.title + " · " + (index - section.first + 1) else (index + 1).toString()
-                            Text(if (index == selected) "当前 · " + label else label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    AppSheet(onDismissRequest = close) {
+        Column(Modifier.fillMaxWidth().fillMaxHeight(.78f).padding(horizontal = 16.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("页缩略图", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+                TextButton(onClick = close) { Text("关闭") }
+            }
+            val grid = rememberLazyGridState(initialFirstVisibleItemIndex = selected)
+            LazyVerticalGrid(GridCells.Adaptive(80.dp), Modifier.weight(1f), state = grid,
+                horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(pages.size) { index ->
+                    val page = pages[index]
+                    Column(Modifier.clickable { select(index) }.padding(3.dp)) {
+                        val tile = Modifier.fillMaxWidth().aspectRatio(.72f).background(MaterialTheme.colorScheme.surfaceVariant)
+                            .then(if (index == selected) Modifier.border(2.dp, MaterialTheme.colorScheme.primary) else Modifier)
+                        if (page.text != null) Box(tile) { Text(page.text, Modifier.padding(4.dp), maxLines = 5, overflow = TextOverflow.Ellipsis) }
+                        else ResolvedPage(page, index, tile) { p ->
+                            val ctx = LocalContext.current
+                            AsyncImage(remember(p.file, ctx) { ImageRequest.Builder(ctx).data(p.file).size(192, 260).build() },
+                                "跳到第 " + (index + 1) + " 页", Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
                         }
+                        val section = sections.lastOrNull { it.first <= index }
+                        val label = if (sections.size > 1 && section != null) section.title + " · " + (index - section.first + 1) else (index + 1).toString()
+                        Text(if (index == selected) "当前 · " + label else label, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
-                TextButton(onClick = close, modifier = Modifier.align(Alignment.End)) { Text("关闭") }
             }
         }
     }

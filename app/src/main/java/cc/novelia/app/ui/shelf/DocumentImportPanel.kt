@@ -135,10 +135,10 @@ internal class DocumentImportViewModel(private val store: LocalStore) : ViewMode
     return viewModel(key = "shelf-document-import", factory = factory)
 }
 
-@Composable internal fun DocumentImportPanel(model: DocumentImportViewModel, onRead: (BookRef) -> Unit) {
+@Composable internal fun DocumentImportPanel(model: DocumentImportViewModel, detailsOpen: MutableState<Boolean>, onRead: (BookRef) -> Unit) {
     val state by model.state.collectAsStateWithLifecycle()
     ImportResultsPanel(state.items, state.running, model::pause, model::retryFailed, model::resume, onRead,
-        onDismiss = model::dismissResults, error = state.error)
+        onDismiss = model::dismissResults, error = state.error, detailsOpen = detailsOpen)
 }
 
 @Composable internal fun ShelfImportSheet(onDismiss: () -> Unit, onFiles: () -> Unit, onImages: () -> Unit, onSeries: () -> Unit) {

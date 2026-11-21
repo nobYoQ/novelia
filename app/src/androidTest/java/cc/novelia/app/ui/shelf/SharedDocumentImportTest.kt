@@ -41,6 +41,23 @@ class SharedDocumentImportTest {
         app.store.update { it.copy(lastShelfLocation = priorLocation) }
     }
 
+    @Test fun bookPickerAcceptsGenericProviderTypesAndRetainsEverySelectedUri() {
+        val contract = cc.novelia.app.ui.components.documents.OpenBookDocuments()
+        val intent = contract.createIntent(app, Unit)
+        assertEquals(Intent.ACTION_OPEN_DOCUMENT, intent.action)
+        assertTrue(intent.hasCategory(Intent.CATEGORY_OPENABLE))
+        assertEquals("*/*", intent.type)
+        assertFalse(intent.hasExtra(Intent.EXTRA_MIME_TYPES))
+        assertTrue(intent.getBooleanExtra(Intent.EXTRA_ALLOW_MULTIPLE, false))
+        val first = Uri.parse("content://files/one.cbz")
+        val second = Uri.parse("content://files/two.cb7")
+        val result = Intent().apply {
+            clipData = ClipData.newRawUri("漫画", first).apply { addItem(ClipData.Item(second)) }
+        }
+        assertEquals(listOf(first, second), contract.parseResult(android.app.Activity.RESULT_OK, result))
+        assertTrue(contract.parseResult(android.app.Activity.RESULT_CANCELED, null).isEmpty())
+    }
+
     @Test fun coldShareImportsTextAndRecreationDoesNotReplayIt() {
         val uri = fixture("txt", "第一章 开始\n这是系统分享导入的正文。$prefix")
         val intent = share(listOf(uri), "text/plain").putExtra(Intent.EXTRA_TEXT, "不应当搜索此文件说明")
@@ -50,7 +67,8 @@ class SharedDocumentImportTest {
             compose.onNodeWithText("成功 · 已加入书架").assertExists()
             // 在结果面板打开时重建，导入清单和已完成状态必须继续保留。
             scenario.recreate()
-            compose.onNodeWithText("成功 · 已加入书架").assertExists()
+            compose.waitUntil(10_000) { compose.onAllNodesWithText("成功 · 已加入书架").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("成功 · 已加入书架").assertIsDisplayed()
             compose.onNodeWithText("开始阅读").performClick()
             compose.waitUntil(10_000) { compose.onAllNodesWithText("这是系统分享导入的正文。$prefix", substring = true).fetchSemanticsNodes().isNotEmpty() }
             assertEquals(1, importedCount())
@@ -83,6 +101,8 @@ class SharedDocumentImportTest {
                     compose.onAllNodesWithText(label).fetchSemanticsNodes().isNotEmpty()
                 }
                 awaitText("1 / 3")
+                compose.onNodeWithContentDescription("漫画显示设置").assertDoesNotExist()
+                compose.onNodeWithText("1 / 3").performClick()
                 compose.onNodeWithContentDescription("页缩略图").performClick()
                 compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("跳到第 3 页").fetchSemanticsNodes().isNotEmpty() }
                 compose.onNodeWithContentDescription("跳到第 3 页").performClick()
@@ -96,10 +116,16 @@ class SharedDocumentImportTest {
                 compose.onNodeWithContentDescription("第 1 页").performTouchInput { doubleClick(center) }
                 compose.onNodeWithContentDescription("第 1 页").performTouchInput { swipeRight() }
                 awaitText("2 / 3")
+                compose.onNodeWithText("2 / 3").performClick()
                 compose.onNodeWithText("从右向左").performClick()
                 compose.onNodeWithText("纵向条漫").performClick()
                 assertEquals(ComicReadingMode.RightToLeft, app.store.state.value.comicReadingMode)
                 assertEquals(ComicReadingMode.Webtoon, app.store.state.value.books.single { it.book.ref == ref }.comicPreferences.mode)
+                val strip = compose.onNodeWithTag("comic-strip")
+                strip.performTouchInput { doubleClick(center) }
+                strip.assert(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "200%"))
+                strip.performTouchInput { doubleClick(center) }
+                strip.assert(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "100%"))
                 compose.onNodeWithContentDescription("下一屏").performClick()
                 compose.waitUntil(10_000) { (app.store.state.value.positions[ref.key]?.offset ?: 0) > 0 }
                 compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("第 2 页").fetchSemanticsNodes().isNotEmpty() }
@@ -111,6 +137,7 @@ class SharedDocumentImportTest {
                 compose.onNodeWithText("从左向右").performClick()
                 compose.onNodeWithContentDescription("第 2 页").performTouchInput { swipeLeft() }
                 awaitText("3 / 3")
+                compose.onNodeWithText("3 / 3").performClick()
                 compose.onNodeWithContentDescription("返回").performClick()
                 compose.onNodeWithTag("shelf-medium").assertTextEquals("漫画")
                 compose.onNodeWithTag("shelf-continue-reading").performClick()
@@ -145,13 +172,22 @@ class SharedDocumentImportTest {
                 val key = app.store.state.value.books.single { it.book.title == prefix }.book.ref.key
                 compose.onNodeWithText("阅读").performClick()
                 compose.waitUntil(10_000) { compose.onAllNodesWithText("1 / 2").fetchSemanticsNodes().isNotEmpty() }
-                compose.onNodeWithContentDescription("下一页").performClick()
+                compose.onNodeWithText("1 / 2").performClick()
+                compose.onNodeWithText("上一话").assertIsNotEnabled()
+                compose.onNodeWithText("下一话").performClick()
+                compose.waitUntil(10_000) { app.store.state.value.positions[key]?.chapterId == "second" }
+                compose.onNodeWithText("上一话").performClick()
+                compose.waitUntil(10_000) { app.store.state.value.positions[key]?.chapterId == "first" }
+                compose.onNodeWithText("目录").performClick()
+                compose.onNodeWithText("章节目录").assertIsDisplayed()
+                compose.onAllNodesWithText("1 页").onLast().performClick()
                 compose.waitUntil(10_000) { app.store.state.value.positions[key]?.chapterId == "second" }
                 assertEquals(1, app.store.state.value.positions.getValue(key).index)
                 compose.onNodeWithContentDescription("返回").performClick()
                 compose.onNodeWithTag("shelf-medium").assertTextEquals("漫画")
                 compose.onNodeWithTag("shelf-continue-reading").performClick()
                 compose.waitUntil(10_000) { compose.onAllNodesWithText("2 / 2").fetchSemanticsNodes().isNotEmpty() }
+                assertEquals("second", app.store.state.value.positions[key]?.chapterId)
             }
         } finally { app.store.update { it.copy(comicReadingMode = previousMode) } }
     }
@@ -180,13 +216,15 @@ class SharedDocumentImportTest {
             compose.onNodeWithText("作为漫画阅读").performClick()
             compose.onNodeWithText("开始阅读").performClick()
             compose.waitUntil(10_000) { compose.onAllNodesWithText("版权说明 $prefix").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("1 / 2").performClick()
             compose.onNodeWithContentDescription("漫画显示设置").performClick()
             compose.onNodeWithText("按阅读方向拆分横跨页").performClick()
             compose.onNodeWithText("裁去白边").performClick()
             compose.onNodeWithText("适合宽度").performClick()
             compose.onNodeWithText("完成").performClick()
             compose.onNodeWithContentDescription("下一页").performClick()
-            compose.waitUntil(10_000) { compose.onAllNodesWithText("2 / 2").fetchSemanticsNodes().isNotEmpty() }
+            val ref = app.store.state.value.books.single { it.book.title == prefix }.book.ref
+            compose.waitUntil(10_000) { app.store.state.value.positions[ref.key]?.chapterId == "i" }
             compose.onNodeWithContentDescription("下一页").performClick()
             compose.onNodeWithContentDescription("下一页").assertIsNotEnabled()
             val item = app.store.state.value.books.single { it.book.title == prefix }
