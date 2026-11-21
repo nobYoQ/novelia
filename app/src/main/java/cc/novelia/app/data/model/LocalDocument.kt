@@ -56,11 +56,23 @@ fun LocalChapter.toReaderChapter(novelTitle: String? = null, prevId: String? = n
     val downloadMode: String? = null,
     /** 仅 EPUB 导入时预判；旧书在打开时根据章节内容识别。 */
     val imageOnlyEpub: Boolean? = null,
+    val archivePages: List<ArchivePage> = emptyList(),
+    val comicSeries: Boolean = false,
+    val comicMetadata: ComicMetadata? = null,
     /** EPUB 目录标题独立升级，可覆盖章节正文文件中的旧标题。 */
     val epubTitleVersion: Int = 0,
     /** 旧索引只记录有目录标题的章节 ID。 */
     val epubNavigationIds: List<String> = emptyList(),
     val epubNavigation: List<EpubNavigationEntry> = emptyList())
+
+@Serializable data class ArchivePage(val path: String, val width: Int, val height: Int, val orientation: Int = 1,
+    val regionDecodable: Boolean = true)
+@Serializable data class ComicMetadata(val series: String = "", val title: String = "", val number: String = "", val writer: String = "") {
+    fun label(fallback: String): String = listOf(series, number.takeIf { it.isNotBlank() }?.let { "第 $it 卷" }.orEmpty(), title)
+        .filter { it.isNotBlank() }.distinct().joinToString(" · ").ifBlank { fallback }
+}
+@Serializable data class ComicPreferences(val mode: ComicReadingMode? = null, val fitWidth: Boolean = false,
+    val cropBorders: Boolean = false, val splitWide: Boolean = false)
 
 internal fun LocalDocument.readingOrderToc(): List<TocItem> = chapters.mapIndexed { index, chapter ->
     TocItem(chapter.title.ifBlank { "第 ${index + 1} 节" }, chapterId = chapter.id)

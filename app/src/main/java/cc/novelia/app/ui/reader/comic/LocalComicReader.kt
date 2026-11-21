@@ -6,11 +6,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.view.WindowCompat
 import androidx.exifinterface.media.ExifInterface
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import cc.novelia.app.data.model.BookRef
-import cc.novelia.app.data.model.ComicReadingMode
-import cc.novelia.app.data.model.comicArchiveFormats
-import cc.novelia.app.data.model.hasOnlyImagePages
-import cc.novelia.app.data.model.Position
+import cc.novelia.app.data.model.*
+import cc.novelia.app.files.comic.ComicPageCache
+
 import cc.novelia.app.data.storage.LocalStore
 import cc.novelia.app.reader.ComicPage
 import cc.novelia.app.ui.navigation.AppController
@@ -29,23 +27,36 @@ internal data class LocalComicVolume(val title: String, val pages: List<ComicPag
 /** 纯图片 EPUB 跨 spine 连续翻页，保存位置时仍使用原书的章节 ID 与章内下标。 */
 internal suspend fun LocalStore.loadComicVolume(id: String): LocalComicVolume? = withContext(Dispatchers.IO) {
     val doc = documentIndex(id)
-    if (doc.format !in comicArchiveFormats && (doc.format != "epub" || doc.imageOnlyEpub == false)) return@withContext null
+    val override = state.value.books.firstOrNull { it.book.ref == BookRef("local", id) }?.epubMediumOverride
+    if (doc.format !in comicArchiveFormats && (doc.format != "epub" || override == BookMedium.Novel ||
+        override == null && doc.imageOnlyEpub == false)) return@withContext null
+    val source = documentSource(id, doc.format)
+    val cache = ComicPageCache(File(context.cacheDir, "comic-pages"), source, doc.format, doc.sourceHash)
     val sections = mutableListOf<ComicSection>()
     val hashes = mutableListOf<String>()
     for (entry in doc.chapters) {
         ensureActive()
         val chapter = documentChapter(id, entry.id)
-        if (!chapter.hasOnlyImagePages()) {
+        if (doc.archivePages.isEmpty() && override != BookMedium.Comic && !chapter.hasOnlyImagePages()) {
             if (doc.format == "epub") return@withContext null
             throw IllegalArgumentException("漫画章节中的图片索引无效")
         }
+        if (chapter.paragraphs.isEmpty()) continue
         sections += ComicSection(entry.id, entry.title, hashes.size, chapter.paragraphs.size)
-        chapter.paragraphs.mapTo(hashes) { it.removePrefix("novelia-image:") }
+        hashes.addAll(chapter.paragraphs)
     }
     require(hashes.isNotEmpty()) { "这一册没有漫画页" }
     val pages = hashes.map { hash ->
         ensureActive()
-        readComicPage(documentImage(id, hash))
+        when {
+            hash.startsWith("novelia-archive:") && doc.archivePages.isNotEmpty() -> {
+                val page = doc.archivePages[hash.substringAfter(':').toInt()]
+                ComicPage(source, page.width, page.height, page.orientation, page.regionDecodable,
+                    load = { cache.load(page.path) })
+            }
+            hash.matches(imageToken) -> readComicPage(documentImage(id, hash.substringAfter(':')))
+            else -> ComicPage(File(""), 3, 4, text = hash)
+        }
     }
     LocalComicVolume(doc.name, pages, sections)
 }
@@ -65,23 +76,31 @@ internal fun LocalComicReader(c: AppController, ref: BookRef, book: LocalComicVo
         val saved = remember(ref, chapter.id) { state.positions[ref.key]?.takeIf { it.chapterId == chapter.id } }
         val interact = rememberReaderReadingTime(c, ref.key, book.title, state.readingStatistics.revision,
             eligible = state.readingStatistics.enabled && !state.historyPaused, automatic = false)
+        val preferences = state.books.firstOrNull { it.book.ref == ref }?.comicPreferences ?: ComicPreferences()
+        val mode = preferences.mode ?: state.comicReadingMode
         ComicReader(
-            title = book.title, pages = book.pages, mode = state.comicReadingMode,
+            title = book.title, pages = book.pages, mode = mode, preferences = preferences, sections = book.sections,
+            defaultMode = state.comicReadingMode, onDefaultMode = { next -> c.store.update { it.copy(comicReadingMode = next) } },
+            onDetails = { c.showBookDetails(ref) },
             initialPage = chapter.first + ((saved?.index ?: 1) - 1).coerceIn(0, chapter.count - 1), initialOffset = saved?.offset ?: 0,
-            onMode = { mode -> c.store.update { it.copy(comicReadingMode = mode) } },
+            onPreferences = { next -> c.store.update { library -> library.copy(books = library.books.map {
+                if (it.book.ref == ref) it.copy(comicPreferences = next) else it
+            }) } },
             onPosition = { page, sourceY, completed ->
                 val hit = book.sections.binarySearchBy(page) { it.first }
                 val ordinal = if (hit >= 0) hit else -hit - 2
                 val section = book.sections[ordinal]
                 val within = page - section.first + 1
                 c.store.savePosition(ref, Position(section.id, within, offset = sourceY, title = section.title,
-                    chapterIndex = ordinal, chapterCount = book.sections.size, paragraphCount = section.count,
+                    chapterIndex = ordinal, chapterCount = book.sections.size, paragraphCount = section.count, sourceParagraph = within - 1,
                     chapterCompleted = completed || (ordinal < book.sections.lastIndex && within == section.count &&
-                        state.comicReadingMode != ComicReadingMode.Webtoon)), book.title)
+                        mode != ComicReadingMode.Webtoon)), book.title)
             }, onBack = c::back, modifier = readerInteractionModifier(interact)
         )
     }
 }
+
+private val imageToken = Regex("novelia-image:[a-f0-9]{64}")
 
 private fun readComicPage(file: File): ComicPage {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
