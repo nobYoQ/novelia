@@ -51,11 +51,10 @@ import cc.novelia.app.ui.components.base.*
     val characterActive = !localFiles && type == ShelfBookType.Web && characters.active
     val count = (if(type != ShelfBookType.All) 1 else 0) + (if(status != "全部") 1 else 0) + (if(characterActive) 1 else 0)
     val showControls = visible && !collapsed
-    LaunchedEffect(active, showControls, collapsed) {
-        if(collapsed) searchExpanded = false
+    LaunchedEffect(active, showControls) {
         if(!active || !showControls) { folderMenu = false; sortMenu = false; onExpanded(false); focus.clearFocus() }
     }
-    if(showControls) Column(modifier.fillMaxWidth().testTag("local-controls")) {
+    ShelfControlsPanel(visible, collapsed, modifier, "local-controls", onCollapsed = { searchExpanded = false }) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp).testTag("local-toolbar"), verticalAlignment = Alignment.CenterVertically) {
             BoxWithConstraints(Modifier.weight(1f)) {
                 val folderMenuWidth = maxWidth
@@ -66,7 +65,7 @@ import cc.novelia.app.ui.components.base.*
                         overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.labelLarge)
                     Icon(if(folderMenu) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, null, Modifier.size(18.dp))
                 }
-                AppDropdownMenu(folderMenu, { folderMenu = false }, Modifier.width(folderMenuWidth).testTag("local-folder-menu")) {
+                AppDropdownMenu(showControls && folderMenu, { folderMenu = false }, Modifier.width(folderMenuWidth).testTag("local-folder-menu")) {
                     FavoriteFolderMenu(listOf(Folder("", "全部收藏夹")) + folders, folders.firstOrNull { it.title == folder }?.id ?: "",
                         { id -> folderMenu = false; onFolder(folders.firstOrNull { it.id == id }?.title ?: "全部") },
                         setOf("", DEFAULT_FOLDER_ID), folderOrder, "按创建顺序", onOrderFolders) {
@@ -95,7 +94,7 @@ import cc.novelia.app.ui.components.base.*
                     Text(sorts[sort.coerceIn(0, 2)], style = MaterialTheme.typography.labelMedium)
                     Spacer(Modifier.width(4.dp)); Icon(Icons.AutoMirrored.Outlined.Sort, null, Modifier.size(18.dp))
                 }
-                AppDropdownMenu(sortMenu, { sortMenu = false }, Modifier.testTag("local-sort-menu")) {
+                AppDropdownMenu(showControls && sortMenu, { sortMenu = false }, Modifier.testTag("local-sort-menu")) {
                     sorts.forEachIndexed { index, label -> DropdownMenuItem({ Text(label) }, { sortMenu = false; onSort(index) },
                         trailingIcon = if(sort == index) ({ Icon(Icons.Outlined.Check, null) }) else null) }
                 }

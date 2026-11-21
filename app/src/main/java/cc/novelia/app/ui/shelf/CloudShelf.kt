@@ -205,7 +205,7 @@ import cc.novelia.app.ui.navigation.AppController
                             }
                             CloudShelfBooks(result.items, local, account, listState, page, result.pageNumber, { page = it },
                                 managing, { managing = it; if(it) { expanded = false; focus.clearFocus() } }, selection, { selection = it },
-                                bulkBusy, bulkProgress, active, if(toolsExpanded) controlsHeight else 0, selectedBookKey,
+                                bulkBusy, bulkProgress, active, controlsHeight, selectedBookKey,
                                 onOpenBook = { expanded = false; onOpenBook(it) }, onLocal = { bulkLocal = selection.values.toList() },
                                 onRemove = { bulkRemoval = current.id to selection.values.toList() }, onRetry = retry,
                                 onReadBook = { ref, chapter -> c.read(ref, chapter) },

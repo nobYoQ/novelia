@@ -318,7 +318,7 @@ import kotlinx.coroutines.withContext
                         }
                         if(pageManaging) ShelfSelectionHeader(selection.size, !batchWorking,
                             // 长按尚未松手时保持列表起点，避免进入选择模式后书籍从手指下跳开。
-                            if(dragSelection.dragging) with(density) { (if(toolsExpanded) controlsHeight else 0).toDp() } else 48.dp,
+                            if(dragSelection.dragging) with(density) { controlsHeight.toDp() } else 48.dp,
                             onSelectAll = { selection = selectableKeys },
                             onFinish = { managing = false; selection = emptySet() })
                         ShelfLayoutTransition(grid, Modifier.weight(1f), overlay = {

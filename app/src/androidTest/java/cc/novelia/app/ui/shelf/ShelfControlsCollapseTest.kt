@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -34,10 +35,17 @@ class ShelfControlsCollapseTest {
             val partition = compose.onNodeWithTag("shelf-page-0")
             fun tabBounds() = (0..2).map { compose.onNodeWithTag("shelf-tab-$it").getUnclippedBoundsInRoot() }
             val tabs = tabBounds()
-            toggle.assertWidthIsEqualTo(64.dp).assertHeightIsEqualTo(44.dp)
+            toggle.assertWidthIsEqualTo(30.dp).assertHeightIsEqualTo(20.dp)
             val expandedTop = viewport.getUnclippedBoundsInRoot().top
             assertEquals(compose.onNodeWithTag("local-results-header").getUnclippedBoundsInRoot().bottom, expandedTop)
             assertEquals(expandedTop, toggle.getUnclippedBoundsInRoot().top)
+
+            val target = toggle.fetchSemanticsNode().boundsInRoot
+            viewport.performTouchInput {
+                click(Offset(center.x, target.height * 1.3f))
+                click(Offset(center.x + target.width * .64f, target.height * .35f))
+            }
+            toggle.assertContentDescriptionEquals("收起书架工具栏")
 
             toggle.performTouchInput { click(center) }
             compose.onNodeWithTag("local-toolbar").assertDoesNotExist()
@@ -73,6 +81,28 @@ class ShelfControlsCollapseTest {
             toggle.performClick()
             runBlocking { app.store.flush() }
             assertTrue(LocalStore(app).state.value.shelfControlsExpanded)
+        }
+    }
+
+    @Test fun arrowFollowsTheBookViewportThroughBothHeightTransitions() {
+        withShelf(reducedMotion = false) {
+            val toggle = compose.onNodeWithTag("shelf-controls-toggle")
+            val viewport = compose.onNodeWithTag("shelf-books")
+            fun currentTop() = viewport.getUnclippedBoundsInRoot().top
+            repeat(2) {
+                val before = currentTop()
+                compose.mainClock.autoAdvance = false
+                try {
+                    toggle.performClick()
+                    compose.mainClock.advanceTimeBy(96)
+                    val during = currentTop()
+                    assertEquals(during, toggle.getUnclippedBoundsInRoot().top)
+                    compose.mainClock.advanceTimeBy(400)
+                    val after = currentTop()
+                    assertTrue("书目在过渡中应经过起点和终点之间", during > minOf(before, after) && during < maxOf(before, after))
+                    assertEquals(after, toggle.getUnclippedBoundsInRoot().top)
+                } finally { compose.mainClock.autoAdvance = true }
+            }
         }
     }
 
@@ -120,7 +150,7 @@ class ShelfControlsCollapseTest {
         }
     }
 
-    private fun withShelf(eInk: Boolean = false, block: (StateRestorationTester) -> Unit) {
+    private fun withShelf(eInk: Boolean = false, reducedMotion: Boolean = true, block: (StateRestorationTester) -> Unit) {
         val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
         runBlocking { app.initialization.await() }
         val before = app.store.state.value
@@ -131,7 +161,7 @@ class ShelfControlsCollapseTest {
                 rememberLastShelfFolder = false) }
             val restoration = StateRestorationTester(compose)
             restoration.setContent {
-                AppInteractionMode(eInk, true) {
+                AppInteractionMode(eInk, reducedMotion) {
                     NoveliaTheme("light") {
                         val nav = rememberNavController()
                         val scope = rememberCoroutineScope()

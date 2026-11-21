@@ -47,11 +47,10 @@ import cc.novelia.app.ui.components.book.WebSourceOptions
     val translateLabels = listOf("全部", "GPT", "Sakura")
     val count = if(kind == 0) listOf(sources.size != providers.size, filter.type != 0, filter.level != 0, filter.translate != 0).count { it } else 0
     val showControls = visible && !collapsed
-    LaunchedEffect(active, showControls, collapsed) {
-        if(collapsed) searchExpanded = false
+    LaunchedEffect(active, showControls) {
         if(!active || !showControls) { folderMenu = false; sortMenu = false; onExpanded(false); focus.clearFocus() }
     }
-    if(showControls) Column(modifier.fillMaxWidth().testTag("cloud-controls")) {
+    ShelfControlsPanel(visible, collapsed, modifier, "cloud-controls", onCollapsed = { searchExpanded = false }) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp).testTag("cloud-toolbar"), verticalAlignment = Alignment.CenterVertically) {
             BoxWithConstraints(Modifier.weight(1f)) {
                 val folderMenuWidth = maxWidth
@@ -62,7 +61,7 @@ import cc.novelia.app.ui.components.book.WebSourceOptions
                         color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.labelLarge)
                     Icon(if(folderMenu) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, null, Modifier.size(18.dp))
                 }
-                AppDropdownMenu(folderMenu, { folderMenu = false }, Modifier.width(folderMenuWidth).testTag("cloud-folder-menu")) {
+                AppDropdownMenu(showControls && folderMenu, { folderMenu = false }, Modifier.width(folderMenuWidth).testTag("cloud-folder-menu")) {
                     FavoriteFolderMenu(folders, current?.id, { folderMenu = false; onFolder(it) },
                         setOf(ALL_CLOUD_FAVORITES, CLOUD_DEFAULT_FOLDER_ID), folderOrder, "原站顺序", onOrderFolders) {
                         folderActions { folderMenu = false }
@@ -84,7 +83,7 @@ import cc.novelia.app.ui.components.book.WebSourceOptions
                     Text(if(sort == "update") "更新时间" else "收藏时间", style = MaterialTheme.typography.labelMedium)
                     Spacer(Modifier.width(4.dp)); Icon(Icons.AutoMirrored.Outlined.Sort, null, Modifier.size(18.dp))
                 }
-                AppDropdownMenu(sortMenu, { sortMenu = false }, Modifier.testTag("cloud-sort-menu")) {
+                AppDropdownMenu(showControls && sortMenu, { sortMenu = false }, Modifier.testTag("cloud-sort-menu")) {
                     listOf("update" to "更新时间", "create" to "收藏时间").forEach { (id, label) ->
                         DropdownMenuItem({ Text(label) }, { sortMenu = false; onSort(id) },
                             trailingIcon = if(sort == id) ({ Icon(Icons.Outlined.Check, null) }) else null)
