@@ -14,7 +14,8 @@ class SharedDocumentIntentsTest {
 
     @Test fun registeredTypesAppearInSingleAndMultipleShareResolvers() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val types = listOf("application/epub+zip", "text/plain", "application/x-subrip", "application/srt", "text/srt", "application/octet-stream", "*/*")
+        val types = listOf("application/epub+zip", "text/plain", "application/x-subrip", "application/srt", "text/srt", "application/octet-stream", "*/*") +
+            cc.novelia.app.data.model.comicMimeTypes.values.flatten()
         for(action in listOf(Intent.ACTION_SEND, Intent.ACTION_SEND_MULTIPLE)) for(type in types) {
             val intent = Intent(action).setType(type).setPackage(context.packageName)
             @Suppress("DEPRECATION")
@@ -61,7 +62,8 @@ class SharedDocumentIntentsTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         fun matches(uri: Uri, mime: String?) = context.packageManager.queryIntentActivities(
             Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime).setPackage(context.packageName), PackageManager.MATCH_DEFAULT_ONLY)
-        for(type in listOf("application/epub+zip", "text/plain", "application/x-subrip", "application/srt", "text/srt", "application/octet-stream", "*/*")) {
+        for(type in listOf("application/epub+zip", "text/plain", "application/x-subrip", "application/srt", "text/srt", "application/octet-stream", "*/*") +
+            cc.novelia.app.data.model.comicMimeTypes.values.flatten()) {
             assertTrue("Missing open target for $type", matches(first, type).any { it.activityInfo.name == "cc.novelia.app.MainActivity" })
         }
         assertTrue(matches(first, "image/png").isEmpty())

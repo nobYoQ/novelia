@@ -2,7 +2,17 @@ package cc.novelia.app.data.model
 
 import kotlinx.serialization.Serializable
 
-internal val localDocumentFormats = setOf("epub", "txt", "srt", "cbz")
+internal val comicMimeTypes = mapOf(
+    "cbz" to listOf("application/vnd.comicbook+zip", "application/x-cbz"),
+    "zip" to listOf("application/zip", "application/x-zip-compressed", "application/x-zip"),
+    "cbr" to listOf("application/vnd.comicbook-rar", "application/x-cbr"),
+    "rar" to listOf("application/vnd.rar", "application/x-rar-compressed", "application/x-rar"),
+    "cb7" to listOf("application/x-cb7"), "7z" to listOf("application/x-7z-compressed"),
+    "cbt" to listOf("application/x-cbt"), "tar" to listOf("application/x-tar"),
+)
+internal val comicArchiveFormats = comicMimeTypes.keys
+internal val localDocumentFormats = setOf("epub", "txt", "srt") + comicArchiveFormats
+internal const val supportedBookFiles = "支持 EPUB、TXT、SRT、ZIP/CBZ、RAR/CBR、7z/CB7 和 TAR/CBT 文件"
 
 enum class ComicReadingMode { RightToLeft, LeftToRight, Webtoon }
 
@@ -44,6 +54,8 @@ fun LocalChapter.toReaderChapter(novelTitle: String? = null, prevId: String? = n
     val chapterFiles: Map<String, String> = emptyMap(),
     /** 下载请求的内容模式，用于结合 EPUB 原文标记识别对照段落。 */
     val downloadMode: String? = null,
+    /** 仅 EPUB 导入时预判；旧书在打开时根据章节内容识别。 */
+    val imageOnlyEpub: Boolean? = null,
     /** EPUB 目录标题独立升级，可覆盖章节正文文件中的旧标题。 */
     val epubTitleVersion: Int = 0,
     /** 旧索引只记录有目录标题的章节 ID。 */
@@ -122,3 +134,5 @@ internal fun navigationChapterId(readingOrder: List<TocItem>, navigation: List<T
     }
     return null
 }
+private val imageParagraph = Regex("novelia-image:[a-f0-9]{64}")
+internal fun LocalChapter.hasOnlyImagePages() = paragraphs.isNotEmpty() && paragraphs.all(imageParagraph::matches)

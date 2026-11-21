@@ -107,6 +107,42 @@ class SharedDocumentImportTest {
         } finally { app.store.update { it.copy(comicReadingMode = previousMode) } }
     }
 
+    @Test fun imageEpubTurnsAcrossSpineAndResumesAtOriginalChapterId() {
+        val previousMode = app.store.state.value.comicReadingMode
+        app.store.update { it.copy(comicReadingMode = ComicReadingMode.LeftToRight) }
+        val file = File(app.store.exportsDir, "$prefix.epub")
+        files += file
+        ZipOutputStream(file.outputStream()).use { zip ->
+            fun text(name: String, contents: String) {
+                zip.putNextEntry(ZipEntry(name)); zip.write(contents.toByteArray()); zip.closeEntry()
+            }
+            text("META-INF/container.xml", """<container><rootfile full-path="book.opf"/></container>""")
+            text("book.opf", """<package><manifest><item id="first" href="10.png" media-type="image/png"/><item id="second" href="2.png" media-type="image/png"/></manifest><spine><itemref idref="first"/><itemref idref="second"/></spine></package>""")
+            for (i in listOf(2, 10)) {
+                val bitmap = Bitmap.createBitmap(100, 150, Bitmap.Config.ARGB_8888)
+                zip.putNextEntry(ZipEntry("$i.png"))
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, zip)
+                bitmap.recycle(); zip.closeEntry()
+            }
+        }
+        try {
+            val uri = FileProvider.getUriForFile(app, "${app.packageName}.files", file)
+            ActivityScenario.launch<MainActivity>(share(listOf(uri), "application/epub+zip")).use {
+                awaitBooks(1)
+                val key = app.store.state.value.books.single { it.book.title == prefix }.book.ref.key
+                compose.onNodeWithText("阅读").performClick()
+                compose.waitUntil(10_000) { compose.onAllNodesWithText("1 / 2").fetchSemanticsNodes().isNotEmpty() }
+                compose.onNodeWithContentDescription("下一页").performClick()
+                compose.waitUntil(10_000) { app.store.state.value.positions[key]?.chapterId == "second" }
+                assertEquals(1, app.store.state.value.positions.getValue(key).index)
+                compose.onNodeWithContentDescription("返回").performClick()
+                compose.onNodeWithTag("shelf-tab-0").performClick()
+                compose.onNodeWithTag("shelf-continue-reading").performClick()
+                compose.waitUntil(10_000) { compose.onAllNodesWithText("2 / 2").fetchSemanticsNodes().isNotEmpty() }
+            }
+        } finally { app.store.update { it.copy(comicReadingMode = previousMode) } }
+    }
+
     @Test fun dismissedImportStaysClosedAfterRecreationAndNextBatchCanBeShown() {
         val uri = fixture("txt", "关闭提示后仍保留正文 $prefix")
         ActivityScenario.launch<MainActivity>(share(listOf(uri), "text/plain")).use { scenario ->
@@ -178,7 +214,7 @@ class SharedDocumentImportTest {
                 awaitBooks(2)
                 scenario.onActivity { assertEquals(Intent.ACTION_SEND_MULTIPLE, it.intent.action) }
                 compose.onNodeWithTag("import-results").performClick()
-                compose.waitUntil(10_000) { compose.onAllNodesWithText("失败 · 支持 EPUB、TXT、SRT 和 CBZ 文件").fetchSemanticsNodes().isNotEmpty() }
+                compose.waitUntil(10_000) { compose.onAllNodesWithText("失败 · " + cc.novelia.app.data.model.supportedBookFiles).fetchSemanticsNodes().isNotEmpty() }
                 assertEquals(setOf("epub", "srt"), app.store.state.value.books.filter { it.book.title.startsWith(prefix) }
                     .map { app.store.documentIndex(it.book.ref.id).format }.toSet())
             } finally {

@@ -61,6 +61,12 @@ internal fun readEpubContents(
         checkCancelled()
         if (chapterId != null && item.id != chapterId) return@mapNotNull null
         val path = item.contentPath
+        if (path != null && item.rasterImage) {
+            return@mapNotNull image(path)?.let { hash ->
+                LocalChapter(item.id, book.tocTitle(item) ?: path.substringAfterLast('/'), listOf("novelia-image:$hash"),
+                    epubContentVersion = EPUB_CONTENT_VERSION, downloadMode = downloadMode)
+            }
+        }
         val html = path?.let(text)
         if (path == null || html == null) {
             return@mapNotNull LocalChapter(item.id, book.tocTitle(item) ?: UNAVAILABLE_CHAPTER,
@@ -89,9 +95,8 @@ internal fun readEpubDirectory(file: File, chapterIds: Set<String>): EpubDirecto
         val titles = buildMap {
             for (item in book.spine) {
                 if (item.id !in chapterIds) continue
-                val title = book.tocTitle(item) ?: item.contentPath?.let(archive::text)?.let {
-                    book.chapterTitle(item, epubChapterDocument(it))
-                }
+                val title = book.tocTitle(item) ?: if (item.rasterImage) item.contentPath?.substringAfterLast('/')
+                    else item.contentPath?.let(archive::text)?.let { book.chapterTitle(item, epubChapterDocument(it)) }
                 put(item.id, title ?: UNAVAILABLE_CHAPTER)
             }
         }

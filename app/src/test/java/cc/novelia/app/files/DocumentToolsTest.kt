@@ -236,6 +236,7 @@ class DocumentToolsTest {
         assertEquals(listOf(marker("two"), marker("two"), marker("ten")), book.chapters.single().paragraphs)
         assertEquals(marker("two").substringAfter(':'), book.coverImage)
         assertEquals(2, book.images.size)
+        assertEquals(book.chapters, DocumentTools.parse("漫画.zip", bytes).chapters)
     }
     @Test fun cbzRejectsUnsafePathsAndEmptyArchives() {
         assertThrows(IllegalArgumentException::class.java) { DocumentTools.parse("漫画.cbz", archive(mapOf("../1.png" to "x"))) }
@@ -250,6 +251,7 @@ class DocumentToolsTest {
         ))
         val doc = DocumentTools.parse("插图.epub", bytes)
         assertEquals(1, doc.images.size)
+        assertEquals(false, doc.imageOnlyEpub)
         assertNotNull(doc.coverImage)
         assertEquals("插图之前", doc.chapters.single().paragraphs[0])
         assertTrue(doc.chapters.single().paragraphs[1].startsWith("novelia-image:"))
@@ -285,6 +287,27 @@ class DocumentToolsTest {
         val recovered = recoverEpubChapter(source, legacy, null)
         assertEquals(legacy.paragraphs, recovered.paragraphs)
         assertEquals(mapOf(5 to "窓辺にいる猫"), recovered.readingContent.imageDescriptions)
+    }
+
+    @Test fun imageOnlyEpubUsesSpineWithDirectRasterAndSvgWrapperInBothParsers() {
+        val bytes = archive(mapOf(
+            "META-INF/container.xml" to """<container><rootfile full-path="book.opf"/></container>""",
+            "book.opf" to """<package><manifest><item id="wrapper" href="one.xhtml"/><item id="page" href="img" media-type="image/png"/></manifest><spine><itemref idref="page"/><itemref idref="wrapper"/></spine></package>""",
+            "one.xhtml" to """<html><body><svg><title>画页标题</title><desc>图片说明</desc><image xlink:href="two.png"/></svg></body></html>""",
+            "two.png" to "two", "img" to "one"))
+        val book = DocumentTools.parse("彩页.epub", bytes)
+        assertEquals(true, book.imageOnlyEpub)
+        assertEquals(DocumentTools.digest("one".byteInputStream()), book.coverImage)
+        assertEquals(listOf("page", "wrapper"), book.chapters.map { it.id })
+        assertEquals(listOf("one", "two").map { "novelia-image:" + DocumentTools.digest(it.byteInputStream()) },
+            book.chapters.flatMap { it.paragraphs })
+        val file = java.io.File.createTempFile("image-spine", ".epub")
+        try {
+            file.writeBytes(bytes)
+            val parsed = DocumentTools.parseFile("彩页.epub", file, { _, _ -> })
+            assertEquals(book.chapters, parsed.chapters)
+            assertEquals(true, parsed.imageOnlyEpub)
+        } finally { file.delete() }
     }
     @Test fun srtKeepsTimestampsAndSequenceNumbers() {
         val text = "1\r\n00:00:01,000 --> 00:00:03,000\r\n你好\r\n\r\n2\r\n00:00:04,000 --> 00:00:05,000\r\n世界"

@@ -2,6 +2,8 @@ package cc.novelia.app.files.importing
 
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.provider.DocumentsContract
+import cc.novelia.app.files.comic.packComicFolder
 import cc.novelia.app.NoveliaApplication
 import cc.novelia.app.data.library.withDownloadedVolume
 import cc.novelia.app.data.library.withWenkuSiteOrder
@@ -59,6 +61,15 @@ suspend fun importDocumentUri(store: LocalStore, uri: Uri, onProgress: (String) 
     require(uri.scheme == "content") { "无法读取此文件，请从文件管理器重新分享或使用书架导入" }
     onProgress("正在读取文件")
     val resolver = store.context.contentResolver
+    if (DocumentsContract.isTreeUri(uri) && uri.pathSegments.size == 2) {
+        val archive = File.createTempFile("comic-folder-", ".cbz", store.context.cacheDir)
+        try {
+            onProgress("正在整理漫画文件夹")
+            val job = coroutineContext
+            val title = packComicFolder(resolver, uri, archive) { job.ensureActive() }
+            return@withContext importLocalDocument(store, archive, "$title.cbz", onProgress = onProgress)
+        } finally { archive.delete() }
+    }
     val metadata = try {
         resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use {
             if (it.moveToFirst()) {

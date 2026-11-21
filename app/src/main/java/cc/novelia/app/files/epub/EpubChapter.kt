@@ -27,6 +27,7 @@ internal fun parseEpubChapter(
     preserveLegacyBody: Boolean = false,
 ): LocalChapter? {
     val doc = epubChapterDocument(html, preserveLegacyBody)
+    if (!preserveLegacyBody) doc.select("svg title,svg desc").remove()
     val blocks = if (preserveLegacyBody) epubBlocks else epubBlocksWithTableCells
     val title = chapterTitle(doc)
     val ruby = prepareEpubRuby(doc, checkCancelled)

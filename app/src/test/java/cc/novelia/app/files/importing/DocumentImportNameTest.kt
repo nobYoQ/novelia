@@ -11,6 +11,10 @@ class DocumentImportNameTest {
     }
 
     @Test fun missingExtensionUsesOnlyAKnownBookType() {
+        assertEquals("漫画.zip", documentImportName("漫画", null, "application/zip"))
+        assertEquals("漫画.cbr", documentImportName("漫画", null, "application/vnd.comicbook-rar"))
+        assertEquals("漫画.7z", documentImportName("漫画", null, "application/x-7z-compressed"))
+        assertEquals("漫画.CBT", documentImportName("漫画.CBT", null, "application/octet-stream"))
         assertEquals("小说.epub", documentImportName("小说", "123", "application/epub+zip"))
         assertEquals("123.srt", documentImportName(null, "123", "application/x-subrip"))
         assertEquals("导入文档.txt", documentImportName("", null, "text/plain; charset=utf-8"))

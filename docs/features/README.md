@@ -11,7 +11,7 @@
 | 详情、目录、文库维护和术语 | [书籍详情与文库](book-details.md) | `ui/book` |
 | 正文、双语、分页、定位和朗读 | [阅读器](reader.md) | `ui/reader`、顶层 `reader` |
 | 帖子、评论、Markdown 与草稿 | [社区与内容编辑](community.md) | `ui/community`、`ui/markdown` |
-| EPUB/TXT/SRT、下载和导出 | [文件与下载](files-and-downloads.md) | `ui/downloads`、`ui/tools`、`files` |
+| 本地书籍与漫画、下载和导出 | [文件与下载](files-and-downloads.md) | `ui/downloads`、`ui/tools`、`files` |
 | 偏好、屏蔽、缓存和笔记 | [设置、笔记与个人数据](settings-and-notes.md) | `ui/settings`、`ui/notes` |
 | 可选资料的跨设备合并 | [WebDAV 多设备同步](../network/webdav-sync.md) | `ui/settings`、`data/webdav` |
 
