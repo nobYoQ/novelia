@@ -66,7 +66,8 @@ try {
 
     $outputDirectory = Join-Path $rootPath "outputs/packages/$mode"
     [IO.Directory]::CreateDirectory($outputDirectory) | Out-Null
-    $stem = "Novelia-$versionName-$mode-$Abi"
+    $packageMode = if ($mode -eq 'release-local') { 'release' } else { $mode }
+    $stem = "Novelia-$versionName-$packageMode-$Abi"
     $outputApk = Join-Path $outputDirectory "$stem.apk"
     Copy-Item -LiteralPath $apk -Destination $outputApk -Force
     $sha256 = (Get-FileHash -LiteralPath $outputApk -Algorithm SHA256).Hash.ToLowerInvariant()
