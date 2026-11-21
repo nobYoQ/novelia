@@ -109,6 +109,30 @@ class LibraryBackupTest {
         catch (expected: IllegalArgumentException) { /* 拒绝恢复时不改动当前书库。 */ }
     }
 
+    @Test fun cbzBackupCanRestoreWithOrWithoutTheOriginalArchive() {
+        val root = temp()
+        try {
+            val image = File(root, "page").apply { writeBytes(byteArrayOf(1, 2, 3)) }
+            val hash = LibraryBackupArchive.digest(image).sha256
+            val doc = LocalDocument("comic", "漫画", "cbz",
+                listOf(LocalChapter("0", "全册", listOf("novelia-image:$hash"))), coverImage = hash)
+            val json = File(root, "document").apply { writeText(appJson.encodeToString(doc)) }
+            val cbz = File(root, "source.cbz").apply { writeBytes(archive(mapOf("1.png" to image.readBytes()))) }
+            for (original in listOf(false, true)) {
+                val files = mutableMapOf("documents/comic.json" to json, "documents/comic-images/$hash" to image)
+                if (original) files["documents/comic.cbz"] = cbz
+                val metadata = manifest(documents = listOf("comic"), assets = files.mapValues { LibraryBackupArchive.digest(it.value) })
+                    .copy(originalsIncluded = original)
+                val output = ByteArrayOutputStream()
+                LibraryBackupArchive.write(output, metadata, files)
+                val directory = File(root, "restore-$original").apply { mkdirs() }
+                assertEquals(metadata, LibraryBackupArchive.extract(output.toByteArray().inputStream(), directory))
+                assertEquals(original, File(directory, "documents/comic.cbz").isFile)
+                assertArrayEquals(image.readBytes(), File(directory, "documents/comic-images/$hash").readBytes())
+            }
+        } finally { root.deleteRecursively() }
+    }
+
     @Test fun modeSnapshotsRestoreAndRejectInvalidDormantPreferences() {
         val root = temp()
         try {

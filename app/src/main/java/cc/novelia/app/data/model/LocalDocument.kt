@@ -4,6 +4,10 @@ import kotlinx.serialization.Serializable
 
 internal const val UNAVAILABLE_EPUB_CHAPTER_TEXT = "此章节使用当前阅读器无法打开的资源，且没有可读取的替代内容。"
 
+internal val localDocumentFormats = setOf("epub", "txt", "srt", "cbz")
+
+enum class ComicReadingMode { RightToLeft, LeftToRight, Webtoon }
+
 /** 保留 EPUB 的原始段落下标；一个 p 内的 br 可以对应多段。 */
 @Serializable data class LocalBilingualGroup(val original: List<Int>, val translations: List<List<Int>>)
 
