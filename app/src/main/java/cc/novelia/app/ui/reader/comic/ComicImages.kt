@@ -3,7 +3,6 @@ package cc.novelia.app.ui.reader.comic
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.BitmapRegionDecoder
-import android.graphics.Matrix
 import android.graphics.Rect
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -30,6 +29,7 @@ import cc.novelia.app.reader.ComicPage
 import cc.novelia.app.reader.ComicStrip
 import cc.novelia.app.reader.IllustrationTransform
 import cc.novelia.app.reader.transformIllustration
+import cc.novelia.app.files.comic.comicImageOrientation
 import cc.novelia.app.ui.components.media.RecoveringAsyncImage
 import cc.novelia.app.ui.components.base.AppTextButton
 import cc.novelia.app.ui.theme.appReducedMotion
@@ -131,10 +131,7 @@ private fun decodeStrip(page: ComicPage, strip: ComicStrip, width: Int): Bitmap 
         }
         val bitmap = decoder.decodeRegion(region, BitmapFactory.Options().apply { inSampleSize = sample })
             ?: throw IOException("无法解码漫画区域")
-        val matrix = Matrix().apply {
-            if (page.orientation in listOf(2, 4, 5, 7)) setScale(-1f, 1f)
-            postRotate(when (page.orientation) { 3, 4 -> 180f; 5, 8 -> 270f; 6, 7 -> 90f; else -> 0f })
-        }
+        val matrix = comicImageOrientation(page.orientation)
         if (matrix.isIdentity) bitmap else Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
     } finally { decoder.recycle() }
 }

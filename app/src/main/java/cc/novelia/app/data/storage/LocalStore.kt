@@ -148,6 +148,25 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
         else withContext(Dispatchers.IO) { save(null) }
     }
 
+    internal suspend fun saveComicCover(source: BookRef, target: BookRef, chapterId: String?, cover: () -> InputStream) {
+        require(source.isLocal && (target == source || target.isLocalSeries && chapterId == null)) { "封面目标无效" }
+        bookCovers.withValidatedCover(cover) { temporary ->
+            synchronized(documentLock) {
+                val document = documentIndex(source.id)
+                require(chapterId == null || document.chapters.any { it.id == chapterId }) { "这话已不存在" }
+                synchronized(this) {
+                    check(recoveryIssue.value == null) { "本地资料已保护，请先前往资料备份与恢复" }
+                    if (target != source) {
+                        val books = state.value.books
+                        require(books.any { it.book.ref == target } &&
+                            books.any { it.book.ref == source && it.parentWenkuKey == target.key }) { "这话的总集已变更" }
+                    }
+                    bookCovers.installValidatedCover(target, temporary, chapterId)
+                }
+            }
+        }
+    }
+
     @Synchronized private fun update(readingKey: String?, transform: (LibraryState) -> LibraryState) {
         // 调用方包括界面回调和阅读器销毁流程；恢复保护期间保持状态只读，
         // 避免在这些回调中抛异常，由持续显示的恢复提示说明原因。
@@ -509,7 +528,7 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
     fun removeDocument(id: String) = synchronized(documentLock) {
         check(recoveryIssue.value == null) { "本地资料已保护，请先前往资料备份与恢复" }
         val key = safeId(id)
-        bookCovers.restoreDefault(BookRef("local", key))
+        bookCovers.removeDocumentCovers(BookRef("local", key))
         documentMemory.remove(key)
         localChapterMemory.clear()
         sourceIndex.remove(key)

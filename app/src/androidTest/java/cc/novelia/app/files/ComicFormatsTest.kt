@@ -27,6 +27,7 @@ import cc.novelia.app.ui.reader.comic.loadComicVolume
 import java.io.ByteArrayOutputStream
 import java.util.zip.ZipOutputStream
 import java.util.zip.ZipEntry
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import java.nio.file.Files
 import org.junit.Assert.*
@@ -196,12 +197,18 @@ class ComicFormatsTest {
                 val ref = importComicSeries(store, selected).ref
                 val initial = store.documentIndex(ref.id)
                 assertEquals(listOf("第2话", "第10话"), initial.chapters.map { it.title })
+                val initialVolume = requireNotNull(store.loadComicVolume(ref.id))
+                val chapterId = initialVolume.sections.last().id
+                val chapterCover = encodeComicPageCover(initialVolume.pages.last())
+                store.saveComicCover(ref, ref, chapterId) { chapterCover.inputStream() }
+                assertNull(store.bookCovers.observe(ref).first())
                 store.savePosition(ref, Position(initial.chapters.last().id, 1), "连载")
                 chapter(1); chapter(11)
                 assertEquals(ref, importComicSeries(store, selected, ref.id).ref)
                 val refreshed = requireNotNull(store.loadComicVolume(ref.id))
                 assertEquals(listOf("第1话", "第2话", "第10话", "第11话"), refreshed.sections.map { it.title })
                 assertEquals(refreshed.sections[2].id, store.state.value.positions[ref.key]?.chapterId)
+                assertArrayEquals(chapterCover, requireNotNull(store.bookCovers.observe(ref, chapterId).first()).file.readBytes())
                 assertEquals(1, store.state.value.books.size)
                 assertFalse(importComicSeries(store, selected).imported)
                 assertArrayEquals(png(), refreshed.pages[2].load!!().readBytes())

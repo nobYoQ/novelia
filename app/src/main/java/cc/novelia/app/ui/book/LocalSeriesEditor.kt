@@ -34,6 +34,7 @@ import cc.novelia.app.data.library.LOCAL_SERIES_DESCRIPTION_LIMIT
 import cc.novelia.app.data.library.LOCAL_SERIES_LIST_FIELD_LIMIT
 import cc.novelia.app.data.library.LOCAL_SERIES_TITLE_LIMIT
 import cc.novelia.app.data.library.LocalSeriesEdits
+import cc.novelia.app.data.library.acceptsMountedVolume
 import cc.novelia.app.data.library.compareVolumeTitles
 import cc.novelia.app.data.library.localSeriesTagLength
 import cc.novelia.app.data.library.mountedVolumes
@@ -53,16 +54,20 @@ internal fun NavGraphBuilder.localSeriesEditorDestination(c: AppController) {
     composable(LOCAL_SERIES_EDITOR_ROUTE, arguments = listOf(
         navArgument("folderId") { type = NavType.StringType; nullable = true; defaultValue = null },
         navArgument("volumes") { type = NavType.BoolType; defaultValue = false },
+        navArgument("comic") { type = NavType.BoolType; defaultValue = false },
     )) { entry ->
         val id = requireNotNull(entry.arguments?.getString("id"))
         val creating = id == NEW_LOCAL_SERIES
         val seriesId = rememberSaveable(id) { if(creating) BookRef.newLocalSeries().id else id }
         val ref = remember(seriesId) { BookRef("local-series", seriesId) }
-        LocalSeriesEditor(c, ref, creating, entry.arguments?.getString("folderId"), entry.arguments?.getBoolean("volumes") == true)
+        LocalSeriesEditor(c, ref, creating, entry.arguments?.getString("folderId"), entry.arguments?.getBoolean("volumes") == true,
+            entry.arguments?.getBoolean("comic") == true)
     }
 }
 
-@Composable private fun LocalSeriesEditor(c: AppController, ref: BookRef, creating: Boolean, initialFolderId: String?, startAtVolumes: Boolean) {
+@Composable private fun LocalSeriesEditor(c: AppController, ref: BookRef, creating: Boolean, initialFolderId: String?,
+    startAtVolumes: Boolean, createComic: Boolean,
+) {
     val state by c.store.state.collectAsStateWithLifecycle()
     val parent = remember(state.books, ref) { state.books.firstOrNull { it.book.ref == ref } }
     if(creating && parent != null) {
@@ -79,7 +84,11 @@ internal fun NavGraphBuilder.localSeriesEditorDestination(c: AppController) {
     val folders = remember(state.folders, state.folderIds, state.localFavoriteFolderOrder) {
         state.localFavoriteFolderOrder.ordered(state.localFavoriteFolders(), DEFAULT_FOLDER_ID)
     }
-    val imported = remember(state.books) { state.books.filter { it.book.ref.isLocal } }
+    val medium = parent?.book?.shelfMedium ?: if (createComic) BookMedium.Comic else BookMedium.Novel
+    val comic = medium == BookMedium.Comic
+    val imported = remember(state.books, parent, medium) { state.books.filter { saved ->
+        parent?.acceptsMountedVolume(saved) ?: (saved.book.ref.isLocal && saved.book.shelfMedium == medium)
+    } }
     val booksByKey = remember(imported) { imported.associateBy { it.book.ref.key } }
     val parentsByKey = remember(state.books) { state.books.filter { it.book.ref.isVolumeParent }.associateBy { it.book.ref.key } }
     val initialFolder = parent?.folderId ?: initialFolderId ?: DEFAULT_FOLDER_ID
@@ -127,7 +136,7 @@ internal fun NavGraphBuilder.localSeriesEditorDestination(c: AppController) {
     val hasCustomCover = coverUri != null || (savedCover != null && !restoreCover)
     val keywordIndex by c.app.keywords.displayIndex.collectAsStateWithLifecycle()
 
-    Screen(if(creating) "新建本地总集" else "编辑总集", goBack) { padding ->
+    Screen(if(!creating) "编辑总集" else if (comic) "新建漫画总集" else "新建本地总集", goBack) { padding ->
         Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).imePadding(), contentAlignment = Alignment.TopCenter) {
             Column(Modifier.widthIn(max = 680.dp).fillMaxSize()) {
                 AppLazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState,
@@ -166,22 +175,24 @@ internal fun NavGraphBuilder.localSeriesEditorDestination(c: AppController) {
                     item("volume-header") {
                         Row(Modifier.fillMaxWidth().padding(start = 4.dp), verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Text("分卷 · ${volumes.size}", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                            Text("${if (comic) "话数" else "分卷"} · ${volumes.size}", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                             AppFilledTonalButton(enabled = !saving, onClick = { focus.clearFocus(); browsing = !browsing }) {
                                 Icon(if(browsing) Icons.Outlined.Check else Icons.Outlined.Add, null, Modifier.size(18.dp))
                                 Spacer(Modifier.width(6.dp))
-                                Text(if(browsing) "完成选择" else "添加分卷")
+                                Text(if(browsing) "完成选择" else if (comic) "添加单话" else "添加分卷")
                             }
                         }
                     }
                     if(browsing) {
                         item("volume-search") {
-                            OutlinedTextField(query, { query = it }, label = { Text("搜索已导入的书籍") },
+                            OutlinedTextField(query, { query = it }, label = { Text(if (comic) "搜索已导入的漫画" else "搜索已导入的书籍") },
                                 leadingIcon = { Icon(Icons.Outlined.Search, null) }, enabled = !saving, singleLine = true, shape = fieldShape,
                                 modifier = Modifier.fillMaxWidth().testTag("local-series-volume-search"))
                         }
                         if(candidates.isEmpty()) item("no-candidates") {
-                            LocalSeriesVolumeEmpty(if(imported.isEmpty()) "书架里还没有导入的书籍。" else "没有匹配的书籍。")
+                            LocalSeriesVolumeEmpty(if (comic) {
+                                if (imported.isEmpty()) "书架里还没有导入的漫画。" else "没有匹配的漫画。"
+                            } else if(imported.isEmpty()) "书架里还没有导入的书籍。" else "没有匹配的书籍。")
                         }
                         items(candidates, key = { "pick-${it.book.ref.key}" }) { saved ->
                             val key = saved.book.ref.key
@@ -195,14 +206,14 @@ internal fun NavGraphBuilder.localSeriesEditorDestination(c: AppController) {
                         }
                     } else {
                         if(volumes.isEmpty()) item("no-volumes") {
-                            LocalSeriesVolumeEmpty("可以从已导入的书籍中选择分卷。")
+                            LocalSeriesVolumeEmpty(if (comic) "可以把已导入的漫画挂载为单话。" else "可以从已导入的书籍中选择分卷。")
                         }
                         itemsIndexed(volumes, key = { _, saved -> saved.book.ref.key }) { index, saved ->
                             val key = saved.book.ref.key
                             fun move(to: Int) {
                                 volumeKeys = ArrayList(selectedKeys).apply { add(to, removeAt(index)) }
                             }
-                            LocalSeriesVolumeItem(saved.book, "第 ${index + 1} 卷", Modifier.testTag("edit-series-volume-$key"), trailing = {
+                            LocalSeriesVolumeItem(saved.book, "第 ${index + 1} ${if (comic) "话" else "卷"}", Modifier.testTag("edit-series-volume-$key"), trailing = {
                                 Row {
                                     AppIconButton({ move(index - 1) }, enabled = !saving && index > 0) {
                                         Icon(Icons.Outlined.KeyboardArrowUp, "上移 ${saved.book.title}")
@@ -224,7 +235,7 @@ internal fun NavGraphBuilder.localSeriesEditorDestination(c: AppController) {
                         AppButton(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).heightIn(min = 48.dp),
                             enabled = !saving && title.isNotBlank() && (creating || changed), onClick = {
                                 focus.clearFocus()
-                                val edits = LocalSeriesEdits(title, authors, tags, description, selectedFolderId, selectedKeys)
+                                val edits = LocalSeriesEdits(title, authors, tags, description, selectedFolderId, selectedKeys, medium)
                                 val uri = coverUri?.let(Uri::parse)
                                 saving = true
                                 c.action {

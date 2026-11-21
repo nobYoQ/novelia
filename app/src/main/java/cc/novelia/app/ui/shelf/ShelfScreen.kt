@@ -277,7 +277,7 @@ import kotlinx.coroutines.withContext
             onUpdates = { c.go("updates") },
             onFavoriteSync = if (!comics) ({ if(profile == null) c.go("login") else favoriteSync = true }) else null,
             favoriteSyncEnabled = !batchWorking && !cloudBusy,
-            onCreateSeries = if (!comics && tab == 0 && !managing) ({ c.editLocalSeries(folderId = folderId) }) else null)
+            onCreateSeries = if (tab == 0 && !managing) ({ c.editLocalSeries(folderId = folderId, comic = comics) }) else null)
     }) { padding ->
         ShelfPager(tab, { tab = it }, enabled = !batchWorking && !cloudBusy, singlePage = comics,
             classifyingBooks = classifyingBooks, modifier = Modifier.padding(padding),
@@ -424,8 +424,9 @@ import kotlinx.coroutines.withContext
                                         }, selecting = pageManaging, selected = if(pageManaging) key in selection else key == selectedBookKey,
                                             enabled = !batchWorking && (!pageManaging || key in selectableKeys), pinned = saved.pinned,
                                             volumeLabel = if(saved.book.ref.isVolumeParent) {
-                                                if(filteringVolumes && group.volumes.size != volumes.size) "匹配 ${group.volumes.size} / ${volumes.size} 卷"
-                                                else if(volumes.isEmpty()) "挂载分卷" else "本地 ${volumes.size} 卷"
+                                                val unit = if (comics) "话" else "卷"
+                                                if(filteringVolumes && group.volumes.size != volumes.size) "匹配 ${group.volumes.size} / ${volumes.size} $unit"
+                                                else if(volumes.isEmpty()) (if (comics) "挂载单话" else "挂载分卷") else "本地 ${volumes.size} $unit"
                                             } else null,
                                             onVolumes = if(saved.book.ref.isVolumeParent) ({
                                                 focus.clearFocus()
@@ -502,11 +503,12 @@ import kotlinx.coroutines.withContext
                                             else if(filteringVolumes) collapsedSearchGroups = if(row.expanded) collapsedSearchGroups + saved.book.ref.key else collapsedSearchGroups - saved.book.ref.key
                                             else c.store.update { it.copy(books = it.books.map { book -> if(book.book.ref == saved.book.ref) book.copy(volumesExpanded = !row.expanded) else book }) }
                                         }, enabled = !pageManaging, modifier = Modifier.padding(start = 20.dp).testTag("wenku-volumes-${saved.book.ref.key}")
-                                            .semantics { stateDescription = if(row.volumeCount == 0) "未挂载分卷" else if(row.expanded) "已展开" else "已折叠" }) {
+                                            .semantics { stateDescription = if(row.volumeCount == 0) (if (comics) "未挂载单话" else "未挂载分卷") else if(row.expanded) "已展开" else "已折叠" }) {
                                             Icon(if(row.volumeCount == 0) Icons.Outlined.Add else Icons.Outlined.ExpandMore, null,
                                                 if(row.volumeCount == 0) Modifier else Modifier.rotate(rotation))
                                             Spacer(Modifier.width(8.dp))
-                                            Text(if(row.volumeCount == 0) "挂载分卷" else "${if(row.expanded) "收起" else "展开"} ${row.volumeCount} 个分卷")
+                                            Text(if(row.volumeCount == 0) (if (comics) "挂载单话" else "挂载分卷")
+                                                else "${if(row.expanded) "收起" else "展开"} ${row.volumeCount} ${if (comics) "话" else "个分卷"}")
                                         }
                                     }
                                 }
@@ -640,7 +642,9 @@ import kotlinx.coroutines.withContext
         else if(!saved.book.ref.isLocalSeries) ChoiceRow("收藏夹", orderedFolders, orderedFolders.indexOf(saved.folder)) { index -> c.store.saveBook(saved.book, orderedFolders[index]); selected = null }
         if(saved.book.ref.isWenku) MenuRow("管理挂载分卷", "选择已导入的书籍作为分卷", Icons.Outlined.LibraryAdd, { selected = null; volumeManager = saved })
         if(saved.book.ref.isWenku && state.books.any { it.parentWenkuKey == saved.book.ref.key }) WenkuSiteOrderActions(c, saved.book.ref.key)
-        if(saved.book.ref.isLocal) MenuRow(if(parent == null) "挂载到文库或总集" else "更换或取消挂载", parent?.let { "当前挂载：${it.book.title}" } ?: "将本书添加为分卷", Icons.Outlined.DriveFileMove, { selected = null; volumeParentPicker = saved })
+        if(saved.book.ref.isLocal) MenuRow(if(parent != null) "更换或取消挂载" else if (comics) "挂载到漫画总集" else "挂载到文库或总集",
+            parent?.let { "当前挂载：${it.book.title}" } ?: if (comics) "将此漫画添加为一话" else "将本书添加为分卷",
+            Icons.Outlined.DriveFileMove, { selected = null; volumeParentPicker = saved })
         if(saved.book.ref.isLocal) MenuRow("重命名", "修改书名", Icons.Outlined.Edit, { selected = null; renamingDocument = saved })
         if(saved.book.ref.isLocal && !comics) MenuRow("本地术语表", "维护此文件的专有名词", Icons.Outlined.Translate, { selected = null; c.go("glossary/${saved.book.ref.key}") })
         if(saved.book.ref.isLocal) MenuRow("导出原文件", "导出保存在本机的书籍文件", Icons.Outlined.IosShare, { c.action {

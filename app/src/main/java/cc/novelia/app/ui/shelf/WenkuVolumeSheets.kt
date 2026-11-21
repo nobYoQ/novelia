@@ -22,7 +22,10 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.model.Position
+import cc.novelia.app.data.library.acceptsMountedVolume
+import cc.novelia.app.data.model.BookMedium
 import cc.novelia.app.data.model.SavedBook
+import cc.novelia.app.data.model.shelfMedium
 import cc.novelia.app.ui.components.base.AppLazyColumn
 import cc.novelia.app.ui.components.base.AppSheet
 import cc.novelia.app.ui.components.book.BookCover
@@ -92,25 +95,31 @@ internal data class ShelfRowItem(val saved: SavedBook, val parent: SavedBook? = 
 
 @Composable internal fun VolumeParentPicker(volume: SavedBook, books: List<SavedBook>, onDismiss: () -> Unit, onSelect: (String?) -> Unit) {
     var query by rememberSaveable(volume.book.ref.key) { mutableStateOf("") }
-    val parents = remember(books, query) { books.filter { it.book.ref.isVolumeParent && it.book.title.contains(query, true) }.sortedBy { it.book.title } }
+    val comic = volume.book.shelfMedium == BookMedium.Comic
+    val target = if (comic) "漫画总集" else "文库或总集"
+    val parents = remember(books, query, volume) { books.filter { parent ->
+        parent.acceptsMountedVolume(volume) && parent.book.title.contains(query, true) &&
+            (!comic || parent.book.ref.isLocalSeries || parent.book.ref.key == volume.parentWenkuKey)
+    }.sortedBy { it.book.title } }
     AppSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxHeight(.75f).navigationBarsPadding().imePadding()) {
             AppLazyColumn(Modifier.weight(1f), listModifier = Modifier.testTag("volume-parent-picker")) {
                 item("heading") {
-                    Text("挂载到文库或总集", Modifier.padding(20.dp), style = MaterialTheme.typography.titleLarge)
+                    Text("挂载到$target", Modifier.padding(20.dp), style = MaterialTheme.typography.titleLarge)
                     Text(volume.book.title, Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.bodyMedium, maxLines = 2)
                 }
                 item("search") {
-                    OutlinedTextField(query, { query = it }, label = { Text("搜索文库或总集") }, singleLine = true,
+                    OutlinedTextField(query, { query = it }, label = { Text("搜索$target") }, singleLine = true,
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
                         shape = appControlShape())
                 }
                 if(volume.parentWenkuKey != null) item {
-                    AppListItem(headlineContent = { Text("取消挂载") }, supportingContent = { Text("保留分卷文件和阅读进度") }, modifier = Modifier.motionClickable { onSelect(null) })
+                    AppListItem(headlineContent = { Text("取消挂载") }, supportingContent = { Text(if (comic) "保留单话文件和阅读进度" else "保留分卷文件和阅读进度") }, modifier = Modifier.motionClickable { onSelect(null) })
                 }
-                if(parents.isEmpty()) item { Text(if(query.isBlank()) "请先创建本地总集，或收藏一本目标文库小说。" else "没有匹配的文库或总集", Modifier.padding(20.dp)) }
+                if(parents.isEmpty()) item { Text(if (query.isNotBlank()) "没有匹配的$target"
+                    else if (comic) "请先在漫画书架创建总集。" else "请先创建本地总集，或收藏一本目标文库小说。", Modifier.padding(20.dp)) }
                 items(parents, key = { it.book.ref.key }) { parent ->
-                    val type = if(parent.book.ref.isLocalSeries) "本地总集" else "文库"
+                    val type = if(parent.book.ref.isLocalSeries) { if (parent.book.shelfMedium == BookMedium.Comic) "漫画总集" else "本地总集" } else "文库"
                     val label = if(parent.book.ref.key == volume.parentWenkuKey) "当前挂载" else parent.folder
                     AppListItem(headlineContent = { Text(parent.book.title) }, supportingContent = { Text("$type · $label") },
                         modifier = Modifier.testTag("volume-parent-${parent.book.ref.key}").motionClickable { onSelect(parent.book.ref.key) })

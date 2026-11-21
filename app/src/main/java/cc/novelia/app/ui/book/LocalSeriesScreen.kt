@@ -23,7 +23,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.library.mountedVolumes
+import cc.novelia.app.data.model.BookMedium
 import cc.novelia.app.data.model.BookRef
+import cc.novelia.app.data.model.shelfMedium
 import cc.novelia.app.files.downloads.deleteBookFiles
 import cc.novelia.app.ui.components.base.AppButton
 import cc.novelia.app.ui.components.base.AppDropdownMenu
@@ -44,10 +46,11 @@ import cc.novelia.app.ui.shelf.MountedVolumeRow
     val keywordIndex by c.app.keywords.displayIndex.collectAsStateWithLifecycle()
     val parent = remember(state.books, ref) { state.books.firstOrNull { it.book.ref == ref } }
     val volumes = remember(state.books, parent) { parent?.let { state.mountedVolumes(it) }.orEmpty() }
+    val comic = parent?.book?.shelfMedium == BookMedium.Comic
     var menu by remember(ref) { mutableStateOf(false) }
     var dissolving by rememberSaveable(ref.key) { mutableStateOf(false) }
     val cover = rememberCustomBookCover(ref)
-    Screen("本地总集", onBack, actions = {
+    Screen(if (comic) "漫画总集" else "本地总集", onBack, actions = {
         if(parent != null) {
             AppTextButton({ c.editLocalSeries(ref) }) { Text("编辑总集") }
             Box {
@@ -63,7 +66,7 @@ import cc.novelia.app.ui.shelf.MountedVolumeRow
             if(parent == null) item { EmptyState("总集已不在书架", "可以返回书架查看其他总集。") }
             else {
                 item {
-                    val summary = listOf(parent.book.authors.joinToString("、"), "${volumes.size} 卷", parent.folder)
+                    val summary = listOf(parent.book.authors.joinToString("、"), "${volumes.size} ${if (comic) "话" else "卷"}", parent.folder)
                         .filter(String::isNotBlank).joinToString(" · ")
                     BookHero(parent.book, summary, state, cover)
                 }
@@ -78,7 +81,11 @@ import cc.novelia.app.ui.shelf.MountedVolumeRow
                     MetaParagraph("标签", parent.book.tags.joinToString(" · ") { keywordIndex.labels[it] ?: it })
                 }
                 if(parent.seriesDescription.isNotBlank()) item { MetaParagraph("简介", parent.seriesDescription) }
-                item { SectionTitle("分卷目录", if(volumes.isEmpty()) "添加分卷" else "编辑分卷") { c.editLocalSeries(ref, startAtVolumes = true) } }
+                item {
+                    SectionTitle(if (comic) "单话目录" else "分卷目录",
+                        if (comic) { if (volumes.isEmpty()) "添加单话" else "编辑单话" }
+                        else if(volumes.isEmpty()) "添加分卷" else "编辑分卷") { c.editLocalSeries(ref, startAtVolumes = true) }
+                }
                 items(volumes, key = { it.book.ref.key }) { volume ->
                     val book = volume.book
                     MountedVolumeRow(volume, state.positions[book.ref.key], Modifier.padding(horizontal = 8.dp),
@@ -90,7 +97,7 @@ import cc.novelia.app.ui.shelf.MountedVolumeRow
         }
     }
     if(parent != null && dissolving) {
-        ConfirmDialog("解散总集？", "分卷将回到书架，保留文件、封面和阅读进度。", { dissolving = false }, "解散总集") {
+        ConfirmDialog("解散总集？", "${if (comic) "单话" else "分卷"}将回到书架，保留文件、封面和阅读进度。", { dissolving = false }, "解散总集") {
             c.action("总集已解散") { deleteBookFiles(c.app, setOf(ref)); onBack() }
         }
     }

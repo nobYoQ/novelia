@@ -96,8 +96,7 @@ private val pageIO = Dispatchers.IO.limitedParallelism(4)
                                     Icon(Icons.Outlined.Check, null, Modifier.padding(3.dp).size(16.dp))
                                 }
                             }
-                            val hit = sections.binarySearchBy(index) { it.first }
-                            val section = sections.getOrNull(if (hit >= 0) hit else -hit - 2)
+                            val section = sections.getOrNull(sections.sectionIndexAt(index))
                             Text("${if (active) "当前 · " else ""}第 ${index + 1} 页", Modifier.padding(horizontal = 2.dp),
                                 style = MaterialTheme.typography.labelMedium, color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
                             if (sections.size > 1 && section != null) Text(section.title, Modifier.padding(start = 2.dp, end = 2.dp, bottom = 2.dp),

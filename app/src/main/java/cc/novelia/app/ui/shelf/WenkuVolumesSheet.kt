@@ -25,6 +25,8 @@ import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.model.Position
+import cc.novelia.app.data.model.BookMedium
+import cc.novelia.app.data.model.shelfMedium
 import cc.novelia.app.data.model.SavedBook
 import cc.novelia.app.ui.components.base.*
 import cc.novelia.app.ui.components.book.BookCover
@@ -64,6 +66,9 @@ import kotlinx.coroutines.launch
     val reorder = rememberVolumeReorderState(list, rows, !managing && !filtered && !busy, onReorder)
     LaunchedEffect(keys) { onSelection(selection.intersect(keys.toSet())) }
     val recent = volumes.filter { it.book.ref.key in positions }.maxByOrNull { positions.getValue(it.book.ref.key).updatedAt }
+    val comic = parent.book.shelfMedium == BookMedium.Comic
+    val unit = if (comic) "话" else "卷"
+    val directory = if (comic) "单话目录" else "分卷目录"
     fun toggle(saved: SavedBook) {
         if(!drag.dragging && !busy) onSelection(if(saved.book.ref.key in selection) selection - saved.book.ref.key else selection + saved.book.ref.key)
     }
@@ -80,15 +85,15 @@ import kotlinx.coroutines.launch
                     if(!compact) BookCover(parent.book, Modifier.size(width = 44.dp, height = 64.dp), showFallbackTitle = false)
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(parent.book.title, style = MaterialTheme.typography.titleLarge, maxLines = if(compact) 1 else 2, overflow = TextOverflow.Ellipsis)
-                        Text("本地 ${volumes.size} 卷" + parent.book.publishedVolumeCount?.let { " · 出版 $it 卷" }.orEmpty(),
+                        Text("本地 ${volumes.size} $unit" + parent.book.publishedVolumeCount?.let { " · 出版 $it 卷" }.orEmpty(),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     AppIconButton({ close() }, enabled = !busy, modifier = Modifier.align(Alignment.Top).testTag("volume-sheet-close")) {
-                        Icon(Icons.Outlined.Close, "关闭分卷")
+                        Icon(Icons.Outlined.Close, if (comic) "关闭单话目录" else "关闭分卷")
                     }
                 }
                 Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(if(filtered) "匹配 ${shown.size} 卷" else "分卷目录", Modifier.weight(1f),
+                    Text(if(filtered) "匹配 ${shown.size} $unit" else directory, Modifier.weight(1f),
                         style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if(filtered) AppTextButton({ showAll = true }, enabled = !busy, modifier = Modifier.testTag("volume-show-all")) { Text("显示全部") }
                     else AppTextButton({ onManaging(true) }, enabled = !busy && shown.isNotEmpty(), modifier = Modifier.testTag("volume-select")) {
@@ -102,7 +107,10 @@ import kotlinx.coroutines.launch
                 verticalArrangement = Arrangement.spacedBy(4.dp),
                 listModifier = Modifier.testTag("volume-books").shelfDragSelection(drag, !busy)) {
                 if(shown.isEmpty()) item {
-                    if(filtered) EmptyState("没有符合条件的分卷", "这部作品的本地分卷未匹配当前筛选，可显示全部后继续阅读。", action = "显示全部", onAction = { showAll = true })
+                    if (comic) {
+                        if (filtered) EmptyState("没有符合条件的单话", "可显示全部单话后继续阅读。", action = "显示全部", onAction = { showAll = true })
+                        else EmptyState("尚未挂载单话", "可以把已导入的漫画添加到此总集。", action = "管理挂载", onAction = onMount)
+                    } else if(filtered) EmptyState("没有符合条件的分卷", "这部作品的本地分卷未匹配当前筛选，可显示全部后继续阅读。", action = "显示全部", onAction = { showAll = true })
                     else EmptyState("尚未挂载本地分卷", if(parent.book.ref.isLocalSeries) "可以把已导入的书籍添加为分卷。"
                         else "下载并导入分卷后，会显示在这里。也可以挂载已有的本地文件。", action = "管理挂载", onAction = onMount)
                 }
@@ -119,7 +127,7 @@ import kotlinx.coroutines.launch
                         }, appShape(MaterialTheme.shapes.medium))
                         .semantics {
                             selected = managing && key in selection
-                            onClick(if(managing) "切换选择" else "阅读分卷") { open(); true }
+                            onClick(if(managing) "切换选择" else if (comic) "阅读本话" else "阅读分卷") { open(); true }
                             if(!busy) onLongClick("选择${saved.book.title}") { drag.selectOne(key); true }
                         }, open, trailing = {
                             if(managing) AppCheckbox(key in selection, { toggle(saved) }, enabled = !busy)

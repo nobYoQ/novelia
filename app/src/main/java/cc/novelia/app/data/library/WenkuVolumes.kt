@@ -3,6 +3,11 @@ package cc.novelia.app.data.library
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.SavedBook
+import cc.novelia.app.data.model.shelfMedium
+
+internal fun SavedBook.acceptsMountedVolume(volume: SavedBook): Boolean =
+    book.ref.isVolumeParent && volume.book.ref.isLocal &&
+        (book.ref.isWenku || book.shelfMedium == volume.book.shelfMedium || volume.parentWenkuKey == book.ref.key)
 
 /**
  * 用给定集合替换文库或本地总集的挂载分卷，只有已导入的本地书目可作为子卷。
@@ -13,6 +18,7 @@ fun LibraryState.withMountedVolumes(parentKey: String, volumeKeys: Set<String>):
     require(parent != null) { "挂载目标已不在书架" }
     val localVolumes = books.filter { it.book.ref.isLocal }.associateBy { it.book.ref.key }
     require(localVolumes.keys.containsAll(volumeKeys)) { "只能挂载已导入的本地分卷" }
+    require(volumeKeys.all { parent.acceptsMountedVolume(localVolumes.getValue(it)) }) { "只能挂载与总集类型一致的本地书籍" }
     val alreadyReading = parent.status == "想读" && autoReadingStatus &&
         parent.readingStatusControl?.automatic == true && volumeKeys.any { it in positions }
     return copy(books = books.map { saved ->

@@ -27,8 +27,8 @@ internal class BookCoverStore(
 ) {
     private val revisions = MutableStateFlow<Map<String, Long>>(emptyMap())
 
-    fun observe(ref: BookRef): Flow<CustomBookCover?> {
-        val key = hashName(ref.key)
+    fun observe(ref: BookRef, chapterId: String? = null): Flow<CustomBookCover?> {
+        val key = coverKey(ref, chapterId)
         val file = File(directory, key)
         return revisions.map { it[key] ?: 0L }.distinctUntilChanged()
             .map { revision -> if(file.isFile) CustomBookCover(file, revision) else null }
@@ -73,16 +73,37 @@ internal class BookCoverStore(
         }
     }
 
-    @Synchronized fun installValidatedCover(ref: BookRef, temporary: File) {
-        val key = hashName(ref.key)
-        directory.mkdirs()
-        Files.move(temporary.toPath(), File(directory, key).toPath(), ATOMIC_MOVE, REPLACE_EXISTING)
+    @Synchronized fun installValidatedCover(ref: BookRef, temporary: File, chapterId: String? = null) {
+        val key = coverKey(ref, chapterId)
+        val destination = File(directory, key)
+        destination.parentFile?.mkdirs()
+        Files.move(temporary.toPath(), destination.toPath(), ATOMIC_MOVE, REPLACE_EXISTING)
         revisions.value += key to ((revisions.value[key] ?: 0L) + 1)
     }
 
-    @Synchronized fun restoreDefault(ref: BookRef) {
-        val key = hashName(ref.key)
+    @Synchronized fun restoreDefault(ref: BookRef, chapterId: String? = null) {
+        val key = coverKey(ref, chapterId)
         Files.deleteIfExists(File(directory, key).toPath())
         revisions.value += key to ((revisions.value[key] ?: 0L) + 1)
     }
+
+    @Synchronized fun removeDocumentCovers(ref: BookRef) {
+        restoreDefault(ref)
+        val folderName = chapterCoverDirectory(ref)
+        val folder = File(directory, folderName)
+        val changes = mutableMapOf<String, Long>()
+        folder.listFiles().orEmpty().forEach { file ->
+            if (Files.deleteIfExists(file.toPath())) {
+                val key = "$folderName/${file.name}"
+                changes[key] = (revisions.value[key] ?: 0L) + 1
+            }
+        }
+        Files.deleteIfExists(folder.toPath())
+        revisions.value += changes
+    }
+
+    private fun coverKey(ref: BookRef, chapterId: String?): String =
+        if (chapterId == null) hashName(ref.key) else "${chapterCoverDirectory(ref)}/${hashName(chapterId)}"
+
+    private fun chapterCoverDirectory(ref: BookRef): String = "${hashName(ref.key)}-chapters"
 }
