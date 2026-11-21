@@ -28,6 +28,7 @@ import cc.novelia.app.data.model.ComicPreferences
 import cc.novelia.app.data.model.ComicReadingMode
 import cc.novelia.app.reader.ComicPage
 import cc.novelia.app.reader.ComicStripLayout
+import cc.novelia.app.ui.reader.ReaderToolbarVisibility
 import cc.novelia.app.ui.theme.appReducedMotion
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.first
@@ -194,8 +195,12 @@ internal fun ComicReader(
                     }
                 }
             }
-            if (menu) {
-                ComicHeader(title, chapter, onBack, onDetails, Modifier.align(Alignment.TopCenter))
+            if (!menu) ComicPageIndicator(page - progressRange.first + 1, progressRange.last - progressRange.first + 1,
+                { menu = true }, Modifier.align(Alignment.BottomCenter))
+            ReaderToolbarVisibility(menu, Modifier.align(Alignment.TopCenter), reduced, fromTop = true) {
+                ComicHeader(title, chapter, onBack, onDetails, Modifier)
+            }
+            ReaderToolbarVisibility(menu, Modifier.align(Alignment.BottomCenter), reduced, fromTop = false) {
                 ComicControls(progressRange, page, mode, hasChapters = sections.size > 1, wholeBook = progressRange == pages.indices,
                     previousChapter = sections.getOrNull(sectionIndex - 1)?.let { section -> { seek(section.first) } },
                     nextChapter = sections.getOrNull(sectionIndex + 1)?.let { section -> { seek(section.first) } },
@@ -205,9 +210,8 @@ internal fun ComicReader(
                     onSettings = { settings = true }, onMode = { next ->
                         save(position())
                         onPreferences(preferences.copy(mode = next))
-                    }, modifier = Modifier.align(Alignment.BottomCenter))
-            } else ComicPageIndicator(page - progressRange.first + 1, progressRange.last - progressRange.first + 1,
-                { menu = true }, Modifier.align(Alignment.BottomCenter))
+                    }, modifier = Modifier)
+            }
             if (chapters) ComicChapterSheet(sections, sectionIndex, { seek(sections[it].first); chapters = false }, { chapters = false })
             if (overview) ComicOverview(pages, sections, page, { target -> seek(target); overview = false }, { overview = false })
         }

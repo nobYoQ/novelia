@@ -1,5 +1,6 @@
 package cc.novelia.app.ui.reader.comic
 
+import android.animation.ValueAnimator
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -19,6 +20,7 @@ import cc.novelia.app.ui.theme.AppInteractionMode
 import cc.novelia.app.ui.theme.NoveliaTheme
 import java.io.File
 import org.junit.Assert.*
+import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -26,6 +28,49 @@ import org.junit.Test
 class ComicReaderLayoutTest {
     @get:Rule val compose = createComposeRule()
     private val sections = List(3) { ComicSection("chapter-$it", "第 ${it + 1} 话 · 河岸边的日常", it * 8, 8) }
+
+    @Test fun toolbarsSlideFromOppositeEdgesWithoutMovingTheReader() {
+        assumeTrue(ValueAnimator.areAnimatorsEnabled())
+        val pages = List(24) { ComicPage(File(""), 3, 4, text = "第 ${it + 1} 页") }
+        val mode = ComicReadingMode.RightToLeft
+        compose.setContent {
+            AppInteractionMode(false, false) { NoveliaTheme("light") {
+                ComicReader("河岸边的日常", pages, mode, 0, 0, ComicPreferences(), sections, mode,
+                    {}, {}, { _, _, _ -> }, {}, {})
+            } }
+        }
+        val reader = compose.onNodeWithTag("comic-reader")
+        val top = compose.onNodeWithTag("comic-top-toolbar")
+        val bottom = compose.onNodeWithTag("comic-bottom-toolbar")
+        val indicator = compose.onNodeWithContentDescription("第 1 页，共 8 页，显示阅读工具")
+        val viewport = reader.getUnclippedBoundsInRoot()
+        compose.mainClock.autoAdvance = false
+        try {
+            top.assertDoesNotExist()
+            bottom.assertDoesNotExist()
+            indicator.performClick()
+            compose.mainClock.advanceTimeBy(80)
+            val enteringTop = top.getUnclippedBoundsInRoot()
+            val enteringBottom = bottom.getUnclippedBoundsInRoot()
+            assertEquals(viewport, reader.getUnclippedBoundsInRoot())
+
+            compose.mainClock.advanceTimeBy(300)
+            val openTop = top.assertIsDisplayed().getUnclippedBoundsInRoot()
+            val openBottom = bottom.assertIsDisplayed().getUnclippedBoundsInRoot()
+            assertTrue(enteringTop.top < openTop.top)
+            assertTrue(enteringBottom.top > openBottom.top)
+            reader.performTouchInput { click(center) }
+            compose.mainClock.advanceTimeBy(80)
+            assertTrue(top.getUnclippedBoundsInRoot().top < openTop.top)
+            assertTrue(bottom.getUnclippedBoundsInRoot().top > openBottom.top)
+
+            compose.mainClock.advanceTimeBy(300)
+            top.assertDoesNotExist()
+            bottom.assertDoesNotExist()
+            indicator.assertIsDisplayed()
+            assertEquals(viewport, reader.getUnclippedBoundsInRoot())
+        } finally { compose.mainClock.autoAdvance = true }
+    }
 
     @Test fun panelsAndDirectionChangesKeepViewportAndReadingPosition() {
         val pages = fixturePages()
