@@ -17,7 +17,7 @@ import cc.novelia.app.ui.theme.isMonochromeTheme
 import cc.novelia.app.ui.theme.monochromeBorder
 
 /** 同样的低对比底座与分段选中态；窄屏、大字模式下保持标签完整。 */
-@Composable internal fun ShelfKindSwitch(labels: List<String>, selectedIndex: Int, tag: String, onChange: (Int) -> Unit) {
+@Composable internal fun ShelfKindSwitch(labels: List<String>, selectedIndex: Int, tag: String, enabled: Boolean = true, onChange: (Int) -> Unit) {
     val colors = MaterialTheme.colorScheme
     val monochrome = isMonochromeTheme()
     val indicator = if(monochrome) colors.primary else colors.secondaryContainer
@@ -33,7 +33,7 @@ import cc.novelia.app.ui.theme.monochromeBorder
                     Row {
                         values.forEachIndexed { column, label ->
                             val index = row * columns + column
-                            AppTextButton(onClick = { if(selectedIndex != index) onChange(index) },
+                            AppTextButton(onClick = { if(selectedIndex != index) onChange(index) }, enabled = enabled,
                                 modifier = Modifier.weight(1f).heightIn(min = 48.dp).semantics { selected = selectedIndex == index },
                                 contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
                                 shape = DefaultShapes.small,

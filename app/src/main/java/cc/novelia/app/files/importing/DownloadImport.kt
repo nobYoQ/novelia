@@ -12,6 +12,8 @@ import cc.novelia.app.data.library.originBook
 import cc.novelia.app.data.library.originVolumeId
 import cc.novelia.app.data.library.withDownloadLink
 import cc.novelia.app.data.model.BookCard
+import cc.novelia.app.data.model.bookMedium
+import cc.novelia.app.data.storage.restoreBookMedia
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.DownloadEntry
 import cc.novelia.app.data.model.LocalDocument
@@ -113,6 +115,8 @@ suspend fun importLocalDocument(store: LocalStore, file: File, name: String = fi
                 val document = store.documentIndex(it.id)
                 val count = store.documentDisplayChapterCount(document) { workContext.ensureActive() }
                 store.saveBook(store.importedBookCard(it, document, count))
+            } else if (store.state.value.books.firstOrNull { saved -> saved.book.ref == it }?.book?.medium == null) {
+                store.restoreBookMedia(setOf(it))
             }
             return@withLock DocumentImportResult(it, false)
         }
@@ -149,6 +153,7 @@ private fun LocalStore.importedBookCard(ref: BookRef, document: LocalDocument, c
     ref, document.name, cover = document.coverImage?.let { documentImage(document.id, it).absolutePath },
     subtitle = localDocumentSubtitle(document.format, chapterCount), authors = document.authors.orEmpty(),
     localChapterCount = chapterCount,
+    medium = document.bookMedium { chapter -> documentChapter(ref.id, chapter) },
 )
 
 /** 开始阅读和批量导入共用来源解析、文件去重和文库挂载。 */

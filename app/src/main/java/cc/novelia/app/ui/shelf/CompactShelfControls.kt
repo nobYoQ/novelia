@@ -39,7 +39,7 @@ import cc.novelia.app.ui.components.base.*
     countLabel: String = "", visible: Boolean = true, active: Boolean = true, modifier: Modifier = Modifier,
     grid: Boolean? = null, onToggleLayout: () -> Unit = {},
     folderOrder: FavoriteFolderOrder = FavoriteFolderOrder(), onOrderFolders: ((FavoriteFolderOrder) -> Unit)? = null,
-    collapsed: Boolean = false,
+    collapsed: Boolean = false, comics: Boolean = false,
     footer: @Composable () -> Unit = {},
     trailingContent: @Composable () -> Unit = {},
 ) {
@@ -124,7 +124,7 @@ import cc.novelia.app.ui.components.base.*
             onDismiss = { onExpanded(false) },
             onReset = { draftType = ShelfBookType.All; draftStatus = "全部"; draftCharacters = CharacterCountFilter(); validCharacters = true },
             onApply = { focus.clearFocus(); onType(draftType); onStatus(draftStatus); onCharacters(draftCharacters); onExpanded(false) }) {
-            FilterOptions("小说类型", labels, setOf(types.indexOf(draftType)), "local-novel-kind") { draftType = types[it] }
+            if (!comics) FilterOptions("小说类型", labels, setOf(types.indexOf(draftType)), "local-novel-kind") { draftType = types[it] }
             FilterOptions("阅读状态", statuses, setOf(statuses.indexOf(draftStatus)), "local-reading-status") { draftStatus = statuses[it] }
             if(!localFiles && draftType == ShelfBookType.Web) {
                 CharacterCountFilterFields(draftCharacters, onValidity = { validCharacters = it }) { draftCharacters = it }

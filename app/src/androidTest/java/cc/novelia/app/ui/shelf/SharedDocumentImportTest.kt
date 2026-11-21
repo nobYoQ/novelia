@@ -12,6 +12,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.MainActivity
 import cc.novelia.app.NoveliaApplication
 import cc.novelia.app.data.model.ComicReadingMode
+import cc.novelia.app.data.model.ShelfLocation
 import cc.novelia.app.files.importing.documentImportLock
 import java.io.File
 import java.util.UUID
@@ -31,11 +32,13 @@ class SharedDocumentImportTest {
     private val prefix = "分享测试-${UUID.randomUUID()}"
     private val files = mutableListOf<File>()
 
-    @Before fun ready() = runBlocking { app.initialization.await(); Unit }
+    private lateinit var priorLocation: ShelfLocation
+    @Before fun ready() = runBlocking { app.initialization.await(); priorLocation = app.store.state.value.lastShelfLocation }
 
     @After fun cleanup() {
         app.store.state.value.books.filter { it.book.title.startsWith(prefix) }.forEach { app.store.removeDocument(it.book.ref.id) }
         files.forEach { it.delete() }
+        app.store.update { it.copy(lastShelfLocation = priorLocation) }
     }
 
     @Test fun coldShareImportsTextAndRecreationDoesNotReplayIt() {
@@ -99,7 +102,7 @@ class SharedDocumentImportTest {
                 compose.onNodeWithContentDescription("第 2 页").performTouchInput { swipeLeft() }
                 awaitText("3 / 3")
                 compose.onNodeWithContentDescription("返回").performClick()
-                compose.onNodeWithTag("shelf-tab-0").performClick()
+                compose.onNodeWithText("漫画书架").assertIsSelected()
                 compose.onNodeWithTag("shelf-continue-reading").performClick()
                 awaitText("3 / 3")
                 assertTrue(app.store.state.value.positions.getValue(ref.key).chapterCompleted)
@@ -136,7 +139,7 @@ class SharedDocumentImportTest {
                 compose.waitUntil(10_000) { app.store.state.value.positions[key]?.chapterId == "second" }
                 assertEquals(1, app.store.state.value.positions.getValue(key).index)
                 compose.onNodeWithContentDescription("返回").performClick()
-                compose.onNodeWithTag("shelf-tab-0").performClick()
+                compose.onNodeWithText("漫画书架").assertIsSelected()
                 compose.onNodeWithTag("shelf-continue-reading").performClick()
                 compose.waitUntil(10_000) { compose.onAllNodesWithText("2 / 2").fetchSemanticsNodes().isNotEmpty() }
             }

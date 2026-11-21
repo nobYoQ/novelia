@@ -38,11 +38,12 @@ class ThemePresetsTest {
     }
 
     @Test fun ordinarySettingsRoundTripAndLegacyImportKeepsLocalPresets() {
-        val state = LibraryState(themePresets = ThemePresets().saveAndSelect(forest))
+        val state = LibraryState(themePresets = ThemePresets().saveAndSelect(forest), comicShelfGrid = false)
         val serialized = appJson.encodeToString(SettingsBackup.serializer(), state.settingsBackup())
         val backup = appJson.decodeFromString<SettingsBackup>(serialized)
         backup.requireValid()
         assertEquals(state.themePresets, backup.applyTo(LibraryState()).themePresets)
+        assertFalse(backup.applyTo(LibraryState()).comicShelfGrid)
         assertEquals(state.themePresets, appJson.decodeFromString<SettingsBackup>("{}").applyTo(state).themePresets)
         assertNull(appJson.decodeFromString<LibraryState>("{}").themePresets.activeId)
     }
