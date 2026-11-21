@@ -115,6 +115,30 @@ class ReadingStatusSyncTest {
         assertTrue(status(merged).readingStatusControl!!.automatic)
     }
 
+    @Test fun wenkuAutomaticStatusComesFromEachDevicesMountedVolumes() {
+        val wenku = BookRef("wenku", "mounted-status")
+        val volume = BookRef("local", "mounted-volume")
+        val initial = LibraryState().withSavedBook(BookCard(wenku, "文库作品", publishedVolumeCount = 5))
+            .withSavedBook(BookCard(volume, "已挂载分卷")).withMountedVolumes(wenku.key, setOf(volume.key))
+        val finished = initial.withReadingStatus(setOf(volume.key), "读完").withMountedVolumeReadingStatuses()
+        val document = doc(baseline(finished))
+        assertEquals(projection(initial), projection(finished))
+        assertEquals("想读", status(document).status)
+        assertTrue(status(document).readingStatusControl!!.automatic)
+
+        val incoming = mapOf(domain to document)
+        val stillReading = initial.withReadingStatus(setOf(volume.key), "在读").withMountedVolumeReadingStatuses()
+        fun LibraryState.syncedStatus() = WebDavProjection.applyLibrary(this, incoming, setOf(domain))
+            .books.single { it.book.ref == wenku }.status
+        assertEquals("在读", stillReading.syncedStatus())
+        assertEquals("读完", finished.syncedStatus())
+
+        val manual = finished.withReadingStatus(setOf(wenku.key), "读完")
+        val manualStatus = status(doc(baseline(manual)))
+        assertEquals("读完", manualStatus.status)
+        assertFalse(manualStatus.readingStatusControl!!.automatic)
+    }
+
     @Test fun restoringAfterConcurrentLegacyAndNewManualEditsObservesBothIntents() {
         val old = LibraryState(books = listOf(SavedBook(BookCard(ref, "旧书"), status = "在读"))).withStableFolderIds()
         val base = baseline(old)

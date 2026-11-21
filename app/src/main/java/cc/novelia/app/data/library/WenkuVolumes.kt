@@ -13,7 +13,7 @@ fun LibraryState.withMountedVolumes(parentKey: String, volumeKeys: Set<String>):
     require(parent != null) { "挂载目标已不在书架" }
     val localVolumes = books.filter { it.book.ref.isLocal }.associateBy { it.book.ref.key }
     require(localVolumes.keys.containsAll(volumeKeys)) { "只能挂载已导入的本地分卷" }
-    val alreadyReading = parent.book.ref.isLocalSeries && parent.status == "想读" && autoReadingStatus &&
+    val alreadyReading = parent.status == "想读" && autoReadingStatus &&
         parent.readingStatusControl?.automatic == true && volumeKeys.any { it in positions }
     return copy(books = books.map { saved ->
         when {

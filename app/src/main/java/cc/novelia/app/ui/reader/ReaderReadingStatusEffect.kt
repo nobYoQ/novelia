@@ -9,28 +9,31 @@ import cc.novelia.app.data.model.Position
 import cc.novelia.app.ui.navigation.AppController
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.distinctUntilChanged
 
-/** 正文有效停留五秒才自动记录；拖动、定位及旧生命周期回调不能立即制造完成。 */
+/** 末章正文到尾后立即记录完成，普通前台停留用于判断开读。 */
 @Composable internal fun rememberReaderReadingStatus(
     c: AppController, ref: BookRef, chapterId: String, token: ReadingStatusToken?,
-    eligible: Boolean, completeCatalog: Boolean, position: () -> Position?, atChapterEnd: () -> Boolean,
-): () -> Unit {
+    eligible: Boolean, completeCatalog: Boolean, position: Position, atChapterEnd: () -> Boolean,
+): (confirmEnd: Boolean) -> Unit {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val state by lifecycle.currentStateFlow.collectAsState()
     val active = eligible && state.isAtLeast(Lifecycle.State.RESUMED)
     val currentPosition by rememberUpdatedState(position)
     val currentEnd by rememberUpdatedState(atChapterEnd)
+    fun canComplete() = completeCatalog && currentEnd()
     LaunchedEffect(ref, chapterId, token, active, completeCatalog) {
         if(!active || token == null) return@LaunchedEffect
-        snapshotFlow { currentEnd() }.distinctUntilChanged().collectLatest { end ->
-            delay(5_000)
-            currentPosition()?.let { point -> c.store.update { it.withReadingActivity(ref, token, point, end, completeCatalog) } }
+        snapshotFlow { canComplete() }.collectLatest { atEnd ->
+            if(!atEnd) delay(5_000)
+            if(lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) && atEnd == canComplete()) {
+                c.store.update { it.withReadingActivity(ref, token, currentPosition, atEnd, completeCatalog) }
+            }
         }
     }
-    return {
-        if(active && token != null && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) currentPosition()?.let { point ->
-            c.store.update { it.withReadingActivity(ref, token, point) }
+    return { confirmEnd ->
+        if(active && token != null && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) &&
+            (!confirmEnd || canComplete())) {
+            c.store.update { it.withReadingActivity(ref, token, currentPosition, confirmEnd, completeCatalog) }
         }
     }
 }

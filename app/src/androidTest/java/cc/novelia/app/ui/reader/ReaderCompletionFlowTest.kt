@@ -85,7 +85,7 @@ class ReaderCompletionFlowTest {
         val title = "末屏进度测试 $mode"
         try {
             compose.runOnIdle {
-                app.store.update { it.copy(reader = ReaderSettings(paginationMode = mode, showPageButtons = true,
+                app.store.update { it.copy(autoReadingStatus = true, reader = ReaderSettings(paginationMode = mode, showPageButtons = true,
                     showScrollPageButtons = false), reducedMotion = true, historyPaused = false,
                     bookSettings = it.bookSettings - ref.key, positions = it.positions - ref.key) }
                 app.store.saveDocument(LocalDocument(ref.id, title, "txt", listOf(
@@ -113,19 +113,20 @@ class ReaderCompletionFlowTest {
             compose.onNodeWithText(title).performClick()
             compose.waitUntil(15_000) { compose.onAllNodesWithContentDescription("阅读设置").fetchSemanticsNodes().isNotEmpty() }
             if(mode == "auto") {
-                compose.waitUntil(15_000) { compose.onAllNodesWithTag("reader-page-counter").fetchSemanticsNodes().isNotEmpty() }
-                val pages = pageNumbers().second
+                compose.waitUntil(15_000) { pageNumbers() != null }
+                val pages = requireNotNull(pageNumbers()).second
                 assertTrue("测试正文应跨越多页", pages > 1)
                 for(page in 2..pages) {
                     compose.onNodeWithText("下一页").performClick()
-                    compose.waitUntil(10_000) { pageNumbers().first == page }
+                    compose.waitUntil(10_000) { pageNumbers()?.first == page }
                 }
             } else {
                 compose.onNodeWithTag("reader-scroll").performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 100_000f) }
                 compose.onNodeWithText("返回目录").assertDoesNotExist()
             }
+            // 使用短于旧计时器的超时，确认退出阅读器前已自动写入状态。
+            if(!manual) compose.waitUntil(2_500) { app.store.state.value.books.single { it.book.ref == ref }.status == "读完" }
             compose.waitUntil(10_000) { app.store.state.value.positions[ref.key]?.chapterCompleted == true }
-            if(!manual) compose.waitUntil(10_000) { app.store.state.value.books.single { it.book.ref == ref }.status == "读完" }
             val finalScreen = app.store.state.value.positions.getValue(ref.key)
             assertEquals("末屏仍应保存真实段落下标", 1, finalScreen.index)
             assertTrue("末屏必须保留段内位置", finalScreen.textOffset > 0)
@@ -144,6 +145,7 @@ class ReaderCompletionFlowTest {
             }
             compose.onNodeWithText(title).performClick()
             compose.waitUntil(15_000) { compose.onAllNodesWithContentDescription("阅读设置").fetchSemanticsNodes().isNotEmpty() }
+            if(mode == "auto") compose.waitUntil(15_000) { pageNumbers()?.let { it.first == it.second } == true }
             compose.waitForIdle()
             compose.runOnIdle {
                 val restored = app.store.state.value.positions.getValue(ref.key)
@@ -159,13 +161,17 @@ class ReaderCompletionFlowTest {
         }
     }
 
-    private fun pageNumbers(): Pair<Int, Int> = compose.onNodeWithTag("reader-page-counter").fetchSemanticsNode()
-        .config[SemanticsProperties.Text].single().text.split('/').map { it.trim().toInt() }.let { it[0] to it[1] }
+    private fun pageNumbers(): Pair<Int, Int>? {
+        val counter = compose.onAllNodesWithTag("reader-page-counter").fetchSemanticsNodes().singleOrNull() ?: return null
+        val numbers = counter.config[SemanticsProperties.Text].single().text.split('/').mapNotNull { it.trim().toIntOrNull() }
+        return if(numbers.size == 2) numbers[0] to numbers[1] else null
+    }
 
     private fun assertAnchorEquals(expected: Position, actual: Position) {
         assertEquals(expected.chapterId, actual.chapterId)
         assertEquals(expected.index, actual.index)
-        assertEquals(expected.offset, actual.offset)
+        assertEquals(expected.sourceParagraph, actual.sourceParagraph)
+        // 重开滚动阅读器会把正文字符定位到行首，像素偏移可能随测量变化。
         assertEquals(expected.textOffset, actual.textOffset)
     }
 }

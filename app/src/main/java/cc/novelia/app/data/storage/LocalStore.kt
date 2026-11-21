@@ -15,6 +15,7 @@ import cc.novelia.app.data.documents.DocumentStorage
 import cc.novelia.app.data.library.withoutBook
 import cc.novelia.app.data.library.LocalSeriesEdits
 import cc.novelia.app.data.library.withEditedLocalSeries
+import cc.novelia.app.data.library.withMountedVolumeReadingStatuses
 import cc.novelia.app.data.library.withoutBooks
 import cc.novelia.app.data.library.withDeletedBookRecords
 import cc.novelia.app.data.library.withMigratedDownloadLinks
@@ -71,7 +72,8 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
         readLastGood = { AtomicFile(lastGoodFile).openRead().bufferedReader(Charsets.UTF_8).use { it.readText() } },
         decode = stateCodec::decode
     )
-    private val mutable = MutableStateFlow(initial.state.withMigratedReadingHistory().withStableFolderIds().withMigratedDownloadLinks())
+    private val mutable = MutableStateFlow(initial.state.withMigratedReadingHistory().withStableFolderIds()
+        .withMigratedDownloadLinks().withMountedVolumeReadingStatuses())
     private val mutableRecoveryIssue = MutableStateFlow(initial.issue)
     // 损坏快照仍可能包含可恢复的引用，应保留其历史正文载荷。
     private val preserveTextHistory = initial.issue != null || context.filesDir.listFiles().orEmpty().any { it.name.startsWith("library-damaged-") }
@@ -150,7 +152,7 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
         // 避免在这些回调中抛异常，由持续显示的恢复提示说明原因。
         if (mutableRecoveryIssue.value != null) return
         val before = mutable.value
-        val raw = transform(before).withMigratedReadingHistory().withStableFolderIds(before)
+        val raw = transform(before).withMigratedReadingHistory().withStableFolderIds(before).withMountedVolumeReadingStatuses(before)
         // 启动恢复等调用经常没有实际修改，不为这些调用初始化同步配置或投影整份书库。
         if(raw == before) return
         val domains = WebDavProjection.affectedLibraryDomains(before, raw)
@@ -192,7 +194,8 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
         synchronized(diskLock) {
             synchronized(this@LocalStore) {
                 val before = mutable.value
-                val restored = transform(before).withMigratedReadingHistory().withStableFolderIds().withMigratedDownloadLinks()
+                val restored = transform(before).withMigratedReadingHistory().withStableFolderIds()
+                    .withMigratedDownloadLinks().withMountedVolumeReadingStatuses()
                 val domains = WebDavProjection.affectedLibraryDomains(before, restored)
                 val includeDevices = syncDevicePreferences()
                 val next = restored.copy(syncReplica = before.syncReplica.track(WebDavProjection.library(before, domains, includeDevices),

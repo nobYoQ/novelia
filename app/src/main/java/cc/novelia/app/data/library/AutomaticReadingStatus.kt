@@ -78,13 +78,31 @@ fun LibraryState.withReadingActivity(ref: BookRef, token: ReadingStatusToken, po
         status = if(completed || saved.status == "读完" && (control.completedChapterCount ?: 0) >= total) "读完" else "在读",
         readingStatusControl = control.copy(knownChapterCount = total,
             completedChapterCount = if(completed) total else control.completedChapterCount)) else saved
-    // 出版目录与上传文件不是同一个集合；仅凭本地已挂载卷不能证明整部作品读完。
+    // 父项在子卷开读时跟进。书库随后按本机挂载的分卷汇总完成状态。
     return copy(books = books.map { book -> when {
         book.book.ref == ref -> next
         book.book.ref.key == token.parentKey && saved.parentWenkuKey == token.parentKey &&
             book.readingStatusControl?.revision == token.parentRevision && book.readingStatusControl?.automatic == true && book.status == "想读" -> book.copy(status = "在读")
         else -> book
     } })
+}
+
+/** 文库作品和本地总集均按本机挂载范围汇总。 */
+internal fun LibraryState.withMountedVolumeReadingStatuses(previous: LibraryState? = null): LibraryState {
+    if(!autoReadingStatus || (previous?.autoReadingStatus == true && books === previous.books)) return this
+    val volumes = books.filter { it.book.ref.isLocal && it.parentWenkuKey != null }.groupBy { it.parentWenkuKey }
+    val updated = books.map { parent ->
+        if(!parent.book.ref.isVolumeParent || parent.readingStatusControl?.automatic != true) return@map parent
+        val mounted = volumes[parent.book.ref.key].orEmpty()
+        val status = when {
+            mounted.isEmpty() -> "想读"
+            mounted.all { it.status == "读完" } -> "读完"
+            parent.status != "想读" || mounted.any { it.status != "想读" } -> "在读"
+            else -> "想读"
+        }
+        if(status == parent.status) parent else parent.copy(status = status)
+    }
+    return if(updated == books) this else copy(books = updated)
 }
 
 /** 新目录只撤销自动完成；译文变化、回看和手动完成均不降级。 */

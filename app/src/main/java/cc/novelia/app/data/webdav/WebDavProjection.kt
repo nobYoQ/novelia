@@ -19,6 +19,7 @@ import cc.novelia.app.data.webdav.WebDavSchema.arrayStrings
 import cc.novelia.app.data.catalog.KeywordEntry
 import cc.novelia.app.data.catalog.KeywordLibrary
 import cc.novelia.app.data.catalog.KeywordLibraryFormat
+import cc.novelia.app.data.library.withMountedVolumeReadingStatuses
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.DEFAULT_FOLDER
 import cc.novelia.app.data.model.DEFAULT_FOLDER_ID
@@ -334,15 +335,19 @@ object WebDavProjection {
             require(book.ref.key == key && book.ref.isOnline) { "收藏书目身份不一致" }
             val folderId = fields.getValue("folderId").jsonPrimitive.content.takeIf { it in names } ?: DEFAULT_FOLDER_ID
             val old = localByKey[key]
+            val encodedStatus = fields.getValue("status")
+            val statusControl = WebDavReadingStatus.control(encodedStatus)
+            val status = if(book.ref.isWenku && statusControl?.automatic == true) {
+                old?.takeIf { it.readingStatusControl?.automatic == true }?.status ?: "想读"
+            } else WebDavReadingStatus.status(encodedStatus)
             (old ?: cc.novelia.app.data.model.SavedBook(book)).copy(
                 // 原站关系与本机分卷整理状态不由 WebDAV 改写。
                 book = book.copy(favored = old?.book?.favored, cloudReading = old?.book?.cloudReading),
                 folder = names.getValue(folderId), folderId = folderId, pinned = fields.getValue("pinned").jsonPrimitive.booleanOrNull!!,
-                status = WebDavReadingStatus.status(fields.getValue("status")),
-                readingStatusControl = WebDavReadingStatus.control(fields.getValue("status")),
+                status = status, readingStatusControl = statusControl,
                 addedAt = fields.getValue("addedAt").jsonPrimitive.longOrNull!!)
         }
-        return state.copy(books = localBooks + remote, folders = folders, folderIds = folderIds)
+        return state.copy(books = localBooks + remote, folders = folders, folderIds = folderIds).withMountedVolumeReadingStatuses()
     }
 
     private fun applyAnnotations(state: LibraryState, documents: Map<SyncDomain, SyncDocument>): LibraryState {

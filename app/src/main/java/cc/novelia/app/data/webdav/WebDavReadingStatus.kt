@@ -9,7 +9,10 @@ internal object WebDavReadingStatus {
     private val json = Json { encodeDefaults = true; explicitNulls = true }
     fun encode(status: String, control: ReadingStatusControl): JsonObject =
         JsonObject(json.encodeToJsonElement(ReadingStatusControl.serializer(), control).jsonObject + ("status" to JsonPrimitive(status)))
-    fun encode(saved: SavedBook): JsonElement = saved.readingStatusControl?.let { encode(saved.status, it) } ?: JsonPrimitive(saved.status)
+    fun encode(saved: SavedBook): JsonElement = saved.readingStatusControl?.let {
+        // 文库的自动分类取决于设备挂载的分卷，收藏同步只携带其管理意图。
+        encode(if(saved.book.ref.isWenku && it.automatic) "想读" else saved.status, it)
+    } ?: JsonPrimitive(saved.status)
 
     fun status(value: JsonElement): String = if(value is JsonObject) value.getValue("status").jsonPrimitive.content else value.jsonPrimitive.content
     fun control(value: JsonElement): ReadingStatusControl? = (value as? JsonObject)?.let {

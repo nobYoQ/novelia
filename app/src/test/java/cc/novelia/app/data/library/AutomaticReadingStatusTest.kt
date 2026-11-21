@@ -145,21 +145,53 @@ class AutomaticReadingStatusTest {
         assertTrue(restored.books.last().readingStatusControl!!.automatic)
     }
 
-    @Test fun volumeActivityPromotesAutomaticParentButNeverInfersCompleteSeriesFromImportedSubset() {
+    @Test fun wenkuCompletionUsesMountedVolumesAndRespectsManualStatus() {
         val parent = BookCard(BookRef("wenku", "series"), "文库作品", publishedVolumeCount = 5)
         val volume = BookCard(BookRef("local", "vol1"), "第一卷", total = 1)
         val initial = LibraryState().withSavedBook(parent).withSavedBook(volume).withVolumeParent(volume.ref.key, parent.ref.key)
         val token = initial.readingStatusToken(volume.ref)!!
         val point = position.copy(chapterIndex = 0, chapterCount = 1)
-        val read = initial.withReadingActivity(volume.ref, token, point, true, true)
+        val read = initial.withReadingActivity(volume.ref, token, point, true, true).withMountedVolumeReadingStatuses()
         assertEquals("读完", read.books.single { it.book.ref == volume.ref }.status)
-        assertEquals("在读", read.books.single { it.book.ref == parent.ref }.status)
+        assertEquals("读完", read.books.single { it.book.ref == parent.ref }.status)
         val fixed = initial.withReadingStatus(setOf(parent.ref.key), "想读")
-        assertEquals("想读", fixed.withReadingActivity(volume.ref, token, point, true, true).books.single { it.book.ref == parent.ref }.status)
+        val fixedRead = fixed.withReadingActivity(volume.ref, token, point, true, true).withMountedVolumeReadingStatuses()
+        assertEquals("想读", fixedRead.books.single { it.book.ref == parent.ref }.status)
         val childFixed = initial.withReadingStatus(setOf(volume.ref.key), "想读")
         val parentRead = childFixed.withReadingActivity(volume.ref, childFixed.readingStatusToken(volume.ref)!!, point, true, true)
+            .withMountedVolumeReadingStatuses()
         assertEquals("想读", parentRead.books.single { it.book.ref == volume.ref }.status)
         assertEquals("在读", parentRead.books.single { it.book.ref == parent.ref }.status)
+    }
+
+    @Test fun localSeriesCompletesOnlyWhenAllMountedVolumesAreFinished() {
+        val series = BookRef.newLocalSeries()
+        val first = BookRef("local", "series-first")
+        val second = BookRef("local", "series-second")
+        val third = BookRef("local", "series-third")
+        val mounted = setOf(first.key, second.key)
+        val initial = LibraryState().withSavedBook(BookCard(series, "本地总集"))
+            .withSavedBook(BookCard(first, "第一卷", total = 1)).withSavedBook(BookCard(second, "第二卷", total = 1))
+            .withSavedBook(BookCard(third, "第三卷", total = 1)).withMountedVolumes(series.key, mounted)
+        fun LibraryState.seriesStatus() = withMountedVolumeReadingStatuses().books.single { it.book.ref == series }.status
+        val point = position.copy(chapterIndex = 0, chapterCount = 1)
+        assertEquals("想读", initial.seriesStatus())
+        val oneFinished = initial.withReadingActivity(second, initial.readingStatusToken(second)!!, point, true, true)
+        assertEquals("在读", oneFinished.seriesStatus())
+        val allFinished = oneFinished.withReadingActivity(first, oneFinished.readingStatusToken(first)!!, point, true, true)
+            .withMountedVolumeReadingStatuses()
+        assertEquals("读完", allFinished.seriesStatus())
+        val expanded = allFinished.withMountedVolumes(series.key, mounted + third.key)
+        assertEquals("在读", expanded.seriesStatus())
+        assertEquals("读完", expanded.withoutBook(third).seriesStatus())
+        assertEquals("想读", allFinished.withMountedVolumes(series.key, emptySet()).seriesStatus())
+
+        val manual = allFinished.withReadingStatus(setOf(series.key), "想读")
+        assertEquals("想读", manual.seriesStatus())
+        assertEquals("读完", manual.withAutomaticReadingStatus(setOf(series.key)).seriesStatus())
+        val paused = allFinished.withAutoReadingStatus(false).withMountedVolumes(series.key, mounted + third.key)
+        assertEquals("读完", paused.seriesStatus())
+        assertEquals("在读", paused.withAutoReadingStatus(true).seriesStatus())
     }
 
     @Test fun settingsAndManagementRoundTripWithoutChangingLegacyBackupDefaults() {

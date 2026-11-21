@@ -490,6 +490,15 @@ import kotlinx.serialization.encodeToString
         }
         val safeTop = readingInsets.getTop(density)
         val persistentTopPx = if(topItems.isEmpty()) 0 else bodyInsets.getTop(density)
+        fun atChapterBodyEnd(): Boolean {
+            if(paragraphs.isEmpty()) return false
+            if(settings.staticPagination) return eInk.ready && eInk.pages.isNotEmpty() && !eInk.canGoForward
+            val layout = scroll.layoutInfo
+            // 第 0 项是章标题，末段之后是按钮和留白。只检查末段是否已经读到视口内。
+            val lastParagraph = paragraphs.size
+            val item = layout.visibleItemsInfo.firstOrNull { it.index >= lastParagraph } ?: return false
+            return item.index > lastParagraph || item.offset + item.size <= layout.viewportEndOffset
+        }
         // 恢复定位或重新分页期间的中间画面不能覆盖真实进度。两种模式统一保存正文下标 + 1，
         // 因为滚动列表的第 0 项是章标题；字符偏移支持重排，像素偏移用于恢复原滚动布局。
         fun savePosition() {
@@ -507,8 +516,7 @@ import kotlinx.serialization.encodeToString
             val saved = c.store.state.value.positions[ref.key]?.takeIf { it.chapterId == chapterId }
             // 末页可能从最后一段中间开始；应保留精确恢复锚点，
             // 另行记录读完状态，回看后再次到末页也遵循此规则。
-            val chapterCompleted = saved?.chapterCompleted == true ||
-                if(settings.staticPagination) !eInk.canGoForward else !scroll.canScrollForward
+            val chapterCompleted = saved?.chapterCompleted == true || atChapterBodyEnd()
             val next = visible.copy(chapterIndex = chapterProgress?.first ?: saved?.chapterIndex,
                 chapterCount = chapterProgress?.second ?: saved?.chapterCount,
                 paragraphCount = paragraphs.size, chapterCompleted = chapterCompleted,
@@ -598,17 +606,31 @@ import kotlinx.serialization.encodeToString
             (if(settings.staticPagination) eInk.ready && eInk.pages.isNotEmpty() else hasScrollItems) && c.nav.currentBackStackEntry == readerEntry
         val completeStatusCatalog = chapterProgress != null && !tocState.loading && tocState.error == null &&
             chapterProgress.second >= knownChapterCount
-        val recordReadingStatusInteraction = rememberReaderReadingStatus(c, ref, chapterId, local.readingStatusToken(ref),
+        val readingStatusPosition = remember(chapterId, chapterProgress, paragraphs.size) {
+            Position(chapterId, chapterIndex = chapterProgress?.first, chapterCount = chapterProgress?.second,
+                paragraphCount = paragraphs.size)
+        }
+        val recordReadingStatus = rememberReaderReadingStatus(c, ref, chapterId, local.readingStatusToken(ref),
             readingActivityEligible, completeStatusCatalog,
-            position = { savePosition(); c.store.state.value.positions[ref.key]?.takeIf { it.chapterId == chapterId } },
-            atChapterEnd = { chapter.nextId == null && if(settings.staticPagination) !eInk.canGoForward else !scroll.canScrollForward })
+            position = readingStatusPosition, atChapterEnd = { chapter.nextId == null && atChapterBodyEnd() })
         val recordReadingTimeInteraction = rememberReaderReadingTime(c, ref.key, bookTitle,
             local.readingStatistics.revision,
             eligible = local.readingStatistics.enabled && !local.historyPaused && panelsClosed && !showTapTutorial && !leaving &&
                 !chapterLoad.loading && chapterLoad.error == null && positionState.initialAnchorRestored && !positionState.restoringAnchor &&
                 seekTarget == null && (!settings.staticPagination || eInk.ready) && c.nav.currentBackStackEntry == readerEntry,
             automatic = autoReading || (speechPlayback?.bookKey == ref.key && speechPlayback?.playing == true))
-        fun recordReadingInteraction() { recordReadingTimeInteraction(); recordReadingStatusInteraction() }
+        fun recordReadingInteraction() { recordReadingTimeInteraction(); recordReadingStatus(false) }
+        fun leaveReader(destination: () -> Unit) {
+            if(leaving) return
+            recordReadingStatus(true)
+            seekGeneration++; seekJob?.cancel(); seekTarget = null; chapterLoad.cancel()
+            savePosition(); leaving = true
+            destination()
+        }
+        fun promptNextVolume() {
+            recordReadingStatus(true)
+            nextVolumePrompt = true
+        }
         LaunchedEffect(volumeKeysActive) { if(volumeKeysActive) runCatching { focus.requestFocus() } }
         fun openChapter(id: String, startAtEnd: Boolean = false, match: ReadingTextMatch? = null, inline: Boolean = false,
             restore: ReadingReturnPoint? = null, followingSpeech: Boolean = false, automatic: Boolean = false, epubFragment: String? = null) {
@@ -719,7 +741,7 @@ import kotlinx.serialization.encodeToString
             seekGeneration++; seekJob?.cancel(); seekTarget = null
             if(settings.staticPagination) {
                 if(!eInk.ready) return
-                if(direction > 0 && !eInk.canGoForward && eInk.pages.isNotEmpty()) { if(chapter.nextId != null) openChapter(chapter.nextId) else if(nextVolume != null) nextVolumePrompt = true }
+                if(direction > 0 && !eInk.canGoForward && eInk.pages.isNotEmpty()) { if(chapter.nextId != null) openChapter(chapter.nextId) else if(nextVolume != null) promptNextVolume() }
                 else if(direction < 0 && !eInk.canGoBack && eInk.pages.isNotEmpty()) chapter.prevId?.let { id ->
                     // 从章首向前翻页时，落在上一章末页。
                     openChapter(id, startAtEnd = true)
@@ -792,7 +814,7 @@ import kotlinx.serialization.encodeToString
                     if(chapter.nextId != null) openChapter(chapter.nextId, automatic = true)
                     else {
                         autoReading = false
-                        if(nextVolume != null) nextVolumePrompt = true else c.message("已到末章，自动阅读已暂停")
+                        if(nextVolume != null) promptNextVolume() else c.message("已到末章，自动阅读已暂停")
                     }
                     return@LaunchedEffect
                 }
@@ -836,7 +858,7 @@ import kotlinx.serialization.encodeToString
         }
         BackHandler(panelsClosed && !showTapTutorial) {
             if(chapterLoad.loading || chapterLoad.error != null) chapterLoad.cancel()
-            else if(!leaving) { seekGeneration++; seekJob?.cancel(); seekTarget = null; savePosition(); leaving = true; c.back() }
+            else leaveReader(c::back)
         }
         ReaderPositionEffects(positionLayout, ref, chapterId, chapterProgress) { savePosition() }
         var arrivalApplied by remember { mutableStateOf(false) }
@@ -894,14 +916,9 @@ import kotlinx.serialization.encodeToString
                         inlineChapterLoad && chapterLoad.loading, foreground, Modifier.padding(bottom = 8.dp))
                     if(settings.showScrollPageButtons) {
                         if(chapter.nextId != null) AppButton(onClick = { openChapter(chapter.nextId, inline = true) }, modifier = Modifier.heightIn(min = 48.dp), enabled = !leaving && !chapterLoad.loading) { Text("阅读下一章") }
-                        else if(nextVolume != null) { Text("下一分卷：${nextVolume.book.title}", color = foreground, modifier = Modifier.padding(bottom = 12.dp)); AppButton(onClick = { nextVolumePrompt = true }, modifier = Modifier.heightIn(min = 48.dp), enabled = !leaving) { Text("阅读下一分卷") } }
-                        else AppOutlinedButton(onClick = {
-                            if(!leaving) {
-                                seekGeneration++; seekJob?.cancel(); seekTarget = null; chapterLoad.cancel()
-                                savePosition(); leaving = true
-                                c.returnToBookContents(ref)
-                            }
-                        }, modifier = Modifier.heightIn(min = 48.dp), enabled = !leaving) { Text("返回目录") }
+                        else if(nextVolume != null) { Text("下一分卷：${nextVolume.book.title}", color = foreground, modifier = Modifier.padding(bottom = 12.dp)); AppButton(onClick = ::promptNextVolume, modifier = Modifier.heightIn(min = 48.dp), enabled = !leaving) { Text("阅读下一分卷") } }
+                        else AppOutlinedButton(onClick = { leaveReader { c.returnToBookContents(ref) } },
+                            modifier = Modifier.heightIn(min = 48.dp), enabled = !leaving) { Text("返回目录") }
                     }
                     // 章末留白让同一提示句位于控件上方，不改变正文视口或分页。
                     Spacer(Modifier.height(with(density) { (bottomOverlayHeight - readingInsets.getBottom(density)).coerceAtLeast(0).toDp() }
@@ -1005,7 +1022,7 @@ import kotlinx.serialization.encodeToString
                 menu = menu, reducedMotion = reducedMotion, toolbarBackground = toolbarBackground, foreground = foreground,
                 modifier = if(topItems.isEmpty()) Modifier else Modifier.consumeWindowInsets(readingInsets.only(WindowInsetsSides.Top)),
                 onHeightChanged = { topOverlayHeight = it },
-                onBack = { if(!leaving) { seekGeneration++; seekJob?.cancel(); seekTarget = null; chapterLoad.cancel(); savePosition(); leaving = true; c.back() } },
+                onBack = { leaveReader(c::back) },
                 onRefresh = { refreshChapter() }, onToggleSearch = { if(search) focusManager.clearFocus(); search = !search },
                 onSpeech = { autoReading = false; speechSheet = true },
                 onAutoRead = { autoReading = false; autoReadSheet = true }, onReturnToReading = { returnToReadingPlace() },
@@ -1031,7 +1048,7 @@ import kotlinx.serialization.encodeToString
                 onChapterTitle = showChapterTitle,
                 onHeightChanged = { bottomOverlayHeight = it }, onPage = { page(it) }, onSeek = { seekChapter(it) },
                 onSeekFocusChanged = { seekFocused = it }, onPreviousChapter = { chapter.prevId?.let { openChapter(it) } },
-                onNextChapter = { if(chapter.nextId != null) openChapter(chapter.nextId) else nextVolumePrompt = true },
+                onNextChapter = { if(chapter.nextId != null) openChapter(chapter.nextId) else promptNextVolume() },
                 onToc = { if(wideDirectory) { setWideToc(!settings.showWideToc); if(!settings.showWideToc) tocLocateRequest++ } else toc = true },
                 onBookmark = { paragraphs.getOrNull(firstParagraph)?.let { saveBookmark(it) } }, onPreferences = { preferences = true },
                 onSpeechHeightChanged = { speechControlsHeight = it },
@@ -1091,7 +1108,7 @@ import kotlinx.serialization.encodeToString
             chapterTitleOpen = false
             if(wideDirectory) { setWideToc(true); tocLocateRequest++ } else toc = true
         })
-        if(nextVolumePrompt && nextVolume != null) AppAlertDialog(onDismissRequest = { nextVolumePrompt = false }, title = { Text("本卷已读完") }, text = { Column { Text("按书架中的分卷顺序接续：${nextVolume.book.title}"); volumeError?.let { Text(it, color = MaterialTheme.colorScheme.error) } } }, confirmButton = { AppTextButton(onClick = { openNextVolume() }, enabled = !openingVolume) { Text(if(openingVolume) "正在打开…" else "阅读下一分卷") } }, dismissButton = { AppTextButton(onClick = { nextVolumePrompt = false }) { Text("稍后") } })
+        if(nextVolumePrompt && nextVolume != null) AppAlertDialog(onDismissRequest = { nextVolumePrompt = false }, title = { Text("切换分卷") }, text = { Column { Text("按书架中的分卷顺序接续：${nextVolume.book.title}"); volumeError?.let { Text(it, color = MaterialTheme.colorScheme.error) } } }, confirmButton = { AppTextButton(onClick = { openNextVolume() }, enabled = !openingVolume) { Text(if(openingVolume) "正在打开…" else "阅读下一分卷") } }, dismissButton = { AppTextButton(onClick = { nextVolumePrompt = false }) { Text("稍后") } })
         if(bookSearch) ReaderSheet(onDismissRequest = { bookSearch = false }) {
             BookSearchPanel(c, ref, chapterId, chapter, settings) { match ->
                 rememberReadingPlace()
