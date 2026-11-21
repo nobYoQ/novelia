@@ -83,6 +83,14 @@ class SharedDocumentImportTest {
                     compose.onAllNodesWithText(label).fetchSemanticsNodes().isNotEmpty()
                 }
                 awaitText("1 / 3")
+                compose.onNodeWithContentDescription("页缩略图").performClick()
+                compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("跳到第 3 页").fetchSemanticsNodes().isNotEmpty() }
+                compose.onNodeWithContentDescription("跳到第 3 页").performClick()
+                awaitText("3 / 3")
+                compose.onNodeWithContentDescription("上一页").performClick()
+                compose.onNodeWithContentDescription("上一页").performClick()
+                awaitText("1 / 3")
+                compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("第 1 页").fetchSemanticsNodes().isNotEmpty() }
                 compose.onNodeWithContentDescription("第 1 页").performTouchInput { doubleClick(center) }
                 compose.onNode(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "250%")).assertExists()
                 compose.onNodeWithContentDescription("第 1 页").performTouchInput { doubleClick(center) }
@@ -90,6 +98,8 @@ class SharedDocumentImportTest {
                 awaitText("2 / 3")
                 compose.onNodeWithText("从右向左").performClick()
                 compose.onNodeWithText("纵向条漫").performClick()
+                assertEquals(ComicReadingMode.RightToLeft, app.store.state.value.comicReadingMode)
+                assertEquals(ComicReadingMode.Webtoon, app.store.state.value.books.single { it.book.ref == ref }.comicPreferences.mode)
                 compose.onNodeWithContentDescription("下一屏").performClick()
                 compose.waitUntil(10_000) { (app.store.state.value.positions[ref.key]?.offset ?: 0) > 0 }
                 compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("第 2 页").fetchSemanticsNodes().isNotEmpty() }
@@ -144,6 +154,46 @@ class SharedDocumentImportTest {
                 compose.waitUntil(10_000) { compose.onAllNodesWithText("2 / 2").fetchSemanticsNodes().isNotEmpty() }
             }
         } finally { app.store.update { it.copy(comicReadingMode = previousMode) } }
+    }
+
+    @Test fun mixedEpubCanSwitchShelvesAndKeepTextAndImagePages() {
+        val file = File(app.store.exportsDir, "$prefix.epub")
+        files += file
+        ZipOutputStream(file.outputStream()).use { zip ->
+            fun text(name: String, value: String) {
+                zip.putNextEntry(ZipEntry(name)); zip.write(value.toByteArray()); zip.closeEntry()
+            }
+            text("META-INF/container.xml", "<container><rootfile full-path='book.opf'/></container>")
+            text("book.opf", "<package><manifest><item id='p' href='p.xhtml'/><item id='i' href='i.png' media-type='image/png'/></manifest><spine><itemref idref='p'/><itemref idref='i'/></spine></package>")
+            text("p.xhtml", "<html><body><p>版权说明 $prefix</p></body></html>")
+            zip.putNextEntry(ZipEntry("i.png"))
+            Bitmap.createBitmap(200, 100, Bitmap.Config.ARGB_8888).also { it.compress(Bitmap.CompressFormat.PNG, 100, zip); it.recycle() }
+            zip.closeEntry()
+        }
+        val uri = FileProvider.getUriForFile(app, "${app.packageName}.files", file)
+        ActivityScenario.launch<MainActivity>(share(listOf(uri), "application/epub+zip")).use {
+            awaitBooks(1)
+            compose.onNodeWithContentDescription("管理 $prefix").performClick()
+            compose.onNodeWithText("书籍详情").performClick()
+            compose.waitUntil(10_000) { compose.onAllNodesWithText("阅读方式 · 自动识别").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("阅读方式 · 自动识别").performClick()
+            compose.onNodeWithText("作为漫画阅读").performClick()
+            compose.onNodeWithText("开始阅读").performClick()
+            compose.waitUntil(10_000) { compose.onAllNodesWithText("版权说明 $prefix").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithContentDescription("漫画显示设置").performClick()
+            compose.onNodeWithText("按阅读方向拆分横跨页").performClick()
+            compose.onNodeWithText("裁去白边").performClick()
+            compose.onNodeWithText("适合宽度").performClick()
+            compose.onNodeWithText("完成").performClick()
+            compose.onNodeWithContentDescription("下一页").performClick()
+            compose.waitUntil(10_000) { compose.onAllNodesWithText("2 / 2").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithContentDescription("下一页").performClick()
+            compose.onNodeWithContentDescription("下一页").assertIsNotEnabled()
+            val item = app.store.state.value.books.single { it.book.title == prefix }
+            assertEquals(cc.novelia.app.data.model.BookMedium.Comic, item.book.medium)
+            assertEquals("i", app.store.state.value.positions[item.book.ref.key]?.chapterId)
+            assertTrue(item.comicPreferences.splitWide && item.comicPreferences.fitWidth && item.comicPreferences.cropBorders)
+        }
     }
 
     @Test fun dismissedImportStaysClosedAfterRecreationAndNextBatchCanBeShown() {

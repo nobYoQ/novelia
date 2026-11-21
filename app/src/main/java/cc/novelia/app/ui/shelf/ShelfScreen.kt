@@ -208,6 +208,12 @@ import kotlinx.coroutines.withContext
     val comicFolder = rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()) { tree ->
         if (tree != null) importModel.start(listOf(tree))
     }
+    val seriesFolder = rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()) { tree ->
+        if (tree != null) {
+            runCatching { c.store.context.contentResolver.takePersistableUriPermission(tree, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            importModel.start(listOf(tree), asSeries = true)
+        }
+    }
     var importMenu by remember { mutableStateOf(false) }
     val recent = remember(shelfBooks, state.positions) {
         shelfBooks.asSequence().filter { state.positions.containsKey(it.book.ref.key) }.maxByOrNull { state.positions.getValue(it.book.ref.key).updatedAt }
@@ -294,6 +300,7 @@ import kotlinx.coroutines.withContext
             AppDropdownMenu(importMenu, { importMenu = false }) {
                 DropdownMenuItem({ Text("选择书籍文件") }, { importMenu = false; importLocalFiles() })
                 DropdownMenuItem({ Text("选择漫画图片文件夹") }, { importMenu = false; comicFolder.launch(null) })
+                DropdownMenuItem({ Text("导入系列文件夹") }, { importMenu = false; seriesFolder.launch(null) })
             }
         }
     }) { padding ->
@@ -600,7 +607,7 @@ import kotlinx.coroutines.withContext
     } }
     selected?.let { saved -> AppSheet(onDismissRequest = { selected = null }) { AppScrollColumn(modifier = Modifier.navigationBarsPadding(), contentModifier = Modifier.padding(bottom = 28.dp)) {
         Text(saved.book.title, Modifier.padding(20.dp), style = MaterialTheme.typography.titleLarge, maxLines = 2)
-        if(saved.book.ref.isLocal) MenuRow("书籍详情", "查看阅读时长和管理封面", Icons.Outlined.Info, {
+        if(saved.book.ref.isLocal) MenuRow("书籍详情", "查看目录、阅读时长和管理封面", Icons.Outlined.Info, {
             selected = null; c.showBookDetails(saved.book.ref)
         })
         if(saved.book.ref.isLocalSeries) MenuRow("编辑总集", "修改资料和分卷", Icons.Outlined.Edit, {

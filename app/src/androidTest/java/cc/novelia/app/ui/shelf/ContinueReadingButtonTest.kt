@@ -66,7 +66,7 @@ class ContinueReadingButtonTest {
         runBlocking { app.initialization.await() }
         assertNull("Use an anonymous dedicated test emulator", app.session.profile.value)
         before = app.store.state.value
-        app.store.update { it.copy(books = books, shelfGrid = false, shelfTapToRead = false,
+        app.store.update { it.copy(lastShelfLocation = cc.novelia.app.data.model.ShelfLocation(), books = books, shelfGrid = false, shelfTapToRead = false,
             rememberLastShelfFolder = false, shelfControlsExpanded = true, shelfSort = 0, positions = mapOf(
             recent.ref.key to position,
             books[2].book.ref.key to position.copy(updatedAt = 100L),

@@ -155,7 +155,7 @@ class ShelfSwipeTest {
             val web = BookCard(BookRef("syosetu", "swipe-web"), "网络小说")
             val local = BookCard(BookRef("local", "swipe-local"), "本地小说")
             app.store.update { it.copy(books = listOf(SavedBook(web), SavedBook(local)), positions = emptyMap(),
-                lastShelfLocation = it.lastShelfLocation.copy(tab = 0, localFolderId = null)) }
+                lastShelfLocation = cc.novelia.app.data.model.ShelfLocation()) }
             compose.setContent {
                 AppInteractionMode(eInk = static, reducedMotion = static) {
                     NoveliaTheme("light") {

@@ -36,7 +36,7 @@ class ShelfBatchUiTest {
         val book = BookCard(BookRef("local", "many-folders-${UUID.randomUUID()}"), "收藏夹滚动测试")
         val folders = listOf(DEFAULT_FOLDER) + (1..40).map { "测试收藏夹 $it" }
         try {
-            app.store.update { it.copy(books = listOf(SavedBook(book)), folders = folders) }
+            app.store.update { it.copy(lastShelfLocation = cc.novelia.app.data.model.ShelfLocation(), books = listOf(SavedBook(book)), folders = folders) }
             compose.setContent { AppInteractionMode(eInk, true) { NoveliaTheme("light") {
                 val controller = AppController(app, rememberNavController(), rememberCoroutineScope(), remember { SnackbarHostState() })
                 ShelfScreen(controller)
@@ -65,7 +65,7 @@ class ShelfBatchUiTest {
         val local = BookCard(BookRef("local", "batch-ui-${UUID.randomUUID()}"), "批量操作本地书")
         val web = BookCard(BookRef("syosetu", "batch-ui-${UUID.randomUUID()}"), "保留的网络书")
         try {
-            app.store.update { it.copy(books = listOf(SavedBook(local), SavedBook(web)), deleteLocalCopyOnShelfRemoval = false) }
+            app.store.update { it.copy(lastShelfLocation = cc.novelia.app.data.model.ShelfLocation(), books = listOf(SavedBook(local), SavedBook(web)), deleteLocalCopyOnShelfRemoval = false) }
             compose.setContent { AppInteractionMode(false, true) { NoveliaTheme("light") {
                 val snackbar = remember { SnackbarHostState() }
                 val controller = AppController(app, rememberNavController(), rememberCoroutineScope(), snackbar)
