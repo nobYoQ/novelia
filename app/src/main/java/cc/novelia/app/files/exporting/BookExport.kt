@@ -4,6 +4,7 @@ import cc.novelia.app.data.storage.LocalStore
 import java.io.OutputStream
 
 internal fun bookFileMimeType(fileName: String): String = when(fileName.substringAfterLast('.', "").lowercase()) {
+    "cbz" -> "application/vnd.comicbook+zip"
     "epub" -> "application/epub+zip"
     "txt" -> "text/plain"
     "srt" -> "application/x-subrip"
@@ -26,6 +27,7 @@ internal fun localBookExportFileName(name: String, sourceFormat: String, format:
 internal fun prepareLocalBookExport(store: LocalStore, id: String): LocalBookExport {
     val doc = store.documentIndex(id)
     val original = store.documentSource(id, doc.format).isFile
+    require(original || doc.format != "cbz") { "缺少 CBZ 原件，可通过阅读资料备份导出漫画页" }
     val format = if(original) doc.format else "txt"
     return LocalBookExport(localBookExportFileName(doc.name, doc.format, format), original)
 }
@@ -38,7 +40,7 @@ internal fun exportLocalBook(store: LocalStore, id: String, original: Boolean,
     checkCancelled()
     if(original) {
         val source = store.documentSource(id, doc.format)
-        require(source.isFile) { "原文件已不存在，请重新选择导出缓存正文为 TXT" }
+        require(source.isFile) { "原文件已不存在，请重新选择导出" }
         source.inputStream().use { input ->
             requireNotNull(destination()) { "无法写入文件" }.use { output ->
                 val buffer = ByteArray(65536)

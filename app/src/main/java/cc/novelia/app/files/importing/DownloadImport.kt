@@ -112,7 +112,7 @@ suspend fun importLocalDocument(store: LocalStore, file: File, name: String = fi
             val document = if (title == null) parsed else parsed.copy(name = title)
             val ref = BookRef("local", document.id)
             try {
-                onProgress("正在保存小说")
+                onProgress("正在保存书籍")
                 file.inputStream().use { copyImport(it, store.documentSource(document.id, document.format)) { workContext.ensureActive() } }
                 images.listFiles().orEmpty().forEach { image ->
                     workContext.ensureActive()

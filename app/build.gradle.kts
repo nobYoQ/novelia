@@ -134,6 +134,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
     implementation("org.jsoup:jsoup:1.18.3")
     implementation("com.ibm.icu:icu4j:76.1")
     implementation("io.noties.markwon:core:4.6.2")
