@@ -112,7 +112,7 @@ class SharedDocumentImportTest {
                 compose.onNodeWithContentDescription("第 2 页").performTouchInput { swipeLeft() }
                 awaitText("3 / 3")
                 compose.onNodeWithContentDescription("返回").performClick()
-                compose.onNodeWithText("漫画书架").assertIsSelected()
+                compose.onNodeWithTag("shelf-medium").assertTextEquals("漫画")
                 compose.onNodeWithTag("shelf-continue-reading").performClick()
                 awaitText("3 / 3")
                 assertTrue(app.store.state.value.positions.getValue(ref.key).chapterCompleted)
@@ -149,7 +149,7 @@ class SharedDocumentImportTest {
                 compose.waitUntil(10_000) { app.store.state.value.positions[key]?.chapterId == "second" }
                 assertEquals(1, app.store.state.value.positions.getValue(key).index)
                 compose.onNodeWithContentDescription("返回").performClick()
-                compose.onNodeWithText("漫画书架").assertIsSelected()
+                compose.onNodeWithTag("shelf-medium").assertTextEquals("漫画")
                 compose.onNodeWithTag("shelf-continue-reading").performClick()
                 compose.waitUntil(10_000) { compose.onAllNodesWithText("2 / 2").fetchSemanticsNodes().isNotEmpty() }
             }
