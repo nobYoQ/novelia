@@ -2,6 +2,7 @@
 
 package cc.novelia.app.ui.reader
 
+import cc.novelia.app.ui.theme.appControlShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -47,7 +48,8 @@ import kotlinx.coroutines.flow.map
                 OutlinedTextField(value = input, onValueChange = { if (it.length <= ReaderThemePalette.MAX_NAME) saveName = it },
                     singleLine = true, label = { Text("主题名称") }, supportingText = {
                         Text(if (existing != null) "已有同名主题，覆盖后使用当前配色。" else "保存正文、背景、工具栏颜色和工具栏透明度。")
-                    })
+                    },
+                    shape = appControlShape())
             }, confirmButton = {
                 AppTextButton(enabled = name.isNotEmpty(), onClick = {
                     store.update { state ->

@@ -12,6 +12,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import cc.novelia.app.ui.theme.appReducedMotion
 import cc.novelia.app.ui.theme.LocalAmoledBlack
+import cc.novelia.app.ui.theme.DefaultShapes
+import cc.novelia.app.ui.theme.appBottomSheetShape
+import cc.novelia.app.ui.theme.appPanelShape
 
 /** 标记内容已在应用面板中，使内部组件能选择合适的滚动和翻屏处理。 */
 internal val LocalInAppSheet = compositionLocalOf { false }
@@ -26,6 +29,7 @@ internal val LocalInAppSheet = compositionLocalOf { false }
     if (!appReducedMotion()) ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         sheetState = sheetState,
+        shape = appBottomSheetShape(),
         containerColor = if(LocalAmoledBlack.current) MaterialTheme.colorScheme.surfaceContainerHigh else BottomSheetDefaults.ContainerColor,
         dragHandle = { AppSheetDragHandle() },
         // 顶部安全区放在可拖动面板外，保持内容测量高度和展开锚点稳定。
@@ -37,7 +41,7 @@ internal val LocalInAppSheet = compositionLocalOf { false }
         CompositionLocalProvider(LocalInAppSheet provides true, LocalPanelSession provides session) { content() }
     }
     else AppDialog(onDismissRequest, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(Modifier.fillMaxWidth(.95f).fillMaxHeight(.9f), shape = MaterialTheme.shapes.large,
+        Surface(Modifier.fillMaxWidth(.95f).fillMaxHeight(.9f), shape = appPanelShape(DefaultShapes.large),
             color = if(LocalAmoledBlack.current) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surface) {
             Column {
                 AppTextButton(onClick = onDismissRequest, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("关闭面板") }

@@ -30,7 +30,9 @@ import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.Position
 import cc.novelia.app.ui.theme.AppMotion
+import cc.novelia.app.ui.theme.DefaultShapes
 import cc.novelia.app.ui.theme.MotionContent
+import cc.novelia.app.ui.theme.appControlShape
 import cc.novelia.app.ui.theme.appReducedMotion
 
 /** 续读目标沿用书架最近的本机位置；完整书名和章节仍保留在无障碍文本中。 */
@@ -44,7 +46,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
     val reducedMotion = appReducedMotion()
     val chapter = position.title.ifBlank { position.chapterIndex?.let { "第 ${it + 1} 章" } ?: "已记录阅读位置" }
     MotionContent(book.ref.key, modifier) {
-        Surface(onClick = onClick, shape = MaterialTheme.shapes.medium,
+        Surface(onClick = onClick, shape = appControlShape(DefaultShapes.medium),
             color = MaterialTheme.colorScheme.secondaryContainer,
             contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
             shadowElevation = if(reducedMotion) 0.dp else 1.dp,

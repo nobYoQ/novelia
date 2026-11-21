@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.shelf
 
+import cc.novelia.app.ui.theme.DefaultShapes
+import cc.novelia.app.ui.theme.appPanelShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DeleteOutline
@@ -98,7 +100,7 @@ internal fun HistoryBookRow(
                     AppIconButton(onClick = { menuOpen = true }, enabled = canRemove) {
                         Icon(Icons.Outlined.MoreVert, "《${book.title}》的更多操作", Modifier.size(20.dp), tint = secondary)
                     }
-                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }, shape = appPanelShape(DefaultShapes.extraSmall)) {
                         DropdownMenuItem(text = { Text("删除阅读历史") }, enabled = canRemove, onClick = {
                             menuOpen = false
                             onRemove()

@@ -6,6 +6,8 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.reader
 
+import cc.novelia.app.ui.theme.DefaultShapes
+import cc.novelia.app.ui.theme.appControlShape
 import cc.novelia.app.ui.components.base.AppListItem
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
@@ -128,8 +130,10 @@ import kotlin.math.roundToInt
             .onSizeChanged { bottomControlsHeight = with(density) { it.height.toDp() } }, color = controlsColor) {
             Column(Modifier.padding(horizontal = 8.dp)) {
                 FlowRow(Modifier.fillMaxWidth(), itemVerticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FilterChip(!double, { double = false }, label = { Text("单击") }, modifier = Modifier.testTag("tap-zone-single"))
-                    FilterChip(double, { double = true }, label = { Text("双击") }, modifier = Modifier.testTag("tap-zone-double"))
+                    FilterChip(!double, { double = false }, label = { Text("单击") }, modifier = Modifier.testTag("tap-zone-single"),
+                        shape = appControlShape(DefaultShapes.small))
+                    FilterChip(double, { double = true }, label = { Text("双击") }, modifier = Modifier.testTag("tap-zone-double"),
+                        shape = appControlShape(DefaultShapes.small))
                     AppTextButton(onClick = { individual = !individual }, modifier = Modifier.testTag("tap-zone-individual")) {
                         Text(if(individual) "合并区域" else "逐格编辑")
                     }

@@ -12,8 +12,10 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import cc.novelia.app.ui.theme.LocalSquareCorners
-import cc.novelia.app.ui.theme.appShape
+import cc.novelia.app.data.model.SquareCornerTarget
+import cc.novelia.app.ui.theme.DefaultShapes
+import cc.novelia.app.ui.theme.appPanelShape
+import cc.novelia.app.ui.theme.useSquareCorners
 
 @Composable fun AppLinearProgressIndicator(
     modifier: Modifier = Modifier,
@@ -22,7 +24,7 @@ import cc.novelia.app.ui.theme.appShape
     strokeCap: StrokeCap = ProgressIndicatorDefaults.LinearStrokeCap,
     gapSize: Dp = ProgressIndicatorDefaults.LinearIndicatorTrackGapSize,
 ) = LinearProgressIndicator(modifier, color, trackColor,
-    if(LocalSquareCorners.current) StrokeCap.Butt else strokeCap, gapSize)
+    if(useSquareCorners(SquareCornerTarget.Navigation)) StrokeCap.Butt else strokeCap, gapSize)
 
 @Composable fun AppLinearProgressIndicator(
     progress: () -> Float, modifier: Modifier = Modifier,
@@ -32,15 +34,15 @@ import cc.novelia.app.ui.theme.appShape
     gapSize: Dp = ProgressIndicatorDefaults.LinearIndicatorTrackGapSize,
     drawStopIndicator: (DrawScope.() -> Unit)? = null,
 ) {
-    val cap = if(LocalSquareCorners.current) StrokeCap.Butt else strokeCap
+    val cap = if(useSquareCorners(SquareCornerTarget.Navigation)) StrokeCap.Butt else strokeCap
     if(drawStopIndicator == null) LinearProgressIndicator(progress, modifier, color, trackColor, cap, gapSize)
     else LinearProgressIndicator(progress, modifier, color, trackColor, cap, gapSize, drawStopIndicator)
 }
 
 @Composable fun AppBadge(modifier: Modifier = Modifier) {
-    if(LocalSquareCorners.current) Box(modifier.size(6.dp).background(BadgeDefaults.containerColor))
+    if(useSquareCorners(SquareCornerTarget.Navigation)) Box(modifier.size(6.dp).background(BadgeDefaults.containerColor))
     else Badge(modifier)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable fun AppSheetDragHandle() = BottomSheetDefaults.DragHandle(shape = appShape(MaterialTheme.shapes.extraLarge))
+@Composable fun AppSheetDragHandle() = BottomSheetDefaults.DragHandle(shape = appPanelShape(DefaultShapes.extraLarge))

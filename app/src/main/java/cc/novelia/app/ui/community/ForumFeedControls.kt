@@ -1,6 +1,8 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.community
 
+import cc.novelia.app.ui.theme.DefaultShapes
+import cc.novelia.app.ui.theme.appControlShape
 import cc.novelia.app.ui.components.base.AppPageTabs
 
 import cc.novelia.app.ui.components.base.AppIconButton
@@ -59,6 +61,6 @@ import cc.novelia.app.data.community.ForumCategory
             leadingIcon = { Icon(Icons.Outlined.Search, null) },
             trailingIcon = { if(search.isNotEmpty()) AppIconButton(onClick = { onSearch("") }) { Icon(Icons.Outlined.Close, "清空搜索") } },
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp).testTag("forum-search-input"),
-            shape = MaterialTheme.shapes.extraLarge)
+            shape = appControlShape(DefaultShapes.extraLarge))
     }
 }

@@ -1,6 +1,8 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.reader
 
+import cc.novelia.app.ui.theme.appPanelShape
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
@@ -72,7 +74,7 @@ internal fun ReaderSettings.editableNightTheme(): ReaderSettings {
     AppDialog(onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         CompositionLocalProvider(LocalReaderPresetDraft provides true) {
             Surface(Modifier.padding(horizontal = 16.dp).widthIn(max = 600.dp).fillMaxWidth().height(maxHeight)
-                .testTag("reader-night-preset-editor"), shape = MaterialTheme.shapes.extraLarge) {
+                .testTag("reader-night-preset-editor"), shape = appPanelShape()) {
                 Column {
                     Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text("夜间阅读预设", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)

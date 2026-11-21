@@ -1,5 +1,6 @@
 package cc.novelia.app.ui.settings
 
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -32,7 +33,8 @@ import androidx.compose.ui.text.style.TextAlign
 import cc.novelia.app.data.network.NetworkDiagnosisState
 import cc.novelia.app.ui.components.base.*
 import cc.novelia.app.ui.theme.LocalEInkMode
-import cc.novelia.app.ui.theme.LocalSquareCorners
+import cc.novelia.app.data.model.SquareCornerTarget
+import cc.novelia.app.ui.theme.useSquareCorners
 import cc.novelia.app.ui.theme.appReducedMotion
 import cc.novelia.app.ui.theme.appRoundedCornerShape
 
@@ -268,7 +270,7 @@ private fun DiagnosticStep(number: String, title: String, description: String, a
 
 @Composable
 private fun DiagnosticDisclosure(title: String, expanded: Boolean, onClick: () -> Unit, description: String? = null) {
-    AppTextButton(onClick = onClick, modifier = Modifier.fillMaxWidth(), shape = appRoundedCornerShape(12.dp),
+    AppTextButton(onClick = onClick, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(title, style = MaterialTheme.typography.titleSmall)
@@ -289,7 +291,7 @@ private fun DiagnosticToggle(title: String, subtitle: String, checked: Boolean, 
             Text(title, style = MaterialTheme.typography.titleMedium)
             DiagnosticNote(subtitle)
         }
-        if (LocalEInkMode.current && !LocalSquareCorners.current) Icon(
+        if (LocalEInkMode.current && !useSquareCorners(SquareCornerTarget.Controls)) Icon(
             if (checked) Icons.Outlined.ToggleOn else Icons.Outlined.ToggleOff, null, Modifier.size(48.dp),
             tint = if (checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
         ) else AppSwitch(checked, onCheckedChange = null)

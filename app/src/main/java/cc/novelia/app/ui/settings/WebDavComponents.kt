@@ -5,7 +5,8 @@ import cc.novelia.app.ui.theme.ThemeBar
 import cc.novelia.app.ui.theme.themeBarBackground
 
 import cc.novelia.app.ui.components.base.AppSwitch
-import cc.novelia.app.ui.theme.LocalSquareCorners
+import cc.novelia.app.data.model.SquareCornerTarget
+import cc.novelia.app.ui.theme.useSquareCorners
 import cc.novelia.app.ui.components.base.AppButton
 import cc.novelia.app.ui.components.base.AppIconButton
 import cc.novelia.app.ui.theme.appShape
@@ -150,7 +151,7 @@ internal fun WebDavToggleRow(
     onCheckedChange: (Boolean) -> Unit,
 ) {
     WebDavRow(title, description, icon, Modifier.toggleable(checked, enabled = enabled, role = Role.Switch, onValueChange = onCheckedChange), shape) {
-        if(LocalEInkMode.current && !LocalSquareCorners.current) Icon(
+        if(LocalEInkMode.current && !useSquareCorners(SquareCornerTarget.Controls)) Icon(
             if(checked) Icons.Outlined.ToggleOn else Icons.Outlined.ToggleOff, null, Modifier.size(48.dp),
             tint = if(checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
         ) else AppSwitch(checked, onCheckedChange = null, enabled = enabled)

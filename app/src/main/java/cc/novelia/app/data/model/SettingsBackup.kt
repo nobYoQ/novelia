@@ -23,10 +23,12 @@ import kotlinx.serialization.Serializable
     val ttsEnginePackage: String? = null,
     val themePresets: ThemePresets? = null,
     val readerThemePresets: Map<String, ReaderThemePalette>? = null,
-    val shelfControlsFollowScroll: Boolean = true)
+    val shelfControlsFollowScroll: Boolean = true,
+    val squareCornerTargets: Set<SquareCornerTarget> = SquareCornerTarget.defaults)
 
 internal fun LibraryState.settingsBackup() = SettingsBackup(
     readerThemePresets = readerThemePresets,
+    squareCornerTargets = squareCornerTargets,
     reader = reader, theme = theme, themePresets = themePresets, reducedMotion = reducedMotion, squareCorners = squareCorners,
     amoledBlack = amoledBlack, stickerPackId = stickerPackId, discoverWenkuGrid = discoverWenkuGrid,
     rememberSavedSearchPage = rememberSavedSearchPage, shelfGrid = shelfGrid, localFilesGrid = localFilesGrid,
@@ -59,6 +61,7 @@ internal fun SettingsBackup.requireValid() {
 
 internal fun SettingsBackup.applyTo(state: LibraryState): LibraryState = state.copy(
     readerThemePresets = readerThemePresets ?: state.readerThemePresets,
+    squareCornerTargets = squareCornerTargets,
     reader = reader, theme = theme, themePresets = themePresets ?: state.themePresets,
     reducedMotion = reducedMotion, squareCorners = squareCorners, amoledBlack = amoledBlack, stickerPackId = stickerPackId,
     discoverWenkuGrid = discoverWenkuGrid, rememberSavedSearchPage = rememberSavedSearchPage, shelfGrid = shelfGrid,

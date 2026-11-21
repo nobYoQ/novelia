@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.book
 
+import cc.novelia.app.ui.theme.appControlShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -121,7 +123,7 @@ internal fun NavGraphBuilder.localSeriesEditorDestination(c: AppController) {
     val focus = LocalFocusManager.current
     val preview = (parent?.book ?: BookCard(ref, "")).copy(title = title.trim().ifEmpty { "本地总集" }, cover = coverUri)
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = if(startAtVolumes) 2 else 0)
-    val fieldShape = appRoundedCornerShape(14.dp)
+    val fieldShape = appControlShape(RoundedCornerShape(14.dp))
     val hasCustomCover = coverUri != null || (savedCover != null && !restoreCover)
     val keywordIndex by c.app.keywords.displayIndex.collectAsStateWithLifecycle()
 
@@ -256,7 +258,7 @@ internal fun NavGraphBuilder.localSeriesEditorDestination(c: AppController) {
     tags: List<String>, labels: Map<String, String>, enabled: Boolean, onChoose: () -> Unit, onRemove: (String) -> Unit,
 ) {
     AppOutlinedButton(onChoose, Modifier.fillMaxWidth().testTag("local-series-tags"), enabled = enabled,
-        shape = appRoundedCornerShape(14.dp)) {
+        shape = RoundedCornerShape(14.dp)) {
         Icon(Icons.Outlined.Label, null, Modifier.size(20.dp))
         Spacer(Modifier.width(8.dp))
         Text("从标签库选择")
@@ -294,7 +296,7 @@ internal fun NavGraphBuilder.localSeriesEditorDestination(c: AppController) {
     var open by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxWidth()) {
         AppOutlinedButton({ open = true }, Modifier.fillMaxWidth().testTag("local-series-folder"), enabled = enabled,
-            shape = appRoundedCornerShape(14.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)) {
+            shape = RoundedCornerShape(14.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)) {
             Icon(Icons.Outlined.Folder, null, Modifier.size(20.dp))
             Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
                 Text("收藏夹", style = MaterialTheme.typography.labelSmall)

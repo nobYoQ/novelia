@@ -23,7 +23,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.appReducedMotion
-import cc.novelia.app.ui.theme.LocalSquareCorners
+import cc.novelia.app.data.model.SquareCornerTarget
+import cc.novelia.app.ui.theme.useSquareCorners
 import cc.novelia.app.ui.theme.ThemeBar
 import cc.novelia.app.ui.theme.pageContainerColor
 import cc.novelia.app.ui.theme.themeBarBackground
@@ -88,7 +89,7 @@ private val rootTabs = listOf(
             Spacer(Modifier.height(if(compactRail) 12.dp else 40.dp))
             rootTabs.forEach { (target, label, icon) ->
                 val selected = route == target
-                if(LocalSquareCorners.current) SquareNavigationItem(selected, { if(!selected) onNavigate(target) },
+                if(useSquareCorners(SquareCornerTarget.Navigation)) SquareNavigationItem(selected, { if(!selected) onNavigate(target) },
                     icon, label, Modifier.width(80.dp), showLabel = !compactRail)
                 else NavigationRailItem(selected, { if(!selected) onNavigate(target) },
                     { NavigationIcon(icon, label, selected) }, label = if(compactRail) null else { { Text(label) } })
@@ -99,7 +100,7 @@ private val rootTabs = listOf(
         NavigationBar(containerColor = bar.color, contentColor = colors.onSurface, modifier = bar.modifier.testTag("root-navigation")) {
             rootTabs.forEach { (target, label, icon) ->
                 val selected = route == target
-                if(LocalSquareCorners.current) SquareNavigationItem(selected, { if(!selected) onNavigate(target) },
+                if(useSquareCorners(SquareCornerTarget.Navigation)) SquareNavigationItem(selected, { if(!selected) onNavigate(target) },
                     icon, label, Modifier.weight(1f))
                 else NavigationBarItem(selected, { if(!selected) onNavigate(target) },
                     { NavigationIcon(icon, label, selected) }, label = { Text(label) })

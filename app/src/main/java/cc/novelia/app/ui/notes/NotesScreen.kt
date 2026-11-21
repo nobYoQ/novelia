@@ -2,6 +2,8 @@
 
 package cc.novelia.app.ui.notes
 
+import cc.novelia.app.ui.theme.appControlShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import cc.novelia.app.ui.components.base.AppTextButton
 import cc.novelia.app.ui.account.ProfileDetailCard
 import cc.novelia.app.ui.components.base.AppSelectionChip
@@ -44,7 +46,7 @@ import cc.novelia.app.ui.navigation.AppController
     ProfileDetailScreen("书签与笔记", c::back) { padding -> ProfileDetailList(Modifier.padding(padding)) {
         item(key = "note-search") {
             OutlinedTextField(query, { query = it }, label = { Text("搜索书名、章节、摘录或笔记") }, singleLine = true,
-                leadingIcon = { Icon(Icons.Outlined.Search, null) }, shape = appRoundedCornerShape(24.dp),
+                leadingIcon = { Icon(Icons.Outlined.Search, null) }, shape = appControlShape(RoundedCornerShape(24.dp)),
                 colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow),
                 modifier = Modifier.fillMaxWidth().testTag("notes-search"))
         }

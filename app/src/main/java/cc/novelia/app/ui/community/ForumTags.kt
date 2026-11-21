@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.community
 
+import cc.novelia.app.ui.theme.DefaultShapes
+import cc.novelia.app.ui.theme.appControlShape
 import cc.novelia.app.ui.components.base.AppBadge
 import cc.novelia.app.ui.components.base.AppIconButton
 import androidx.compose.foundation.BorderStroke
@@ -60,7 +62,8 @@ import cc.novelia.app.ui.theme.LocalEInkMode
                 FilterChip(selected = selected, enabled = enabled && (selected || selectedIds.size < ForumRules.TAG_LIMIT),
                     onClick = { onSelect(if(selected) selectedIds - tag.id else selectedIds + tag.id) },
                     leadingIcon = if(selected) ({ Icon(Icons.Outlined.Check, null, Modifier.size(FilterChipDefaults.IconSize)) }) else null,
-                    label = { Text(tag.name) }, colors = forumTagChipColors(tag.color))
+                    label = { Text(tag.name) }, colors = forumTagChipColors(tag.color),
+                    shape = appControlShape(DefaultShapes.small))
             }
         }
     }
@@ -71,11 +74,13 @@ import cc.novelia.app.ui.theme.LocalEInkMode
     Row(Modifier.fillMaxWidth().testTag("forum-tag-filter").appHorizontalScroll(rememberScrollState())
         .padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         FilterChip(selected = selectedId == null, onClick = { onSelect(null) }, label = { Text("全部标签") },
-            leadingIcon = if(selectedId == null) ({ Icon(Icons.Outlined.Check, null, Modifier.size(FilterChipDefaults.IconSize)) }) else null)
+            leadingIcon = if(selectedId == null) ({ Icon(Icons.Outlined.Check, null, Modifier.size(FilterChipDefaults.IconSize)) }) else null,
+            shape = appControlShape(DefaultShapes.small))
         tags.sortedBy { it.sortOrder }.distinctBy { it.id }.forEach { tag ->
             FilterChip(selected = selectedId == tag.id, onClick = { onSelect(if(selectedId == tag.id) null else tag.id) },
                 leadingIcon = if(selectedId == tag.id) ({ Icon(Icons.Outlined.Check, null, Modifier.size(FilterChipDefaults.IconSize)) }) else null,
-                label = { Text(tag.name) }, colors = forumTagChipColors(tag.color))
+                label = { Text(tag.name) }, colors = forumTagChipColors(tag.color),
+                shape = appControlShape(DefaultShapes.small))
         }
     }
 }

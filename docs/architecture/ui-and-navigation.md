@@ -85,7 +85,7 @@ c.openMarkdownLink(url, baseUrl)
 
 断点依据**组件可用宽度**。侧边导航已经占用的空间会影响子页面，不能仅按设备型号判断双栏。
 
-“fuck 圆角”由 `NoveliaTheme(squareCorners)` 和 `LocalSquareCorners` 统一传播。主题形状覆盖卡片、输入框和弹层；自定义容器使用 `appRoundedCornerShape` / `appShape`。Material 的胶囊按钮、导航指示器、开关和部分绘制控件不会仅随 `MaterialTheme.shapes` 改变，因此页面应使用 `AppButton`、`AppTextButton`、`AppIconButton` 等应用包装组件，以及 `AppSwitch`、`AppSlider`、`AppLinearProgressIndicator`。新增自绘圆角或裁切也需读取该偏好，关闭时保留原始形状与交互。
+“fuck 圆角”由 `NoveliaTheme` 提供启用的分类集合。主题形状用于普通卡片和容器，自绘形状通过 `appShape` 指定分类。封面裁切统一使用 `appBookCoverShape`，按钮和输入框通过 `appControlShape` 取得形状，弹窗和底部面板使用 `appPanelShape` / `appBottomSheetShape`。这些组件以默认圆角为基准，避免跟随卡片分类一起切换。导航指示器、阅读控件等自绘组件读取自身的分类。
 
 优先复用 `Screen`、`AppLazyColumn` / `AppScrollColumn`、`AppDialog`、`AppSheet` 和 `MotionContent`。这些组件在 [ui/components](../../app/src/main/java/cc/novelia/app/ui/components) 与 [ui/theme](../../app/src/main/java/cc/novelia/app/ui/theme)。静态模式的面板会改用对话框，窗口动画也需要关闭。
 

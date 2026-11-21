@@ -1,6 +1,7 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.shelf
 
+import cc.novelia.app.ui.theme.appControlShape
 import cc.novelia.app.ui.components.base.AppListItem
 import cc.novelia.app.ui.components.base.AppCheckbox
 import cc.novelia.app.ui.components.base.AppButton
@@ -67,7 +68,8 @@ internal data class ShelfRowItem(val saved: SavedBook, val parent: SavedBook? = 
                 }
                 item("search") {
                     OutlinedTextField(query, { query = it }, label = { Text("搜索本地分卷") }, leadingIcon = { Icon(Icons.Outlined.Search, null) },
-                        singleLine = true, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp))
+                        singleLine = true, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+                        shape = appControlShape())
                 }
                 if(localBooks.isEmpty()) item { Text("还没有可挂载的分卷，请先下载并导入阅读，或导入本地文件。", Modifier.padding(20.dp)) }
                 else if(filtered.isEmpty()) item { Text("没有匹配的本地分卷", Modifier.padding(20.dp)) }
@@ -100,7 +102,8 @@ internal data class ShelfRowItem(val saved: SavedBook, val parent: SavedBook? = 
                 }
                 item("search") {
                     OutlinedTextField(query, { query = it }, label = { Text("搜索文库或总集") }, singleLine = true,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp))
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+                        shape = appControlShape())
                 }
                 if(volume.parentWenkuKey != null) item {
                     AppListItem(headlineContent = { Text("取消挂载") }, supportingContent = { Text("保留分卷文件和阅读进度") }, modifier = Modifier.motionClickable { onSelect(null) })

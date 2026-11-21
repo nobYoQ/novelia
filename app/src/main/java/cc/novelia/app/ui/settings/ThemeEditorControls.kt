@@ -1,6 +1,7 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.settings
 
+import cc.novelia.app.ui.theme.appControlShape
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -34,7 +35,7 @@ internal val darkSwatches = listOf(0x101512L, 0x232524, 0x2A241B, 0x172C2C, 0x1D
     SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
         options.forEachIndexed { index, label ->
             SegmentedButton(index == selected, onClick = { choose(index) },
-                shape = SegmentedButtonDefaults.itemShape(index, options.size), label = { Text(label) })
+                shape = appControlShape(SegmentedButtonDefaults.itemShape(index, options.size)), label = { Text(label) })
         }
     }
 }

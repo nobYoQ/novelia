@@ -1,5 +1,6 @@
 package cc.novelia.app.ui.reader
 
+import cc.novelia.app.ui.theme.appControlShape
 import cc.novelia.app.ui.components.base.AppListItem
 import cc.novelia.app.ui.components.base.AppTextButton
 import androidx.compose.foundation.layout.*
@@ -101,7 +102,8 @@ import kotlinx.coroutines.launch
         Column {
             Text("目录", Modifier.padding(start = 20.dp, top = 16.dp).semantics { heading() }, style = MaterialTheme.typography.titleMedium)
             OutlinedTextField(query, onQuery, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).testTag("reader-toc-query"),
-                label = { Text("搜索章节") }, leadingIcon = { Icon(Icons.Outlined.Search, null) }, singleLine = true)
+                label = { Text("搜索章节") }, leadingIcon = { Icon(Icons.Outlined.Search, null) }, singleLine = true,
+                shape = appControlShape())
             Row(Modifier.padding(horizontal = 8.dp)) {
                 AppTextButton(onClick = { onReversed(!reversed) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if(reversed) "倒序" else "正序") }
                 AppTextButton(onClick = { scope.launch(Dispatchers.Main.immediate) { locate() } }, enabled = currentIndex >= 0, modifier = Modifier.heightIn(min = 48.dp)) { Text("定位当前") }

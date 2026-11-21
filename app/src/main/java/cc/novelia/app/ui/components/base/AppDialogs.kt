@@ -29,6 +29,8 @@ import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
+import cc.novelia.app.ui.theme.DefaultShapes
+import cc.novelia.app.ui.theme.appPanelShape
 import cc.novelia.app.ui.theme.appReducedMotion
 
 /** 窗口动画不受 Compose 动画缩放控制，需要单独关闭。 */
@@ -67,7 +69,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
         ApplyDialogMotion()
         confirmButton()
     }, modifier = modifier, dismissButton = dismissButton, icon = icon, title = title, text = text,
-        properties = properties)
+        shape = appPanelShape(), properties = properties)
 }
 
 /** 减少动画模式使用静态锚定弹窗，避开 Material 菜单固定的淡入和缩放动画。 */
@@ -79,14 +81,15 @@ import cc.novelia.app.ui.theme.appReducedMotion
     content: @Composable ColumnScope.() -> Unit,
 ) {
     AppOverlayPresence(expanded)
+    val shape = appPanelShape(DefaultShapes.extraSmall)
     if(!appReducedMotion()) {
-        DropdownMenu(expanded, onDismissRequest, modifier, scrollState = scrollState, content = content)
+        DropdownMenu(expanded, onDismissRequest, modifier, scrollState = scrollState, shape = shape, content = content)
     } else if(expanded) {
         val margin = with(LocalDensity.current) { 8.dp.roundToPx() }
         val position = remember(margin) { StaticMenuPosition(margin) }
         Popup(popupPositionProvider = position, onDismissRequest = onDismissRequest,
             properties = PopupProperties(focusable = true)) {
-            Surface(shape = MaterialTheme.shapes.extraSmall, color = MaterialTheme.colorScheme.surfaceContainer,
+            Surface(shape = shape, color = MaterialTheme.colorScheme.surfaceContainer,
                 shadowElevation = 3.dp) {
                 Column(modifier.width(IntrinsicSize.Max).widthIn(min = 112.dp, max = 280.dp)
                     .verticalScroll(scrollState).padding(vertical = 8.dp), content = content)

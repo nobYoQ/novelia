@@ -1,6 +1,7 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.reader
 
+import cc.novelia.app.ui.theme.appControlShape
 import cc.novelia.app.ui.components.base.AppListItem
 import cc.novelia.app.ui.components.base.AppLinearProgressIndicator
 import cc.novelia.app.ui.components.base.AppTextButton
@@ -60,8 +61,10 @@ import kotlinx.coroutines.withContext
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("共 $count 章，按目录正序编号。每批最多 200 章，已有缓存会跳过；总缓存预算 256 MB，超出时较旧内容会自动清理。")
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(first, { first = it.filter(Char::isDigit).take(7) }, label = { Text("起始章") }, singleLine = true, enabled = !busy, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f).testTag("cache-first"))
-                OutlinedTextField(last, { last = it.filter(Char::isDigit).take(7) }, label = { Text("结束章") }, singleLine = true, enabled = !busy, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f).testTag("cache-last"))
+                OutlinedTextField(first, { first = it.filter(Char::isDigit).take(7) }, label = { Text("起始章") }, singleLine = true, enabled = !busy, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f).testTag("cache-first"),
+                    shape = appControlShape())
+                OutlinedTextField(last, { last = it.filter(Char::isDigit).take(7) }, label = { Text("结束章") }, singleLine = true, enabled = !busy, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f).testTag("cache-last"),
+                    shape = appControlShape())
             }
             if(!busy) TogglePreference("仅 Wi-Fi 缓存", "离开 Wi-Fi 后停止后续请求", wifiOnly) { wifiOnly = it }
             // 确定进度直接跟随已完成工作量，不使用循环动画。
@@ -125,7 +128,8 @@ private data class SearchScope(val toc: List<TocItem>, val document: LocalDocume
         Text(if(source == null) (if(failure == null) "正在读取离线目录…" else "离线目录暂不可用") else if(ref.isLocal) "本地文件 · ${source.toc.size} 章" else if(!source.completeDirectory) "未找到离线目录，仅搜索当前缓存章节。" else "离线目录快照 · 已缓存 ${source.cachedIds.size} / ${source.toc.count { it.chapterId != null }} 章；未缓存章节不在搜索范围内。", style = MaterialTheme.typography.bodySmall)
         Text("按当前阅读语言和译文设置搜索，每次最多显示 200 条结果。", style = MaterialTheme.typography.bodySmall)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(query, { query = it.take(200); requestVersion++; job?.cancel(); busy = false; result = null; failure = null }, label = { Text("搜索整本正文") }, singleLine = true, modifier = Modifier.weight(1f).testTag("book-search-query"))
+            OutlinedTextField(query, { query = it.take(200); requestVersion++; job?.cancel(); busy = false; result = null; failure = null }, label = { Text("搜索整本正文") }, singleLine = true, modifier = Modifier.weight(1f).testTag("book-search-query"),
+                shape = appControlShape())
             AppTextButton(onClick = {
                 if(busy) { requestVersion++; job?.cancel(); busy = false }
                 else if(source != null) {

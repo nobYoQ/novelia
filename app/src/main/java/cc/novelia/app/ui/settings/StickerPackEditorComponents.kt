@@ -2,6 +2,7 @@
 
 package cc.novelia.app.ui.settings
 
+import cc.novelia.app.ui.theme.appControlShape
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -91,10 +92,12 @@ internal fun StickerPackNameFields(title: String, onTitle: (String) -> Unit, com
     ProfileDetailCard {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             OutlinedTextField(title, onTitle, enabled = enabled, label = { Text("贴纸集名称") }, singleLine = true,
-                supportingText = { Text("${title.length} / 40") }, modifier = Modifier.fillMaxWidth().testTag("sticker-pack-title"))
+                supportingText = { Text("${title.length} / 40") }, modifier = Modifier.fillMaxWidth().testTag("sticker-pack-title"),
+                shape = appControlShape())
             OutlinedTextField(companionName, onCompanion, enabled = enabled, label = { Text("动态icon名称") }, singleLine = true,
                 placeholder = { Text("留空时使用贴纸集名称") }, supportingText = { Text("动态icon的称呼 · 最多 24 字") },
-                modifier = Modifier.fillMaxWidth().testTag("sticker-pack-companion-name"))
+                modifier = Modifier.fillMaxWidth().testTag("sticker-pack-companion-name"),
+                shape = appControlShape())
         }
     }
 }

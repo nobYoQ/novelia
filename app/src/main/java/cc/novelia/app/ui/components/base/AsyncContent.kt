@@ -1,6 +1,8 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.components.base
 
+import cc.novelia.app.ui.theme.DefaultShapes
+import cc.novelia.app.ui.theme.appPanelShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CloudOff
@@ -95,7 +97,8 @@ import kotlinx.coroutines.ensureActive
                 }
                 refreshError?.let { error ->
                     MotionContent(error, Modifier.align(Alignment.BottomCenter).padding(12.dp)) {
-                        Snackbar(modifier = Modifier.heightIn(min = 64.dp), action = { AppTextButton(onClick = retry) { Text("重试") } }) {
+                        Snackbar(modifier = Modifier.heightIn(min = 64.dp), action = { AppTextButton(onClick = retry) { Text("重试") } },
+                            shape = appPanelShape(DefaultShapes.extraSmall)) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 StickerAccent(Sticker.Concerned, error, Modifier.size(40.dp))
                                 Text("刷新未完成：${error.friendlyMessage()}", Modifier.weight(1f))

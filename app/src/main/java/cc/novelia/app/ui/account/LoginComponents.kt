@@ -1,5 +1,8 @@
 package cc.novelia.app.ui.account
 
+import cc.novelia.app.ui.theme.DefaultShapes
+import cc.novelia.app.ui.theme.appControlShape
+import cc.novelia.app.data.model.SquareCornerTarget
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -109,7 +112,7 @@ import cc.novelia.app.ui.theme.appRoundedCornerShape
     trailingIcon: @Composable (() -> Unit)? = null,
 ) {
     val shape = appRoundedCornerShape(topStart = if(first) 24.dp else 6.dp, topEnd = if(first) 24.dp else 6.dp,
-        bottomStart = if(last) 24.dp else 6.dp, bottomEnd = if(last) 24.dp else 6.dp)
+        bottomStart = if(last) 24.dp else 6.dp, bottomEnd = if(last) 24.dp else 6.dp, target = SquareCornerTarget.Controls)
     val border = profileCardBorder()
     val colors = MaterialTheme.colorScheme
     TextField(value, onValueChange,
@@ -154,7 +157,8 @@ import cc.novelia.app.ui.theme.appRoundedCornerShape
                         FilterChip(selected = selected.source == source,
                             enabled = enabled && (source == BookSource.ORIGINAL || selected.hasAccessToken),
                             modifier = Modifier.testTag("login-source-${source.id}"),
-                            label = { Text(source.title) }, onClick = { onSelect(source) })
+                            label = { Text(source.title) }, onClick = { onSelect(source) },
+                            shape = appControlShape(DefaultShapes.small))
                     }
                 }
                 Text(selected.source.origin.substringAfter("://"), style = MaterialTheme.typography.bodySmall,

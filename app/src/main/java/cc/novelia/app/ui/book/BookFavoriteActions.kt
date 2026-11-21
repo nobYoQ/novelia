@@ -1,5 +1,6 @@
 package cc.novelia.app.ui.book
 
+import cc.novelia.app.ui.theme.DefaultShapes
 import cc.novelia.app.ui.components.base.AppTextButton
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
@@ -81,7 +82,7 @@ private data class FavoriteActionContent(val label: String, val icon: ImageVecto
         contentDescription = description
         stateDescription = label
     }, colors = ButtonDefaults.textButtonColors(containerColor = if(reducedMotion) targetBackground else background),
-        shape = MaterialTheme.shapes.medium, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp)) {
+        shape = DefaultShapes.medium, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp)) {
         if(reducedMotion) FavoriteActionBody(content, stacked, tag)
         else Crossfade(content, Modifier.fillMaxWidth(), animationSpec = tween(AppMotion.Quick), label = "$tag-content") { visible ->
             FavoriteActionBody(visible, stacked, tag, current = visible == content)

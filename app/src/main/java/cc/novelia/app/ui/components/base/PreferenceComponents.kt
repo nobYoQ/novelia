@@ -1,6 +1,7 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.components.base
 
+import cc.novelia.app.ui.theme.appControlShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.*
@@ -72,7 +73,8 @@ import cc.novelia.app.ui.theme.motionClickable
 }
 @Composable fun TextPrompt(title: String, label: String, initial: String = "", onDismiss: () -> Unit, onSave: (String) -> Unit) {
     var text by remember { mutableStateOf(initial) }
-    AppAlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = { OutlinedTextField(text, { text = it }, label = { Text(label) }, modifier = Modifier.fillMaxWidth(), minLines = 1, maxLines = 6) }, confirmButton = { AppTextButton(onClick = { onSave(text.trim()); onDismiss() }, enabled = text.isNotBlank()) { Text("保存") } }, dismissButton = { AppTextButton(onClick = onDismiss) { Text("取消") } })
+    AppAlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = { OutlinedTextField(text, { text = it }, label = { Text(label) }, modifier = Modifier.fillMaxWidth(), minLines = 1, maxLines = 6,
+        shape = appControlShape()) }, confirmButton = { AppTextButton(onClick = { onSave(text.trim()); onDismiss() }, enabled = text.isNotBlank()) { Text("保存") } }, dismissButton = { AppTextButton(onClick = onDismiss) { Text("取消") } })
 }
 @Composable fun ConfirmDialog(title: String, message: String, onDismiss: () -> Unit, confirmLabel: String, onConfirm: () -> Unit) {
     AppAlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = { Text(message) }, confirmButton = { AppTextButton(onClick = { onConfirm(); onDismiss() }, modifier = Modifier.heightIn(min = 48.dp)) { Text(confirmLabel) } }, dismissButton = { AppTextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("取消") } })

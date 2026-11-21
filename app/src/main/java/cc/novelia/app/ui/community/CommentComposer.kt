@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.community
 
+import cc.novelia.app.ui.theme.DefaultShapes
+import cc.novelia.app.ui.theme.appControlShape
 import cc.novelia.app.ui.components.base.AppIconButton
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
@@ -45,7 +47,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
 
 @Composable internal fun CommentButton(visible: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     CommentVisibility(visible, editor = false, modifier = modifier) {
-        FloatingActionButton(onClick = onClick, shape = MaterialTheme.shapes.large,
+        FloatingActionButton(onClick = onClick, shape = appControlShape(DefaultShapes.large),
             modifier = Modifier.testTag("comment-compose-button")) {
             Icon(Icons.Outlined.ChatBubbleOutline, "写评论")
         }

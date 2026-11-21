@@ -15,14 +15,15 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
-import cc.novelia.app.ui.theme.LocalSquareCorners
+import cc.novelia.app.data.model.SquareCornerTarget
+import cc.novelia.app.ui.theme.useSquareCorners
 
 /** 保留 Material 的尺寸、颜色及父行接管点击的规则，仅替换没有 shape 参数的绘制。 */
 @Composable fun AppSwitch(
     checked: Boolean, onCheckedChange: ((Boolean) -> Unit)?, modifier: Modifier = Modifier,
     enabled: Boolean = true, colors: SwitchColors = SwitchDefaults.colors(),
 ) {
-    if(!LocalSquareCorners.current) {
+    if(!useSquareCorners(SquareCornerTarget.Controls)) {
         Switch(checked, onCheckedChange, modifier, enabled = enabled, colors = colors)
         return
     }
@@ -48,7 +49,7 @@ import cc.novelia.app.ui.theme.LocalSquareCorners
     checked: Boolean, onCheckedChange: ((Boolean) -> Unit)?, modifier: Modifier = Modifier,
     enabled: Boolean = true, colors: CheckboxColors = CheckboxDefaults.colors(),
 ) {
-    if(!LocalSquareCorners.current) {
+    if(!useSquareCorners(SquareCornerTarget.Controls)) {
         Checkbox(checked, onCheckedChange, modifier, enabled, colors)
         return
     }
@@ -75,7 +76,7 @@ import cc.novelia.app.ui.theme.LocalSquareCorners
 @Composable fun AppRadioButton(
     selected: Boolean, onClick: (() -> Unit)?, modifier: Modifier = Modifier, enabled: Boolean = true,
 ) {
-    if(!LocalSquareCorners.current) {
+    if(!useSquareCorners(SquareCornerTarget.Controls)) {
         RadioButton(selected, onClick, modifier, enabled)
         return
     }

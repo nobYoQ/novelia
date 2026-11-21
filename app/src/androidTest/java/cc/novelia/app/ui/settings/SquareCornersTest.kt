@@ -6,6 +6,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import cc.novelia.app.MainActivity
 import cc.novelia.app.NoveliaApplication
+import cc.novelia.app.data.model.SquareCornerTarget
 import cc.novelia.app.data.storage.LocalStore
 import cc.novelia.app.ui.saveTestScreenshot
 import kotlinx.coroutines.runBlocking
@@ -22,7 +23,8 @@ class SquareCornersTest {
         val app = compose.activity.application as NoveliaApplication
         val original = app.store.state.value
         try {
-            compose.runOnIdle { app.store.update { it.copy(theme = "light", squareCorners = false, reducedMotion = true,
+            compose.runOnIdle { app.store.update { it.copy(theme = "light", squareCorners = false,
+                squareCornerTargets = SquareCornerTarget.defaults, reducedMotion = true,
                 reader = it.reader.copy(eInkMode = false)) } }
             compose.onNodeWithText("我的").performClick()
             assertHistoryCorner(square = false)
@@ -31,8 +33,12 @@ class SquareCornersTest {
             saveTestScreenshot("corners-settings-rounded.png")
             compose.onNodeWithText("fuck 圆角").performClick().assertIsOn()
             compose.runOnIdle { assertTrue(app.store.state.value.squareCorners) }
+            option("小说封面").assertIsOn().performClick().assertIsOff()
+            option("普通卡片").assertIsOn()
             runBlocking { app.store.flush() }
-            assertTrue(LocalStore(app).state.value.squareCorners)
+            val saved = LocalStore(app).state.value
+            assertTrue(saved.squareCorners)
+            assertEquals(SquareCornerTarget.defaults - SquareCornerTarget.Covers, saved.squareCornerTargets)
             compose.waitForIdle()
             saveTestScreenshot("corners-settings-square.png")
             returnToProfile()
@@ -49,11 +55,16 @@ class SquareCornersTest {
             compose.runOnIdle { app.store.update { it.copy(theme = "light") } }
             openAppearance()
             option("fuck 圆角").assertIsOn().performClick().assertIsOff()
+            compose.onNodeWithText("应用直角的元素").assertDoesNotExist()
+            option("fuck 圆角").performClick().assertIsOn()
+            option("小说封面").assertIsOff()
+            option("fuck 圆角").performClick().assertIsOff()
             returnToProfile()
             assertHistoryCorner(square = false)
             saveTestScreenshot("corners-profile-restored.png")
         } finally {
             compose.runOnIdle { app.store.update { it.copy(theme = original.theme, squareCorners = original.squareCorners,
+                squareCornerTargets = original.squareCornerTargets,
                 reducedMotion = original.reducedMotion, reader = it.reader.copy(eInkMode = original.reader.eInkMode)) } }
             runBlocking { app.store.flush() }
         }

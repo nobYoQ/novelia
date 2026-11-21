@@ -26,6 +26,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.*
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.LibraryState
+import cc.novelia.app.data.model.SquareCornerTarget
 import cc.novelia.app.data.model.ThemePreset
 import cc.novelia.app.files.importing.sharedDocumentUris
 import cc.novelia.app.launcher.observeLauncherSplashScreen
@@ -102,10 +103,11 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.delay
 import cc.novelia.app.startup.StartupScreen
 
-private data class AppAppearance(val theme: String, val amoledBlack: Boolean, val squareCorners: Boolean, val reducedMotion: Boolean, val eInk: Boolean, val eInkBooks: Set<String>,
+private data class AppAppearance(val theme: String, val amoledBlack: Boolean, val squareCorners: Boolean, val squareCornerTargets: Set<SquareCornerTarget>,
+    val reducedMotion: Boolean, val eInk: Boolean, val eInkBooks: Set<String>,
     val screenButtons: Boolean, val hideStatusBar: Boolean, val bookStatusBars: Map<String, Boolean>,
     val readerOrientation: String, val bookOrientations: Map<String, String>, val stickerPackId: String, val preset: ThemePreset?)
-private fun LibraryState.appearance() = AppAppearance(theme, amoledBlack, squareCorners, reducedMotion || reader.eInkMode, reader.eInkMode,
+private fun LibraryState.appearance() = AppAppearance(theme, amoledBlack, squareCorners, squareCornerTargets, reducedMotion || reader.eInkMode, reader.eInkMode,
     bookSettings.filterValues { it.eInkMode }.keys, reader.showEInkScreenButtons, reader.hideStatusBar, bookSettings.mapValues { it.value.hideStatusBar },
     reader.resolvedOrientation, bookSettings.mapValues { it.value.resolvedOrientation }, stickerPackId, themePresets.active)
 
@@ -151,7 +153,8 @@ class MainActivity : ComponentActivity() {
                 .collectAsStateWithLifecycle(initialValue = remember(app) { app.stickerPacks.state.value.packs })
             val stickerPacks = remember(localStickers) { StickerPacks.all + localStickers.map { it.asStickerPack() } }
             AppInteractionMode(appearance.eInk, appearance.reducedMotion) {
-            NoveliaTheme(appearance.theme, squareCorners = appearance.squareCorners, amoledBlack = appearance.amoledBlack,
+            NoveliaTheme(appearance.theme, squareCorners = appearance.squareCorners, squareCornerTargets = appearance.squareCornerTargets,
+                amoledBlack = appearance.amoledBlack,
                 preset = appearance.preset, imageFile = appearance.preset?.image?.let(app.store.customThemes::imageFile)) {
                 val nav = rememberNavController(); val scope = rememberCoroutineScope(); val snackbar = remember { SnackbarHostState() }
                 val source by app.bookSources.state.collectAsStateWithLifecycle()

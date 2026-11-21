@@ -22,6 +22,8 @@ import cc.novelia.app.data.auth.AuthTarget
 import cc.novelia.app.data.auth.verificationPageUrl
 import cc.novelia.app.data.auth.verificationSnapshotScript
 import cc.novelia.app.ui.components.base.AppTextButton
+import cc.novelia.app.ui.theme.DefaultShapes
+import cc.novelia.app.ui.theme.appPanelShape
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.json.Json
@@ -81,7 +83,7 @@ import kotlin.coroutines.resume
     }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.padding(horizontal = 8.dp).widthIn(max = 440.dp).fillMaxWidth(),
-            shape = MaterialTheme.shapes.large) {
+            shape = appPanelShape(DefaultShapes.large)) {
             Column(Modifier.verticalScroll(rememberScrollState()).padding(vertical = 16.dp).testTag("login-verification")) {
                 Text("人机验证", Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.titleLarge)
                 Text("完成验证后将自动发送邮箱验证码", Modifier.padding(16.dp), style = MaterialTheme.typography.bodyMedium)

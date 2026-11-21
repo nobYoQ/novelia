@@ -1,6 +1,9 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.discover
 
+import cc.novelia.app.ui.theme.DefaultShapes
+import cc.novelia.app.ui.theme.appControlShape
+
 import cc.novelia.app.ui.components.base.AppTopBar
 
 import cc.novelia.app.ui.components.base.AppIconButton
@@ -74,7 +77,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
                     if(editing) { focus.requestFocus(); keyboard?.show() } else onEditingChange(true)
                 }, modifier = Modifier.weight(1f).testTag("discover-search-bar")
                         .semantics { stateDescription = if(editing) "正在编辑搜索" else "当前搜索" },
-                    shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                    shape = appControlShape(DefaultShapes.extraLarge), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
                     Row(Modifier.heightIn(min = 48.dp).padding(start = 12.dp, end = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Outlined.Search, null, Modifier.size(20.dp))

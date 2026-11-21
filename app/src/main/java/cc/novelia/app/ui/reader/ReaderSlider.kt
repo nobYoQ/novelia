@@ -23,7 +23,8 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
-import cc.novelia.app.ui.theme.LocalSquareCorners
+import cc.novelia.app.data.model.SquareCornerTarget
+import cc.novelia.app.ui.theme.useSquareCorners
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.clipPath
@@ -107,7 +108,7 @@ import kotlin.math.max
 @Composable private fun ReaderProgressSlider(name: String, value: Float, range: ClosedFloatingPointRange<Float>, modifier: Modifier,
     enabled: Boolean, livePreviewStep: Float?, reference: Float?, resetDescription: String,
     onPreview: ((Float) -> Unit)?, onChange: (Float) -> Unit) {
-    val squareCorners = LocalSquareCorners.current
+    val squareCorners = useSquareCorners(SquareCornerTarget.Navigation)
     val reducedMotion = appReducedMotion()
     var draft by remember { mutableFloatStateOf(value) }
     var dragging by remember { mutableStateOf(false) }
@@ -204,6 +205,7 @@ import kotlin.math.max
                 }
             }
         }, modifier = modifier.fillMaxWidth().height(48.dp), valueRange = range, enabled = enabled,
+            cornerTarget = SquareCornerTarget.Navigation,
             onValueChangeFinished = {
                 if(gestureChanged) { gestureChanged = false; dragging = false; onChange(draft) }
             }, track = { slider ->
@@ -211,8 +213,9 @@ import kotlin.math.max
                     trackStart = it.positionInRoot().x
                     trackWidth = it.size.width.toFloat()
                 }) {
-                    AppSliderTrack(slider, enabled = enabled)
+                    AppSliderTrack(slider, enabled = enabled, cornerTarget = SquareCornerTarget.Navigation)
                     if(referenceFraction != null) AppSliderTrack(slider, enabled = enabled,
+                        cornerTarget = SquareCornerTarget.Navigation,
                         colors = SliderDefaults.colors(activeTrackColor = coveredColor, inactiveTrackColor = overflowColor,
                             disabledActiveTrackColor = coveredColor.copy(alpha = .38f), disabledInactiveTrackColor = overflowColor.copy(alpha = .38f)),
                         modifier = Modifier.matchParentSize().drawWithContent {

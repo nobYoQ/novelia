@@ -1,5 +1,6 @@
 package cc.novelia.app.ui.book
 
+import cc.novelia.app.ui.theme.DefaultShapes
 import cc.novelia.app.ui.components.base.AppButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -20,7 +21,7 @@ import cc.novelia.app.ui.shelf.BookFavoriteState
         BookFavoriteActions(favoriteState, onLocalFavorite, onCloudFavorite, onDownload = onDownload)
         AppButton(onClick = onRead, enabled = destination != null,
             modifier = Modifier.fillMaxWidth().heightIn(min = 76.dp).testTag("book-read-action"),
-            shape = MaterialTheme.shapes.large, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp)) {
+            shape = DefaultShapes.large, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp)) {
             Icon(Icons.AutoMirrored.Outlined.MenuBook, null, Modifier.size(24.dp))
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {

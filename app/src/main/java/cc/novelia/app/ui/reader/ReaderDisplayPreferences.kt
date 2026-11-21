@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.reader
 
+import cc.novelia.app.ui.components.base.AppSwitch
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.*
@@ -37,7 +39,7 @@ import kotlin.math.roundToInt
                     Text(if(settings.nightReading) "已开启 · 关闭后恢复普通配置" else "未开启 · 正在使用普通配置",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Switch(settings.nightReading, onCheckedChange = null)
+                AppSwitch(settings.nightReading, onCheckedChange = null)
             }
             ReaderNightPresetEntry(settings, onEditPreset)
             if (settings.nightReading) {

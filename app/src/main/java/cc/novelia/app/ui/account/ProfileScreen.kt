@@ -2,6 +2,7 @@
 
 package cc.novelia.app.ui.account
 
+import androidx.compose.foundation.shape.RoundedCornerShape
 import cc.novelia.app.ui.theme.wallpaperCardColor
 
 import cc.novelia.app.data.community.ForumRules
@@ -122,7 +123,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
             .heightIn(min = 48.dp).testTag("account-permissions-toggle")
             .semantics { stateDescription = if(expanded) "已展开" else "已收起" },
             colors = ButtonDefaults.textButtonColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-            shape = appRoundedCornerShape(20.dp), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)) {
+            shape = RoundedCornerShape(20.dp), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)) {
             Icon(Icons.Outlined.VerifiedUser, null, Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
             Text("账号权限", Modifier.weight(1f))

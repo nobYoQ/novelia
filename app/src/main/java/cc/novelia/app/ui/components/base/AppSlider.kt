@@ -13,26 +13,29 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.LayoutDirection
-import cc.novelia.app.ui.theme.LocalSquareCorners
+import cc.novelia.app.data.model.SquareCornerTarget
+import cc.novelia.app.ui.theme.useSquareCorners
 
 /** 手势、键盘和无障碍仍交给 Material Slider，仅统一滑块和轨道的形状。 */
 @Composable fun AppSlider(
     value: Float, onValueChange: (Float) -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true,
     onValueChangeFinished: (() -> Unit)? = null, colors: SliderColors = SliderDefaults.colors(),
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() }, steps: Int = 0,
+    cornerTarget: SquareCornerTarget = SquareCornerTarget.Controls,
     thumb: @Composable (SliderState) -> Unit = {
-        if(LocalSquareCorners.current) Box(Modifier.size(4.dp, 44.dp).background(if(enabled) colors.thumbColor else colors.disabledThumbColor))
+        if(useSquareCorners(cornerTarget)) Box(Modifier.size(4.dp, 44.dp).background(if(enabled) colors.thumbColor else colors.disabledThumbColor))
         else SliderDefaults.Thumb(interactionSource, colors = colors, enabled = enabled)
     },
-    track: @Composable (SliderState) -> Unit = { AppSliderTrack(it, enabled = enabled, colors = colors) },
+    track: @Composable (SliderState) -> Unit = { AppSliderTrack(it, enabled = enabled, colors = colors, cornerTarget = cornerTarget) },
     valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
 ) = Slider(value, onValueChange, modifier, enabled, onValueChangeFinished, colors, interactionSource,
     steps, thumb, track, valueRange)
 
 @Composable fun AppSliderTrack(
     state: SliderState, modifier: Modifier = Modifier, enabled: Boolean = true, colors: SliderColors = SliderDefaults.colors(),
+    cornerTarget: SquareCornerTarget = SquareCornerTarget.Controls,
 ) {
-    if(!LocalSquareCorners.current) {
+    if(!useSquareCorners(cornerTarget)) {
         SliderDefaults.Track(state, modifier = modifier, colors = colors, enabled = enabled)
         return
     }

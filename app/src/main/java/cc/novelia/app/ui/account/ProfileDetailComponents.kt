@@ -1,7 +1,8 @@
 package cc.novelia.app.ui.account
 
 import cc.novelia.app.ui.components.base.AppSwitch
-import cc.novelia.app.ui.theme.LocalSquareCorners
+import cc.novelia.app.data.model.SquareCornerTarget
+import cc.novelia.app.ui.theme.useSquareCorners
 import cc.novelia.app.ui.components.base.AppTextButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyListScope
@@ -84,7 +85,7 @@ import cc.novelia.app.ui.components.base.Screen
                 Text(title, style = MaterialTheme.typography.titleMedium)
                 if(subtitle.isNotBlank()) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            if(LocalEInkMode.current && !LocalSquareCorners.current) Icon(if(value) Icons.Outlined.ToggleOn else Icons.Outlined.ToggleOff, null,
+            if(LocalEInkMode.current && !useSquareCorners(SquareCornerTarget.Controls)) Icon(if(value) Icons.Outlined.ToggleOn else Icons.Outlined.ToggleOff, null,
                 Modifier.size(48.dp), tint = if(value) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
             else AppSwitch(value, onCheckedChange = null, enabled = enabled)
         }

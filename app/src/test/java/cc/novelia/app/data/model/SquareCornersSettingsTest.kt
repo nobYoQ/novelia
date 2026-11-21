@@ -22,8 +22,21 @@ class SquareCornersSettingsTest {
 
     @Test fun localEasterEggDoesNotChangeTheWebDavProtocol() {
         val before = LibraryState()
-        val after = before.copy(squareCorners = true)
+        val after = before.copy(squareCorners = true, squareCornerTargets = setOf(SquareCornerTarget.Covers))
         assertTrue(WebDavProjection.affectedLibraryDomains(before, after).isEmpty())
         assertEquals(WebDavProjection.library(before), WebDavProjection.library(after))
+    }
+
+    @Test fun olderEnabledSettingsSelectEveryTargetAndCustomSelectionsSurviveBackupAndRestore() {
+        val oldExport = """{"squareCorners":true}"""
+        val legacy = json.decodeFromString<LibraryState>(oldExport)
+        assertEquals(SquareCornerTarget.defaults, legacy.squareCornerTargets)
+        assertEquals(SquareCornerTarget.defaults, json.decodeFromString<SettingsBackup>(oldExport).squareCornerTargets)
+        for(targets in listOf(emptySet(), SquareCornerTarget.defaults - SquareCornerTarget.Covers)) {
+            val state = legacy.copy(squareCornerTargets = targets)
+            assertEquals(targets, json.decodeFromString<LibraryState>(json.encodeToString(state)).squareCornerTargets)
+            val backup = json.decodeFromString<SettingsBackup>(json.encodeToString(state.settingsBackup()))
+            assertEquals(targets, backup.applyTo(legacy).squareCornerTargets)
+        }
     }
 }

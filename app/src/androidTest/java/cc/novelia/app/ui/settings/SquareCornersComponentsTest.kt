@@ -13,7 +13,15 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
+import cc.novelia.app.data.model.BookCard
+import cc.novelia.app.data.model.BookRef
+import cc.novelia.app.data.model.SquareCornerTarget
+import cc.novelia.app.ui.components.book.BookCover
+import cc.novelia.app.ui.components.book.BookRowStatus
+import cc.novelia.app.ui.shelf.ShelfCoverCard
 import cc.novelia.app.ui.theme.NoveliaTheme
+import cc.novelia.app.ui.theme.appControlShape
+import cc.novelia.app.ui.theme.appPanelShape
 import cc.novelia.app.ui.theme.appShape
 import org.junit.Assert.*
 import org.junit.Rule
@@ -62,5 +70,50 @@ class SquareCornersComponentsTest {
             compose.onNodeWithTag("slider").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { it(.75f) }
             compose.runOnIdle { assertEquals(.75f, slider, .01f); assertFalse(checked) }
         }
+    }
+
+    @Test fun categoriesOnlyUpdateTheirOwnCornersIncludingTheOuterGridCover() {
+        var enabled by mutableStateOf(true)
+        var targets by mutableStateOf(SquareCornerTarget.defaults)
+        val background = Color.Magenta
+        val fill = Color(0xFF008040)
+        val book = BookCard(BookRef("local", "shape-test"), "封面示例")
+        compose.setContent {
+            NoveliaTheme("light", squareCorners = enabled, squareCornerTargets = targets) {
+                Column(Modifier.fillMaxSize().background(background).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        BookCover(book, Modifier.testTag("cover"))
+                        ShelfCoverCard(book, BookRowStatus(), {}, Modifier.width(76.dp).testTag("grid-cover"))
+                    }
+                    Card(Modifier.size(100.dp, 40.dp).testTag("card"), colors = CardDefaults.cardColors(containerColor = fill)) {}
+                    AppButton({}, Modifier.size(100.dp, 48.dp).testTag("button"), colors = ButtonDefaults.buttonColors(containerColor = fill)) { Text("按钮") }
+                    OutlinedTextField("", {}, Modifier.width(160.dp).testTag("input"), shape = appControlShape(),
+                        colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = fill, unfocusedBorderColor = fill))
+                    Surface(Modifier.size(100.dp, 40.dp).testTag("panel"), shape = appPanelShape(), color = fill) {}
+                    Surface(Modifier.size(100.dp, 40.dp).testTag("navigation"),
+                        shape = appShape(CircleShape, SquareCornerTarget.Navigation), color = fill) {}
+                }
+            }
+        }
+        val elements = mapOf("cover" to SquareCornerTarget.Covers, "grid-cover" to SquareCornerTarget.Covers,
+            "card" to SquareCornerTarget.Cards, "button" to SquareCornerTarget.Controls, "input" to SquareCornerTarget.Controls,
+            "panel" to SquareCornerTarget.Panels, "navigation" to SquareCornerTarget.Navigation)
+        fun assertCorners(expected: Set<SquareCornerTarget>) {
+            elements.forEach { (tag, category) ->
+                val pixel = compose.onNodeWithTag(tag).captureToImage().toPixelMap()[0, 0]
+                val matchesBackground = abs(pixel.red - background.red) < .06f &&
+                    abs(pixel.green - background.green) < .06f && abs(pixel.blue - background.blue) < .06f
+                assertEquals(tag, category !in expected, matchesBackground)
+            }
+        }
+
+        for(target in SquareCornerTarget.entries) {
+            compose.runOnIdle { targets = setOf(target) }
+            assertCorners(setOf(target))
+        }
+        compose.runOnIdle { targets = SquareCornerTarget.defaults - SquareCornerTarget.Covers }
+        assertCorners(SquareCornerTarget.defaults - SquareCornerTarget.Covers)
+        compose.runOnIdle { enabled = false }
+        assertCorners(emptySet())
     }
 }

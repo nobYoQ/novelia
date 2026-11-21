@@ -1,5 +1,6 @@
 package cc.novelia.app.ui.account
 
+import androidx.compose.foundation.shape.RoundedCornerShape
 import android.os.SystemClock
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardActions
@@ -202,7 +203,7 @@ private enum class LoginMode { LOGIN, REGISTER, RESET_PASSWORD }
             error?.let { LoginStatus(it, error = true) }
             notice?.let { LoginStatus(it) }
             AppButton(enabled = canSubmit, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("login-submit"),
-                shape = appRoundedCornerShape(24.dp), contentPadding = PaddingValues(horizontal = 24.dp, vertical = 14.dp), onClick = ::submit) {
+                shape = RoundedCornerShape(24.dp), contentPadding = PaddingValues(horizontal = 24.dp, vertical = 14.dp), onClick = ::submit) {
                 if(busy) {
                     CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = LocalContentColor.current)
                     Spacer(Modifier.width(10.dp))

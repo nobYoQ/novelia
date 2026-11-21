@@ -1,5 +1,6 @@
 package cc.novelia.app.ui.shelf
 
+import cc.novelia.app.ui.theme.appControlShape
 import cc.novelia.app.ui.components.base.AppIconButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardActions
@@ -50,6 +51,7 @@ import cc.novelia.app.ui.components.base.FilterPanelVisibility
                     }
                 }
             },
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp).testTag("$tagPrefix-search-field"))
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp).testTag("$tagPrefix-search-field"),
+            shape = appControlShape())
     }
 }

@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.reader
 
+import cc.novelia.app.ui.theme.DefaultShapes
+import cc.novelia.app.ui.theme.appPanelShape
 import android.graphics.Typeface
 import android.content.Context
 import cc.novelia.app.ui.components.documents.DocumentPickerFallback
@@ -103,7 +105,7 @@ internal data class ReaderFontFace(val typeface: Typeface, val available: Boolea
         Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 20.dp), contentAlignment = Alignment.Center) {
             // 字体库和预览异步更新时保持窗口高度，避免入场后重新居中造成跳动。
             Surface(Modifier.widthIn(max = 480.dp).fillMaxWidth().height(maxHeight).testTag("reader-font-dialog"),
-                shape = MaterialTheme.shapes.extraLarge, color = colors.surfaceContainer) {
+                shape = appPanelShape(), color = colors.surfaceContainer) {
                 Column {
                     Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -239,7 +241,7 @@ internal data class ReaderFontFace(val typeface: Typeface, val available: Boolea
         if(loadingLibrary) Text("正在读取已导入字体…", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
         if(!font.available) Text("字体在本机不可用，暂用系统字体。请重新导入。", color = colors.error, style = MaterialTheme.typography.bodySmall)
         AppOutlinedButton(onClick = { picker.launch() }, enabled = !importing && !deleting,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("reader-font-import"), shape = MaterialTheme.shapes.medium) {
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("reader-font-import"), shape = DefaultShapes.medium) {
             Icon(Icons.Outlined.FileUpload, null, Modifier.size(20.dp))
             Spacer(Modifier.width(8.dp))
             Text(if(importing) "正在导入 $importProgress…" else "导入字体文件")

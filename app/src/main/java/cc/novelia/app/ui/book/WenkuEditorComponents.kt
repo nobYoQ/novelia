@@ -1,5 +1,8 @@
 package cc.novelia.app.ui.book
 
+import cc.novelia.app.ui.theme.appControlShape
+import cc.novelia.app.ui.theme.appPanelShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -109,7 +112,7 @@ internal fun WenkuEditorField(
     isError: Boolean = false,
 ) {
     OutlinedTextField(value, onValueChange, label = { Text(label) },
-        modifier = modifier.fillMaxWidth(), shape = appRoundedCornerShape(16.dp),
+        modifier = modifier.fillMaxWidth(), shape = appControlShape(RoundedCornerShape(16.dp)),
         minLines = minLines, singleLine = singleLine, isError = isError,
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         supportingText = hint?.let { { Text(it) } })
@@ -184,7 +187,7 @@ internal fun WenkuVolumeEditorDialog(existing: WenkuVolume, onDismiss: () -> Uni
         BoxWithConstraints(Modifier.fillMaxSize().systemBarsPadding().imePadding().padding(horizontal = 20.dp, vertical = 8.dp),
             contentAlignment = Alignment.Center) {
             val compact = maxHeight / LocalDensity.current.fontScale.coerceAtLeast(1f) < 360.dp
-            Surface(Modifier.widthIn(max = 560.dp).fillMaxWidth(), shape = appRoundedCornerShape(28.dp),
+            Surface(Modifier.widthIn(max = 560.dp).fillMaxWidth(), shape = appPanelShape(),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh) {
                 Column(Modifier.padding(horizontal = 20.dp, vertical = if(compact) 8.dp else 20.dp),
                     verticalArrangement = Arrangement.spacedBy(if(compact) 8.dp else 16.dp)) {

@@ -1,5 +1,6 @@
 package cc.novelia.app.ui.settings
 
+import cc.novelia.app.ui.theme.appControlShape
 import cc.novelia.app.ui.components.base.AppTextButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -35,7 +36,8 @@ import cc.novelia.app.ui.account.ProfileMenuRow
                 label = { Text("最多保存的标签数") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 isError = input.isNotEmpty() && parsed == null,
                 supportingText = { Text(if(input.isNotEmpty() && parsed == null) "请输入有效的正整数" else "当前已有 $entryCount 个标签") },
-                modifier = Modifier.fillMaxWidth().testTag("keyword-limit-input"))
+                modifier = Modifier.fillMaxWidth().testTag("keyword-limit-input"),
+                shape = appControlShape())
             Text("默认不限数量。设置上限后，达到上限时停止收集新标签，超限导入会提示调整上限。")
             Text(if(!unlimited && parsed != null && parsed < entryCount)
                 "已有标签超过此上限，仍会全部保留，并可继续修改译名和分类。"

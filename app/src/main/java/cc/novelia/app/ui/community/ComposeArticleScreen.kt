@@ -1,6 +1,7 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.community
 
+import cc.novelia.app.ui.theme.appControlShape
 import cc.novelia.app.ui.components.base.AppButton
 import cc.novelia.app.ui.components.base.AppTextButton
 import cc.novelia.app.ui.components.base.AppOutlinedButton
@@ -122,7 +123,8 @@ import cc.novelia.app.ui.theme.MotionContent
                         MarkdownText(c, content, renderer = renderer, documentUrl = article?.id?.let(ForumLinks::articleUrl) ?: ForumLinks.ORIGIN)
                     }
                     else {
-                        OutlinedTextField(title, { title = it }, label = { Text("标题") }, supportingText = { Text("$titleLength / $titleLimit") }, isError = title.isNotEmpty() && ForumRules.titleError(title) != null, modifier = Modifier.fillMaxWidth().testTag("article-title"), singleLine = true)
+                        OutlinedTextField(title, { title = it }, label = { Text("标题") }, supportingText = { Text("$titleLength / $titleLimit") }, isError = title.isNotEmpty() && ForumRules.titleError(title) != null, modifier = Modifier.fillMaxWidth().testTag("article-title"), singleLine = true,
+                            shape = appControlShape())
                         ChoiceRow("分类", writableCategories.map { it.title }, writableCategories.indexOfFirst { it.id == categoryId }) {
                             val nextCategoryId = writableCategories[it].id
                             if(nextCategoryId != categoryId) { categoryId = nextCategoryId; tagIds = emptyList() }

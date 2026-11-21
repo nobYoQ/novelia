@@ -1,6 +1,7 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.shelf
 
+import cc.novelia.app.ui.theme.DefaultShapes
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -154,7 +155,7 @@ import kotlinx.coroutines.launch
             if(recent != null && position != null) {
                 val reading = bookRowStatus(recent.book, recent, position, null)
                 val progress = listOf(reading.progressLabel, position.title).filter { it.isNotBlank() }.joinToString(" · ")
-                AppButton({ onContinue(recent, position) }, enabled = !busy, shape = MaterialTheme.shapes.large,
+                AppButton({ onContinue(recent, position) }, enabled = !busy, shape = DefaultShapes.large,
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
                     modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 12.dp).heightIn(min = 80.dp).testTag("volume-resume")
                         .semantics { if(compact) stateDescription = progress }) {

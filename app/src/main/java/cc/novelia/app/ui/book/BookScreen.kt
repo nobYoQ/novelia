@@ -1,6 +1,8 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.book
 
+import cc.novelia.app.ui.theme.appControlShape
+import cc.novelia.app.ui.theme.DefaultShapes
 import cc.novelia.app.ui.components.base.AppListItem
 import cc.novelia.app.ui.components.base.AppPageTabs
 
@@ -416,7 +418,8 @@ import kotlinx.coroutines.withContext
     val scroll = rememberLazyListState(); val scope = rememberCoroutineScope()
     Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize()) {
-        OutlinedTextField(search, { search = it }, label = { Text("搜索章节") }, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), singleLine = true, leadingIcon = { Icon(Icons.Outlined.Search, null) })
+        OutlinedTextField(search, { search = it }, label = { Text("搜索章节") }, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), singleLine = true, leadingIcon = { Icon(Icons.Outlined.Search, null) },
+            shape = appControlShape())
         FlowRow(Modifier.padding(horizontal = 12.dp)) {
             AppTextButton(onClick = { reversed = !reversed }) { Text(if(reversed) "倒序" else "正序") }
             AppTextButton(onClick = { scope.launch { if(reducedMotion || abs(currentIndex - scroll.firstVisibleItemIndex) > 100) scroll.scrollToItem(currentIndex) else scroll.animateScrollToItem(currentIndex) } }, enabled = currentIndex >= 0) { Text("定位当前") }
@@ -458,7 +461,7 @@ import kotlinx.coroutines.withContext
 }
 
 @Composable internal fun TocContinueButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    FloatingActionButton(onClick = onClick, shape = MaterialTheme.shapes.large,
+    FloatingActionButton(onClick = onClick, shape = appControlShape(DefaultShapes.large),
         modifier = modifier.testTag("toc-continue-reading")) {
         Icon(Icons.Outlined.MenuBook, "继续阅读")
     }

@@ -1,5 +1,6 @@
 package cc.novelia.app.ui.notes
 
+import cc.novelia.app.ui.theme.appControlShape
 import cc.novelia.app.ui.components.base.AppTextButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -17,7 +18,8 @@ import cc.novelia.app.ui.components.base.AppAlertDialog
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(note.quote, maxLines = 3, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             OutlinedTextField(text, { text = it }, Modifier.fillMaxWidth(), label = { Text("笔记内容") },
-                supportingText = { Text(if(note.selection != null) "留空保留划线" else "留空仅保留书签") }, minLines = 3, maxLines = 6)
+                supportingText = { Text(if(note.selection != null) "留空保留划线" else "留空仅保留书签") }, minLines = 3, maxLines = 6,
+                shape = appControlShape())
         }
     }, confirmButton = {
         AppTextButton(onClick = { onSave(text.trim()); onDismiss() }, modifier = Modifier.heightIn(min = 48.dp)) { Text("保存笔记") }

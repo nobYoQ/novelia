@@ -1,6 +1,8 @@
 @file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.components.base
 
+import cc.novelia.app.ui.theme.DefaultShapes
+import cc.novelia.app.ui.theme.appControlShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.foundation.text.KeyboardActions
@@ -71,7 +73,7 @@ internal fun paginationItems(page: Int, count: Int): List<Int?> {
                             selected = active
                             contentDescription = "第 ${item + 1} 页"
                         },
-                        shape = MaterialTheme.shapes.small,
+                        shape = DefaultShapes.small,
                         contentPadding = PaddingValues(horizontal = 8.dp),
                         colors = ButtonDefaults.textButtonColors(
                             containerColor = if (active) MaterialTheme.colorScheme.secondaryContainer else androidx.compose.ui.graphics.Color.Transparent,
@@ -111,7 +113,8 @@ internal fun paginationItems(page: Int, count: Int): List<Int?> {
                     placeholder = { Text("1–$total") }, isError = invalid,
                     supportingText = if (invalid) ({ Text("请输入 1–$total 的页码") }) else null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Go),
-                    keyboardActions = KeyboardActions(onGo = { jump() }))
+                    keyboardActions = KeyboardActions(onGo = { jump() }),
+                    shape = appControlShape())
                 AppTextButton(onClick = { jump() }, enabled = target != null) { Text("跳转") }
             }
         }

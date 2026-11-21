@@ -12,6 +12,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -168,7 +169,7 @@ import kotlin.math.roundToInt
     val shift = with(density) { 24.dp.toPx() } * retreat * if(rightSide) 1 else -1
     val circleBackground = if(eInk) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.primary
     val circleForeground = if(eInk) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.onPrimary
-    val panelShape = appRoundedCornerShape(20.dp)
+    val panelShape = appPanelShape(RoundedCornerShape(20.dp))
     val navigateUpdated by rememberUpdatedState<(String) -> Unit>({ navigate(it) })
     Layout(modifier = Modifier.fillMaxSize().clipToBounds().onSizeChanged { size = it }
         .testTag("edge-toolbar-layer"), content = {

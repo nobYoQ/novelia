@@ -31,7 +31,8 @@ import cc.novelia.app.reader.chapterSeekPage
 import cc.novelia.app.reader.safeFraction
 import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.LocalEInkMode
-import cc.novelia.app.ui.theme.LocalSquareCorners
+import cc.novelia.app.data.model.SquareCornerTarget
+import cc.novelia.app.ui.theme.useSquareCorners
 import androidx.compose.ui.geometry.Size
 import cc.novelia.app.ui.theme.appReducedMotion
 import kotlinx.coroutines.flow.first
@@ -47,7 +48,7 @@ import kotlin.math.roundToInt
     onSeek: (Float) -> Unit, modifier: Modifier = Modifier,
 ) {
     val eInk = LocalEInkMode.current
-    val squareCorners = LocalSquareCorners.current
+    val squareCorners = useSquareCorners(SquareCornerTarget.Navigation)
     val reducedMotion = appReducedMotion()
     var draft by remember { mutableStateOf<Float?>(null) }
     val interaction = remember { MutableInteractionSource() }

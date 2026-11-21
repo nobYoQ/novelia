@@ -2,6 +2,7 @@
 
 package cc.novelia.app.ui.markdown
 
+import cc.novelia.app.ui.theme.appControlShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
@@ -67,7 +68,8 @@ import androidx.compose.ui.unit.dp
                 false
             },
             placeholder = { Text("写下你的想法…") }, minLines = minOf(6, visibleLines), maxLines = visibleLines,
-            isError = length > limit, textStyle = MaterialTheme.typography.bodyLarge)
+            isError = length > limit, textStyle = MaterialTheme.typography.bodyLarge,
+            shape = appControlShape())
         }
         }
         Text("$length / $limit", style = MaterialTheme.typography.bodySmall, color = if(length > limit) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)

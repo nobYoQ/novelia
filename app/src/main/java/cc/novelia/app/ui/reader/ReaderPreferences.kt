@@ -35,6 +35,7 @@ import cc.novelia.app.data.model.readingAppearance
 import cc.novelia.app.data.model.withReadingAppearance
 import cc.novelia.app.reader.*
 import cc.novelia.app.ui.components.base.AppScrollColumn
+import cc.novelia.app.ui.components.base.AppSwitch
 import cc.novelia.app.ui.components.base.AppTextButton
 import cc.novelia.app.ui.components.base.ChoiceRow
 import cc.novelia.app.ui.components.base.TogglePreference
@@ -111,7 +112,7 @@ import kotlin.math.roundToInt
             if(perBook != null) Row(Modifier.toggleable(perBook, role = Role.Switch, onValueChange = onPerBook).heightIn(min = 48.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("仅应用于这本书", style = MaterialTheme.typography.labelSmall)
-                Switch(perBook, onCheckedChange = null)
+                AppSwitch(perBook, onCheckedChange = null)
             }
         }
         PrimaryTabRow(tab) {

@@ -1,6 +1,7 @@
 @file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.discover
 
+import cc.novelia.app.ui.theme.appControlShape
 import cc.novelia.app.ui.components.base.AppButton
 import cc.novelia.app.ui.components.base.AppTextButton
 import cc.novelia.app.ui.components.base.AppOutlinedButton
@@ -113,7 +114,8 @@ fun SearchAssistantPanel(
                             OutlinedTextField(tagQuery, { tagQuery = it }, label = { Text("输入原文或中文标签") }, singleLine = true,
                                 isError = tagQuery.trim().length > KeywordCatalog.MAX_TEXT_LENGTH,
                                 supportingText = { if(tagQuery.trim().length > KeywordCatalog.MAX_TEXT_LENGTH) Text("标签最多 ${KeywordCatalog.MAX_TEXT_LENGTH} 字符，请缩短后添加。") },
-                                modifier = Modifier.fillMaxWidth().testTag("assistant-tag-input"))
+                                modifier = Modifier.fillMaxWidth().testTag("assistant-tag-input"),
+                                shape = appControlShape())
                             KeywordCategoryChips(listOf("全部") + categoryNames, category, { category = it }, Modifier.fillMaxWidth(), PaddingValues(vertical = 4.dp))
                             Text("点按标签依次包含、排除、恢复未选择。这里最多显示 12 个候选；浏览全部标签可按分类批量选择。", style = MaterialTheme.typography.bodySmall)
                             AppChipFlowRow() {
@@ -149,13 +151,17 @@ fun SearchAssistantPanel(
                             HorizontalDivider()
                             Text("书名、作者及关键词", style = MaterialTheme.typography.titleSmall)
                             Text("多个词用空格分开；精确短语会作为一个完整条件。", style = MaterialTheme.typography.bodySmall)
-                            OutlinedTextField(all, { all = it }, label = { Text("全部包含") }, modifier = Modifier.fillMaxWidth().testTag("assistant-all"))
-                            OutlinedTextField(any, { any = it }, label = { Text("任意包含") }, modifier = Modifier.fillMaxWidth())
-                            OutlinedTextField(exact, { exact = it }, label = { Text("精确短语") }, modifier = Modifier.fillMaxWidth())
-                            OutlinedTextField(excluded, { excluded = it }, label = { Text("排除关键词") }, modifier = Modifier.fillMaxWidth())
+                            OutlinedTextField(all, { all = it }, label = { Text("全部包含") }, modifier = Modifier.fillMaxWidth().testTag("assistant-all"),
+                                shape = appControlShape())
+                            OutlinedTextField(any, { any = it }, label = { Text("任意包含") }, modifier = Modifier.fillMaxWidth(), shape = appControlShape())
+                            OutlinedTextField(exact, { exact = it }, label = { Text("精确短语") }, modifier = Modifier.fillMaxWidth(), shape = appControlShape())
+                            OutlinedTextField(excluded, { excluded = it }, label = { Text("排除关键词") }, modifier = Modifier.fillMaxWidth(),
+                                shape = appControlShape())
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedTextField(minimum, { minimum = it.filter(Char::isDigit).take(6) }, label = { Text("章节数大于") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f))
-                                OutlinedTextField(maximum, { maximum = it.filter(Char::isDigit).take(6) }, label = { Text("章节数小于") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f), isError = invalidBounds)
+                                OutlinedTextField(minimum, { minimum = it.filter(Char::isDigit).take(6) }, label = { Text("章节数大于") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f),
+                                    shape = appControlShape())
+                                OutlinedTextField(maximum, { maximum = it.filter(Char::isDigit).take(6) }, label = { Text("章节数小于") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f), isError = invalidBounds,
+                                    shape = appControlShape())
                             }
                             if(invalidBounds) Text("上限需要大于下限；章节数不包含填写的边界值。", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                             if(query.isNotBlank()) {

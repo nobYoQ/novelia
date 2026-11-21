@@ -1,5 +1,6 @@
 package cc.novelia.app.ui.discover
 
+import cc.novelia.app.ui.theme.appControlShape
 import cc.novelia.app.ui.components.base.AppTextButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -16,7 +17,8 @@ import cc.novelia.app.ui.components.base.AppAlertDialog
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(name, { if(it.length <= 80) name = it }, label = { Text("名称") }, singleLine = true,
-                    modifier = Modifier.fillMaxWidth(), supportingText = { Text("${name.length} / 80") })
+                    modifier = Modifier.fillMaxWidth(), supportingText = { Text("${name.length} / 80") },
+                    shape = appControlShape())
                 Text(preset.summary(), style = MaterialTheme.typography.bodySmall)
             }
         },

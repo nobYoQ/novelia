@@ -1,5 +1,6 @@
 package cc.novelia.app.ui.markdown
 
+import cc.novelia.app.ui.theme.appControlShape
 import cc.novelia.app.ui.components.base.AppTextButton
 import cc.novelia.app.ui.components.base.AppIconButton
 import androidx.compose.foundation.layout.*
@@ -91,7 +92,8 @@ internal fun TextFieldValue.format(template: MarkdownTemplate, limit: Int): Text
                     // TextField 失焦会收起选区，需在 Tab 转移焦点之前捕获。
                     if(it.type == KeyEventType.KeyDown && it.key == Key.Tab && !it.isCtrlPressed && !it.isAltPressed && !it.isMetaPressed) toolbarSelection = current
                     false
-                }, isError = isError, maxLines = 4)
+                }, isError = isError, maxLines = 4,
+                shape = appControlShape())
             }
             sendButton()
         }

@@ -38,7 +38,7 @@ import cc.novelia.app.ui.components.book.BookFavoriteIndicator
 import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.LocalEInkMode
 import cc.novelia.app.ui.theme.appReducedMotion
-import cc.novelia.app.ui.theme.appRoundedCornerShape
+import cc.novelia.app.ui.theme.appBookCoverShape
 import cc.novelia.app.ui.theme.motionClickable
 
 /** 用懒加载的封面行复用应用的电子纸翻屏与搜索收起手势。 */
@@ -115,7 +115,7 @@ import cc.novelia.app.ui.theme.motionClickable
 @Composable private fun DiscoverWenkuCover(book: BookCard, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val eInk = LocalEInkMode.current
     Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(appRoundedCornerShape(12.dp))
+        Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(appBookCoverShape())
             .motionClickable(onClick = onClick).semantics(mergeDescendants = true) { role = Role.Button }
             .testTag("discover-wenku-cover-${book.ref.key}")) {
             BookCover(book, Modifier.matchParentSize().clearAndSetSemantics {}, showFallbackTitle = false)

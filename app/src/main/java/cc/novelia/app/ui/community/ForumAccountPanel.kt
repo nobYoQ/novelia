@@ -1,5 +1,6 @@
 package cc.novelia.app.ui.community
 
+import androidx.compose.foundation.shape.RoundedCornerShape
 import cc.novelia.app.ui.components.base.AppBadge
 import cc.novelia.app.ui.components.base.AppTextButton
 import cc.novelia.app.ui.components.base.AppFilledTonalButton
@@ -102,7 +103,7 @@ internal enum class ForumAccountAction { LOGIN, POSTS, FAVORITES, BLACKLIST, STR
 }
 
 @Composable private fun ForumPanelItem(label: String, icon: ImageVector, enabled: Boolean, destructive: Boolean = false, unread: Boolean = false, onClick: () -> Unit) {
-    AppTextButton(onClick = onClick, enabled = enabled, shape = appRoundedCornerShape(12.dp),
+    AppTextButton(onClick = onClick, enabled = enabled, shape = RoundedCornerShape(12.dp),
         colors = ButtonDefaults.textButtonColors(contentColor = if(destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface),
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp).heightIn(min = 52.dp), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)) {
         Icon(icon, null, Modifier.size(22.dp)); Spacer(Modifier.width(16.dp))

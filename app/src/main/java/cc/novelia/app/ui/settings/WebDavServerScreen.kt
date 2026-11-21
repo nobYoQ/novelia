@@ -1,5 +1,6 @@
 package cc.novelia.app.ui.settings
 
+import cc.novelia.app.ui.theme.appControlShape
 import cc.novelia.app.ui.components.base.AppTextButton
 import cc.novelia.app.ui.components.base.AppIconButton
 import androidx.compose.foundation.layout.*
@@ -89,11 +90,13 @@ internal fun WebDavServerForm(
                             label = { Text("服务器地址") }, placeholder = { Text("https://example.com/dav/") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
                             singleLine = true, enabled = !working, modifier = Modifier.fillMaxWidth(),
+                            shape = appControlShape()
                         )
                         OutlinedTextField(
                             draft.username, { draft = draft.copy(username = it) }, label = { Text("用户名") },
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                             singleLine = true, enabled = !working, modifier = Modifier.fillMaxWidth(),
+                            shape = appControlShape()
                         )
                         OutlinedTextField(
                             password, { password = it }, label = { Text("密码或应用授权码") },
@@ -103,6 +106,7 @@ internal fun WebDavServerForm(
                                 Icon(if(passwordVisible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility, if(passwordVisible) "隐藏密码" else "显示密码")
                             } },
                             singleLine = true, enabled = !working, modifier = Modifier.fillMaxWidth(),
+                            shape = appControlShape()
                         )
                     }
                 } }
@@ -119,9 +123,11 @@ internal fun WebDavServerForm(
                     Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         OutlinedTextField(draft.folder, { draft = draft.copy(folder = it) }, label = { Text("同步目录") },
                             supportingText = { Text("相对于服务器地址的目录，所有设备请填写同一目录") },
-                            singleLine = true, enabled = !working, modifier = Modifier.fillMaxWidth())
+                            singleLine = true, enabled = !working, modifier = Modifier.fillMaxWidth(),
+                            shape = appControlShape())
                         OutlinedTextField(draft.deviceName, { draft = draft.copy(deviceName = it) }, label = { Text("此设备名称") },
-                            singleLine = true, enabled = !working, modifier = Modifier.fillMaxWidth())
+                            singleLine = true, enabled = !working, modifier = Modifier.fillMaxWidth(),
+                            shape = appControlShape())
                         AppTextButton(onClick = { password = ""; onClearPassword() }, enabled = !working) { Text("清除已保存的密码") }
                     }
                 } }

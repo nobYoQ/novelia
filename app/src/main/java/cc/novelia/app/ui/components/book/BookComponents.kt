@@ -1,12 +1,14 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.components.book
 
+import cc.novelia.app.ui.theme.DefaultShapes
+import cc.novelia.app.ui.theme.appPanelShape
 import cc.novelia.app.ui.components.base.AppLinearProgressIndicator
 import cc.novelia.app.ui.components.base.AppIconButton
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
-import cc.novelia.app.ui.theme.appRoundedCornerShape
+import cc.novelia.app.ui.theme.appBookCoverShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Block
@@ -64,7 +66,7 @@ import cc.novelia.app.ui.components.keywords.KeywordEditorDialog
                 Box {
                     AppIconButton(onClick = { menu = true }, modifier = Modifier.size(48.dp)) { Icon(Icons.Outlined.MoreVert, "更多标签操作 $tag", Modifier.size(18.dp)) }
                     val blocked = tag in library.blockedTags
-                    DropdownMenu(menu, onDismissRequest = { menu = false }) {
+                    DropdownMenu(menu, onDismissRequest = { menu = false }, shape = appPanelShape(DefaultShapes.extraSmall)) {
                         DropdownMenuItem(text = { Text("编辑标签翻译") }, onClick = { menu = false; editing = entry },
                             leadingIcon = { Icon(Icons.Outlined.Edit, null) })
                         DropdownMenuItem(text = { Text(if(blocked) "取消屏蔽标签" else "屏蔽标签") }, onClick = {
@@ -92,7 +94,7 @@ import cc.novelia.app.ui.components.keywords.KeywordEditorDialog
     val custom = customRequest.takeUnless { customFailed }
     val source = custom ?: book.cover?.takeIf { it.isNotBlank() }
     var loaded by remember(source) { mutableStateOf(false) }
-    Box(modifier.width(76.dp).height(104.dp).clip(appRoundedCornerShape(12.dp)).semantics {
+    Box(modifier.width(76.dp).height(104.dp).clip(appBookCoverShape()).semantics {
         contentDescription = "${book.title} ${when { !loaded -> "默认封面"; custom != null -> "自定义封面"; else -> "封面" }}"
     }, contentAlignment = Alignment.Center) {
         DefaultBookCover(book, Modifier.matchParentSize().clearAndSetSemantics {}, showTitle = showFallbackTitle)

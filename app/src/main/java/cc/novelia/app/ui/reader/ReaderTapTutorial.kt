@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.reader
 
+import cc.novelia.app.ui.theme.DefaultShapes
+import cc.novelia.app.ui.theme.appControlShape
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -60,8 +62,8 @@ import cc.novelia.app.ui.components.base.AppTextButton
                     if(!compact) Text("这里展示你当前设置的区域。相同动作的邻格合并显示；可在阅读设置中拖动分界线调整大小。",
                         Modifier.padding(vertical = 8.dp), style = MaterialTheme.typography.bodySmall)
                     FlowRow(Modifier.fillMaxWidth(), itemVerticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(!double, { double = false }, label = { Text("单击") })
-                        FilterChip(double, { double = true }, label = { Text("双击") })
+                        FilterChip(!double, { double = false }, label = { Text("单击") }, shape = appControlShape(DefaultShapes.small))
+                        FilterChip(double, { double = true }, label = { Text("双击") }, shape = appControlShape(DefaultShapes.small))
                         AppTextButton(onClick = onDismiss) { Text("开始阅读") }
                         AppIconButton(onClick = { controlsVisible = false }) { Icon(Icons.Outlined.VisibilityOff, "隐藏教程控件以查看完整分区") }
                     }

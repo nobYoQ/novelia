@@ -1,6 +1,8 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.discover
 
+import cc.novelia.app.ui.theme.DefaultShapes
+import cc.novelia.app.ui.theme.appControlShape
 import cc.novelia.app.ui.components.base.AppListItem
 import cc.novelia.app.ui.theme.wallpaperCardColor
 import cc.novelia.app.ui.components.base.AppButton
@@ -141,7 +143,7 @@ class KeywordLibraryActions(
     }) { padding ->
         Column(Modifier.padding(padding)) {
             OutlinedTextField(query, { query = it }, placeholder = { Text("搜索原文、译名或别名") }, singleLine = true,
-                leadingIcon = { Icon(Icons.Outlined.Search, null) }, shape = MaterialTheme.shapes.large,
+                leadingIcon = { Icon(Icons.Outlined.Search, null) }, shape = appControlShape(DefaultShapes.large),
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 12.dp, bottom = 8.dp).testTag("keyword-library-search"))
             KeywordCategoryChips(listOf("全部") + categories, activeCategory, { category = it }, Modifier.fillMaxWidth().testTag("keyword-library-categories"))
             if(activeCategory != "全部" && onIncludeCategory != null && onExcludeCategory != null) {
@@ -248,7 +250,8 @@ class KeywordLibraryActions(
         text = { OutlinedTextField(name, { name = it; error = null }, label = { Text("分类名称") }, singleLine = true,
             isError = (name.isNotEmpty() && invalid != null) || error != null,
             supportingText = { Text(error ?: invalid?.takeIf { name.isNotEmpty() } ?: "最多 ${KeywordLibrary.MAX_CATEGORY_LENGTH} 个字符") },
-            modifier = Modifier.testTag("keyword-category-name")) },
+            modifier = Modifier.testTag("keyword-category-name"),
+            shape = appControlShape()) },
         confirmButton = { AppTextButton(onClick = { try { onSave(normalized); onDismiss() } catch(failure: IllegalArgumentException) { error = failure.message } },
             enabled = invalid == null && normalized != initial) { Text(if(initial == null) "创建分类" else "保存名称") } },
         dismissButton = { AppTextButton(onClick = onDismiss) { Text("取消") } })

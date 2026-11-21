@@ -2,6 +2,8 @@
 
 package cc.novelia.app.ui.reader
 
+import cc.novelia.app.ui.theme.appControlShape
+import cc.novelia.app.ui.theme.DefaultShapes
 import cc.novelia.app.ui.components.base.AppSlider
 import cc.novelia.app.ui.components.base.AppTextButton
 import cc.novelia.app.ui.components.base.AppOutlinedButton
@@ -50,7 +52,8 @@ import androidx.compose.ui.unit.dp
 import cc.novelia.app.ui.components.base.AppAlertDialog
 import cc.novelia.app.ui.components.base.AppScrollColumn
 import cc.novelia.app.ui.theme.LocalEInkMode
-import cc.novelia.app.ui.theme.LocalSquareCorners
+import cc.novelia.app.data.model.SquareCornerTarget
+import cc.novelia.app.ui.theme.useSquareCorners
 import kotlin.math.roundToInt
 
 private val CommonColors = listOf(0x000000L, 0xFFFFFFL, 0x282E27L, 0xF4ECD8L, 0xE8F2E5L, 0x141A16L, 0xDDE5DCL, 0xDED2B8L)
@@ -65,7 +68,7 @@ private fun rgb(hue: Float, saturation: Float, brightness: Float): Long =
 
 /** 颜色在弹窗内预览，确认后才更新阅读设置。 */
 @Composable internal fun ReaderColorPicker(label: String, initial: Long, onDismiss: () -> Unit, onApply: (Long) -> Unit) {
-    val squareCorners = LocalSquareCorners.current
+    val squareCorners = useSquareCorners(SquareCornerTarget.Navigation)
     val initialHsv = remember(initial) { hsv(initial) }
     var hue by rememberSaveable { mutableFloatStateOf(initialHsv[0]) }
     var saturation by rememberSaveable { mutableFloatStateOf(initialHsv[1]) }
@@ -92,7 +95,7 @@ private fun rgb(hue: Float, saturation: Float, brightness: Float): Long =
         val focus = LocalFocusManager.current
         AppScrollColumn(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Surface(color = rgb(pickedColor), shape = appShape(CircleShape), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                Surface(color = rgb(pickedColor), shape = appShape(CircleShape, SquareCornerTarget.Navigation), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                     modifier = Modifier.size(40.dp).testTag("reader-picked-color")) {}
                 Text(hex(pickedColor), Modifier.weight(1f).testTag("reader-color-code-preview"), style = MaterialTheme.typography.bodyMedium)
                 AppTextButton(onClick = {
@@ -118,10 +121,10 @@ private fun rgb(hue: Float, saturation: Float, brightness: Float): Long =
                     ReaderColorStepper("明度", "brightness", brightness, 1f, .05f, "${(brightness * 100).roundToInt()}%") { setHsv(v = it) }
                 } else {
                     Text("色相 ${hue.roundToInt()}°", style = MaterialTheme.typography.labelLarge)
-                    AppSlider(hue, { setHsv(h = it) }, valueRange = 0f..360f,
+                    AppSlider(hue, { setHsv(h = it) }, valueRange = 0f..360f, cornerTarget = SquareCornerTarget.Navigation,
                         modifier = Modifier.fillMaxWidth().testTag("reader-color-hue").semantics { contentDescription = "色相" },
                         thumb = {
-                            Surface(color = rgb(rgb(hue, 1f, 1f)), shape = appShape(CircleShape),
+                            Surface(color = rgb(rgb(hue, 1f, 1f)), shape = appShape(CircleShape, SquareCornerTarget.Navigation),
                                 border = BorderStroke(2.dp, MaterialTheme.colorScheme.onSurface), modifier = Modifier.size(24.dp)) {}
                         }, track = {
                             Canvas(Modifier.fillMaxWidth().height(12.dp)) {
@@ -129,16 +132,16 @@ private fun rgb(hue: Float, saturation: Float, brightness: Float): Long =
                             }
                         })
                     Text("饱和度 ${(saturation * 100).roundToInt()}%", style = MaterialTheme.typography.labelLarge)
-                    AppSlider(saturation, { setHsv(s = it) }, modifier = Modifier.fillMaxWidth().testTag("reader-color-saturation")
+                    AppSlider(saturation, { setHsv(s = it) }, cornerTarget = SquareCornerTarget.Navigation, modifier = Modifier.fillMaxWidth().testTag("reader-color-saturation")
                         .semantics { contentDescription = "饱和度" })
                     Text("明度 ${(brightness * 100).roundToInt()}%", style = MaterialTheme.typography.labelLarge)
-                    AppSlider(brightness, { setHsv(v = it) }, modifier = Modifier.fillMaxWidth().testTag("reader-color-brightness")
+                    AppSlider(brightness, { setHsv(v = it) }, cornerTarget = SquareCornerTarget.Navigation, modifier = Modifier.fillMaxWidth().testTag("reader-color-brightness")
                         .semantics { contentDescription = "明度" })
                 }
                 Text("常用颜色", style = MaterialTheme.typography.labelLarge)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     CommonColors.forEach { color ->
-                        Surface(onClick = { selectColor(color); input = hex(color) }, color = rgb(color), shape = appShape(CircleShape),
+                        Surface(onClick = { selectColor(color); input = hex(color) }, color = rgb(color), shape = appShape(CircleShape, SquareCornerTarget.Navigation),
                             border = BorderStroke(if(pickedColor == color) 2.dp else 1.dp, MaterialTheme.colorScheme.outline),
                             modifier = Modifier.size(48.dp).semantics { contentDescription = "常用颜色 ${hex(color)}"; selected = pickedColor == color }) {
                             if(pickedColor == color) Box(contentAlignment = Alignment.Center) {
@@ -190,15 +193,16 @@ private fun rgb(hue: Float, saturation: Float, brightness: Float): Long =
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii, capitalization = KeyboardCapitalization.Characters,
             autoCorrectEnabled = false, imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { keyboard?.hide(); focusManager.clearFocus() }),
-        modifier = Modifier.fillMaxWidth().focusRequester(focus).testTag("reader-color-input"))
+        modifier = Modifier.fillMaxWidth().focusRequester(focus).testTag("reader-color-input"),
+        shape = appControlShape())
 }
 
 @Composable private fun SaturationBrightnessPlane(hue: Float, saturation: Float, brightness: Float,
     onPick: (Float, Float) -> Unit) {
-    val squareCorners = LocalSquareCorners.current
+    val squareCorners = useSquareCorners(SquareCornerTarget.Navigation)
     val eInk = LocalEInkMode.current
     val latestPick by rememberUpdatedState(onPick)
-    Canvas(Modifier.fillMaxWidth().aspectRatio(1.4f).clip(MaterialTheme.shapes.small)
+    Canvas(Modifier.fillMaxWidth().aspectRatio(1.4f).clip(appShape(DefaultShapes.small, SquareCornerTarget.Navigation))
         .testTag("reader-color-plane").semantics {
             contentDescription = "饱和度与明度取色盘"
             stateDescription = "饱和度 ${(saturation * 100).roundToInt()}%，明度 ${(brightness * 100).roundToInt()}%"

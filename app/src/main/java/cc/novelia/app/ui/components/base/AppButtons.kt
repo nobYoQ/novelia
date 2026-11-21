@@ -8,7 +8,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Shape
-import cc.novelia.app.ui.theme.appShape
+import cc.novelia.app.ui.theme.appControlShape
 
 // Material 的 Full 形状令牌不读取 MaterialTheme.shapes，按钮在这里统一应用直角偏好。
 
@@ -23,7 +23,7 @@ import cc.novelia.app.ui.theme.appShape
     contentPadding: PaddingValues = ButtonDefaults.ContentPadding,
     interactionSource: MutableInteractionSource? = null,
     content: @Composable RowScope.() -> Unit,
-) = Button(onClick, modifier, enabled, appShape(shape), colors, elevation, border, contentPadding, interactionSource, content)
+) = Button(onClick, modifier, enabled, appControlShape(shape), colors, elevation, border, contentPadding, interactionSource, content)
 
 @Composable fun AppFilledTonalButton(
     onClick: () -> Unit,
@@ -36,7 +36,7 @@ import cc.novelia.app.ui.theme.appShape
     contentPadding: PaddingValues = ButtonDefaults.ContentPadding,
     interactionSource: MutableInteractionSource? = null,
     content: @Composable RowScope.() -> Unit,
-) = FilledTonalButton(onClick, modifier, enabled, appShape(shape), colors, elevation, border, contentPadding, interactionSource, content)
+) = FilledTonalButton(onClick, modifier, enabled, appControlShape(shape), colors, elevation, border, contentPadding, interactionSource, content)
 
 @Composable fun AppOutlinedButton(
     onClick: () -> Unit,
@@ -49,7 +49,7 @@ import cc.novelia.app.ui.theme.appShape
     contentPadding: PaddingValues = ButtonDefaults.ContentPadding,
     interactionSource: MutableInteractionSource? = null,
     content: @Composable RowScope.() -> Unit,
-) = OutlinedButton(onClick, modifier, enabled, appShape(shape), colors, elevation, border, contentPadding, interactionSource, content)
+) = OutlinedButton(onClick, modifier, enabled, appControlShape(shape), colors, elevation, border, contentPadding, interactionSource, content)
 
 @Composable fun AppTextButton(
     onClick: () -> Unit,
@@ -62,7 +62,7 @@ import cc.novelia.app.ui.theme.appShape
     contentPadding: PaddingValues = ButtonDefaults.TextButtonContentPadding,
     interactionSource: MutableInteractionSource? = null,
     content: @Composable RowScope.() -> Unit,
-) = TextButton(onClick, modifier, enabled, appShape(shape), colors, elevation, border, contentPadding, interactionSource, content)
+) = TextButton(onClick, modifier, enabled, appControlShape(shape), colors, elevation, border, contentPadding, interactionSource, content)
 
 @Composable fun AppIconButton(
     onClick: () -> Unit,
@@ -72,7 +72,7 @@ import cc.novelia.app.ui.theme.appShape
     interactionSource: MutableInteractionSource? = null,
     shape: Shape = IconButtonDefaults.standardShape,
     content: @Composable () -> Unit,
-) = IconButton(onClick, modifier, enabled, colors, interactionSource, appShape(shape), content)
+) = IconButton(onClick, modifier, enabled, colors, interactionSource, appControlShape(shape), content)
 
 @Composable fun AppFilledIconButton(
     onClick: () -> Unit,
@@ -82,5 +82,5 @@ import cc.novelia.app.ui.theme.appShape
     colors: IconButtonColors = IconButtonDefaults.filledIconButtonColors(),
     interactionSource: MutableInteractionSource? = null,
     content: @Composable () -> Unit,
-) = FilledIconButton(onClick, modifier, enabled, appShape(shape), colors, interactionSource, content)
+) = FilledIconButton(onClick, modifier, enabled, appControlShape(shape), colors, interactionSource, content)
 

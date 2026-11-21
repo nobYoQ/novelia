@@ -34,6 +34,8 @@ import cc.novelia.app.ui.components.base.AppSheet
 import cc.novelia.app.ui.components.base.LocalInAppSheet
 import cc.novelia.app.ui.components.base.LocalPanelSession
 import cc.novelia.app.ui.theme.appReducedMotion
+import cc.novelia.app.ui.theme.appBottomSheetShape
+import cc.novelia.app.ui.theme.appPanelShape
 
 @Composable internal fun ReaderSheet(onDismissRequest: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     AppSheet(onDismissRequest, rememberModalBottomSheetState(skipPartiallyExpanded = true), content)
@@ -51,7 +53,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
         if(reducedMotion) snap() else spring(dampingRatio = .72f, stiffness = 280f), label = "reader panel height")
     val sheetHeight = if(reducedMotion) targetHeight else animatedHeight
     val resizeGesture = Modifier.readerPreferencesResizeGesture(expanded, { expanded = it }, onDismissRequest)
-    if(!reducedMotion) ModalBottomSheet(onDismissRequest = onDismissRequest,
+    if(!reducedMotion) ModalBottomSheet(onDismissRequest = onDismissRequest, shape = appBottomSheetShape(),
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         // 高度切换由阅读偏好管理，避免大半屏下拖直接触发底层弹层关闭。
         sheetGesturesEnabled = false,
@@ -68,7 +70,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
         val window = (LocalView.current.parent as? DialogWindowProvider)?.window
         SideEffect { window?.setDimAmount(0f) }
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
-            Surface(Modifier.fillMaxWidth().height(sheetHeight).then(resizeGesture).testTag("reader-preferences-panel"), shape = MaterialTheme.shapes.extraLarge) {
+            Surface(Modifier.fillMaxWidth().height(sheetHeight).then(resizeGesture).testTag("reader-preferences-panel"), shape = appPanelShape()) {
                 CompositionLocalProvider(LocalInAppSheet provides true, LocalPanelSession provides session) {
                     Column { content(expanded) { expanded = it } }
                 }

@@ -141,9 +141,10 @@ internal class ShelfLayoutState(val list: LazyListState, val grid: LazyListState
 ) {
     val eInk = LocalEInkMode.current
     val largeText = LocalDensity.current.fontScale > 1.3f
+    val coverShape = appBookCoverShape()
     Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(appRoundedCornerShape(12.dp))
-            .then(if(selected && !selecting) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, appRoundedCornerShape(12.dp)) else Modifier)
+        Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(coverShape)
+            .then(if(selected && !selecting) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, coverShape) else Modifier)
             .motionClickable(onClick = { if(enabled) onOpen() })) {
             BookCover(book, Modifier.matchParentSize().clearAndSetSemantics {}, showFallbackTitle = false)
             val backdrop = if(eInk) Modifier.background(Color.Black) else Modifier.background(
@@ -171,7 +172,7 @@ internal class ShelfLayoutState(val list: LazyListState, val grid: LazyListState
         }
         if(volumeLabel != null && onVolumes != null) AppTextButton(onVolumes, Modifier.fillMaxWidth().heightIn(min = 48.dp)
             .testTag("shelf-grid-volumes-${book.ref.key}").semantics { onClick(label = "打开分卷面板", action = null) }, enabled = !selecting,
-            shape = MaterialTheme.shapes.small, contentPadding = PaddingValues(horizontal = 6.dp)) {
+            shape = DefaultShapes.small, contentPadding = PaddingValues(horizontal = 6.dp)) {
             Text(volumeLabel, Modifier.weight(1f), style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if(!compact) Icon(Icons.AutoMirrored.Outlined.ViewList, null, Modifier.size(18.dp))
         }

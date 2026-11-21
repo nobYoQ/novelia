@@ -1,6 +1,8 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.shelf
 
+import cc.novelia.app.ui.theme.DefaultShapes
+import cc.novelia.app.ui.theme.appControlShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Sort
@@ -130,6 +132,6 @@ import cc.novelia.app.ui.components.base.*
 
 @Composable internal fun ShelfFilterChip(label: String, tag: String, onClear: () -> Unit) {
     InputChip(selected = true, onClick = onClear, label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        trailingIcon = { Icon(Icons.Outlined.Close, "清除$label", Modifier.size(16.dp)) }, shape = MaterialTheme.shapes.small,
+        trailingIcon = { Icon(Icons.Outlined.Close, "清除$label", Modifier.size(16.dp)) }, shape = appControlShape(DefaultShapes.small),
         modifier = Modifier.heightIn(min = 48.dp).testTag(tag))
 }

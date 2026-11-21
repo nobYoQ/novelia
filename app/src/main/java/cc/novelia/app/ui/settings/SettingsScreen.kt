@@ -44,6 +44,7 @@ import cc.novelia.app.ui.account.ProfileDetailList
 import cc.novelia.app.ui.components.base.AppSheet
 import cc.novelia.app.ui.account.ProfileChoiceRow
 import cc.novelia.app.data.model.ShelfGridDensity
+import cc.novelia.app.data.model.SquareCornerTarget
 import cc.novelia.app.ui.components.base.ConfirmDialog
 import cc.novelia.app.ui.account.ProfileMenuRow
 import cc.novelia.app.ui.account.ProfileSummary
@@ -159,7 +160,19 @@ private enum class SettingsSection(val title: String, val summary: String) {
         item { ProfileMenuRow("自定义主题", if (state.theme == MONOCHROME_APP_THEME) "黑白外观" else state.themePresets.active?.name ?: "默认外观",
             Icons.Outlined.Palette, { c.go("custom-themes") }) }
         item { ProfileToggle("纯黑显示模式", "深色主题使用纯黑底色，卡片与弹层保留层次", state.amoledBlack) { value -> c.store.update { it.copy(amoledBlack = value) } } }
-        item { ProfileToggle("fuck 圆角", "让整个应用变成直角", state.squareCorners) { value -> c.store.update { it.copy(squareCorners = value) } } }
+        item { ProfileToggle("fuck 圆角", "为选中的界面元素使用直角", state.squareCorners) { value -> c.store.update { it.copy(squareCorners = value) } } }
+        if(state.squareCorners) {
+            item { ProfileSectionTitle("应用直角的元素") }
+            SquareCornerTarget.entries.forEach { target ->
+                item(key = target) {
+                    ProfileToggle(target.label, target.description, target in state.squareCornerTargets) { enabled ->
+                        c.store.update {
+                            it.copy(squareCornerTargets = if(enabled) it.squareCornerTargets + target else it.squareCornerTargets - target)
+                        }
+                    }
+                }
+            }
+        }
         item { LauncherIconPreference(c.app.launcherIcons) }
         item { StickerPackPreference(c.app.stickerPacks, state.stickerPackId) { c.go("sticker-packs") } }
         item { ProfileSectionTitle("交互与提示") }

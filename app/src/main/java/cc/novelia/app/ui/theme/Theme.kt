@@ -20,6 +20,7 @@ import androidx.core.view.WindowCompat
 import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.data.model.MONOCHROME_APP_THEME
 import cc.novelia.app.data.model.ThemePreset
+import cc.novelia.app.data.model.SquareCornerTarget
 import java.io.File
 
 internal fun android.content.Context.activityOrNull(): android.app.Activity? {
@@ -136,7 +137,8 @@ internal fun baseAppColors(dark: Boolean, amoled: Boolean) = when {
 }
 
 @Composable fun NoveliaTheme(theme: String, squareCorners: Boolean = false, amoledBlack: Boolean = false,
-    preset: ThemePreset? = null, imageFile: File? = null, content: @Composable () -> Unit) {
+    preset: ThemePreset? = null, imageFile: File? = null, squareCornerTargets: Set<SquareCornerTarget> = SquareCornerTarget.defaults,
+    content: @Composable () -> Unit) {
     val dark = theme == "dark" || (theme == "system" && isSystemInDarkTheme())
     val monochrome = theme == MONOCHROME_APP_THEME
     val custom = if (monochrome || LocalEInkMode.current) null else preset
@@ -153,9 +155,10 @@ internal fun baseAppColors(dark: Boolean, amoled: Boolean) = when {
     val view = LocalView.current
     val activity = LocalContext.current.activityOrNull()
     SideEffect { activity?.let { WindowCompat.getInsetsController(it.window, view).apply { isAppearanceLightStatusBars = lightBars; isAppearanceLightNavigationBars = lightBars } } }
-    CompositionLocalProvider(LocalSquareCorners provides squareCorners, LocalAmoledBlack provides black,
+    val activeCorners = if(squareCorners) squareCornerTargets else emptySet()
+    CompositionLocalProvider(LocalSquareCornerTargets provides activeCorners, LocalAmoledBlack provides black,
         LocalAppDark provides dark, LocalThemePreset provides custom, LocalThemeWallpaper provides wallpaper) {
-    MaterialTheme(colorScheme = colors, shapes = if(squareCorners) SquareShapes else DefaultShapes, typography = Typography(
+    MaterialTheme(colorScheme = colors, shapes = if(SquareCornerTarget.Cards in activeCorners) SquareShapes else DefaultShapes, typography = Typography(
         headlineLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold, fontSize = 32.sp, lineHeight = 40.sp),
         titleLarge = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 22.sp, lineHeight = 30.sp),
         bodyLarge = TextStyle(fontSize = 16.sp, lineHeight = 26.sp), bodyMedium = TextStyle(fontSize = 14.sp, lineHeight = 22.sp)

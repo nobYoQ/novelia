@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.components.keywords
 
+import cc.novelia.app.ui.theme.DefaultShapes
+import cc.novelia.app.ui.theme.appPanelShape
 import cc.novelia.app.ui.components.base.AppOutlinedButton
 import cc.novelia.app.ui.theme.appShape
 import androidx.compose.foundation.layout.*
@@ -39,7 +41,7 @@ import cc.novelia.app.ui.components.base.appHorizontalScroll
             Text("分类：$selected", Modifier.weight(1f))
             Icon(Icons.Outlined.ExpandMore, null)
         }
-        DropdownMenu(expanded, { expanded = false }, modifier = Modifier.heightIn(max = 360.dp)) {
+        DropdownMenu(expanded, { expanded = false }, modifier = Modifier.heightIn(max = 360.dp), shape = appPanelShape(DefaultShapes.extraSmall)) {
             categories.forEach { name ->
                 DropdownMenuItem(text = { Text(name) }, onClick = { onSelect(name); expanded = false },
                     trailingIcon = { if(name == selected) Icon(Icons.Outlined.Check, "已选") }, modifier = Modifier.heightIn(min = 48.dp))

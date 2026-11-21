@@ -1,6 +1,7 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.shelf
 
+import cc.novelia.app.ui.theme.DefaultShapes
 import cc.novelia.app.ui.theme.ThemeBar
 import cc.novelia.app.ui.theme.themeBarBackground
 
@@ -72,7 +73,7 @@ import cc.novelia.app.ui.components.base.*
 
 @Composable internal fun RowScope.ShelfActionButton(label: String, description: String, icon: ImageVector, tag: String,
     enabled: Boolean, onClick: () -> Unit) {
-    AppTextButton(onClick, enabled = enabled, shape = MaterialTheme.shapes.medium,
+    AppTextButton(onClick, enabled = enabled, shape = DefaultShapes.medium,
         modifier = Modifier.weight(1f).heightIn(min = 64.dp).testTag(tag).semantics { contentDescription = description },
         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {

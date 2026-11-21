@@ -1,5 +1,7 @@
 package cc.novelia.app.ui.settings
 
+import cc.novelia.app.data.model.SquareCornerTarget
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -39,7 +41,8 @@ import kotlinx.coroutines.delay
                 Text("点按顶栏或底栏可调整", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
             }
             listOf("浅色", "深色").forEachIndexed { i, text ->
-                FilterChip(selected = dark == (i == 1), onClick = { onDarkChange(i == 1) }, label = { Text(text) })
+                FilterChip(selected = dark == (i == 1), onClick = { onDarkChange(i == 1) }, label = { Text(text) },
+                    shape = appControlShape(DefaultShapes.small))
                 if (i == 0) Spacer(Modifier.width(6.dp))
             }
         }
@@ -84,7 +87,7 @@ import kotlinx.coroutines.delay
                                 listOf(Icons.Outlined.CollectionsBookmark, Icons.Outlined.Explore, Icons.Outlined.Forum, Icons.Outlined.PersonOutline)
                                     .forEachIndexed { index, icon ->
                                         Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                                            Surface(shape = MaterialTheme.shapes.extraLarge,
+                                            Surface(shape = appShape(DefaultShapes.extraLarge, SquareCornerTarget.Navigation),
                                                 color = if (index == 0) scheme.secondaryContainer else Color.Transparent) {
                                                 Icon(icon, null, Modifier.padding(horizontal = 10.dp, vertical = 3.dp).size(18.dp),
                                                     tint = if (index == 0) scheme.onSecondaryContainer else scheme.onSurfaceVariant)

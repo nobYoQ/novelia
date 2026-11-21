@@ -1,5 +1,6 @@
 package cc.novelia.app.ui.reader
 
+import cc.novelia.app.ui.theme.appControlShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -59,7 +60,8 @@ import cc.novelia.app.ui.theme.motionClickable
                     textStyle = MaterialTheme.typography.titleLarge.copy(textAlign = TextAlign.Center),
                     isError = parsed == null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { parsed?.let(::save) }))
+                    keyboardActions = KeyboardActions(onDone = { parsed?.let(::save) }),
+                    shape = appControlShape())
                 Text(if(parsed == null) "请输入 0–20 之间的整数" else "可设置 0–20 格",
                     style = MaterialTheme.typography.bodySmall,
                     color = if(parsed == null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)

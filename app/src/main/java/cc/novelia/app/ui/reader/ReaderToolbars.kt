@@ -1,6 +1,7 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.reader
 
+import cc.novelia.app.ui.theme.appControlShape
 import cc.novelia.app.ui.components.base.AppTextButton
 import cc.novelia.app.ui.components.base.AppOutlinedButton
 import cc.novelia.app.ui.components.base.AppIconButton
@@ -94,7 +95,8 @@ internal data class ReaderChapterSearchState(
                     OutlinedTextField(search.query, onQueryChange, label = { Text("搜索本章段落") }, singleLine = true, modifier = Modifier.weight(1f), enabled = search.visible,
                         colors = OutlinedTextFieldDefaults.colors(focusedTextColor = foreground, unfocusedTextColor = foreground,
                             focusedBorderColor = foreground, unfocusedBorderColor = foreground.copy(alpha = .5f),
-                            focusedLabelColor = foreground, unfocusedLabelColor = foreground.copy(alpha = .7f), cursorColor = foreground))
+                            focusedLabelColor = foreground, unfocusedLabelColor = foreground.copy(alpha = .7f), cursorColor = foreground),
+                        shape = appControlShape())
                     AppTextButton(onClick = { onFind(1) }, enabled = search.visible && search.query.isNotBlank() && !search.finding,
                         colors = ButtonDefaults.textButtonColors(contentColor = foreground, disabledContentColor = foreground.copy(alpha = .38f))) { Text(if(search.finding) "查找中" else "查找") }
                 }
