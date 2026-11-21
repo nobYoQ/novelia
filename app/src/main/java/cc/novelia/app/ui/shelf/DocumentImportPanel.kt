@@ -3,7 +3,16 @@ package cc.novelia.app.ui.shelf
 
 import android.net.Uri
 import android.provider.OpenableColumns
+import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Collections
+import androidx.compose.material.icons.outlined.FolderCopy
+import androidx.compose.material.icons.outlined.FileOpen
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -11,11 +20,15 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.BookMedium
+import cc.novelia.app.data.model.comicArchiveTypes
 import cc.novelia.app.data.model.shelfMedium
 import cc.novelia.app.data.storage.LocalStore
 import cc.novelia.app.files.*
 import cc.novelia.app.ui.components.documents.ImportResultsPanel
 import cc.novelia.app.ui.components.base.friendlyMessage
+import cc.novelia.app.ui.components.base.AppScrollColumn
+import cc.novelia.app.ui.components.base.AppSheet
+import cc.novelia.app.ui.components.base.MenuRow
 import cc.novelia.app.ui.navigation.AppController
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -126,4 +139,19 @@ internal class DocumentImportViewModel(private val store: LocalStore) : ViewMode
     val state by model.state.collectAsStateWithLifecycle()
     ImportResultsPanel(state.items, state.running, model::pause, model::retryFailed, model::resume, onRead,
         onDismiss = model::dismissResults, error = state.error)
+}
+
+@Composable internal fun ShelfImportSheet(onDismiss: () -> Unit, onFiles: () -> Unit, onImages: () -> Unit, onSeries: () -> Unit) {
+    AppSheet(onDismissRequest = onDismiss) {
+        AppScrollColumn(contentModifier = Modifier.padding(bottom = 16.dp)) {
+            Text("导入本地书籍", Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                style = MaterialTheme.typography.titleLarge)
+            MenuRow("选择书籍文件", "可多选 EPUB、TXT、SRT，或装有图片的漫画压缩包。\n$comicArchiveTypes（单文件、无密码）",
+                Icons.Outlined.FileOpen, onFiles)
+            MenuRow("选择漫画图片文件夹", "选一册的目录，子目录中的图片也会并入这一册。支持 JPG/JPEG、PNG、WebP、GIF、BMP。\n例如 第一卷/001.jpg",
+                Icons.Outlined.Collections, onImages)
+            MenuRow("导入系列文件夹", "选整部作品的目录，每个图片子目录或上述漫画压缩包对应一话。\n作品/第01话/001.jpg\n作品/第02话.cbz",
+                Icons.Outlined.FolderCopy, onSeries)
+        }
+    }
 }

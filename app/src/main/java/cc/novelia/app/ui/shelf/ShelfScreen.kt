@@ -84,7 +84,6 @@ import cc.novelia.app.files.exporting.exportLocalBook
 import cc.novelia.app.files.downloads.deleteBookFiles
 import cc.novelia.app.ui.components.base.EmptyState
 import cc.novelia.app.ui.components.base.MenuRow
-import cc.novelia.app.ui.components.base.Screen
 import cc.novelia.app.ui.components.base.TextPrompt
 import cc.novelia.app.ui.components.base.rememberDebouncedQuery
 import cc.novelia.app.ui.feedback.Sticker
@@ -214,7 +213,7 @@ import kotlinx.coroutines.withContext
             importModel.start(listOf(tree), asSeries = true)
         }
     }
-    var importMenu by remember { mutableStateOf(false) }
+    var importMenu by rememberSaveable { mutableStateOf(false) }
     val recent = remember(shelfBooks, state.positions) {
         shelfBooks.asSequence().filter { state.positions.containsKey(it.book.ref.key) }.maxByOrNull { state.positions.getValue(it.book.ref.key).updatedAt }
     }
@@ -271,45 +270,21 @@ import kotlinx.coroutines.withContext
             }, onDelete = { permanentDeletion = chosen.map { it.book.ref }.toSet() },
             onSingleBook = chosen.singleOrNull()?.let { single -> { selected = single } }, comics = comics)
     }
-    Screen("书架", actions = {
-        if (!comics) {
-        AppIconButton(onClick = { if(profile == null) c.go("login") else favoriteSync = true },
-            enabled = !batchWorking && !cloudBusy) { Icon(Icons.Outlined.CloudSync, "云端与本地收藏同步") }
-        AppIconButton(onClick = { c.go("updates") }) { Icon(Icons.Outlined.NewReleases, "查看书架更新") }
-        }
-        AppIconButton(onClick = { c.go("history") }) { Icon(Icons.Outlined.History, "阅读历史") }
-        val showAdd = tab == 0 && !managing
-        Box {
-            AppIconButton(onClick = { if(showAdd) addToShelf = true else importLocalFiles() },
-                enabled = if(showAdd) !batchWorking else !importing,
-                modifier = Modifier.semantics { contentDescription = if(showAdd) "添加到书架" else "导入本地文件" }) {
-                val icon = if(showAdd) Icons.Outlined.Add else Icons.Outlined.FileOpen
-                if(reducedMotion) Icon(icon, null)
-                else Crossfade(icon, animationSpec = tween(AppMotion.Quick), label = "书架操作") { Icon(it, null) }
-            }
-            AppDropdownMenu(addToShelf, { addToShelf = false }) {
-                DropdownMenuItem({ Text("导入本地文件") }, { addToShelf = false; importLocalFiles() },
-                    enabled = !importing, leadingIcon = { Icon(Icons.Outlined.FileOpen, null) })
-                DropdownMenuItem({ Text("选择漫画图片文件夹") }, { addToShelf = false; comicFolder.launch(null) },
-                    enabled = !importing, leadingIcon = { Icon(Icons.Outlined.Folder, null) })
-                DropdownMenuItem({ Text("新建本地总集") }, { addToShelf = false; c.editLocalSeries(folderId = folderId) },
-                    leadingIcon = { Icon(Icons.Outlined.LibraryAdd, null) })
-            }
-        }
-        Box {
-            AppDropdownMenu(importMenu, { importMenu = false }) {
-                DropdownMenuItem({ Text("选择书籍文件") }, { importMenu = false; importLocalFiles() })
-                DropdownMenuItem({ Text("选择漫画图片文件夹") }, { importMenu = false; comicFolder.launch(null) })
-                DropdownMenuItem({ Text("导入系列文件夹") }, { importMenu = false; seriesFolder.launch(null) })
-            }
-        }
+    if (importMenu && !importing) ShelfImportSheet(onDismiss = { importMenu = false },
+        onFiles = { importMenu = false; importLocalFiles() },
+        onImages = { importMenu = false; comicFolder.launch(null) },
+        onSeries = { importMenu = false; seriesFolder.launch(null) })
+    Scaffold(containerColor = cc.novelia.app.ui.theme.pageContainerColor(), contentColor = MaterialTheme.colorScheme.onBackground, topBar = {
+        ShelfTopBar(medium = medium, switchEnabled = !batchWorking && !cloudBusy && !queueingDownloads,
+            onSwitch = { switchShelf(if (comics) BookMedium.Novel else BookMedium.Comic) },
+            importEnabled = !importing && !batchWorking, onImport = { importMenu = true }, onHistory = { c.go("history") },
+            onUpdates = { c.go("updates") },
+            onFavoriteSync = if (!comics) ({ if(profile == null) c.go("login") else favoriteSync = true }) else null,
+            favoriteSyncEnabled = !batchWorking && !cloudBusy,
+            onCreateSeries = if (!comics && tab == 0 && !managing) ({ c.editLocalSeries(folderId = folderId) }) else null)
     }) { padding ->
         ShelfPager(tab, { tab = it }, enabled = !batchWorking && !cloudBusy, singlePage = comics,
             classifyingBooks = classifyingBooks, modifier = Modifier.padding(padding),
-            header = {
-                ShelfKindSwitch(listOf("小说书架", "漫画书架"), medium.ordinal, "shelf-medium",
-                    enabled = !batchWorking && !cloudBusy && !queueingDownloads) { switchShelf(BookMedium.entries[it]) }
-            },
             controls = {
                 DocumentPickerFallback(importer, enabled = !importing)
                 DocumentImportPanel(importModel) { ref ->
