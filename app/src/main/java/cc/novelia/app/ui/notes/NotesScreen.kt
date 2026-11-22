@@ -21,6 +21,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.Note
+import cc.novelia.app.sharing.ShareCard
+import cc.novelia.app.sharing.ShareCardDialog
+import cc.novelia.app.sharing.excerptCard
 import cc.novelia.app.ui.components.base.AppLazyColumn
 import cc.novelia.app.ui.account.ProfileDetailList
 import cc.novelia.app.ui.theme.appRoundedCornerShape
@@ -37,6 +40,7 @@ import cc.novelia.app.ui.navigation.AppController
     var bookKey by rememberSaveable { mutableStateOf(c.nav.currentBackStackEntry?.savedStateHandle?.remove<String>("notesBookKey")) }
     var choosingBook by remember { mutableStateOf(false) }
     var exporting by remember { mutableStateOf(false) }
+    var sharedExcerpt by remember { mutableStateOf<ShareCard?>(null) }
     val export = rememberNoteExport(c)
     val settledQuery = rememberDebouncedQuery(query)
     val allNotes = remember(state.notes, state.books, state.positions) { presentNotes(state) }
@@ -73,6 +77,10 @@ import cc.novelia.app.ui.navigation.AppController
                 }) { Text("回到原文") }
                 AppTextButton(onClick = { editing = note }, modifier = Modifier.heightIn(min = 48.dp)) { Text("编辑笔记") }
                 AppTextButton(onClick = { c.share("${item.bookTitle} · ${item.chapterTitle}\n\n${note.quote}" + if(note.text.isNotBlank()) "\n\n${note.text}" else "") }) { Text("分享") }
+                if (note.quote.isNotBlank()) AppTextButton(onClick = {
+                    val parentKey = state.books.firstOrNull { it.book.ref.key == note.key }?.parentWenkuKey
+                    sharedExcerpt = note.excerptCard(item.bookTitle, item.chapterTitle, parentKey)
+                }) { Text("分享摘录图片") }
                 AppTextButton(onClick = {
                     c.store.update { it.copy(notes = it.notes.filterNot { n -> n.id == note.id }) }
                     c.action {
@@ -84,6 +92,7 @@ import cc.novelia.app.ui.navigation.AppController
             }
         } } }
     } }
+    sharedExcerpt?.let { card -> ShareCardDialog(card) { sharedExcerpt = null } }
     if(choosingBook) AppSheet(onDismissRequest = { choosingBook = false }) {
         AppLazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
             item { Text("按书籍查看", Modifier.padding(20.dp), style = MaterialTheme.typography.titleLarge) }

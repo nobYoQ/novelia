@@ -30,11 +30,15 @@ internal fun noteMatch(note: Note, paragraph: ReadingParagraph, displayIndex: In
     return ReadingTextMatch(displayIndex, part, start, start + note.quote.length)
 }
 
-/** 查看本段的全部已有版本，不改变阅读设置，也不请求新的翻译。 */
-internal fun paragraphVersions(chapter: Chapter, sourceIndex: Int, settings: ReaderSettings, checkCancelled: () -> Unit = {}): ReadingParagraph? =
+/** 整理选文可用的已有版本，不改变阅读设置，也不请求新的翻译。 */
+internal fun prepareParagraphVersions(chapter: Chapter, settings: ReaderSettings, checkCancelled: () -> Unit = {}): List<ReadingParagraph> =
     prepareReadingParagraphs(chapter, settings.copy(mode = "jp-zh", parallel = true,
         engines = listOf("sakura", "gpt", "youdao")), checkCancelled)
-        .firstOrNull { it.index == readingSourceAnchor(chapter, sourceIndex) }
+
+internal fun List<ReadingParagraph>.versionsAt(chapter: Chapter, sourceIndex: Int): ReadingParagraph? {
+    val anchor = readingSourceAnchor(chapter, sourceIndex)
+    return firstOrNull { it.index == anchor }
+}
 
 internal fun annotationLabel(part: TextPart, occurrence: Int): String = when(part.source) {
     "sakura" -> "Sakura 译文"

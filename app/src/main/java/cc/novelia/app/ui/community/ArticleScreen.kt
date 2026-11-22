@@ -21,6 +21,8 @@ import cc.novelia.app.ui.components.base.AppLazyColumn
 import cc.novelia.app.ui.components.base.AsyncContent
 import cc.novelia.app.ui.components.base.CachedAsyncContent
 import cc.novelia.app.ui.components.base.ContentShareButton
+import cc.novelia.app.sharing.ShareCard
+import cc.novelia.app.sharing.CardKind
 import cc.novelia.app.ui.components.base.ConfirmDialog
 import cc.novelia.app.ui.components.base.Screen
 import cc.novelia.app.ui.components.base.displayDate
@@ -48,14 +50,17 @@ import kotlinx.coroutines.CancellationException
     var tab by rememberSaveable(id) { mutableIntStateOf(0) }; var deletion by remember(id) { mutableStateOf<Article?>(null) }
     val tabState = rememberSaveableStateHolder()
     val detailKey = listOf(id, binding, profile?.userId, profile?.role, cacheGeneration)
-    var shareTitle by remember(detailKey) { mutableStateOf<String?>(null) }
-    Screen("文章", c::back, actions = { ContentShareButton(ForumLinks.articleUrl(id), shareTitle, "分享文章", c::share) }) { padding ->
+    var shareCard by remember(detailKey) { mutableStateOf<ShareCard?>(null) }
+    Screen("文章", c::back, actions = { ContentShareButton(ForumLinks.articleUrl(id), shareCard, "分享文章", c::share) }) { padding ->
         CachedAsyncContent(c.uiResults.articles, detailKey,
             load = { c.article(id) }, modifier = Modifier.padding(padding), revealContent = true,
             observeInvalidation = false, validate = { session.ensureCurrent(binding) }) { article, _ ->
-            DisposableEffect(detailKey, article.title) {
-                shareTitle = article.title
-                onDispose { shareTitle = null }
+            DisposableEffect(detailKey, article) {
+                shareCard = ShareCard(CardKind.Post, article.title, article.content,
+                    listOf(article.user.username, displayDate(article.createAt)).filter(String::isNotBlank).joinToString(" · "),
+                    listOf("论坛", article.category).filter(String::isNotBlank).joinToString("  /  "),
+                    ForumLinks.articleUrl(id), "扫码看原帖", article.forumTags.map { it.name })
+                onDispose { shareCard = null }
             }
             val now = rememberForumModificationTime(article.createAt)
             val favorite = remember(article, binding) { ForumFavoriteState(article.forumFavorited) }

@@ -38,7 +38,7 @@ class ReaderAnnotationsTest {
     @Test fun versionsIncludeHiddenEnginesWithoutChangingTheReadersChoice() {
         val chapter = Chapter(paragraphs = listOf("", "日本語"), sakuraParagraphs = listOf("", "樱译"), gptParagraphs = listOf("", "GPT译文"))
         val settings = ReaderSettings(mode = "zh", parallel = false)
-        val versions = paragraphVersions(chapter, 1, settings)!!
+        val versions = prepareParagraphVersions(chapter, settings).versionsAt(chapter, 1)!!
         assertEquals(1, versions.index)
         assertEquals(listOf("日本語", "樱译", "GPT译文"), versions.parts.map { it.text })
         assertEquals(listOf("樱译"), prepareReadingParagraphs(chapter, settings).single().parts.map { it.text })
@@ -47,8 +47,9 @@ class ReaderAnnotationsTest {
     @Test fun localVersionsUseReliableGroupsAndDoNotInventPairsForPlainText() {
         val content = LocalReadingContent(groups = listOf(LocalBilingualGroup(listOf(0), listOf(listOf(1), listOf(2)))))
         val chapter = Chapter(paragraphs = listOf("原文", "译文甲", "译文乙", "独立正文"), localContent = content)
-        assertEquals(listOf("原文", "译文甲", "译文乙"), paragraphVersions(chapter, 2, ReaderSettings())!!.parts.map { it.text })
-        assertEquals(listOf("独立正文"), paragraphVersions(chapter, 3, ReaderSettings())!!.parts.map { it.text })
+        val versions = prepareParagraphVersions(chapter, ReaderSettings())
+        assertEquals(listOf("原文", "译文甲", "译文乙"), versions.versionsAt(chapter, 2)!!.parts.map { it.text })
+        assertEquals(listOf("独立正文"), versions.versionsAt(chapter, 3)!!.parts.map { it.text })
     }
 
     @Test fun oldBookmarksDecodeAndTwoSelectionsInOneParagraphSurviveSerialization() {

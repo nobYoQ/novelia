@@ -26,6 +26,9 @@ import cc.novelia.app.ui.components.base.AppScrollColumn
     onNotes: () -> Unit,
     onSpeak: ((String, NoteSelection) -> Unit)? = null,
     onReplace: ((String) -> Unit)? = null,
+    onShareCard: ((String) -> Unit)? = null,
+    onShareMultiple: ((ParagraphShareStart) -> Unit)? = null,
+    onShareNoteCard: ((Note) -> Unit)? = null,
 ) {
     val content = versions ?: paragraph
     var selectedPart by remember(content) { mutableIntStateOf(content.parts.indexOfFirst {
@@ -51,6 +54,7 @@ import cc.novelia.app.ui.components.base.AppScrollColumn
                 val end = value.selection.max
                 val quote = part.text.substring(start, end)
                 val selection = selectionFor(content, selectedPart, start, end)
+                val excerpt = if (selection == null) part.text else quote
                 OutlinedTextField(value, { value = value.copy(selection = it.selection) }, readOnly = true,
                     minLines = 3, maxLines = 9, textStyle = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.fillMaxWidth().testTag("reader-selection-text"),
@@ -61,6 +65,14 @@ import cc.novelia.app.ui.components.base.AppScrollColumn
                     AppTextButton(onClick = { value = value.copy(selection = TextRange(0, part.text.length)) }) { Text("全选") }
                     AppTextButton(onClick = { onCopy(quote) }, enabled = selection != null) { Text("复制选文") }
                     AppTextButton(onClick = { onShare(quote) }, enabled = selection != null) { Text("分享选文") }
+                    if (onShareCard != null) AppTextButton(
+                        onClick = { onShareCard(excerpt) }, enabled = excerpt.isNotBlank(),
+                    ) { Text("生成段落卡") }
+                    if (onShareMultiple != null) AppTextButton(onClick = {
+                        val source = annotationSource(part)
+                        val occurrence = content.parts.take(selectedPart).count { annotationSource(it) == source }
+                        onShareMultiple(ParagraphShareStart(content.index, excerpt, source, occurrence))
+                    }, enabled = excerpt.isNotBlank()) { Text("选择多段") }
                     AppTextButton(onClick = { onLookup(quote) }, enabled = selection != null && quote.length <= 2000) { Text("查词 / 翻译") }
                     AppTextButton(onClick = { selection?.let { onAnnotate(quote, it, false) } }, enabled = selection != null && quote.length <= 100_000) { Text("划线") }
                     AppTextButton(onClick = { selection?.let { onAnnotate(quote, it, true) } }, enabled = selection != null && quote.length <= 100_000) { Text("写批注") }
@@ -81,6 +93,9 @@ import cc.novelia.app.ui.components.base.AppScrollColumn
                     Text(note.quote, maxLines = 3)
                     if(note.text.isNotBlank()) Text(note.text, style = MaterialTheme.typography.bodyMedium)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (onShareNoteCard != null && note.quote.isNotBlank()) {
+                            AppTextButton(onClick = { onShareNoteCard(note) }) { Text("分享摘录图片") }
+                        }
                         AppTextButton(onClick = { onEditNote(note) }) { Text("编辑笔记") }
                         AppTextButton(onClick = { onDeleteNote(note) }) { Text("删除记录") }
                     }

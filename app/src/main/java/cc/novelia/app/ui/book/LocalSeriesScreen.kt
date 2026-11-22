@@ -1,5 +1,8 @@
 package cc.novelia.app.ui.book
 
+import cc.novelia.app.sharing.shareCard
+import cc.novelia.app.ui.components.base.ContentShareButton
+
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -49,6 +52,7 @@ import cc.novelia.app.ui.shelf.MountedVolumeRow
     val cover = rememberCustomBookCover(ref)
     Screen("本地总集", onBack, actions = {
         if(parent != null) {
+            ContentShareButton(null, parent.book.shareCard(parent.seriesDescription, cover?.file), "分享作品", c::share)
             AppTextButton({ c.editLocalSeries(ref) }) { Text("编辑总集") }
             Box {
                 AppIconButton({ menu = true }) { Icon(Icons.Outlined.MoreVert, "更多操作") }

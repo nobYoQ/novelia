@@ -470,6 +470,21 @@ class ReaderAdaptiveUiTest {
         }
     }
 
+    @Test fun longPressCanShareNonAdjacentParagraphsInOneCard() = withReader(390.dp, document = LocalDocument(
+        "multi-share-ui", "测试读本", "txt", listOf(LocalChapter("first", "第一章", listOf("第一段正文。", "第二段正文。", "第三段正文。")))),
+    ) { _, _, _ ->
+        compose.onNodeWithText("第二段正文。", substring = true).performSemanticsAction(SemanticsActions.OnLongClick) { it() }
+        compose.onNodeWithText("选择多段").performScrollTo().performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("第一段正文。").fetchSemanticsNodes().any { it.config.contains(SemanticsProperties.ToggleableState) } }
+        compose.onNode(hasText("第三段正文。") and isToggleable()).performClick().assertIsOn()
+        compose.onNode(hasText("第一段正文。") and isToggleable()).performClick().assertIsOn()
+        compose.onNode(hasText("第二段正文。") and isToggleable()).performClick().assertIsOff()
+        compose.onNodeWithText("预览 · 2 段").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("分享图片预览").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("保存图片").assertIsDisplayed().assertIsEnabled()
+        compose.onNodeWithContentDescription("关闭").performClick()
+    }
+
     @Test fun directoryAndTextKeepTheirStateAcrossWideAndCompactLayouts() = withReader(1024.dp) { app, ref, resize ->
         compose.onNodeWithTag("reader-wide-layout").assertExists()
         compose.onNodeWithTag("reader-toc-chapter-first").assertIsSelected()

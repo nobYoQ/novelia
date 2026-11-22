@@ -23,12 +23,18 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.*
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.SquareCornerTarget
 import cc.novelia.app.data.model.ThemePreset
 import cc.novelia.app.files.importing.sharedDocumentUris
+import cc.novelia.app.data.catalog.BookLinks
+import cc.novelia.app.sharing.readCardLink
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import cc.novelia.app.launcher.observeLauncherSplashScreen
 import cc.novelia.app.ui.about.AboutScreen
 import cc.novelia.app.ui.about.OpenSourceLicensesScreen
@@ -99,6 +105,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.delay
 import cc.novelia.app.startup.StartupScreen
@@ -107,6 +114,12 @@ private data class AppAppearance(val theme: String, val amoledBlack: Boolean, va
     val reducedMotion: Boolean, val eInk: Boolean, val eInkBooks: Set<String>,
     val screenButtons: Boolean, val hideStatusBar: Boolean, val bookStatusBars: Map<String, Boolean>,
     val readerOrientation: String, val bookOrientations: Map<String, String>, val stickerPackId: String, val preset: ThemePreset?)
+
+/** 冷启动或切回前台时，返回栈可能已存在而首屏尚未恢复；此时应保留待处理的分享。 */
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+private suspend fun NavHostController.awaitResumedPage() {
+    currentBackStackEntryFlow.flatMapLatest { it.lifecycle.currentStateFlow }.first { it == Lifecycle.State.RESUMED }
+}
 private fun LibraryState.appearance() = AppAppearance(theme, amoledBlack, squareCorners, squareCornerTargets, reducedMotion || reader.eInkMode, reader.eInkMode,
     bookSettings.filterValues { it.eInkMode }.keys, reader.showEInkScreenButtons, reader.hideStatusBar, bookSettings.mapValues { it.value.hideStatusBar },
     reader.resolvedOrientation, bookSettings.mapValues { it.value.resolvedOrientation }, stickerPackId, themePresets.active)
@@ -117,6 +130,8 @@ private fun LibraryState.appearance() = AppAppearance(theme, amoledBlack, square
  * 根标签切换保存各自返回栈，详情页面则保留带不同参数的独立历史记录。
  */
 class MainActivity : ComponentActivity() {
+    private data class SharedImages(val uris: List<Uri>, val caption: String?)
+    private val incomingImages = MutableStateFlow<SharedImages?>(null)
     private val incoming = MutableStateFlow<String?>(null)
     private val incomingDocuments = MutableStateFlow<List<Uri>>(emptyList())
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -129,6 +144,9 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) receive(intent)
         else {
             incoming.value = savedInstanceState.getString("novelia.pendingLink")
+            savedInstanceState.getStringArrayList("novelia.pendingImages")?.let { images ->
+                incomingImages.value = SharedImages(images.map(Uri::parse), savedInstanceState.getString("novelia.imageCaption"))
+            }
             incomingDocuments.value = savedInstanceState.getStringArrayList("novelia.pendingDocuments").orEmpty().map(Uri::parse)
         }
         setContent {
@@ -148,6 +166,7 @@ class MainActivity : ComponentActivity() {
             val appearance by remember(app) { app.store.state.map { it.appearance() }.distinctUntilChanged() }
                 .collectAsStateWithLifecycle(initialValue = remember(app) { app.store.state.value.appearance() })
             val link by incoming.collectAsStateWithLifecycle()
+            val sharedImages by incomingImages.collectAsStateWithLifecycle()
             val sharedDocuments by incomingDocuments.collectAsStateWithLifecycle()
             val localStickers by remember(app) { app.stickerPacks.state.map { it.packs }.distinctUntilChanged() }
                 .collectAsStateWithLifecycle(initialValue = remember(app) { app.stickerPacks.state.value.packs })
@@ -180,7 +199,19 @@ class MainActivity : ComponentActivity() {
                     }
                     return@CompositionLocalProvider
                 }
-                LaunchedEffect(link) { link?.let { controller.openLink(it); incoming.value = null } }
+                LaunchedEffect(link) { link?.let { nav.awaitResumedPage(); controller.openLink(it); incoming.value = null } }
+                LaunchedEffect(sharedImages) {
+                    val images = sharedImages ?: return@LaunchedEffect
+                    val target = withContext(Dispatchers.IO) {
+                        images.uris.firstNotNullOfOrNull { readCardLink(contentResolver, it) }
+                            ?: images.caption?.takeIf { BookLinks.parse(it) != null }
+                    }
+                    nav.awaitResumedPage()
+                    if (incomingImages.compareAndSet(images, null)) {
+                        if (target != null) controller.openLink(target)
+                        else controller.message("未找到作品链接，请分享带二维码的卡片或原链接")
+                    }
+                }
                 LaunchedEffect(sharedDocuments) {
                     if(sharedDocuments.isNotEmpty()) {
                         // 冷启动时 LaunchedEffect 可能先于 NavHost 安装返回栈，等待首个页面就绪。
@@ -205,7 +236,7 @@ class MainActivity : ComponentActivity() {
                     appearance.bookOrientations[readingKey] ?: appearance.readerOrientation)
                 ObserveDownloadCelebrations(controller, route)
                 cc.novelia.app.ui.feedback.ObserveAppUpdates(controller, show = route?.startsWith("reader/") != true)
-                ObserveClipboardLinks(controller, externalLinkPending = link != null || sharedDocuments.isNotEmpty())
+                ObserveClipboardLinks(controller, externalLinkPending = link != null || sharedImages != null || sharedDocuments.isNotEmpty())
                 val roots = listOf("shelf", DISCOVER_ROUTE, COMMUNITY_ROUTE, "profile")
                 fun switchTab(target: String) { nav.switchRootTab(target) }
                 var navigationBarHeight by remember { mutableStateOf(0.dp) }
@@ -351,12 +382,24 @@ class MainActivity : ComponentActivity() {
     override fun onStop() { super.onStop(); (application as NoveliaApplication).persistState() }
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putString("novelia.pendingLink", incoming.value)
+        incomingImages.value?.let {
+            outState.putStringArrayList("novelia.pendingImages", ArrayList(it.uris.map(Uri::toString)))
+            outState.putString("novelia.imageCaption", it.caption)
+        }
         outState.putStringArrayList("novelia.pendingDocuments", ArrayList(incomingDocuments.value.map(Uri::toString)))
         super.onSaveInstanceState(outState)
     }
     override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); receive(intent) }
     private fun receive(intent: Intent) {
         val documents = intent.sharedDocumentUris()
+        if (intent.type?.startsWith("image/", ignoreCase = true) == true &&
+            (intent.action == Intent.ACTION_SEND || intent.action == Intent.ACTION_SEND_MULTIPLE)) {
+            incoming.value = null
+            incomingImages.value = SharedImages(documents.filter { it.scheme == "content" },
+                intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.take(8192)?.toString())
+            return
+        }
+        incomingImages.value = null
         if(documents.isNotEmpty()) {
             incoming.value = null
             incomingDocuments.value = (incomingDocuments.value + documents).distinct()

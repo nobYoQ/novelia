@@ -1,6 +1,11 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.reader
 
+import cc.novelia.app.sharing.ShareCard
+import cc.novelia.app.sharing.ShareCardDialog
+import cc.novelia.app.sharing.excerptCard
+import cc.novelia.app.sharing.paragraphCard
+
 import cc.novelia.app.ui.components.base.AppButton
 import cc.novelia.app.ui.components.base.AppTextButton
 import cc.novelia.app.ui.components.base.AppOutlinedButton
@@ -267,7 +272,8 @@ import kotlinx.serialization.encodeToString
     }
     BackHandler(preferences || (toc && !wideDirectory) || search || bookSearch) { preferences = false; toc = false; search = false; bookSearch = false }
     AsyncContent(listOf(ref, chapterId), load = { c.chapter(ref, chapterId, version > 0) }, refreshKey = version) { (chapter, cached), _ ->
-        val shelfBook = remember(local.books, ref) { local.books.firstOrNull { it.book.ref == ref }?.book }
+        val shelfEntry = remember(local.books, ref) { local.books.firstOrNull { it.book.ref == ref } }
+        val shelfBook = shelfEntry?.book
         val bookTitle = shelfBook?.title?.takeIf(String::isNotBlank) ?: chapter.novelTitleZh?.takeIf(String::isNotBlank)
             ?: chapter.novelTitleJp?.takeIf(String::isNotBlank) ?: local.readingHistory[ref.key]?.bookTitle.orEmpty()
         val knownChapterCount = maxOf(shelfBook?.total ?: 0,
@@ -410,19 +416,26 @@ import kotlinx.serialization.encodeToString
                     .getOrNull(firstParagraph)?.parts?.firstOrNull()?.text.orEmpty().take(800)
             }
         }
-        var selected by remember { mutableStateOf<ReadingParagraph?>(null) }
+        var selected by remember(ref, chapterId) { mutableStateOf<ReadingParagraph?>(null) }
+        var sharedQuote by remember(ref, chapterId) { mutableStateOf<ShareCard?>(null) }
+        var multiQuote by remember(ref, chapterId) { mutableStateOf<ParagraphShareStart?>(null) }
         var epubNote by remember(ref, chapterId) { mutableStateOf<String?>(null) }
         var chapterTitleOpen by remember(ref, chapterId) { mutableStateOf(false) }
         LaunchedEffect(settings.epubFootnotePopup) { if (!settings.epubFootnotePopup) epubNote = null }
-        var versions by remember { mutableStateOf<ReadingParagraph?>(null) }
-        LaunchedEffect(selected, chapter, settings.traditional, settings.textReplacements, settings.textReplacementsEnabled) {
-            versions = null
-            selected?.let { paragraph ->
-                versions = withContext(Dispatchers.Default) {
+        val selectingQuote = selected != null || multiQuote != null
+        val allVersions by key(chapter, settings.traditional, settings.textReplacements, settings.textReplacementsEnabled) {
+            produceState<List<ReadingParagraph>?>(null, selectingQuote) {
+                value = if (selectingQuote) withContext(Dispatchers.Default) {
                     val jobContext = currentCoroutineContext()
-                    paragraphVersions(chapter, paragraph.index, settings) { jobContext.ensureActive() } ?: paragraph
-                }
+                    prepareParagraphVersions(chapter, settings) { jobContext.ensureActive() }
+                } else null
             }
+        }
+        val versions = remember(allVersions, selected) { selected?.let { allVersions?.let { list -> list.versionsAt(chapter, it.index) ?: it } } }
+        fun previewExcerpt(text: String) {
+            sharedQuote = paragraphCard(ref, shelfEntry?.parentWenkuKey, chapterId, bookTitle, chapter.title, text)
+            selected = null
+            multiQuote = null
         }
         var note by remember { mutableStateOf<Note?>(null) }
         var bookmarkFeedback by remember { mutableStateOf<Job?>(null) }
@@ -589,7 +602,9 @@ import kotlinx.serialization.encodeToString
             readingLifecycle.lifecycle.addObserver(observer)
             onDispose { readingLifecycle.lifecycle.removeObserver(observer) }
         }
-        val contentPanelsClosed = !preferences && !editingTapZones && !search && (!toc || wideDirectory) && !autoReadSheet && !replacementsSheet && !bookSearch && !nextVolumePrompt && !chapterTitleOpen && selected == null && note == null
+        val contentPanelsClosed = !preferences && !editingTapZones && !search && (!toc || wideDirectory) &&
+            !autoReadSheet && !replacementsSheet && !bookSearch && !nextVolumePrompt && !chapterTitleOpen &&
+            selected == null && multiQuote == null && sharedQuote == null && note == null
         val panelsClosed = contentPanelsClosed && !speechSheet && epubNote == null
         val showTapTutorial = settings.tapPageTurn && !local.readerTapTutorialSeen && panelsClosed && !leaving &&
             !chapterLoad.loading && chapterLoad.error == null && positionState.initialAnchorRestored && !positionState.restoringAnchor && seekTarget == null &&
@@ -1179,9 +1194,25 @@ import kotlinx.serialization.encodeToString
             },
         )
         epubNote?.let { body -> ReaderFootnoteDialog(body) { epubNote = null } }
+        sharedQuote?.let { card -> ShareCardDialog(card) { sharedQuote = null } }
+        multiQuote?.let { start ->
+            val choices by produceState<List<ShareableParagraph>?>(null, start, allVersions, paragraphs) {
+                allVersions?.let { versions -> value = withContext(Dispatchers.Default) {
+                    val jobContext = currentCoroutineContext()
+                    shareableParagraphs(versions, paragraphs, start) { jobContext.ensureActive() }
+                } }
+            }
+            ReaderShareParagraphs(choices, start.index, onDismiss = { multiQuote = null }, onPreview = ::previewExcerpt)
+        }
         selected?.let { paragraph -> ReaderParagraphSheet(paragraph, versions, chapterNotes.filter { it.paragraph == paragraph.index }, onDismiss = { selected = null },
             onCopy = { text -> context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("选文", text)); c.message("选文已复制") },
             onShare = c::share, onLookup = { lookupReaderText(context, it, c::message) },
+            onShareCard = ::previewExcerpt,
+            onShareMultiple = { start -> multiQuote = start; selected = null },
+            onShareNoteCard = { bookmark ->
+                sharedQuote = bookmark.excerptCard(bookTitle, chapter.title, shelfEntry?.parentWenkuKey)
+                selected = null
+            },
             onSpeak = { quote, selection ->
                 selected = null; menu = false; speechSheet = false; speechRequestPending = true
                 val japanese = selection.source == "original" && (!ref.isLocal || quote.any { it in '\u3040'..'\u30ff' })

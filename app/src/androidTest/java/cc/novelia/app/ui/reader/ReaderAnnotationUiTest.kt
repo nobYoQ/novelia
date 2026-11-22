@@ -19,23 +19,29 @@ class ReaderAnnotationUiTest {
         val visible = ReadingParagraph(4, listOf(TextPart("前文 喜欢的句子 后文", "gpt")))
         val all = visible.copy(parts = listOf(TextPart("日本語の原文", "日文")) + visible.parts)
         var shared = ""
+        var cardText = ""
         var lookup = ""
         var spoken: Pair<String, NoteSelection>? = null
         var saved: Pair<String, NoteSelection>? = null
         compose.setContent {
             NoveliaTheme("light") { AppInteractionMode(false, true) {
                 ReaderParagraphSheet(visible, all, emptyList(), {}, {}, { shared = it }, { lookup = it }, {},
-                    { quote, range, _ -> saved = quote to range }, {}, {}, {}, onSpeak = { quote, range -> spoken = quote to range })
+                    { quote, range, _ -> saved = quote to range }, {}, {}, {}, onSpeak = { quote, range -> spoken = quote to range },
+                    onShareCard = { cardText = it })
             } }
         }
         compose.onNodeWithText("划线").assertIsNotEnabled()
+        compose.onNodeWithText("生成段落卡").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals("前文 喜欢的句子 后文", cardText) }
         compose.onNodeWithTag("reader-selection-text").performTextInputSelection(TextRange(3, 8))
         compose.onNodeWithText("分享选文").performScrollTo().performClick()
+        compose.onNodeWithText("生成段落卡").performScrollTo().performClick()
         compose.onNodeWithText("查词 / 翻译").performScrollTo().performClick()
         compose.onNodeWithText("划线").performScrollTo().performClick()
         compose.onNodeWithText("朗读选文").performScrollTo().performClick()
         compose.runOnIdle {
             assertEquals("喜欢的句子", shared)
+            assertEquals(shared, cardText)
             assertEquals(shared, lookup)
             assertEquals(shared to NoteSelection("gpt", start = 3, end = 8), saved)
             assertEquals(saved, spoken)
@@ -51,6 +57,8 @@ class ReaderAnnotationUiTest {
         compose.onNodeWithText("写批注").assertIsNotEnabled()
         compose.onNodeWithTag("reader-selection-text").performTextInputSelection(TextRange(0, 3))
         compose.onNodeWithText("写批注").performScrollTo().performClick()
+        compose.onNodeWithText("生成段落卡").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals("日本語", cardText) }
         compose.runOnIdle { assertEquals("日本語" to NoteSelection("original", start = 0, end = 3), saved) }
     }
 }

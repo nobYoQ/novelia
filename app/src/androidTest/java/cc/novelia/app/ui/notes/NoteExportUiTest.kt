@@ -1,5 +1,8 @@
 package cc.novelia.app.ui.notes
 
+import android.content.ContentUris
+import android.os.Build
+import android.provider.MediaStore
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
@@ -9,9 +12,13 @@ import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.NoveliaApplication
 import cc.novelia.app.data.model.Note
 import cc.novelia.app.data.model.NoteSelection
+import cc.novelia.app.sharing.readCardLink
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.theme.NoveliaTheme
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -36,5 +43,38 @@ class NoteExportUiTest {
             compose.onNodeWithText("Markdown（.md）").assertIsDisplayed()
             compose.onNodeWithText("纯文本（.txt）").assertIsDisplayed()
         } finally { app.store.update { before } }
+    }
+
+    @Test fun existingBookmarkSavesAllExcerptPagesWithTheChapterQr() {
+        assumeTrue(Build.VERSION.SDK_INT >= 29)
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
+        runBlocking { app.initialization.await() }
+        val before = app.store.state.value
+        val resolver = app.contentResolver
+        val collection = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+        val id = MediaStore.Images.Media._ID
+        fun savedIds() = resolver.query(collection, arrayOf(id), "${MediaStore.Images.Media.RELATIVE_PATH}=?",
+            arrayOf("Pictures/Novelia/"), null)!!.use { cursor -> buildSet { while (cursor.moveToNext()) add(cursor.getLong(0)) } }
+        val existingImages = savedIds()
+        val note = Note("bookmark-share", "kakuyomu/bookmark-share", "chapter-4", 0,
+            "还记得我们出发的那天。\n".repeat(20), "只留在笔记里的文字", bookTitle = "测试书籍", chapterTitle = "第四章")
+        try {
+            app.store.update { it.copy(notes = listOf(note)) }
+            compose.setContent { NoveliaTheme("light") {
+                NotesScreen(AppController(app, rememberNavController(), rememberCoroutineScope(), remember { SnackbarHostState() }))
+            } }
+            compose.onNodeWithText("分享摘录图片").performScrollTo().performClick()
+            compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("分享图片预览").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("保存图片").assertIsDisplayed().assertIsEnabled().performClick()
+            compose.waitUntil(20_000) { compose.onAllNodesWithText("张图片到相册 Novelia", substring = true).fetchSemanticsNodes().isNotEmpty() }
+            val saved = savedIds() - existingImages
+            assertTrue(saved.size > 1)
+            saved.forEach { image ->
+                assertEquals("https://n.novelia.cc/novel/kakuyomu/bookmark-share/chapter-4", readCardLink(resolver, ContentUris.withAppendedId(collection, image)))
+            }
+        } finally {
+            (savedIds() - existingImages).forEach { resolver.delete(ContentUris.withAppendedId(collection, it), null, null) }
+            app.store.update { before }
+        }
     }
 }
