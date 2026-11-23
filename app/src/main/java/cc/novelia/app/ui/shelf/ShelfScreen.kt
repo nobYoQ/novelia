@@ -25,7 +25,6 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -275,7 +274,6 @@ import kotlinx.coroutines.withContext
                     parents = rows.mapNotNull { row -> row.parent?.let { row.saved.book.ref.key to it.book.ref.key } }.toMap())
                 val listState = layout.current(grid)
                 val showControlsToggle = !managing && !batchWorking
-                val controlsScroll = rememberShelfControlsScroll(listState, active && showControlsToggle && state.shelfControlsFollowScroll)
                 val continueBook = recent?.takeIf { page == 0 && active && !pageManaging && volumeSheetKey == null }
                 val density = LocalDensity.current
                 val collapseThreshold = with(density) { 48.dp.roundToPx() }
@@ -316,7 +314,7 @@ import kotlinx.coroutines.withContext
                             footer = {
                                 if(showControlsToggle) ShelfControlsToggle(toolsExpanded,
                                     folder != "全部" || query.isNotBlank() || readingStatus != "全部" || pageType != ShelfBookType.All,
-                                    tucked = controlsScroll.tucked && listState.canScrollBackward, enabled = active) {
+                                    enabled = active) {
                                     c.store.update { it.copy(shelfControlsExpanded = !it.shelfControlsExpanded) }
                                 }
                             }) {
@@ -334,9 +332,7 @@ import kotlinx.coroutines.withContext
                         ShelfLayoutTransition(grid, Modifier.weight(1f)) { showGrid ->
                         AppLazyColumn(modifier = Modifier.fillMaxSize().onSizeChanged { if(showGrid == grid) listHeight = it.height },
                             listModifier = Modifier.testTag(if(showGrid) "shelf-books-grid" else "shelf-books")
-                                .then(if(showGrid == grid) Modifier.nestedScroll(controlsScroll) else Modifier)
                                 .shelfDragSelection(dragSelection, selectionEnabled && showGrid == grid), state = layout.current(showGrid),
-                            onPageTurn = { if(showGrid == grid) controlsScroll.onPageTurn(it, listState) },
                             verticalArrangement = Arrangement.spacedBy(if(showGrid) 14.dp else 0.dp),
                             contentPadding = PaddingValues(top = if(showGrid) 8.dp else 0.dp, bottom = if(continueBook != null)
                                 with(density) { continueHeight.toDp() } + 32.dp else 0.dp)) {

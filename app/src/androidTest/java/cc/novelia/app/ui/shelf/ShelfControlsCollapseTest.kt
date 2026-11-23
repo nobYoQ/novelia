@@ -5,6 +5,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -27,30 +30,29 @@ import org.junit.Test
 
 class ShelfControlsCollapseTest {
     @get:Rule val compose = createComposeRule()
+    private val capturePreview get() = InstrumentationRegistry.getArguments().getString("captureShelfControls") == "true"
 
     @Test fun arrowFoldsBothRowsAboveTheBooksAndRestoresLastChoice() {
         val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
-        val capturePreview = InstrumentationRegistry.getArguments().getString("captureShelfControls") == "true"
         withShelf { restoration ->
             val toggle = compose.onNodeWithTag("shelf-controls-toggle")
             val viewport = compose.onNodeWithTag("shelf-books")
             val partition = compose.onNodeWithTag("shelf-page-0")
             fun tabBounds() = (0..2).map { compose.onNodeWithTag("shelf-tab-$it").getUnclippedBoundsInRoot() }
             val tabs = tabBounds()
-            toggle.assertWidthIsEqualTo(48.dp).assertHeightIsEqualTo(28.dp)
+            toggle.assertHeightIsEqualTo(28.dp)
             val expandedTop = viewport.getUnclippedBoundsInRoot().top
             assertEquals(compose.onNodeWithTag("local-results-header").getUnclippedBoundsInRoot().bottom, toggle.getUnclippedBoundsInRoot().top)
             assertArrowAboveBooks(viewport, toggle)
             if(capturePreview) saveTestScreenshot("shelf-arrow-expanded.png")
 
-            val target = toggle.fetchSemanticsNode().boundsInRoot
             viewport.performTouchInput {
                 click(Offset(center.x, 1f))
-                click(Offset(center.x + target.width * .64f, target.height * .35f))
+                click(Offset(2f, 1f))
             }
             toggle.assertContentDescriptionEquals("收起书架工具栏")
 
-            toggle.performTouchInput { click(center) }
+            toggle.performTouchInput { click(Offset(2f, center.y)) }
             compose.onNodeWithTag("local-toolbar").assertDoesNotExist()
             compose.onNodeWithTag("local-results-header").assertDoesNotExist()
             assertEquals(tabs, tabBounds())
@@ -78,7 +80,7 @@ class ShelfControlsCollapseTest {
             compose.onNodeWithTag("local-layout-toggle").performClick()
             val grid = compose.onNodeWithTag("shelf-books-grid")
             assertArrowAboveBooks(grid, toggle)
-            toggle.performTouchInput { click(center) }
+            toggle.performTouchInput { click(Offset(width - 2f, center.y)) }
             assertEquals(partition.getUnclippedBoundsInRoot().top, toggle.getUnclippedBoundsInRoot().top)
             assertArrowAboveBooks(grid, toggle)
             assertEquals(tabs, tabBounds())
@@ -110,103 +112,70 @@ class ShelfControlsCollapseTest {
         }
     }
 
-    @Test fun arrowTucksWithinTheToolbarEdgeOnForwardScrollAndReturnsOnReverse() {
+    @Test fun arrowStaysFixedWhenBooksScrollInBothLayouts() {
         withShelf(reducedMotion = false) {
             val toggle = compose.onNodeWithTag("shelf-controls-toggle")
-            fun visibleHeight() = toggle.getUnclippedBoundsInRoot().let { it.bottom - it.top }
             for(tag in listOf("shelf-books", "shelf-books-grid")) {
                 val viewport = compose.onNodeWithTag(tag)
-                val top = viewport.getUnclippedBoundsInRoot().top
-                toggle.assertHeightIsEqualTo(28.dp)
+                val bounds = toggle.getUnclippedBoundsInRoot()
                 assertArrowAboveBooks(viewport, toggle)
-
-                fun startDrag(start: Float, end: Float) = viewport.performTouchInput {
-                    val x = width * .2f
-                    down(Offset(x, height * start))
-                    repeat(4) { step ->
-                        moveTo(Offset(x, height * (start + (end - start) * (step + 1) / 4f)), delayMillis = 16)
-                    }
-                }
-                fun releaseDrag() = viewport.performTouchInput { advanceEventTime(160); up() }
-
-                compose.mainClock.autoAdvance = false
-                try {
-                    startDrag(.85f, .25f)
-                    compose.mainClock.advanceTimeBy(96)
-                    val tucking = visibleHeight()
-                    assertTrue("$tag 缩回的中间高度为 $tucking", tucking > 22.dp && tucking < 28.dp)
-                    compose.mainClock.advanceTimeBy(400)
-                    toggle.assertHeightIsEqualTo(22.dp)
-                    assertArrowAboveBooks(viewport, toggle)
-                    assertEquals(top, viewport.getUnclippedBoundsInRoot().top)
-                    releaseDrag()
-
-                    startDrag(.35f, .65f)
-                    compose.mainClock.advanceTimeBy(96)
-                    val returning = visibleHeight()
-                    assertTrue("$tag 滑出的中间高度为 $returning", returning > 22.dp && returning < 28.dp)
-                    compose.mainClock.advanceTimeBy(400)
-                    toggle.assertHeightIsEqualTo(28.dp)
-                    assertArrowAboveBooks(viewport, toggle)
-                    assertEquals(top, viewport.getUnclippedBoundsInRoot().top)
-                    releaseDrag()
-                } finally { compose.mainClock.autoAdvance = true }
-
-                startDrag(.85f, .25f)
-                releaseDrag()
-                toggle.assertHeightIsEqualTo(22.dp).performTouchInput { click(center) }
-                compose.onNodeWithTag("local-toolbar").assertDoesNotExist()
-                toggle.performTouchInput { click(center) }
-                compose.onNodeWithTag("local-toolbar").assertIsDisplayed()
+                viewport.performTouchInput { swipeUp(durationMillis = 400) }
+                compose.onNodeWithTag("shelf-book-local/collapse-0").assertIsNotDisplayed()
+                assertEquals(bounds, toggle.getUnclippedBoundsInRoot())
+                viewport.performTouchInput { swipeDown(durationMillis = 400) }
+                assertEquals(bounds, toggle.getUnclippedBoundsInRoot())
                 if(tag == "shelf-books") compose.onNodeWithTag("local-layout-toggle").performClick()
             }
         }
     }
 
-    @Test fun eInkPageTurnsTuckAndRevealTheButtonImmediately() {
+    @Test fun eInkPageTurnsKeepTheArrowInPlace() {
         withShelf(eInk = true) {
             val toggle = compose.onNodeWithTag("shelf-controls-toggle")
-            toggle.assertHeightIsEqualTo(28.dp)
+            val bounds = toggle.getUnclippedBoundsInRoot()
+            if(capturePreview) saveTestScreenshot("shelf-arrow-eink.png")
             compose.onNodeWithText("下一屏").performClick()
-            toggle.assertHeightIsEqualTo(22.dp)
+            assertEquals(bounds, toggle.getUnclippedBoundsInRoot())
             compose.onNodeWithText("上一屏").performClick()
-            toggle.assertHeightIsEqualTo(28.dp)
+            assertEquals(bounds, toggle.getUnclippedBoundsInRoot())
         }
     }
 
-    @Test fun fixedArrowStaysInPlaceAcrossScrollsAndStillTogglesTheToolbar() {
-        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
-        withShelf(reducedMotion = false) {
-            val toggle = compose.onNodeWithTag("shelf-controls-toggle")
-            val viewport = compose.onNodeWithTag("shelf-books")
-            fun assertFixed() {
-                toggle.assertHeightIsEqualTo(28.dp)
-                assertArrowAboveBooks(viewport, toggle)
+    @Test fun arrowRowLetsTheBackgroundThroughOnlyOutsideEInkMode() {
+        val underlay = Color(0xFF334455)
+        var solid = Color.Unspecified
+        var eInk by mutableStateOf(false)
+        compose.setContent {
+            AppInteractionMode(eInk, reducedMotion = true) {
+                NoveliaTheme("light") {
+                    val container = MaterialTheme.colorScheme.surfaceContainerLow
+                    SideEffect { solid = container }
+                    Surface(color = underlay) {
+                        ShelfControlsToggle(expanded = true, hasActiveFilters = false, enabled = true) {}
+                    }
+                }
             }
-
-            compose.runOnIdle { app.store.update { it.copy(shelfControlsFollowScroll = false) } }
-            assertFixed()
-            viewport.performTouchInput { swipeUp(durationMillis = 400) }
-            compose.onNodeWithTag("shelf-book-local/collapse-0").assertIsNotDisplayed()
-            assertFixed()
-            viewport.performTouchInput { swipeDown(durationMillis = 400) }
-            assertFixed()
-            toggle.performTouchInput { click(center) }
-            compose.onNodeWithTag("local-toolbar").assertDoesNotExist()
-            assertFixed()
-            toggle.performTouchInput { click(center) }
-            compose.onNodeWithTag("local-toolbar").assertIsDisplayed()
-            compose.runOnIdle { app.store.update { it.copy(shelfControlsFollowScroll = true) } }
-            toggle.assertHeightIsEqualTo(28.dp)
         }
+        fun assertBackground(alpha: Float) {
+            val pixels = compose.onNodeWithTag("shelf-controls-toggle").captureToImage().toPixelMap()
+            val color = pixels[2, pixels.height / 2]
+            val expected = solid.copy(alpha = alpha).compositeOver(underlay)
+            assertEquals(expected.red, color.red, .01f)
+            assertEquals(expected.green, color.green, .01f)
+            assertEquals(expected.blue, color.blue, .01f)
+        }
+        assertBackground(.6f)
+        compose.runOnIdle { eInk = true }
+        assertBackground(1f)
     }
 
     private fun assertArrowAboveBooks(viewport: SemanticsNodeInteraction, toggle: SemanticsNodeInteraction) {
         val books = viewport.getUnclippedBoundsInRoot()
         val arrow = toggle.getUnclippedBoundsInRoot()
         assertEquals(28f, (books.top - arrow.top).value, .5f)
-        assertEquals(((books.left + books.right) / 2f).value, ((arrow.left + arrow.right) / 2f).value, .5f)
-        assertTrue("小箭头的点击区应在书目上方", arrow.bottom <= books.top)
+        assertEquals(books.left, arrow.left)
+        assertEquals(books.right, arrow.right)
+        assertEquals(books.top, arrow.bottom)
     }
 
     @Test fun compactLocalControlsKeepCommittedFiltersAndScrollPositionAcrossSheetsAndRestoration() {
@@ -261,7 +230,7 @@ class ShelfControlsCollapseTest {
             app.store.update { it.copy(books = List(60) { index -> SavedBook(
                 BookCard(BookRef("local", "collapse-$index"), "森林来信 ${index.toString().padStart(2, '0')}", authors = listOf("山川遥")), addedAt = 1L)
             }, positions = emptyMap(), shelfGrid = false, localFilesGrid = false, shelfControlsExpanded = true,
-                shelfControlsFollowScroll = true, rememberLastShelfFolder = false) }
+                rememberLastShelfFolder = false) }
             val restoration = StateRestorationTester(compose)
             restoration.setContent {
                 AppInteractionMode(eInk, reducedMotion) {

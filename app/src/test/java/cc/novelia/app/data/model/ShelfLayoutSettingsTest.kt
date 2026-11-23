@@ -1,5 +1,6 @@
 package cc.novelia.app.data.model
 
+import cc.novelia.app.data.storage.appJson
 import cc.novelia.app.data.webdav.WebDavProjection
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -35,14 +36,13 @@ class ShelfLayoutSettingsTest {
         }
     }
 
-    @Test fun shelfButtonFollowsScrollByDefaultAndFixedModeSurvivesSettingsBackup() {
-        val legacy = json.decodeFromString<LibraryState>("{}")
-        assertTrue(legacy.shelfControlsFollowScroll)
-        assertTrue(json.decodeFromString<SettingsBackup>("{}").shelfControlsFollowScroll)
-        val fixed = legacy.copy(shelfControlsFollowScroll = false)
-        assertFalse(json.decodeFromString<LibraryState>(json.encodeToString(fixed)).shelfControlsFollowScroll)
-        val backup = json.decodeFromString<SettingsBackup>(json.encodeToString(fixed.settingsBackup()))
-        assertFalse(backup.applyTo(legacy).shelfControlsFollowScroll)
-        assertEquals(WebDavProjection.library(legacy), WebDavProjection.library(fixed))
+    @Test fun oldLibrariesAndBackupsIgnoreTheRemovedShelfScrollSetting() {
+        val legacy = """{"shelfControlsFollowScroll":false,"shelfGrid":true}"""
+        val state = appJson.decodeFromString<LibraryState>(legacy)
+        val backup = appJson.decodeFromString<SettingsBackup>(legacy)
+        assertTrue(state.shelfGrid)
+        assertEquals(SettingsBackup(shelfGrid = true), backup)
+        assertFalse(appJson.encodeToString(state).contains("shelfControlsFollowScroll"))
+        assertFalse(appJson.encodeToString(state.settingsBackup()).contains("shelfControlsFollowScroll"))
     }
 }

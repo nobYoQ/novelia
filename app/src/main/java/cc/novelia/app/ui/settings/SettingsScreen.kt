@@ -195,9 +195,6 @@ private enum class SettingsSection(val title: String, val summary: String) {
             }
         }
         item { ProfileToggle("点击书架列表直接续读", "书架和云端收藏列表：点封面打开详情，点其余区域从本机进度续读；无进度或网格模式保持原行为", state.shelfTapToRead) { value -> c.store.update { it.copy(shelfTapToRead = value) } } }
-        item { ProfileToggle("折叠按钮跟随滚动", "浏览书目时小箭头随滚动缩回或复位。关闭后位置固定。", state.shelfControlsFollowScroll) { value ->
-            c.store.update { it.copy(shelfControlsFollowScroll = value) }
-        } }
         item { ProfileToggle("记住上次打开的收藏夹", "重新打开应用时恢复上次的书架分区和收藏夹", state.rememberLastShelfFolder) { value -> c.store.update { it.copy(rememberLastShelfFolder = value) } } }
         item { ProfileToggle("云端收藏同时保存到本地", "新增本地副本时优先放入同名收藏夹，没有则放入默认收藏；已有本地收藏不移动", state.autoSaveCloudFavoritesLocally) { value -> c.store.update { it.copy(autoSaveCloudFavoritesLocally = value) } } }
         item { ProfileToggle("本地收藏同时保存到云端", "登录后收藏网络或文库小说时，优先保存到云端同名收藏夹，没有则放入默认收藏夹；已有云端收藏不移动", state.autoSaveLocalFavoritesToCloud) { value -> c.store.update { it.copy(autoSaveLocalFavoritesToCloud = value) } } }

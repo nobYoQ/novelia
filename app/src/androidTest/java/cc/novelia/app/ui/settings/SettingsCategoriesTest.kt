@@ -8,7 +8,6 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.navigation.compose.rememberNavController
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.NoveliaApplication
-import cc.novelia.app.data.storage.LocalStore
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.saveTestScreenshot
 import cc.novelia.app.ui.theme.NoveliaTheme
@@ -183,27 +182,6 @@ class SettingsCategoriesTest {
             compose.runOnIdle { assertFalse(app.store.state.value.shelfTapToRead) }
         } finally {
             app.store.update { it.copy(shelfTapToRead = original) }
-            runBlocking { app.store.flush() }
-        }
-    }
-
-    @Test fun shelfButtonScrollSettingCanBeDisabledAndPersists() {
-        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
-        runBlocking { app.initialization.await() }
-        val original = app.store.state.value.shelfControlsFollowScroll
-        try {
-            app.store.update { it.copy(shelfControlsFollowScroll = true) }
-            compose.setContent { NoveliaTheme("light") {
-                SettingsScreen(AppController(app, rememberNavController(), rememberCoroutineScope(), remember { SnackbarHostState() }), "LIBRARY")
-            } }
-            val toggle = option("折叠按钮跟随滚动")
-            toggle.assertIsOn().performClick().assertIsOff()
-            runBlocking { app.store.flush() }
-            assertFalse(LocalStore(app).state.value.shelfControlsFollowScroll)
-            toggle.performClick().assertIsOn()
-            compose.runOnIdle { assertTrue(app.store.state.value.shelfControlsFollowScroll) }
-        } finally {
-            app.store.update { it.copy(shelfControlsFollowScroll = original) }
             runBlocking { app.store.flush() }
         }
     }

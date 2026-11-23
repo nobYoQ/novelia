@@ -134,7 +134,6 @@ fun legacyFolderId(name: String): String = if(name == DEFAULT_FOLDER) DEFAULT_FO
     val epubTocIncludeUnlisted: Map<String, Boolean> = emptyMap(),
     // 三个书架分区共用本机的工具栏展开状态。
     val shelfControlsExpanded: Boolean = true,
-    val shelfControlsFollowScroll: Boolean = true,
     val squareCornerTargets: Set<SquareCornerTarget> = SquareCornerTarget.defaults,
 )
 

@@ -23,7 +23,6 @@ import kotlinx.serialization.Serializable
     val ttsEnginePackage: String? = null,
     val themePresets: ThemePresets? = null,
     val readerThemePresets: Map<String, ReaderThemePalette>? = null,
-    val shelfControlsFollowScroll: Boolean = true,
     val squareCornerTargets: Set<SquareCornerTarget> = SquareCornerTarget.defaults)
 
 internal fun LibraryState.settingsBackup() = SettingsBackup(
@@ -33,7 +32,7 @@ internal fun LibraryState.settingsBackup() = SettingsBackup(
     amoledBlack = amoledBlack, stickerPackId = stickerPackId, discoverWenkuGrid = discoverWenkuGrid,
     rememberSavedSearchPage = rememberSavedSearchPage, shelfGrid = shelfGrid, localFilesGrid = localFilesGrid,
     cloudShelfGrid = cloudShelfGrid, shelfGridDensity = shelfGridDensity, shelfTapToRead = shelfTapToRead, rememberLastShelfFolder = rememberLastShelfFolder,
-    shelfControlsFollowScroll = shelfControlsFollowScroll, autoReadingStatus = autoReadingStatus,
+    autoReadingStatus = autoReadingStatus,
     edgeToolbar = edgeToolbar.normalized(), blockedBooks = blockedBooks,
     blockedTags = blockedTags, blockedAuthors = blockedAuthors, blockedUsers = blockedUsers, hideNovelComments = hideNovelComments,
     hideUnavailableComments = hideUnavailableComments, hideLocalFavorites = hideLocalFavorites, hideCloudFavorites = hideCloudFavorites,
@@ -66,7 +65,7 @@ internal fun SettingsBackup.applyTo(state: LibraryState): LibraryState = state.c
     reducedMotion = reducedMotion, squareCorners = squareCorners, amoledBlack = amoledBlack, stickerPackId = stickerPackId,
     discoverWenkuGrid = discoverWenkuGrid, rememberSavedSearchPage = rememberSavedSearchPage, shelfGrid = shelfGrid,
     localFilesGrid = localFilesGrid, cloudShelfGrid = cloudShelfGrid, shelfGridDensity = shelfGridDensity, shelfTapToRead = shelfTapToRead,
-    rememberLastShelfFolder = rememberLastShelfFolder, shelfControlsFollowScroll = shelfControlsFollowScroll,
+    rememberLastShelfFolder = rememberLastShelfFolder,
     edgeToolbar = edgeToolbar, blockedBooks = blockedBooks,
     blockedTags = blockedTags, blockedAuthors = blockedAuthors, blockedUsers = blockedUsers, hideNovelComments = hideNovelComments,
     hideUnavailableComments = hideUnavailableComments, hideLocalFavorites = hideLocalFavorites, hideCloudFavorites = hideCloudFavorites,
