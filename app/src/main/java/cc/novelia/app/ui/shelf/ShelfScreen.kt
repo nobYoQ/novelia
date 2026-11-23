@@ -22,9 +22,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -32,12 +34,16 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.library.moveShelfBooks
+import cc.novelia.app.data.library.CUSTOM_SHELF_SORT
+import cc.novelia.app.data.library.withShelfSort
+import cc.novelia.app.data.library.withShelfBookMoved
 import cc.novelia.app.data.catalog.CharacterCountFilter
 import cc.novelia.app.ui.components.base.CharacterCountFilterSaver
 import cc.novelia.app.data.library.ShelfBookType
@@ -103,7 +109,8 @@ import kotlinx.coroutines.withContext
         state.localFavoriteFolderOrder.ordered(state.localFavoriteFolders(), DEFAULT_FOLDER_ID)
     }
     val orderedFolders = remember(folderChoices) { folderChoices.map(Folder::title) }
-    var query by rememberSaveable { mutableStateOf("") }; var sort by rememberSaveable { mutableIntStateOf(0) }
+    var query by rememberSaveable { mutableStateOf("") }
+    val sort = state.shelfSort
     LaunchedEffect(tab, folderId, state.folderIds, state.rememberLastShelfFolder) {
         val validFolderId = folderId?.takeIf { it in state.folderIds.values }
         folderId = validFolderId
@@ -173,7 +180,7 @@ import kotlinx.coroutines.withContext
     val filteringVolumes = settledQuery.isNotBlank() || readingStatus != "全部"
     val reducedMotion = appReducedMotion()
     val cacheGeneration by c.store.cacheGeneration.collectAsStateWithLifecycle()
-    val shelfGroups = remember(state.books, state.positions, folder, settledQuery, sort, bookType, readingStatus) {
+    val shelfGroups = remember(state.books, state.positions, state.shelfBookOrder, folder, settledQuery, sort, bookType, readingStatus) {
         state.shelfGroups(localOnly = false, folder = folder, query = settledQuery, sort = sort, type = bookType, status = readingStatus)
     }
     val filterShelfCharacters = bookType == ShelfBookType.Web && characterFilter.active
@@ -243,7 +250,7 @@ import kotlinx.coroutines.withContext
             if(page == 2) CloudShelf(c, onOpenBook, selectedBookKey, active = active, observeInvalidation = !favoriteSync,
                 onSelectionStateChanged = updateCloudSelection) else BoxWithConstraints(Modifier.fillMaxSize()) {
                 // 邻页预组合时按自己的分区生成列表，不能复用当前选中页的数据或修剪其批量选择。
-                val baseGroups = if(page == 0) shelfGroups else remember(state.books, state.positions, folder, settledQuery, sort, fileType, readingStatus) {
+                val baseGroups = if(page == 0) shelfGroups else remember(state.books, state.positions, state.shelfBookOrder, folder, settledQuery, sort, fileType, readingStatus) {
                     state.shelfGroups(localOnly = true, folder = folder, query = settledQuery, sort = sort,
                         type = fileType, status = readingStatus)
                 }
@@ -254,6 +261,7 @@ import kotlinx.coroutines.withContext
                 val columns = shelfGridColumns(maxWidth, state.shelfGridDensity)
                 val compactGridCards = compactShelfGridCards(maxWidth, columns)
                 val gridRows = remember(groups, columns) { groups.chunked(columns) }
+                val groupKeys = remember(groups) { groups.map { it.saved.book.ref.key } }
                 val selectableKeys = remember(books, groups, grid) {
                     (if(grid) groups.filter { it.matchesFilters }.map { it.saved } else books).map { it.book.ref.key }.toSet()
                 }
@@ -270,7 +278,7 @@ import kotlinx.coroutines.withContext
                 val pageManaging = active && managing && volumeSheetKey == null
                 val toolsExpanded = state.shelfControlsExpanded
                 val pageType = if(page == 0) bookType else fileType
-                val layout = rememberShelfLayoutState(grid, rows.map { it.saved.book.ref.key }, groups.map { it.saved.book.ref.key }, columns,
+                val layout = rememberShelfLayoutState(grid, rows.map { it.saved.book.ref.key }, groupKeys, columns,
                     parents = rows.mapNotNull { row -> row.parent?.let { row.saved.book.ref.key to it.book.ref.key } }.toMap())
                 val listState = layout.current(grid)
                 val showControlsToggle = !managing && !batchWorking
@@ -292,18 +300,26 @@ import kotlinx.coroutines.withContext
                 var controlsHeight by remember { mutableIntStateOf(0) }
                 val gridHit = rememberShelfGridHitTest(layout.grid, gridRows.map { groupRow -> groupRow.map { it.saved.book.ref.key } }, columns)
                 val selectionEnabled = active && !batchWorking && volumeSheetKey == null
+                val reorderBooks = selectionEnabled && sort == CUSTOM_SHELF_SORT
+                val reorderKeys = remember(reorderBooks, groupKeys, selectableKeys) {
+                    if(reorderBooks) groupKeys.filter { it in selectableKeys } else emptyList()
+                }
                 val dragSelection = rememberShelfDragSelection(listState,
-                    (if(grid) groups.map { it.saved.book.ref.key } else rows.map { it.saved.book.ref.key }).filter { it in selectableKeys },
+                    (if(grid) groupKeys else rows.map { it.saved.book.ref.key }).filter { it in selectableKeys },
                     selection, pageManaging, selectionEnabled,
                     onBegin = { managing = true; filtersExpanded = false; focus.clearFocus() }, onSelection = { selection = it.intersect(selectableKeys) },
-                    hitTest = if(grid) gridHit else null)
+                    hitTest = if(grid) gridHit else null, reorderKeys = reorderKeys,
+                    onReorder = { key, target, after -> c.store.update { it.withShelfBookMoved(key, target, after) } })
+                val dropColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = .8f)
+                val dropOutline = MaterialTheme.colorScheme.primary
                 val canReorder = active && !grid && page == 0 && !managing && query.isBlank() && settledQuery.isBlank() && readingStatus == "全部"
                 val reorder = rememberVolumeReorderState(layout.list, rows, canReorder, commitVolumeOrder)
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     val filterHeight = maxHeight * .9f
                     Column(Modifier.fillMaxSize()) {
                         LocalShelfFilters(page == 1, pageType, { if(page == 0) bookType = it else fileType = it },
-                            folderChoices, folder, { folderId = state.folderIds[it] }, sort, { sort = it }, query, { query = it }, readingStatus, { readingStatus = it },
+                            folderChoices, folder, { folderId = state.folderIds[it] }, sort, { value -> c.store.update { it.withShelfSort(value) } },
+                            query, { query = it }, readingStatus, { readingStatus = it },
                             filtersExpanded, { filtersExpanded = it }, filterHeight, { createFolder = true }, { renameFolder = true }, { deleteFolder = true },
                             characters = characterFilter, onCharacters = { characterFilter = it },
                             countLabel = "${groups.size} 本" + groups.sumOf { it.volumes.size }.takeIf { it > 0 }?.let { " · $it 分卷" }.orEmpty(),
@@ -364,10 +380,14 @@ import kotlinx.coroutines.withContext
                                                 catch(_: Exception) { /* 离线保留已有进度。 */ }
                                             }
                                         }
-                                        ShelfCoverCard(saved.book, status, open, Modifier.weight(1f).testTag("shelf-book-$key").semantics {
+                                        ShelfCoverCard(saved.book, status, open, Modifier.weight(1f).testTag("shelf-book-$key").drawWithContent {
+                                            drawContent()
+                                            if(dragSelection.dropTarget == key) drawRect(dropOutline, style = Stroke(3.dp.toPx()))
+                                        }.semantics {
                                             this.selected = if(pageManaging) key in selection else key == selectedBookKey
                                             onClick(if(pageManaging) "切换选择" else "打开书籍") { open(); true }
                                             if(selectionEnabled && key in selectableKeys) onLongClick("选择${saved.book.title}") { dragSelection.selectOne(key); true }
+                                            customActions = dragSelection.reorderActions(key)
                                         }, selecting = pageManaging, selected = if(pageManaging) key in selection else key == selectedBookKey,
                                             enabled = !batchWorking && (!pageManaging || key in selectableKeys), pinned = saved.pinned,
                                             volumeLabel = if(saved.book.ref.isVolumeParent) {
@@ -419,6 +439,7 @@ import kotlinx.coroutines.withContext
                                         onClick(if(pageManaging) "切换选择" else if(onRead != null) "继续阅读" else "打开书籍") { (onRead ?: onOpen)(); true }
                                         if(pageManaging) stateDescription = if(saved.book.ref.key in selection) "已选择" else "未选择"
                                         if(active && selectable && !batchWorking) onLongClick("选择${saved.book.title}") { dragSelection.selectOne(saved.book.ref.key); true }
+                                        customActions = dragSelection.reorderActions(saved.book.ref.key)
                                     }
                                 val trailing: @Composable () -> Unit = {
                                     if(pageManaging) AppCheckbox(saved.book.ref.key in selection, { checked ->
@@ -433,7 +454,9 @@ import kotlinx.coroutines.withContext
                                     dragHandle = if(canReorder && reorder.siblings(saved.book.ref.key).size > 1) {
                                         { VolumeDragHandle(reorder, saved.book.ref.key, saved.book.title) }
                                     } else null)
-                                else Column(itemMotion.testTag("shelf-book-${saved.book.ref.key}").drawBehind { drawRect(selectionColor.value) }
+                                else Column(itemMotion.testTag("shelf-book-${saved.book.ref.key}").drawBehind {
+                                    drawRect(if(dragSelection.dropTarget == saved.book.ref.key) dropColor else selectionColor.value)
+                                }
                                     .semantics { if(!pageManaging && saved.book.ref.key == selectedBookKey) stateDescription = "已选中" }) {
                                     BookRow(if(filterCharacters) saved.book.copy(totalCharacters = characterCounts.count(saved.book)) else saved.book, onOpen,
                                         status = bookRowStatus(saved.book, saved, state.positions[saved.book.ref.key], state.bookUpdates[saved.book.ref.key], profile?.username),
@@ -458,6 +481,9 @@ import kotlinx.coroutines.withContext
                                     }
                                 }
                             }
+                        }
+                        if(showGrid == grid) dragSelection.draggedBook?.let { key ->
+                            groups.firstOrNull { it.saved.book.ref.key == key }?.let { ShelfReorderPreview(it.saved.book.title, dragSelection) }
                         }
                         }
                         if(pageManaging) selectionActions(page == 1, books.filter { it.book.ref.key in selection })

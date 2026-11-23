@@ -20,6 +20,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.catalog.CharacterCountFilter
+import cc.novelia.app.data.library.CUSTOM_SHELF_SORT
 import cc.novelia.app.data.library.ShelfBookType
 import cc.novelia.app.data.library.readingStatuses
 import cc.novelia.app.data.model.DEFAULT_FOLDER_ID
@@ -50,7 +51,7 @@ import cc.novelia.app.ui.components.base.*
         else listOf(ShelfBookType.All, ShelfBookType.Web, ShelfBookType.Wenku, ShelfBookType.Local, ShelfBookType.Series)
     val labels = if(localFiles) listOf("全部文件", "文库分卷", "本地小说", "总集分卷") else listOf("全部", "网络小说", "文库小说", "本地小说", "本地总集")
     val statuses = listOf("全部") + readingStatuses
-    val sorts = listOf("最近阅读", "添加时间", "书名排序")
+    val sorts = listOf("最近阅读", "添加时间", "书名排序", "自定义排序")
     val characterActive = !localFiles && type == ShelfBookType.Web && characters.active
     val count = (if(type != ShelfBookType.All) 1 else 0) + (if(status != "全部") 1 else 0) + (if(characterActive) 1 else 0)
     val showControls = visible && !collapsed
@@ -94,7 +95,7 @@ import cc.novelia.app.ui.components.base.*
             Box {
                 AppTextButton(onClick = { sortMenu = true; focus.clearFocus() },
                     modifier = Modifier.heightIn(min = 48.dp).testTag("local-sort-picker"), contentPadding = PaddingValues(horizontal = 8.dp)) {
-                    Text(sorts[sort.coerceIn(0, 2)], style = MaterialTheme.typography.labelMedium)
+                    Text(sorts.getOrElse(sort) { sorts.first() }, style = MaterialTheme.typography.labelMedium)
                     Spacer(Modifier.width(4.dp)); Icon(Icons.AutoMirrored.Outlined.Sort, null, Modifier.size(18.dp))
                 }
                 AppDropdownMenu(showControls && sortMenu, { sortMenu = false }, Modifier.testTag("local-sort-menu")) {
@@ -104,6 +105,8 @@ import cc.novelia.app.ui.components.base.*
             }
             if(grid != null) ShelfLayoutToggle(grid, onToggleLayout, "local")
         }
+        if(sort == CUSTOM_SHELF_SORT) Text("长按书籍后拖动调整顺序", Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+            style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if(count > 0 || (!searchExpanded && query.isNotBlank())) FlowRow(
             Modifier.fillMaxWidth().padding(horizontal = 20.dp).testTag("local-filter-summary"), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if(type != ShelfBookType.All) ShelfFilterChip(labels[types.indexOf(type).coerceAtLeast(0)], "local-clear-type") { onType(ShelfBookType.All) }

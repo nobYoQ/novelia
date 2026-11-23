@@ -9,6 +9,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.navigation.compose.rememberNavController
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.NoveliaApplication
+import cc.novelia.app.data.library.CUSTOM_SHELF_SORT
+import cc.novelia.app.data.library.shelfGroups
 import cc.novelia.app.data.model.*
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.navigation.TestShelfRootLayout
@@ -35,7 +37,8 @@ class ShelfDragSelectionTest {
         runBlocking { app.initialization.await() }
         assertNull("Use an anonymous dedicated test emulator", app.session.profile.value)
         before = app.store.state.value
-        app.store.update { it.copy(books = books, positions = emptyMap()) }
+        app.store.update { it.copy(books = books, positions = emptyMap(), shelfSort = 0, shelfBookOrder = emptyList(),
+            shelfGrid = false, localFilesGrid = false, shelfControlsExpanded = true, lastShelfLocation = ShelfLocation()) }
     }
     @After fun restore() { app.store.update { before } }
 
@@ -62,7 +65,7 @@ class ShelfDragSelectionTest {
         compose.onNodeWithText("已选 1 本").assertIsDisplayed()
         compose.onNodeWithTag("local-selection-actions").assertIsDisplayed()
         listOf("移动", "状态", "下载", "更多").forEach { compose.onNodeWithText(it).assertIsDisplayed() }
-        compose.onNodeWithContentDescription("发现", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithContentDescription("发现", useUnmergedTree = true).assertIsNotDisplayed()
         compose.onNodeWithTag("local-selection-download").assertIsNotEnabled()
         compose.runOnIdle { assertEquals(0, opened) }
         screenshot("shelf-selection-live")
@@ -146,6 +149,54 @@ class ShelfDragSelectionTest {
             assertEquals(books[1].status, saved.getValue(books[1].book.ref.key).status)
             assertEquals(parent.book.ref.key, saved.getValue(books[0].book.ref.key).parentWenkuKey)
         }
+    }
+
+    @Test fun customSortMovesTheSelectedBookInTheList() {
+        show()
+        chooseCustomSort()
+        dragBook(0, 2, "shelf-books")
+        compose.runOnIdle {
+            val state = app.store.state.value
+            assertEquals(CUSTOM_SHELF_SORT, state.shelfSort)
+            assertEquals(listOf(books[1].book.ref, books[2].book.ref, books[0].book.ref),
+                state.shelfGroups(false, "全部", "", state.shelfSort).take(3).map { it.saved.book.ref })
+            assertEquals(0, opened)
+        }
+        compose.onNodeWithTag("shelf-books").performScrollToIndex(0)
+        assertTrue(book(0).getUnclippedBoundsInRoot().top > book(2).getUnclippedBoundsInRoot().top)
+    }
+
+    @Test fun customSortSupportsHorizontalDragsInTheGrid() {
+        app.store.update { it.copy(shelfGrid = true, shelfGridDensity = ShelfGridDensity.Two) }
+        show()
+        chooseCustomSort()
+        dragBook(0, 1, "shelf-books-grid")
+        compose.runOnIdle {
+            assertEquals(listOf(books[1].book.ref.key, books[0].book.ref.key), app.store.state.value.shelfBookOrder.take(2))
+            assertEquals(0, opened)
+        }
+        assertTrue(book(0).getUnclippedBoundsInRoot().left > book(1).getUnclippedBoundsInRoot().left)
+    }
+
+    private fun chooseCustomSort() {
+        compose.onNodeWithTag("local-sort-picker").performClick()
+        compose.onNodeWithText("自定义排序").performClick()
+        compose.onNodeWithText("长按书籍后拖动调整顺序").assertIsDisplayed()
+    }
+
+    private fun dragBook(from: Int, to: Int, listTag: String) {
+        val list = compose.onNodeWithTag(listTag)
+        val origin = list.fetchSemanticsNode().boundsInRoot.topLeft
+        val start = book(from).fetchSemanticsNode().boundsInRoot.center - origin
+        val target = book(to).fetchSemanticsNode().boundsInRoot.center - origin
+        compose.mainClock.autoAdvance = false
+        try {
+            list.performTouchInput { down(start); moveTo(start + Offset(0f, 1f), delayMillis = 700) }
+            compose.mainClock.advanceTimeBy(32)
+            compose.onNodeWithText("已选 1 本").assertIsDisplayed()
+            list.performTouchInput { moveTo(target, delayMillis = 120); up() }
+            compose.mainClock.advanceTimeBy(400)
+        } finally { compose.mainClock.autoAdvance = true }
     }
 
     @Test fun ordinaryMotionUsesABottomFilterPanelAndPreservesTheListOnDismissal() {

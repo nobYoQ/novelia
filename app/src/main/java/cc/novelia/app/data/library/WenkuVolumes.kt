@@ -46,7 +46,7 @@ fun LibraryState.withoutBooks(refs: Set<BookRef>): LibraryState {
     val removed = books.filter { it.book.ref in refs }.associateBy { it.book.ref.key }
     return copy(books = books.filterNot { it.book.ref in refs }.map { saved ->
         removed[saved.parentWenkuKey]?.let { parent -> saved.copy(parentWenkuKey = null, folder = parent.folder) } ?: saved
-    }).pruneVolumeOrders()
+    }, shelfBookOrder = shelfBookOrder.filterNot { it in removed }).pruneVolumeOrders()
 }
 
 fun LibraryState.moveShelfBooks(keys: Set<String>, folder: String): LibraryState = copy(books = books.map { saved ->
@@ -96,7 +96,7 @@ data class ShelfGroup(val saved: SavedBook, val volumes: List<SavedBook> = empty
 /**
  * 构造书架显示分组：普通书架将分卷放在文库父项下，本地视图则平铺本地书。
  * 搜索命中子卷时保留父项作为上下文，父项命中时保留全部子卷；文件夹按有效父项判断。
- * 最近阅读排序取当前分组中父项和子卷的最新时间，置顶优先于其他排序条件。
+ * 最近阅读排序取当前分组中父项和子卷的最新时间；自定义顺序按书目键排序。
  */
 fun LibraryState.shelfGroups(localOnly: Boolean, folder: String, query: String, sort: Int,
     type: ShelfBookType = ShelfBookType.All, status: String = "全部"): List<ShelfGroup> {
@@ -126,6 +126,11 @@ fun LibraryState.shelfGroups(localOnly: Boolean, folder: String, query: String, 
         }
         .filter { it.matchesFilters || it.volumes.isNotEmpty() }
     fun recent(group: ShelfGroup): Long = (listOf(group.saved) + group.volumes).maxOf { positions[it.book.ref.key]?.updatedAt ?: it.addedAt }
+    if(sort == CUSTOM_SHELF_SORT) {
+        val ranks = shelfBookOrder.withIndex().associate { it.value to it.index }
+        return groups.sortedWith(compareBy<ShelfGroup> { ranks[it.saved.book.ref.key] ?: Int.MAX_VALUE }
+            .thenByDescending { it.saved.pinned }.thenByDescending(::recent).thenBy { it.saved.book.title }).toList()
+    }
     return groups.sortedWith(compareByDescending<ShelfGroup> { it.saved.pinned }
         .thenByDescending { if(sort == 0) recent(it) else if(sort == 1) it.saved.addedAt else 0 }
         .thenBy { it.saved.book.title }).toList()

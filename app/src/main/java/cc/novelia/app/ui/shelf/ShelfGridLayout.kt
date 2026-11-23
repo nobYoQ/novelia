@@ -117,11 +117,13 @@ internal class ShelfLayoutState(val list: LazyListState, val grid: LazyListState
     val gap = with(density) { 12.dp.toPx() }
     val rowKeys = remember(rows) { rows.associateBy { it.first() } }
     return { point, nearest ->
-        val visible = list.layoutInfo.visibleItemsInfo.filter { it.key in rowKeys }
-        val row = visible.firstOrNull { point.y >= it.offset && point.y < it.offset + it.size }
-            ?: if(nearest) visible.minByOrNull { abs(point.y - (it.offset + it.size / 2f)) } else null
+        val layout = list.layoutInfo
+        val y = point.y + layout.viewportStartOffset
+        val visible = layout.visibleItemsInfo.filter { it.key in rowKeys }
+        val row = visible.firstOrNull { y >= it.offset && y < it.offset + it.size }
+            ?: if(nearest) visible.minByOrNull { abs(y - (it.offset + it.size / 2f)) } else null
         val entries = row?.let { rowKeys[it.key] }
-        val width = list.layoutInfo.viewportSize.width.toFloat()
+        val width = layout.viewportSize.width.toFloat()
         val cell = (width - inset * 2 - gap * (columns - 1)) / columns
         val x = (if(rtl) width - point.x else point.x) - inset
         val column = if(cell > 0) ((x + if(nearest) gap / 2 else 0f) / (cell + gap)).toInt() else -1
