@@ -2,6 +2,8 @@ package cc.novelia.app.data.model
 
 import kotlinx.serialization.Serializable
 
+internal const val UNAVAILABLE_EPUB_CHAPTER_TEXT = "此章节使用当前阅读器无法打开的资源，且没有可读取的替代内容。"
+
 /** 保留 EPUB 的原始段落下标；一个 p 内的 br 可以对应多段。 */
 @Serializable data class LocalBilingualGroup(val original: List<Int>, val translations: List<List<Int>>)
 
@@ -67,6 +69,31 @@ internal fun LocalDocument.navigationToc(readingOrder: List<TocItem> = readingOr
     if (epubNavigationIds.isEmpty()) return readingOrder
     return epubNavigationIds.mapNotNull(byId::get).ifEmpty { readingOrder }
 }
+
+/** 有原书目录时按独立正文 ID 计数，纯插图页即使列在目录中也不会增加章数。 */
+internal fun LocalDocument.displayChapterCount(readChapter: (LocalChapter) -> LocalChapter = { it }): Int {
+    if(format != "epub") return chapters.size
+    val listed = navigationToc().mapNotNullTo(hashSetOf()) { it.chapterId }
+    return chapters.count { descriptor ->
+        if(descriptor.id !in listed) return@count false
+        val chapter = readChapter(descriptor)
+        val paragraphs = chapter.paragraphs
+        if(paragraphs.singleOrNull() == UNAVAILABLE_EPUB_CHAPTER_TEXT) return@count false
+        val first = paragraphs.indexOfFirst(String::isNotBlank)
+        val hasImage = paragraphs.any(::localImageParagraph)
+        paragraphs.indices.any { index ->
+            val text = paragraphs[index]
+            text.isNotBlank() && !localImageParagraph(text) &&
+                !(hasImage && index == first && text.trim() == chapter.title.trim())
+        }
+    }
+}
+
+private fun localImageParagraph(text: String): Boolean =
+    text.startsWith("novelia-image:") || text.startsWith("<图片>")
+
+internal fun localDocumentSubtitle(format: String, chapterCount: Int?): String =
+    format.uppercase() + (chapterCount?.let { " · $it 章" } ?: "")
 
 /** 倒序只反转同级条目，分组标题仍在子项之前。 */
 internal fun List<IndexedValue<TocItem>>.reverseTocSiblings(): List<IndexedValue<TocItem>> {

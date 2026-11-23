@@ -2,6 +2,7 @@ package cc.novelia.app.files.epub
 
 import cc.novelia.app.data.model.LocalChapter
 import cc.novelia.app.data.model.EpubNavigationEntry
+import cc.novelia.app.data.model.UNAVAILABLE_EPUB_CHAPTER_TEXT
 import cc.novelia.app.files.DocumentTools
 import java.io.File
 import java.io.FilterInputStream
@@ -65,7 +66,7 @@ internal fun readEpubContents(
         val html = path?.let(text)
         if (path == null || html == null) {
             return@mapNotNull LocalChapter(item.id, book.tocTitle(item) ?: UNAVAILABLE_CHAPTER,
-                listOf("此章节使用当前阅读器无法打开的资源，且没有可读取的替代内容。"),
+                listOf(UNAVAILABLE_EPUB_CHAPTER_TEXT),
                 epubContentVersion = EPUB_CONTENT_VERSION, downloadMode = downloadMode)
         }
         val directory = path.substringBeforeLast('/', "")

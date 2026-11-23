@@ -194,10 +194,13 @@ import kotlinx.coroutines.withContext
     fun fileAuthors(saved: SavedBook): List<String> = saved.book.authors.filter(String::isNotBlank).ifEmpty {
         allVolumeGroups[saved.parentWenkuKey]?.saved?.book?.authors.orEmpty().filter(String::isNotBlank)
     }
-    val missingAuthors = remember(state.books) {
-        state.books.filter { it.book.ref.isLocal && it.book.authors.none(String::isNotBlank) }.map { it.book.ref.id }
+    val incompleteLocalMetadata = remember(state.books) {
+        state.books.map { it.book }.filter {
+            it.ref.isLocal && (it.localChapterCount == null ||
+                (it.subtitle.substringBefore(" · ") == "EPUB" && it.authors.none(String::isNotBlank)))
+        }
     }
-    LaunchedEffect(c.store, missingAuthors) { c.store.restoreLocalEpubAuthors(missingAuthors) }
+    LaunchedEffect(c.store, incompleteLocalMetadata) { c.store.restoreLocalShelfMetadata(incompleteLocalMetadata) }
     val commitVolumeOrder: (String, List<String>) -> Unit = { parent, keys ->
         c.store.update { current ->
             val siblings = current.books.filter { it.book.ref.isLocal && it.parentWenkuKey == parent }.map { it.book.ref.key }

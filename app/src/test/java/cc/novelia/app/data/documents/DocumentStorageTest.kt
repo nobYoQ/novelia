@@ -4,6 +4,8 @@ import cc.novelia.app.data.model.LocalChapter
 import cc.novelia.app.data.model.LocalDocument
 import cc.novelia.app.data.model.LocalBilingualGroup
 import cc.novelia.app.data.model.LocalReadingContent
+import cc.novelia.app.data.model.UNAVAILABLE_EPUB_CHAPTER_TEXT
+import cc.novelia.app.data.model.displayChapterCount
 import cc.novelia.app.data.model.navigationToc
 import cc.novelia.app.data.storage.appJson
 import java.io.File
@@ -18,6 +20,31 @@ class DocumentStorageTest {
     private val original = LocalDocument("book", "中文书名", "txt", listOf(
         LocalChapter("chapter/1", "第一章", listOf("正文甲")),
         LocalChapter("chapter/2", "第二章", listOf("正文乙"))), sourceHash = "source")
+
+    @Test fun epubDisplayCountUsesTheOriginalDirectoryAndIgnoresIllustrationOnlyChapters() {
+        val directory = Files.createTempDirectory("document-chapter-count").toFile()
+        try {
+            val reads = mutableListOf<String>()
+            val storage = DocumentStorage(directory, { reads += it.name; it.readText() }, { file, text -> file.writeText(text) })
+            val image = "novelia-image:${"a".repeat(64)}"
+            val document = original.copy(format = "epub", chapters = listOf(
+                LocalChapter("cover", "封面", listOf(image)),
+                LocalChapter("art", "彩色插图", listOf("彩色插图", image)),
+                LocalChapter("unavailable", "图版", listOf(UNAVAILABLE_EPUB_CHAPTER_TEXT)),
+                LocalChapter("first", "第一章", listOf("第一章", image, "混有插图的正文")),
+                LocalChapter("continuation", "续页", listOf("第一章的未列出续页")),
+                LocalChapter("last", "末章", listOf("末章的正文")),
+            ), epubNavigationIds = listOf("art", "first", "last"))
+            assertEquals(2, document.displayChapterCount())
+            assertEquals(3, document.copy(epubNavigationIds = emptyList()).displayChapterCount())
+            val restored = storage.index(storage.save(document).id)
+            reads.clear()
+            assertEquals(2, storage.displayChapterCount(restored) {})
+            assertEquals(setOf("art", "first", "last").map { "${restored.chapterFiles[it]}.json" }.toSet(), reads.toSet())
+            assertEquals(document.chapters, storage.full(restored).chapters)
+            assertEquals(2, original.displayChapterCount())
+        } finally { directory.deleteRecursively() }
+    }
 
     @Test fun retainedDocumentIdsExcludeIndexesAndUncommittedFilesWithoutReadingBodies() {
         val directory = Files.createTempDirectory("retained-documents").toFile()

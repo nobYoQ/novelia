@@ -283,7 +283,7 @@ import kotlinx.coroutines.withContext
             }
             val readingOrder = remember(document) { document.readingOrderToc() }
             val navigation = remember(document, readingOrder) { document.navigationToc(readingOrder) }
-            val chapterCount = remember(navigation) { navigation.mapNotNull { it.chapterId }.distinct().size }
+            val chapterCount = book.localChapterCount ?: remember(navigation) { navigation.mapNotNull { it.chapterId }.distinct().size }
             val toc = remember(document, readingOrder, navigation, state.epubTocIncludeUnlisted[ref.key]) {
                 if(state.epubTocIncludeUnlisted[ref.key] == true) document.navigationWithUnlisted(readingOrder, navigation) else navigation
             }

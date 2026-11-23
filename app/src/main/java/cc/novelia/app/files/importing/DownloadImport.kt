@@ -12,7 +12,10 @@ import cc.novelia.app.data.library.withDownloadLink
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.DownloadEntry
+import cc.novelia.app.data.model.LocalDocument
 import cc.novelia.app.data.model.WenkuDetail
+import cc.novelia.app.data.model.displayChapterCount
+import cc.novelia.app.data.model.localDocumentSubtitle
 import cc.novelia.app.data.storage.LocalStore
 import cc.novelia.app.data.storage.appJson
 import cc.novelia.app.data.storage.hashName
@@ -97,9 +100,8 @@ suspend fun importLocalDocument(store: LocalStore, file: File, name: String = fi
             if (downloadMode != null) store.recordDocumentDownloadMode(it.id, downloadMode)
             if(store.state.value.books.none { saved -> saved.book.ref == it }) {
                 val document = store.documentIndex(it.id)
-                store.saveBook(BookCard(it, document.name,
-                    cover = document.coverImage?.let { image -> store.documentImage(document.id, image).absolutePath },
-                    subtitle = "${document.format.uppercase()} · ${document.chapters.size} 章", authors = document.authors.orEmpty()))
+                val count = store.documentDisplayChapterCount(document) { workContext.ensureActive() }
+                store.saveBook(store.importedBookCard(it, document, count))
             }
             return@withLock DocumentImportResult(it, false)
         }
@@ -120,9 +122,8 @@ suspend fun importLocalDocument(store: LocalStore, file: File, name: String = fi
                     if (!image.renameTo(destination)) image.copyTo(destination, overwrite = true)
                 }
                 store.saveDocument(document) { workContext.ensureActive() }
-                store.saveBook(BookCard(ref, document.name,
-                    cover = document.coverImage?.let { store.documentImage(document.id, it).absolutePath },
-                    subtitle = "${document.format.uppercase()} · ${document.chapters.size} 章", authors = document.authors.orEmpty()))
+                val count = document.displayChapterCount { chapter -> workContext.ensureActive(); chapter }
+                store.saveBook(store.importedBookCard(ref, document, count))
                 DocumentImportResult(ref, true)
             } catch (error: Exception) {
                 // 本次生成的新 ID 不可能对应已有的阅读副本。
@@ -132,6 +133,12 @@ suspend fun importLocalDocument(store: LocalStore, file: File, name: String = fi
         } finally { images.deleteRecursively() }
     }
 }
+
+private fun LocalStore.importedBookCard(ref: BookRef, document: LocalDocument, chapterCount: Int?) = BookCard(
+    ref, document.name, cover = document.coverImage?.let { documentImage(document.id, it).absolutePath },
+    subtitle = localDocumentSubtitle(document.format, chapterCount), authors = document.authors.orEmpty(),
+    localChapterCount = chapterCount,
+)
 
 /** 开始阅读和批量导入共用来源解析、文件去重和文库挂载。 */
 suspend fun importDownloadedDocument(app: NoveliaApplication, entry: DownloadEntry, onProgress: (String) -> Unit = {}): DocumentImportResult = downloadedBookLock.withLock {

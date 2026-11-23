@@ -127,7 +127,8 @@ import cc.novelia.app.ui.components.keywords.KeywordEditorDialog
     val reading = status ?: bookRowStatus(book, saved, presentation.positions[book.ref.key], presentation.updates[book.ref.key], presentation.account)
     val showProgress = showReadingProgress && !book.ref.isVolumeParent
     val updated = bookUpdateDate(book.updateAt ?: saved?.book?.updateAt?.takeIf { showBookMetadata })
-    val subtitle = book.subtitle.ifBlank { providers[book.ref.provider] ?: "本地小说" }
+    val subtitle = if(book.ref.isLocal && showLocalAuthors && book.localChapterCount == null && book.subtitle.startsWith("EPUB · ")) "EPUB"
+        else book.subtitle.ifBlank { providers[book.ref.provider] ?: "本地小说" }
     val characters = book.totalCharacters ?: saved?.book?.totalCharacters
     val novelType = book.novelType?.takeIf(String::isNotBlank) ?: saved?.book?.novelType?.takeIf(String::isNotBlank)
     val publishedVolumes = book.publishedVolumeCount ?: saved?.book?.publishedVolumeCount

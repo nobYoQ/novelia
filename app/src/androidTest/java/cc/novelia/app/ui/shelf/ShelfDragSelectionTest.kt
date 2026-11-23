@@ -23,6 +23,7 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import java.io.File
+import java.util.UUID
 
 class ShelfDragSelectionTest {
     @get:Rule val compose = createComposeRule()
@@ -195,6 +196,26 @@ class ShelfDragSelectionTest {
         compose.onNodeWithText("总集作者", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithTag("local-layout-toggle").performClick()
         compose.onNodeWithText("分卷作者", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test fun olderEpubShowsOnlyItsTextChaptersInBothLists() {
+        val ref = BookRef("local", UUID.randomUUID().toString())
+        val document = LocalDocument(ref.id, "含插图的旧书", "epub", listOf(
+            LocalChapter("cover", "封面", listOf("novelia-image:${"a".repeat(64)}")),
+            LocalChapter("chapter", "第一章", listOf("真实正文")),
+            LocalChapter("art", "插图", listOf("novelia-image:${"b".repeat(64)}")),
+        ), authors = listOf("旧书作者"))
+        app.store.saveDocument(document)
+        app.store.update { it.copy(books = listOf(SavedBook(BookCard(ref, document.name, subtitle = "EPUB · 3 章")))) }
+        try {
+            show()
+            compose.waitUntil(5_000) { compose.onAllNodesWithText("EPUB · 1 章", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("旧书作者", useUnmergedTree = true).assertIsDisplayed()
+            compose.onNodeWithText("EPUB · 3 章", useUnmergedTree = true).assertDoesNotExist()
+            compose.onNodeWithText("本地文件").performClick()
+            compose.onNodeWithText("EPUB · 1 章", useUnmergedTree = true).assertIsDisplayed()
+            compose.runOnIdle { assertEquals(1, app.store.state.value.books.single().book.localChapterCount) }
+        } finally { app.store.removeDocument(ref.id) }
     }
 
     private fun chooseCustomSort() {

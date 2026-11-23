@@ -31,6 +31,7 @@ import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.LocalChapter
 import cc.novelia.app.data.model.LocalDocument
 import cc.novelia.app.data.model.LocalReadingContent
+import cc.novelia.app.data.model.localDocumentSubtitle
 import cc.novelia.app.data.model.Position
 import cc.novelia.app.data.model.WebDetail
 import cc.novelia.app.files.DocumentTools
@@ -412,39 +413,54 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
     private fun loadDocumentIndex(id: String): LocalDocument =
         documentMemory[id] ?: documentStorage.index(id).also { documentMemory.put(id, it) }
 
-    internal suspend fun restoreLocalEpubAuthors(ids: List<String>) = withContext(Dispatchers.IO) {
-        if(ids.isEmpty() || recoveryIssue.value != null) return@withContext
+    internal suspend fun restoreLocalShelfMetadata(books: List<BookCard>) = withContext(Dispatchers.IO) {
+        if(books.isEmpty() || recoveryIssue.value != null) return@withContext
         val workContext = coroutineContext
-        val authors = buildMap {
-            for(id in ids) {
+        val metadata = buildMap {
+            for(book in books) {
                 workContext.ensureActive()
-                val recovered = try { localEpubAuthors(id) { workContext.ensureActive() } }
+                val recovered = try { localShelfMetadata(book) { workContext.ensureActive() } }
                 catch(e: CancellationException) { throw e }
-                catch(_: Exception) { emptyList() }
-                if(recovered.isNotEmpty()) put(id, recovered)
+                catch(_: Exception) { null }
+                if(recovered != null && recovered != book) put(book.ref, recovered)
             }
         }
-        if(authors.isEmpty()) return@withContext
+        if(metadata.isEmpty()) return@withContext
         workContext.ensureActive()
         update { state -> state.copy(books = state.books.map { saved ->
-            val recovered = authors[saved.book.ref.id]
-            if(saved.book.ref.isLocal && recovered != null && saved.book.authors.none(String::isNotBlank))
-                saved.copy(book = saved.book.copy(authors = recovered))
-            else saved
+            val book = saved.book
+            val recovered = metadata[book.ref] ?: return@map saved
+            saved.copy(book = book.copy(
+                authors = book.authors.takeIf { it.any(String::isNotBlank) } ?: recovered.authors,
+                localChapterCount = book.localChapterCount ?: recovered.localChapterCount,
+                subtitle = if(book.localChapterCount == null && recovered.localChapterCount != null) recovered.subtitle else book.subtitle,
+            ))
         }) }
     }
 
-    private fun localEpubAuthors(id: String, checkCancelled: () -> Unit): List<String> = synchronized(documentLock) {
-        val key = safeId(id)
+    private fun localShelfMetadata(book: BookCard, checkCancelled: () -> Unit): BookCard? = synchronized(documentLock) {
+        val key = safeId(book.ref.id)
         val source = documentSource(key, "epub")
-        if(!source.isFile) return@synchronized emptyList()
-        val index = loadDocumentIndex(key)
-        val authors = index.authors
-        if(authors != null) return@synchronized authors
-        if(index.format != "epub" || recoveryIssue.value != null) return@synchronized emptyList()
-        val updated = documentStorage.recoverEpubAuthors(index, source, checkCancelled)
-        documentMemory.put(key, updated)
-        updated.authors.orEmpty()
+        if(book.subtitle.substringBefore(" · ") != "EPUB" && !source.isFile) return@synchronized null
+        val index = if(book.localChapterCount == null) documentIndex(key) else loadDocumentIndex(key)
+        if(index.format != "epub" || recoveryIssue.value != null) return@synchronized null
+        val authors = if(book.authors.any(String::isNotBlank)) book.authors
+            else index.authors ?: if(source.isFile) {
+                try {
+                    val updated = documentStorage.recoverEpubAuthors(index, source, checkCancelled)
+                    documentMemory.put(key, updated)
+                    updated.authors.orEmpty()
+                } catch(e: CancellationException) { throw e }
+                catch(_: Exception) { emptyList() }
+            } else emptyList()
+        val count = book.localChapterCount ?: documentDisplayChapterCount(index, checkCancelled)
+        book.copy(authors = authors, localChapterCount = count, subtitle = localDocumentSubtitle(index.format, count))
+    }
+
+    internal fun documentDisplayChapterCount(index: LocalDocument, checkCancelled: () -> Unit): Int? = synchronized(documentLock) {
+        try { documentStorage.displayChapterCount(index, checkCancelled) }
+        catch(e: CancellationException) { throw e }
+        catch(_: Exception) { null }
     }
 
     fun documentChapter(id: String, chapterId: String): LocalChapter = synchronized(documentLock) {

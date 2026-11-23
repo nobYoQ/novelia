@@ -3,6 +3,7 @@ package cc.novelia.app.data.documents
 import cc.novelia.app.data.model.LocalChapter
 import cc.novelia.app.data.model.LocalDocument
 import cc.novelia.app.data.model.LocalReadingContent
+import cc.novelia.app.data.model.displayChapterCount
 import cc.novelia.app.data.storage.appJson
 import cc.novelia.app.data.storage.hashName
 import cc.novelia.app.files.epub.EPUB_TITLE_VERSION
@@ -66,12 +67,21 @@ internal class DocumentStorage(
     /** 外置章节校验哈希和 ID；升级过的 EPUB 以目录中的标题为准。 */
     fun chapter(index: LocalDocument, chapterId: String): LocalChapter {
         val descriptor = index.chapters.firstOrNull { it.id == chapterId } ?: error("本地章节不存在")
-        val hash = index.chapterFiles[chapterId] ?: return descriptor
+        return chapter(index, descriptor)
+    }
+
+    fun displayChapterCount(index: LocalDocument, checkCancelled: () -> Unit): Int = index.displayChapterCount { descriptor ->
+        checkCancelled()
+        chapter(index, descriptor)
+    }
+
+    private fun chapter(index: LocalDocument, descriptor: LocalChapter): LocalChapter {
+        val hash = index.chapterFiles[descriptor.id] ?: return descriptor
         val text = read(chapterFile(index.id, hash))
         require(hashName(text) == hash) { "本地章节文件校验失败" }
         val chapter = appJson.decodeFromString<LocalChapter>(text)
         val indexHasEpubTitles = index.format == "epub" && index.epubTitleVersion > 0
-        require(chapter.id == chapterId && (indexHasEpubTitles || chapter.title == descriptor.title)) { "本地章节文件与目录不一致" }
+        require(chapter.id == descriptor.id && (indexHasEpubTitles || chapter.title == descriptor.title)) { "本地章节文件与目录不一致" }
         return if (indexHasEpubTitles && chapter.title != descriptor.title) chapter.copy(title = descriptor.title) else chapter
     }
 

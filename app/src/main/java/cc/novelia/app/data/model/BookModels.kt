@@ -49,6 +49,8 @@ import kotlinx.serialization.Transient
     val publishedVolumeCount: Int? = null,
     // null 表示旧摘要尚未取得插画师；空列表表示详情明确没有插画师。
     val artists: List<String>? = null,
+    // 本地书架的正文章数与阅读顺序分开保存，避免影响插图页定位和阅读进度。
+    val localChapterCount: Int? = null,
     // 只展示本次从目录确认的最新章，不把它随书架备份长期保存。
     @Transient val latestChapter: TocItem? = null,
 )
