@@ -299,11 +299,7 @@ import kotlinx.coroutines.withContext
                     derivedStateOf { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset < collapseThreshold }
                 }
                 var continueHeight by remember { mutableIntStateOf(0) }
-                var listHeight by remember { mutableIntStateOf(0) }
-                // 电子纸的翻屏栏也位于列表底部，浮动入口需放在翻屏栏上方。
-                val pagingControlsHeight by remember {
-                    derivedStateOf { (listHeight - listState.layoutInfo.viewportSize.height).coerceAtLeast(0) }
-                }
+                var pagingControlsHeight by remember(listState) { mutableIntStateOf(0) }
                 var filtersExpanded by remember { mutableStateOf(false) }
                 LaunchedEffect(active) { if(!active) filtersExpanded = false }
                 val focus = LocalFocusManager.current
@@ -352,15 +348,16 @@ import kotlinx.coroutines.withContext
                             }
                         }
                         if(pageManaging) ShelfSelectionHeader(selection.size, !batchWorking,
-                            // 长按尚未松手时保持列表起点，避免进入选择模式后书籍从手指下跳开。
-                            if(dragSelection.dragging) with(density) { controlsHeight.toDp() } else 48.dp,
+                            // 连续勾选时保持列表起点。自定义排序的浮层跟随手指，可直接收起工具栏。
+                            if(dragSelection.dragging && dragSelection.draggedBook == null) with(density) { controlsHeight.toDp() } else 48.dp,
                             onSelectAll = { selection = selectableKeys },
                             onFinish = { managing = false; selection = emptySet() })
                         ShelfLayoutTransition(grid, Modifier.weight(1f)) { showGrid ->
-                        AppLazyColumn(modifier = Modifier.fillMaxSize().onSizeChanged { if(showGrid == grid) listHeight = it.height },
+                        AppLazyColumn(modifier = Modifier.fillMaxSize(),
                             listModifier = Modifier.testTag(if(showGrid) "shelf-books-grid" else "shelf-books")
                                 .shelfDragSelection(dragSelection, selectionEnabled && showGrid == grid), state = layout.current(showGrid),
                             verticalArrangement = Arrangement.spacedBy(if(showGrid) 14.dp else 0.dp),
+                            onPageButtonsHeightChanged = if(page == 0 && showGrid == grid) ({ pagingControlsHeight = it }) else null,
                             contentPadding = PaddingValues(top = if(showGrid) 8.dp else 0.dp, bottom = if(continueBook != null)
                                 with(density) { continueHeight.toDp() } + 32.dp else 0.dp)) {
                             if(books.isEmpty()) item {

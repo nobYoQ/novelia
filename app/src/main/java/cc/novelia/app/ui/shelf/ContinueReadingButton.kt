@@ -45,7 +45,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
 ) {
     val reducedMotion = appReducedMotion()
     val chapter = position.title.ifBlank { position.chapterIndex?.let { "第 ${it + 1} 章" } ?: "已记录阅读位置" }
-    MotionContent(book.ref.key, modifier) {
+    MotionContent(book.ref.key, modifier, animateInitial = false) {
         Surface(onClick = onClick, shape = appControlShape(DefaultShapes.medium),
             color = MaterialTheme.colorScheme.secondaryContainer,
             contentColor = MaterialTheme.colorScheme.onSecondaryContainer,

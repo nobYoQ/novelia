@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.rememberNavController
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.NoveliaApplication
@@ -177,22 +178,33 @@ class ShelfDragSelectionTest {
         show(reducedMotion = false) { previewColor = it }
         chooseCustomSort()
         val list = compose.onNodeWithTag("shelf-books")
-        val start = book(0).fetchSemanticsNode().boundsInRoot.center - list.fetchSemanticsNode().boundsInRoot.topLeft
+        val initialOrigin = list.fetchSemanticsNode().boundsInRoot.topLeft
+        val finger = book(0).fetchSemanticsNode().boundsInRoot.center
+        val start = finger - initialOrigin
         compose.mainClock.autoAdvance = false
         try {
             list.performTouchInput { down(start); moveTo(start + Offset(0f, 1f), delayMillis = 700) }
             compose.mainClock.advanceTimeBy(64)
             compose.onNodeWithText("已选 1 本").assertIsDisplayed()
+            compose.onNodeWithTag("local-selection-header").assertHeightIsEqualTo(48.dp)
+            val viewportTop = list.fetchSemanticsNode().boundsInRoot.top
+            assertTrue(viewportTop < initialOrigin.y)
             val pixels = list.captureToImage().toPixelMap()
             var colored = 0
             var sampled = 0
+            var lastColoredRow = -1
             for(y in 0 until pixels.height step 8) {
                 for(x in 0 until pixels.width step 8) {
                     sampled++
-                    if(pixels[x, y].toArgb() == previewColor) colored++
+                    if(pixels[x, y].toArgb() == previewColor) {
+                        colored++
+                        lastColoredRow = y
+                    }
                 }
             }
             assertTrue("Drag preview background covered $colored of $sampled samples", colored in 1..(sampled / 8))
+            val expectedPreviewBottom = finger.y - viewportTop - with(compose.density) { 12.dp.toPx() }
+            assertEquals("Drag preview stays with the stationary finger as the list moves", expectedPreviewBottom, lastColoredRow.toFloat(), 12f)
         } finally {
             list.performTouchInput { cancel() }
             compose.mainClock.autoAdvance = true
@@ -260,12 +272,13 @@ class ShelfDragSelectionTest {
         val list = compose.onNodeWithTag(listTag)
         val origin = list.fetchSemanticsNode().boundsInRoot.topLeft
         val start = book(from).fetchSemanticsNode().boundsInRoot.center - origin
-        val target = book(to).fetchSemanticsNode().boundsInRoot.center - origin
         compose.mainClock.autoAdvance = false
         try {
             list.performTouchInput { down(start); moveTo(start + Offset(0f, 1f), delayMillis = 700) }
             compose.mainClock.advanceTimeBy(32)
             compose.onNodeWithText("已选 1 本").assertIsDisplayed()
+            compose.onNodeWithTag("local-selection-header").assertHeightIsEqualTo(48.dp)
+            val target = book(to).fetchSemanticsNode().boundsInRoot.center - list.fetchSemanticsNode().boundsInRoot.topLeft
             list.performTouchInput { moveTo(target, delayMillis = 120); up() }
             compose.mainClock.advanceTimeBy(400)
         } finally { compose.mainClock.autoAdvance = true }

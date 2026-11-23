@@ -10,6 +10,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.toPixelMap
@@ -74,10 +75,10 @@ class ContinueReadingButtonTest {
 
     @After fun restore() { app.store.update { before } }
 
-    private fun showShelf(eInk: Boolean = false, fontScale: Float = 1f) {
+    private fun showShelf(eInk: Boolean = false, fontScale: Float = 1f, reducedMotion: Boolean = true) {
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, fontScale)) {
-                AppInteractionMode(eInk = eInk, reducedMotion = true) {
+                AppInteractionMode(eInk = eInk, reducedMotion = reducedMotion) {
                     NoveliaTheme("light") {
                         val nav = rememberNavController()
                         val scope = rememberCoroutineScope()
@@ -195,6 +196,41 @@ class ContinueReadingButtonTest {
         compose.onNodeWithTag("shelf-continue-reading").assertIsDisplayed()
         compose.onNodeWithContentDescription("发现", useUnmergedTree = true).performClick()
         compose.onNodeWithTag("shelf-continue-reading").assertDoesNotExist()
+    }
+
+    @Test fun continueButtonStaysDockedAfterCustomSort() {
+        app.store.update { it.copy(shelfSort = 0, shelfBookOrder = emptyList(), shelfControlsExpanded = true,
+            rememberLastShelfFolder = false) }
+        showShelf(reducedMotion = false)
+        val list = compose.onNodeWithTag("shelf-books")
+        val button = compose.onNodeWithTag("shelf-continue-reading")
+        fun assertDockedToList() {
+            val expectedBottom = list.getUnclippedBoundsInRoot().bottom - 16.dp
+            assertEquals(expectedBottom.value, button.getUnclippedBoundsInRoot().bottom.value, 1f)
+        }
+        assertDockedToList()
+        compose.onNodeWithTag("local-sort-picker").performClick()
+        compose.onNodeWithText("自定义排序").performClick()
+        val source = compose.onNodeWithTag("shelf-book-${recent.ref.key}")
+        val start = source.fetchSemanticsNode().boundsInRoot.center - list.fetchSemanticsNode().boundsInRoot.topLeft
+        compose.mainClock.autoAdvance = false
+        try {
+            list.performTouchInput { down(start); moveTo(start + Offset(0f, 1f), delayMillis = 700) }
+            compose.mainClock.advanceTimeBy(64)
+            button.assertDoesNotExist()
+            val target = compose.onNodeWithTag("shelf-book-${books[0].book.ref.key}")
+                .fetchSemanticsNode().boundsInRoot.center - list.fetchSemanticsNode().boundsInRoot.topLeft
+            list.performTouchInput { moveTo(target, delayMillis = 120); up() }
+            compose.mainClock.advanceTimeBy(400)
+            compose.runOnIdle { assertEquals(books[0].book.ref.key, app.store.state.value.shelfBookOrder.first()) }
+            compose.onNodeWithTag("local-selection-done").performClick()
+            repeat(6) {
+                compose.mainClock.advanceTimeBy(32)
+                if(button.isDisplayed()) assertDockedToList()
+            }
+        } finally { compose.mainClock.autoAdvance = true }
+        button.assertIsDisplayed()
+        assertDockedToList()
     }
 
     @Test fun largeTextRemainsThreeLinesAndEInkPageButtonsStayAccessible() {

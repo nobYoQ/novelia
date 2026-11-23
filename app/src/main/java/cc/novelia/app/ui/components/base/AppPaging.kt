@@ -21,6 +21,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.pageDown
@@ -51,6 +52,7 @@ internal fun screenPageDistance(viewport: Int, overlap: Float): Float =
     listModifier: Modifier = Modifier,
     onPageTurn: (Int) -> Unit = {},
     fillHeight: Boolean = true,
+    onPageButtonsHeightChanged: ((Int) -> Unit)? = null,
     content: LazyListScope.() -> Unit
 ) {
     val eInk = LocalEInkMode.current
@@ -68,7 +70,13 @@ internal fun screenPageDistance(viewport: Int, overlap: Float): Float =
             horizontalAlignment = horizontalAlignment, userScrollEnabled = !eInk,
             modifier = listModifier.weight(1f, fill = fillHeight).then(if (sheetEnd != null) Modifier.nestedScroll(sheetEnd) else Modifier).screenPageInput(eInk, page = page,
                 scroll = { amount -> scope.launch { state.scrollBy(amount) }; Unit }), content = content)
-        if(eInk && LocalScreenPageButtons.current && (state.canScrollBackward || state.canScrollForward)) ScreenPageButtons(state.canScrollBackward, state.canScrollForward, page)
+        if(eInk && LocalScreenPageButtons.current && (state.canScrollBackward || state.canScrollForward)) {
+            val pageButtonsModifier = if(onPageButtonsHeightChanged == null) Modifier
+                else Modifier.onSizeChanged { onPageButtonsHeightChanged(it.height) }
+            ScreenPageButtons(state.canScrollBackward, state.canScrollForward, page, pageButtonsModifier)
+        } else if(onPageButtonsHeightChanged != null) {
+            SideEffect { onPageButtonsHeightChanged(0) }
+        }
     }
 }
 
@@ -117,8 +125,8 @@ internal class SheetEndOverscrollConnection(private val canScrollForward: () -> 
     return if(horizontal) input.horizontalScroll(state, enabled = enabled && !eInk) else input.verticalScroll(state, enabled = enabled && !eInk)
 }
 
-@Composable internal fun ScreenPageButtons(back: Boolean, forward: Boolean, page: (Int) -> Unit) {
-    Surface {
+@Composable internal fun ScreenPageButtons(back: Boolean, forward: Boolean, page: (Int) -> Unit, modifier: Modifier = Modifier) {
+    Surface(modifier = modifier) {
         Column {
             HorizontalDivider()
             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {

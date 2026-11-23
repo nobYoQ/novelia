@@ -14,6 +14,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalViewConfiguration
@@ -46,10 +48,11 @@ internal fun shelfRangeSelection(keys: List<String>, baseline: Set<String>, anch
     private var anchor: String? = null
     private var baseline = emptySet<String>()
     private var selecting = true
-    private var startPosition = Offset.Zero
+    private var startInRoot = Offset.Zero
     private var movingBook = false
-    var pointer by mutableStateOf(Offset.Zero)
-        private set
+    private var viewportOrigin by mutableStateOf(Offset.Zero)
+    private var pointerInRoot by mutableStateOf(Offset.Zero)
+    val pointer: Offset get() = pointerInRoot - viewportOrigin
     var draggedBook by mutableStateOf<String?>(null)
         private set
     var dropTarget by mutableStateOf<String?>(null)
@@ -67,8 +70,8 @@ internal fun shelfRangeSelection(keys: List<String>, baseline: Set<String>, anch
         anchor = key
         baseline = if(managing()) selection() else emptySet()
         selecting = key !in baseline
-        pointer = position
-        startPosition = position
+        pointerInRoot = viewportOrigin + position
+        startInRoot = pointerInRoot
         dragging = true
         begin()
         if(reorderKeys().size > 1 && key in reorderKeys()) {
@@ -90,12 +93,19 @@ internal fun shelfRangeSelection(keys: List<String>, baseline: Set<String>, anch
 
     fun drag(position: Offset) {
         if(!dragging) return
-        pointer = position
+        pointerInRoot = viewportOrigin + position
         if(draggedBook != null && !movingBook) {
-            if((pointer - startPosition).getDistance() < touchSlop) return
+            if((pointerInRoot - startInRoot).getDistance() < touchSlop) return
             movingBook = true
         }
         updateDrag()
+    }
+
+    fun updateViewportOrigin(origin: Offset) {
+        if(viewportOrigin == origin) return
+        // 工具栏收起会移动书架视口，手指在根布局中的位置不随它改变。
+        viewportOrigin = origin
+        if(movingBook) updateDrag()
     }
 
     private fun updateDrag() {
@@ -203,7 +213,7 @@ internal fun shelfRangeSelection(keys: List<String>, baseline: Set<String>, anch
 }
 
 internal fun Modifier.shelfDragSelection(state: ShelfDragSelectionState, enabled: Boolean): Modifier =
-    if(!enabled) this else pointerInput(state) {
+    if(!enabled) this else onGloballyPositioned { state.updateViewportOrigin(it.positionInRoot()) }.pointerInput(state) {
         detectDragGesturesAfterLongPress(onDragStart = state::start, onDragEnd = state::finish,
             onDragCancel = state::cancel, onDrag = { change, _ ->
                 if(state.dragging) { change.consume(); state.drag(change.position) }
