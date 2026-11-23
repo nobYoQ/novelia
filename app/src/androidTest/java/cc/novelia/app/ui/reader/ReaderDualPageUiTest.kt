@@ -4,12 +4,16 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.reader.ReadingParagraph
@@ -17,6 +21,7 @@ import cc.novelia.app.reader.TextPart
 import cc.novelia.app.ui.saveTestScreenshot
 import cc.novelia.app.ui.theme.AppInteractionMode
 import cc.novelia.app.ui.theme.NoveliaTheme
+import kotlin.math.roundToInt
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -29,14 +34,22 @@ class ReaderDualPageUiTest {
         val paragraphs = listOf(ReadingParagraph(0, listOf(TextPart("旅人沿着林间的小路前行，寻找远处灯火通明的小镇。".repeat(300), "local"))))
         var width by mutableStateOf(800.dp)
         var enabled by mutableStateOf(true)
+        var hasHinge by mutableStateOf(false)
+        var origin by mutableStateOf(Offset.Zero)
         compose.setContent {
             NoveliaTheme("light") { AppInteractionMode(false, false) {
                 CompositionLocalProvider(LocalDensity provides Density(1f)) {
                     val settings = ReaderSettings(paginationMode = "auto", horizontalPageTurn = true, horizontalDualPage = enabled)
-                    EInkPage(paragraphs, settings, state, Modifier.requiredSize(width, 420.dp).testTag("spread-body"),
+                    val folds = if(hasHinge && width >= 720.dp) {
+                        val x = origin.x.roundToInt()
+                        val y = origin.y.roundToInt()
+                        listOf(IntRect(x + 320, y, x + 356, y + 420))
+                    } else emptyList()
+                    EInkPage(paragraphs, settings, state, Modifier.requiredSize(width, 420.dp).testTag("spread-body")
+                        .onGloballyPositioned { origin = it.positionInWindow() },
                         imageModel = { null }, onToggleMenu = {}, onSelect = {}, onPage = state::move,
                         chapterTitle = "第一章 林间", contentPadding = PaddingValues(horizontal = 24.dp),
-                        pageColumns = if(readerUsesDualPage(settings, width.value)) 2 else 1)
+                        pageColumns = if(readerUsesDualPage(settings, width.value)) 2 else 1, verticalFolds = folds)
                 }
             } }
         }
@@ -57,9 +70,19 @@ class ReaderDualPageUiTest {
         compose.waitForIdle()
         compose.onNodeWithTag("reader-page-chapter-title", useUnmergedTree = true).assertDoesNotExist()
         saveTestScreenshot("reader-dual-page.png")
-        val widePages = state.pages
+        val centeredPages = state.pages
+        compose.runOnIdle { hasHinge = true }
+        compose.waitUntil(15_000) { state.ready && state.visiblePageCount == 2 && state.pages !== centeredPages }
+        val body = compose.onNodeWithTag("spread-body").getUnclippedBoundsInRoot()
+        val bodyWidth = body.right - body.left
+        val hingeLeft = body.left + bodyWidth * (320f / 800f)
+        val hingeRight = body.left + bodyWidth * (356f / 800f)
+        assertTrue(compose.onNodeWithTag("reader-left-page").getUnclippedBoundsInRoot().right <= hingeLeft)
+        assertTrue(compose.onNodeWithTag("reader-right-page").getUnclippedBoundsInRoot().left >= hingeRight)
+        compose.runOnIdle { assertEquals(anchor, state.anchor) }
+        val hingePages = state.pages
         compose.runOnIdle { width = 360.dp }
-        compose.waitUntil(15_000) { state.ready && state.visiblePageCount == 1 && state.pages !== widePages }
+        compose.waitUntil(15_000) { state.ready && state.visiblePageCount == 1 && state.pages !== hingePages }
         compose.onNodeWithTag("reader-single-page", useUnmergedTree = true).assertExists()
         compose.runOnIdle {
             assertEquals(anchor, state.anchor)

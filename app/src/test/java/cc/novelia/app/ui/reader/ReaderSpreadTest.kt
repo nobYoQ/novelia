@@ -1,5 +1,6 @@
 package cc.novelia.app.ui.reader
 
+import androidx.compose.ui.unit.IntRect
 import cc.novelia.app.data.model.Position
 import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.reader.*
@@ -16,6 +17,27 @@ class ReaderSpreadTest {
         assertFalse(readerUsesDualPage(enabled, 719f))
         assertTrue(readerUsesDualPage(enabled, 720f))
         for(mode in listOf("scroll", "row")) assertFalse(readerUsesDualPage(enabled.withPaginationMode(mode), 1200f))
+    }
+
+    @Test fun anOffCenterHingeUsesWindowCoordinatesAndTheNarrowerPanel() {
+        val viewport = IntRect(24, 48, 824, 468)
+        val hinge = IntRect(334, 0, 370, 500)
+        val spread = readerSpreadLayout(viewport, listOf(hinge), maxPageWidth = 720, gutterWidth = 16, pageInset = 24)
+        assertEquals(ReaderSpreadLayout(leftPageX = 24, rightPageX = 442, pageWidth = 262, dividerX = null), spread)
+    }
+
+    @Test fun aZeroWidthFoldGetsClearanceOnBothSides() {
+        val viewport = IntRect(24, 48, 824, 468)
+        val fold = IntRect(424, 0, 424, 500)
+        val spread = readerSpreadLayout(viewport, listOf(fold), maxPageWidth = 720, gutterWidth = 16, pageInset = 0)
+        assertEquals(ReaderSpreadLayout(leftPageX = 0, rightPageX = 408, pageWidth = 392, dividerX = null), spread)
+    }
+
+    @Test fun foldsOutsideTheViewportLeaveTheCenteredSpreadAndWidthLimit() {
+        val viewport = IntRect(24, 48, 1524, 468)
+        val folds = listOf(IntRect(760, 0, 788, 48), IntRect(0, 0, 24, 500))
+        val spread = readerSpreadLayout(viewport, folds, maxPageWidth = 500, gutterWidth = 16, pageInset = 24)
+        assertEquals(ReaderSpreadLayout(leftPageX = 145, rightPageX = 903, pageWidth = 452, dividerX = 750), spread)
     }
 
     @Test fun forwardAndBackwardTurnTwoPagesIncludingAnOddFinalPage() {

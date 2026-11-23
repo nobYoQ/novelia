@@ -47,6 +47,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.core.view.WindowCompat
@@ -55,6 +56,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.window.layout.FoldingFeature
+import androidx.window.layout.WindowInfoTracker
 import cc.novelia.app.data.catalog.providers
 import cc.novelia.app.data.chapters.ChapterOffline
 import cc.novelia.app.data.chapters.chapterFreshness
@@ -103,6 +106,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
@@ -241,6 +245,16 @@ import kotlinx.serialization.encodeToString
         if(speechPlayback?.bookKey == ref.key) ReadAloudService.follow(false)
     }
     val context = LocalContext.current; val activity = context.activityOrNull()
+    val verticalFolds = if(activity != null && settings.horizontalDualPage && settings.paginationMode == "auto") {
+        val foldUpdates = remember(activity) {
+            WindowInfoTracker.getOrCreate(activity).windowLayoutInfo(activity).map { layout ->
+                layout.displayFeatures.filterIsInstance<FoldingFeature>()
+                    .filter { it.orientation == FoldingFeature.Orientation.VERTICAL }
+                    .map { feature -> feature.bounds.let { IntRect(it.left, it.top, it.right, it.bottom) } }
+            }
+        }
+        foldUpdates.collectAsStateWithLifecycle(initialValue = emptyList()).value
+    } else emptyList()
     fun speechAction(action: String) {
         if(action == "stop") speechRequestPending = false
         context.startService(Intent(context, ReadAloudService::class.java).setAction(action))
@@ -962,7 +976,7 @@ import kotlinx.serialization.encodeToString
                 highlightLayers = highlightLayers,
                 interactionEnabled = bodyInputEnabled, contentPadding = PaddingValues(horizontal = settings.resolvedHorizontalMargin.dp, vertical = settings.resolvedVerticalMargin.dp), onNavigate = openToc,
                 onNote = { pauseReadingAutomation(); epubNote = it }, chapterTitle = chapter.title, onLink = ::openEpubLink,
-                pageColumns = if(dualPage) 2 else 1)
+                pageColumns = if(dualPage) 2 else 1, verticalFolds = verticalFolds)
             } else LazyColumn(state = scroll, overscrollEffect = null, modifier = Modifier.testTag("reader-scroll")
                 .then(readerInteractionModifier { recordReadingInteraction(); pauseReadingAutomation() }).align(Alignment.TopCenter).fillMaxHeight()
                 .windowInsetsPadding(bodyInsets).padding(bottom = persistentBottomHeight).fillMaxWidth()

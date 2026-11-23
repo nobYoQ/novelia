@@ -32,7 +32,9 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -43,6 +45,9 @@ import androidx.compose.ui.semantics.text
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.model.Page
 import cc.novelia.app.data.model.Position
@@ -56,6 +61,7 @@ import cc.novelia.app.ui.theme.LocalReducedMotion
 import cc.novelia.app.ui.components.media.RecoveringAsyncImage as AsyncImage
 import coil.request.ImageRequest
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -255,14 +261,21 @@ internal fun measureChapterLines(paragraphs: List<ReadingParagraph>, settings: R
     highlightLayers: List<ReaderHighlightLayer> = listOfNotNull(activeMatch?.let { ReaderHighlightLayer(it, 1f) }),
     interactionEnabled: Boolean = true, contentPadding: PaddingValues = PaddingValues(0.dp), onNavigate: () -> Unit = {},
     onNote: (String) -> Unit = {}, chapterTitle: String = "", onLink: (String) -> Unit = {},
-    pageColumns: Int = 1,
+    pageColumns: Int = 1, verticalFolds: List<IntRect> = emptyList(),
 ) {
     val density = LocalDensity.current
     val layoutDirection = LocalLayoutDirection.current
     val pageTurnAxis = settings.pageTurnAxis
     val columns = pageColumns.coerceIn(1, 2)
-    val gutter = if(columns == 2) 16.dp else 0.dp
     val horizontalPadding = contentPadding.calculateLeftPadding(layoutDirection) + contentPadding.calculateRightPadding(layoutDirection)
+    val trackFold = columns == 2 && verticalFolds.isNotEmpty()
+    var windowPosition by remember(trackFold) { mutableStateOf<IntOffset?>(null) }
+    val pageWidthModifier = if(columns == 1) Modifier.wrapContentWidth(Alignment.CenterHorizontally).widthIn(max = settings.width.dp)
+        else Modifier
+    val foldPositionModifier = if(trackFold) Modifier.onGloballyPositioned { coordinates ->
+        val position = coordinates.positionInWindow()
+        windowPosition = IntOffset(position.x.roundToInt(), position.y.roundToInt())
+    } else Modifier
     val context = LocalContext.current
     val font = rememberReaderFont(settings)
     var expandedImage by remember { mutableStateOf<Pair<Any, String?>?>(null) }
@@ -270,7 +283,7 @@ internal fun measureChapterLines(paragraphs: List<ReadingParagraph>, settings: R
     val turnDuration = if(columns == 2) AppMotion.Quick else AppMotion.Standard
     var pageOffset by remember { mutableFloatStateOf(0f) }
     var dragAxis by remember { mutableIntStateOf(0) }
-    var viewport by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+    var viewport by remember { mutableStateOf(IntSize.Zero) }
     var transitionJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     var previousPageIndex by remember(state.pages) { mutableIntStateOf(state.pageIndex) }
     var incomingOffset by remember { mutableFloatStateOf(0f) }
@@ -381,16 +394,23 @@ internal fun measureChapterLines(paragraphs: List<ReadingParagraph>, settings: R
                 }
             }
             // 手势覆盖整个阅读区；限宽只作用于居中的正文和分页测量。
-            .wrapContentWidth(Alignment.CenterHorizontally).widthIn(max = settings.width.dp * columns + gutter).fillMaxWidth()
+            .then(pageWidthModifier).fillMaxWidth()
             .padding(if(columns == 1) contentPadding else PaddingValues(top = contentPadding.calculateTopPadding(), bottom = contentPadding.calculateBottomPadding())).clipToBounds()
+            .then(foldPositionModifier)
     ) {
-        val width = if(columns == 1) constraints.maxWidth.coerceAtLeast(1) else
-            ((constraints.maxWidth - with(density) { gutter.roundToPx() }) / columns - with(density) { horizontalPadding.roundToPx() }).coerceAtLeast(1)
         val height = constraints.maxHeight.coerceAtLeast(1)
+        val spread = if(columns == 2 && constraints.hasBoundedWidth && constraints.hasBoundedHeight) with(density) {
+            val viewportBounds = IntRect(windowPosition ?: IntOffset.Zero, IntSize(constraints.maxWidth, height))
+            readerSpreadLayout(viewportBounds, if(windowPosition != null) verticalFolds else emptyList(),
+                settings.width.dp.roundToPx(), 16.dp.roundToPx(), (horizontalPadding / 2).roundToPx())
+        } else null
+        val width = spread?.pageWidth ?: constraints.maxWidth.coerceAtLeast(1)
+        val waitingForFoldPosition = trackFold && windowPosition == null
         val typography = listOf(settings.readerTypography(density), settings.paragraphSpacing, settings.weight, settings.resolvedIndentSize, settings.parallel, settings.underline, settings.secondaryAlpha, font.typeface, font.loading,
             settings.showEpubRuby, settings.epubFootnotePopup, settings.showEpubStyles)
         val input = EInkMeasureInput(paragraphs, chapterTitle, typography, width, height, density.density, density.fontScale, columns)
-        val measured by produceState<EInkMeasurement?>(null, input) {
+        val measured by produceState<EInkMeasurement?>(null, input, waitingForFoldPosition) {
+            if(waitingForFoldPosition) return@produceState
             if(value != null) delay(120)
             if (!font.loading && width != Constraints.Infinity && height != Constraints.Infinity) {
                 val next = withContext(Dispatchers.Default) {
@@ -401,7 +421,7 @@ internal fun measureChapterLines(paragraphs: List<ReadingParagraph>, settings: R
                 value = EInkMeasurement(input, next)
             }
         }
-        val chapter = measured?.takeIf { it.input == input && state.pages === it.chapter.pages }?.chapter
+        val chapter = measured?.takeIf { !waitingForFoldPosition && it.input == input && state.pages === it.chapter.pages }?.chapter
         SideEffect { if(chapter == null) state.invalidate() else state.confirm(chapter.pages) }
         if (chapter == null) Text("正在分页…", Modifier.align(Alignment.Center), color = foreground)
         else {
@@ -421,16 +441,18 @@ internal fun measureChapterLines(paragraphs: List<ReadingParagraph>, settings: R
                             { if (canInteract) { tapNavigation.cancel(); onNote(it) } },
                             { if (canInteract) { tapNavigation.cancel(); onLink(it) } }, modifier)
                     }
-                    if(columns == 1) page(firstPage, spreadModifier)
+                    if(spread == null) page(firstPage, spreadModifier)
                     else CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                         val leftPage = firstPage + if(settings.rightToLeftPageTurn) 1 else 0
                         val rightPage = firstPage + if(settings.rightToLeftPageTurn) 0 else 1
-                        Row(spreadModifier) {
-                            page(leftPage, Modifier.weight(1f).fillMaxHeight().padding(horizontal = horizontalPadding / 2).clipToBounds().testTag("reader-left-page"))
-                            Box(Modifier.width(gutter).fillMaxHeight(), contentAlignment = Alignment.Center) {
-                                Box(Modifier.width(1.dp).fillMaxHeight().background(foreground.copy(alpha = .12f)))
+                        val pageModifier = Modifier.width(with(density) { spread.pageWidth.toDp() }).fillMaxHeight().clipToBounds()
+                        Box(spreadModifier) {
+                            page(leftPage, Modifier.absoluteOffset { IntOffset(spread.leftPageX, 0) }.then(pageModifier).testTag("reader-left-page"))
+                            spread.dividerX?.let { x ->
+                                Box(Modifier.absoluteOffset { IntOffset(x - 1.dp.roundToPx() / 2, 0) }
+                                    .width(1.dp).fillMaxHeight().background(foreground.copy(alpha = .12f)))
                             }
-                            page(rightPage, Modifier.weight(1f).fillMaxHeight().padding(horizontal = horizontalPadding / 2).clipToBounds().testTag("reader-right-page"))
+                            page(rightPage, Modifier.absoluteOffset { IntOffset(spread.rightPageX, 0) }.then(pageModifier).testTag("reader-right-page"))
                         }
                     }
                 }
