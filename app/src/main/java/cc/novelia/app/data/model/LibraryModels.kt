@@ -96,6 +96,7 @@ fun legacyFolderId(name: String): String = if(name == DEFAULT_FOLDER) DEFAULT_FO
     val shelfGrid: Boolean = false, val localFilesGrid: Boolean = false, val cloudShelfGrid: Boolean = false,
     val shelfGridDensity: ShelfGridDensity = ShelfGridDensity.Auto,
     val shelfSort: Int = 0, val shelfBookOrder: List<String> = emptyList(),
+    val cloudShelfSorts: Map<String, String> = emptyMap(),
     // 列表点击续读是本机操作偏好，默认关闭；普通设置备份保留，WebDAV 不同步。
     val shelfTapToRead: Boolean = false,
     // 书架打开位置仅保存在本机，云端收藏夹按账号隔离；不参与 WebDAV 同步。

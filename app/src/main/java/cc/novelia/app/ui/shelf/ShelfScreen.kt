@@ -328,7 +328,8 @@ import kotlinx.coroutines.withContext
                     val filterHeight = maxHeight * .9f
                     Column(Modifier.fillMaxSize()) {
                         LocalShelfFilters(page == 1, pageType, { if(page == 0) bookType = it else fileType = it },
-                            folderChoices, folder, { folderId = state.folderIds[it] }, sort, { value -> c.store.update { it.withShelfSort(value) } },
+                            folderChoices, folder, { folderId = state.folderIds[it] }, sort,
+                            { value -> c.action { c.store.updateAndFlush { it.withShelfSort(value) } } },
                             query, { query = it }, readingStatus, { readingStatus = it },
                             filtersExpanded, { filtersExpanded = it }, filterHeight, { createFolder = true }, { renameFolder = true }, { deleteFolder = true },
                             characters = characterFilter, onCharacters = { characterFilter = it },

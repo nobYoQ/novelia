@@ -19,6 +19,18 @@ class PartitionedLibraryTest {
     }
     private fun codec(dir: File) = LibraryStateCodec(dir, { it.readText(Charsets.UTF_8) }, { file, text -> file.writeText(text, Charsets.UTF_8) })
 
+    @Test fun shelfSortsSurviveDiskReloadIndependentlyOfRememberingFolders() = fixture { dir ->
+        val state = LibraryState(shelfSort = 2, rememberLastShelfFolder = false, lastShelfLocation = ShelfLocation(tab = 2))
+            .withCloudShelfSort("alice", "create")
+        val restored = codec(dir).decode(codec(dir).encode(state))
+
+        assertEquals(2, restored.shelfSort)
+        assertEquals(ShelfLocation(), restored.restoredShelfLocation())
+        assertEquals("create", restored.cloudShelfSort("alice"))
+        assertEquals("update", restored.cloudShelfSort("bob"))
+        assertEquals("update", restored.withCloudShelfSort("alice", "update").cloudShelfSort("alice"))
+    }
+
     @Test fun twoThousandBookMigrationAndProgressWritesPreserveAllOtherPartitions() = fixture { dir ->
         val legacy = LibraryState(books = List(2000) { SavedBook(BookCard(BookRef("local", "book-$it"), "测试小说 $it")) },
             notes = listOf(Note("note", "local/book-1999", "chapter", 23, "原文", "笔记")),

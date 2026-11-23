@@ -30,8 +30,10 @@ import cc.novelia.app.data.model.CloudShelfLocation
 import cc.novelia.app.data.model.restoredCloudShelfLocation
 import cc.novelia.app.data.model.Folder
 import cc.novelia.app.data.model.cloudFavoriteFolderOrder
+import cc.novelia.app.data.model.cloudShelfSort
 import cc.novelia.app.data.model.orderedLocalFavoriteFolders
 import cc.novelia.app.data.model.withCloudFavoriteFolderOrder
+import cc.novelia.app.data.model.withCloudShelfSort
 import cc.novelia.app.data.network.ALL_CLOUD_FAVORITES
 import cc.novelia.app.data.network.CloudWebFilter
 import cc.novelia.app.data.network.cloudFavorites
@@ -71,7 +73,7 @@ import cc.novelia.app.ui.navigation.AppController
     var create by remember { mutableStateOf(false) }
     var rename by remember { mutableStateOf<Folder?>(null) }
     var deleting by remember { mutableStateOf<Folder?>(null) }
-    var sort by rememberSaveable { mutableStateOf("update") }
+    val sort = local.cloudShelfSort(account)
     var query by rememberSaveable { mutableStateOf("") }
     var submitted by rememberSaveable { mutableStateOf("") }
     var source by rememberSaveable { mutableStateOf(providers.keys.joinToString(",")) }
@@ -168,7 +170,13 @@ import cc.novelia.app.ui.navigation.AppController
             val toolsExpanded = local.shelfControlsExpanded
             val showControlsToggle = !managing && !bulkBusy
             Column(Modifier.fillMaxSize()) {
-                CompactCloudControls(choices, current, { folderId = it; page = 0 }, sort, { sort = it; page = 0 }, kind, filter,
+                CompactCloudControls(choices, current, { folderId = it; page = 0 }, sort, { value ->
+                    page = 0
+                    c.action {
+                        c.session.ensureCurrent(binding)
+                        c.store.updateAndFlush { it.withCloudShelfSort(account, value) }
+                    }
+                }, kind, filter,
                     onApply = { nextKind, next ->
                         if(kind != nextKind) { kind = nextKind; folderId = ""; query = ""; submitted = "" }
                         source = next.source; type = next.type; level = next.level; translate = next.translate; page = 0

@@ -20,3 +20,12 @@ fun LibraryState.restoredShelfLocation(): ShelfLocation = if(rememberLastShelfFo
 
 fun LibraryState.restoredCloudShelfLocation(account: String): CloudShelfLocation =
     restoredShelfLocation().cloud[account]?.takeIf { it.kind in 0..1 } ?: CloudShelfLocation()
+
+internal fun LibraryState.cloudShelfSort(account: String): String =
+    if(cloudShelfSorts[account] == "create") "create" else "update"
+
+internal fun LibraryState.withCloudShelfSort(account: String, sort: String): LibraryState = when(sort) {
+    "create" -> copy(cloudShelfSorts = cloudShelfSorts + (account to sort))
+    "update" -> copy(cloudShelfSorts = cloudShelfSorts - account)
+    else -> this
+}

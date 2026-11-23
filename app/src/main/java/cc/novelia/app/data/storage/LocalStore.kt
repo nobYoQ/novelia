@@ -135,6 +135,12 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
      */
     fun update(transform: (LibraryState) -> LibraryState) = update(null, transform)
 
+    /** 用户选中排序后立即请求保存书库快照。 */
+    internal suspend fun updateAndFlush(transform: (LibraryState) -> LibraryState) {
+        update(transform)
+        withContext(Dispatchers.IO) { persistence.flush() }
+    }
+
     internal suspend fun saveLocalSeries(
         ref: BookRef, creating: Boolean, edits: LocalSeriesEdits,
         cover: (() -> InputStream)?, restoreDefaultCover: Boolean,

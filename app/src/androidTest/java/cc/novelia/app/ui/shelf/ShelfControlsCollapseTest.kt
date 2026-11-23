@@ -182,7 +182,7 @@ class ShelfControlsCollapseTest {
         withShelf { restoration ->
             compose.onNodeWithText("批量整理").assertDoesNotExist()
             compose.onNodeWithTag("local-filter-toggle").performClick()
-            compose.onNodeWithText("本地小说").performClick()
+            compose.onNodeWithTag("local-novel-kind-本地小说").performClick()
             compose.onNodeWithTag("local-filter-apply").performClick()
             compose.onNodeWithTag("local-sort-picker").performClick()
             compose.onNodeWithText("书名排序").performClick()
@@ -204,6 +204,22 @@ class ShelfControlsCollapseTest {
             compose.onNodeWithText("关闭面板").performClick()
             compose.onNodeWithTag("shelf-tab-0").performClick()
             compose.onNodeWithTag("local-clear-type").assertIsDisplayed()
+        }
+    }
+
+    @Test fun titleSortIsSavedOnSelectionAndAvailableToAReopenedStore() {
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
+        withShelf { restoration ->
+            runBlocking { app.store.flush() }
+            assertEquals(0, LocalStore(app).state.value.shelfSort)
+            val picker = compose.onNodeWithTag("local-sort-picker")
+            picker.assertTextContains("最近阅读", substring = true).performClick()
+            compose.onNodeWithText("书名排序").performClick()
+            compose.waitUntil(5_000) { LocalStore(app).state.value.shelfSort == 2 }
+            restoration.emulateSavedInstanceStateRestore()
+            picker.assertTextContains("书名排序", substring = true)
+            compose.onNodeWithTag("shelf-tab-1").performClick()
+            picker.assertTextContains("书名排序", substring = true)
         }
     }
 
@@ -229,7 +245,7 @@ class ShelfControlsCollapseTest {
         try {
             app.store.update { it.copy(books = List(60) { index -> SavedBook(
                 BookCard(BookRef("local", "collapse-$index"), "森林来信 ${index.toString().padStart(2, '0')}", authors = listOf("山川遥")), addedAt = 1L)
-            }, positions = emptyMap(), shelfGrid = false, localFilesGrid = false, shelfControlsExpanded = true,
+            }, positions = emptyMap(), shelfGrid = false, localFilesGrid = false, shelfSort = 0, shelfControlsExpanded = true,
                 rememberLastShelfFolder = false) }
             val restoration = StateRestorationTester(compose)
             restoration.setContent {
