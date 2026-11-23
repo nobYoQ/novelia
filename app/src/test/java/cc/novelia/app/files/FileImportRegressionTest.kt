@@ -1,5 +1,6 @@
 package cc.novelia.app.files
 
+import cc.novelia.app.files.epub.readEpubAuthors
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -35,6 +36,24 @@ class FileImportRegressionTest {
         assertEquals(images.keys.single(), document.coverImage)
         assertEquals(listOf("插图前", "novelia-image:${document.coverImage}", "插图后"), document.chapters.single().paragraphs)
         assertArrayEquals("image-content".toByteArray(), images.values.single())
+    }
+
+    @Test fun epubAuthorsAreReadFromThePackageDuringImportAndLegacyRecovery() {
+        val book = epub(mapOf("OPS/book.opf" to """
+            <package xmlns='http://www.idpf.org/2007/opf' xmlns:d='http://purl.org/dc/elements/1.1/'>
+              <metadata>
+                <d:creator> 青山 文子 </d:creator><d:creator>山川 遥</d:creator>
+                <d:creator>青山 文子</d:creator><d:creator> </d:creator>
+                <d:contributor>译者</d:contributor>
+              </metadata>
+              <manifest><item id='c' href='c.xhtml'/></manifest><spine><itemref idref='c'/></spine>
+            </package>
+        """.trimIndent().toByteArray()))
+        val expected = listOf("青山 文子", "山川 遥")
+        assertEquals(expected, DocumentTools.parseFile("旧书.epub", book, { _, _ -> }).authors)
+        assertEquals(expected, DocumentTools.parse("旧书.epub", book.readBytes()).authors)
+        assertEquals(expected, readEpubAuthors(book) {})
+        assertEquals(emptyList<String>(), readEpubAuthors(epub()) {})
     }
 
     @Test fun oversizedFileIsRejectedBeforeReadOrImageAllocation() {

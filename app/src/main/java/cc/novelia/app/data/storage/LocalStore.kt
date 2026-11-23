@@ -41,10 +41,12 @@ import cc.novelia.app.files.epub.contentMode
 import cc.novelia.app.files.epub.recoverEpubChapter
 import java.io.File
 import java.io.InputStream
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
@@ -409,6 +411,42 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
 
     private fun loadDocumentIndex(id: String): LocalDocument =
         documentMemory[id] ?: documentStorage.index(id).also { documentMemory.put(id, it) }
+
+    internal suspend fun restoreLocalEpubAuthors(ids: List<String>) = withContext(Dispatchers.IO) {
+        if(ids.isEmpty() || recoveryIssue.value != null) return@withContext
+        val workContext = coroutineContext
+        val authors = buildMap {
+            for(id in ids) {
+                workContext.ensureActive()
+                val recovered = try { localEpubAuthors(id) { workContext.ensureActive() } }
+                catch(e: CancellationException) { throw e }
+                catch(_: Exception) { emptyList() }
+                if(recovered.isNotEmpty()) put(id, recovered)
+            }
+        }
+        if(authors.isEmpty()) return@withContext
+        workContext.ensureActive()
+        update { state -> state.copy(books = state.books.map { saved ->
+            val recovered = authors[saved.book.ref.id]
+            if(saved.book.ref.isLocal && recovered != null && saved.book.authors.none(String::isNotBlank))
+                saved.copy(book = saved.book.copy(authors = recovered))
+            else saved
+        }) }
+    }
+
+    private fun localEpubAuthors(id: String, checkCancelled: () -> Unit): List<String> = synchronized(documentLock) {
+        val key = safeId(id)
+        val source = documentSource(key, "epub")
+        if(!source.isFile) return@synchronized emptyList()
+        val index = loadDocumentIndex(key)
+        val authors = index.authors
+        if(authors != null) return@synchronized authors
+        if(index.format != "epub" || recoveryIssue.value != null) return@synchronized emptyList()
+        val updated = documentStorage.recoverEpubAuthors(index, source, checkCancelled)
+        documentMemory.put(key, updated)
+        updated.authors.orEmpty()
+    }
+
     fun documentChapter(id: String, chapterId: String): LocalChapter = synchronized(documentLock) {
         val index = documentIndex(id)
         val key = "${index.id}/${index.chapterFiles[chapterId] ?: chapterId}"

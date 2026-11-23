@@ -99,7 +99,7 @@ suspend fun importLocalDocument(store: LocalStore, file: File, name: String = fi
                 val document = store.documentIndex(it.id)
                 store.saveBook(BookCard(it, document.name,
                     cover = document.coverImage?.let { image -> store.documentImage(document.id, image).absolutePath },
-                    subtitle = "${document.format.uppercase()} · ${document.chapters.size} 章"))
+                    subtitle = "${document.format.uppercase()} · ${document.chapters.size} 章", authors = document.authors.orEmpty()))
             }
             return@withLock DocumentImportResult(it, false)
         }
@@ -122,7 +122,7 @@ suspend fun importLocalDocument(store: LocalStore, file: File, name: String = fi
                 store.saveDocument(document) { workContext.ensureActive() }
                 store.saveBook(BookCard(ref, document.name,
                     cover = document.coverImage?.let { store.documentImage(document.id, it).absolutePath },
-                    subtitle = "${document.format.uppercase()} · ${document.chapters.size} 章"))
+                    subtitle = "${document.format.uppercase()} · ${document.chapters.size} 章", authors = document.authors.orEmpty()))
                 DocumentImportResult(ref, true)
             } catch (error: Exception) {
                 // 本次生成的新 ID 不可能对应已有的阅读副本。

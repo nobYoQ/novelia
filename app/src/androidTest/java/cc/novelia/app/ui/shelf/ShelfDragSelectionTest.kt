@@ -178,6 +178,25 @@ class ShelfDragSelectionTest {
         assertTrue(book(0).getUnclippedBoundsInRoot().left > book(1).getUnclippedBoundsInRoot().left)
     }
 
+    @Test fun localFilesShowAuthorsWhileGroupedVolumesStayCompact() {
+        val parent = SavedBook(BookCard(BookRef("wenku", "author-parent"), "文库作品", authors = listOf("总集作者")), addedAt = 1, volumesExpanded = true)
+        val standalone = books[0].copy(book = books[0].book.copy(authors = listOf("单本作者")))
+        val volume = books[1].copy(book = books[1].book.copy(authors = listOf("分卷作者")), parentWenkuKey = parent.book.ref.key)
+        val volumeWithoutAuthor = books[2].copy(parentWenkuKey = parent.book.ref.key)
+        app.store.update { it.copy(books = listOf(standalone, parent, volume, volumeWithoutAuthor)) }
+        show()
+        compose.onNodeWithText("单本作者", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithTag("shelf-volume-${volume.book.ref.key}").assertIsDisplayed()
+        compose.onNodeWithText("分卷作者", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithText("本地文件").performClick()
+        compose.onNodeWithText("单本作者", useUnmergedTree = true).assertIsDisplayed()
+        book(1).assertIsDisplayed()
+        compose.onNodeWithText("分卷作者", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("总集作者", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithTag("local-layout-toggle").performClick()
+        compose.onNodeWithText("分卷作者", useUnmergedTree = true).assertIsDisplayed()
+    }
+
     private fun chooseCustomSort() {
         compose.onNodeWithTag("local-sort-picker").performClick()
         compose.onNodeWithText("自定义排序").performClick()

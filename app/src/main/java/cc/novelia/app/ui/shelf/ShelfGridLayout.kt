@@ -138,6 +138,7 @@ internal class ShelfLayoutState(val list: LazyListState, val grid: LazyListState
     pinned: Boolean = false, onToggle: () -> Unit = onOpen,
     volumeLabel: String? = null, onVolumes: (() -> Unit)? = null, progressLabel: String? = null,
     compact: Boolean = false,
+    authorLabel: String? = null,
     footer: @Composable (() -> Unit)? = null,
 ) {
     val eInk = LocalEInkMode.current
@@ -156,6 +157,10 @@ internal class ShelfLayoutState(val list: LazyListState, val grid: LazyListState
                 verticalArrangement = Arrangement.spacedBy(if(compact) 2.dp else 4.dp)) {
                 Text(book.title, color = Color.White, style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold, maxLines = if(compact || largeText) 2 else 3, overflow = TextOverflow.Ellipsis)
+                authorLabel?.let {
+                    Text(it, color = Color.White.copy(alpha = .9f), style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
                 Text(progressLabel ?: status.progressLabel, color = Color.White.copy(alpha = .9f),
                     style = MaterialTheme.typography.labelSmall, maxLines = if(compact || largeText) 1 else 2, overflow = TextOverflow.Ellipsis)
             }

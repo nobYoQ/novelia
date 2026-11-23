@@ -121,7 +121,7 @@ import cc.novelia.app.ui.components.keywords.KeywordEditorDialog
 @OptIn(ExperimentalLayoutApi::class)
 @Composable internal fun BookRow(book: BookCard, onClick: () -> Unit, modifier: Modifier = Modifier, status: BookRowStatus? = null, showReadingProgress: Boolean = true, showBookMetadata: Boolean = true, showCharacterCount: Boolean = false, compactMetadata: Boolean = false, trailing: @Composable (() -> Unit)? = null,
     /** 非封面区域点击时直接继续阅读；为空则整行都走 onClick（进详情）。 */
-    onRead: (() -> Unit)? = null, useCustomCover: Boolean = true) {
+    onRead: (() -> Unit)? = null, useCustomCover: Boolean = true, showLocalAuthors: Boolean = false) {
     val presentation = LocalBookListPresentation.current
     val saved = presentation.books[book.ref.key]
     val reading = status ?: bookRowStatus(book, saved, presentation.positions[book.ref.key], presentation.updates[book.ref.key], presentation.account)
@@ -131,15 +131,17 @@ import cc.novelia.app.ui.components.keywords.KeywordEditorDialog
     val characters = book.totalCharacters ?: saved?.book?.totalCharacters
     val novelType = book.novelType?.takeIf(String::isNotBlank) ?: saved?.book?.novelType?.takeIf(String::isNotBlank)
     val publishedVolumes = book.publishedVolumeCount ?: saved?.book?.publishedVolumeCount
+    val authorLine = book.authors.ifEmpty { saved?.book?.authors.orEmpty() }.filter(String::isNotBlank).distinct().joinToString("、")
+        .takeIf { !book.ref.isLocal || showLocalAuthors }.orEmpty()
     val metadata = when {
         book.ref.isWenku -> publishedVolumes?.takeIf { it > 0 }?.let { "$it 卷" }.orEmpty()
+        book.ref.isLocal && authorLine.isNotBlank() -> subtitle
         novelType != null -> "$novelType · ${book.total} 章"
         book.total > 0 -> "${book.total} 章"
         else -> ""
     }
     // 列表摘要可能以状态和章节数作为副标题，详情摘要则以作者为副标题。
-    val compactSubtitle = book.authors.ifEmpty { saved?.book?.authors.orEmpty() }.filter(String::isNotBlank).distinct()
-        .joinToString("、").ifBlank {
+    val compactSubtitle = authorLine.ifBlank {
             subtitle.takeUnless { it == metadata || it == "${book.novelType.orEmpty()} · ${book.total} 章" }.orEmpty()
         }
     val fontScale = LocalDensity.current.fontScale
@@ -157,8 +159,10 @@ import cc.novelia.app.ui.components.keywords.KeywordEditorDialog
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(book.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        val byline = if(compactMetadata) compactSubtitle else subtitle
+                        val byline = if(compactMetadata) compactSubtitle else if(showLocalAuthors && book.ref.isLocal) authorLine.ifBlank { subtitle } else subtitle
                         if(byline.isNotBlank()) Text(byline, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if(!compactMetadata && showLocalAuthors && book.ref.isLocal && byline != subtitle) Text(subtitle,
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         if(!compactMetadata && showBookMetadata && (characters != null || showCharacterCount)) Text(characters?.let(::formatApproximateCharacters) ?: "字数未知",
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }

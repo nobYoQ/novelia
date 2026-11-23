@@ -44,7 +44,9 @@ fun LocalChapter.toReaderChapter(novelTitle: String? = null, prevId: String? = n
     val epubTitleVersion: Int = 0,
     /** 旧索引只记录有目录标题的章节 ID。 */
     val epubNavigationIds: List<String> = emptyList(),
-    val epubNavigation: List<EpubNavigationEntry> = emptyList())
+    val epubNavigation: List<EpubNavigationEntry> = emptyList(),
+    /** null 表示旧索引尚未读取作者元数据。 */
+    val authors: List<String>? = null)
 
 internal fun LocalDocument.readingOrderToc(): List<TocItem> = chapters.mapIndexed { index, chapter ->
     TocItem(chapter.title.ifBlank { "第 ${index + 1} 节" }, chapterId = chapter.id)

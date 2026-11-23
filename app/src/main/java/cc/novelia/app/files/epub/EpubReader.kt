@@ -13,6 +13,7 @@ internal data class EpubContents(
     val chapters: List<LocalChapter>,
     val cover: String?,
     val navigation: List<EpubNavigationEntry> = emptyList(),
+    val authors: List<String> = emptyList(),
 )
 
 internal data class EpubDirectory(val titles: Map<String, String>, val navigation: List<EpubNavigationEntry>)
@@ -77,7 +78,16 @@ internal fun readEpubContents(
             chapterTitle = { book.chapterTitle(item, it) }, link = { book.linkTarget(path, it, item.sourcePath ?: path) },
             preserveLegacyBody = preserveLegacyBody)
     }
-    return EpubContents(chapters, cover, book.navigation(chapters.mapTo(hashSetOf()) { it.id }))
+    return EpubContents(chapters, cover, book.navigation(chapters.mapTo(hashSetOf()) { it.id }), book.authors)
+}
+
+/** 补回旧导入的作者时只读容器和 OPF。 */
+internal fun readEpubAuthors(file: File, checkCancelled: () -> Unit): List<String> {
+    DocumentTools.requireImportSize(file.length())
+    return ZipFile(file).use { zip ->
+        val archive = EpubArchive(zip, checkCancelled)
+        readEpubOpf(archive::text).second.epubPackageAuthors()
+    }
 }
 
 /** 更新旧目录时只匹配原章节 ID，无需重新提取正文、注音或图片。 */

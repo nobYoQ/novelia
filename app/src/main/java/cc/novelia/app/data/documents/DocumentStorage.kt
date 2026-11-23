@@ -7,6 +7,7 @@ import cc.novelia.app.data.storage.appJson
 import cc.novelia.app.data.storage.hashName
 import cc.novelia.app.files.epub.EPUB_TITLE_VERSION
 import cc.novelia.app.files.epub.chapterIds
+import cc.novelia.app.files.epub.readEpubAuthors
 import cc.novelia.app.files.epub.readEpubDirectory
 import java.io.File
 import java.io.IOException
@@ -87,6 +88,13 @@ internal class DocumentStorage(
 
     fun full(index: LocalDocument, checkCancelled: () -> Unit = {}): LocalDocument = index.copy(
         chapters = index.chapters.map { checkCancelled(); chapter(index, it.id) }, chapterFiles = emptyMap())
+
+    fun recoverEpubAuthors(index: LocalDocument, source: File, checkCancelled: () -> Unit): LocalDocument {
+        val next = index.copy(authors = readEpubAuthors(source, checkCancelled))
+        checkCancelled()
+        write(manifest(index.id), appJson.encodeToString(next))
+        return next
+    }
 
     /** 只升级当前章；先提交新正文，再原子替换目录，失败时仍可读取旧章。 */
     fun replaceChapter(index: LocalDocument, chapter: LocalChapter): LocalDocument {

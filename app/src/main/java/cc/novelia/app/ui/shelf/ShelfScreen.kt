@@ -191,6 +191,13 @@ import kotlinx.coroutines.withContext
     val allVolumeGroups = remember(state.books) {
         state.shelfGroups(localOnly = false, folder = "全部", query = "", sort = 2).associateBy { it.saved.book.ref.key }
     }
+    fun fileAuthors(saved: SavedBook): List<String> = saved.book.authors.filter(String::isNotBlank).ifEmpty {
+        allVolumeGroups[saved.parentWenkuKey]?.saved?.book?.authors.orEmpty().filter(String::isNotBlank)
+    }
+    val missingAuthors = remember(state.books) {
+        state.books.filter { it.book.ref.isLocal && it.book.authors.none(String::isNotBlank) }.map { it.book.ref.id }
+    }
+    LaunchedEffect(c.store, missingAuthors) { c.store.restoreLocalEpubAuthors(missingAuthors) }
     val commitVolumeOrder: (String, List<String>) -> Unit = { parent, keys ->
         c.store.update { current ->
             val siblings = current.books.filter { it.book.ref.isLocal && it.parentWenkuKey == parent }.map { it.book.ref.key }
@@ -398,7 +405,8 @@ import kotlinx.coroutines.withContext
                                                 focus.clearFocus()
                                                 managing = false; selection = emptySet(); volumeMatches = if(filteringVolumes) group.volumes.map { it.book.ref.key }.toSet() else null
                                                 volumeSheetKey = key
-                                            }) else null, progressLabel = progress, compact = compactGridCards)
+                                            }) else null, progressLabel = progress, compact = compactGridCards,
+                                            authorLabel = if(page == 1) fileAuthors(saved).distinct().joinToString("、").takeIf(String::isNotBlank) else null)
                                     } }
                                     repeat(columns - groupRow.size) { Spacer(Modifier.weight(1f)) }
                                 }
@@ -458,9 +466,15 @@ import kotlinx.coroutines.withContext
                                     drawRect(if(dragSelection.dropTarget == saved.book.ref.key) dropColor else selectionColor.value)
                                 }
                                     .semantics { if(!pageManaging && saved.book.ref.key == selectedBookKey) stateDescription = "已选中" }) {
-                                    BookRow(if(filterCharacters) saved.book.copy(totalCharacters = characterCounts.count(saved.book)) else saved.book, onOpen,
+                                    val book = when {
+                                        filterCharacters -> saved.book.copy(totalCharacters = characterCounts.count(saved.book))
+                                        page == 1 -> saved.book.copy(authors = fileAuthors(saved))
+                                        else -> saved.book
+                                    }
+                                    BookRow(book, onOpen,
                                         status = bookRowStatus(saved.book, saved, state.positions[saved.book.ref.key], state.bookUpdates[saved.book.ref.key], profile?.username),
                                         showCharacterCount = filterCharacters, compactMetadata = page == 0, trailing = trailing,
+                                        showLocalAuthors = true,
                                         onRead = onRead)
                                     if(saved.book.ref.isVolumeParent && (!pageManaging || dragSelection.dragging)) {
                                         val rotation by animateFloatAsState(if(row.expanded) 180f else 0f, tween(if(reducedMotion) 0 else AppMotion.Standard), label = "wenku-volume-disclosure")

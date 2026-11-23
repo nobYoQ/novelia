@@ -73,7 +73,7 @@ object DocumentTools {
         return LocalDocument(UUID.randomUUID().toString(), name.substringBeforeLast('.'), extension, contents.chapters,
             coverImage = contents.cover, sourceHash = sourceHash ?: file.inputStream().use { digest(it, checkCancelled = checkCancelled) },
             downloadMode = downloadMode, epubTitleVersion = if (extension == "epub") EPUB_TITLE_VERSION else 0,
-            epubNavigationIds = contents.navigation.chapterIds(), epubNavigation = contents.navigation)
+            epubNavigationIds = contents.navigation.chapterIds(), epubNavigation = contents.navigation, authors = contents.authors)
     }
     fun parse(name: String, bytes: ByteArray, downloadMode: String? = null): LocalDocument {
         require(bytes.size <= MAX_INPUT) { "文件超过 64 MB，请先拆分" }
@@ -88,7 +88,7 @@ object DocumentTools {
         return LocalDocument(UUID.randomUUID().toString(), name.substringBeforeLast('.'), extension, contents.chapters,
             images = images, coverImage = contents.cover, sourceHash = digest(bytes), downloadMode = downloadMode,
             epubTitleVersion = if (extension == "epub") EPUB_TITLE_VERSION else 0,
-            epubNavigationIds = contents.navigation.chapterIds(), epubNavigation = contents.navigation)
+            epubNavigationIds = contents.navigation.chapterIds(), epubNavigation = contents.navigation, authors = contents.authors)
     }
     /** 优先按 BOM 判断 UTF-16，否则严格尝试 UTF-8；解码失败再回退 GB18030，最后移除 BOM。 */
     fun decodeText(bytes: ByteArray): String {

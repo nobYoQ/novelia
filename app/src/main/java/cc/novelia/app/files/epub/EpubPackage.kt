@@ -28,6 +28,7 @@ internal class EpubPackage(
     val spine: List<EpubSpineItem>,
     val coverPath: String?,
     private val bookTitle: String?,
+    val authors: List<String>,
     navPath: String?,
     ncxPath: String?,
     navigationText: (String) -> String?,
@@ -134,11 +135,7 @@ internal fun readEpubPackage(
     hasResource: (String) -> Boolean,
     checkCancelled: () -> Unit = {},
 ): EpubPackage {
-    val container = text("META-INF/container.xml") ?: error("EPUB 缺少 container.xml")
-    val opfPath = Jsoup.parse(container, "", Parser.xmlParser()).getAllElements().firstOrNull { it.isEpubElement("rootfile", OCF_NS) }?.attr("full-path")
-        ?.let { resolveEpubResource("", it) } ?: error("EPUB 未指定内容文件")
-    val opf = Jsoup.parse(text(opfPath) ?: error("EPUB 缺少 OPF"), "", Parser.xmlParser()).getAllElements()
-        .firstOrNull { it.isEpubElement("package", OPF_NS) } ?: error("EPUB 的 OPF 缺少 package")
+    val (opfPath, opf) = readEpubOpf(text)
     val directory = opfPath.substringBeforeLast('/', "")
     val manifest = opf.epubChild("manifest", OPF_NS)?.epubChildren("item", OPF_NS).orEmpty()
     val resources = manifest.associate { item ->
@@ -188,8 +185,23 @@ internal fun readEpubPackage(
     val bookTitle = metadata?.epubChild("title", DC_NS)?.epubTitle()
     val coverId = manifest.firstOrNull { it.hasEpubProperty("cover-image") }?.attr("id")
         ?: metadata?.epubChildren("meta", OPF_NS)?.firstOrNull { it.attr("name") == "cover" }?.attr("content")
-    return EpubPackage(items, resources[coverId]?.path, bookTitle, navPath, ncxPath, navigationText, checkCancelled)
+    return EpubPackage(items, resources[coverId]?.path, bookTitle, metadata.epubAuthors(), navPath, ncxPath, navigationText, checkCancelled)
 }
+
+internal fun readEpubOpf(text: (String) -> String?): Pair<String, Element> {
+    val container = text("META-INF/container.xml") ?: error("EPUB 缺少 container.xml")
+    val path = Jsoup.parse(container, "", Parser.xmlParser()).getAllElements()
+        .firstOrNull { it.isEpubElement("rootfile", OCF_NS) }?.attr("full-path")
+        ?.let { resolveEpubResource("", it) } ?: error("EPUB 未指定内容文件")
+    val opf = Jsoup.parse(text(path) ?: error("EPUB 缺少 OPF"), "", Parser.xmlParser()).getAllElements()
+        .firstOrNull { it.isEpubElement("package", OPF_NS) } ?: error("EPUB 的 OPF 缺少 package")
+    return path to opf
+}
+
+internal fun Element.epubPackageAuthors(): List<String> = epubChild("metadata", OPF_NS).epubAuthors()
+
+private fun Element?.epubAuthors(): List<String> =
+    this?.epubChildren("creator", DC_NS).orEmpty().mapNotNull { it.epubTitle() }.distinct()
 
 internal fun Element.epubNamespace(prefix: String): String? {
     val declaration = if (prefix.isEmpty()) "xmlns" else "xmlns:$prefix"
