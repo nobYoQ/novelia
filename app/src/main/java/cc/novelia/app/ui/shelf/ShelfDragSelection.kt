@@ -13,7 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalViewConfiguration
@@ -211,19 +211,23 @@ internal fun Modifier.shelfDragSelection(state: ShelfDragSelectionState, enabled
     }
 
 @Composable internal fun ShelfReorderPreview(title: String, drag: ShelfDragSelectionState) {
-    Surface(Modifier.layout { measurable, constraints ->
-        val preview = measurable.measure(constraints)
-        layout(preview.width, preview.height) {
+    Layout(modifier = Modifier.clearAndSetSemantics {}, content = {
+        Surface(Modifier.widthIn(max = 240.dp), shape = MaterialTheme.shapes.small,
+            color = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer) {
+            Text(title, Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }) { measurables, constraints ->
+        // 动效容器可能传入视口大小的最小约束，只有透明层应当填满视口。
+        val preview = measurables.single().measure(constraints.copy(minWidth = 0, minHeight = 0))
+        val width = constraints.maxWidth
+        val height = constraints.maxHeight
+        layout(width, height) {
             val x = (drag.pointer.x - preview.width / 2f).roundToInt()
-                .coerceIn(0, (constraints.maxWidth - preview.width).coerceAtLeast(0))
+                .coerceIn(0, width - preview.width)
             val y = (drag.pointer.y - preview.height - 12.dp.toPx()).roundToInt()
-                .coerceIn(0, (constraints.maxHeight - preview.height).coerceAtLeast(0))
+                .coerceIn(0, height - preview.height)
             preview.place(x, y)
         }
-    }.widthIn(max = 240.dp).clearAndSetSemantics {},
-        shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.primaryContainer,
-        contentColor = MaterialTheme.colorScheme.onPrimaryContainer) {
-        Text(title, Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }

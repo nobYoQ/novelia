@@ -1,9 +1,12 @@
 package cc.novelia.app.ui.shelf
 
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.*
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.navigation.compose.rememberNavController
@@ -43,8 +46,10 @@ class ShelfDragSelectionTest {
     }
     @After fun restore() { app.store.update { before } }
 
-    private fun show(reducedMotion: Boolean = true) {
+    private fun show(reducedMotion: Boolean = true, onPreviewColor: (Int) -> Unit = {}) {
         compose.setContent { AppInteractionMode(false, reducedMotion) { NoveliaTheme("dark") {
+            val previewColor = MaterialTheme.colorScheme.primaryContainer.toArgb()
+            SideEffect { onPreviewColor(previewColor) }
             val nav = rememberNavController()
             val scope = rememberCoroutineScope()
             val c = remember(nav, scope) { AppController(app, nav, scope, SnackbarHostState()) }
@@ -165,6 +170,33 @@ class ShelfDragSelectionTest {
         }
         compose.onNodeWithTag("shelf-books").performScrollToIndex(0)
         assertTrue(book(0).getUnclippedBoundsInRoot().top > book(2).getUnclippedBoundsInRoot().top)
+    }
+
+    @Test fun animatedCustomSortKeepsTheDragPreviewBackgroundSmall() {
+        var previewColor = 0
+        show(reducedMotion = false) { previewColor = it }
+        chooseCustomSort()
+        val list = compose.onNodeWithTag("shelf-books")
+        val start = book(0).fetchSemanticsNode().boundsInRoot.center - list.fetchSemanticsNode().boundsInRoot.topLeft
+        compose.mainClock.autoAdvance = false
+        try {
+            list.performTouchInput { down(start); moveTo(start + Offset(0f, 1f), delayMillis = 700) }
+            compose.mainClock.advanceTimeBy(64)
+            compose.onNodeWithText("已选 1 本").assertIsDisplayed()
+            val pixels = list.captureToImage().toPixelMap()
+            var colored = 0
+            var sampled = 0
+            for(y in 0 until pixels.height step 8) {
+                for(x in 0 until pixels.width step 8) {
+                    sampled++
+                    if(pixels[x, y].toArgb() == previewColor) colored++
+                }
+            }
+            assertTrue("Drag preview background covered $colored of $sampled samples", colored in 1..(sampled / 8))
+        } finally {
+            list.performTouchInput { cancel() }
+            compose.mainClock.autoAdvance = true
+        }
     }
 
     @Test fun customSortSupportsHorizontalDragsInTheGrid() {
