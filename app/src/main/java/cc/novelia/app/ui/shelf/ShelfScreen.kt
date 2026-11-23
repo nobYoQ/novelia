@@ -274,8 +274,8 @@ import kotlinx.coroutines.withContext
                 val layout = rememberShelfLayoutState(grid, rows.map { it.saved.book.ref.key }, groups.map { it.saved.book.ref.key }, columns,
                     parents = rows.mapNotNull { row -> row.parent?.let { row.saved.book.ref.key to it.book.ref.key } }.toMap())
                 val listState = layout.current(grid)
-                val showControlsToggle = active && !managing && !batchWorking
-                val controlsScroll = rememberShelfControlsScroll(listState, showControlsToggle && state.shelfControlsFollowScroll)
+                val showControlsToggle = !managing && !batchWorking
+                val controlsScroll = rememberShelfControlsScroll(listState, active && showControlsToggle && state.shelfControlsFollowScroll)
                 val continueBook = recent?.takeIf { page == 0 && active && !pageManaging && volumeSheetKey == null }
                 val density = LocalDensity.current
                 val collapseThreshold = with(density) { 48.dp.roundToPx() }
@@ -312,7 +312,14 @@ import kotlinx.coroutines.withContext
                             visible = !pageManaging, active = active, modifier = Modifier.onSizeChanged { controlsHeight = it.height },
                             grid = grid, onToggleLayout = { c.store.update { if(page == 0) it.copy(shelfGrid = !it.shelfGrid) else it.copy(localFilesGrid = !it.localFilesGrid) } },
                             folderOrder = state.localFavoriteFolderOrder, collapsed = !toolsExpanded,
-                            onOrderFolders = { order -> c.store.update { it.copy(localFavoriteFolderOrder = order) } }) {
+                            onOrderFolders = { order -> c.store.update { it.copy(localFavoriteFolderOrder = order) } },
+                            footer = {
+                                if(showControlsToggle) ShelfControlsToggle(toolsExpanded,
+                                    folder != "全部" || query.isNotBlank() || readingStatus != "全部" || pageType != ShelfBookType.All,
+                                    tucked = controlsScroll.tucked && listState.canScrollBackward, enabled = active) {
+                                    c.store.update { it.copy(shelfControlsExpanded = !it.shelfControlsExpanded) }
+                                }
+                            }) {
                             if(filterCharacters) Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                                 val unknown = countCandidates.count { characterCounts.count(it) == null }
                                 Text(if(characterCounts.loading) "正在补全字数…" else "$unknown 本字数未知", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
@@ -324,13 +331,7 @@ import kotlinx.coroutines.withContext
                             if(dragSelection.dragging) with(density) { controlsHeight.toDp() } else 48.dp,
                             onSelectAll = { selection = selectableKeys },
                             onFinish = { managing = false; selection = emptySet() })
-                        ShelfLayoutTransition(grid, Modifier.weight(1f), overlay = {
-                            if(showControlsToggle) ShelfControlsToggle(toolsExpanded,
-                                folder != "全部" || query.isNotBlank() || readingStatus != "全部" || pageType != ShelfBookType.All,
-                                tucked = controlsScroll.tucked && listState.canScrollBackward, followScroll = state.shelfControlsFollowScroll) {
-                                c.store.update { it.copy(shelfControlsExpanded = !it.shelfControlsExpanded) }
-                            }
-                        }) { showGrid ->
+                        ShelfLayoutTransition(grid, Modifier.weight(1f)) { showGrid ->
                         AppLazyColumn(modifier = Modifier.fillMaxSize().onSizeChanged { if(showGrid == grid) listHeight = it.height },
                             listModifier = Modifier.testTag(if(showGrid) "shelf-books-grid" else "shelf-books")
                                 .then(if(showGrid == grid) Modifier.nestedScroll(controlsScroll) else Modifier)

@@ -58,7 +58,7 @@ internal fun shelfVolumeProgressLabel(parentTitle: String, volumeTitle: String, 
     (width - 40.dp - 12.dp * (columns - 1)) / columns < 120.dp * LocalDensity.current.fontScale.coerceIn(1f, 1.3f)
 
 @Composable internal fun ShelfLayoutTransition(grid: Boolean, modifier: Modifier = Modifier,
-    overlay: @Composable BoxScope.() -> Unit = {}, content: @Composable (Boolean) -> Unit) {
+    content: @Composable (Boolean) -> Unit) {
     Box(modifier) {
         if(appReducedMotion()) content(grid)
         else AnimatedContent(grid, Modifier.fillMaxSize(), transitionSpec = {
@@ -66,7 +66,6 @@ internal fun shelfVolumeProgressLabel(parentTitle: String, volumeTitle: String, 
                 (fadeOut(tween(AppMotion.Exit)) + scaleOut(tween(AppMotion.Exit), targetScale = .98f)))
                 .using(SizeTransform(clip = false))
         }, label = "shelf-layout") { content(it) }
-        Box(Modifier.matchParentSize(), content = overlay)
     }
 }
 

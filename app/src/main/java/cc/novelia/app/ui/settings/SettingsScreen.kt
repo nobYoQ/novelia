@@ -195,7 +195,7 @@ private enum class SettingsSection(val title: String, val summary: String) {
             }
         }
         item { ProfileToggle("点击书架列表直接续读", "书架和云端收藏列表：点封面打开详情，点其余区域从本机进度续读；无进度或网格模式保持原行为", state.shelfTapToRead) { value -> c.store.update { it.copy(shelfTapToRead = value) } } }
-        item { ProfileToggle("折叠按钮跟随滚动", "浏览书目时随滚动缩回或滑出。关闭后固定显示半圆。", state.shelfControlsFollowScroll) { value ->
+        item { ProfileToggle("折叠按钮跟随滚动", "浏览书目时小箭头随滚动缩回或复位。关闭后位置固定。", state.shelfControlsFollowScroll) { value ->
             c.store.update { it.copy(shelfControlsFollowScroll = value) }
         } }
         item { ProfileToggle("记住上次打开的收藏夹", "重新打开应用时恢复上次的书架分区和收藏夹", state.rememberLastShelfFolder) { value -> c.store.update { it.copy(rememberLastShelfFolder = value) } } }

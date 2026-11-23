@@ -35,6 +35,7 @@ import cc.novelia.app.ui.components.book.WebSourceOptions
     grid: Boolean? = null, onToggleLayout: () -> Unit = {},
     folderOrder: FavoriteFolderOrder = FavoriteFolderOrder(), onOrderFolders: ((FavoriteFolderOrder) -> Unit)? = null,
     collapsed: Boolean = false,
+    footer: @Composable () -> Unit = {},
     folderActions: @Composable ColumnScope.(close: () -> Unit) -> Unit,
 ) {
     var folderMenu by remember(kind) { mutableStateOf(false) }
@@ -50,7 +51,7 @@ import cc.novelia.app.ui.components.book.WebSourceOptions
     LaunchedEffect(active, showControls) {
         if(!active || !showControls) { folderMenu = false; sortMenu = false; onExpanded(false); focus.clearFocus() }
     }
-    ShelfControlsPanel(visible, collapsed, modifier, "cloud-controls", onCollapsed = { searchExpanded = false }) {
+    ShelfControlsPanel(visible, collapsed, modifier, "cloud-controls", onCollapsed = { searchExpanded = false }, footer = footer) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp).testTag("cloud-toolbar"), verticalAlignment = Alignment.CenterVertically) {
             BoxWithConstraints(Modifier.weight(1f)) {
                 val folderMenuWidth = maxWidth

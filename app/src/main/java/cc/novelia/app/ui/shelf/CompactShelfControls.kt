@@ -39,6 +39,7 @@ import cc.novelia.app.ui.components.base.*
     grid: Boolean? = null, onToggleLayout: () -> Unit = {},
     folderOrder: FavoriteFolderOrder = FavoriteFolderOrder(), onOrderFolders: ((FavoriteFolderOrder) -> Unit)? = null,
     collapsed: Boolean = false,
+    footer: @Composable () -> Unit = {},
     trailingContent: @Composable () -> Unit = {},
 ) {
     val focus = LocalFocusManager.current
@@ -56,7 +57,7 @@ import cc.novelia.app.ui.components.base.*
     LaunchedEffect(active, showControls) {
         if(!active || !showControls) { folderMenu = false; sortMenu = false; onExpanded(false); focus.clearFocus() }
     }
-    ShelfControlsPanel(visible, collapsed, modifier, "local-controls", onCollapsed = { searchExpanded = false }) {
+    ShelfControlsPanel(visible, collapsed, modifier, "local-controls", onCollapsed = { searchExpanded = false }, footer = footer) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp).testTag("local-toolbar"), verticalAlignment = Alignment.CenterVertically) {
             BoxWithConstraints(Modifier.weight(1f)) {
                 val folderMenuWidth = maxWidth
