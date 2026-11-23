@@ -34,6 +34,7 @@ import cc.novelia.app.ui.theme.DefaultShapes
 import cc.novelia.app.ui.theme.MotionContent
 import cc.novelia.app.ui.theme.appControlShape
 import cc.novelia.app.ui.theme.appReducedMotion
+import cc.novelia.app.ui.theme.isMonochromeTheme
 
 /** 续读目标沿用书架最近的本机位置；完整书名和章节仍保留在无障碍文本中。 */
 @Composable internal fun ContinueReadingButton(
@@ -44,11 +45,13 @@ import cc.novelia.app.ui.theme.appReducedMotion
     expanded: Boolean = true,
 ) {
     val reducedMotion = appReducedMotion()
+    val monochrome = isMonochromeTheme()
+    val colors = MaterialTheme.colorScheme
     val chapter = position.title.ifBlank { position.chapterIndex?.let { "第 ${it + 1} 章" } ?: "已记录阅读位置" }
     MotionContent(book.ref.key, modifier, animateInitial = false) {
         Surface(onClick = onClick, shape = appControlShape(DefaultShapes.medium),
-            color = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            color = if(monochrome) colors.primary else colors.secondaryContainer,
+            contentColor = if(monochrome) colors.onPrimary else colors.onSecondaryContainer,
             shadowElevation = if(reducedMotion) 0.dp else 1.dp,
             modifier = Modifier.testTag("shelf-continue-reading").semantics { role = Role.Button }) {
             if(reducedMotion) ContinueReadingContent(book, chapter, expanded)

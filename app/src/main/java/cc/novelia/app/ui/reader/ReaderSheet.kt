@@ -36,6 +36,7 @@ import cc.novelia.app.ui.components.base.LocalPanelSession
 import cc.novelia.app.ui.theme.appReducedMotion
 import cc.novelia.app.ui.theme.appBottomSheetShape
 import cc.novelia.app.ui.theme.appPanelShape
+import cc.novelia.app.ui.theme.monochromeBorder
 
 @Composable internal fun ReaderSheet(onDismissRequest: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     AppSheet(onDismissRequest, rememberModalBottomSheetState(skipPartiallyExpanded = true), content)
@@ -70,7 +71,8 @@ import cc.novelia.app.ui.theme.appPanelShape
         val window = (LocalView.current.parent as? DialogWindowProvider)?.window
         SideEffect { window?.setDimAmount(0f) }
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
-            Surface(Modifier.fillMaxWidth().height(sheetHeight).then(resizeGesture).testTag("reader-preferences-panel"), shape = appPanelShape()) {
+            Surface(Modifier.fillMaxWidth().height(sheetHeight).then(resizeGesture).testTag("reader-preferences-panel"),
+                shape = appPanelShape(), border = monochromeBorder()) {
                 CompositionLocalProvider(LocalInAppSheet provides true, LocalPanelSession provides session) {
                     Column { content(expanded) { expanded = it } }
                 }

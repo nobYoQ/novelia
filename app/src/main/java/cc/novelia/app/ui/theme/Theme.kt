@@ -84,6 +84,7 @@ internal data class ReaderColors(val background: Color, val foreground: Color, v
 private val ReaderLightColors = ReaderColors(Color(0xFFE8F2E5), Color(0xFF263C2B), Color(0xFFCDDEC8))
 private val ReaderDarkColors = ReaderColors(DarkColors.surface, DarkColors.onSurface,
     lerp(DarkColors.surface, Color.Black, .55f))
+private val ReaderMonochromeColors = ReaderColors(Color.White, Color.Black, Color.White)
 
 internal fun readerColors(settings: ReaderSettings, appColors: ColorScheme, customApp: Boolean = false): ReaderColors =
     if (customApp && settings.resolvedTheme == "system") {
@@ -99,9 +100,9 @@ internal fun readerColors(theme: String, appColors: ColorScheme): ReaderColors =
     "paper" -> ReaderColors(Color(0xFFF4ECD8), Color(0xFF282E27), Color(0xFFDED2B8))
     "light" -> ReaderLightColors
     "dark" -> ReaderDarkColors
-    "monochrome" -> ReaderColors(Color.White, Color.Black, Color(0xFFE0E0E0))
+    "monochrome" -> ReaderMonochromeColors
     else -> when {
-        appColors == MonochromeColors -> ReaderColors(appColors.background, appColors.onBackground, appColors.surfaceContainerHigh)
+        appColors == MonochromeColors -> ReaderMonochromeColors
         appColors.surface.luminance() > .5f -> ReaderLightColors
         appColors.surface == Color.Black -> ReaderDarkColors.copy(background = Color.Black, foreground = appColors.onSurface, toolbar = Color.Black)
         else -> ReaderDarkColors
@@ -123,11 +124,10 @@ internal fun readerColors(theme: String, appColors: ColorScheme): ReaderColors =
 }
 
 @Composable internal fun ReaderPageTheme(monochrome: Boolean, content: @Composable () -> Unit) {
-    val appColors = MaterialTheme.colorScheme
-    MaterialTheme(colorScheme = if(monochrome && appColors != MonochromeColors) lightColorScheme(primary = Color.Black, onPrimary = Color.White,
-        surface = Color.White, onSurface = Color.Black, background = Color.White, onBackground = Color.Black,
-        secondaryContainer = Color.White, onSecondaryContainer = Color.Black, outline = Color.Black) else appColors,
-        content = content)
+    val colors = if(monochrome) MonochromeColors else MaterialTheme.colorScheme
+    MaterialTheme(colorScheme = colors) {
+        AppInteractionMode(LocalEInkMode.current, LocalReducedMotion.current, content)
+    }
 }
 
 internal fun baseAppColors(dark: Boolean, amoled: Boolean) = when {
@@ -138,10 +138,11 @@ internal fun baseAppColors(dark: Boolean, amoled: Boolean) = when {
 
 @Composable fun NoveliaTheme(theme: String, squareCorners: Boolean = false, amoledBlack: Boolean = false,
     preset: ThemePreset? = null, imageFile: File? = null, squareCornerTargets: Set<SquareCornerTarget> = SquareCornerTarget.defaults,
+    eInk: Boolean = LocalEInkMode.current, reducedMotion: Boolean = LocalReducedMotion.current,
     content: @Composable () -> Unit) {
     val dark = theme == "dark" || (theme == "system" && isSystemInDarkTheme())
     val monochrome = theme == MONOCHROME_APP_THEME
-    val custom = if (monochrome || LocalEInkMode.current) null else preset
+    val custom = if (monochrome || eInk) null else preset
     val black = dark && amoledBlack
     val colors = remember(monochrome, custom, dark, black) {
         when {
@@ -158,10 +159,12 @@ internal fun baseAppColors(dark: Boolean, amoled: Boolean) = when {
     val activeCorners = if(squareCorners) squareCornerTargets else emptySet()
     CompositionLocalProvider(LocalSquareCornerTargets provides activeCorners, LocalAmoledBlack provides black,
         LocalAppDark provides dark, LocalThemePreset provides custom, LocalThemeWallpaper provides wallpaper) {
-    MaterialTheme(colorScheme = colors, shapes = if(SquareCornerTarget.Cards in activeCorners) SquareShapes else DefaultShapes, typography = Typography(
-        headlineLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold, fontSize = 32.sp, lineHeight = 40.sp),
-        titleLarge = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 22.sp, lineHeight = 30.sp),
-        bodyLarge = TextStyle(fontSize = 16.sp, lineHeight = 26.sp), bodyMedium = TextStyle(fontSize = 14.sp, lineHeight = 22.sp)
-    ), content = content)
+        MaterialTheme(colorScheme = colors, shapes = if(SquareCornerTarget.Cards in activeCorners) SquareShapes else DefaultShapes, typography = Typography(
+            headlineLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold, fontSize = 32.sp, lineHeight = 40.sp),
+            titleLarge = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 22.sp, lineHeight = 30.sp),
+            bodyLarge = TextStyle(fontSize = 16.sp, lineHeight = 26.sp), bodyMedium = TextStyle(fontSize = 14.sp, lineHeight = 22.sp)
+        )) {
+            AppInteractionMode(eInk, reducedMotion, content)
+        }
     }
 }

@@ -1,12 +1,12 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.components.book
 
-import cc.novelia.app.ui.theme.DefaultShapes
-import cc.novelia.app.ui.theme.appPanelShape
+import cc.novelia.app.ui.components.base.AppDropdownMenu
 import cc.novelia.app.ui.components.base.AppLinearProgressIndicator
 import cc.novelia.app.ui.components.base.AppIconButton
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import cc.novelia.app.ui.theme.appBookCoverShape
 import androidx.compose.material.icons.Icons
@@ -39,6 +39,8 @@ import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.appReducedMotion
 import cc.novelia.app.ui.theme.motionClickable
+import cc.novelia.app.ui.theme.monochromeBorder
+import cc.novelia.app.ui.theme.monochromeDivider
 import cc.novelia.app.ui.components.media.RecoveringAsyncImage as AsyncImage
 import coil.decode.DataSource
 import coil.request.ImageRequest
@@ -66,7 +68,7 @@ import cc.novelia.app.ui.components.keywords.KeywordEditorDialog
                 Box {
                     AppIconButton(onClick = { menu = true }, modifier = Modifier.size(48.dp)) { Icon(Icons.Outlined.MoreVert, "更多标签操作 $tag", Modifier.size(18.dp)) }
                     val blocked = tag in library.blockedTags
-                    DropdownMenu(menu, onDismissRequest = { menu = false }, shape = appPanelShape(DefaultShapes.extraSmall)) {
+                    AppDropdownMenu(menu, onDismissRequest = { menu = false }) {
                         DropdownMenuItem(text = { Text("编辑标签翻译") }, onClick = { menu = false; editing = entry },
                             leadingIcon = { Icon(Icons.Outlined.Edit, null) })
                         DropdownMenuItem(text = { Text(if(blocked) "取消屏蔽标签" else "屏蔽标签") }, onClick = {
@@ -94,7 +96,10 @@ import cc.novelia.app.ui.components.keywords.KeywordEditorDialog
     val custom = customRequest.takeUnless { customFailed }
     val source = custom ?: book.cover?.takeIf { it.isNotBlank() }
     var loaded by remember(source) { mutableStateOf(false) }
-    Box(modifier.width(76.dp).height(104.dp).clip(appBookCoverShape()).semantics {
+    val shape = appBookCoverShape()
+    val border = monochromeBorder()
+    val outline = if(border != null) Modifier.border(border, shape) else Modifier
+    Box(modifier.width(76.dp).height(104.dp).clip(shape).then(outline).semantics {
         contentDescription = "${book.title} ${when { !loaded -> "默认封面"; custom != null -> "自定义封面"; else -> "封面" }}"
     }, contentAlignment = Alignment.Center) {
         DefaultBookCover(book, Modifier.matchParentSize().clearAndSetSemantics {}, showTitle = showFallbackTitle)
@@ -148,7 +153,8 @@ import cc.novelia.app.ui.components.keywords.KeywordEditorDialog
     val fontScale = LocalDensity.current.fontScale
     // 双区交互：封面点击进详情，卡片其余区域直接续读。
     // 封面的 clickable 会先消费事件，所以点封面不会连带触发整行点击。
-    Row(modifier.fillMaxWidth().motionClickable(onClick = onRead ?: onClick).padding(horizontal = 20.dp, vertical = if(compactMetadata) 10.dp else 12.dp),
+    Row(modifier.fillMaxWidth().monochromeDivider().motionClickable(onClick = onRead ?: onClick)
+        .padding(horizontal = 20.dp, vertical = if(compactMetadata) 10.dp else 12.dp),
         horizontalArrangement = Arrangement.spacedBy(if(compactMetadata) 12.dp else 16.dp), verticalAlignment = Alignment.CenterVertically) {
         BookCover(book, if(onRead == null) Modifier else Modifier.motionClickable(onClick = onClick), useCustomCover = useCustomCover)
         BoxWithConstraints(Modifier.weight(1f)) {

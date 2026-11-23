@@ -49,6 +49,7 @@ import cc.novelia.app.ui.feedback.StickerCompanion
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.LocalEInkMode
+import cc.novelia.app.ui.theme.isMonochromeTheme
 import cc.novelia.app.ui.theme.appReducedMotion
 
 @Composable fun ProfileScreen(c: AppController) {
@@ -154,7 +155,8 @@ import cc.novelia.app.ui.theme.appReducedMotion
                 exit = if(reduced) ExitTransition.None else fadeOut(tween(AppMotion.Exit)) +
                     scaleOut(tween(AppMotion.Page), targetScale = .96f, transformOrigin = TransformOrigin(0f, 0f))) {
                 Surface(shape = appRoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    tonalElevation = 4.dp, shadowElevation = if(LocalEInkMode.current) 0.dp else 8.dp, border = profileCardBorder(),
+                    tonalElevation = 4.dp, shadowElevation = if(LocalEInkMode.current || isMonochromeTheme()) 0.dp else 8.dp,
+                    border = profileCardBorder(),
                     modifier = Modifier.width(minOf(336.dp, (configuration.screenWidthDp.dp - 24.dp).coerceAtLeast(1.dp)))
                         .heightIn(max = (configuration.screenHeightDp.dp - 32.dp).coerceAtLeast(1.dp))
                         .testTag("account-permissions-panel").semantics { paneTitle = "账号权限" }) {

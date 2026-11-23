@@ -15,6 +15,7 @@ import cc.novelia.app.ui.theme.LocalAmoledBlack
 import cc.novelia.app.ui.theme.DefaultShapes
 import cc.novelia.app.ui.theme.appBottomSheetShape
 import cc.novelia.app.ui.theme.appPanelShape
+import cc.novelia.app.ui.theme.monochromeBorder
 
 /** 标记内容已在应用面板中，使内部组件能选择合适的滚动和翻屏处理。 */
 internal val LocalInAppSheet = compositionLocalOf { false }
@@ -42,7 +43,8 @@ internal val LocalInAppSheet = compositionLocalOf { false }
     }
     else AppDialog(onDismissRequest, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxWidth(.95f).fillMaxHeight(.9f), shape = appPanelShape(DefaultShapes.large),
-            color = if(LocalAmoledBlack.current) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surface) {
+            color = if(LocalAmoledBlack.current) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surface,
+            border = monochromeBorder()) {
             Column {
                 AppTextButton(onClick = onDismissRequest, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("关闭面板") }
                 HorizontalDivider()

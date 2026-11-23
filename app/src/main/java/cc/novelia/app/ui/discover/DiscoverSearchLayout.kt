@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import cc.novelia.app.ui.components.base.rememberCloudFilterCollapse
 import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.appReducedMotion
+import cc.novelia.app.ui.theme.monochromeBorder
 
 /** 搜索始终在标题栏内编辑；离开编辑状态后显示已生效的搜索词，保留输入草稿。 */
 @Composable internal fun DiscoverSearchLayout(
@@ -77,7 +78,8 @@ import cc.novelia.app.ui.theme.appReducedMotion
                     if(editing) { focus.requestFocus(); keyboard?.show() } else onEditingChange(true)
                 }, modifier = Modifier.weight(1f).testTag("discover-search-bar")
                         .semantics { stateDescription = if(editing) "正在编辑搜索" else "当前搜索" },
-                    shape = appControlShape(DefaultShapes.extraLarge), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                    shape = appControlShape(DefaultShapes.extraLarge), color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    border = monochromeBorder()) {
                     Row(Modifier.heightIn(min = 48.dp).padding(start = 12.dp, end = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Outlined.Search, null, Modifier.size(20.dp))

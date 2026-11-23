@@ -12,10 +12,11 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import cc.novelia.app.ui.theme.monochromeDivider
 
 @Composable internal fun CollapsibleCloudFilters(expanded: Boolean, toggle: () -> Unit, summary: String, maxHeight: androidx.compose.ui.unit.Dp, modifier: Modifier = Modifier, showHeader: Boolean = true, content: @Composable () -> Unit) {
     val scroll = rememberPanelScrollState(expanded)
-    Surface(modifier, tonalElevation = 1.dp) {
+    Surface(modifier.monochromeDivider(), tonalElevation = 1.dp) {
         Column {
             if(showHeader) Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(onClickLabel = if (expanded) "收起筛选" else "展开筛选", onClick = toggle).padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {

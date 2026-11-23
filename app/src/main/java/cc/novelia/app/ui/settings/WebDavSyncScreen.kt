@@ -1,6 +1,6 @@
 package cc.novelia.app.ui.settings
 
-import cc.novelia.app.ui.theme.appPanelShape
+import cc.novelia.app.ui.components.base.AppAlertDialog
 import cc.novelia.app.ui.components.base.AppTextButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -113,7 +113,7 @@ fun WebDavSyncScreen(c: AppController) {
     }
 
     preview?.let { value ->
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { if(!working) preview = null },
             title = { Text(if(value.existing) "连接已有同步资料" else "建立同步资料") },
             text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -128,11 +128,10 @@ fun WebDavSyncScreen(c: AppController) {
             } },
             confirmButton = { AppTextButton(onClick = { runTask("已连接同步资料") { c.app.webDav.connect(settingsPreference); preview = null } }, enabled = !working) { Text("合并并连接") } },
             dismissButton = { AppTextButton(onClick = { preview = null }, enabled = !working) { Text("取消") } },
-            shape = appPanelShape()
         )
     }
     conflict?.let { value ->
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { if(!working) conflict = null },
             title = { Text(conflictTitle(value)) },
             text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -150,20 +149,18 @@ fun WebDavSyncScreen(c: AppController) {
                 }
             } },
             confirmButton = { AppTextButton(onClick = { conflict = null }, enabled = !working) { Text("稍后处理") } },
-            shape = appPanelShape()
         )
     }
 }
 
 @Composable
 internal fun WebDavReconnectDialog(working: Boolean, onDismiss: () -> Unit, onConfirm: () -> Unit) {
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = { if(!working) onDismiss() },
         title = { Text("重新连接同步目录？") },
         text = { Text("本机资料和服务器登录信息会保留。接下来将重新检查当前目录：目录为空时可用本机资料建立同步；已有同步资料时会先展示合并预览。如果重新建立了云端资料，其他设备也需重新连接。") },
         confirmButton = { AppTextButton(onClick = onConfirm, enabled = !working) { Text("重新检查并预览") } },
         dismissButton = { AppTextButton(onClick = onDismiss, enabled = !working) { Text("取消") } },
-        shape = appPanelShape()
     )
 }
 

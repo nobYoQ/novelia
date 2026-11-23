@@ -9,6 +9,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Shape
 import cc.novelia.app.ui.theme.appControlShape
+import cc.novelia.app.ui.theme.isMonochromeTheme
+import cc.novelia.app.ui.theme.monochromeBorder
 
 // Material 的 Full 形状令牌不读取 MaterialTheme.shapes，按钮在这里统一应用直角偏好。
 
@@ -23,7 +25,8 @@ import cc.novelia.app.ui.theme.appControlShape
     contentPadding: PaddingValues = ButtonDefaults.ContentPadding,
     interactionSource: MutableInteractionSource? = null,
     content: @Composable RowScope.() -> Unit,
-) = Button(onClick, modifier, enabled, appControlShape(shape), colors, elevation, border, contentPadding, interactionSource, content)
+) = Button(onClick, modifier, enabled, appControlShape(shape), colors,
+    if(isMonochromeTheme()) null else elevation, border, contentPadding, interactionSource, content)
 
 @Composable fun AppFilledTonalButton(
     onClick: () -> Unit,
@@ -36,7 +39,8 @@ import cc.novelia.app.ui.theme.appControlShape
     contentPadding: PaddingValues = ButtonDefaults.ContentPadding,
     interactionSource: MutableInteractionSource? = null,
     content: @Composable RowScope.() -> Unit,
-) = FilledTonalButton(onClick, modifier, enabled, appControlShape(shape), colors, elevation, border, contentPadding, interactionSource, content)
+) = FilledTonalButton(onClick, modifier, enabled, appControlShape(shape), colors,
+    if(isMonochromeTheme()) null else elevation, border ?: monochromeBorder(), contentPadding, interactionSource, content)
 
 @Composable fun AppOutlinedButton(
     onClick: () -> Unit,

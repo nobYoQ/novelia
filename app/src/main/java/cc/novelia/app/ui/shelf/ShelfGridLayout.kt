@@ -141,7 +141,8 @@ internal class ShelfLayoutState(val list: LazyListState, val grid: LazyListState
     authorLabel: String? = null,
     footer: @Composable (() -> Unit)? = null,
 ) {
-    val eInk = LocalEInkMode.current
+    val monochrome = isMonochromeTheme()
+    val solidLabel = LocalEInkMode.current || monochrome
     val largeText = LocalDensity.current.fontScale > 1.3f
     val coverShape = appBookCoverShape()
     Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -149,27 +150,28 @@ internal class ShelfLayoutState(val list: LazyListState, val grid: LazyListState
             .then(if(selected && !selecting) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, coverShape) else Modifier)
             .motionClickable(onClick = { if(enabled) onOpen() })) {
             BookCover(book, Modifier.matchParentSize().clearAndSetSemantics {}, showFallbackTitle = false)
-            val backdrop = if(eInk) Modifier.background(Color.Black) else Modifier.background(
+            val backdrop = if(solidLabel) Modifier.background(Color.Black) else Modifier.background(
                 Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .9f))))
             Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().then(backdrop)
                 .padding(start = if(compact) 6.dp else 10.dp, end = if(compact) 6.dp else 10.dp,
-                    top = if(compact) 4.dp else if(eInk) 8.dp else 32.dp, bottom = if(compact) 4.dp else 10.dp),
+                    top = if(compact) 4.dp else if(solidLabel) 8.dp else 32.dp, bottom = if(compact) 4.dp else 10.dp),
                 verticalArrangement = Arrangement.spacedBy(if(compact) 2.dp else 4.dp)) {
                 Text(book.title, color = Color.White, style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold, maxLines = if(compact || largeText) 2 else 3, overflow = TextOverflow.Ellipsis)
                 authorLabel?.let {
-                    Text(it, color = Color.White.copy(alpha = .9f), style = MaterialTheme.typography.labelSmall,
+                    Text(it, color = Color.White.copy(alpha = if(monochrome) 1f else .9f), style = MaterialTheme.typography.labelSmall,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                Text(progressLabel ?: status.progressLabel, color = Color.White.copy(alpha = .9f),
+                Text(progressLabel ?: status.progressLabel, color = Color.White.copy(alpha = if(monochrome) 1f else .9f),
                     style = MaterialTheme.typography.labelSmall, maxLines = if(compact || largeText) 1 else 2, overflow = TextOverflow.Ellipsis)
             }
-            if(selecting && selected) Box(Modifier.matchParentSize().background(MaterialTheme.colorScheme.primary.copy(alpha = .25f)))
+            if(selecting && selected && !monochrome) Box(Modifier.matchParentSize().background(MaterialTheme.colorScheme.primary.copy(alpha = .25f)))
             if(selecting) Surface(Modifier.align(Alignment.TopEnd).padding(4.dp), shape = MaterialTheme.shapes.small,
-                color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = .94f)) {
+                color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = if(monochrome) 1f else .94f), border = monochromeBorder()) {
                 AppCheckbox(selected, { onToggle() }, enabled = enabled, modifier = Modifier.semantics { contentDescription = "选择${book.title}" })
             } else if(pinned || status.updateLabel != null) Surface(Modifier.align(Alignment.TopStart).padding(6.dp),
-                shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = .94f)) {
+                shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = if(monochrome) 1f else .94f),
+                border = monochromeBorder()) {
                 Row(Modifier.padding(horizontal = 6.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     if(pinned) Icon(Icons.Outlined.PushPin, "已置顶", Modifier.size(14.dp))
                     status.updateLabel?.let { Text(it, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) }

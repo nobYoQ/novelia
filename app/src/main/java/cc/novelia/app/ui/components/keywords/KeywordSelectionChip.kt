@@ -19,6 +19,7 @@ import cc.novelia.app.data.catalog.KeywordSelectionState
 import cc.novelia.app.ui.components.base.AppSelectionChip
 import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.appReducedMotion
+import cc.novelia.app.ui.theme.isMonochromeTheme
 
 /** 候选、已选条件和全部标签共用三态颜色，切换状态不改变标签的占位。 */
 @Composable internal fun KeywordSelectionChip(
@@ -32,14 +33,15 @@ import cc.novelia.app.ui.theme.appReducedMotion
 ) {
     val scheme = MaterialTheme.colorScheme
     val reducedMotion = appReducedMotion()
+    val monochrome = isMonochromeTheme()
     val background = selectionColor(when(state) {
         KeywordSelectionState.Unselected -> scheme.surfaceContainerLow
-        KeywordSelectionState.Included -> scheme.primaryContainer
-        KeywordSelectionState.Excluded -> scheme.errorContainer
+        KeywordSelectionState.Included -> if(monochrome) scheme.primary else scheme.primaryContainer
+        KeywordSelectionState.Excluded -> if(monochrome) scheme.surface else scheme.errorContainer
     }, reducedMotion, "keyword background")
     val foreground = selectionColor(when(state) {
         KeywordSelectionState.Unselected -> scheme.onSurfaceVariant
-        KeywordSelectionState.Included -> scheme.onPrimaryContainer
+        KeywordSelectionState.Included -> if(monochrome) scheme.onPrimary else scheme.onPrimaryContainer
         KeywordSelectionState.Excluded -> scheme.onErrorContainer
     }, reducedMotion, "keyword foreground")
     val outline = selectionColor(when(state) {
@@ -61,7 +63,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
         colors = FilterChipDefaults.filterChipColors(containerColor = background, selectedContainerColor = background,
             labelColor = foreground, selectedLabelColor = foreground,
             iconColor = foreground, selectedLeadingIconColor = foreground, selectedTrailingIconColor = foreground),
-        border = BorderStroke(1.5.dp, outline))
+        border = BorderStroke(if(monochrome) 1.dp else 1.5.dp, outline))
 }
 
 @Composable private fun selectionColor(target: Color, reducedMotion: Boolean, label: String): Color {

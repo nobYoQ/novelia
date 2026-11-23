@@ -14,6 +14,8 @@ import androidx.activity.result.ActivityResultRegistryOwner
 import androidx.activity.result.contract.ActivityResultContract
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.MaterialTheme
@@ -33,6 +35,7 @@ import androidx.navigation.compose.*
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.NoveliaApplication
 import cc.novelia.app.ui.components.media.RecoveringAsyncImage
+import cc.novelia.app.ui.components.base.AppSelectionChip
 import cc.novelia.app.data.backup.LibraryBackupService
 import cc.novelia.app.data.catalog.KeywordStore
 import cc.novelia.app.data.model.ThemePreset
@@ -116,7 +119,7 @@ class CustomThemeTest {
         } finally { bitmap.recycle(); file.delete() }
     }
 
-    @Test fun monochromeAppModeOverridesWallpaperAndWorksInEInk() {
+    @Test fun monochromeAppModeOverridesWallpaperWithoutChangingInteractionMode() {
         val app = context.applicationContext as NoveliaApplication
         runBlocking { app.initialization.await() }
         val original = app.store.state.value
@@ -124,9 +127,12 @@ class CustomThemeTest {
         val file = File.createTempFile("mono-wallpaper-", ".png", context.cacheDir)
         image(file)
         var eInk by mutableStateOf(false)
+        var reducedMotion by mutableStateOf(false)
         var scheme = MonochromeColors
         var hasPaper = false
-        var follow = Color.Transparent
+        var follow = ReaderColors(Color.Transparent, Color.Transparent, Color.Transparent)
+        var isStatic = false
+        var usesEInk = false
         fun choose(label: String) {
             compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasText(label))
             compose.onNodeWithText(label).performClick()
@@ -135,37 +141,62 @@ class CustomThemeTest {
             app.store.update { it.copy(theme = "dark", amoledBlack = true, themePresets = ThemePresets().saveAndSelect(preset)) }
             compose.setContent {
                 val state by app.store.state.collectAsState()
-                AppInteractionMode(eInk, true) {
-                    NoveliaTheme(state.theme, amoledBlack = state.amoledBlack, preset = state.themePresets.active, imageFile = file) {
-                        val rendered = MaterialTheme.colorScheme
-                        val wallpaper = LocalThemeWallpaper.current
-                        SideEffect {
-                            scheme = rendered
-                            hasPaper = wallpaper != null
-                            follow = readerColors("system", rendered).background
-                        }
-                        val nav = rememberNavController()
-                        val c = AppController(app, nav, rememberCoroutineScope(), remember { SnackbarHostState() })
-                        NavHost(nav, startDestination = "settings") {
-                            composable("settings") { SettingsScreen(c, "APPEARANCE") }
-                            composable("custom-themes") { CustomThemesScreen(c) }
-                        }
+                NoveliaTheme(state.theme, amoledBlack = state.amoledBlack, preset = state.themePresets.active,
+                    imageFile = file, eInk = eInk, reducedMotion = reducedMotion) {
+                    val rendered = MaterialTheme.colorScheme
+                    val wallpaper = LocalThemeWallpaper.current
+                    val staticInteraction = LocalReducedMotion.current
+                    val eInkInteraction = LocalEInkMode.current
+                    SideEffect {
+                        scheme = rendered
+                        hasPaper = wallpaper != null
+                        follow = readerColors("system", rendered)
+                        isStatic = staticInteraction
+                        usesEInk = eInkInteraction
+                    }
+                    val nav = rememberNavController()
+                    val c = AppController(app, nav, rememberCoroutineScope(), remember { SnackbarHostState() })
+                    NavHost(nav, startDestination = "settings") {
+                        composable("settings") { SettingsScreen(c, "APPEARANCE") }
+                        composable("custom-themes") { CustomThemesScreen(c) }
                     }
                 }
             }
+            val systemReducedMotion = compose.runOnIdle { isStatic }
             choose("黑白")
             compose.onNodeWithText("黑白").assertIsSelected()
             compose.runOnIdle {
                 assertEquals(Color.White, scheme.background)
                 assertEquals(Color.Black, scheme.onSurface)
-                assertEquals(Color.White, follow)
+                assertEquals(ReaderColors(Color.White, Color.Black, Color.White), follow)
+                assertEquals(systemReducedMotion, isStatic)
+                assertFalse(usesEInk)
                 assertFalse(hasPaper)
                 assertEquals(preset, app.store.state.value.themePresets.active)
+                assertEquals(original.reader, app.store.state.value.reader)
                 eInk = true
             }
-            compose.runOnIdle { assertEquals(MonochromeColors, scheme); eInk = false }
+            compose.runOnIdle {
+                assertEquals(MonochromeColors, scheme)
+                assertTrue(usesEInk)
+                assertTrue(isStatic)
+                eInk = false
+                reducedMotion = true
+            }
+            compose.runOnIdle {
+                assertFalse(usesEInk)
+                assertTrue(isStatic)
+                reducedMotion = false
+            }
+            compose.runOnIdle { assertEquals(systemReducedMotion, isStatic) }
             choose("浅色")
-            compose.runOnIdle { assertTrue(hasPaper) }
+            compose.runOnIdle { assertTrue(hasPaper); eInk = true }
+            compose.runOnIdle {
+                assertNotEquals(MonochromeColors, scheme)
+                assertTrue(usesEInk)
+                assertTrue(isStatic)
+                eInk = false
+            }
             choose("自定义主题")
             choose("黑白外观")
             compose.runOnIdle { assertEquals(MonochromeColors, scheme) }
@@ -175,6 +206,24 @@ class CustomThemeTest {
             app.store.update { it.copy(theme = original.theme, amoledBlack = original.amoledBlack, themePresets = original.themePresets) }
             file.delete()
         }
+    }
+
+    @Test fun monochromeChipsHaveInkOutlinesAndAnInvertedSelection() {
+        compose.setContent {
+            NoveliaTheme("monochrome") {
+                Column(Modifier.background(Color.White)) {
+                    listOf(false, true).forEach { selected ->
+                        AppSelectionChip(selected, {}, label = { Spacer(Modifier.size(40.dp, 16.dp)) },
+                            modifier = Modifier.testTag("monochrome-chip-$selected"))
+                    }
+                }
+            }
+        }
+        val unselected = compose.onNodeWithTag("monochrome-chip-false").captureToImage().toPixelMap()
+        val selected = compose.onNodeWithTag("monochrome-chip-true").captureToImage().toPixelMap()
+        assertEquals(Color.White, unselected[unselected.width / 2, unselected.height / 2])
+        assertTrue((0 until unselected.width).any { unselected[it, unselected.height / 2] == Color.Black })
+        assertEquals(Color.Black, selected[selected.width / 2, selected.height / 2])
     }
 
     private fun image(file: File) {

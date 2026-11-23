@@ -171,9 +171,8 @@ class MainActivity : ComponentActivity() {
             val localStickers by remember(app) { app.stickerPacks.state.map { it.packs }.distinctUntilChanged() }
                 .collectAsStateWithLifecycle(initialValue = remember(app) { app.stickerPacks.state.value.packs })
             val stickerPacks = remember(localStickers) { StickerPacks.all + localStickers.map { it.asStickerPack() } }
-            AppInteractionMode(appearance.eInk, appearance.reducedMotion) {
             NoveliaTheme(appearance.theme, squareCorners = appearance.squareCorners, squareCornerTargets = appearance.squareCornerTargets,
-                amoledBlack = appearance.amoledBlack,
+                amoledBlack = appearance.amoledBlack, eInk = appearance.eInk, reducedMotion = appearance.reducedMotion,
                 preset = appearance.preset, imageFile = appearance.preset?.image?.let(app.store.customThemes::imageFile)) {
                 val nav = rememberNavController(); val scope = rememberCoroutineScope(); val snackbar = remember { SnackbarHostState() }
                 val source by app.bookSources.state.collectAsStateWithLifecycle()
@@ -375,7 +374,6 @@ class MainActivity : ComponentActivity() {
                 }
                 }
                 }
-            }
             }
         }
     }

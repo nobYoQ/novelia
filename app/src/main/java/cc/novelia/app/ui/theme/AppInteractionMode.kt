@@ -19,7 +19,7 @@ import androidx.compose.ui.node.DrawModifierNode
  */
 @Composable internal fun AppInteractionMode(eInk: Boolean, reducedMotion: Boolean, content: @Composable () -> Unit) {
     val durationScale = rememberCoroutineScope().coroutineContext[MotionDurationScale]
-    val static = eInk || reducedMotion || !android.animation.ValueAnimator.areAnimatorsEnabled() ||
+    val static = LocalReducedMotion.current || eInk || reducedMotion || !android.animation.ValueAnimator.areAnimatorsEnabled() ||
         (durationScale?.scaleFactor ?: 1f) == 0f
     CompositionLocalProvider(
         LocalEInkMode provides eInk,

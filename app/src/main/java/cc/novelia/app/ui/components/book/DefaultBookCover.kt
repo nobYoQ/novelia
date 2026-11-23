@@ -1,7 +1,5 @@
 package cc.novelia.app.ui.components.book
 
-import cc.novelia.app.ui.theme.MonochromeColors
-
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
@@ -24,6 +22,7 @@ import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.ui.feedback.StickerIllustration
 import cc.novelia.app.ui.feedback.Sticker
 import cc.novelia.app.ui.theme.LocalEInkMode
+import cc.novelia.app.ui.theme.isMonochromeTheme
 
 private val CoverStickers = listOf(Sticker.Reading, Sticker.Thinking, Sticker.Neutral, Sticker.Welcome)
 private val CoverAccents = listOf(Color(0xFF537B57), Color(0xFF566EA0), Color(0xFF947055), Color(0xFF846697), Color(0xFF4D8085), Color(0xFF9E6876))
@@ -33,16 +32,18 @@ internal fun DefaultBookCover(book: BookCard, modifier: Modifier = Modifier, sho
     // 贴纸沿用稳定变体；网络小说的颜色只由分级和连载状态决定。
     val variant = remember(book.ref.key) { stableCoverVariant(book.ref.key, CoverAccents.size) }
     val colors = MaterialTheme.colorScheme
-    val eInk = LocalEInkMode.current
+    val monochrome = isMonochromeTheme()
+    val flat = LocalEInkMode.current || monochrome
     val dark = colors.surface.luminance() < .5f
     val accent = when {
-        eInk || colors == MonochromeColors -> colors.onSurface
+        flat -> colors.onSurface
         !book.ref.isWebNovel -> CoverAccents[variant]
         else -> webCoverPalette(book).accent
     }
-    val tint = if(eInk) colors.surface else lerp(colors.surface, accent, if(dark) .38f else .18f)
-    Box(modifier.background(Brush.verticalGradient(listOf(tint, if(eInk) tint else lerp(colors.surface, accent, .08f))))) {
-        Box(Modifier.fillMaxHeight().width(3.dp).background(accent.copy(alpha = .65f)))
+    val background = if(flat) Modifier.background(colors.surface) else Modifier.background(Brush.verticalGradient(
+        listOf(lerp(colors.surface, accent, if(dark) .38f else .18f), lerp(colors.surface, accent, .08f))))
+    Box(modifier.then(background)) {
+        Box(Modifier.fillMaxHeight().width(3.dp).background(accent.copy(alpha = if(monochrome) 1f else .65f)))
         Column(Modifier.fillMaxSize().padding(start = 8.dp, end = 6.dp, top = 7.dp, bottom = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(when {
                 book.ref.isLocalSeries -> "总集"

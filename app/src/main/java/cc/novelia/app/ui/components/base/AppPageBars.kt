@@ -7,12 +7,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.ui.theme.ThemeBar
+import cc.novelia.app.ui.theme.monochromeDivider
 import cc.novelia.app.ui.theme.themeBarBackground
 
 @Composable internal fun AppTopBar(title: @Composable () -> Unit, navigationIcon: @Composable () -> Unit = {},
     actions: @Composable RowScope.() -> Unit = {}) {
     val bar = themeBarBackground(ThemeBar.Top, TopAppBarDefaults.topAppBarColors().containerColor)
-    TopAppBar(title = title, modifier = bar.modifier.testTag("page-top-bar"), navigationIcon = navigationIcon, actions = actions,
+    TopAppBar(title = title, modifier = bar.modifier.monochromeDivider().testTag("page-top-bar"), navigationIcon = navigationIcon, actions = actions,
         colors = TopAppBarDefaults.topAppBarColors(containerColor = bar.color, scrolledContainerColor = bar.color))
 }
 

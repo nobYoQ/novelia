@@ -13,11 +13,18 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import cc.novelia.app.ui.theme.isMonochromeTheme
+import cc.novelia.app.ui.theme.monochromeBorder
 
 /** 同样的低对比底座与分段选中态；窄屏、大字模式下保持标签完整。 */
 @Composable internal fun ShelfKindSwitch(labels: List<String>, selectedIndex: Int, tag: String, onChange: (Int) -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val monochrome = isMonochromeTheme()
+    val indicator = if(monochrome) colors.primary else colors.secondaryContainer
+    val selectedContent = if(monochrome) colors.onPrimary else colors.onSecondaryContainer
     Surface(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp).testTag(tag),
-        shape = MaterialTheme.shapes.medium, color = cc.novelia.app.ui.theme.wallpaperCardColor(MaterialTheme.colorScheme.surfaceContainerLow)) {
+        shape = MaterialTheme.shapes.medium, color = cc.novelia.app.ui.theme.wallpaperCardColor(colors.surfaceContainerLow),
+        border = monochromeBorder()) {
         BoxWithConstraints(Modifier.padding(4.dp).selectableGroup()) {
             val fontScale = LocalDensity.current.fontScale
             val columns = (maxWidth / (64 * fontScale).dp).toInt().coerceIn(1, labels.size)
@@ -31,8 +38,8 @@ import androidx.compose.ui.unit.dp
                                 contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
                                 shape = DefaultShapes.small,
                                 colors = ButtonDefaults.textButtonColors(
-                                    containerColor = if(selectedIndex == index) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
-                                    contentColor = if(selectedIndex == index) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)) {
+                                    containerColor = if(selectedIndex == index) indicator else Color.Transparent,
+                                    contentColor = if(selectedIndex == index) selectedContent else colors.onSurfaceVariant)) {
                                 Text(label, style = MaterialTheme.typography.labelLarge)
                             }
                         }

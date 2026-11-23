@@ -37,6 +37,8 @@ import cc.novelia.app.reader.*
 import cc.novelia.app.ui.feedback.Sticker
 import cc.novelia.app.ui.feedback.StickerAccent
 import cc.novelia.app.ui.theme.AppMotion
+import cc.novelia.app.ui.theme.isMonochromeTheme
+import cc.novelia.app.ui.theme.monochromeDivider
 
 
 internal data class ReaderTopToolbarState(
@@ -66,8 +68,9 @@ internal data class ReaderChapterSearchState(
     onSpeech: () -> Unit, onAutoRead: () -> Unit, onReturnToReading: () -> Unit,
     onQueryChange: (String) -> Unit, onFind: (Int) -> Unit, onBookSearch: () -> Unit,
 ) {
+    val monochrome = isMonochromeTheme()
     ReaderOverlayVisibility(menu, modifier, enter = if(reducedMotion) EnterTransition.None else fadeIn(tween(AppMotion.Quick)) + slideInVertically(tween(AppMotion.Standard)) { -it }, exit = if(reducedMotion) ExitTransition.None else fadeOut(tween(AppMotion.Exit)) + slideOutVertically(tween(AppMotion.Release)) { -it }) {
-        Surface(Modifier.testTag("reader-top-toolbar"), color = toolbarBackground, contentColor = foreground) {
+        Surface(Modifier.monochromeDivider(color = foreground).testTag("reader-top-toolbar"), color = toolbarBackground, contentColor = foreground) {
         // 此高度仅用于把搜索结果放在浮层下方。
         Column(Modifier.onSizeChanged { onHeightChanged(it.height) }) {
             TopAppBar(title = { Text(state.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium) }, navigationIcon = {
@@ -94,8 +97,8 @@ internal data class ReaderChapterSearchState(
                 Row(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(search.query, onQueryChange, label = { Text("搜索本章段落") }, singleLine = true, modifier = Modifier.weight(1f), enabled = search.visible,
                         colors = OutlinedTextFieldDefaults.colors(focusedTextColor = foreground, unfocusedTextColor = foreground,
-                            focusedBorderColor = foreground, unfocusedBorderColor = foreground.copy(alpha = .5f),
-                            focusedLabelColor = foreground, unfocusedLabelColor = foreground.copy(alpha = .7f), cursorColor = foreground),
+                            focusedBorderColor = foreground, unfocusedBorderColor = foreground.copy(alpha = if(monochrome) 1f else .5f),
+                            focusedLabelColor = foreground, unfocusedLabelColor = foreground.copy(alpha = if(monochrome) 1f else .7f), cursorColor = foreground),
                         shape = appControlShape())
                     AppTextButton(onClick = { onFind(1) }, enabled = search.visible && search.query.isNotBlank() && !search.finding,
                         colors = ButtonDefaults.textButtonColors(contentColor = foreground, disabledContentColor = foreground.copy(alpha = .38f))) { Text(if(search.finding) "查找中" else "查找") }
@@ -143,7 +146,7 @@ internal data class ReaderBottomToolbarState(
         Box(Modifier.fillMaxWidth().onSizeChanged { onSpeechHeightChanged(it.height) }) { speechControls?.invoke() }
         if(settings.showPageButtons) Row(Modifier.fillMaxWidth().testTag("reader-page-buttons")
             .onSizeChanged { onPageButtonsHeightChanged(it.height) }
-            .background(toolbarBackground).padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
+            .background(toolbarBackground).monochromeDivider(atTop = true, color = foreground).padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
             val directions = if(settings.rightToLeftPageTurn) 1 downTo -1 step 2 else -1..1 step 2
             val unit = if(settings.staticPagination) "页" else "屏"
             for(direction in directions) {
@@ -156,7 +159,7 @@ internal data class ReaderBottomToolbarState(
             }
         }
         ReaderOverlayVisibility(menu, Modifier, enter = if(reducedMotion) EnterTransition.None else fadeIn(tween(AppMotion.Quick)) + slideInVertically(tween(AppMotion.Standard)) { it }, exit = if(reducedMotion) ExitTransition.None else fadeOut(tween(AppMotion.Exit)) + slideOutVertically(tween(AppMotion.Release)) { it }) {
-            Surface(color = toolbarBackground, contentColor = foreground) {
+            Surface(Modifier.monochromeDivider(atTop = true, color = foreground), color = toolbarBackground, contentColor = foreground) {
                 Column(if(persistentControls) Modifier else Modifier.navigationBarsPadding()) {
                     if(settings.showProgressBar) ReaderSeekBar(state.reading.progress,
                         pageCount = if(settings.staticPagination && state.reading.pageReady) state.reading.pageCount else null,

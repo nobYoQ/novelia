@@ -21,6 +21,7 @@ import cc.novelia.app.data.model.ThemeBarGlass
 import cc.novelia.app.data.model.ThemePreset
 import cc.novelia.app.data.model.ThemePresets
 import cc.novelia.app.data.model.MONOCHROME_APP_THEME
+import cc.novelia.app.ui.theme.monochromeBorder
 import cc.novelia.app.data.model.useAppPresets
 import cc.novelia.app.data.storage.appJson
 import cc.novelia.app.ui.account.ProfileDetailList
@@ -71,7 +72,7 @@ import kotlinx.serialization.encodeToString
                 ThemeRow("默认外观", "内置主题", 0x3E6B3B, !monochrome && themes.activeId == null, { select(null) })
             }
             item {
-                ThemeRow("黑白外观", "内置主题 · 白底黑字", 0x000000, monochrome,
+                ThemeRow("黑白外观", "白底黑字 · 高对比描边", 0x000000, monochrome,
                     { c.store.update { it.copy(theme = MONOCHROME_APP_THEME) } })
             }
             items(themes.items, key = { it.id }) { preset ->
@@ -108,7 +109,7 @@ import kotlinx.serialization.encodeToString
     Surface(onClick = select, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large,
         color = wallpaperCardColor(if (selected) scheme.secondaryContainer else scheme.surfaceContainerLow),
         contentColor = if (selected) scheme.onSecondaryContainer else scheme.onSurface,
-        border = if (selected) BorderStroke(1.dp, scheme.primary) else null) {
+        border = if (selected) BorderStroke(1.dp, scheme.primary) else monochromeBorder()) {
         Row(Modifier.heightIn(min = 72.dp).padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             ColorSwatch(accent)

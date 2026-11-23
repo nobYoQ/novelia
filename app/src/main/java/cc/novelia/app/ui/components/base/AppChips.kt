@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.ui.theme.pressFeedback
 import cc.novelia.app.ui.theme.appControlShape
+import cc.novelia.app.ui.theme.isMonochromeTheme
 
 private val ChipShape = RoundedCornerShape(14.dp)
 internal val ChipSpacing = 12.dp
@@ -37,14 +38,19 @@ internal val ChipSpacing = 12.dp
 ) {
     val interaction = remember { MutableInteractionSource() }
     val scheme = MaterialTheme.colorScheme
+    val monochrome = isMonochromeTheme()
+    val selectedContainer = if(monochrome) scheme.primary else scheme.secondaryContainer
+    val selectedContent = if(monochrome) scheme.onPrimary else scheme.onSecondaryContainer
     FilterChip(selected = selected, onClick = onClick, enabled = enabled,
         label = { Box(Modifier.padding(vertical = 6.dp)) { label() } },
         modifier = modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp).pressFeedback(interaction),
         leadingIcon = leadingIcon, trailingIcon = trailingIcon, shape = appControlShape(shape),
         colors = colors ?: FilterChipDefaults.filterChipColors(containerColor = scheme.surfaceContainerLow,
-            labelColor = scheme.onSurfaceVariant, selectedContainerColor = scheme.secondaryContainer,
-            selectedLabelColor = scheme.onSecondaryContainer),
-        border = border ?: BorderStroke(if(selected) 1.5.dp else 1.dp, if(selected) scheme.primary else scheme.outlineVariant),
+            labelColor = scheme.onSurfaceVariant, selectedContainerColor = selectedContainer,
+            selectedLabelColor = selectedContent,
+            selectedLeadingIconColor = if(monochrome) selectedContent else androidx.compose.ui.graphics.Color.Unspecified,
+            selectedTrailingIconColor = if(monochrome) selectedContent else androidx.compose.ui.graphics.Color.Unspecified),
+        border = border ?: BorderStroke(if(selected && !monochrome) 1.5.dp else 1.dp, if(selected) scheme.primary else scheme.outlineVariant),
         interactionSource = interaction)
 }
 

@@ -112,6 +112,8 @@ import kotlin.math.roundToInt
     val preferences = settings.normalized()
     val density = LocalDensity.current
     val eInk = LocalEInkMode.current
+    val border = monochromeBorder()
+    val flat = eInk || border != null
     val reduced = appReducedMotion()
     var size by remember { mutableStateOf(IntSize.Zero) }
     var expanded by remember(pageKey) { mutableStateOf(false) }
@@ -178,7 +180,7 @@ import kotlin.math.roundToInt
                 .clickable(enabled = open, interactionSource = remember { MutableInteractionSource() }, indication = null) { close() }
                 .clearAndSetSemantics { }.testTag("edge-toolbar-scrim"))
             Surface(shape = panelShape, color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                shadowElevation = if(eInk) 0.dp else 6.dp,
+                shadowElevation = if(flat) 0.dp else 6.dp, border = border,
                 modifier = Modifier.testTag("edge-toolbar-panel")
                     .then(if(open) Modifier.semantics { paneTitle = "快捷入口"; isTraversalGroup = true }
                         else Modifier.clearAndSetSemantics { })) {
@@ -242,7 +244,7 @@ import kotlin.math.roundToInt
                 }, contentAlignment = Alignment.Center) {
                 // 圆点是固定形状的拖动把手，直角模式也保留圆形；只移动视觉层，触控区留在屏幕内。
                 Surface(shape = CircleShape, color = circleBackground, contentColor = circleForeground,
-                    shadowElevation = if(eInk) 0.dp else 2.dp,
+                    shadowElevation = if(flat) 0.dp else 2.dp,
                     modifier = Modifier.size(32.dp).graphicsLayer { translationX = shift; alpha = dotAlpha }) {
                     Box(contentAlignment = Alignment.Center) { Icon(Icons.Outlined.Widgets, null, Modifier.size(18.dp)) }
                 }

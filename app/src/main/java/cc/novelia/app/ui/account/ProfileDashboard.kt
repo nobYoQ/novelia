@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.Constraints
 import cc.novelia.app.data.model.Profile
 import cc.novelia.app.ui.components.base.AppLazyColumn
 import cc.novelia.app.ui.theme.LocalEInkMode
+import cc.novelia.app.ui.theme.isMonochromeTheme
 import cc.novelia.app.ui.theme.LocalAmoledBlack
 
 /** 同一组真实入口在宽屏并列显示；空间不足或字号放大时恢复纵向阅读顺序。 */
@@ -225,7 +226,7 @@ import cc.novelia.app.ui.theme.LocalAmoledBlack
 
 /** 电子纸使用清晰轮廓，纯黑模式用细弱边框补足近黑卡片的边界。 */
 @Composable internal fun profileCardBorder(): BorderStroke? = when {
-    LocalEInkMode.current -> BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+    LocalEInkMode.current || isMonochromeTheme() -> BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
     LocalAmoledBlack.current -> BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .65f))
     else -> null
 }

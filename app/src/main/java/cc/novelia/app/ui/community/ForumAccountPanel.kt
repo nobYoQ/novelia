@@ -10,6 +10,7 @@ import cc.novelia.app.ui.components.base.AppScrollColumn
 import cc.novelia.app.ui.components.base.AppDropdownMenu
 import cc.novelia.app.ui.theme.AppMotion
 import cc.novelia.app.ui.theme.appReducedMotion
+import cc.novelia.app.ui.theme.monochromeBorder
 import androidx.compose.animation.*
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.animateFloatAsState
@@ -70,8 +71,9 @@ internal enum class ForumAccountAction { LOGIN, POSTS, FAVORITES, BLACKLIST, STR
                 AnimatedVisibility(visibility,
                     enter = if(reduced) EnterTransition.None else fadeIn(tween(AppMotion.Quick)) + scaleIn(tween(AppMotion.Standard), initialScale = .92f, transformOrigin = TransformOrigin(1f, 0f)),
                     exit = if(reduced) ExitTransition.None else fadeOut(tween(AppMotion.Exit)) + scaleOut(tween(AppMotion.Page), targetScale = .96f, transformOrigin = TransformOrigin(1f, 0f))) {
+                    val border = monochromeBorder()
                     Surface(shape = appRoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        tonalElevation = 4.dp, shadowElevation = 8.dp,
+                        tonalElevation = 4.dp, shadowElevation = if(border != null) 0.dp else 8.dp, border = border,
                         modifier = Modifier.width(minOf(336.dp, (configuration.screenWidthDp.dp - 24.dp).coerceAtLeast(1.dp)))
                             .heightIn(max = (configuration.screenHeightDp.dp - 32.dp).coerceAtLeast(1.dp)).testTag("forum-account-panel")) {
                         AppScrollColumn(contentModifier = Modifier.padding(vertical = 12.dp)) {

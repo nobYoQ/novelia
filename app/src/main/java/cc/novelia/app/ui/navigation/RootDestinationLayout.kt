@@ -14,11 +14,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.ui.theme.AppMotion
@@ -26,6 +28,8 @@ import cc.novelia.app.ui.theme.appReducedMotion
 import cc.novelia.app.data.model.SquareCornerTarget
 import cc.novelia.app.ui.theme.useSquareCorners
 import cc.novelia.app.ui.theme.ThemeBar
+import cc.novelia.app.ui.theme.isMonochromeTheme
+import cc.novelia.app.ui.theme.monochromeDivider
 import cc.novelia.app.ui.theme.pageContainerColor
 import cc.novelia.app.ui.theme.themeBarBackground
 
@@ -83,27 +87,36 @@ private val rootTabs = listOf(
 
 @Composable private fun RootNavigation(route: String?, onNavigate: (String) -> Unit, wide: Boolean, compactRail: Boolean) {
     val colors = MaterialTheme.colorScheme
+    val monochrome = isMonochromeTheme()
     if(wide) {
         val bar = themeBarBackground(ThemeBar.Bottom, NavigationRailDefaults.ContainerColor)
-        NavigationRail(containerColor = bar.color, contentColor = colors.onSurface, modifier = bar.modifier.testTag("root-navigation")) {
+        val itemColors = if(monochrome) NavigationRailItemDefaults.colors(selectedIconColor = colors.onPrimary,
+            indicatorColor = colors.primary) else NavigationRailItemDefaults.colors()
+        NavigationRail(containerColor = bar.color, contentColor = colors.onSurface,
+            modifier = bar.modifier.monochromeDivider(vertical = true).testTag("root-navigation")) {
             Spacer(Modifier.height(if(compactRail) 12.dp else 40.dp))
             rootTabs.forEach { (target, label, icon) ->
                 val selected = route == target
                 if(useSquareCorners(SquareCornerTarget.Navigation)) SquareNavigationItem(selected, { if(!selected) onNavigate(target) },
                     icon, label, Modifier.width(80.dp), showLabel = !compactRail)
                 else NavigationRailItem(selected, { if(!selected) onNavigate(target) },
-                    { NavigationIcon(icon, label, selected) }, label = if(compactRail) null else { { Text(label) } })
+                    { NavigationIcon(icon, label, selected) }, colors = itemColors,
+                    label = if(compactRail) null else { { NavigationLabel(label, monochrome && selected) } })
             }
         }
     } else {
         val bar = themeBarBackground(ThemeBar.Bottom, NavigationBarDefaults.containerColor)
-        NavigationBar(containerColor = bar.color, contentColor = colors.onSurface, modifier = bar.modifier.testTag("root-navigation")) {
+        val itemColors = if(monochrome) NavigationBarItemDefaults.colors(selectedIconColor = colors.onPrimary,
+            indicatorColor = colors.primary) else NavigationBarItemDefaults.colors()
+        NavigationBar(containerColor = bar.color, contentColor = colors.onSurface,
+            modifier = bar.modifier.monochromeDivider(atTop = true).testTag("root-navigation")) {
             rootTabs.forEach { (target, label, icon) ->
                 val selected = route == target
                 if(useSquareCorners(SquareCornerTarget.Navigation)) SquareNavigationItem(selected, { if(!selected) onNavigate(target) },
                     icon, label, Modifier.weight(1f))
                 else NavigationBarItem(selected, { if(!selected) onNavigate(target) },
-                    { NavigationIcon(icon, label, selected) }, label = { Text(label) })
+                    { NavigationIcon(icon, label, selected) }, colors = itemColors,
+                    label = { NavigationLabel(label, monochrome && selected) })
             }
         }
     }
@@ -115,18 +128,30 @@ private val rootTabs = listOf(
     modifier: Modifier = Modifier, showLabel: Boolean = true,
 ) {
     val colors = MaterialTheme.colorScheme
+    val monochrome = isMonochromeTheme()
+    val indicator = if(monochrome) colors.primary else colors.secondaryContainer
+    val iconColor = when {
+        !selected -> colors.onSurfaceVariant
+        monochrome -> colors.onPrimary
+        else -> colors.onSecondaryContainer
+    }
     Column(modifier.heightIn(min = if(showLabel) 80.dp else 56.dp)
         .selectable(selected, role = Role.Tab, onClick = onClick).padding(vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Box(Modifier.size(64.dp, 32.dp).background(if(selected) colors.secondaryContainer else androidx.compose.ui.graphics.Color.Transparent),
+        Box(Modifier.size(64.dp, 32.dp).background(if(selected) indicator else Color.Transparent),
             contentAlignment = Alignment.Center) {
-            androidx.compose.runtime.CompositionLocalProvider(LocalContentColor provides if(selected) colors.onSecondaryContainer else colors.onSurfaceVariant) {
+            CompositionLocalProvider(LocalContentColor provides iconColor) {
                 NavigationIcon(icon, label, selected)
             }
         }
         if(showLabel) Text(label, color = if(selected) colors.onSurface else colors.onSurfaceVariant,
+            fontWeight = if(monochrome && selected) FontWeight.Bold else null,
             style = MaterialTheme.typography.labelMedium)
     }
+}
+
+@Composable private fun NavigationLabel(label: String, emphasized: Boolean) {
+    Text(label, fontWeight = if(emphasized) FontWeight.Bold else null)
 }
 
 @Composable private fun NavigationIcon(icon: ImageVector, label: String, selected: Boolean) {

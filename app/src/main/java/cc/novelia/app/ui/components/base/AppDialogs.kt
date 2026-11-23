@@ -1,6 +1,7 @@
 package cc.novelia.app.ui.components.base
 
 import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -32,6 +33,7 @@ import androidx.compose.ui.window.PopupProperties
 import cc.novelia.app.ui.theme.DefaultShapes
 import cc.novelia.app.ui.theme.appPanelShape
 import cc.novelia.app.ui.theme.appReducedMotion
+import cc.novelia.app.ui.theme.monochromeBorder
 
 /** 窗口动画不受 Compose 动画缩放控制，需要单独关闭。 */
 @Composable private fun ApplyDialogMotion() {
@@ -65,11 +67,14 @@ import cc.novelia.app.ui.theme.appReducedMotion
     properties: DialogProperties = DialogProperties(),
 ) {
     AppOverlayPresence()
+    val shape = appPanelShape()
+    val border = monochromeBorder()
     AlertDialog(onDismissRequest, confirmButton = {
         ApplyDialogMotion()
         confirmButton()
-    }, modifier = modifier, dismissButton = dismissButton, icon = icon, title = title, text = text,
-        shape = appPanelShape(), properties = properties)
+    }, modifier = if(border != null) modifier.border(border, shape) else modifier,
+        dismissButton = dismissButton, icon = icon, title = title, text = text,
+        shape = shape, properties = properties)
 }
 
 /** 减少动画模式使用静态锚定弹窗，避开 Material 菜单固定的淡入和缩放动画。 */
@@ -89,8 +94,9 @@ import cc.novelia.app.ui.theme.appReducedMotion
         val position = remember(margin) { StaticMenuPosition(margin) }
         Popup(popupPositionProvider = position, onDismissRequest = onDismissRequest,
             properties = PopupProperties(focusable = true)) {
+            val border = monochromeBorder()
             Surface(shape = shape, color = MaterialTheme.colorScheme.surfaceContainer,
-                shadowElevation = 3.dp) {
+                shadowElevation = if(border != null) 0.dp else 3.dp, border = border) {
                 Column(modifier.width(IntrinsicSize.Max).widthIn(min = 112.dp, max = 280.dp)
                     .verticalScroll(scrollState).padding(vertical = 8.dp), content = content)
             }
