@@ -31,11 +31,18 @@ class MountedVolumeSelectionTest {
         val book = BookCard(BookRef("wenku", UUID.randomUUID().toString()), "分卷多选")
         val sources = List(3) { File.createTempFile("mounted-selection-", ".txt", app.cacheDir).apply { writeText(name) } }
         val refs = runBlocking { sources.map { importLocalDocument(app.store, it, title = "同名分卷").ref } }
+        val downloads = listOf(0, 2).map { index ->
+            val id = UUID.randomUUID().toString()
+            val file = File(app.store.downloadsDir, "$id.txt").apply { writeBytes(sources[index].readBytes()) }
+            DownloadEntry(id, "第一卷", file.name, "https://example.invalid", status = "已完成", sourceBook = book.ref)
+        }
         try {
             val position = Position("chapter", index = 4)
             app.store.update { state -> state.copy(books = state.books + SavedBook(book),
                 positions = state.positions + (refs[0].key to position),
-                downloadLinks = state.downloadLinks + DownloadedBookLink("selection-link", refs[0], book.ref, "第一卷")
+                downloads = state.downloads + downloads,
+                downloadLinks = state.downloadLinks + listOf(DownloadedBookLink(downloads[0].id, refs[0], book.ref, "第一卷"),
+                    DownloadedBookLink(downloads[1].id, refs[2], book.ref, "第一卷"))
             ).withMountedVolumes(book.ref.key, refs.map { it.key }.toSet()) }
             compose.setContent {
                 val nav = rememberNavController()
@@ -57,6 +64,9 @@ class MountedVolumeSelectionTest {
                 !app.store.documentSource(refs[1].id, "txt").exists() }
             assertEquals(position, app.store.state.value.positions[refs[0].key])
             assertTrue(sources.all { it.isFile })
+            assertFalse(File(app.store.downloadsDir, downloads[0].fileName).exists())
+            assertTrue(File(app.store.downloadsDir, downloads[1].fileName).isFile)
+            assertEquals(listOf(downloads[1]), app.store.state.value.downloads.filter { it.sourceBook == book.ref })
             assertTrue(app.store.documentSource(refs[2].id, "txt").isFile)
             compose.onNodeWithText("多选挂载").performClick()
             row(2).performClick()
@@ -67,6 +77,7 @@ class MountedVolumeSelectionTest {
             refs.forEach { app.store.removeDocument(it.id) }
             app.store.update { before }
             sources.forEach { it.delete() }
+            downloads.forEach { File(app.store.downloadsDir, it.fileName).delete() }
         }
     }
 }

@@ -266,18 +266,13 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
         }
     }
     /** 批量书架操作只提交一次关系变更，返回因清理偏好而删除副本的书目。 */
-    suspend fun removeShelfBooks(refs: Set<BookRef>, mountedIn: BookRef? = null,
-        deleteLocalCopies: Boolean = state.value.deleteLocalCopyOnShelfRemoval): Set<BookRef> = withContext(Dispatchers.IO) {
+    suspend fun removeShelfBooks(refs: Set<BookRef>): Set<BookRef> = withContext(Dispatchers.IO) {
         downloadedBookLock.withLock {
             documentImportLock.withLock {
                 check(recoveryIssue.value == null) { "本地资料已保护，请先前往资料备份与恢复" }
-                var copies = emptySet<BookRef>()
-                update { current ->
-                    val selected = current.books.filter { it.book.ref in refs && (mountedIn == null ||
-                        (it.book.ref.isLocal && it.parentWenkuKey == mountedIn.key)) }.map { it.book.ref }.toSet()
-                    copies = if(deleteLocalCopies) selected.filter { it.isLocal }.toSet() else emptySet()
-                    current.withoutBooks(selected)
-                }
+                val selected = state.value.books.filter { it.book.ref in refs }.map { it.book.ref }.toSet()
+                val copies = if(state.value.deleteLocalCopyOnShelfRemoval) selected.filter { it.isLocal }.toSet() else emptySet()
+                update { it.withoutBooks(selected) }
                 if(copies.isNotEmpty()) {
                     flush()
                     copies.forEach { removeDocument(it.id) }

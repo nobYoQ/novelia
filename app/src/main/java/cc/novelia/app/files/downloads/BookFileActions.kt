@@ -2,6 +2,8 @@ package cc.novelia.app.files.downloads
 
 import cc.novelia.app.NoveliaApplication
 import cc.novelia.app.data.library.bookDeletionPlan
+import cc.novelia.app.data.library.BookDeletionPlan
+import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.library.downloadedVolume
 import cc.novelia.app.data.library.originBook
 import cc.novelia.app.data.library.originVolumeId
@@ -71,13 +73,27 @@ private suspend fun recoverDownloadLinks(store: LocalStore) {
 
 /** 删除所选书籍/分卷的副本和对应下载；整本文库还包含全部挂载分卷。 */
 suspend fun deleteBookFiles(app: NoveliaApplication, refs: Set<BookRef> = emptySet(),
-    downloadIds: Set<String> = emptySet(), eraseReadingData: Boolean = true) = withContext(Dispatchers.IO) {
+    downloadIds: Set<String> = emptySet(), eraseReadingData: Boolean = true) {
+    deletePlannedFiles(app, eraseReadingData) { it.bookDeletionPlan(refs, downloadIds, includeSourceBooks = eraseReadingData) }
+}
+
+/** 按勾选的本地版本删除，保留同一原站卷的其他译本和第三方同名卷。 */
+internal suspend fun deleteMountedCopies(app: NoveliaApplication, parent: BookRef, refs: Set<BookRef>): Int =
+    deletePlannedFiles(app, eraseReadingData = false) { state ->
+        val copies = state.books.filter { it.book.ref in refs && it.book.ref.isLocal && it.parentWenkuKey == parent.key }
+            .map { it.book.ref }.toSet()
+        val links = state.downloadLinks.filter { it.localBook in copies }.map { it.downloadId }.toSet()
+        BookDeletionPlan(copies, links.intersect(state.downloads.map { it.id }.toSet()), links)
+    }
+
+private suspend fun deletePlannedFiles(app: NoveliaApplication, eraseReadingData: Boolean,
+    planFor: (LibraryState) -> BookDeletionPlan): Int = withContext(Dispatchers.IO) {
     downloadedBookLock.withLock {
         documentImportLock.withLock {
             val store = app.store
             check(store.recoveryIssue.value == null) { "本地资料已保护，请先前往资料备份与恢复" }
             recoverDownloadLinks(store)
-            val plan = store.state.value.bookDeletionPlan(refs, downloadIds, includeSourceBooks = eraseReadingData)
+            val plan = planFor(store.state.value)
             // 取消正在下载的任务并持久化删除，旧 Worker 不能再次发布成品。
             withContext(NonCancellable) {
                 plan.downloadIds.forEach { DownloadWorker.remove(app, it) }
@@ -87,6 +103,7 @@ suspend fun deleteBookFiles(app: NoveliaApplication, refs: Set<BookRef> = emptyS
                 if(eraseReadingData) plan.books.filterNot { it.isLocal }.forEach(store.bookCovers::restoreDefault)
                 store.flush()
             }
+            plan.books.size
         }
     }
 }

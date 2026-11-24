@@ -15,6 +15,7 @@ import cc.novelia.app.data.library.withMountedVolumes
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.LibraryState
+import cc.novelia.app.files.downloads.deleteMountedCopies
 import cc.novelia.app.ui.components.base.*
 import cc.novelia.app.ui.navigation.AppController
 
@@ -39,7 +40,12 @@ import cc.novelia.app.ui.navigation.AppController
     val toggle: (String) -> Unit = { key -> selection = if(key in selected) selection - key else selection + key }
     Column {
         FlowRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("已选 ${chosen.size} 卷", Modifier.align(Alignment.CenterVertically), style = MaterialTheme.typography.titleSmall)
+            val status = when {
+                removing -> "正在删除分卷…"
+                transfer.busy -> "正在处理分卷文件…"
+                else -> "已选 ${chosen.size} 卷"
+            }
+            Text(status, Modifier.align(Alignment.CenterVertically), style = MaterialTheme.typography.titleSmall)
             val all = keys.isNotEmpty() && selected == keys
             AppTextButton({ selection = if(all) emptyList() else keys.toList() }, enabled = !busy) { Text(if(all) "取消全选" else "全选") }
             AppTextButton(onDone, enabled = !busy) { Text("完成") }
@@ -74,14 +80,14 @@ import cc.novelia.app.ui.navigation.AppController
         }
     }
     deleting?.let { refs ->
-        ConfirmDialog("删除 ${refs.size} 卷的本地副本？", "选中分卷的导入副本将从本机删除。原文件、下载文件和阅读记录保留。此操作无法撤销。",
+        ConfirmDialog("删除 ${refs.size} 卷的本地副本？", "将删除所选副本及其对应的下载文件。导入前的原文件和阅读记录保留。此操作无法撤销。",
             { deleting = null }, "删除副本") {
             removing = true
             c.action {
                 try {
-                    val removed = c.store.removeShelfBooks(refs, mountedIn = book.ref, deleteLocalCopies = true)
+                    val removed = deleteMountedCopies(c.app, book.ref, refs)
                     onDone()
-                    c.message("已删除 ${removed.size} 卷的本地副本")
+                    c.message("已删除 ${removed} 卷的本地副本")
                 } finally { removing = false }
             }
         }
