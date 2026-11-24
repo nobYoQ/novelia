@@ -14,7 +14,7 @@ import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.SavedBook
 import cc.novelia.app.ui.components.base.AppLazyColumn
 import cc.novelia.app.ui.navigation.AppController
-import cc.novelia.app.ui.shelf.ContinueReadingButton
+import cc.novelia.app.ui.shelf.ContinueReadingOverlay
 
 @Composable internal fun VolumeList(
     c: AppController, library: LibraryState, volumes: List<SavedBook>, tag: String,
@@ -38,11 +38,8 @@ import cc.novelia.app.ui.shelf.ContinueReadingButton
             onPageButtonsHeightChanged = { pagingHeight = it },
             contentPadding = PaddingValues(bottom = if(floating) with(density) { buttonHeight.toDp() } + 32.dp else 24.dp),
             content = content)
-        if(showContinue && latest != null) {
-            val (book, position) = latest
-            ContinueReadingButton(book, position, { c.read(book.ref, position.chapterId) },
-                Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = with(density) { pagingHeight.toDp() } + 16.dp)
-                    .onSizeChanged { buttonHeight = it.height }, expanded = expanded, tagPrefix = "volume-continue")
-        }
+        ContinueReadingOverlay(latest.takeIf { showContinue }, { book, position -> c.read(book.ref, position.chapterId) },
+            Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = with(density) { pagingHeight.toDp() } + 16.dp)
+                .onSizeChanged { buttonHeight = it.height }, expanded = expanded, tagPrefix = "volume-continue")
     }
 }

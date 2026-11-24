@@ -66,7 +66,8 @@ class ContinueReadingButtonTest {
         runBlocking { app.initialization.await() }
         assertNull("Use an anonymous dedicated test emulator", app.session.profile.value)
         before = app.store.state.value
-        app.store.update { it.copy(books = books, shelfGrid = false, shelfTapToRead = false, positions = mapOf(
+        app.store.update { it.copy(books = books, shelfGrid = false, shelfTapToRead = false,
+            rememberLastShelfFolder = false, shelfControlsExpanded = true, shelfSort = 0, positions = mapOf(
             recent.ref.key to position,
             books[2].book.ref.key to position.copy(updatedAt = 100L),
             "syosetu/not-in-shelf" to position.copy(updatedAt = 300L),
@@ -205,8 +206,9 @@ class ContinueReadingButtonTest {
         val list = compose.onNodeWithTag("shelf-books")
         val button = compose.onNodeWithTag("shelf-continue-reading")
         fun assertDockedToList() {
-            val expectedBottom = list.getUnclippedBoundsInRoot().bottom - 16.dp
-            assertEquals(expectedBottom.value, button.getUnclippedBoundsInRoot().bottom.value, 1f)
+            val expectedBottom = list.fetchSemanticsNode().boundsInRoot.bottom - with(compose.density) { 16.dp.toPx() }
+            // 进场缩放期间比较变换后的可见边界，布局尺寸仍是按钮完全展开时的尺寸。
+            assertEquals(expectedBottom, button.fetchSemanticsNode().boundsInRoot.bottom, compose.density.density)
         }
         assertDockedToList()
         compose.onNodeWithTag("local-sort-picker").performClick()
@@ -216,7 +218,7 @@ class ContinueReadingButtonTest {
         compose.mainClock.autoAdvance = false
         try {
             list.performTouchInput { down(start); moveTo(start + Offset(0f, 1f), delayMillis = 700) }
-            compose.mainClock.advanceTimeBy(64)
+            compose.mainClock.advanceTimeBy(224)
             button.assertDoesNotExist()
             val target = compose.onNodeWithTag("shelf-book-${books[0].book.ref.key}")
                 .fetchSemanticsNode().boundsInRoot.center - list.fetchSemanticsNode().boundsInRoot.topLeft
@@ -231,6 +233,26 @@ class ContinueReadingButtonTest {
         } finally { compose.mainClock.autoAdvance = true }
         button.assertIsDisplayed()
         assertDockedToList()
+    }
+
+    @Test fun clearingReadingPositionKeepsButtonDuringExitAndRestoringItAnimatesEntry() {
+        showShelf(reducedMotion = false)
+        val button = compose.onNodeWithTag("shelf-continue-reading")
+        button.assertIsDisplayed()
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.runOnIdle { app.store.update { it.copy(positions = emptyMap()) } }
+            compose.mainClock.advanceTimeBy(64)
+            button.assertExists().assertIsNotEnabled()
+            compose.mainClock.advanceTimeBy(240)
+            button.assertDoesNotExist()
+            compose.runOnIdle { app.store.update { it.copy(positions = mapOf(recent.ref.key to position)) } }
+            compose.mainClock.advanceTimeBy(64)
+            button.assertIsEnabled()
+            val entering = button.fetchSemanticsNode().boundsInRoot.width
+            compose.mainClock.advanceTimeBy(320)
+            assertTrue(button.fetchSemanticsNode().boundsInRoot.width > entering)
+        } finally { compose.mainClock.autoAdvance = true }
     }
 
     @Test fun largeTextRemainsThreeLinesAndEInkPageButtonsStayAccessible() {

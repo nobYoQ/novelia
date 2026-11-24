@@ -452,10 +452,9 @@ import kotlinx.coroutines.withContext
                         }
                         if(pageManaging) selectionActions(page == 1, books.filter { it.book.ref.key in selection })
                     }
-                    if(continueBook != null) {
-                        val position = state.positions.getValue(continueBook.book.ref.key)
-                        ContinueReadingButton(continueBook.book, position,
-                            { c.read(continueBook.book.ref, position.chapterId) },
+                    if(page == 0) {
+                        ContinueReadingOverlay(continueBook?.let { it.book to state.positions.getValue(it.book.ref.key) },
+                            { book, position -> c.read(book.ref, position.chapterId) },
                             Modifier.align(Alignment.BottomEnd)
                                 .padding(end = 16.dp, bottom = 16.dp + with(density) { pagingControlsHeight.toDp() })
                                 .onSizeChanged { continueHeight = it.height }, expanded = continueExpanded)

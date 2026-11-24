@@ -1,10 +1,14 @@
 package cc.novelia.app.ui.shelf
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,8 +23,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
@@ -36,6 +46,34 @@ import cc.novelia.app.ui.theme.appControlShape
 import cc.novelia.app.ui.theme.appReducedMotion
 import cc.novelia.app.ui.theme.isMonochromeTheme
 
+@Composable internal fun ContinueReadingOverlay(
+    target: Pair<BookCard, Position>?,
+    onRead: (BookCard, Position) -> Unit,
+    modifier: Modifier = Modifier,
+    expanded: Boolean = true,
+    tagPrefix: String = "shelf-continue",
+) {
+    if (appReducedMotion()) {
+        target?.let { (book, position) ->
+            ContinueReadingButton(book, position, { onRead(book, position) }, modifier, expanded, tagPrefix)
+        }
+        return
+    }
+    val visible = remember { MutableTransitionState(false) }.apply { targetState = target != null }
+    var previous by remember { mutableStateOf(target) }
+    SideEffect { if (target != null || visible.isIdle && !visible.currentState) previous = target }
+    val anchor = TransformOrigin(1f, 1f)
+    AnimatedVisibility(visible, modifier,
+        enter = fadeIn(tween(AppMotion.Standard)) + scaleIn(tween(AppMotion.Standard), .9f, anchor),
+        exit = fadeOut(tween(AppMotion.Exit)) + scaleOut(tween(AppMotion.Exit), .9f, anchor),
+    ) {
+        (target ?: previous)?.let { (book, position) ->
+            ContinueReadingButton(book, position, { if (target != null) onRead(book, position) },
+                expanded = expanded, tagPrefix = tagPrefix, enabled = target != null)
+        }
+    }
+}
+
 /** 续读目标沿用书架最近的本机位置；完整书名和章节仍保留在无障碍文本中。 */
 @Composable internal fun ContinueReadingButton(
     book: BookCard,
@@ -44,13 +82,14 @@ import cc.novelia.app.ui.theme.isMonochromeTheme
     modifier: Modifier = Modifier,
     expanded: Boolean = true,
     tagPrefix: String = "shelf-continue",
+    enabled: Boolean = true,
 ) {
     val reducedMotion = appReducedMotion()
     val monochrome = isMonochromeTheme()
     val colors = MaterialTheme.colorScheme
     val chapter = position.title.ifBlank { position.chapterIndex?.let { "第 ${it + 1} 章" } ?: "已记录阅读位置" }
     MotionContent(book.ref.key, modifier, animateInitial = false) {
-        Surface(onClick = onClick, shape = appControlShape(DefaultShapes.medium),
+        Surface(onClick = onClick, enabled = enabled, shape = appControlShape(DefaultShapes.medium),
             color = if(monochrome) colors.primary else colors.secondaryContainer,
             contentColor = if(monochrome) colors.onPrimary else colors.onSecondaryContainer,
             shadowElevation = if(reducedMotion) 0.dp else 1.dp,
