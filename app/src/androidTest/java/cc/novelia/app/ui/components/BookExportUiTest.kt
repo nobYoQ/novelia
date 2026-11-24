@@ -55,6 +55,7 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import cc.novelia.app.ui.components.documents.CreateBookDocument
+import cc.novelia.app.ui.book.WenkuVolumesPanel
 
 class BookExportUiTest {
     @get:Rule val compose = createComposeRule()
@@ -110,6 +111,64 @@ class BookExportUiTest {
         ZipFile(target, Charsets.UTF_8).use { zip ->
             assertEquals(payloads.keys.map { "$batchFolder/$it" }, zip.entries().toList().map { it.name })
             payloads.forEach { (name, bytes) -> assertArrayEquals(bytes, zip.getInputStream(zip.getEntry("$batchFolder/$name")).readBytes()) }
+        }
+    }
+
+    @Test fun mountedCopiesCanExportAndShareOfflineWithDuplicateNamesAndMissingOriginals() {
+        val docs = List(3) { i -> LocalDocument(UUID.randomUUID().toString(), "同名", if(i == 1) "epub" else "txt",
+            listOf(LocalChapter("ch", "第一章", listOf("正文$i")))) }
+        docs.forEach { documents += it.id; app.store.saveDocument(it) }
+        val original = txtBytes()
+        app.store.documentSource(docs.first().id, "txt").writeBytes(original)
+        val volumes = docs.map { SavedBook(BookCard(BookRef("local", it.id), it.name), parentWenkuKey = batchBook.ref.key) }
+        app.store.update { it.copy(books = listOf(SavedBook(batchBook, volumeOrder = volumes.map { v -> v.book.ref.key })) + volumes) }
+        val picker = ExportPicker()
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val sent = CopyOnWriteArrayList<Intent>()
+        val monitor = object : Instrumentation.ActivityMonitor() {
+            override fun onStartActivity(intent: Intent): Instrumentation.ActivityResult? {
+                if(intent.action != Intent.ACTION_CHOOSER) return null
+                @Suppress("DEPRECATION") val send = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)!!
+                sent += send
+                return Instrumentation.ActivityResult(Activity.RESULT_CANCELED, null)
+            }
+        }
+        instrumentation.addMonitor(monitor)
+        try {
+            val restore = screen(picker) { WenkuVolumesPanel(it, batchBook, null, false, {}, {}) }
+            compose.onNodeWithText("多选挂载").performClick()
+            fun row(i: Int) = compose.onNodeWithTag("shelf-volume-${volumes[i].book.ref.key}")
+            row(0).performClick()
+            compose.onNodeWithText("分享文件").performClick()
+            compose.waitUntil(10_000) { sent.size == 1 }
+            val single = sent.single()
+            assertEquals("text/plain", single.type)
+            assertArrayEquals(original, app.contentResolver.openInputStream(single.clipData!!.getItemAt(0).uri)!!.use { it.readBytes() })
+            row(1).performClick()
+            compose.onNodeWithText("导出 ZIP").performClick()
+            assertPicker(picker, "${batchBook.title}（2卷）.zip", "application/zip")
+            restore.emulateSavedInstanceStateRestore()
+            val output = finishExport(picker, "zip", 8192)
+            awaitMessage("分卷文件已导出")
+            ZipFile(output).use { zip ->
+                assertEquals(listOf("$batchFolder/同名.txt", "$batchFolder/同名（2）.txt"), zip.entries().toList().map { it.name })
+                assertArrayEquals(original, zip.getInputStream(zip.getEntry("$batchFolder/同名.txt")).use { it.readBytes() })
+                assertEquals("第一章\n\n正文1", zip.getInputStream(zip.getEntry("$batchFolder/同名（2）.txt")).bufferedReader().use { it.readText() })
+            }
+            compose.onNodeWithText("分享 ZIP").performClick()
+            compose.waitUntil(10_000) { sent.size == 2 }
+            val zipShare = sent.last()
+            assertEquals("application/zip", zipShare.type)
+            assertTrue(zipShare.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
+            ZipInputStream(app.contentResolver.openInputStream(zipShare.clipData!!.getItemAt(0).uri)).use { zip ->
+                assertEquals("$batchFolder/同名.txt", zip.nextEntry.name)
+                assertArrayEquals(original, zip.readBytes())
+                assertEquals("$batchFolder/同名（2）.txt", zip.nextEntry.name)
+                assertNull(zip.nextEntry)
+            }
+        } finally {
+            instrumentation.removeMonitor(monitor)
+            sent.forEach { intent -> app.contentResolver.delete(intent.clipData!!.getItemAt(0).uri, null, null) }
         }
     }
 

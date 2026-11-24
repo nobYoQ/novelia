@@ -35,13 +35,7 @@ internal fun downloadArchivePaths(entries: List<DownloadEntry>, books: List<Book
     val knownBooks = books.groupBy { it.ref }
     val folders = entries.groupBy { it.archiveWork() }.mapValues { (work, volumes) ->
         val cards = knownBooks[work.ref].orEmpty() + volumes.mapNotNull { it.sourceCard?.takeIf { card -> card.ref == work.ref } }
-        val title = cards.firstNotNullOfOrNull { it.title.trim().ifBlank { it.originalTitle.trim() }.takeIf(String::isNotBlank) }
-            ?: volumes.first().title.trim().ifBlank { "未命名作品" }
-        val authors = cards.firstNotNullOfOrNull { it.authors.creditNames().takeIf(String::isNotBlank) }
-        val artists = cards.firstNotNullOfOrNull { it.artists }?.creditNames().orEmpty()
-        val credit = authors?.let { if(artists.isBlank()) it else "$it×$artists" }
-        val label = safeArchiveName(if(credit == null) title else "[$credit] $title", "未命名作品")
-        uniqueArchiveName(folderNames, label)
+        archiveFolder(folderNames, cards, volumes.first().title)
     }
     val fileNames = mutableSetOf<String>()
     return entries.associate { entry ->
@@ -54,15 +48,24 @@ internal fun downloadArchivePaths(entries: List<DownloadEntry>, books: List<Book
 
 private fun List<String>.creditNames() = map(String::trim).filter(String::isNotBlank).distinct().joinToString("、")
 
+internal fun archiveFolder(used: MutableSet<String>, cards: List<BookCard>, fallback: String): String {
+    val title = cards.firstNotNullOfOrNull { it.title.trim().ifBlank { it.originalTitle.trim() }.takeIf(String::isNotBlank) }
+        ?: fallback.trim().ifBlank { "未命名作品" }
+    val authors = cards.firstNotNullOfOrNull { it.authors.creditNames().takeIf(String::isNotBlank) }
+    val artists = cards.firstNotNullOfOrNull { it.artists }?.creditNames().orEmpty()
+    val credit = authors?.let { if(artists.isBlank()) it else "$it×$artists" }
+    return uniqueArchiveName(used, safeArchiveName(if(credit == null) title else "[$credit] $title", "未命名作品"))
+}
+
 private val unsafeArchiveCharacters = Regex("[\\\\/:*?\"<>|\\p{Cntrl}]")
 private val reservedArchiveName = Regex("(?i)(CON|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³])(?:\\..*)?")
 
-private fun safeArchiveName(value: String, fallback: String): String {
+internal fun safeArchiveName(value: String, fallback: String): String {
     val name = value.replace(unsafeArchiveCharacters, "_").trim(' ', '.').ifBlank { fallback }
     return if(reservedArchiveName.matches(name)) "_$name" else name
 }
 
-private fun uniqueArchiveName(names: MutableSet<String>, stem: String, extension: String = "", prefix: String = ""): String {
+internal fun uniqueArchiveName(names: MutableSet<String>, stem: String, extension: String = "", prefix: String = ""): String {
     // 单个路径段留出序号空间，按 UTF-8 字节限制，避免中文长书名解压失败。
     val limit = (240 - extension.toByteArray(Charsets.UTF_8).size).coerceAtLeast(1)
     var end = minOf(stem.length, limit)

@@ -5,6 +5,7 @@ import java.io.OutputStream
 
 internal fun bookFileMimeType(fileName: String): String = when(fileName.substringAfterLast('.', "").lowercase()) {
     "epub" -> "application/epub+zip"
+    "zip" -> "application/zip"
     "txt" -> "text/plain"
     "srt" -> "application/x-subrip"
     "tsv" -> "text/tab-separated-values"

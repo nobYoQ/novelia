@@ -32,10 +32,10 @@ class DownloadArchiveTest {
         )
         val contents = listOf(byteArrayOf(-1, -2, 0, 65), "另一个同名文件".toByteArray(), ByteArray(150_000) { (it % 256).toByte() })
         entries.zip(contents).forEach { (entry, bytes) -> File(downloads, entry.fileName).writeBytes(bytes) }
-        val archive = DownloadArchiveFiles(exports)
+        val archive = BookExportFiles(exports)
         val id = archive.create(downloads, entries)
         val target = temporary.newFile("结果.zip")
-        DownloadArchiveFiles(exports).finish(id, { target.outputStream() })
+        BookExportFiles(exports).finish(id, { target.outputStream() })
         ZipFile(target, Charsets.UTF_8).use { zip ->
             val actual = zip.entries().toList()
             assertEquals(listOf("[作者甲×画师乙] 星之旅/第一卷.txt", "[作者甲×画师乙] 星之旅/第一卷（2）.txt", "[作者丙] 另一作品/作品.epub"), actual.map { it.name })
@@ -60,7 +60,7 @@ class DownloadArchiveTest {
         val exports = temporary.newFolder()
         val first = entry("one", "第一卷.txt")
         File(downloads, first.fileName).writeText("正文")
-        val archives = DownloadArchiveFiles(exports)
+        val archives = BookExportFiles(exports)
         assertTrue(runCatching { archives.create(downloads, listOf(first, entry("missing", "第二卷.txt"))) }.isFailure)
         assertTrue(runCatching { archives.create(downloads, listOf(first)) { false } }.isFailure)
         assertEquals(0, exports.listFiles()!!.size)
@@ -69,7 +69,7 @@ class DownloadArchiveTest {
     @Test fun incompleteTasksDuplicateIdsAndEscapingPathsCannotBePacked() = runBlocking {
         val downloads = temporary.newFolder()
         val exports = temporary.newFolder()
-        val archives = DownloadArchiveFiles(exports)
+        val archives = BookExportFiles(exports)
         val task = entry("one", "作品.txt")
         File(downloads, task.fileName).writeText("正文")
         val outside = temporary.newFile("outside.txt").apply { writeText("保留内容") }
@@ -86,7 +86,7 @@ class DownloadArchiveTest {
         val task = entry("one", "作品.txt")
         File(downloads, task.fileName).writeBytes(ByteArray(150_000))
         var checks = 0
-        val result = runCatching { DownloadArchiveFiles(exports).create(downloads, listOf(task)) {
+        val result = runCatching { BookExportFiles(exports).create(downloads, listOf(task)) {
             if(++checks == 2) throw CancellationException("取消")
             true
         } }
@@ -99,7 +99,7 @@ class DownloadArchiveTest {
         val exports = temporary.newFolder()
         val task = entry("one", "作品.txt")
         File(downloads, task.fileName).writeText("正文")
-        val archives = DownloadArchiveFiles(exports)
+        val archives = BookExportFiles(exports)
         archives.finish(archives.create(downloads, listOf(task)), null)
         val id = archives.create(downloads, listOf(task))
         val failing = object : OutputStream() { override fun write(value: Int) { throw IOException("无法写入") } }
@@ -112,7 +112,7 @@ class DownloadArchiveTest {
         val exports = temporary.newFolder()
         val task = entry("one", "作品.txt")
         File(downloads, task.fileName).writeText("正文")
-        val archives = DownloadArchiveFiles(exports)
+        val archives = BookExportFiles(exports)
         val old = archives.share(archives.create(downloads, listOf(task)))
         assertTrue(old.setLastModified(System.currentTimeMillis() - 48 * 60 * 60 * 1000L))
         val pendingId = archives.create(downloads, listOf(task))
@@ -129,7 +129,7 @@ class DownloadArchiveTest {
     @Test fun invalidSavedIdsCannotAccessOtherFiles() {
         val exports = temporary.newFolder()
         val unrelated = temporary.newFile("unrelated.zip").apply { writeText("保留") }
-        val archives = DownloadArchiveFiles(exports)
+        val archives = BookExportFiles(exports)
         assertThrows(IllegalArgumentException::class.java) { archives.finish("../unrelated.zip", null) }
         assertThrows(IllegalArgumentException::class.java) { archives.share("../unrelated.zip") }
         assertThrows(IllegalArgumentException::class.java) { archives.finish(UUID.randomUUID().toString(), { ByteArrayOutputStream() }) }

@@ -10,7 +10,7 @@ import cc.novelia.app.ui.components.base.AppFilledTonalButton
 import cc.novelia.app.ui.components.base.AppIconButton
 import cc.novelia.app.ui.account.ProfileDetailCard
 import android.content.Intent
-import android.content.ClipData
+import cc.novelia.app.sharing.shareBookFile
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -54,7 +54,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import cc.novelia.app.files.downloads.DownloadFiles
 import cc.novelia.app.files.downloads.deleteBookFiles
-import cc.novelia.app.files.exporting.DownloadArchiveFiles
+import cc.novelia.app.files.exporting.BookExportFiles
 import cc.novelia.app.files.exporting.downloadArchiveBooks
 import cc.novelia.app.data.storage.hashName
 import cc.novelia.app.files.exporting.bookFileMimeType
@@ -73,7 +73,7 @@ import cc.novelia.app.files.importing.importDownloadedDocument
     var permanentDeletion by remember { mutableStateOf<DownloadEntry?>(null) }
     var preparingArchive by remember { mutableStateOf(false) }
     var pendingArchiveId by rememberSaveable { mutableStateOf<String?>(null) }
-    val archives = remember(c.store) { DownloadArchiveFiles(c.store.exportsDir) }
+    val archives = remember(c.store) { BookExportFiles(c.store.exportsDir) }
     val operating = deleting || preparingArchive || pendingArchiveId != null || exportId != null
     val available = remember(state.downloads, importing) { state.downloads.filter { it.id !in importing }.map { it.id } }
     val completed = remember(state.downloads, available) { state.downloads.filter { it.status == "已完成" && it.id in available }.map { it.id } }
@@ -129,10 +129,7 @@ import cc.novelia.app.files.importing.importDownloadedDocument
         }
     }
     fun shareFile(file: File, mime: String) {
-        val uri = FileProvider.getUriForFile(c.app, "${c.app.packageName}.files", file)
-        val send = Intent(Intent.ACTION_SEND).setType(mime).putExtra(Intent.EXTRA_STREAM, uri)
-            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION).apply { clipData = ClipData.newUri(c.app.contentResolver, "下载文件", uri) }
-        c.app.startActivity(Intent.createChooser(send, "分享下载文件").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION))
+        shareBookFile(c.app, file, mime, file.name, "分享下载文件")
     }
     fun transferDownloads(sharing: Boolean) {
         if(operating || batch.running || importable.isEmpty()) return

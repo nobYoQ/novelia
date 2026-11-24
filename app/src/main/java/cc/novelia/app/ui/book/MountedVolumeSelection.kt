@@ -24,7 +24,9 @@ import cc.novelia.app.ui.navigation.AppController
 ) {
     var selection by rememberSaveable(book.ref.key) { mutableStateOf(emptyList<String>()) }
     var deleting by remember { mutableStateOf<Set<BookRef>?>(null) }
-    var busy by remember { mutableStateOf(false) }
+    var removing by remember { mutableStateOf(false) }
+    val transfer = rememberMountedVolumeTransfer(c, book)
+    val busy = removing || transfer.busy
     val keys = remember(files.mounted) { files.mounted.map { it.book.ref.key }.toSet() }
     val selected = selection.intersect(keys)
     val chosen = (files.own + files.other).filter { it.book.ref.key in selected }
@@ -52,6 +54,12 @@ import cc.novelia.app.ui.navigation.AppController
                 selectedKeys = selected, onSelect = toggle, enabled = !busy)
         }
         FlowRow(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+            AppTextButton({ transfer.start(chosen.map { it.book.ref }, false) }, enabled = canAct) {
+                Text(if(chosen.size > 1) "导出 ZIP" else "导出文件")
+            }
+            AppTextButton({ transfer.start(chosen.map { it.book.ref }, true) }, enabled = canAct) {
+                Text(if(chosen.size > 1) "分享 ZIP" else "分享文件")
+            }
             AppTextButton({
                 c.store.update { current ->
                     if(current.books.none { it.book.ref == book.ref }) current else {
@@ -68,13 +76,13 @@ import cc.novelia.app.ui.navigation.AppController
     deleting?.let { refs ->
         ConfirmDialog("删除 ${refs.size} 卷的本地副本？", "选中分卷的导入副本将从本机删除。原文件、下载文件和阅读记录保留。此操作无法撤销。",
             { deleting = null }, "删除副本") {
-            busy = true
+            removing = true
             c.action {
                 try {
                     val removed = c.store.removeShelfBooks(refs, mountedIn = book.ref, deleteLocalCopies = true)
                     onDone()
                     c.message("已删除 ${removed.size} 卷的本地副本")
-                } finally { busy = false }
+                } finally { removing = false }
             }
         }
     }

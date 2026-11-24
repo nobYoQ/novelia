@@ -53,18 +53,24 @@ internal suspend fun writeDownloadArchive(
 }
 
 /** 导出暂存只保存 UUID，支持系统文件选择器期间重建；分享文件另行保留供接收应用读取。 */
-internal class DownloadArchiveFiles(private val directory: File) {
-    private fun file(id: String, sharing: Boolean = false): File {
+internal class BookExportFiles(private val directory: File) {
+    private fun file(id: String, sharing: Boolean = false, extension: String = "zip"): File {
         require(runCatching { UUID.fromString(id).toString() == id }.getOrDefault(false)) { "压缩包标识无效，请重新打包" }
-        return File(directory, "download-${if(sharing) "share" else "export"}-$id.zip")
+        require(extension in setOf("zip", "epub", "txt", "srt")) { "不支持的文件类型" }
+        return File(directory, "download-${if(sharing) "share" else "export"}-$id.$extension")
     }
 
     suspend fun create(downloads: File, entries: List<DownloadEntry>, books: List<BookCard> = emptyList(),
-        isCurrent: (DownloadEntry) -> Boolean = { true }): String = withContext(Dispatchers.IO) {
+        isCurrent: (DownloadEntry) -> Boolean = { true }): String = create { output ->
+        val work = kotlinx.coroutines.currentCoroutineContext()
+        writeDownloadArchive(downloads, entries, output, books, isCurrent) { work.ensureActive() }
+    }
+
+    suspend fun create(write: suspend (OutputStream) -> Unit): String = withContext(Dispatchers.IO) {
         val id = UUID.randomUUID().toString()
         val target = file(id)
         try {
-            target.outputStream().buffered().use { output -> writeDownloadArchive(downloads, entries, output, books, isCurrent) { coroutineContext.ensureActive() } }
+            target.outputStream().buffered().use { output -> write(output) }
             id
         } catch(error: Exception) { target.delete(); throw error }
     }
@@ -88,13 +94,13 @@ internal class DownloadArchiveFiles(private val directory: File) {
         } finally { source.delete() }
     }
 
-    fun share(id: String): File {
+    fun share(id: String, extension: String = "zip"): File {
         val source = file(id)
-        val shared = file(id, sharing = true)
+        val shared = file(id, sharing = true, extension = extension)
         require(source.isFile && source.renameTo(shared)) { "压缩包已不存在，请重新打包" }
         // 只清理过期的分享包，不影响等待文件选择器的导出包或其他导出文件。
         val cutoff = System.currentTimeMillis() - 24 * 60 * 60 * 1000L
-        directory.listFiles().orEmpty().filter { it.name.matches(Regex("download-share-[0-9a-f-]{36}\\.zip")) && it.lastModified() < cutoff }
+        directory.listFiles().orEmpty().filter { it.name.matches(Regex("download-share-[0-9a-f-]{36}\\.(zip|epub|txt|srt)")) && it.lastModified() < cutoff }
             .forEach { it.delete() }
         return shared
     }
