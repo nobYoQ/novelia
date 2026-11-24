@@ -60,6 +60,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
     var managing by rememberSaveable(book.ref.key) { mutableStateOf(false) }
     val translated = remember(detail) { detail?.volumeJp.orEmpty().associateBy { it.volumeId } }
     val account = profile?.username
+    var selectingMounted by rememberSaveable(book.ref.key) { mutableStateOf(false) }
     var selecting by rememberSaveable(book.ref.key, account) { mutableStateOf(false) }
     var selection by rememberSaveable(book.ref.key, account) { mutableStateOf(emptyList<String>()) }
     var download by remember(book.ref.key, account) { mutableStateOf(emptyList<String>()) }
@@ -101,8 +102,20 @@ import cc.novelia.app.ui.theme.appReducedMotion
         else -> null
     }
     val heading = localHeading ?: if(siteVolumes.isNotEmpty()) "原站译文分卷" else "分卷目录"
+    if(selectingMounted) {
+        MountedVolumeSelection(c, book, library, files, sources) { selectingMounted = false }
+        return
+    }
     Column {
         pickerFallback()
+        if(!selecting) FlowRow(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+            if(parent != null) AppTextButton({ managing = true }) { Text("管理挂载") }
+            if(files.mounted.isNotEmpty()) {
+                WenkuSiteOrderActions(c, book.ref.key, detail, compact = true)
+                AppTextButton({ selectingMounted = true }) { Text("多选挂载") }
+            }
+            if(translated.isNotEmpty()) AppTextButton({ selecting = true }, enabled = available.isNotEmpty()) { Text("批量下载") }
+        }
         if(selecting) {
             FlowRow(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -121,20 +134,7 @@ import cc.novelia.app.ui.theme.appReducedMotion
         }
         VolumeList(c, library, files.mounted, "wenku-volume-list", Modifier.weight(1f), showContinue = !selecting) {
             if(!selecting && (localHeading != null || parent != null || translated.isNotEmpty())) item("volume-heading") {
-                FlowRow(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(heading, Modifier.align(Alignment.CenterVertically).padding(vertical = 8.dp),
-                        style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    FlowRow {
-                        if(parent != null) AppTextButton({ managing = true }) { Text("管理挂载") }
-                        if(files.mounted.isNotEmpty()) WenkuSiteOrderActions(c, book.ref.key, detail, compact = true)
-                        if(translated.isNotEmpty()) AppTextButton({ selecting = true }, enabled = available.isNotEmpty()) {
-                            Icon(Icons.Outlined.Checklist, null, Modifier.size(18.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("多选")
-                        }
-                    }
-                }
+                SectionTitle(heading)
             }
             if(!selecting) {
                 mountedVolumeItems(c, library, files.own, sourceLabel = { volume ->

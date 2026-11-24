@@ -29,7 +29,7 @@ class WenkuBatchDownloadTest {
     @Test fun selectionExcludesUnavailableVolumesAndOpensOneSharedDownloadSheet() {
         val detail = mutableStateOf(WenkuDetail(title = "多卷测试", volumeJp = listOf(first, second, incomplete, empty)))
         val restore = setup(detail)
-        compose.onNodeWithText("多选").performClick()
+        compose.onNodeWithText("批量下载").performClick()
         compose.onNodeWithTag("wenku-batch-download").assertIsNotEnabled()
         compose.onNodeWithText("全选").performClick()
         compose.onNodeWithTag("wenku-volume-${first.volumeId}").assertIsOn()
@@ -54,7 +54,7 @@ class WenkuBatchDownloadTest {
     @Test fun refreshedVolumesRemoveSelectionsThatAreNoLongerDownloadable() {
         val detail = mutableStateOf(WenkuDetail(title = "多卷测试", volumeJp = listOf(first, second)))
         setup(detail)
-        compose.onNodeWithText("多选").performClick()
+        compose.onNodeWithText("批量下载").performClick()
         compose.onNodeWithText("全选").performClick()
         compose.runOnIdle { detail.value = detail.value.copy(volumeJp = listOf(second.copy(total = 13))) }
         compose.onNodeWithText("已选 0 卷").assertIsDisplayed()

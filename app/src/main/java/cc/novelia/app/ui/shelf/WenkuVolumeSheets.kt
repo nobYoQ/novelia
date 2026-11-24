@@ -32,14 +32,17 @@ import cc.novelia.app.ui.components.book.bookRowStatus
 @Composable internal fun MountedVolumeRow(
     saved: SavedBook, position: Position?, onClick: () -> Unit, onLongClick: (() -> Unit)?, trailing: @Composable () -> Unit,
     sourceLabel: String? = null, orderButtons: (@Composable () -> Unit)? = null,
+    checked: Boolean? = null, enabled: Boolean = true,
 ) {
     val book = saved.book
     val reading = bookRowStatus(book, saved, position, null)
     val format = book.title.substringAfterLast('.', "").uppercase().takeIf { it in setOf("EPUB", "TXT", "SRT") }
     val title = if(format == null) book.title else book.title.substringBeforeLast('.').ifBlank { book.title }
     val status = listOfNotNull(format, reading.progressLabel, position?.title?.takeIf(String::isNotBlank)).joinToString(" · ")
-    Column(Modifier.fillMaxWidth().testTag("shelf-volume-${book.ref.key}").combinedClickable(
-        onClickLabel = "阅读分卷", onClick = onClick, onLongClickLabel = "调整分卷顺序", onLongClick = onLongClick)) {
+    val interaction = if(checked == null) Modifier.combinedClickable(
+        onClickLabel = "阅读分卷", onClick = onClick, onLongClickLabel = "调整分卷顺序", onLongClick = onLongClick)
+    else Modifier.toggleable(checked, enabled = enabled, role = Role.Checkbox) { onClick() }
+    Column(Modifier.fillMaxWidth().testTag("shelf-volume-${book.ref.key}").then(interaction)) {
         Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
             BookCover(book, Modifier.size(80.dp, 112.dp).testTag("volume-cover-${book.ref.key}"), showFallbackTitle = false)

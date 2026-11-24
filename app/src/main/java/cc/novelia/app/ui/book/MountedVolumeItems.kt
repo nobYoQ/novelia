@@ -21,6 +21,7 @@ import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.SavedBook
 import cc.novelia.app.ui.components.base.AppDropdownMenu
+import cc.novelia.app.ui.components.base.AppCheckbox
 import cc.novelia.app.ui.components.base.AppIconButton
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.shelf.MountedVolumeRow
@@ -39,11 +40,12 @@ import cc.novelia.app.ui.theme.LocalEInkMode
 internal fun LazyListScope.mountedVolumeItems(
     c: AppController, library: LibraryState, volumes: List<SavedBook>,
     sourceLabel: (SavedBook) -> String?, action: (@Composable (SavedBook) -> Unit)? = null,
+    selectedKeys: Set<String> = emptySet(), onSelect: ((String) -> Unit)? = null, enabled: Boolean = true,
 ) {
     items(volumes.size, key = { volumes[it].book.ref.key }, contentType = { "mounted-volume" }) { index ->
         val volume = volumes[index]
         val ref = volume.book.ref
-        val buttons = LocalEInkMode.current && volumes.size > 1
+        val buttons = onSelect == null && LocalEInkMode.current && volumes.size > 1
         var menu by remember { mutableStateOf(false) }
         fun move(delta: Int) {
             menu = false
@@ -60,10 +62,12 @@ internal fun LazyListScope.mountedVolumeItems(
             }
         }
         Box {
-            MountedVolumeRow(volume, library.positions[ref.key], onClick = { c.book(ref) },
-                onLongClick = if(!buttons && volumes.size > 1) ({ menu = true }) else null,
+            MountedVolumeRow(volume, library.positions[ref.key], onClick = { if(onSelect != null) onSelect(ref.key) else c.book(ref) },
+                checked = if(onSelect != null) ref.key in selectedKeys else null, enabled = enabled,
+                onLongClick = if(onSelect == null && !buttons && volumes.size > 1) ({ menu = true }) else null,
                 sourceLabel = sourceLabel(volume), trailing = {
-                    if(action != null) action(volume) else AppIconButton({ c.showBookDetails(ref) }) {
+                    if(onSelect != null) AppCheckbox(ref.key in selectedKeys, onCheckedChange = null, enabled = enabled)
+                    else if(action != null) action(volume) else AppIconButton({ c.showBookDetails(ref) }) {
                         Icon(Icons.Outlined.Info, "查看 ${volume.book.title} 详情")
                     }
                 }, orderButtons = if(buttons) ({
