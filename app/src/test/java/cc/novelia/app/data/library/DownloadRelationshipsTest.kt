@@ -46,6 +46,35 @@ class DownloadRelationshipsTest {
         assertEquals(setOf(parent, first, second), removed.bookDeletionPlan(setOf(parent)).books)
     }
 
+    @Test fun remountingKeepsRealProvenanceEvenWhenTheNewCatalogHasTheSameVolumeId() {
+        val state = library().withVolumeParent(first.key, other.key)
+        val oldGuess = DownloadedBookLink("legacy-volume-${first.id}", first, other, "第1卷.epub")
+        val restored = state.copy(downloadLinks = state.downloadLinks + oldGuess).withMigratedDownloadLinks()
+        assertEquals(listOf(first), restored.wenkuVolumeFiles(other).other.map { it.book.ref })
+        assertNull(restored.downloadedVolume(other, "第1卷.epub"))
+        assertEquals(setOf("第1卷.epub"), restored.wenkuVolumeFiles(parent).unmountedDownloadIds)
+        assertEquals(first, restored.downloadedVolume(parent, "第1卷.epub"))
+    }
+
+    @Test fun localSectionsKeepEachCopyAndOnlyIncludeCompletedDownloadsFromThisBook() {
+        val manual = BookRef("local", "manual")
+        val variant = BookRef("local", "variant")
+        val one = entry("variant")
+        val raw = entry("raw", volume = "番外.txt").copy(status = "已完成")
+        val state = library().let { library -> library.copy(books = library.books + listOf(
+            SavedBook(BookCard(manual, one.title), parentWenkuKey = parent.key),
+            SavedBook(BookCard(variant, "另一译本"), parentWenkuKey = parent.key)),
+            downloads = library.downloads + raw + entry("pending", volume = "待下载") +
+                entry("elsewhere", other, "他书").copy(status = "已完成")) }.withDownloadLink(one, variant)
+        val files = state.wenkuVolumeFiles(parent)
+        assertEquals(setOf(first, second, variant), files.own.map { it.book.ref }.toSet())
+        assertEquals(listOf(manual), files.other.map { it.book.ref })
+        assertEquals(setOf(raw.title), files.unmountedDownloadIds)
+        assertEquals(setOf(one.title, "第2卷.txt", raw.title), files.downloadedIds)
+        val manualOnly = state.copy(books = listOf(files.other.single()), downloadLinks = emptyList())
+        assertNull(manualOnly.downloadedVolume(parent, one.title))
+    }
+
     @Test fun wholeSeriesDeletionIncludesDetachedVolumesAndUnimportedTasksButKeepsOtherSeries() {
         val state = library().withoutBook(first).copy(downloads = library().downloads + entry("waiting", volume = "第3卷.txt"))
         val plan = state.bookDeletionPlan(setOf(parent))

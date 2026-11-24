@@ -3,6 +3,7 @@ package cc.novelia.app.data.library
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.DownloadEntry
 import cc.novelia.app.data.model.DownloadedBookLink
+import cc.novelia.app.data.model.SavedBook
 import cc.novelia.app.data.model.LibraryState
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
@@ -29,20 +30,49 @@ fun LibraryState.withDownloadLink(entry: DownloadEntry, localBook: BookRef): Lib
 
 /** 升级时保留旧分卷的来源身份，避免移出父书后丢失仅存的挂载关联。 */
 fun LibraryState.withMigratedDownloadLinks(): LibraryState {
+    // 旧版换挂载时可能重复推断来源。保留最早的旧版来源以及所有可核实的下载记录。
+    val known = mutableSetOf<BookRef>()
+    val links = downloadLinks.filter { link ->
+        if(link.sourceBook == null) return@filter true
+        val first = known.add(link.localBook)
+        first || link.downloadId != "legacy-volume-${link.localBook.id}"
+    }
     val migrated = books.mapNotNull { saved ->
         val parent = saved.parentWenkuKey?.let(BookRef::fromKey)?.takeIf { it.isWenku } ?: return@mapNotNull null
         val volume = saved.sourceVolumeId ?: return@mapNotNull null
-        if(!saved.book.ref.isLocal || downloadLinks.any { it.localBook == saved.book.ref && it.sourceBook == parent && it.volumeId == volume }) return@mapNotNull null
+        if(!saved.book.ref.isLocal || saved.book.ref in known) return@mapNotNull null
         DownloadedBookLink("legacy-volume-${saved.book.ref.id}", saved.book.ref, parent, volume)
     }
-    return if(migrated.isEmpty()) this else copy(downloadLinks = downloadLinks + migrated)
+    return if(links.size == downloadLinks.size && migrated.isEmpty()) this
+        else copy(downloadLinks = links + migrated)
 }
 
 /** 即使下载源文件已按偏好清理，分卷入口仍指向可阅读的本地副本。 */
 fun LibraryState.downloadedVolume(source: BookRef, volumeId: String): BookRef? =
     downloadLinks.lastOrNull { it.sourceBook == source && it.volumeId == volumeId }?.localBook
-        ?: books.firstOrNull { it.book.ref.isLocal && it.parentWenkuKey == source.key &&
-            (it.sourceVolumeId == volumeId || (it.sourceVolumeId == null && it.book.title == volumeId)) }?.book?.ref
+        ?: books.firstOrNull { saved -> saved.book.ref.isLocal && saved.parentWenkuKey == source.key &&
+            saved.sourceVolumeId == volumeId && downloadLinks.none { it.localBook == saved.book.ref && it.sourceBook != null } }?.book?.ref
+
+/** 已下载的原站卷和当前挂载关系分别取自下载来源与书架。一本书可有多个本地版本。 */
+internal data class WenkuVolumeFiles(
+    val mounted: List<SavedBook>,
+    val sourceIds: Map<BookRef, List<String>>,
+    val downloadedIds: Set<String>,
+) {
+    val own = mounted.filter { it.book.ref in sourceIds }
+    val other = mounted.filterNot { it.book.ref in sourceIds }
+    val unmountedDownloadIds = downloadedIds - own.flatMap { sourceIds.getValue(it.book.ref) }.toSet()
+}
+
+internal fun LibraryState.wenkuVolumeFiles(ref: BookRef): WenkuVolumeFiles {
+    val parent = books.firstOrNull { it.book.ref == ref }
+    val mounted = parent?.let { mountedVolumes(it) }.orEmpty()
+    val ids = downloadLinks.filter { it.sourceBook == ref && it.volumeId != null }
+        .groupBy({ it.localBook }, { requireNotNull(it.volumeId) }).mapValues { (_, ids) -> ids.distinct() }
+    val downloaded = downloads.asSequence().filter { it.status == "已完成" && it.originBook() == ref }
+        .mapNotNull { it.originVolumeId() }.toSet()
+    return WenkuVolumeFiles(mounted, ids, ids.values.flatten().toSet() + downloaded)
+}
 
 data class BookDeletionPlan(val books: Set<BookRef>, val downloadIds: Set<String>, val linkIds: Set<String>)
 
