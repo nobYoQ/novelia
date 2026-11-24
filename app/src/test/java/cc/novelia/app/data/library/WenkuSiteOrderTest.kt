@@ -39,6 +39,17 @@ class WenkuSiteOrderTest {
         assertEquals(listOf("local/three", "local/two", "local/one"), keys(next))
     }
 
+    @Test fun renamedCopiesUseTheDownloadLinksFromTheCurrentWenku() {
+        val first = volume("a", "我的译本甲")
+        val second = volume("b", "我的译本乙")
+        val state = LibraryState(books = listOf(parent, first, second), downloadLinks = listOf(
+            DownloadedBookLink("other", second.book.ref, BookRef("wenku", "other"), "1.epub"),
+            DownloadedBookLink("a", first.book.ref, parent.book.ref, "1.epub"),
+            DownloadedBookLink("b", second.book.ref, parent.book.ref, "2.epub")))
+        val ids = listOf("jp:1.epub", "jp:2.epub")
+        assertEquals(listOf("local/b", "local/a"), keys(state.withWenkuSiteOrder(parent.book.ref.key, ids, true)))
+    }
+
     @Test fun oldSettingsKeepDestructiveCleanupDisabledAndNewSettingsRoundTrip() {
         val old = appJson.decodeFromString<LibraryState>("{}")
         assertFalse(old.deleteDownloadAfterImport)

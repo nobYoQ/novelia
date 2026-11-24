@@ -35,6 +35,7 @@ import cc.novelia.app.data.library.wenkuVolumeFiles
 import cc.novelia.app.data.library.withMountedVolumes
 import cc.novelia.app.data.model.JapaneseVolume
 import cc.novelia.app.ui.shelf.WenkuVolumeManager
+import cc.novelia.app.ui.shelf.WenkuSiteOrderActions
 import cc.novelia.app.files.downloads.downloadedVolumeForReading
 import cc.novelia.app.data.network.encodeSegment
 import cc.novelia.app.ui.components.book.BookRow
@@ -124,8 +125,9 @@ import cc.novelia.app.ui.theme.appReducedMotion
                     horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(heading, Modifier.align(Alignment.CenterVertically).padding(vertical = 8.dp),
                         style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Row {
+                    FlowRow {
                         if(parent != null) AppTextButton({ managing = true }) { Text("管理挂载") }
+                        if(files.mounted.isNotEmpty()) WenkuSiteOrderActions(c, book.ref.key, detail, compact = true)
                         if(translated.isNotEmpty()) AppTextButton({ selecting = true }, enabled = available.isNotEmpty()) {
                             Icon(Icons.Outlined.Checklist, null, Modifier.size(18.dp))
                             Spacer(Modifier.width(4.dp))

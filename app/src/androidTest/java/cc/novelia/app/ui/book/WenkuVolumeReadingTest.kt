@@ -30,6 +30,32 @@ class WenkuVolumeReadingTest {
     @Test fun clickingCompletedVolumeImportsAndNavigatesDirectlyToReading() = withVolume(false)
     @Test fun clickingImportedVolumeStillReadsWhenSourceDownloadWasAutomaticallyDeleted() = withVolume(true)
 
+    @Test fun detailCanSortMountedVolumesInEitherSiteDirectionOffline() {
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
+        runBlocking { app.initialization.await() }
+        val before = app.store.state.value
+        val parent = BookCard(BookRef("wenku", UUID.randomUUID().toString()), "离线排序", volumeIds = listOf("jp:2.epub", "jp:1.epub"))
+        fun mounted(id: String) = SavedBook(BookCard(BookRef("local", id), id), parentWenkuKey = parent.ref.key)
+        val volumes = listOf(mounted("1.epub"), mounted("2.epub"), mounted("番外"))
+        try {
+            app.store.update { it.copy(books = listOf(SavedBook(parent)) + volumes) }
+            compose.setContent {
+                val nav = rememberNavController()
+                val scope = rememberCoroutineScope()
+                val c = remember { AppController(app, nav, scope, SnackbarHostState()) }
+                AppInteractionMode(false, true) { NoveliaTheme("light") {
+                    WenkuVolumesPanel(c, parent, null, false, {}, {})
+                } }
+            }
+            for(descending in listOf(true, false)) {
+                compose.onNodeWithText("排序").performClick()
+                compose.onNodeWithText(if(descending) "网站倒序" else "网站正序").performClick()
+                val expected = (if(descending) listOf(1, 0, 2) else listOf(0, 1, 2)).map { volumes[it].book.ref.key }
+                compose.waitUntil(5_000) { app.store.state.value.books.first().volumeOrder == expected }
+            }
+        } finally { app.store.update { before } }
+    }
+
     @Test fun detailSeparatesSourceDownloadsAndManualMountsEvenWhenNamesMatchTheCatalog() {
         val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
         runBlocking { app.initialization.await() }

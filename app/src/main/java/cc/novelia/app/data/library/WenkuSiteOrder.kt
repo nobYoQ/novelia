@@ -36,7 +36,11 @@ private fun volumeName(value: String): String = Normalizer.normalize(
 ).lowercase(Locale.ROOT).filter { it.isLetterOrDigit() }
 
 /** 优先使用下载来源 ID；旧导入卷按完整文件名或标题匹配，不猜测数字卷号。 */
-internal fun siteVolumeRank(volume: SavedBook, siteIds: List<String>): Int? {
+private fun siteVolumeRank(volume: SavedBook, siteIds: List<String>, linkedIds: List<String>): Int? {
+    if(linkedIds.isNotEmpty()) {
+        val linked = siteIds.indexOfFirst { it in linkedIds || it.substringAfter(':') in linkedIds }
+        if(linked >= 0) return linked
+    }
     val source = volume.sourceVolumeId
     if(source != null) {
         val exact = siteIds.indexOfFirst { it == source || it.substringAfter(':') == source }
@@ -57,7 +61,9 @@ fun LibraryState.withWenkuSiteOrder(parentKey: String, siteIds: List<String>, de
             val order = (previous[a.book.ref.key] ?: Int.MAX_VALUE).compareTo(previous[b.book.ref.key] ?: Int.MAX_VALUE)
             if(order != 0) order else compareVolumeTitles(a.book.title, b.book.title)
         }
-    val ranks = volumes.associate { it.book.ref.key to siteVolumeRank(it, siteIds) }
+    val linkedIds = downloadLinks.filter { it.sourceBook == parent.book.ref && it.volumeId != null }
+        .groupBy({ it.localBook }, { requireNotNull(it.volumeId) })
+    val ranks = volumes.associate { it.book.ref.key to siteVolumeRank(it, siteIds, linkedIds[it.book.ref].orEmpty()) }
     val matched = volumes.filter { ranks[it.book.ref.key] != null }.sortedWith { a, b ->
         val order = ranks.getValue(a.book.ref.key)!!.compareTo(ranks.getValue(b.book.ref.key)!!)
         if(descending) -order else order
