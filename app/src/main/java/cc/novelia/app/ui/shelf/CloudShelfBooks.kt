@@ -28,7 +28,7 @@ import cc.novelia.app.ui.components.book.bookRowStatus
     managing: Boolean, onManaging: (Boolean) -> Unit, selection: Map<String, BookCard>, onSelection: (Map<String, BookCard>) -> Unit,
     busy: Boolean, progress: Int, active: Boolean, controlsHeight: Int, selectedBookKey: String?,
     onOpenBook: (BookRef) -> Unit, onLocal: () -> Unit, onRemove: () -> Unit, onRetry: () -> Unit,
-    /** 列表视图里点卡片非封面区域直接续读；网格视图整卡即封面，仍走详情。 */
+    /** 列表视图里点卡片非封面区域可直接续读。网格视图中点封面或书名都打开详情。 */
     onReadBook: ((BookRef, String) -> Unit)? = null,
     grid: Boolean = false,
     gridState: LazyListState? = null,
@@ -79,7 +79,7 @@ import cc.novelia.app.ui.components.book.bookRowStatus
                                 onClick(if(managing) "切换选择" else "打开书籍") { open(); true }
                                 if(active && !busy) onLongClick("选择${book.title}") { dragSelection.selectOne(book.ref.key); true }
                             }, selecting = managing, selected = if(managing) book.ref.key in selection else book.ref.key == selectedBookKey, enabled = !busy,
-                            compact = compactGridCards, footer = if(!managing) ({ actions(displayed) { !dragSelection.dragging && !busy } }) else null)
+                            compact = compactGridCards, style = local.shelfGridStyle, footer = if(!managing) ({ actions(displayed) { !dragSelection.dragging && !busy } }) else null)
                     } }
                     repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
                 }

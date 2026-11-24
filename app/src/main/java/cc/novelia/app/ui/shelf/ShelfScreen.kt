@@ -370,7 +370,8 @@ import kotlinx.coroutines.withContext
                                             if(selectionEnabled && key in selectableKeys) onLongClick("选择${saved.book.title}") { dragSelection.selectOne(key); true }
                                             customActions = dragSelection.reorderActions(key)
                                         }, selecting = pageManaging, selected = if(pageManaging) key in selection else key == selectedBookKey,
-                                            enabled = !batchWorking && (!pageManaging || key in selectableKeys), compact = compactGridCards)
+                                            enabled = !batchWorking && (!pageManaging || key in selectableKeys), compact = compactGridCards,
+                                            style = state.shelfGridStyle)
                                     } }
                                     repeat(columns - groupRow.size) { Spacer(Modifier.weight(1f)) }
                                 }

@@ -18,6 +18,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
@@ -27,9 +28,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.ShelfGridDensity
+import cc.novelia.app.data.model.ShelfGridStyle
 import cc.novelia.app.ui.components.base.*
 import cc.novelia.app.ui.components.book.BookCover
 import cc.novelia.app.ui.components.book.BookRowStatus
+import cc.novelia.app.ui.components.book.BookReadingProgressBar
 import cc.novelia.app.ui.theme.*
 import kotlin.math.abs
 
@@ -125,36 +128,59 @@ internal class ShelfLayoutState(val list: LazyListState, val grid: LazyListState
 @Composable internal fun ShelfCoverCard(
     book: BookCard, status: BookRowStatus, onOpen: () -> Unit, modifier: Modifier = Modifier,
     selecting: Boolean = false, selected: Boolean = false, enabled: Boolean = true,
-    onToggle: () -> Unit = onOpen, compact: Boolean = false,
+    onToggle: () -> Unit = onOpen, compact: Boolean = false, style: ShelfGridStyle = ShelfGridStyle.Classic,
     footer: @Composable (() -> Unit)? = null,
 ) {
     val monochrome = isMonochromeTheme()
-    val solidLabel = LocalEInkMode.current || monochrome
-    val progressLabel = status.progress?.let { if(it == 0f) "未读" else "已读 ${(it * 100).toInt()}%" } ?: status.progressLabel
-    val largeText = LocalDensity.current.fontScale > 1.3f
+    val fullCover = style == ShelfGridStyle.FullCover
     val coverShape = appBookCoverShape()
     Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(coverShape)
-            .then(if(selected && !selecting) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, coverShape) else Modifier)
-            .motionClickable(onClick = { if(enabled) onOpen() })) {
-            BookCover(book, Modifier.matchParentSize().clearAndSetSemantics {}, showFallbackTitle = false)
-            val backdrop = if(solidLabel) Modifier.background(Color.Black) else Modifier.background(
-                Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .9f))))
-            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().then(backdrop)
-                .padding(start = if(compact) 6.dp else 10.dp, end = if(compact) 6.dp else 10.dp,
-                    top = if(compact) 4.dp else if(solidLabel) 8.dp else 32.dp, bottom = if(compact) 4.dp else 10.dp),
-                verticalArrangement = Arrangement.spacedBy(if(compact) 2.dp else 4.dp)) {
-                Text(book.title, color = Color.White, style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold, maxLines = if(compact || largeText) 2 else 3, overflow = TextOverflow.Ellipsis)
-                Text(progressLabel, color = Color.White.copy(alpha = if(monochrome) 1f else .9f),
-                    style = MaterialTheme.typography.labelSmall, maxLines = if(compact || largeText) 1 else 2, overflow = TextOverflow.Ellipsis)
+        Column(Modifier.fillMaxWidth().motionClickable(enabled = enabled, onClick = onOpen)) {
+            Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(coverShape).testTag("shelf-grid-cover-${book.ref.key}")
+                .then(if(selected && !selecting) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, coverShape) else Modifier)) {
+                BookCover(book, Modifier.matchParentSize().clearAndSetSemantics {}, showFallbackTitle = false,
+                    contentScale = if(fullCover) ContentScale.Fit else ContentScale.Crop)
+                if(!fullCover) {
+                    val solidLabel = LocalEInkMode.current || monochrome
+                    val backdrop = if(solidLabel) Modifier.background(Color.Black) else Modifier.background(
+                        Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .9f))))
+                    ShelfGridCaption(book.title, status, compact, fullCover = false,
+                        modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().then(backdrop)
+                            .padding(start = if(compact) 6.dp else 10.dp, end = if(compact) 6.dp else 10.dp,
+                                top = if(compact) 4.dp else if(solidLabel) 8.dp else 32.dp, bottom = if(compact) 4.dp else 10.dp))
+                }
+                if(selecting && selected && !monochrome) Box(Modifier.matchParentSize().background(MaterialTheme.colorScheme.primary.copy(alpha = .25f)))
+                if(selecting) Surface(Modifier.align(Alignment.TopEnd).padding(4.dp), shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = if(monochrome) 1f else .94f), border = monochromeBorder()) {
+                    AppCheckbox(selected, { onToggle() }, enabled = enabled, modifier = Modifier.semantics { contentDescription = "选择${book.title}" })
+                }
             }
-            if(selecting && selected && !monochrome) Box(Modifier.matchParentSize().background(MaterialTheme.colorScheme.primary.copy(alpha = .25f)))
-            if(selecting) Surface(Modifier.align(Alignment.TopEnd).padding(4.dp), shape = MaterialTheme.shapes.small,
-                color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = if(monochrome) 1f else .94f), border = monochromeBorder()) {
-                AppCheckbox(selected, { onToggle() }, enabled = enabled, modifier = Modifier.semantics { contentDescription = "选择${book.title}" })
-            }
+            if(fullCover) ShelfGridCaption(book.title, status, compact, fullCover = true,
+                modifier = Modifier.fillMaxWidth().padding(start = 2.dp, end = 2.dp, top = 6.dp))
         }
         footer?.invoke()
+    }
+}
+
+@Composable private fun ShelfGridCaption(title: String, status: BookRowStatus, compact: Boolean, fullCover: Boolean, modifier: Modifier) {
+    val percent = status.progress?.let { (it * 100).toInt() }
+    val label = when {
+        status.progress == 0f -> "未读"
+        percent != null -> "已读 ${percent}%"
+        else -> status.progressLabel
+    }
+    val titleColor = if(fullCover) MaterialTheme.colorScheme.onSurface else Color.White
+    val progressColor = if(fullCover) MaterialTheme.colorScheme.onSurfaceVariant else Color.White.copy(alpha = if(isMonochromeTheme()) 1f else .9f)
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(if(compact) 2.dp else 4.dp)) {
+        Text(title, color = titleColor, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
+            maxLines = if(fullCover || compact || LocalDensity.current.fontScale > 1.3f) 2 else 3,
+            overflow = TextOverflow.Ellipsis)
+        if(fullCover && percent != null) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                BookReadingProgressBar(status.copy(progressLabel = label), Modifier.weight(1f))
+                Text(if(status.progress == 0f) "未读" else "${percent}%", style = MaterialTheme.typography.labelSmall,
+                    color = progressColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        } else Text(label, color = progressColor, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }

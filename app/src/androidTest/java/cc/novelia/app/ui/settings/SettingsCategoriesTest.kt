@@ -8,6 +8,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.navigation.compose.rememberNavController
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.NoveliaApplication
+import cc.novelia.app.data.model.ShelfGridStyle
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.saveTestScreenshot
 import cc.novelia.app.ui.theme.NoveliaTheme
@@ -18,6 +19,22 @@ import org.junit.Assert.*
 
 class SettingsCategoriesTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun shelfGridStyleCanBeSelectedInLibrarySettings() {
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
+        runBlocking { app.initialization.await() }
+        val original = app.store.state.value.shelfGridStyle
+        try {
+            app.store.update { it.copy(shelfGridStyle = ShelfGridStyle.Classic) }
+            compose.setContent { NoveliaTheme("light") {
+                SettingsScreen(AppController(app, rememberNavController(), rememberCoroutineScope(), remember { SnackbarHostState() }), "LIBRARY")
+            } }
+            option("完整封面").performClick()
+            compose.runOnIdle { assertEquals(ShelfGridStyle.FullCover, app.store.state.value.shelfGridStyle) }
+            option("经典").performClick()
+            compose.runOnIdle { assertEquals(ShelfGridStyle.Classic, app.store.state.value.shelfGridStyle) }
+        } finally { app.store.update { it.copy(shelfGridStyle = original) } }
+    }
 
     @Test fun savedSearchPageSettingCanBeToggledAndRestored() {
         val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication

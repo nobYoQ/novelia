@@ -44,6 +44,7 @@ import cc.novelia.app.ui.account.ProfileDetailList
 import cc.novelia.app.ui.components.base.AppSheet
 import cc.novelia.app.ui.account.ProfileChoiceRow
 import cc.novelia.app.data.model.ShelfGridDensity
+import cc.novelia.app.data.model.ShelfGridStyle
 import cc.novelia.app.data.model.SquareCornerTarget
 import cc.novelia.app.ui.components.base.ConfirmDialog
 import cc.novelia.app.ui.account.ProfileMenuRow
@@ -188,6 +189,11 @@ private enum class SettingsSection(val title: String, val summary: String) {
             ProfileMenuRow("将已有书籍恢复自动管理", "重新判断所有手动设置和旧版保留状态，不改变阅读位置", Icons.Outlined.Sync, {
                 c.store.update { it.withAutomaticReadingStatus(it.books.filter { book -> book.readingStatusControl?.automatic != true }.map { book -> book.book.ref.key }.toSet()) }
             })
+        }
+        item {
+            ProfileChoiceRow("书架网格样式", ShelfGridStyle.entries.map { it.label }, state.shelfGridStyle.ordinal) { index ->
+                c.store.update { it.copy(shelfGridStyle = ShelfGridStyle.entries[index]) }
+            }
         }
         item {
             ProfileChoiceRow("书架网格列数", ShelfGridDensity.entries.map { it.label }, state.shelfGridDensity.ordinal) { index ->

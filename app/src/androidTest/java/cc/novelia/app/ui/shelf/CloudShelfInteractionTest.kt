@@ -47,7 +47,7 @@ class CloudShelfInteractionTest {
     private val books = List(20) { BookCard(BookRef("wenku", "cloud-preview-$it"), "云端收藏示例 ${it + 1}", authors = listOf("山川遥")) }
     private val folders = listOf(Folder("all", "全部收藏"), Folder("reading", "正在阅读的长名称收藏夹"))
 
-    private fun show(fontScale: Float = 1f, reduced: Boolean = true) {
+    private fun show(fontScale: Float = 1f, reduced: Boolean = true, gridStyle: ShelfGridStyle = ShelfGridStyle.Classic) {
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, fontScale)) {
                 AppInteractionMode(false, reduced) { NoveliaTheme("dark") {
@@ -66,7 +66,7 @@ class CloudShelfInteractionTest {
                             }
                             val state = key(page) { rememberLazyListState() }
                             Box(Modifier.weight(1f)) {
-                                CloudShelfBooks(books.drop(page * 10).take(10), LibraryState(), "preview", state, page, 2, { page = it },
+                                CloudShelfBooks(books.drop(page * 10).take(10), LibraryState(shelfGridStyle = gridStyle), "preview", state, page, 2, { page = it },
                                     managing, { managing = it }, selected, { selected = it }, busy, 1, true, height, null,
                                     { opened++ }, { local = true }, { busy = true }, {}, grid = grid)
                             }
@@ -196,7 +196,10 @@ class CloudShelfInteractionTest {
 
     @Test fun cloudGridUsesTheSameSelectionActionsAndSwitchesBackWithoutLosingTheBook() {
         grid = true
-        show(reduced = false)
+        show(reduced = false, gridStyle = ShelfGridStyle.FullCover)
+        val cover = compose.onNodeWithTag("shelf-grid-cover-${books[0].ref.key}", true).fetchSemanticsNode().boundsInRoot
+        val title = compose.onNodeWithText(books[0].title, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        assertTrue(title.top >= cover.bottom)
         compose.onNodeWithTag("cloud-books-grid").performScrollToIndex(2)
         compose.onNodeWithTag("cloud-layout-toggle").performClick()
         compose.onNodeWithTag("cloud-book-${books[4].ref.key}").assertIsDisplayed()

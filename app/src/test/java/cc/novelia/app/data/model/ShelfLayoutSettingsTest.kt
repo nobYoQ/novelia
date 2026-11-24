@@ -36,6 +36,17 @@ class ShelfLayoutSettingsTest {
         }
     }
 
+    @Test fun gridStylesDefaultToClassicAndRoundTripThroughSettingsBackup() {
+        val legacy = appJson.decodeFromString<LibraryState>("{}")
+        assertEquals(ShelfGridStyle.Classic, legacy.shelfGridStyle)
+        val full = legacy.copy(shelfGridStyle = ShelfGridStyle.FullCover)
+        assertEquals(ShelfGridStyle.FullCover, appJson.decodeFromString<LibraryState>(appJson.encodeToString(full)).shelfGridStyle)
+        val backup = appJson.decodeFromString<SettingsBackup>(appJson.encodeToString(full.settingsBackup()))
+        assertEquals(ShelfGridStyle.FullCover, backup.applyTo(legacy).shelfGridStyle)
+        assertEquals(ShelfGridStyle.Classic, appJson.decodeFromString<SettingsBackup>("{}").applyTo(full).shelfGridStyle)
+        assertTrue(WebDavProjection.affectedLibraryDomains(legacy, full).isEmpty())
+    }
+
     @Test fun oldLibrariesAndBackupsIgnoreTheRemovedShelfScrollSetting() {
         val legacy = """{"shelfControlsFollowScroll":false,"shelfGrid":true}"""
         val state = appJson.decodeFromString<LibraryState>(legacy)

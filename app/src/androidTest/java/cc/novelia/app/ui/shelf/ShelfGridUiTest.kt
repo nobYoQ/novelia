@@ -1,5 +1,8 @@
 package cc.novelia.app.ui.shelf
 
+import android.graphics.Bitmap
+import android.graphics.Color
+import android.net.Uri
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.*
 import androidx.compose.ui.geometry.Offset
@@ -42,7 +45,7 @@ class ShelfGridUiTest {
         assertNull("Use an anonymous dedicated test emulator", app.session.profile.value)
         before = app.store.state.value
         app.store.update { it.copy(books = books, positions = emptyMap(), shelfGrid = true, localFilesGrid = false, cloudShelfGrid = false,
-            shelfGridDensity = ShelfGridDensity.Auto) }
+            shelfGridDensity = ShelfGridDensity.Auto, shelfGridStyle = ShelfGridStyle.Classic) }
     }
     @After fun restore() { app.store.update { before } }
     private fun show(reduced: Boolean = true, eInk: Boolean = false, fontScale: Float = 1f) {
@@ -88,10 +91,61 @@ class ShelfGridUiTest {
         compose.runOnIdle { assertTrue(app.store.state.value.shelfGrid); assertTrue(app.store.state.value.localFilesGrid); assertFalse(app.store.state.value.cloudShelfGrid) }
     }
 
+    @Test fun fullCoverPlacesTheTitleAndProgressBelowTheImageAndBothOpenTheCollection() {
+        seedVolumes(withProgress = true)
+        show()
+        val key = parent.book.ref.key
+        val withinCard = hasAnyAncestor(hasTestTag("shelf-book-$key"))
+        val cover = compose.onNodeWithTag("shelf-grid-cover-$key", true)
+        val title = compose.onNode(withinCard and hasText(parent.book.title), true)
+        assertTrue(title.fetchSemanticsNode().boundsInRoot.bottom <= cover.fetchSemanticsNode().boundsInRoot.bottom)
+        screenshot("grid-style-classic")
+        compose.runOnIdle { app.store.update { it.copy(shelfGridStyle = ShelfGridStyle.FullCover) } }
+        assertTrue(title.fetchSemanticsNode().boundsInRoot.top >= cover.fetchSemanticsNode().boundsInRoot.bottom)
+        val progress = compose.onNode(withinCard and hasText("40%"), true)
+        progress.assertIsDisplayed()
+        compose.onNode(withinCard and hasContentDescription("已读 40%"), true).assertIsDisplayed()
+        screenshot("grid-style-full-cover")
+        progress.performTouchInput { click() }
+        compose.onNodeWithTag("wenku-volume-list").assertIsDisplayed()
+        compose.onNodeWithContentDescription("返回").performClick()
+        cover.performTouchInput { click() }
+        compose.onNodeWithTag("wenku-volume-list").assertIsDisplayed()
+    }
+
+    @Test fun fullCoverShowsBothEdgesOfAWideImage() {
+        val file = File.createTempFile("wide-grid-cover", ".png", app.cacheDir)
+        try {
+            val colors = IntArray(180 * 90) { i -> when(i % 180) {
+                in 0..39 -> Color.RED
+                in 140..179 -> Color.BLUE
+                else -> Color.GREEN
+            } }
+            val bitmap = Bitmap.createBitmap(colors, 180, 90, Bitmap.Config.ARGB_8888)
+            file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            bitmap.recycle()
+            val first = books.first()
+            app.store.update { it.copy(shelfGridStyle = ShelfGridStyle.FullCover,
+                books = listOf(first.copy(book = first.book.copy(cover = Uri.fromFile(file).toString())))) }
+            show()
+            val cover = compose.onNodeWithTag("shelf-grid-cover-${first.book.ref.key}", true)
+            compose.waitUntil(10_000) {
+                val frame = cover.captureToImage().asAndroidBitmap()
+                frame.getPixel(frame.width / 10, frame.height / 2) == Color.RED &&
+                    frame.getPixel(frame.width * 9 / 10, frame.height / 2) == Color.BLUE &&
+                    frame.getPixel(frame.width / 2, frame.height / 10) != Color.GREEN
+            }
+        } finally { file.delete() }
+    }
+
     @Test fun customColumnsReflowBothLocalGridSections() {
-        app.store.update { it.copy(localFilesGrid = true, shelfGridDensity = ShelfGridDensity.Three) }
+        app.store.update { it.copy(localFilesGrid = true, shelfGridDensity = ShelfGridDensity.Three, shelfGridStyle = ShelfGridStyle.FullCover) }
         show()
         fun assertThreeInTheFirstRow() {
+            val firstBook = books[0].book
+            val cover = compose.onNodeWithTag("shelf-grid-cover-${firstBook.ref.key}", true).fetchSemanticsNode().boundsInRoot
+            val title = compose.onNodeWithText(firstBook.title, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+            assertTrue(title.top >= cover.bottom)
             val first = book(0).getUnclippedBoundsInRoot().top
             assertEquals(first, book(2).getUnclippedBoundsInRoot().top)
             assertTrue(book(3).getUnclippedBoundsInRoot().top > first)

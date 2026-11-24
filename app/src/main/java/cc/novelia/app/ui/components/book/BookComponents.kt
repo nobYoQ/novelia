@@ -6,6 +6,7 @@ import cc.novelia.app.ui.components.base.AppLinearProgressIndicator
 import cc.novelia.app.ui.components.base.AppIconButton
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import cc.novelia.app.ui.theme.appBookCoverShape
@@ -86,7 +87,8 @@ import cc.novelia.app.ui.components.keywords.KeywordEditorDialog
         categories = entries.categories, onSaveDetails = c.app.keywords::editEntry) }
 }
 
-@Composable fun BookCover(book: BookCard, modifier: Modifier = Modifier, showFallbackTitle: Boolean = true, useCustomCover: Boolean = true) {
+@Composable fun BookCover(book: BookCard, modifier: Modifier = Modifier, showFallbackTitle: Boolean = true, useCustomCover: Boolean = true,
+    contentScale: ContentScale = ContentScale.Crop) {
     val cover = if(useCustomCover) rememberCustomBookCover(book.ref) else null
     val context = LocalContext.current
     val customRequest = remember(context, cover) {
@@ -114,8 +116,9 @@ import cc.novelia.app.ui.components.keywords.KeywordEditorDialog
             }
             AsyncImage(
                 source, null,
-                Modifier.fillMaxSize().graphicsLayer { alpha = if(reducedMotion || memoryCached) 1f else coverAlpha.value },
-                contentScale = ContentScale.Crop,
+                Modifier.fillMaxSize().graphicsLayer { alpha = if(reducedMotion || memoryCached) 1f else coverAlpha.value }
+                    .then(if(contentScale == ContentScale.Fit) Modifier.background(MaterialTheme.colorScheme.surfaceContainerLow) else Modifier),
+                contentScale = contentScale,
                 onLoading = { loaded = false; memoryCached = false },
                 onSuccess = { memoryCached = it.result.dataSource == DataSource.MEMORY_CACHE; loaded = true },
                 onError = { loaded = false; memoryCached = false; if(custom != null) customFailed = true },
