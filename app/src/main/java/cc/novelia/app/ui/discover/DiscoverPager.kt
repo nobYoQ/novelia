@@ -2,7 +2,7 @@
 package cc.novelia.app.ui.discover
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.pager.HorizontalPager
+import cc.novelia.app.ui.components.base.AppHorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import cc.novelia.app.ui.components.base.AppPageTabs
 import androidx.compose.material3.Tab
@@ -41,14 +41,13 @@ import kotlinx.coroutines.launch
 ) {
     val pages = rememberSaveableStateHolder()
     Column(modifier.fillMaxSize()) {
-        AppPageTabs(pager.currentPage) {
-            listOf("为你发现", "网络小说", "文库小说").forEachIndexed { index, title ->
-                Tab(pager.currentPage == index, onClick = { onSelect(index) },
-                    text = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    modifier = Modifier.testTag("discover-tab-$index"))
-            }
+        val titles = listOf("为你发现", "网络小说", "文库小说")
+        AppPageTabs(pager.currentPage, titles.size) { index ->
+            Tab(pager.currentPage == index, onClick = { onSelect(index) },
+                text = { Text(titles[index], maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                modifier = Modifier.testTag("discover-tab-$index"))
         }
-        HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth().testTag("discover-pager"), key = { it }) { section ->
+        AppHorizontalPager(pager, Modifier.weight(1f).fillMaxWidth().testTag("discover-pager"), key = { it }) { section ->
             pages.SaveableStateProvider(section) {
                 Box(Modifier.fillMaxSize().testTag("discover-section-$section")) { content(section) }
             }

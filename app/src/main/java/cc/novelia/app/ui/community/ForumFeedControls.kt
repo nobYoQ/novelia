@@ -30,11 +30,11 @@ import cc.novelia.app.data.community.ForumCategory
         val equalWidths = 96.dp * categories.size * fontScale <= maxWidth
         // 滚动模式也至少铺满可用宽度，避免临界字号下再次留下尾部空白。
         val minimumWidth = if(equalWidths) 0.dp else ((maxWidth - 24.dp) / categories.size).coerceAtLeast(0.dp)
-        val tabs: @Composable () -> Unit = {
-            categories.forEach { category -> Tab(category.slug == selected, { onSelect(category.slug) },
-                modifier = Modifier.widthIn(min = minimumWidth).testTag("forum-category-${category.slug}"), text = { Text(category.title) }) }
+        AppPageTabs(index, categories.size, scrollable = !equalWidths) { i ->
+            val category = categories[i]
+            Tab(category.slug == selected, { onSelect(category.slug) },
+                modifier = Modifier.widthIn(min = minimumWidth).testTag("forum-category-${category.slug}"), text = { Text(category.title) })
         }
-        AppPageTabs(index, scrollable = !equalWidths, tabs = tabs)
     }
 }
 

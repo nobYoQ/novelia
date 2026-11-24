@@ -46,6 +46,43 @@ class BookDetailSwipeTest {
         compose.onNodeWithText("简介").assertIsSelected()
     }
 
+    @Test fun eInkHoldsTheCurrentPageUntilReleaseAndCancelsWithoutMoving() {
+        compose.setContent {
+            AppInteractionMode(eInk = true, reducedMotion = false) {
+                NoveliaTheme("light") {
+                    var tab by rememberSaveable { mutableIntStateOf(0) }
+                    AdaptiveBookDetail(tab, { tab = it }, listOf("简介", "分卷", "讨论"), rememberSaveableStateHolder(),
+                        Modifier.size(320.dp, 400.dp)) { page ->
+                        Box(Modifier.fillMaxSize().background(listOf(Color.Blue, Color.Red, Color.Green)[page]))
+                    }
+                }
+            }
+        }
+        val pager = compose.onNodeWithTag("book-detail-pager")
+        fun assertSolid(color: Color) {
+            val frame = pager.captureToImage().toPixelMap()
+            for(x in listOf(1, frame.width / 2, frame.width - 2)) assertEquals(color, frame[x, frame.height / 2])
+        }
+        compose.waitForIdle()
+        compose.mainClock.autoAdvance = false
+        try {
+            repeat(2) { attempt ->
+                pager.performTouchInput { down(Offset(width * .9f, centerY)) }
+                for(fraction in listOf(.7f, .4f, .1f)) {
+                    pager.performTouchInput { moveTo(Offset(width * fraction, centerY), delayMillis = 40) }
+                    compose.mainClock.advanceTimeByFrame()
+                    assertSolid(Color.Blue)
+                }
+                pager.performTouchInput { if(attempt == 0) cancel() else up() }
+                compose.mainClock.advanceTimeByFrame()
+                assertSolid(if(attempt == 0) Color.Blue else Color.Red)
+            }
+        } finally { compose.mainClock.autoAdvance = true }
+        compose.onNodeWithText("分卷").assertIsSelected()
+        pager.performTouchInput { swipeRight() }
+        compose.onNodeWithText("简介").assertIsSelected()
+    }
+
     @Test fun animatedTabClicksKeepContentOpaqueIncludingIntermediatePages() {
         showAnimatedPanels()
         for(title in listOf("讨论", "简介")) {

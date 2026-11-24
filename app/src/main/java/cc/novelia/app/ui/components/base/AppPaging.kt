@@ -146,7 +146,6 @@ internal class SheetEndOverscrollConnection(private val canScrollForward: () -> 
     if(!enabled) return this
     val latestPage by rememberUpdatedState(page)
     val latestScroll by rememberUpdatedState(scroll)
-    val threshold = with(LocalDensity.current) { 24.dp.toPx() }
     return this
         .semantics {
             scrollBy { x, y ->
@@ -165,15 +164,7 @@ internal class SheetEndOverscrollConnection(private val canScrollForward: () -> 
                 latestPage(if(it.key == Key.PageDown) 1 else -1); true
             } else it.key in listOf(Key.PageUp, Key.PageDown)
         }
-        .pointerInput(horizontal, threshold) {
-            var distance = 0f
-            val end = { if(abs(distance) >= threshold) latestPage(if(distance < 0) 1 else -1); distance = 0f }
-            if(horizontal) detectHorizontalDragGestures(onDragStart = { distance = 0f }, onDragCancel = { distance = 0f }, onDragEnd = end) { change, amount ->
-                change.consume(); distance += amount
-            } else detectVerticalDragGestures(onDragStart = { distance = 0f }, onDragCancel = { distance = 0f }, onDragEnd = end) { change, amount ->
-                change.consume(); distance += amount
-            }
-        }
+        .screenPageSwipe(horizontal, page)
         .pointerInput(horizontal) {
             awaitPointerEventScope {
                 var lastWheel = Long.MIN_VALUE
@@ -190,4 +181,18 @@ internal class SheetEndOverscrollConnection(private val canScrollForward: () -> 
                 }
             }
         }
+}
+
+@Composable internal fun Modifier.screenPageSwipe(horizontal: Boolean, page: (Int) -> Unit): Modifier {
+    val latestPage by rememberUpdatedState(page)
+    val threshold = with(LocalDensity.current) { 24.dp.toPx() }
+    return pointerInput(horizontal, threshold) {
+        var distance = 0f
+        val end = { if(abs(distance) >= threshold) latestPage(if(distance < 0) 1 else -1); distance = 0f }
+        if(horizontal) detectHorizontalDragGestures(onDragStart = { distance = 0f }, onDragCancel = { distance = 0f }, onDragEnd = end) { change, amount ->
+            change.consume(); distance += amount
+        } else detectVerticalDragGestures(onDragStart = { distance = 0f }, onDragCancel = { distance = 0f }, onDragEnd = end) { change, amount ->
+            change.consume(); distance += amount
+        }
+    }
 }

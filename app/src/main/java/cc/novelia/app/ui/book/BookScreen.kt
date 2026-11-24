@@ -17,7 +17,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.pager.HorizontalPager
+import cc.novelia.app.ui.components.base.AppHorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
@@ -370,10 +370,10 @@ import kotlinx.coroutines.withContext
         snapshotFlow { pager.settledPage }.distinctUntilChanged().drop(1).collect { select(it + firstPanel) }
     }
     Column(Modifier.fillMaxSize()) {
-        AppPageTabs(pager.currentPage) { titles.forEachIndexed { index, title ->
-            Tab(pager.currentPage == index, onClick = { select(index + firstPanel) }, text = { Text(title) })
-        } }
-        HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth().testTag("book-detail-pager"),
+        AppPageTabs(pager.currentPage, titles.size) { index ->
+            Tab(pager.currentPage == index, onClick = { select(index + firstPanel) }, text = { Text(titles[index]) })
+        }
+        AppHorizontalPager(pager, Modifier.weight(1f).fillMaxWidth().testTag("book-detail-pager"),
             key = { it + firstPanel }) { index ->
             // 分页已负责横向过渡；currentPage 在拖动中点变化，不能再触发淡入。
             // 首次加载详情的浮现效果由外层 AsyncContent 统一处理。

@@ -2,7 +2,7 @@
 package cc.novelia.app.ui.shelf
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.pager.HorizontalPager
+import cc.novelia.app.ui.components.base.AppHorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import cc.novelia.app.ui.components.base.AppPageTabs
 import androidx.compose.material3.Tab
@@ -39,17 +39,16 @@ import kotlinx.coroutines.launch
         }
     }
     Column(modifier.fillMaxSize()) {
-        AppPageTabs(pager.currentPage) {
-            listOf("我的书架", "本地文件", "云端收藏").forEachIndexed { index, title ->
-                Tab(pager.currentPage == index, onClick = {
-                    scope.launch {
-                        if(reducedMotion) pager.scrollToPage(index) else pager.animateScrollToPage(index)
-                    }
-                }, enabled = enabled, text = { Text(title) }, modifier = Modifier.testTag("shelf-tab-$index"))
-            }
+        val titles = listOf("我的书架", "本地文件", "云端收藏")
+        AppPageTabs(pager.currentPage, titles.size) { index ->
+            Tab(pager.currentPage == index, onClick = {
+                scope.launch {
+                    if(reducedMotion) pager.scrollToPage(index) else pager.animateScrollToPage(index)
+                }
+            }, enabled = enabled, text = { Text(titles[index]) }, modifier = Modifier.testTag("shelf-tab-$index"))
         }
         controls()
-        HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth().testTag("shelf-pager"), userScrollEnabled = enabled,
+        AppHorizontalPager(pager, Modifier.weight(1f).fillMaxWidth().testTag("shelf-pager"), userScrollEnabled = enabled,
             key = { it }) { page ->
             pages.SaveableStateProvider(page) {
                 Box(Modifier.fillMaxSize().testTag("shelf-page-$page")) { content(page) }

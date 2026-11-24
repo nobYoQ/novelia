@@ -2,7 +2,7 @@
 package cc.novelia.app.ui.community
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.pager.HorizontalPager
+import cc.novelia.app.ui.components.base.AppHorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import cc.novelia.app.ui.components.base.AppPageTabs
 import androidx.compose.material3.Tab
@@ -47,7 +47,7 @@ import kotlinx.coroutines.launch
                 }
             }
             controls()
-            HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth().testTag("forum-category-pager"),
+            AppHorizontalPager(pager, Modifier.weight(1f).fillMaxWidth().testTag("forum-category-pager"),
                 key = { categories[it].slug }) { index ->
                 pages.SaveableStateProvider(categories[index].slug) {
                     Box(Modifier.fillMaxSize()) { content(categories[index]) }
@@ -70,15 +70,14 @@ import kotlinx.coroutines.launch
         snapshotFlow { pager.settledPage }.distinctUntilChanged().collect { select(it) }
     }
     Column(modifier.fillMaxSize()) {
-        AppPageTabs(pager.currentPage) {
-            listOf("文章内容", "讨论 $commentCount").forEachIndexed { index, title ->
-                Tab(pager.currentPage == index, onClick = {
-                    select(index)
-                    scope.launch { if(reducedMotion) pager.scrollToPage(index) else pager.animateScrollToPage(index) }
-                }, text = { Text(title) })
-            }
+        val titles = listOf("文章内容", "讨论 $commentCount")
+        AppPageTabs(pager.currentPage, titles.size) { index ->
+            Tab(pager.currentPage == index, onClick = {
+                select(index)
+                scope.launch { if(reducedMotion) pager.scrollToPage(index) else pager.animateScrollToPage(index) }
+            }, text = { Text(titles[index]) })
         }
-        HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth().testTag("article-content-pager")) { index ->
+        AppHorizontalPager(pager, Modifier.weight(1f).fillMaxWidth().testTag("article-content-pager")) { index ->
             state.SaveableStateProvider(index) { Box(Modifier.fillMaxSize()) { content(index) } }
         }
     }
