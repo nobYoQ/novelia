@@ -15,6 +15,16 @@ import org.junit.rules.TemporaryFolder
 class BookCoverStoreTest {
     @get:Rule val folder = TemporaryFolder()
 
+    @Test fun aLateDownloadCannotOverwriteANewerCoverChoice() = runBlocking {
+        val store = BookCoverStore(folder.newFolder("covers"), folder.newFolder("staging")) {}
+        val book = BookRef("syosetu", "1")
+        val beforeDownload = store.revision(book)
+        store.replace(book) { "new choice".byteInputStream() }
+        val late = runCatching { store.replace(book, beforeDownload) { "old download".byteInputStream() } }
+        assertTrue(late.exceptionOrNull() is IllegalStateException)
+        assertEquals("new choice", store.observe(book).first()?.file?.readText())
+    }
+
     @Test fun replacementIsIsolatedPersistentAndReversibleEvenAfterAnInvalidPick() = runBlocking {
         val directory = File(folder.root, "covers")
         val cache = folder.newFolder("staging")

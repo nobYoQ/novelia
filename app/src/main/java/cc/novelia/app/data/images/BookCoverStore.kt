@@ -35,12 +35,13 @@ internal class BookCoverStore(
             .flowOn(Dispatchers.IO)
     }
 
-    suspend fun replace(ref: BookRef, open: () -> InputStream) = withContext(Dispatchers.IO) {
+    fun revision(ref: BookRef): Long = revisions.value[hashName(ref.key)] ?: 0L
+
+    suspend fun replace(ref: BookRef, expectedRevision: Long = revision(ref), open: () -> InputStream) = withContext(Dispatchers.IO) {
         val key = hashName(ref.key)
-        val revision = revisions.value[key] ?: 0L
         withValidatedCover(open) { temporary ->
             synchronized(this@BookCoverStore) {
-                check((revisions.value[key] ?: 0L) == revision) { "封面已变更，请重新选择图片" }
+                check((revisions.value[key] ?: 0L) == expectedRevision) { "封面已变更，请重新选择图片" }
                 installValidatedCover(ref, temporary)
             }
         }

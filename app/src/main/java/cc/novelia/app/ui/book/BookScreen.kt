@@ -123,8 +123,9 @@ import kotlinx.coroutines.withContext
     val cloudFolders = favoritePresentation.cloudFolders?.takeIf { favoritePresentation.account == profile?.username }
     val cacheGeneration by c.store.cacheGeneration.collectAsStateWithLifecycle()
     val cacheActions = rememberChapterCacheActions(c)
-    val coverActions = rememberBookCoverActions(c, ref)
     val detailKey = c.detailKey(if(ref.isWenku) "wenku/${ref.id}" else "novel/${ref.key}").copy(generation = cacheGeneration)
+    var linkedWenkuId by remember(detailKey) { mutableStateOf<String?>(null) }
+    val coverActions = rememberBookCoverActions(c, ref, linkedWenkuId)
     var shareCard by remember(detailKey) { mutableStateOf<ShareCard?>(null) }
     val refreshKey = version
     LaunchedEffect(ref, profile?.username) { favorite = null }
@@ -206,6 +207,10 @@ import kotlinx.coroutines.withContext
             load = { c.detail<WebDetail>("novel/${ref.key}", forceNetwork = version > 0 || c.uiResults.webDetails.snapshot(detailKey) != null) },
             modifier = Modifier.padding(padding), validate = { c.session.ensureCurrent(detailKey.binding) }, revealContent = true) { detail, _ ->
             val book = remember(detail, ref, profile?.username) { detail.card(ref, profile?.username) }
+            DisposableEffect(detailKey, detail.wenkuId) {
+                linkedWenkuId = detail.wenkuId?.trim()?.takeIf(String::isNotEmpty)
+                onDispose { linkedWenkuId = null }
+            }
             DisposableEffect(detailKey, detail, coverActions.cover) {
                 shareCard = book.shareCard(detail.introductionZh?.takeIf(String::isNotBlank) ?: detail.introductionJp.orEmpty(), coverActions.cover?.file)
                 onDispose { shareCard = null }
