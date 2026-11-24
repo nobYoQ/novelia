@@ -45,7 +45,7 @@ class DownloadWorker(context: Context, parameters: WorkerParameters) : Coroutine
         if(owner != null && owner != binding.account) { update(app, id, "需要登录", error = "请登录创建此下载的账号后重试"); app.store.flush(); return@withContext Result.failure() }
         val partial = DownloadFiles.acquire(app.store.downloadsDir, id, this@DownloadWorker.id.toString()); val destination = File(app.store.downloadsDir, entry.fileName)
         try {
-            val client = app.api.downloadTransport
+            val client = app.bookDownloadClient
             val parsed = entry.url.toHttpUrl()
             require(parsed.scheme == "https" && parsed.port == 443 && parsed.username.isEmpty() && parsed.password.isEmpty() &&
                 parsed.host in setOf("n.novelia.cc", "book.xkvi.top"))

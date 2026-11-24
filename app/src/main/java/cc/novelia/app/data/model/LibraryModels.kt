@@ -138,6 +138,7 @@ fun legacyFolderId(name: String): String = if(name == DEFAULT_FOLDER) DEFAULT_FO
     // 三个书架分区共用本机的工具栏展开状态。
     val shelfControlsExpanded: Boolean = true,
     val squareCornerTargets: Set<SquareCornerTarget> = SquareCornerTarget.defaults,
+    val downloadConcurrency: Int = DEFAULT_DOWNLOAD_CONCURRENCY,
 )
 
 /** 收藏夹名称仅用于显示；改名时 ID 及所有本地分卷仍保持原关系。 */

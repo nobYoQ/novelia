@@ -2,6 +2,7 @@ package cc.novelia.app.data.network
 
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
@@ -20,6 +21,51 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class NetworkPerformanceTest {
+    @Test(timeout = 15_000) fun changingDownloadLimitPromotesQueuedCallsAndLetsActiveCallsFinish() = runBlocking {
+        MockWebServer().use { server ->
+            repeat(2) { server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE)) }
+            server.enqueue(MockResponse().setChunkedBody("book", 2))
+            val client = OkHttpClient().forDownloads()
+            client.dispatcher.setDownloadConcurrency(1)
+            val queued = List(3) { CompletableDeferred<Unit>() }
+            val dispatched = List(3) { CompletableDeferred<Unit>() }
+            fun start(index: Int) = launch(Dispatchers.IO) {
+                val observer = DownloadCallObserver({ queued[index].complete(Unit) }, { dispatched[index].complete(Unit) })
+                val request = Request.Builder().url(server.url("/$index")).tag(DownloadCallObserver::class.java, observer).build()
+                client.newCall(request).awaitBody { response ->
+                    assertEquals(-1L, response.body!!.contentLength())
+                    assertEquals("book", response.body!!.string())
+                }
+            }
+            val jobs = mutableListOf<kotlinx.coroutines.Job>()
+            try {
+                jobs += start(0)
+                assertEquals("/0", server.takeRequest(3, TimeUnit.SECONDS)?.path)
+                jobs += start(1)
+                withTimeout(3_000) { queued[1].await() }
+                assertFalse(dispatched[1].isCompleted)
+                client.dispatcher.setDownloadConcurrency(3)
+                assertEquals("/1", server.takeRequest(3, TimeUnit.SECONDS)?.path)
+                assertTrue(dispatched[1].isCompleted)
+                client.dispatcher.setDownloadConcurrency(1)
+                jobs += start(2)
+                withTimeout(3_000) { queued[2].await() }
+                jobs[0].cancelAndJoin()
+                withTimeout(3_000) { while(client.dispatcher.runningCallsCount() != 1 || client.dispatcher.queuedCallsCount() != 1) delay(5) }
+                assertTrue(jobs[1].isActive)
+                assertFalse(dispatched[2].isCompleted)
+                jobs[1].cancelAndJoin()
+                withTimeout(3_000) { jobs[2].join() }
+                assertEquals("/2", server.takeRequest(3, TimeUnit.SECONDS)?.path)
+                assertTrue(dispatched[2].isCompleted)
+            } finally {
+                jobs.forEach { it.cancel() }
+                jobs.joinAll()
+                client.dispatcher.executorService.shutdownNow()
+            }
+        }
+    }
+
     @Test fun cancellingRequestStopsTheUnderlyingCall() = runBlocking {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))

@@ -20,6 +20,28 @@ import org.junit.Assert.*
 class SettingsCategoriesTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun bookDownloadSettingUpdatesRunningDispatcherAndSurvivesRecreation() {
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
+        runBlocking { app.initialization.await() }
+        val original = app.store.state.value.downloadConcurrency
+        try {
+            app.store.update { it.copy(downloadConcurrency = 1) }
+            val dispatcher = app.bookDownloadClient.dispatcher
+            val restoration = StateRestorationTester(compose)
+            restoration.setContent { NoveliaTheme("light") {
+                SettingsScreen(AppController(app, rememberNavController(), rememberCoroutineScope(), remember { SnackbarHostState() }), "LIBRARY")
+            } }
+            option("4 本").performClick()
+            compose.waitUntil(5_000) { dispatcher.maxRequests == 4 && dispatcher.maxRequestsPerHost == 4 }
+            runBlocking { app.store.flush() }
+            restoration.emulateSavedInstanceStateRestore()
+            option("4 本").assertIsSelected()
+        } finally {
+            app.store.update { it.copy(downloadConcurrency = original) }
+            runBlocking { app.store.flush() }
+        }
+    }
+
     @Test fun shelfGridStyleCanBeSelectedInLibrarySettings() {
         val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
         runBlocking { app.initialization.await() }

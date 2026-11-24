@@ -100,6 +100,6 @@
 
 ## 下载与验证
 
-下载使用独立的两个调度槽，流式写入临时文件，再检查账号、任务 ID、workId 和暂停状态后提交。普通失败等待手动重试，重新开始从头下载，没有 Range 续传。镜像路由和重定向会剥离跨来源凭据。完整任务规则见[文件与下载](../features/files-and-downloads.md)。
+整本文件下载使用独立的调度器，默认同时下载两本，可在“书架与下载”中调整。文件先流式写入临时文件，再检查账号、任务 ID、workId 和暂停状态后提交。同一任务遇到瞬时中断时可按条件续传，手动重新开始从头下载。镜像路由和重定向会剥离跨来源凭据。完整任务规则见[文件与下载](../features/files-and-downloads.md)。
 
 修改网络优先看 `ApiContractTest`、`SessionIsolationTest`、`SharedRequestTest`、`CloudMutationQueueTest` 和 `BoundCloudSyncTest`。目录与命令见[测试指南](../quality/testing.md)。MockWebServer 验证客户端协议，真实 WebView、Keystore 和服务端兼容性另行验收。

@@ -24,9 +24,11 @@ import kotlinx.serialization.Serializable
     val ttsEnginePackage: String? = null,
     val themePresets: ThemePresets? = null,
     val readerThemePresets: Map<String, ReaderThemePalette>? = null,
-    val squareCornerTargets: Set<SquareCornerTarget> = SquareCornerTarget.defaults)
+    val squareCornerTargets: Set<SquareCornerTarget> = SquareCornerTarget.defaults,
+    val downloadConcurrency: Int = DEFAULT_DOWNLOAD_CONCURRENCY)
 
 internal fun LibraryState.settingsBackup() = SettingsBackup(
+    downloadConcurrency = downloadConcurrency,
     readerThemePresets = readerThemePresets,
     squareCornerTargets = squareCornerTargets,
     reader = reader, theme = theme, themePresets = themePresets, reducedMotion = reducedMotion, squareCorners = squareCorners,
@@ -49,7 +51,7 @@ internal fun LibraryState.settingsBackup() = SettingsBackup(
 internal fun SettingsBackup.requireValid() {
     themePresets?.requireValid()
     readerThemePresets?.requireValidReaderThemes()
-    require(edgeToolbar.valid && version == 1 && theme in APP_THEME_MODES &&
+    require(downloadConcurrency in DOWNLOAD_CONCURRENCY_RANGE && edgeToolbar.valid && version == 1 && theme in APP_THEME_MODES &&
         (keywordLimit == null || keywordLimit > 0) && reader.modeConfigurations().all { r ->
             r.fontSize in ReaderSettings.FONT_SIZE_RANGE && r.lineHeight in ReaderSettings.LINE_HEIGHT_RANGE &&
                 r.paragraphSpacing in ReaderSettings.PARAGRAPH_SPACING_RANGE && r.width in 300f..900f &&
@@ -61,6 +63,7 @@ internal fun SettingsBackup.requireValid() {
 }
 
 internal fun SettingsBackup.applyTo(state: LibraryState): LibraryState = state.copy(
+    downloadConcurrency = downloadConcurrency.coerceIn(DOWNLOAD_CONCURRENCY_RANGE),
     readerThemePresets = readerThemePresets ?: state.readerThemePresets,
     squareCornerTargets = squareCornerTargets,
     reader = reader, theme = theme, themePresets = themePresets ?: state.themePresets,

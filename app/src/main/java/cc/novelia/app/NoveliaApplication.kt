@@ -18,6 +18,7 @@ import cc.novelia.app.data.network.BookSourceInterceptor
 import cc.novelia.app.data.network.echRedirects
 import cc.novelia.app.data.network.echCallTimeout
 import cc.novelia.app.data.network.newNetworkCall
+import cc.novelia.app.data.network.setDownloadConcurrency
 import cc.novelia.app.data.appupdate.AppReleaseClient
 import cc.novelia.app.data.storage.LocalStore
 import cc.novelia.app.data.sync.CloudSyncWorker
@@ -92,6 +93,16 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
     val appReleaseDownloads by lazy { cc.novelia.app.data.appupdate.AppReleaseDownloader(this, appReleaseClient) }
     private var appUpdateCheck: Job? = null
     val api by lazy { NoveliaApi(session, transport = httpTransport, onResourceMutation = ::novelChanged, onKeywords = { tags -> keywords.enqueueObservation(tags) }) }
+    internal val bookDownloadClient by lazy {
+        api.downloadTransport.also { client ->
+            client.dispatcher.setDownloadConcurrency(store.state.value.downloadConcurrency)
+            applicationScope.launch {
+                store.state.map { it.downloadConcurrency }.distinctUntilChanged().collect { limit ->
+                    client.dispatcher.setDownloadConcurrency(limit)
+                }
+            }
+        }
+    }
     private val mutableForumBlacklistRevision = MutableStateFlow(0L)
     val forumBlacklistRevision = mutableForumBlacklistRevision.asStateFlow()
     private fun blacklistChanged() { mutableForumBlacklistRevision.update { it + 1 } }

@@ -2,6 +2,9 @@ package cc.novelia.app.data.model
 
 import kotlinx.serialization.Serializable
 
+internal const val DEFAULT_DOWNLOAD_CONCURRENCY = 2
+internal val DOWNLOAD_CONCURRENCY_RANGE = 1..5
+
 @Serializable data class DownloadEntry(val id: String, val title: String, val fileName: String, val url: String, val status: String = QUEUED, val progress: Int = 0, val error: String? = null, val sourceBook: BookRef? = null, val workId: String? = null,
     val sourceCard: BookCard? = null, val receivedBytes: Long = 0) {
     val active: Boolean get() = status == QUEUED || status == WAITING_FOR_SOURCE || status == RECEIVING

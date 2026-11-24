@@ -34,6 +34,7 @@ import cc.novelia.app.data.model.settingsBackup
 import cc.novelia.app.data.model.requireValid
 import cc.novelia.app.data.model.applyTo
 import cc.novelia.app.data.model.SettingsBackup
+import cc.novelia.app.data.model.DOWNLOAD_CONCURRENCY_RANGE
 import cc.novelia.app.data.model.APP_THEME_MODES
 import cc.novelia.app.data.model.MONOCHROME_APP_THEME
 import cc.novelia.app.data.storage.appJson
@@ -207,6 +208,12 @@ private enum class SettingsSection(val title: String, val summary: String) {
         item { ProfileToggle("书架更新提醒", "约每 6 小时检查，系统调度可能延后", state.updateNotifications) { value -> c.store.update { it.copy(updateNotifications = value) }; UpdateWorker.schedule(c.app, value); if(value && Build.VERSION.SDK_INT >= 33) notifications.launch(android.Manifest.permission.POST_NOTIFICATIONS) } }
         item { ProfileToggle("移出书架时删除本地副本", "仅删除本地小说或分卷的导入副本，原文件不受影响；删除后无法撤销", state.deleteLocalCopyOnShelfRemoval) { value -> c.store.update { it.copy(deleteLocalCopyOnShelfRemoval = value) } } }
         item { ProfileSectionTitle("下载与文件清理") }
+        item {
+            val counts = DOWNLOAD_CONCURRENCY_RANGE
+            ProfileChoiceRow("同时下载的书籍数", counts.map { "${it} 本" }, counts.indexOf(state.downloadConcurrency.coerceIn(counts))) { index ->
+                c.store.update { it.copy(downloadConcurrency = counts.first + index) }
+            }
+        }
         item { ProfileToggle("仅在 Wi-Fi 下载", "新建下载任务等待非计费网络", state.wifiOnly) { value -> c.store.update { it.copy(wifiOnly = value) } } }
         item { ProfileToggle("导入书架后删除下载", "成功导入并保存本地副本后，删除下载管理中的任务和下载文件", state.deleteDownloadAfterImport) { value -> c.store.update { it.copy(deleteDownloadAfterImport = value) } } }
         }
