@@ -8,6 +8,7 @@ import cc.novelia.app.ui.components.base.AppTextButton
 import cc.novelia.app.ui.components.base.AppIconButton
 import cc.novelia.app.data.updates.withAcknowledgedBookUpdates
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
@@ -31,6 +32,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
@@ -228,16 +230,21 @@ import kotlinx.coroutines.withContext
             enabled = !batchWorking && !cloudBusy) { Icon(Icons.Outlined.CloudSync, "云端与本地收藏同步") }
         AppIconButton(onClick = { c.go("updates") }) { Icon(Icons.Outlined.NewReleases, "查看书架更新") }
         AppIconButton(onClick = { c.go("history") }) { Icon(Icons.Outlined.History, "阅读历史") }
-        if(tab == 0 && !managing) Box {
-            AppIconButton(onClick = { addToShelf = true }, enabled = !batchWorking) { Icon(Icons.Outlined.Add, "添加到书架") }
+        val showAdd = tab == 0 && !managing
+        Box {
+            AppIconButton(onClick = { if(showAdd) addToShelf = true else importLocalFiles() },
+                enabled = if(showAdd) !batchWorking else !importing,
+                modifier = Modifier.semantics { contentDescription = if(showAdd) "添加到书架" else "导入本地文件" }) {
+                val icon = if(showAdd) Icons.Outlined.Add else Icons.Outlined.FileOpen
+                if(reducedMotion) Icon(icon, null)
+                else Crossfade(icon, animationSpec = tween(AppMotion.Quick), label = "书架操作") { Icon(it, null) }
+            }
             AppDropdownMenu(addToShelf, { addToShelf = false }) {
                 DropdownMenuItem({ Text("导入本地文件") }, { addToShelf = false; importLocalFiles() },
                     enabled = !importing, leadingIcon = { Icon(Icons.Outlined.FileOpen, null) })
                 DropdownMenuItem({ Text("新建本地总集") }, { addToShelf = false; c.editLocalSeries(folderId = folderId) },
                     leadingIcon = { Icon(Icons.Outlined.LibraryAdd, null) })
             }
-        } else {
-            AppIconButton(onClick = importLocalFiles, enabled = !importing) { Icon(Icons.Outlined.FileOpen, "导入本地文件") }
         }
     }) { padding ->
         ShelfPager(tab, { tab = it }, enabled = !batchWorking && !cloudBusy, modifier = Modifier.padding(padding),

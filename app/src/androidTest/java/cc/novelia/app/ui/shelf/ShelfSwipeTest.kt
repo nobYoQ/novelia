@@ -8,6 +8,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.StateRestorationTester
@@ -23,6 +24,7 @@ import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.theme.AppInteractionMode
 import cc.novelia.app.ui.theme.NoveliaTheme
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
@@ -129,13 +131,14 @@ class ShelfSwipeTest {
         runBlocking { app.initialization.await() }
         assertNull("Use the anonymous dedicated test emulator", app.session.profile.value)
         val before = app.store.state.value
+        var static by mutableStateOf(true)
         try {
             val web = BookCard(BookRef("syosetu", "swipe-web"), "网络小说")
             val local = BookCard(BookRef("local", "swipe-local"), "本地小说")
             app.store.update { it.copy(books = listOf(SavedBook(web), SavedBook(local)), positions = emptyMap(),
                 lastShelfLocation = it.lastShelfLocation.copy(tab = 0, localFolderId = null)) }
             compose.setContent {
-                AppInteractionMode(eInk = true, reducedMotion = true) {
+                AppInteractionMode(eInk = static, reducedMotion = static) {
                     NoveliaTheme("light") {
                         val nav = rememberNavController()
                         val scope = rememberCoroutineScope()
@@ -169,7 +172,21 @@ class ShelfSwipeTest {
             pager.performTouchInput { swipeLeft() }
             compose.onNodeWithTag("shelf-tab-2").assertIsSelected()
             compose.onNodeWithText("连接你的云端书架").assertIsDisplayed()
+            compose.runOnIdle { static = false }
+            val importIcon = compose.onNodeWithContentDescription("导入本地文件").captureToImage().asAndroidBitmap()
+            compose.mainClock.autoAdvance = false
             compose.onNodeWithTag("shelf-tab-0").performClick()
+            compose.waitUntil(10_000) {
+                compose.mainClock.advanceTimeByFrame()
+                compose.onAllNodesWithContentDescription("添加到书架").fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.mainClock.advanceTimeBy(64)
+            val addButton = compose.onNodeWithContentDescription("添加到书架")
+            val transitionIcon = addButton.captureToImage().asAndroidBitmap()
+            compose.mainClock.autoAdvance = true
+            val addIcon = addButton.captureToImage().asAndroidBitmap()
+            assertFalse(importIcon.sameAs(transitionIcon))
+            assertFalse(addIcon.sameAs(transitionIcon))
             compose.onNodeWithTag("shelf-book-${web.ref.key}").assertIsDisplayed()
             compose.onNodeWithText("已选 1 本").assertDoesNotExist()
         } finally { app.store.update { before } }
