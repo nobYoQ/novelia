@@ -33,13 +33,6 @@ import cc.novelia.app.ui.components.book.BookRowStatus
 import cc.novelia.app.ui.theme.*
 import kotlin.math.abs
 
-private val volumeNumber = Regex("第\\s*[0-9一二三四五六七八九十百零〇]+\\s*[卷巻]")
-internal fun shelfVolumeProgressLabel(parentTitle: String, volumeTitle: String, progress: String): String {
-    val title = volumeTitle.removePrefix(parentTitle).trim().ifBlank { volumeTitle }
-    // 只缩短文件名里明确写出的卷号，番外、合订本等保留原名，不用列表序号冒充卷号。
-    return "${volumeNumber.find(title)?.value ?: title} · $progress"
-}
-
 @Composable internal fun ShelfLayoutToggle(grid: Boolean, onToggle: () -> Unit, prefix: String) {
     AppIconButton(onToggle, Modifier.size(48.dp).testTag("$prefix-layout-toggle").semantics {
         stateDescription = if(grid) "网格布局" else "列表布局"
@@ -132,14 +125,12 @@ internal class ShelfLayoutState(val list: LazyListState, val grid: LazyListState
 @Composable internal fun ShelfCoverCard(
     book: BookCard, status: BookRowStatus, onOpen: () -> Unit, modifier: Modifier = Modifier,
     selecting: Boolean = false, selected: Boolean = false, enabled: Boolean = true,
-    pinned: Boolean = false, onToggle: () -> Unit = onOpen,
-    volumeLabel: String? = null, progressLabel: String? = null,
-    compact: Boolean = false,
-    authorLabel: String? = null,
+    onToggle: () -> Unit = onOpen, compact: Boolean = false,
     footer: @Composable (() -> Unit)? = null,
 ) {
     val monochrome = isMonochromeTheme()
     val solidLabel = LocalEInkMode.current || monochrome
+    val progressLabel = status.progress?.let { if(it == 0f) "未读" else "已读 ${(it * 100).toInt()}%" } ?: status.progressLabel
     val largeText = LocalDensity.current.fontScale > 1.3f
     val coverShape = appBookCoverShape()
     Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -155,31 +146,14 @@ internal class ShelfLayoutState(val list: LazyListState, val grid: LazyListState
                 verticalArrangement = Arrangement.spacedBy(if(compact) 2.dp else 4.dp)) {
                 Text(book.title, color = Color.White, style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold, maxLines = if(compact || largeText) 2 else 3, overflow = TextOverflow.Ellipsis)
-                authorLabel?.let {
-                    Text(it, color = Color.White.copy(alpha = if(monochrome) 1f else .9f), style = MaterialTheme.typography.labelSmall,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                Text(progressLabel ?: status.progressLabel, color = Color.White.copy(alpha = if(monochrome) 1f else .9f),
+                Text(progressLabel, color = Color.White.copy(alpha = if(monochrome) 1f else .9f),
                     style = MaterialTheme.typography.labelSmall, maxLines = if(compact || largeText) 1 else 2, overflow = TextOverflow.Ellipsis)
             }
             if(selecting && selected && !monochrome) Box(Modifier.matchParentSize().background(MaterialTheme.colorScheme.primary.copy(alpha = .25f)))
             if(selecting) Surface(Modifier.align(Alignment.TopEnd).padding(4.dp), shape = MaterialTheme.shapes.small,
                 color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = if(monochrome) 1f else .94f), border = monochromeBorder()) {
                 AppCheckbox(selected, { onToggle() }, enabled = enabled, modifier = Modifier.semantics { contentDescription = "选择${book.title}" })
-            } else if(pinned || status.updateLabel != null) Surface(Modifier.align(Alignment.TopStart).padding(6.dp),
-                shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = if(monochrome) 1f else .94f),
-                border = monochromeBorder()) {
-                Row(Modifier.padding(horizontal = 6.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if(pinned) Icon(Icons.Outlined.PushPin, "已置顶", Modifier.size(14.dp))
-                    status.updateLabel?.let { Text(it, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                }
             }
-        }
-        if(volumeLabel != null) AppTextButton(onOpen, Modifier.fillMaxWidth().heightIn(min = 48.dp)
-            .testTag("shelf-grid-volumes-${book.ref.key}"), enabled = enabled && !selecting,
-            shape = DefaultShapes.small, contentPadding = PaddingValues(horizontal = 6.dp)) {
-            Text(volumeLabel, Modifier.weight(1f), style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if(!compact) Icon(Icons.AutoMirrored.Outlined.ViewList, "查看分卷", Modifier.size(18.dp))
         }
         footer?.invoke()
     }

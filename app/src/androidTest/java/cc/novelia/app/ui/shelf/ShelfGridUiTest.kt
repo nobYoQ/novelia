@@ -139,6 +139,10 @@ class ShelfGridUiTest {
         compose.onNodeWithText("已选 17 本").assertIsDisplayed()
         compose.onNodeWithTag("local-selection-done").performClick()
         volume(0).assertDoesNotExist()
+        val parentCard = hasAnyAncestor(hasTestTag("shelf-book-${parent.book.ref.key}"))
+        compose.onNode(parentCard and hasText("已读 40%"), true).assertIsDisplayed()
+        compose.onNode(parentCard and hasText("第 4 章 月台来信", substring = true), true).assertDoesNotExist()
+        compose.onNodeWithText("本地 8 卷").assertDoesNotExist()
         openVolumes()
         compose.onNodeWithText("其他挂载分卷").assertIsDisplayed()
         compose.onNodeWithTag("volume-continue-title", true).assertTextEquals(volumes[2].book.title)
@@ -150,7 +154,8 @@ class ShelfGridUiTest {
         seedVolumes(); show()
         compose.onNodeWithTag("local-search-toggle").performClick()
         compose.onNodeWithTag("local-search-field").performTextInput("夜色中的车站")
-        compose.waitUntil(5_000) { compose.onAllNodesWithText("匹配 2 / 8 卷").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("1 本 · 2 分卷", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("匹配 2 / 8 卷").assertDoesNotExist()
         volume(2).assertDoesNotExist()
         openVolumes()
         val list = compose.onNodeWithTag("wenku-volume-list")

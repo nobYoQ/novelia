@@ -240,7 +240,8 @@ class ShelfDragSelectionTest {
         compose.onNodeWithText("分卷作者", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithText("总集作者", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithTag("local-layout-toggle").performClick()
-        compose.onNodeWithText("分卷作者", useUnmergedTree = true).assertIsDisplayed()
+        book(1).assertIsDisplayed()
+        compose.onNodeWithText("分卷作者", useUnmergedTree = true).assertDoesNotExist()
     }
 
     @Test fun olderEpubShowsOnlyItsTextChaptersInBothLists() {

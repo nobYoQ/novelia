@@ -347,11 +347,9 @@ import kotlinx.coroutines.withContext
                                         val key = saved.book.ref.key
                                         val volumes = allVolumeGroups[key]?.volumes.orEmpty()
                                         val recentVolume = volumes.filter { it.book.ref.key in state.positions }.maxByOrNull { state.positions.getValue(it.book.ref.key).updatedAt }
-                                        val status = bookRowStatus(saved.book, saved, state.positions[key], state.bookUpdates[key], profile?.username)
-                                        val progress = recentVolume?.let { volume ->
-                                            val label = bookRowStatus(volume.book, volume, state.positions[volume.book.ref.key], null).progressLabel
-                                            shelfVolumeProgressLabel(saved.book.title, volume.book.title, label)
-                                        }
+                                        val readingBook = recentVolume ?: saved
+                                        val status = bookRowStatus(readingBook.book, readingBook, state.positions[readingBook.book.ref.key],
+                                            state.bookUpdates[readingBook.book.ref.key], profile?.username)
                                         val open = { if(!dragSelection.dragging && !batchWorking) {
                                             if(pageManaging) { if(key in selectableKeys) selection = if(key in selection) selection - key else selection + key }
                                             else { filtersExpanded = false; onOpenBook(saved.book.ref) }
@@ -372,10 +370,7 @@ import kotlinx.coroutines.withContext
                                             if(selectionEnabled && key in selectableKeys) onLongClick("选择${saved.book.title}") { dragSelection.selectOne(key); true }
                                             customActions = dragSelection.reorderActions(key)
                                         }, selecting = pageManaging, selected = if(pageManaging) key in selection else key == selectedBookKey,
-                                            enabled = !batchWorking && (!pageManaging || key in selectableKeys), pinned = saved.pinned,
-                                            volumeLabel = if(saved.book.ref.isVolumeParent) volumeLabel(group) else null,
-                                            progressLabel = progress, compact = compactGridCards,
-                                            authorLabel = if(page == 1) fileAuthors(saved).distinct().joinToString("、").takeIf(String::isNotBlank) else null)
+                                            enabled = !batchWorking && (!pageManaging || key in selectableKeys), compact = compactGridCards)
                                     } }
                                     repeat(columns - groupRow.size) { Spacer(Modifier.weight(1f)) }
                                 }
