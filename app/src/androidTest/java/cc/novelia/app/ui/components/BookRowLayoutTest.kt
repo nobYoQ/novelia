@@ -146,8 +146,8 @@ class BookRowLayoutTest {
                     Column {
                         BookRow(parent.book, {})
                         // 进度按已到达的章节计；两章中的第一章才对应 50%。
-                        MountedVolumeRow(first, Position("one", index = 1, chapterIndex = 0, chapterCount = 2, paragraphCount = 8), Modifier, {}, {})
-                        MountedVolumeRow(second, null, Modifier, {}, {})
+                        MountedVolumeRow(first, Position("one", index = 1, chapterIndex = 0, chapterCount = 2, paragraphCount = 8), onClick = {}, onLongClick = null, trailing = {})
+                        MountedVolumeRow(second, null, onClick = {}, onLongClick = null, trailing = {})
                     }
                 }
             }

@@ -145,7 +145,8 @@ class ShelfDragSelectionTest {
         val parent = SavedBook(BookCard(BookRef("wenku", "selection-parent"), "分卷选择测试"), volumesExpanded = true)
         app.store.update { it.copy(books = listOf(parent) + books.take(2).map { book -> book.copy(parentWenkuKey = parent.book.ref.key) }) }
         show()
-        compose.onNodeWithTag("shelf-volume-${books[0].book.ref.key}").performTouchInput { longClick() }
+        compose.onNodeWithText("本地文件").performClick()
+        book(0).performTouchInput { longClick() }
         compose.onNodeWithText("已选 1 本").assertIsDisplayed()
         compose.onNodeWithTag("local-selection-status").performClick()
         compose.onNodeWithText("读完").performClick()
@@ -231,7 +232,7 @@ class ShelfDragSelectionTest {
         app.store.update { it.copy(books = listOf(standalone, parent, volume, volumeWithoutAuthor)) }
         show()
         compose.onNodeWithText("单本作者", useUnmergedTree = true).assertIsDisplayed()
-        compose.onNodeWithTag("shelf-volume-${volume.book.ref.key}").assertIsDisplayed()
+        compose.onNodeWithTag("shelf-volume-${volume.book.ref.key}").assertDoesNotExist()
         compose.onNodeWithText("分卷作者", useUnmergedTree = true).assertDoesNotExist()
         compose.onNodeWithText("本地文件").performClick()
         compose.onNodeWithText("单本作者", useUnmergedTree = true).assertIsDisplayed()

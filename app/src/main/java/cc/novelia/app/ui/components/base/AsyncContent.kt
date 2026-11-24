@@ -38,6 +38,7 @@ import kotlinx.coroutines.ensureActive
     pullToRefreshEnabled: Boolean = false, refreshOnEnter: Boolean = false,
     discardContentOnError: (Exception) -> Boolean = { false },
     showRefreshIndicator: Boolean = true,
+    unavailableContent: (@Composable (loading: Boolean, retry: () -> Unit) -> Unit)? = null,
     content: @Composable (T, () -> Unit) -> Unit) {
     var refresh by remember(key) { mutableIntStateOf(0) }
     var result by remember(key) { mutableStateOf<Result<T>?>(initialResult?.let { Result.success(it) }) }
@@ -75,6 +76,7 @@ import kotlinx.coroutines.ensureActive
     Box(modifier.fillMaxSize().then(refreshModifier)) {
         val current = result
         when {
+            current?.isSuccess != true && unavailableContent != null -> unavailableContent(loading, retry)
             current == null -> Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) { if(!appReducedMotion()) CircularProgressIndicator(); Text(loadingLabel, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             current.isFailure -> if(loading) { Text(loadingLabel, Modifier.align(Alignment.Center)) } else EmptyState("暂时无法加载", current.exceptionOrNull().friendlyMessage(), Icons.Outlined.CloudOff, "重试", retry, sticker = Sticker.Concerned)
             else -> {

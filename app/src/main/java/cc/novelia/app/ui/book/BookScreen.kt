@@ -101,12 +101,13 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.withContext
 
-@Composable fun BookScreen(c: AppController, ref: BookRef, onBack: () -> Unit = c::back, navigationState: SavedStateHandle? = null) {
+@Composable fun BookScreen(c: AppController, ref: BookRef, onBack: () -> Unit = c::back, navigationState: SavedStateHandle? = null,
+    startAtContents: Boolean = false) {
     if(ref.isLocalSeries) {
         LocalSeriesScreen(c, ref, onBack)
         return
     }
-    var tab by rememberSaveable(ref.key) { mutableIntStateOf(if(navigationState?.get<Boolean>(SHOW_BOOK_CONTENTS) == true) 1 else 0) }
+    var tab by rememberSaveable(ref.key) { mutableIntStateOf(if(startAtContents || navigationState?.get<Boolean>(SHOW_BOOK_CONTENTS) == true) 1 else 0) }
     val showContents = navigationState?.getStateFlow(SHOW_BOOK_CONTENTS, false)?.collectAsStateWithLifecycle()?.value == true
     LaunchedEffect(showContents) {
         if(showContents) { tab = 1; navigationState?.set(SHOW_BOOK_CONTENTS, false) }
@@ -144,27 +145,29 @@ import kotlinx.coroutines.withContext
             DropdownMenuItem({ Text("屏蔽这本书") }, { c.store.update { it.copy(blockedBooks = it.blockedBooks + ref.key) }; c.message("已从发现列表中屏蔽"); menu = false }, leadingIcon = { Icon(Icons.Outlined.Block, null) })
         } }
     }) { padding ->
-        if(ref.isWenku) CachedAsyncContent(c.uiResults.wenkuDetails, detailKey, refreshKey = refreshKey,
-            load = { c.detail<WenkuDetail>("wenku/${ref.id}", forceNetwork = version > 0 || c.uiResults.wenkuDetails.snapshot(detailKey) != null) },
-            modifier = Modifier.padding(padding), validate = { c.session.ensureCurrent(detailKey.binding) }, revealContent = true) { detail, _ ->
-            val book = remember(detail, ref) { detail.card(ref) }
-            DisposableEffect(detailKey, detail, coverActions.cover) {
-                shareCard = book.shareCard(detail.introduction, coverActions.cover?.file)
+        if(ref.isWenku) WenkuDetailContent(c, detailKey, version, localSaved != null, Modifier.padding(padding)) { detail ->
+            val book = remember(detail, ref, localSaved?.book) { detail?.card(ref) ?: localSaved?.book } ?: return@WenkuDetailContent
+            DisposableEffect(detailKey, book, detail, coverActions.cover) {
+                shareCard = book.shareCard(detail?.introduction.orEmpty(), coverActions.cover?.file)
                 onDispose { shareCard = null }
             }
-            val favoriteState = bookFavoriteState(ref, localSaved != null, detail.favored, profile?.username, state.pending,
+            val favoriteState = bookFavoriteState(ref, localSaved != null, detail?.favored, profile?.username, state.pending,
                 localFolderName = localSaved?.folder, cloudFolders = cloudFolders)
-            val relatedWebRefs = remember(detail.webIds) {
-                detail.webIds.map { BookRef.fromKey(it.trim()) }
+            val relatedWebRefs = remember(detail?.webIds) {
+                detail?.webIds.orEmpty().map { BookRef.fromKey(it.trim()) }
                     .filter { it.provider.isNotBlank() && it.id.isNotBlank() && !it.isWenku && !it.isLocal }
                     .distinct()
             }
             var relatedWeb by rememberSaveable(ref.key) { mutableStateOf(false) }
             val refresh: () -> Unit = { version++ }
-            val tabState = rememberSaveableStateHolder()
-            AdaptiveBookDetail(tab, { tab = it }, listOf("简介", "分卷", "讨论"), tabState) { panel ->
+            AdaptiveBookDetail(tab, { tab = it }, listOf("简介", "分卷", "讨论"), rememberSaveableStateHolder()) { panel ->
                     when(panel) {
                         0 -> AppLazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+                            if(detail == null) {
+                                item { BookHero(book, "本机书架资料", state, coverActions.cover) }
+                                if(book.tags.isNotEmpty()) item { TagList(book.tags, c) }
+                                return@AppLazyColumn
+                            }
                             item { BookHero(book, "${detail.level} · ${detail.volumes.size} 卷", state, coverActions.cover) {
                                 BookFavoriteActions(favoriteState, { favorite = book to false }, { favorite = book to true },
                                     onRelatedWeb = if(relatedWebRefs.isEmpty()) null else ({ relatedWeb = true }))
@@ -186,7 +189,7 @@ import kotlinx.coroutines.withContext
                         }
                         1 -> WenkuVolumesPanel(c, book, detail, uploadBusy,
                             onUpload = uploader.launch, onRefresh = refresh,
-                            pickerFallback = { DocumentPickerFallback(uploader, enabled = !uploadBusy) })
+                            pickerFallback = { if(detail != null) DocumentPickerFallback(uploader, enabled = !uploadBusy) })
                         2 -> NovelCommentsPanel(c, "wenku-${ref.id}")
                     }
             }

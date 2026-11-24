@@ -13,6 +13,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.NoveliaApplication
 import cc.novelia.app.data.model.*
+import cc.novelia.app.ui.book.BookScreen
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.navigation.TestShelfRootLayout
 import cc.novelia.app.ui.theme.AppInteractionMode
@@ -50,7 +51,12 @@ class ShelfGridUiTest {
             val nav = rememberNavController()
             val scope = rememberCoroutineScope()
             val c = remember(nav, scope) { AppController(app, nav, scope, SnackbarHostState()) }
-            TestShelfRootLayout { ShelfScreen(c, onOpenBook = { opened += it }) }
+            var selected by remember { mutableStateOf<BookRef?>(null) }
+            TestShelfRootLayout {
+                val ref = selected
+                if(ref == null) ShelfScreen(c, onOpenBook = { opened += it; selected = it.takeIf { book -> book.isWenku } })
+                else BookScreen(c, ref, onBack = { selected = null }, startAtContents = true)
+            }
         } } } }
     }
     private fun book(i: Int) = compose.onNodeWithTag("shelf-book-${books[i].book.ref.key}")
@@ -60,9 +66,8 @@ class ShelfGridUiTest {
             mapOf(volumes[2].book.ref.key to Position("chapter-4", title = "第 4 章 月台来信", chapterIndex = 3, chapterCount = 10, updatedAt = 300)) else emptyMap()) }
     }
     private fun openVolumes() {
-        // 横向窗口的封面可能比首屏可用高度更高，分卷入口需要滚动后才可点击。
-        compose.onNodeWithTag("shelf-grid-volumes-${parent.book.ref.key}")
-            .performScrollTo().assertIsDisplayed().performClick()
+        compose.onNodeWithTag("shelf-book-${parent.book.ref.key}").performClick()
+        compose.onNodeWithTag("wenku-volume-list").assertExists()
     }
 
     @Test fun switchingLayoutsPreservesTheVisibleBookAndEachSectionPreference() {
@@ -127,151 +132,69 @@ class ShelfGridUiTest {
         compose.runOnIdle { assertTrue(opened.isEmpty()) }
     }
 
-    @Test fun volumeSheetKeepsParentAndChildrenIndependentAndCanReorder() {
-        seedVolumes(withProgress = true); show(reduced = false)
-        screenshot("shelf-grid-live")
+    @Test fun gridSelectsOnlyParentBooksAndOpensVolumesInDetails() {
+        seedVolumes(withProgress = true); show()
         compose.onNodeWithTag("shelf-book-${parent.book.ref.key}").performTouchInput { longClick() }
         compose.onNodeWithTag("local-select-all").performClick()
         compose.onNodeWithText("已选 17 本").assertIsDisplayed()
         compose.onNodeWithTag("local-selection-done").performClick()
+        volume(0).assertDoesNotExist()
         openVolumes()
-        compose.onNodeWithText("本地 8 卷 · 出版 12 卷").assertIsDisplayed()
-        compose.onNodeWithTag("volume-resume").assertIsDisplayed()
-        screenshot("shelf-volumes-panel", "wenku-volumes-sheet")
-        volume(0).performTouchInput { longClick() }
-        compose.onNodeWithText("已选 1 本").assertIsDisplayed()
-        compose.onNodeWithTag("local-selection-status").performClick()
-        compose.onNodeWithText("读完").performClick()
-        compose.runOnIdle {
-            assertEquals("读完", app.store.state.value.books.first { it.book.ref == volumes[0].book.ref }.status)
-            assertEquals(parent.status, app.store.state.value.books.first { it.book.ref == parent.book.ref }.status)
-            assertEquals(volumes[1].status, app.store.state.value.books.first { it.book.ref == volumes[1].book.ref }.status)
-        }
-        compose.onNodeWithTag("volume-drag-${volumes[0].book.ref.key}").performClick()
-        compose.onNodeWithText("下移一位").performClick()
-        compose.runOnIdle { assertEquals(volumes[1].book.ref.key, app.store.state.value.books.first { it.book.ref == parent.book.ref }.volumeOrder.first()) }
-        compose.onNodeWithTag("volume-sheet-close").performClick()
-        compose.onNodeWithTag("wenku-volumes-sheet").assertDoesNotExist()
-        compose.onNodeWithTag("shelf-books-grid").assertIsDisplayed()
-        openVolumes(); volume(1).performClick()
-        compose.runOnIdle { assertEquals(volumes[1].book.ref, opened.last()) }
+        compose.onNodeWithText("其他挂载分卷").assertIsDisplayed()
+        compose.onNodeWithTag("volume-continue-title", true).assertTextEquals(volumes[2].book.title)
+        volume(0).assertIsDisplayed()
+        compose.runOnIdle { assertEquals(parent.book.ref, opened.single()) }
     }
 
-    @Test fun matchingVolumesStayAccessibleAndCannotSelectTheContextParent() {
+    @Test fun matchingVolumesOpenTheWholeCollectionFromTheSearchResult() {
         seedVolumes(); show()
         compose.onNodeWithTag("local-search-toggle").performClick()
         compose.onNodeWithTag("local-search-field").performTextInput("夜色中的车站")
         compose.waitUntil(5_000) { compose.onAllNodesWithText("匹配 2 / 8 卷").fetchSemanticsNodes().isNotEmpty() }
+        volume(2).assertDoesNotExist()
         openVolumes()
-        compose.onNodeWithText("匹配 2 卷").assertIsDisplayed()
-        volume(2).assertIsDisplayed(); volume(0).assertDoesNotExist()
-        compose.onNodeWithTag("volume-show-all").performClick()
-        compose.onNodeWithTag("volume-show-all").assertDoesNotExist()
-        screenshot("shelf-volumes-show-all", "wenku-volumes-sheet")
+        val list = compose.onNodeWithTag("wenku-volume-list")
+        list.performScrollToNode(hasTestTag("shelf-volume-${volumes[0].book.ref.key}"))
         volume(0).assertIsDisplayed()
-        compose.onNodeWithTag("volume-sheet-close").performClick()
-        compose.onNodeWithTag("local-clear-query").assertDoesNotExist()
-        compose.onNodeWithTag("local-search-field").assertTextContains("夜色中的车站")
+        list.performScrollToNode(hasTestTag("shelf-volume-${volumes[2].book.ref.key}"))
+        volume(2).assertIsDisplayed()
     }
 
-    @Test fun middleVolumesReachBothEndsWithoutMovingTheSheetAndAnimateOnRelease() {
-        seedVolumes(withProgress = true); show(reduced = false); openVolumes()
-        val list = compose.onNodeWithTag("volume-books")
-        for(toEnd in listOf(false, true)) {
-            val index = if(toEnd) 4 else 2
-            val key = volumes[index].book.ref.key
-            val handle = compose.onNodeWithTag("volume-drag-$key")
-            list.performScrollToNode(hasTestTag("volume-drag-$key"))
-            val bounds = list.fetchSemanticsNode().boundsInRoot
-            val sheetTop = compose.onNodeWithTag("wenku-volumes-sheet").fetchSemanticsNode().boundsInRoot.top
-            val start = handle.fetchSemanticsNode().boundsInRoot.center - bounds.topLeft
-            val edge = if(toEnd) bounds.height - 2f else 2f
-            val savedOrder = app.store.state.value.books.first { it.book.ref == parent.book.ref }.volumeOrder
-            compose.mainClock.autoAdvance = false
-            try {
-                list.performTouchInput { down(start) }
-                repeat(10) { step ->
-                    list.performTouchInput { moveTo(Offset(start.x, start.y + (edge - start.y) * (step + 1) / 10), delayMillis = 16) }
-                    compose.mainClock.advanceTimeBy(32)
-                }
-                compose.mainClock.advanceTimeBy(2400)
-                val heldTop = volume(index).fetchSemanticsNode().boundsInRoot.top
-                repeat(5) {
-                    compose.mainClock.advanceTimeBy(64)
-                    assertEquals("到达首尾后拖拽行不能反复跳动", heldTop, volume(index).fetchSemanticsNode().boundsInRoot.top, 1f)
-                    assertEquals("排序手势不能拖动底部面板", sheetTop, compose.onNodeWithTag("wenku-volumes-sheet").fetchSemanticsNode().boundsInRoot.top, 1f)
-                }
-                assertEquals("松手前不应保存排序草稿", savedOrder, app.store.state.value.books.first { it.book.ref == parent.book.ref }.volumeOrder)
-                // 从边缘稍微拖回，制造可观察的归位距离，但不跨过相邻分卷。
-                list.performTouchInput { moveTo(Offset(start.x, edge + if(toEnd) -40f else 40f), delayMillis = 32) }
-                compose.mainClock.advanceTimeBy(32)
-                // 外层行的语义边界可能被列表裁切；测量图层内的手柄才能观察实际绘制位移。
-                val beforeDrop = handle.fetchSemanticsNode().boundsInRoot.top
-                val screenshotName = if(toEnd) "volume-drop-bottom" else "volume-drop-top"
-                screenshot("$screenshotName-held", "wenku-volumes-sheet")
-                list.performTouchInput { up() }
-                compose.mainClock.advanceTimeBy(48)
-                val duringDrop = handle.fetchSemanticsNode().boundsInRoot.top
-                screenshot("$screenshotName-during", "wenku-volumes-sheet")
-                compose.mainClock.advanceTimeBy(400)
-                val afterDrop = handle.fetchSemanticsNode().boundsInRoot.top
-                screenshot("$screenshotName-finished", "wenku-volumes-sheet")
-                val order = app.store.state.value.books.first { it.book.ref == parent.book.ref }.volumeOrder
-                assertTrue("应保存排序结果：$order", order.isNotEmpty())
-                assertEquals(key, if(toEnd) order.last() else order.first())
-                assertEquals(volumes.map { it.book.ref.key }.toSet(), order.toSet())
-                assertTrue("松手应平滑归位：$beforeDrop → $duringDrop → $afterDrop",
-                    duringDrop > minOf(beforeDrop, afterDrop) && duringDrop < maxOf(beforeDrop, afterDrop))
-                val finalBounds = volume(index).fetchSemanticsNode().boundsInRoot
-                assertTrue("首尾分卷应完整留在列表内", finalBounds.top >= bounds.top - 1 && finalBounds.bottom <= bounds.bottom + 1)
-            } finally { compose.mainClock.autoAdvance = true }
-        }
+    @Test fun detailContinueFloatsAboveTheLastVolumeAndExpandsAgainAtTheTop() {
+        seedVolumes(withProgress = true)
+        show()
+        openVolumes()
+        val list = compose.onNodeWithTag("wenku-volume-list")
+        val button = compose.onNodeWithTag("volume-continue-reading")
+        val viewport = list.fetchSemanticsNode().boundsInRoot
+        val expanded = button.fetchSemanticsNode().boundsInRoot
+        assertTrue(expanded.center.x > viewport.center.x && expanded.center.y > viewport.center.y)
+        compose.onNodeWithTag("volume-continue-chapter", true).assertTextEquals("第 4 章 月台来信")
+        screenshot("volume-detail-layout")
+        list.performTouchInput { repeat(4) { swipeUp() } }
+        val compact = button.fetchSemanticsNode().boundsInRoot
+        assertTrue(compact.width < expanded.width)
+        assertEquals(expanded.right, compact.right, 1f)
+        assertEquals(expanded.bottom, compact.bottom, 1f)
+        assertTrue(volume(volumes.lastIndex).fetchSemanticsNode().boundsInRoot.bottom <= compact.top)
+        list.performScrollToIndex(0)
+        compose.onNodeWithTag("volume-continue-title", true).assertTextEquals(volumes[2].book.title)
     }
 
-    @Test fun volumeNeighborsAnimateOutOfTheWayAndCancelKeepsSavedOrder() {
-        seedVolumes(withProgress = true); show(reduced = false); openVolumes()
-        val list = compose.onNodeWithTag("volume-books")
-        val bounds = list.fetchSemanticsNode().boundsInRoot
-        val neighbor = volume(1).fetchSemanticsNode().boundsInRoot
-        val key = volumes[2].book.ref.key
-        val start = compose.onNodeWithTag("volume-drag-$key").fetchSemanticsNode().boundsInRoot.center - bounds.topLeft
-        compose.mainClock.autoAdvance = false
-        try {
-            list.performTouchInput { down(start); moveTo(start - Offset(0f, neighbor.height * .85f), delayMillis = 100) }
-            compose.mainClock.advanceTimeBy(64)
-            val during = volume(1).fetchSemanticsNode().boundsInRoot.top
-            compose.mainClock.advanceTimeBy(300)
-            val after = volume(1).fetchSemanticsNode().boundsInRoot.top
-            assertTrue("被越过的分卷应平滑让位：${neighbor.top} → $during → $after", during > neighbor.top && during < after)
-            list.performTouchInput { cancel() }
-            compose.mainClock.advanceTimeBy(400)
-            assertTrue(app.store.state.value.books.first { it.book.ref == parent.book.ref }.volumeOrder.isEmpty())
-            assertEquals(neighbor.top, volume(1).fetchSemanticsNode().boundsInRoot.top, 1f)
-        } finally { compose.mainClock.autoAdvance = true }
-    }
-
-    @Test fun emptyVolumesOfferMountingWithoutLeavingAnUnusableSheet() {
+    @Test fun emptyCollectionOffersMountingInDetails() {
         app.store.update { it.copy(books = listOf(parent)) }; show()
         openVolumes()
-        compose.onNodeWithText("尚未挂载本地分卷").assertIsDisplayed()
-        compose.onNodeWithTag("volume-mount").performClick()
+        compose.onNodeWithText("管理挂载").performClick()
         compose.onNodeWithTag("wenku-volume-picker").assertIsDisplayed()
         compose.onAllNodesWithText("关闭面板").onLast().performClick()
-        compose.onNodeWithTag("wenku-volumes-sheet").assertIsDisplayed()
+        compose.onNodeWithTag("wenku-volume-list").assertIsDisplayed()
     }
 
-    @Test fun largeTextAndEInkKeepGridVolumesAndOrderingReachable() {
+    @Test fun largeTextAndEInkKeepVolumeOrderingReachableInDetails() {
         seedVolumes(withProgress = true); show(eInk = true, fontScale = 2f)
-        compose.onNodeWithTag("local-layout-toggle").assertIsDisplayed()
         openVolumes()
-        compose.onNodeWithTag("volume-resume").assertIsDisplayed()
-        compose.onNodeWithTag("volume-down-${volumes[0].book.ref.key}").performClick()
+        compose.onNodeWithTag("volume-down-${volumes[0].book.ref.key}").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(volumes[1].book.ref.key, app.store.state.value.books.first { it.book.ref == parent.book.ref }.volumeOrder.first()) }
-        compose.onNodeWithTag("volume-mount").assertIsDisplayed()
-        screenshot("shelf-volumes-large", "wenku-volumes-sheet")
-        compose.onNodeWithTag("volume-sheet-close").performClick()
-        compose.onNodeWithTag("local-layout-toggle").performClick()
-        compose.onNodeWithTag("shelf-books").assertIsDisplayed()
     }
 
     private fun screenshot(name: String, tag: String? = null) {

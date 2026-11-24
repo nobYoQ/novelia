@@ -2,9 +2,11 @@
 package cc.novelia.app.ui.shelf
 
 import cc.novelia.app.ui.theme.appControlShape
+import cc.novelia.app.ui.theme.motionClickable
 import cc.novelia.app.ui.components.base.AppListItem
 import cc.novelia.app.ui.components.base.AppCheckbox
 import cc.novelia.app.ui.components.base.AppButton
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.toggleable
@@ -15,11 +17,9 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cc.novelia.app.data.model.Position
 import cc.novelia.app.data.model.SavedBook
@@ -28,24 +28,41 @@ import cc.novelia.app.ui.components.base.AppSheet
 import cc.novelia.app.ui.components.book.BookCover
 import cc.novelia.app.ui.components.book.BookReadingProgressBar
 import cc.novelia.app.ui.components.book.bookRowStatus
-import cc.novelia.app.ui.theme.motionClickable
-import cc.novelia.app.ui.theme.wallpaperCardColor
 
-internal data class ShelfRowItem(val saved: SavedBook, val parent: SavedBook? = null, val volumeCount: Int = 0, val expanded: Boolean = false)
-
-@Composable internal fun MountedVolumeRow(saved: SavedBook, position: Position?, modifier: Modifier, onClick: () -> Unit, trailing: @Composable () -> Unit, dragHandle: (@Composable () -> Unit)? = null, indented: Boolean = true) {
-    val line = MaterialTheme.colorScheme.outlineVariant
-    val reading = bookRowStatus(saved.book, saved, position, null)
-    AppListItem(headlineContent = { Text(saved.book.title, maxLines = 3) },
-        containerColor = if(indented) wallpaperCardColor(MaterialTheme.colorScheme.surface) else Color.Transparent,
-        supportingContent = { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(if(!indented && position == null) reading.progressLabel else "${reading.progressLabel} · ${position?.title?.ifBlank { "继续阅读" } ?: "尚未开始阅读"}", maxLines = 2)
-            if(indented || position != null || saved.status == "读完") BookReadingProgressBar(reading, Modifier.testTag("book-reading-progress-${saved.book.ref.key}"))
-        } },
-        leadingContent = { VolumeCover(saved) },
-        trailingContent = { Row(verticalAlignment = Alignment.CenterVertically) { dragHandle?.invoke(); trailing() } },
-        modifier = modifier.testTag("shelf-volume-${saved.book.ref.key}").padding(start = if(indented) 28.dp else 4.dp, end = 8.dp)
-            .drawBehind { if(indented) drawLine(line, Offset.Zero, Offset(0f, size.height), strokeWidth = 1.dp.toPx()) }.motionClickable(onClick = onClick))
+@Composable internal fun MountedVolumeRow(
+    saved: SavedBook, position: Position?, onClick: () -> Unit, onLongClick: (() -> Unit)?, trailing: @Composable () -> Unit,
+    sourceLabel: String? = null, orderButtons: (@Composable () -> Unit)? = null,
+) {
+    val book = saved.book
+    val reading = bookRowStatus(book, saved, position, null)
+    val format = book.title.substringAfterLast('.', "").uppercase().takeIf { it in setOf("EPUB", "TXT", "SRT") }
+    val title = if(format == null) book.title else book.title.substringBeforeLast('.').ifBlank { book.title }
+    val status = listOfNotNull(format, reading.progressLabel, position?.title?.takeIf(String::isNotBlank)).joinToString(" · ")
+    Column(Modifier.fillMaxWidth().testTag("shelf-volume-${book.ref.key}").combinedClickable(
+        onClickLabel = "阅读分卷", onClick = onClick, onLongClickLabel = "调整分卷顺序", onLongClick = onLongClick)) {
+        Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            BookCover(book, Modifier.size(80.dp, 112.dp).testTag("volume-cover-${book.ref.key}"), showFallbackTitle = false)
+            Column(Modifier.weight(1f).heightIn(min = 112.dp), verticalArrangement = Arrangement.SpaceBetween) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(title, Modifier.testTag("volume-title-${book.ref.key}"), style = MaterialTheme.typography.titleMedium,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    sourceLabel?.let { Text(it, style = MaterialTheme.typography.labelMedium, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f).padding(end = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(status, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        BookReadingProgressBar(reading, Modifier.testTag("book-reading-progress-${book.ref.key}"))
+                    }
+                    trailing()
+                }
+            }
+            orderButtons?.invoke()
+        }
+        HorizontalDivider(Modifier.padding(start = 114.dp, end = 20.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
+    }
 }
 
 @Composable private fun VolumeCover(volume: SavedBook) {

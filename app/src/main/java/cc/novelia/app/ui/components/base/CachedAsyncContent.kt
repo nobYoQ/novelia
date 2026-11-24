@@ -18,6 +18,7 @@ import cc.novelia.app.data.network.ApiException
     pullToRefreshEnabled: Boolean = false, observeInvalidation: Boolean = true,
     validate: () -> Unit = {},
     showRefreshIndicator: Boolean = true,
+    unavailableContent: (@Composable (loading: Boolean, retry: () -> Unit) -> Unit)? = null,
     content: @Composable (T, () -> Unit) -> Unit,
 ) {
     val revision by cache.revision.collectAsStateWithLifecycle()
@@ -44,7 +45,7 @@ import cc.novelia.app.data.network.ApiException
         discardContentOnError = discard,
         onLoaded = onLoaded, revealContent = revealContent, pullToRefreshEnabled = pullToRefreshEnabled,
         showRefreshIndicator = showRefreshIndicator,
-        content = content)
+        unavailableContent = unavailableContent, content = content)
 }
 
 /** 分页往返复用各页位置；当前页仍使用 Compose 的保存机制应对系统重建。 */

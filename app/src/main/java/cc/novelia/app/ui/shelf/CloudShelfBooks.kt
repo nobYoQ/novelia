@@ -41,7 +41,7 @@ import cc.novelia.app.ui.components.book.bookRowStatus
     val columns = shelfGridColumns(maxWidth, local.shelfGridDensity)
     val compactGridCards = compactShelfGridCards(maxWidth, columns)
     val gridRows = remember(books, columns) { books.chunked(columns) }
-    val layout = rememberShelfLayoutState(grid, keys, keys, columns, listState = listState, restoredGridState = gridState)
+    val layout = rememberShelfLayoutState(grid, keys, columns, listState = listState, restoredGridState = gridState)
     val gridHit = rememberShelfGridHitTest(layout.grid, gridRows.map { row -> row.map { it.ref.key } }, columns)
     val dragSelection = rememberShelfDragSelection(layout.current(grid), keys, selection.keys, managing, active && !busy,
         onBegin = { onManaging(true) }, onSelection = { chosen ->

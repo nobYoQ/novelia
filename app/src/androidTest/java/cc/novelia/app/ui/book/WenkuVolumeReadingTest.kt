@@ -30,6 +30,43 @@ class WenkuVolumeReadingTest {
     @Test fun clickingCompletedVolumeImportsAndNavigatesDirectlyToReading() = withVolume(false)
     @Test fun clickingImportedVolumeStillReadsWhenSourceDownloadWasAutomaticallyDeleted() = withVolume(true)
 
+    @Test fun detailSeparatesSourceDownloadsAndManualMountsEvenWhenNamesMatchTheCatalog() {
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
+        runBlocking { app.initialization.await() }
+        val before = app.store.state.value
+        val ref = BookRef("wenku", UUID.randomUUID().toString())
+        val own = BookRef("local", "owned-copy")
+        val manual = BookRef("local", "manual-copy")
+        val original = JapaneseVolume("第一卷.txt", total = 1, gpt = 1)
+        val other = JapaneseVolume("第二卷.txt", total = 1, gpt = 1)
+        val detail = WenkuDetail(title = "来源测试", volumeJp = listOf(original, other))
+        try {
+            app.store.update { it.copy(books = listOf(SavedBook(detail.card(ref)),
+                SavedBook(BookCard(own, "我的译本"), parentWenkuKey = ref.key),
+                SavedBook(BookCard(manual, other.volumeId), parentWenkuKey = ref.key)),
+                downloadLinks = listOf(DownloadedBookLink("download", own, ref, original.volumeId)), downloads = emptyList()) }
+            compose.setContent {
+                AppInteractionMode(false, true) { NoveliaTheme("light") {
+                    val nav = rememberNavController()
+                    val scope = rememberCoroutineScope()
+                    val c = remember { AppController(app, nav, scope, SnackbarHostState()).also { controller ->
+                        controller.uiResults.wenkuDetails.put(controller.detailKey("wenku/${ref.id}"), detail)
+                    } }
+                    BookScreen(c, ref, startAtContents = true)
+                } }
+            }
+            val list = compose.onNodeWithTag("wenku-volume-list")
+            list.performScrollToNode(hasText("本书已下载"))
+            compose.onNodeWithTag("shelf-volume-${own.key}").assertTextContains("我的译本")
+            compose.onNodeWithTag("wenku-volume-${original.volumeId}").assertDoesNotExist()
+            list.performScrollToNode(hasText("其他挂载分卷"))
+            list.performScrollToNode(hasTestTag("shelf-volume-${manual.key}"))
+            compose.onNodeWithTag("shelf-volume-${manual.key}").assertTextContains("本地导入")
+            list.performScrollToNode(hasTestTag("wenku-volume-${other.volumeId}"))
+            compose.onNodeWithTag("wenku-volume-${other.volumeId}").assertIsDisplayed()
+        } finally { app.store.update { before } }
+    }
+
     private fun withVolume(importFirst: Boolean) {
         val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
         runBlocking { app.initialization.await() }
@@ -57,7 +94,8 @@ class WenkuVolumeReadingTest {
                     }
                 } }
             }
-            compose.onNodeWithTag("wenku-volume-${volume.volumeId}").performClick()
+            val row = local?.let { "shelf-volume-${it.key}" } ?: "wenku-volume-${volume.volumeId}"
+            compose.onNodeWithTag(row).performClick()
             compose.waitUntil(15_000) { compose.onAllNodesWithTag("volume-reader").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithText("下载小说").assertDoesNotExist()
             val mounted = app.store.state.value.books.first { it.parentWenkuKey == ref.key }.book.ref

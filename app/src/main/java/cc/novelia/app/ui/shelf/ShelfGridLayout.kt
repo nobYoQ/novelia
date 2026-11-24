@@ -73,10 +73,9 @@ internal class ShelfLayoutState(val list: LazyListState, val grid: LazyListState
     fun current(grid: Boolean) = if(grid) this.grid else list
 }
 
-/** 切换以当前屏顶作品为锚点；展开子卷切到网格时定位其父作品，不按旧行号跳转。 */
+/** 列表与网格切换时，以当前屏顶作品为锚点。 */
 @Composable internal fun rememberShelfLayoutState(
-    grid: Boolean, listKeys: List<String>, gridKeys: List<String>, columns: Int,
-    parents: Map<String, String> = emptyMap(), leadingItems: Int = 0,
+    grid: Boolean, keys: List<String>, columns: Int,
     listState: LazyListState = rememberLazyListState(),
     restoredGridState: LazyListState? = null,
 ): ShelfLayoutState {
@@ -96,12 +95,10 @@ internal class ShelfLayoutState(val list: LazyListState, val grid: LazyListState
         if(previousGrid != grid || (grid && previousColumns != columns)) {
             val source = state.current(previousGrid)
             val target = state.current(grid)
-            val allKeys = listKeys.toSet() + gridKeys
-            val anchor = source.layoutInfo.visibleItemsInfo.firstOrNull { it.key in allKeys }
-            val key = anchor?.key as? String
-            val targetKey = if(grid) parents[key] ?: key else key
-            val index = (if(grid) gridKeys else listKeys).indexOf(targetKey)
-            if(index >= 0) target.scrollToItem(leadingItems + if(grid) index / columns else index,
+            val keySet = keys.toSet()
+            val key = source.layoutInfo.visibleItemsInfo.firstOrNull { it.key in keySet }?.key
+            val index = keys.indexOf(key)
+            if(index >= 0) target.scrollToItem(if(grid) index / columns else index,
                 if(grid == previousGrid) source.firstVisibleItemScrollOffset else 0)
         }
         previousGrid = grid; previousColumns = columns
@@ -136,7 +133,7 @@ internal class ShelfLayoutState(val list: LazyListState, val grid: LazyListState
     book: BookCard, status: BookRowStatus, onOpen: () -> Unit, modifier: Modifier = Modifier,
     selecting: Boolean = false, selected: Boolean = false, enabled: Boolean = true,
     pinned: Boolean = false, onToggle: () -> Unit = onOpen,
-    volumeLabel: String? = null, onVolumes: (() -> Unit)? = null, progressLabel: String? = null,
+    volumeLabel: String? = null, progressLabel: String? = null,
     compact: Boolean = false,
     authorLabel: String? = null,
     footer: @Composable (() -> Unit)? = null,
@@ -178,11 +175,11 @@ internal class ShelfLayoutState(val list: LazyListState, val grid: LazyListState
                 }
             }
         }
-        if(volumeLabel != null && onVolumes != null) AppTextButton(onVolumes, Modifier.fillMaxWidth().heightIn(min = 48.dp)
-            .testTag("shelf-grid-volumes-${book.ref.key}").semantics { onClick(label = "打开分卷面板", action = null) }, enabled = !selecting,
+        if(volumeLabel != null) AppTextButton(onOpen, Modifier.fillMaxWidth().heightIn(min = 48.dp)
+            .testTag("shelf-grid-volumes-${book.ref.key}"), enabled = enabled && !selecting,
             shape = DefaultShapes.small, contentPadding = PaddingValues(horizontal = 6.dp)) {
             Text(volumeLabel, Modifier.weight(1f), style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if(!compact) Icon(Icons.AutoMirrored.Outlined.ViewList, null, Modifier.size(18.dp))
+            if(!compact) Icon(Icons.AutoMirrored.Outlined.ViewList, "查看分卷", Modifier.size(18.dp))
         }
         footer?.invoke()
     }

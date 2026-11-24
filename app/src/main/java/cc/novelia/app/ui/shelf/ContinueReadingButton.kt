@@ -43,6 +43,7 @@ import cc.novelia.app.ui.theme.isMonochromeTheme
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     expanded: Boolean = true,
+    tagPrefix: String = "shelf-continue",
 ) {
     val reducedMotion = appReducedMotion()
     val monochrome = isMonochromeTheme()
@@ -53,27 +54,27 @@ import cc.novelia.app.ui.theme.isMonochromeTheme
             color = if(monochrome) colors.primary else colors.secondaryContainer,
             contentColor = if(monochrome) colors.onPrimary else colors.onSecondaryContainer,
             shadowElevation = if(reducedMotion) 0.dp else 1.dp,
-            modifier = Modifier.testTag("shelf-continue-reading").semantics { role = Role.Button }) {
-            if(reducedMotion) ContinueReadingContent(book, chapter, expanded)
+            modifier = Modifier.testTag("$tagPrefix-reading").semantics { role = Role.Button }) {
+            if(reducedMotion) ContinueReadingContent(book, chapter, expanded, tagPrefix)
             else AnimatedContent(targetState = expanded, contentAlignment = Alignment.BottomEnd,
                 transitionSpec = {
                     (fadeIn(tween(AppMotion.Quick, delayMillis = AppMotion.Exit)) togetherWith
                         fadeOut(tween(AppMotion.Exit))).using(SizeTransform(clip = true) { _, _ -> tween(AppMotion.Panel) })
                 }, label = "续读按钮展开收起") { showDetails ->
                 // 动画放在背景内部，让背景、点击区域与内容容器的每一帧尺寸一致。
-                ContinueReadingContent(book, chapter, showDetails)
+                ContinueReadingContent(book, chapter, showDetails, tagPrefix)
             }
         }
     }
 }
 
-@Composable private fun ContinueReadingContent(book: BookCard, chapter: String, expanded: Boolean) {
+@Composable private fun ContinueReadingContent(book: BookCard, chapter: String, expanded: Boolean, tagPrefix: String) {
     if(expanded) Column(Modifier.width(184.dp).padding(horizontal = 12.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text("继续", Modifier.testTag("shelf-continue-label"), style = MaterialTheme.typography.labelSmall)
-        Text(book.title, Modifier.testTag("shelf-continue-title"), style = MaterialTheme.typography.labelLarge,
+        Text("继续", Modifier.testTag("$tagPrefix-label"), style = MaterialTheme.typography.labelSmall)
+        Text(book.title, Modifier.testTag("$tagPrefix-title"), style = MaterialTheme.typography.labelLarge,
             maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(chapter, Modifier.testTag("shelf-continue-chapter"), style = MaterialTheme.typography.labelSmall,
+        Text(chapter, Modifier.testTag("$tagPrefix-chapter"), style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = .8f),
             maxLines = 1, overflow = TextOverflow.Ellipsis)
     } else Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {

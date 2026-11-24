@@ -1,7 +1,8 @@
 package cc.novelia.app.ui.shelf
 
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -9,7 +10,6 @@ import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.MainActivity
 import cc.novelia.app.NoveliaApplication
 import cc.novelia.app.data.library.withVolumeParent
-import cc.novelia.app.data.library.withVolumeOrder
 import cc.novelia.app.data.library.withMountedVolumes
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
@@ -35,7 +35,6 @@ class WenkuVolumeFlowTest {
     private val otherRef = BookRef("wenku", "other-series")
     private val volumeRef = BookRef("local", "mount-volume-1")
     private val secondRef = BookRef("local", "mount-volume-2")
-    private val disclosure = "wenku-volumes-${parentRef.key}"
 
     @Test fun legacyMountedVolumeProgressReturnsWithoutOpeningTheReaderAndSurvivesReload() = withShelf { app ->
         val document = LocalDocument(volumeRef.id, "第1卷 春日启程", "txt", listOf(
@@ -50,16 +49,19 @@ class WenkuVolumeFlowTest {
                 .copy(positions = mapOf(volumeRef.key to legacy)) }
         }
         compose.waitUntil(10_000) { app.store.state.value.positions[volumeRef.key] == expected }
-        scrollTo(hasTestTag("shelf-volume-${volumeRef.key}"))
+        openVolumeDetails()
+        detailScrollTo(hasTestTag("shelf-volume-${volumeRef.key}"))
         // 书架按已到达的章节显示进度；旧锚点补齐为第 2 / 2 章后应为 100%。
         compose.onNodeWithTag("book-reading-progress-${volumeRef.key}", useUnmergedTree = true)
             .assertExists().assertContentDescriptionEquals("已读 100%")
         compose.onNodeWithText("已读 100% · 第二章 重逢").assertIsDisplayed()
         assertEquals(document, app.store.document(volumeRef.id))
 
+        compose.onNodeWithContentDescription("返回").performClick()
         compose.onNodeWithText("本地文件").performClick()
         compose.onNodeWithText("我的书架").performClick()
-        scrollTo(hasTestTag("shelf-volume-${volumeRef.key}"))
+        openVolumeDetails()
+        detailScrollTo(hasTestTag("shelf-volume-${volumeRef.key}"))
         compose.onNodeWithText("已读 100% · 第二章 重逢").assertIsDisplayed()
         runBlocking { app.store.flush() }
         val reloaded = LocalStore(compose.activity)
@@ -67,13 +69,14 @@ class WenkuVolumeFlowTest {
         assertEquals(document, reloaded.document(volumeRef.id))
         compose.activityRule.scenario.recreate()
         compose.waitForIdle()
-        scrollTo(hasTestTag("shelf-volume-${volumeRef.key}"))
+        openVolumeDetails()
+        detailScrollTo(hasTestTag("shelf-volume-${volumeRef.key}"))
         compose.onNodeWithTag("book-reading-progress-${volumeRef.key}", useUnmergedTree = true)
             .assertExists().assertContentDescriptionEquals("已读 100%")
         assertEquals(expected, app.store.state.value.positions[volumeRef.key])
     }
 
-    @Test fun mountReadCollapseReloadAndReassignExistingVolumes() = withShelf { app ->
+    @Test fun mountReadFromDetailsReloadAndReassignExistingVolumes() = withShelf { app ->
         openManager()
         compose.onNodeWithTag("wenku-volume-picker").performScrollToNode(hasTestTag("mount-volume-${volumeRef.key}"))
         compose.onNodeWithTag("mount-volume-${volumeRef.key}").performClick()
@@ -83,25 +86,18 @@ class WenkuVolumeFlowTest {
         compose.onNodeWithText("保存挂载（2）").assertIsDisplayed().performClick()
         compose.waitForIdle()
         assertEquals(2, app.store.state.value.books.count { it.parentWenkuKey == parentRef.key })
-        screenshot("wenku-volumes-expanded-light")
-        scrollTo(hasTestTag(disclosure))
-        compose.onNodeWithTag(disclosure).assertIsDisplayed().assertTextContains("收起 2 个分卷")
-        compose.onNodeWithTag(disclosure).performClick()
         compose.onNodeWithTag("shelf-volume-${volumeRef.key}").assertDoesNotExist()
         runBlocking { app.store.flush() }
         val restored = LocalStore(compose.activity).state.value
-        assertFalse(restored.books.first { it.book.ref == parentRef }.volumesExpanded)
         assertEquals(parentRef.key, restored.books.first { it.book.ref == volumeRef }.parentWenkuKey)
         compose.activityRule.scenario.recreate()
-        compose.waitForIdle()
-        scrollTo(hasTestTag(disclosure))
-        compose.onNodeWithTag(disclosure).assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "已折叠"))
-        compose.onNodeWithTag(disclosure).performClick()
-        scrollTo(hasTestTag("shelf-volume-${volumeRef.key}"))
+        openVolumeDetails()
+        detailScrollTo(hasTestTag("shelf-volume-${volumeRef.key}"))
         compose.onNodeWithTag("shelf-volume-${volumeRef.key}").performClick()
         compose.waitUntil(15_000) { app.store.state.value.positions[volumeRef.key]?.chapterId == "chapter" }
         compose.onNodeWithContentDescription("返回").performClick()
-        compose.waitForIdle()
+        compose.onNodeWithContentDescription("返回").performClick()
+        compose.onNodeWithText("本地文件").performClick()
         scrollTo(hasContentDescription("管理 第1卷 春日启程"))
         compose.onNodeWithContentDescription("管理 第1卷 春日启程").performClick()
         assertEquals("阅读后仍应保留分卷挂载", parentRef.key, app.store.state.value.books.first { it.book.ref == volumeRef }.parentWenkuKey)
@@ -123,14 +119,15 @@ class WenkuVolumeFlowTest {
         assertEquals("chapter", app.store.document(volumeRef.id).chapters.single().id)
     }
 
-    @Test fun searchFindsCollapsedVolumesAndUncheckingKeepsLocalFiles() = withShelf { app ->
+    @Test fun searchMatchesTheParentAndUncheckingKeepsLocalFiles() = withShelf { app ->
         compose.runOnIdle { app.store.update { state -> state.withMountedVolumes(parentRef.key, setOf(volumeRef.key, secondRef.key)).let { mounted ->
             mounted.copy(books = mounted.books.map { if(it.book.ref == parentRef) it.copy(volumesExpanded = false) else it }, theme = "dark")
         } } }
         compose.onNodeWithTag("local-search-toggle").performClick()
         compose.onNodeWithText("搜索书名或作者").performTextInput("春日")
         compose.onNodeWithText("搜索书名或作者").performImeAction()
-        compose.waitUntil(10_000) { compose.onAllNodesWithTag("shelf-volume-${volumeRef.key}").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("匹配 1 / 2 卷").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("shelf-volume-${volumeRef.key}").assertDoesNotExist()
         compose.onNodeWithText("青空物语").assertExists()
         compose.onNodeWithTag("volume-drag-${volumeRef.key}").assertDoesNotExist()
         screenshot("wenku-volumes-search-dark")
@@ -147,32 +144,6 @@ class WenkuVolumeFlowTest {
         compose.onNodeWithText("本地文件").performClick()
         scrollTo(hasText("第2卷 夏日约定"))
         compose.onNodeWithText("第2卷 夏日约定").assertIsDisplayed()
-    }
-
-    @Test fun expansionAnimatesAndReducedMotionMakesBothDirectionsImmediate() = withShelf { app ->
-        compose.runOnIdle { app.store.update { state ->
-            val mounted = state.withMountedVolumes(parentRef.key, setOf(volumeRef.key))
-            mounted.copy(books = mounted.books.filterNot { it.book.ref == secondRef })
-        } }
-        scrollTo(hasTestTag(disclosure))
-        for(reduced in listOf(false, true)) {
-            compose.runOnIdle { app.store.update { it.copy(reducedMotion = reduced) } }
-            compose.waitForIdle()
-            repeat(2) {
-                val before = otherTop()
-                compose.mainClock.autoAdvance = false
-                try {
-                    compose.onNodeWithTag(disclosure).performClick()
-                    compose.mainClock.advanceTimeBy(96)
-                    val during = otherTop()
-                    compose.mainClock.advanceTimeBy(400)
-                    val after = otherTop()
-                    assertNotEquals("展开或收起应改变下方书籍位置", before, after)
-                    if(reduced) assertEquals("减少动态效果应立即完成布局变化", after, during, .5f)
-                    else assertTrue("下方书籍应在动画过程中平滑移动", during > minOf(before, after) && during < maxOf(before, after))
-                } finally { compose.mainClock.autoAdvance = true }
-            }
-        }
     }
 
     @Test fun downloadedVolumeRetainsSourceAndImportIsIdempotent() = withShelf { app ->
@@ -193,86 +164,50 @@ class WenkuVolumeFlowTest {
         } finally { file.delete() }
     }
 
-    @Test fun dragVolumesBothWaysPersistsWithAndWithoutReducedMotion() = withShelf { app ->
-        for(reduced in listOf(false, true)) {
-            compose.runOnIdle { app.store.update { it.withMountedVolumes(parentRef.key, setOf(volumeRef.key, secondRef.key))
-                .withVolumeOrder(parentRef.key, listOf(volumeRef.key, secondRef.key)).copy(reducedMotion = reduced, theme = if(reduced) "dark" else "light") } }
-            scrollTo(hasTestTag("volume-drag-${volumeRef.key}"))
-            compose.waitForIdle()
-            dragSibling(volumeRef.key, 1)
-            compose.waitForIdle()
-            assertEquals(listOf(secondRef.key, volumeRef.key), volumeOrder(app))
-            assertTrue(app.store.state.value.positions.isEmpty())
-            assertTrue(compose.onNodeWithTag("shelf-volume-${secondRef.key}").fetchSemanticsNode().boundsInRoot.top <
-                compose.onNodeWithTag("shelf-volume-${volumeRef.key}").fetchSemanticsNode().boundsInRoot.top)
-            screenshot(if(reduced) "wenku-volume-reorder-dark" else "wenku-volume-reorder-light")
-            runBlocking { app.store.flush() }
-            assertEquals(listOf(secondRef.key, volumeRef.key), LocalStore(compose.activity).state.value.books.first { it.book.ref == parentRef }.volumeOrder)
-            compose.activityRule.scenario.recreate()
-            compose.waitForIdle()
-            scrollTo(hasTestTag("volume-drag-${volumeRef.key}"))
-            dragSibling(volumeRef.key, -1)
-            compose.waitForIdle()
-            assertEquals(listOf(volumeRef.key, secondRef.key), volumeOrder(app))
+    @Test fun longVolumeTitleUsesTwoLinesBesideTheLargeCover() = withShelf { app ->
+        val title = "春日来信与夏日约定".repeat(12)
+        compose.runOnIdle {
+            app.store.update { state ->
+                state.copy(books = state.books.map { if(it.book.ref == volumeRef) it.copy(book = it.book.copy(title = "$title.epub")) else it })
+                    .withMountedVolumes(parentRef.key, setOf(volumeRef.key, secondRef.key))
+            }
         }
-        compose.onNodeWithTag("volume-drag-${volumeRef.key}").performClick()
-        compose.onNodeWithText("下移一位").performClick()
-        compose.waitForIdle()
-        assertEquals(listOf(secondRef.key, volumeRef.key), volumeOrder(app))
+        openVolumeDetails()
+        detailScrollTo(hasTestTag("shelf-volume-${volumeRef.key}"))
+        compose.onNodeWithTag("volume-cover-${volumeRef.key}", true).assertWidthIsEqualTo(80.dp).assertHeightIsEqualTo(112.dp)
+        val layouts = mutableListOf<TextLayoutResult>()
+        compose.onNodeWithTag("volume-title-${volumeRef.key}", true).assertTextEquals(title)
+            .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        assertEquals(2, layouts.single().lineCount)
+        assertTrue(layouts.single().isLineEllipsized(1))
+        compose.onNodeWithTag("volume-drag-${volumeRef.key}").assertDoesNotExist()
+        compose.onNodeWithTag("volume-down-${volumeRef.key}").assertDoesNotExist()
+        compose.onNodeWithTag("volume-continue-reading").assertDoesNotExist()
     }
 
-    @Test fun draggingAtEdgeScrollsLongListsAndCancelKeepsSavedOrder() = withShelf { app ->
-        val keys = (1..18).map { "local/reorder-$it" }
-        compose.runOnIdle { app.store.update { state ->
-            state.copy(books = state.books.filterNot { it.book.ref.isLocal } + keys.mapIndexed { index, key ->
-                SavedBook(BookCard(BookRef("local", key.substringAfter('/')), "第${index + 1}卷 长篇故事"), parentWenkuKey = parentRef.key)
-            }).withMountedVolumes(parentRef.key, keys.toSet()).withVolumeOrder(parentRef.key, keys)
-        } }
-        repeat(2) { attempt ->
-            scrollTo(hasTestTag("volume-drag-${keys.first()}"))
-            val list = compose.onNodeWithTag("shelf-books")
-            val bounds = list.fetchSemanticsNode().boundsInRoot
-            val handle = compose.onNodeWithTag("volume-drag-${keys.first()}").fetchSemanticsNode().boundsInRoot.center
-            compose.mainClock.autoAdvance = false
-            try {
-                list.performTouchInput {
-                    val start = handle - bounds.topLeft
-                    down(start)
-                    repeat(20) { step -> moveTo(Offset(start.x, start.y + (height - 20f - start.y) * (step + 1) / 20), delayMillis = 16) }
-                }
-                compose.mainClock.advanceTimeBy(3200)
-                if(attempt == 0) {
-                    list.performTouchInput { cancel() }
-                    compose.mainClock.advanceTimeBy(400)
-                    assertEquals(keys, volumeOrder(app))
-                } else {
-                    list.performTouchInput { up() }
-                    compose.mainClock.advanceTimeBy(400)
-                    val ordered = volumeOrder(app)
-                    assertTrue("停留在边缘应自动滚动并越过初始屏幕的分卷", ordered.indexOf(keys.first()) > 6)
-                    assertEquals(keys.toSet(), ordered.toSet())
-                    assertEquals(keys.size, ordered.size)
-                    assertTrue(app.store.state.value.books.first { it.book.ref == otherRef }.volumeOrder.isEmpty())
-                }
-            } finally { compose.mainClock.autoAdvance = true }
+    @Test fun ordinaryModeOffersGroupOrderingOnLongPress() = withShelf { app ->
+        compose.runOnIdle { app.store.update { it.withMountedVolumes(parentRef.key, setOf(volumeRef.key, secondRef.key)) } }
+        openVolumeDetails()
+        val row = compose.onNodeWithTag("shelf-volume-${volumeRef.key}")
+        row.assertIsDisplayed().performTouchInput { longClick() }
+        compose.onNodeWithText("上移一位").assertIsNotEnabled()
+        compose.onNodeWithText("下移一位").performClick()
+        compose.runOnIdle { assertEquals(listOf(secondRef.key, volumeRef.key), volumeOrder(app)) }
+    }
+
+    @Test fun floatingContinueOpensTheMountedVolumeAtItsSavedChapter() = withShelf { app ->
+        compose.runOnIdle {
+            app.store.saveDocument(LocalDocument(volumeRef.id, "第1卷 春日启程", "txt", listOf(
+                LocalChapter("first", "启程", listOf("这是第一章。")), LocalChapter("second", "重逢", listOf("这次从重逢开始阅读。"))
+            )))
+            app.store.update { it.withMountedVolumes(parentRef.key, setOf(volumeRef.key, secondRef.key)).copy(positions = mapOf(
+                secondRef.key to Position("chapter", title = "第一章 约定", updatedAt = 100),
+                volumeRef.key to Position("second", title = "重逢", updatedAt = 200))) }
         }
-        assertTrue(app.store.state.value.positions.isEmpty())
-        scrollTo(hasTestTag("volume-drag-${keys.first()}"))
-        val list = compose.onNodeWithTag("shelf-books")
-        val bounds = list.fetchSemanticsNode().boundsInRoot
-        val handle = compose.onNodeWithTag("volume-drag-${keys.first()}").fetchSemanticsNode().boundsInRoot.center
-        compose.mainClock.autoAdvance = false
-        try {
-            list.performTouchInput {
-                val start = handle - bounds.topLeft
-                down(start)
-                repeat(20) { step -> moveTo(Offset(start.x, start.y + (20f - start.y) * (step + 1) / 20), delayMillis = 16) }
-            }
-            compose.mainClock.advanceTimeBy(3600)
-            list.performTouchInput { up() }
-            compose.mainClock.advanceTimeBy(400)
-            assertEquals("向上拖回列表顶部应恢复原始顺序", keys, volumeOrder(app))
-        } finally { compose.mainClock.autoAdvance = true }
+        openVolumeDetails()
+        compose.onNodeWithTag("volume-continue-title", true).assertTextEquals("第1卷 春日启程")
+        compose.onNodeWithTag("volume-continue-reading").performClick()
+        compose.waitUntil(15_000) { compose.onAllNodesWithText("这次从重逢开始阅读。", substring = true).fetchSemanticsNodes().isNotEmpty() }
     }
 
     private fun volumeOrder(app: NoveliaApplication) = app.store.state.value.books.first { it.book.ref == parentRef }.volumeOrder
@@ -284,6 +219,7 @@ class WenkuVolumeFlowTest {
         }
         compose.runOnIdle { app.store.update { it.withMountedVolumes(parentRef.key, setOf(volumeRef.key, secondRef.key))
             .copy(reader = it.reader.withEInkMode(true)) } }
+        openVolumeDetails()
         pageTo(hasTestTag("volume-down-${volumeRef.key}"))
         compose.onNodeWithTag("volume-drag-${volumeRef.key}").assertDoesNotExist()
         compose.onNodeWithTag("volume-up-${volumeRef.key}").assertIsNotEnabled()
@@ -303,8 +239,8 @@ class WenkuVolumeFlowTest {
         assertEquals(listOf(volumeRef.key, secondRef.key), volumeOrder(app))
         compose.runOnIdle { app.store.update { it.copy(reader = it.reader.withEInkMode(false)) } }
         compose.onNodeWithTag("volume-up-${volumeRef.key}").assertDoesNotExist()
-        scrollTo(hasTestTag("volume-drag-${volumeRef.key}"))
-        compose.onNodeWithTag("volume-drag-${volumeRef.key}").assertIsDisplayed()
+        detailScrollTo(hasTestTag("shelf-volume-${volumeRef.key}"))
+        compose.onNodeWithTag("volume-drag-${volumeRef.key}").assertDoesNotExist()
     }
 
     private fun pageTo(matcher: SemanticsMatcher) {
@@ -322,25 +258,6 @@ class WenkuVolumeFlowTest {
         error("翻屏后仍未找到目标分卷按钮")
     }
 
-    private fun dragSibling(key: String, direction: Int) {
-        val list = compose.onNodeWithTag("shelf-books")
-        val bounds = list.fetchSemanticsNode().boundsInRoot
-        val start = compose.onNodeWithTag("volume-drag-$key").fetchSemanticsNode().boundsInRoot.center - bounds.topLeft
-        val distance = compose.onNodeWithTag("shelf-volume-$key").fetchSemanticsNode().size.height + 48f
-        // 矮屏中让手指留在列表内，再通过边缘滚动显露相邻分卷。
-        val end = (start.y + direction * distance).coerceIn(20f, bounds.height - 20f)
-        compose.mainClock.autoAdvance = false
-        try {
-            list.performTouchInput {
-                down(start)
-                repeat(20) { step -> moveTo(Offset(start.x, start.y + (end - start.y) * (step + 1) / 20), delayMillis = 16) }
-            }
-            compose.mainClock.advanceTimeBy(1200)
-            list.performTouchInput { up() }
-            compose.mainClock.advanceTimeBy(400)
-        } finally { compose.mainClock.autoAdvance = true }
-    }
-
     private fun openManager() {
         scrollTo(hasContentDescription("管理 青空物语"))
         compose.onNodeWithContentDescription("管理 青空物语").performClick()
@@ -349,11 +266,21 @@ class WenkuVolumeFlowTest {
 
     private fun scrollTo(matcher: SemanticsMatcher) {
         compose.onNodeWithTag("shelf-books").performScrollToNode(matcher)
-        // 父书目及其展开内容可能超出较矮的横屏视口。
         compose.onNode(matcher).performScrollTo()
     }
 
-    private fun otherTop() = compose.onNodeWithTag("shelf-book-${otherRef.key}").fetchSemanticsNode().boundsInRoot.top
+    private fun openVolumeDetails() {
+        if(compose.onAllNodesWithTag("wenku-volume-list").fetchSemanticsNodes().isEmpty()) {
+            scrollTo(hasTestTag("shelf-book-${parentRef.key}"))
+            compose.onNodeWithTag("shelf-book-${parentRef.key}").performClick()
+        }
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("wenku-volume-list").fetchSemanticsNodes().isNotEmpty() }
+    }
+
+    private fun detailScrollTo(matcher: SemanticsMatcher) {
+        compose.onNodeWithTag("wenku-volume-list").performScrollToNode(matcher)
+        compose.onNode(matcher).performScrollTo()
+    }
 
     private fun withShelf(block: (NoveliaApplication) -> Unit) {
         compose.waitUntil(15_000) { compose.onAllNodesWithText("本地文件").fetchSemanticsNodes().isNotEmpty() }

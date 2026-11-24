@@ -63,7 +63,10 @@ import kotlinx.coroutines.flow.map
                 if(ref.isLocal && !expanded) c.book(ref) else selectedKey = ref.key
             }, selectedBookKey = selectedKey, sharedDocuments = sharedDocuments, onSharedDocumentsConsumed = onSharedDocumentsConsumed)
         },
-        detail = { key -> BookScreen(c, BookRef.fromKey(key), onBack = { selectedKey = null }) },
+        detail = { key ->
+            val ref = BookRef.fromKey(key)
+            BookScreen(c, ref, onBack = { selectedKey = null }, startAtContents = ref.isWenku)
+        },
     )
 }
 

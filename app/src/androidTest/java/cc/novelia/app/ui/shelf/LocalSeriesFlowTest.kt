@@ -133,7 +133,7 @@ class LocalSeriesFlowTest {
             assertEquals(listOf("ファンタジー", "冒険"), parent.book.tags)
             assertEquals(books.reversed().map { it.key }, parent.volumeOrder)
             compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("测试总集 自定义封面", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithText("继续阅读 · 总集测试卷 1").assertIsDisplayed()
+            compose.onNodeWithTag("volume-continue-title", true).assertTextEquals("总集测试卷 1")
             detail.performScrollToNode(hasText("总集简介一"))
             compose.onNodeWithText("总集简介一").assertIsDisplayed()
             detail.performScrollToNode(hasTestTag("shelf-volume-${books[1].key}"))
