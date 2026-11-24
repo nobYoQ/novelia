@@ -78,14 +78,13 @@ import cc.novelia.app.ui.theme.motionClickable
                 modifier = Modifier.fillMaxSize(),
                 state = if(showGrid) gridScroll else listScroll,
                 listModifier = Modifier.testTag(if(showGrid) "discover-wenku-grid" else "discover-wenku-list"),
-                contentPadding = if(showGrid) PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 20.dp)
-                    else PaddingValues(bottom = 20.dp),
+                contentPadding = PaddingValues(top = if(showGrid) 8.dp else 0.dp, bottom = 20.dp),
                 verticalArrangement = Arrangement.spacedBy(if(showGrid) 14.dp else 0.dp),
                 onPageTurn = onPageTurn,
             ) {
                 if(books.isEmpty()) item(key = "empty", contentType = "empty") { emptyContent() }
                 if(showGrid) items(rows, key = { it.first().ref.key }, contentType = { "cover-row" }) { row ->
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         row.forEach { book ->
                             key(book.ref.key) { DiscoverWenkuCover(book, { onBookClick(book) }, Modifier.weight(1f)) }
                         }

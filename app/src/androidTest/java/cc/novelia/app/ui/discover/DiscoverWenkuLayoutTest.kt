@@ -119,11 +119,19 @@ class DiscoverWenkuLayoutTest {
 
     @Test fun emptyFilteredPageStillShowsPagingInBothLayouts() {
         compose.setContent { Results(items = emptyList()) }
+        fun assertFullWidthPaging() {
+            compose.onNodeWithTag("page-controls").assertWidthIsEqualTo(360.dp)
+            val navigation = compose.onNodeWithTag("page-navigation").fetchSemanticsNode().boundsInRoot
+            val toggle = compose.onNodeWithTag("page-jump-toggle").fetchSemanticsNode().boundsInRoot
+            assertEquals(navigation.center.y, toggle.center.y, 1f)
+        }
         compose.onNodeWithText("没有找到匹配的作品").assertIsDisplayed()
+        assertFullWidthPaging()
         compose.onNodeWithContentDescription("下一页").performClick()
         compose.runOnIdle { assertEquals(1, page) }
         compose.onNodeWithContentDescription("切换为列表布局").performClick()
         compose.onNodeWithText("没有找到匹配的作品").assertIsDisplayed()
+        assertFullWidthPaging()
         compose.onNodeWithContentDescription("第 3 页").performClick()
         compose.runOnIdle { assertEquals(2, page) }
     }
