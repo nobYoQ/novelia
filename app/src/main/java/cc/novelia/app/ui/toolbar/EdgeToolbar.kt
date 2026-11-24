@@ -57,10 +57,10 @@ import kotlin.math.roundToInt
     onExpandedChanged: (Boolean) -> Unit,
 ) {
     val projection = remember(c.store) { c.store.state.map { state ->
-        state.edgeToolbar.normalized() to state.downloads.count { it.status in setOf("等待下载", "下载中") }
+        state.edgeToolbar.normalized() to state.downloads.count { it.active }
     }.distinctUntilChanged() }
     val initial = remember(c.store) { c.store.state.value.let {
-        it.edgeToolbar.normalized() to it.downloads.count { download -> download.status in setOf("等待下载", "下载中") }
+        it.edgeToolbar.normalized() to it.downloads.count { download -> download.active }
     } }
     val state by projection.collectAsStateWithLifecycle(initialValue = initial)
     val lifecycle by LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsState()

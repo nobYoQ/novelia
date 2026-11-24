@@ -22,6 +22,7 @@ internal suspend fun Call.awaitText(): HttpTextResponse = awaitBody {
  */
 internal suspend fun <T> Call.awaitBody(readResponse: (Response) -> T): T = suspendCancellableCoroutine { continuation ->
     continuation.invokeOnCancellation { cancel() }
+    request().tag(DownloadCallObserver::class.java)?.onQueued?.invoke()
     enqueue(object : Callback {
         override fun onFailure(call: Call, e: IOException) {
             if (continuation.isActive) continuation.resumeWithException(e)

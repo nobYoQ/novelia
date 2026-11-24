@@ -23,6 +23,7 @@ private data class DownloadVersion(val etag: String, val length: Long, val url: 
 /** Resume only this worker's owned partial; response validation happens before any bytes are appended. */
 internal suspend fun resumableDownload(request: Request, partial: File, connections: NetworkConnections?,
     ensureCurrent: () -> Unit, onProgress: (Long, Long) -> Unit,
+    onRetry: () -> Unit = {},
     execute: suspend (Request, (Response) -> Unit) -> Unit) {
     var version: DownloadVersion? = null
     repeat(3) { attempt ->
@@ -97,6 +98,7 @@ internal suspend fun resumableDownload(request: Request, partial: File, connecti
             currentCoroutineContext().ensureActive()
             ensureCurrent()
             if (attempt == 2 || error is DownloadStorageException || !error.isRecoverableNetworkFailure()) throw error
+            onRetry()
             if (error is RestartDownload) { version = null }
             else waitForNetworkRecovery(connections, generation, error)
         }

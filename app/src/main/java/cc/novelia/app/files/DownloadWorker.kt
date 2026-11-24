@@ -5,10 +5,12 @@ import androidx.work.*
 import cc.novelia.app.NoveliaApplication
 import cc.novelia.app.data.model.DownloadEntry
 import cc.novelia.app.data.network.ApiException
+import cc.novelia.app.data.network.DownloadCallObserver
 import cc.novelia.app.data.updates.AppNotifications
 import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
@@ -34,7 +36,7 @@ class DownloadWorker(context: Context, parameters: WorkerParameters) : Coroutine
             val saved = app.store.state.value.downloads.find { it.id == id } ?: return@withTaskLock null
             if (isStopped || saved.status == "已暂停" || (saved.workId != null && saved.workId != workId)) return@withTaskLock null
             // 兼容尚无 workId 的旧安装记录，只允许正在运行的 Worker 认领。
-            val current = saved.copy(workId = workId)
+            val current = saved.queued().copy(workId = workId)
             app.store.update { state -> state.copy(downloads = state.downloads.map { if (it.id == id) current else it }) }
             current
         } ?: return@withContext Result.failure()
@@ -43,34 +45,43 @@ class DownloadWorker(context: Context, parameters: WorkerParameters) : Coroutine
         if(owner != null && owner != binding.account) { update(app, id, "需要登录", error = "请登录创建此下载的账号后重试"); app.store.flush(); return@withContext Result.failure() }
         val partial = DownloadFiles.acquire(app.store.downloadsDir, id, this@DownloadWorker.id.toString()); val destination = File(app.store.downloadsDir, entry.fileName)
         try {
-            update(app, id, "下载中", 0)
             val client = app.api.downloadTransport
             val parsed = entry.url.toHttpUrl()
             require(parsed.scheme == "https" && parsed.port == 443 && parsed.username.isEmpty() && parsed.password.isEmpty() &&
                 parsed.host in setOf("n.novelia.cc", "book.xkvi.top"))
-            val request = Request.Builder().url(parsed).build()
             val workContext = coroutineContext
-            var previousProgress = -1
-            var lastProgressAt = 0L
+            val active = { workContext[Job]?.isActive == true }
+            var lastProgressAt: Long? = null
+            var lastPercent = -1
+            val observer = DownloadCallObserver(
+                onQueued = { update(app, id, DownloadEntry.QUEUED, active = active) },
+                onDispatched = {
+                    lastProgressAt = null
+                    update(app, id, DownloadEntry.WAITING_FOR_SOURCE, active = active)
+                },
+            )
+            val request = Request.Builder().url(parsed).tag(DownloadCallObserver::class.java, observer).build()
             resumableDownload(request, partial, client.networkConnections(), ensureCurrent = {
                 workContext.ensureActive()
                 app.session.ensureCurrent(binding)
                 if (isStopped) throw CancellationException("Download stopped")
             }, onProgress = { total, expected ->
-                val progress = if (expected > 0) (total * 100 / expected).toInt() else 0
                 val now = android.os.SystemClock.elapsedRealtime()
-                if (progress != previousProgress && now - lastProgressAt >= 1_000) {
-                    previousProgress = progress; lastProgressAt = now
-                    update(app, id, "下载中", progress, active = { workContext[kotlinx.coroutines.Job]?.isActive == true })
+                val previous = lastProgressAt
+                val percent = if (expected > 0) (total * 100 / expected).toInt() else -1
+                if (previous == null || now - previous >= 1_000 && (percent < 0 || percent != lastPercent)) {
+                    lastProgressAt = now
+                    lastPercent = percent
+                    update(app, id, DownloadEntry.RECEIVING, percent, receivedBytes = total, active = active)
                 }
-            }) { next, consume -> app.api.withAuthenticatedResponse(next, binding, client, consume) }
+            }, onRetry = observer.onQueued) { next, consume -> app.api.withAuthenticatedResponse(next, binding, client, consume) }
             val committed = DownloadFiles.commit(app.store.downloadsDir, id, partial, destination, {
                 ensureActive()
                 app.session.ensureCurrent(binding)
                 !isStopped && app.store.state.value.downloads.any { it.id == id && it.workId == workId && it.fileName == entry.fileName && it.status != "已暂停" }
             }) {
                 update(app, id, "已完成", 100)
-                cc.novelia.app.data.updates.AppNotifications.show(app, id.hashCode(), "下载已完成", entry.title)
+                AppNotifications.show(app, id.hashCode(), "下载已完成", entry.title)
             }
             if (!committed) return@withContext Result.failure()
             try { app.store.flush() } catch (_: java.io.IOException) { return@withContext Result.retry() }
@@ -84,13 +95,21 @@ class DownloadWorker(context: Context, parameters: WorkerParameters) : Coroutine
             Result.failure()
         } finally {
             DownloadFiles.release(partial)
-            withContext(NonCancellable) { runCatching { app.store.flush() } }
+            withContext(NonCancellable) {
+                if (isStopped) app.store.update { state -> state.copy(downloads = state.downloads.map {
+                    if (it.id == id && it.workId == workId && it.active) it.queued() else it
+                }) }
+                runCatching { app.store.flush() }
+            }
         }
     }
-    private fun update(app: NoveliaApplication, id: String, status: String, progress: Int? = null, error: String? = null, active: () -> Boolean = { true }) {
+    private fun update(app: NoveliaApplication, id: String, status: String, progress: Int? = null, error: String? = null,
+        receivedBytes: Long? = null, active: () -> Boolean = { true }) {
         app.store.update { state ->
             if (isStopped || !active()) state else state.copy(downloads = state.downloads.map { d ->
-                if(d.id == id && d.workId == this@DownloadWorker.id.toString() && !(d.status == "已暂停" && status == "下载中")) d.copy(status = status, progress = progress ?: d.progress, error = error) else d
+                if (d.id == id && d.workId == this@DownloadWorker.id.toString() && d.active)
+                    d.copy(status = status, progress = progress ?: d.progress, receivedBytes = receivedBytes ?: d.receivedBytes, error = error)
+                else d
             })
         }
     }
@@ -118,7 +137,7 @@ class DownloadWorker(context: Context, parameters: WorkerParameters) : Coroutine
             withContext(Dispatchers.IO) {
                 DownloadFiles.withTaskLock(app.store.downloadsDir, entry.id) {
                     withContext(NonCancellable) {
-                        app.store.update { it.copy(downloads = it.downloads.filterNot { d -> d.id == entry.id } + entry.copy(status = "等待下载", error = null, workId = request.id.toString())) }
+                        app.store.update { it.copy(downloads = it.downloads.filterNot { d -> d.id == entry.id } + entry.queued().copy(workId = request.id.toString())) }
                         app.store.flush()
                         WorkManager.getInstance(app).enqueueUniqueWork("download-${entry.id}", ExistingWorkPolicy.REPLACE, request).result.get()
                     }

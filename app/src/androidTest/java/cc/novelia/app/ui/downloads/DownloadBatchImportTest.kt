@@ -33,6 +33,22 @@ class DownloadBatchImportTest {
     @get:Rule val compose = createComposeRule()
     private lateinit var controller: AppController
 
+    @Test fun showsQueueSourceAndTransferSeparatelyIncludingUnknownLengths() = withDownloads { app, _, entries ->
+        val entry = entries.last()
+        fun show(value: DownloadEntry) = app.store.update { it.copy(downloads = listOf(value)) }
+        show(entry)
+        showDownloads(app)
+        compose.onNodeWithText("排队中").assertIsDisplayed()
+        compose.runOnIdle { show(entry.copy(status = DownloadEntry.WAITING_FOR_SOURCE)) }
+        compose.onNodeWithText("等待书源响应").assertIsDisplayed()
+        compose.onNodeWithText("暂停").assertIsEnabled()
+        compose.runOnIdle { show(entry.copy(status = DownloadEntry.RECEIVING, progress = -1, receivedBytes = 3_200_000)) }
+        val size = android.text.format.Formatter.formatShortFileSize(app, 3_200_000)
+        compose.onNodeWithText("下载中 · 已接收 $size").assertIsDisplayed()
+        compose.runOnIdle { show(entry.copy(status = DownloadEntry.RECEIVING, progress = 42)) }
+        compose.onNodeWithText("下载中 · 42%").assertIsDisplayed()
+    }
+
     @Test fun batchImportMountsVolumesPreservesDuplicatesAndRetriesOnlyFailures() = withDownloads { app, parent, entries ->
         val existing = runBlocking { importDownloadedDocument(app.store, entries[0]) }
         val position = Position("0", index = 1, offset = 12, title = "保留的阅读进度")

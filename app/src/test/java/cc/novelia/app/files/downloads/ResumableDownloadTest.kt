@@ -118,10 +118,22 @@ class ResumableDownloadTest {
         }
     }
 
-    private suspend fun download(server: MockWebServer, file: File = temporary.newFile(), check: () -> Unit = {}): File {
+    @Test(timeout = 10_000) fun chunkedFileReportsReceivedBytesWithoutAnInventedTotal() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setChunkedBody("a".repeat(100_000), 8_192))
+            val samples = mutableListOf<Pair<Long, Long>>()
+            val file = download(server, progress = { received, total -> samples += received to total })
+            assertEquals(100_000L, file.length())
+            assertEquals(100_000L to -1L, samples.last())
+            assertTrue(samples.all { it.first > 0 && it.second == -1L })
+        }
+    }
+
+    private suspend fun download(server: MockWebServer, file: File = temporary.newFile(),
+        progress: (Long, Long) -> Unit = { _, _ -> }, check: () -> Unit = {}): File {
         val client = OkHttpClient.Builder().retryOnConnectionFailure(false).build()
         try {
-            resumableDownload(Request.Builder().url(server.url("/file")).build(), file, null, check, { _, _ -> }) { request, consume ->
+            resumableDownload(Request.Builder().url(server.url("/file")).build(), file, null, check, progress) { request, consume ->
                 client.newCall(request).awaitBody(consume)
             }
             return file

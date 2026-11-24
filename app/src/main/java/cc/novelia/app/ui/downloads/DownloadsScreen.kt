@@ -10,6 +10,7 @@ import cc.novelia.app.ui.components.base.AppFilledTonalButton
 import cc.novelia.app.ui.components.base.AppIconButton
 import cc.novelia.app.ui.account.ProfileDetailCard
 import android.content.Intent
+import android.text.format.Formatter
 import cc.novelia.app.sharing.shareBookFile
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -259,13 +260,19 @@ import cc.novelia.app.files.importing.importDownloadedDocument
             }
             MotionContent(entry.status, animateInitial = false) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    val statusIcon = when(entry.status) { "已完成" -> Icons.Outlined.CheckCircle; "已暂停" -> Icons.Outlined.PauseCircle; "失败" -> Icons.Outlined.ErrorOutline; "等待下载" -> Icons.Outlined.Schedule; "需要登录" -> Icons.Outlined.AccountCircle; else -> Icons.Outlined.Downloading }
+                    val statusIcon = when(entry.status) { "已完成" -> Icons.Outlined.CheckCircle; "已暂停" -> Icons.Outlined.PauseCircle; "失败" -> Icons.Outlined.ErrorOutline; DownloadEntry.QUEUED -> Icons.Outlined.Schedule; DownloadEntry.WAITING_FOR_SOURCE -> Icons.Outlined.HourglassEmpty; "需要登录" -> Icons.Outlined.AccountCircle; else -> Icons.Outlined.Downloading }
                     val statusColor = if(entry.status == "失败") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
                     Icon(statusIcon, null, Modifier.size(18.dp), tint = statusColor)
-                    Text("${entry.status}${if(entry.status == "下载中") " · ${entry.progress}%" else ""}", style = MaterialTheme.typography.labelLarge, color = statusColor)
+                    val label = when(entry.status) {
+                        DownloadEntry.QUEUED -> "排队中"
+                        DownloadEntry.RECEIVING -> if(entry.progress >= 0) "下载中 · ${entry.progress}%" else
+                            "下载中 · 已接收 ${Formatter.formatShortFileSize(c.app, entry.receivedBytes)}"
+                        else -> entry.status
+                    }
+                    Text(label, style = MaterialTheme.typography.labelLarge, color = statusColor)
                 }
             }
-            if(entry.status == "下载中") {
+            if(entry.status == DownloadEntry.RECEIVING && entry.progress >= 0) {
                 val progress = animateFloatAsState((entry.progress / 100f).coerceIn(0f, 1f), tween(if(reducedMotion) 0 else AppMotion.Standard, easing = LinearEasing), label = "download progress")
                 AppLinearProgressIndicator(progress = { if(reducedMotion) (entry.progress / 100f).coerceIn(0f, 1f) else progress.value }, modifier = Modifier.fillMaxWidth())
             }
@@ -273,7 +280,7 @@ import cc.novelia.app.files.importing.importDownloadedDocument
             if(entry.status == "已暂停") Text("重新开始会从头下载此文件。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if(!selecting) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 when(entry.status) {
-                    "下载中", "等待下载" -> AppTextButton(onClick = { c.action { DownloadWorker.pause(c.app, entry.id) } }) { Text("暂停") }
+                    DownloadEntry.RECEIVING, DownloadEntry.QUEUED, DownloadEntry.WAITING_FOR_SOURCE -> AppTextButton(onClick = { c.action { DownloadWorker.pause(c.app, entry.id) } }) { Text("暂停") }
                     "已完成" -> {
                         AppButton(enabled = !operating && !batch.running && entry.id !in importing, modifier = Modifier.testTag("download-read-${entry.id}"), onClick = {
                             importing = importing + entry.id

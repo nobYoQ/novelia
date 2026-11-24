@@ -75,7 +75,10 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
         readLastGood = { AtomicFile(lastGoodFile).openRead().bufferedReader(Charsets.UTF_8).use { it.readText() } },
         decode = stateCodec::decode
     )
-    private val mutable = MutableStateFlow(initial.state.withMigratedReadingHistory().withStableFolderIds()
+    // 进程重启时原传输已结束，WorkManager 满足约束后才会再次发出请求。
+    private val mutable = MutableStateFlow(initial.state.copy(downloads = initial.state.downloads.map {
+        if (it.active) it.queued() else it
+    }).withMigratedReadingHistory().withStableFolderIds()
         .withMigratedDownloadLinks().withMountedVolumeReadingStatuses())
     private val mutableRecoveryIssue = MutableStateFlow(initial.issue)
     // 损坏快照仍可能包含可恢复的引用，应保留其历史正文载荷。
