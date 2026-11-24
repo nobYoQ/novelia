@@ -60,7 +60,7 @@
 | 入口 | 当前策略 |
 | --- | --- |
 | 自动预读 | 沿 `nextId` 顺序读取，最多五章，失败不阻断正文 |
-| 手动缓存 | 每批最多 200 章、最多三个 worker；复用已有缓存，取消或失败后保留已完成部分 |
+| 手动缓存 | 每批最多 200 章，多本书合计最多同时缓存三章。关闭弹窗后继续，回到同一本书可查看进度或取消。进程退出后，已落盘章节保留，再次提交相同范围会跳过已有章节 |
 | 译文新鲜度 | 使用单独记录的获取时间，不用文件访问时间代替 |
 
 实现见 [ChapterOffline.kt](../../app/src/main/java/cc/novelia/app/data/chapters/ChapterOffline.kt)。章节预读的“仅 Wi-Fi”检查 Wi-Fi transport；文件下载的同名设置使用 WorkManager `UNMETERED`，即非计费网络。

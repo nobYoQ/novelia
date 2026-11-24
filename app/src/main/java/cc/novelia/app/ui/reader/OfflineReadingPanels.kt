@@ -14,7 +14,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import cc.novelia.app.data.chapters.ChapterOffline
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import cc.novelia.app.data.chapters.ChapterCacheKey
+import cc.novelia.app.data.chapters.ChapterCacheQueue
+import cc.novelia.app.data.chapters.ChapterCacheRequest
 import cc.novelia.app.data.library.chapterCacheRange
 import cc.novelia.app.data.library.readingDestination
 import cc.novelia.app.data.model.BookRef
@@ -44,20 +47,19 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-@Composable internal fun ChapterCacheDialog(c: AppController, ref: BookRef, toc: List<TocItem>, current: String?, onChanged: () -> Unit, onDismiss: () -> Unit) {
-    val count = toc.count { it.chapterId != null }
+@Composable internal fun ChapterCacheDialog(c: AppController, ref: BookRef, toc: List<TocItem>, current: String?,
+    queue: ChapterCacheQueue = c.app.chapterCacheQueue, onDismiss: () -> Unit) {
+    val count = remember(toc) { toc.mapNotNull { it.chapterId }.distinct().size }
+    val key = ChapterCacheKey(ref, c.session.capture())
+    val tasks by queue.progress.collectAsStateWithLifecycle()
+    val task = tasks[key]
+    val busy = task != null && task.result == null
     val firstChapter = (readingDestination(toc, current)?.number ?: 1).coerceAtLeast(1)
-    var first by remember { mutableStateOf(firstChapter.toString()) }
-    var last by remember { mutableStateOf((firstChapter + 19).coerceAtMost(count).toString()) }
-    var wifiOnly by remember { mutableStateOf(c.store.state.value.wifiOnly) }
-    var job by remember { mutableStateOf<Job?>(null) }
-    var busy by remember { mutableStateOf(false) }
-    var completed by remember { mutableIntStateOf(0) }
-    var total by remember { mutableIntStateOf(0) }
-    var message by remember { mutableStateOf("") }
-    val scope = rememberCoroutineScope()
-    fun close() { job?.cancel(); onDismiss() }
-    AppAlertDialog(onDismissRequest = ::close, title = { Text("选择离线缓存范围") }, text = {
+    var first by remember(key) { mutableStateOf((task?.first ?: firstChapter).toString()) }
+    var last by remember(key) { mutableStateOf((task?.let { it.first + it.total - 1 } ?: (firstChapter + 19).coerceAtMost(count)).toString()) }
+    var wifiOnly by remember(key) { mutableStateOf(task?.wifiOnly ?: c.store.state.value.wifiOnly) }
+    var error by remember(key) { mutableStateOf<String?>(null) }
+    AppAlertDialog(onDismissRequest = onDismiss, title = { Text("选择离线缓存范围") }, text = {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("共 $count 章，按目录正序编号。每批最多 200 章，已有缓存会跳过；总缓存预算 256 MB，超出时较旧内容会自动清理。")
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -68,26 +70,25 @@ import kotlinx.coroutines.withContext
             }
             if(!busy) TogglePreference("仅 Wi-Fi 缓存", "离开 Wi-Fi 后停止后续请求", wifiOnly) { wifiOnly = it }
             // 确定进度直接跟随已完成工作量，不使用循环动画。
-            if(busy) { if(!LocalEInkMode.current) AppLinearProgressIndicator(progress = { completed.toFloat() / total.coerceAtLeast(1) }, modifier = Modifier.fillMaxWidth()); Text("正在缓存 $completed / $total 章") }
-            if(message.isNotBlank()) Text(message)
+            if(busy && task != null) {
+                if(!LocalEInkMode.current) AppLinearProgressIndicator(progress = { task.completed.toFloat() / task.total.coerceAtLeast(1) }, modifier = Modifier.fillMaxWidth())
+                Text("正在缓存 ${task.completed} / ${task.total} 章")
+            }
+            (error ?: task?.result)?.let { Text(it) }
         }
     }, confirmButton = {
-        AppTextButton(enabled = !busy && count > 0, onClick = {
-            val ids = runCatching { chapterCacheRange(toc, first.toIntOrNull() ?: 0, last.toIntOrNull() ?: 0) }
-            if(ids.isFailure) message = ids.exceptionOrNull()?.message.orEmpty()
-            else {
-                busy = true; completed = 0; total = ids.getOrThrow().size; message = ""
-                job = scope.launch {
-                    try {
-                        ChapterOffline(c.store, c.api, c.session).cache(ref, ids.getOrThrow(), wifiOnly) { done, _ -> withContext(Dispatchers.Main) { completed = done } }
-                        message = "缓存完成，可在目录查看当前离线范围。"
-                    } catch(e: CancellationException) { message = "已取消，已完成的缓存会保留。"; throw e }
-                    catch(e: Exception) { message = e.message?.take(160) ?: "缓存暂停，请稍后重试。" }
-                    finally { busy = false; onChanged() }
-                }
+        if(busy) AppTextButton(onClick = onDismiss) { Text("后台继续") }
+        else AppTextButton(enabled = count > 0, onClick = {
+            val start = first.toIntOrNull() ?: 0
+            try {
+                val ids = chapterCacheRange(toc, start, last.toIntOrNull() ?: 0)
+                error = null
+                queue.start(ChapterCacheRequest(key, c.store.chapterGeneration(ref), start, ids, wifiOnly))
+            } catch(e: IllegalArgumentException) {
+                error = e.message
             }
         }) { Text("开始缓存") }
-    }, dismissButton = { AppTextButton(onClick = { if(busy) { job?.cancel(); message = "已取消，已完成的缓存会保留。" } else close() }) { Text(if(busy) "取消缓存" else "关闭") } })
+    }, dismissButton = { AppTextButton(onClick = { if(busy) queue.cancel(key) else onDismiss() }) { Text(if(busy) "取消缓存" else "关闭") } })
 }
 
 private data class SearchScope(val toc: List<TocItem>, val document: LocalDocument?, val cachedIds: Set<String>, val completeDirectory: Boolean = true)

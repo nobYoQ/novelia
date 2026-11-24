@@ -474,7 +474,7 @@ import kotlinx.coroutines.withContext
     if(current != null) TocContinueButton(onClick = { if(onContinue != null) onContinue() else onRead(current) },
         modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp))
     }
-    if(cacheDialog) ChapterCacheDialog(c, ref, toc, current, onChanged = {}, onDismiss = { cacheDialog = false })
+    if(cacheDialog) ChapterCacheDialog(c, ref, toc, current, onDismiss = { cacheDialog = false })
 }
 
 @Composable internal fun TocContinueButton(onClick: () -> Unit, modifier: Modifier = Modifier) {

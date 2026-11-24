@@ -9,6 +9,8 @@ import android.app.Application
 import cc.novelia.app.data.auth.Session
 import cc.novelia.app.data.catalog.KeywordStore
 import cc.novelia.app.data.catalog.ClipboardLinkHistory
+import cc.novelia.app.data.chapters.ChapterOffline
+import cc.novelia.app.data.chapters.ChapterCacheQueue
 import cc.novelia.app.data.model.User
 import cc.novelia.app.data.network.NoveliaApi
 import cc.novelia.app.data.community.NovelCommentApi
@@ -85,6 +87,7 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
     private var webDavPoll: Job? = null
     private var webDavEdit: Job? = null
     internal val clipboardLinkHistory = ClipboardLinkHistory()
+    internal val chapterCacheQueue by lazy { ChapterCacheQueue(applicationScope, ChapterOffline(store, api, session)::cache) }
     val metadataCache get() = store.metadataCache
     internal val uiResults = cc.novelia.app.data.cache.UiResultStore()
     private val appReleaseClient by lazy { AppReleaseClient(ech.publicClient()) }

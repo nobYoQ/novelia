@@ -12,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Semaphore
 
 fun chapterNetworkAllowed(context: Context, wifiOnly: Boolean): Boolean {
     val manager = context.getSystemService(ConnectivityManager::class.java) ?: return false
@@ -27,12 +28,13 @@ fun chapterNetworkAllowed(context: Context, wifiOnly: Boolean): Boolean {
  * 手动缓存检查实际落盘结果，自动预读则尽力改善体验，失败由阅读页面处理而不替换当前正文。
  */
 class ChapterOffline(private val store: LocalStore, private val api: NoveliaApi, private val session: AuthenticationSession) {
-    suspend fun cache(ref: BookRef, ids: List<String>, wifiOnly: Boolean, progress: suspend (Int, Int) -> Unit) = withContext(Dispatchers.IO) {
+    private val slots = Semaphore(MAX_CONCURRENT_CHAPTERS)
+    internal suspend fun cache(request: ChapterCacheRequest, progress: suspend (Int, Int) -> Unit) = withContext(Dispatchers.IO) {
+        val (key, generation, _, ids, wifiOnly) = request
+        val (ref, binding) = key
         require(!ref.isLocal && !ref.isWenku)
         require(ids.size <= 200)
-        val binding = session.capture()
-        val generation = store.chapterGeneration(ref)
-        cacheChapterBatch(ids, load = { id ->
+        cacheChapterBatch(ids, slots, load = { id ->
             currentCoroutineContext().ensureActive()
             session.ensureCurrent(binding)
             if(store.chapterGeneration(ref) != generation) throw CancellationException("缓存已清理")
