@@ -12,6 +12,13 @@ import org.junit.Test
 class ArticleDraftsTest {
     private fun snapshot(title: String, content: String) = appJson.encodeToString(mapOf("title" to title, "content" to content, "category" to "Guide"))
 
+    @Test fun draftBoxSkipsOldBlankDraftsAndKeepsTitleOnlyAndBodyOnlyPosts() {
+        val blank = ArticleDrafts.snapshot(" ", "\n", "小说讨论", 100, "novel", listOf(1L))
+        val drafts = mapOf(ArticleDrafts.newKey() to blank, "article:f-10" to blank,
+            "article:new" to snapshot("标题", ""), "article:forum-new" to snapshot("", "正文"))
+        assertEquals(setOf("article:new", "article:forum-new"), ArticleDrafts.posts(drafts).map { it.key }.toSet())
+    }
+
     @Test fun draftBoxIncludesExistingPostEditsAndExcludesOtherEditors() {
         val newPost = ArticleDrafts.newKey()
         val text = snapshot("旧帖子内容", "未提交的修改")

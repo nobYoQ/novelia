@@ -36,6 +36,23 @@ class ForumEditorUiTest {
         forumCategoryId = 100, forumTags = listOf(ForumTag(2, "标签2")))
     private val oldEdit = ArticleDrafts.snapshot("旧帖子标题", "旧帖子正文", "意见反馈", 2, "feedback", emptyList())
 
+    @Test fun blankNewPostSkipsAutosaveAndClearingTheTitleRemovesItsDraftOnExit() = withEditor(null) { key ->
+        val store = (compose.activity.application as NoveliaApplication).store
+        compose.onNodeWithText("标签1").performScrollTo().performClick()
+        compose.mainClock.advanceTimeBy(1000)
+        compose.runOnIdle { assertFalse(key in store.state.value.drafts) }
+        compose.onNodeWithTag("article-title").performScrollTo().performTextReplacement("只写了标题")
+        compose.mainClock.advanceTimeBy(1000)
+        compose.runOnIdle {
+            val draft = ArticleDrafts.read(key, store.state.value.drafts.getValue(key))
+            assertEquals("只写了标题", draft.title)
+            assertEquals(listOf(1L), draft.tagIds)
+        }
+        compose.onNodeWithTag("article-title").performTextReplacement("  ")
+        compose.runOnUiThread { compose.activity.setContent {} }
+        compose.runOnIdle { assertFalse(key in store.state.value.drafts) }
+    }
+
     @Test fun hiddenEditDraftRequiresExplicitChoiceAndCanStillBeRecovered() = withEditor(latestArticle, savedDraft = oldEdit) {
         val app = compose.activity.application as NoveliaApplication
         compose.onNodeWithText("发现本地修改草稿").assertIsDisplayed()
@@ -168,7 +185,7 @@ class ForumEditorUiTest {
         compose.onNodeWithText("标签2").performScrollTo().assertIsSelected()
     }
 
-    private fun withEditor(article: Article?, noticeDismissed: Boolean = false, savedDraft: String? = null, startInDraftBox: Boolean = false, check: () -> Unit) {
+    private fun withEditor(article: Article?, noticeDismissed: Boolean = false, savedDraft: String? = null, startInDraftBox: Boolean = false, check: (String) -> Unit) {
         val app = compose.activity.application as NoveliaApplication
         runBlocking { app.initialization.await() }
         val key = article?.let { "article:${it.id}" } ?: ArticleDrafts.newKey()
@@ -186,7 +203,7 @@ class ForumEditorUiTest {
                     }
                 }
             }
-            check()
+            check(key)
         } finally {
             compose.runOnUiThread { compose.activity.setContent {} }
             compose.runOnIdle { app.store.update { it.copy(drafts = if(previous == null) it.drafts - key else it.drafts + (key to previous), forumRulesReminderDismissed = previousNoticeDismissed) } }

@@ -38,7 +38,8 @@ import cc.novelia.app.ui.navigation.AppController
             val articleId = ArticleDrafts.editedArticleId(draft.key)
             val source = if(ArticleDrafts.isForumNewPostKey(draft.key) || articleId != null) "论坛" else "恢复的旧草稿"
             val kind = if(articleId == null) "新帖" else "修改已发布帖子"
-            MenuRow(draft.displayTitle, "$source · $kind · ${draft.content.length} 字 · 点击续写", Icons.Outlined.Description,
+            val length = if(draft.content.isBlank()) "仅标题" else "${draft.content.length} 字"
+            MenuRow(draft.displayTitle, "$source · $kind · $length · 点击续写", Icons.Outlined.Description,
                 { onClose(); c.go(if(articleId == null) "compose?draft=${encodeSegment(draft.key)}" else "compose?article=${encodeSegment(articleId)}") },
                 trailing = { AppIconButton(onClick = { deleting = draft }) { Icon(Icons.Outlined.DeleteOutline, "删除草稿 ${draft.displayTitle}") } })
         }

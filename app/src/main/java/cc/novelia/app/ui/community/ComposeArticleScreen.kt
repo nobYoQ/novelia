@@ -55,6 +55,7 @@ import cc.novelia.app.ui.theme.MotionContent
     val generatedKey = rememberSaveable { ArticleDrafts.newKey() }
     val key = article?.id?.let { "article:$it" } ?: newPostKey ?: generatedKey
     val draft = remember(key) { c.store.state.value.drafts[key] }
+    val storedDraft = remember(key, draft) { draft?.let { ArticleDrafts.readNonEmpty(key, it) } }
     val originalCategoryId = article?.forumCategoryId ?: writableCategories.firstOrNull { it.slug == "novel" }?.id ?: writableCategories.firstOrNull()?.id
     val originalCategory = forumCategories.firstOrNull { it.id == originalCategoryId }
     val originalTags = article?.forumTags?.map { it.id }.orEmpty().let { ids ->
@@ -64,7 +65,7 @@ import cc.novelia.app.ui.theme.MotionContent
         article?.let { ArticleDrafts.snapshot(it.title, it.content, originalCategory?.title.orEmpty(), originalCategoryId, originalCategory?.slug, originalTags) }
     }
     var useSavedDraft by rememberSaveable(key) { mutableStateOf(article == null) }
-    var chooseDraft by rememberSaveable(key) { mutableStateOf(article != null && draft != null && draft != baseline) }
+    var chooseDraft by rememberSaveable(key) { mutableStateOf(article != null && storedDraft != null && draft != baseline) }
     if(chooseDraft) {
         Screen("编辑帖子", c::back) { padding ->
             Text("已加载最新帖子，请选择要继续编辑的内容。", Modifier.padding(padding).padding(20.dp))
@@ -78,7 +79,7 @@ import cc.novelia.app.ui.theme.MotionContent
             dismissButton = { AppTextButton(onClick = { useSavedDraft = true; chooseDraft = false }) { Text("继续本地草稿") } })
         return
     }
-    val saved = remember(key, useSavedDraft) { if(useSavedDraft) draft?.let { ArticleDrafts.read(key, it) } else null }
+    val saved = if(useSavedDraft) storedDraft else null
     var title by rememberSaveable(key) { mutableStateOf(saved?.title ?: article?.title.orEmpty()) }; var content by rememberSaveable(key) { mutableStateOf(saved?.content ?: article?.content.orEmpty()) }; var preview by rememberSaveable(key) { mutableStateOf(false) }; var sending by remember { mutableStateOf(false) }
     val persistenceError by c.store.persistenceError.collectAsStateWithLifecycle()
     val editorState = rememberSaveableStateHolder()
@@ -102,7 +103,9 @@ import cc.novelia.app.ui.theme.MotionContent
     val renderer = rememberMarkdownRenderer(c, article?.id?.let(ForumLinks::articleUrl) ?: ForumLinks.ORIGIN)
     val focusManager = LocalFocusManager.current
     fun draftSnapshot() = ArticleDrafts.snapshot(title, content, selectedForumCategory?.title.orEmpty(), categoryId, selectedForumCategory?.slug, tagIds)
-    val draftPersistence = rememberDraftPersistence(c.store, key, baseline, ::draftSnapshot)
+    val draftPersistence = rememberDraftPersistence(c.store, key, baseline) {
+        if(ArticleDrafts.hasText(title, content)) draftSnapshot() else null
+    }
     LaunchedEffect(title, content, categoryId, tagIds) { kotlinx.coroutines.delay(700); draftPersistence.save() }
     Screen(if(article == null) "写一篇帖子" else "编辑帖子", c::back, actions = { AppTextButton(onClick = { focusManager.clearFocus(); preview = !preview }) { Text(if(preview) "编辑" else "预览") } }) { padding ->
         BoxWithConstraints(Modifier.padding(padding).consumeWindowInsets(padding).imePadding().fillMaxSize()) {
@@ -139,7 +142,9 @@ import cc.novelia.app.ui.theme.MotionContent
                     AppOutlinedButton(onClick = { c.action {
                         check(c.store.recoveryIssue.value == null) { "本地资料处于恢复保护状态，暂时无法保存草稿" }
                         draftPersistence.save(); c.store.flush(); c.back()
-                    } }, modifier = Modifier.fillMaxWidth(), enabled = !sending) { Text("保存草稿并退出") }
+                    } }, modifier = Modifier.fillMaxWidth(), enabled = !sending) {
+                        Text(if(ArticleDrafts.hasText(title, content)) "保存草稿并退出" else "退出")
+                    }
                     AppButton(onClick = {
                         draftPersistence.save()
                         val submit = { c.action {

@@ -20,6 +20,8 @@ internal data class ArticleDraft(val key: String, val title: String, val content
 
 /** 旧固定键继续可见；新草稿用 UUID，永远不占用已有文章、评论或文库草稿的键。 */
 internal object ArticleDrafts {
+    fun hasText(title: String, content: String): Boolean = title.isNotBlank() || content.isNotBlank()
+
     fun newKey(): String = "article:forum-new:${UUID.randomUUID()}"
     private fun matches(key: String, prefix: String): Boolean = key == prefix ||
         (key.startsWith("$prefix:") && runCatching { UUID.fromString(key.removePrefix("$prefix:")) }.isSuccess)
@@ -45,6 +47,9 @@ internal object ArticleDrafts {
             fields?.get("categorySlug")?.takeIf { it.isNotBlank() })
     }
 
+    fun readNonEmpty(key: String, snapshot: String): ArticleDraft? =
+        read(key, snapshot).takeIf { hasText(it.title, it.content) }
+
     fun posts(drafts: Map<String, String>): List<ArticleDraft> = drafts.entries
-        .filter { isNewPostKey(it.key) || editedArticleId(it.key) != null }.map { read(it.key, it.value) }.reversed()
+        .filter { isNewPostKey(it.key) || editedArticleId(it.key) != null }.mapNotNull { readNonEmpty(it.key, it.value) }.reversed()
 }

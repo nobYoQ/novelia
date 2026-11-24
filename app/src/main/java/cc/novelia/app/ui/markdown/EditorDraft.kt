@@ -8,7 +8,7 @@ import cc.novelia.app.data.storage.LocalStore
  * 提交成功只有在当前文本仍等于已提交文本时才删除草稿；请求期间新增的输入继续保留。
  * completed 防止成功清稿后，组件销毁回调又把已经提交的内容写回草稿。
  */
-internal class DraftPersistence(private val read: () -> String, private val write: (String?) -> Unit, private var baseline: String? = null) {
+internal class DraftPersistence(private val read: () -> String?, private val write: (String?) -> Unit, private var baseline: String? = null) {
     private var completed = false
 
     fun save() { if (!completed) write(read().takeUnless { it == baseline }) }
@@ -24,7 +24,7 @@ internal class DraftPersistence(private val read: () -> String, private val writ
 }
 
 /** 已有文档可传入原始快照，只持久化实际改动，改回原文时清理草稿。 */
-@Composable internal fun rememberDraftPersistence(store: LocalStore, key: String, baseline: String? = null, read: () -> String): DraftPersistence {
+@Composable internal fun rememberDraftPersistence(store: LocalStore, key: String, baseline: String? = null, read: () -> String?): DraftPersistence {
     return androidx.compose.runtime.key(store, key) {
         val latestRead by rememberUpdatedState(read)
         val persistence = remember {
