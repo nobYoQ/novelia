@@ -5,7 +5,6 @@ import cc.novelia.app.ui.components.base.AppCheckbox
 import cc.novelia.app.ui.components.base.AppLinearProgressIndicator
 import cc.novelia.app.ui.components.base.AppButton
 import cc.novelia.app.ui.components.base.AppTextButton
-import cc.novelia.app.ui.components.base.AppOutlinedButton
 import cc.novelia.app.ui.components.base.AppFilledTonalButton
 import cc.novelia.app.ui.components.base.AppIconButton
 import cc.novelia.app.ui.account.ProfileDetailCard
@@ -213,32 +212,13 @@ import cc.novelia.app.files.importing.importDownloadedDocument
             AppTextButton(onClick = { selection = completed }, enabled = !operating && completed.isNotEmpty()) {
                 Text("全选已完成")
             }
-            AppFilledTonalButton(onClick = {
+        }
+        if(selecting) DownloadBatchActions(importable.size, selected.size, !operating && !batch.running && importing.isEmpty(), deleting,
+            onImport = {
                 importer.start(state.downloads.filter { it.id in importable })
                 selecting = false
                 selection = emptyList()
-            }, enabled = !operating && !batch.running && importing.isEmpty() && importable.isNotEmpty(), modifier = Modifier.testTag("download-batch-import")) {
-                Icon(Icons.Outlined.LibraryAdd, null, Modifier.size(18.dp))
-                Spacer(Modifier.width(4.dp))
-                Text("导入书架（${importable.size}）")
-            }
-            AppOutlinedButton(onClick = { transferDownloads(false) }, enabled = !operating && !batch.running && importing.isEmpty() && importable.isNotEmpty(),
-                modifier = Modifier.testTag("download-batch-export")) {
-                Icon(if(importable.size > 1) Icons.Outlined.FolderZip else Icons.Outlined.SaveAlt, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp))
-                Text("${if(importable.size > 1) "导出 ZIP" else "导出文件"}（${importable.size}）")
-            }
-            AppOutlinedButton(onClick = { transferDownloads(true) }, enabled = !operating && !batch.running && importing.isEmpty() && importable.isNotEmpty(),
-                modifier = Modifier.testTag("download-batch-share")) {
-                Icon(Icons.Outlined.Share, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp))
-                Text("${if(importable.size > 1) "分享 ZIP" else "分享文件"}（${importable.size}）")
-            }
-            AppOutlinedButton(onClick = { removeBatch = selected }, enabled = !operating && !batch.running && importing.isEmpty() && selected.isNotEmpty(),
-                modifier = Modifier.testTag("download-batch-delete")) {
-                Icon(Icons.Outlined.DeleteOutline, null, Modifier.size(18.dp))
-                Spacer(Modifier.width(4.dp))
-                Text(if(deleting) "正在删除…" else "删除（${selected.size}）")
-            }
-        }
+            }, onExport = { transferDownloads(false) }, onShare = { transferDownloads(true) }, onDelete = { removeBatch = selected })
         if(selecting) Text(when { preparingArchive -> "正在处理文件…"; pendingArchiveId != null || exportId != null -> "等待选择导出位置…";
             else -> "导入、导出和分享仅处理已完成文件；删除可处理所有选中任务。" }, Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
