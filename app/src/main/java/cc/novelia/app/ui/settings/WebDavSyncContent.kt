@@ -2,6 +2,8 @@ package cc.novelia.app.ui.settings
 
 import cc.novelia.app.ui.components.base.AppTextButton
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.CompareArrows
 import androidx.compose.material.icons.automirrored.outlined.Label
@@ -47,7 +49,8 @@ private fun SyncDomain.icon(): ImageVector = when(this) {
 /** 独立渲染层便于离线检查布局，不需要账户、凭据或真实同步资料。 */
 @Composable
 internal fun WebDavSyncContent(config: WebDavConfig, status: WebDavSyncStatus, needsConfirmation: Boolean, working: Boolean, actions: WebDavSyncActions) {
-    var showDetails by remember { mutableStateOf(false) }
+    var showDetails by rememberSaveable(config.datasetId) { mutableStateOf(false) }
+    var showConflicts by rememberSaveable(config.datasetId) { mutableStateOf(false) }
     val recovery = status.recovery?.takeIf { it.matches(config) }
     val action = when {
         working -> "正在处理…"
@@ -57,12 +60,54 @@ internal fun WebDavSyncContent(config: WebDavConfig, status: WebDavSyncStatus, n
         needsConfirmation -> "查看资料并连接"
         else -> "立即同步"
     }
+    fun LazyListScope.syncStatusSection() {
+        item(key = "status-header") { WebDavSection("同步状态") }
+        item(key = "status-card") { WebDavCard {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(when { status.running -> "正在同步"; recovery != null -> "等待处理同步目录"; !config.enabled -> "同步已停用"; needsConfirmation -> "等待确认同步资料"; else -> "已连接同步资料" }, style = MaterialTheme.typography.titleMedium)
+                Text("最近成功：${syncTime(status.lastSuccessAt)}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if(config.bound && recovery == null && status.conflicts.isNotEmpty()) {
+                    AppTextButton(onClick = {
+                        if(status.conflicts.size == 1) actions.onConflict(status.conflicts.single())
+                        else showConflicts = !showConflicts
+                    }, enabled = !working) {
+                        Text(if(showConflicts && status.conflicts.size > 1) "收起待选择资料（${status.conflicts.size} 条）" else "${status.conflicts.size} 条资料待选择")
+                    }
+                }
+                status.error?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error) }
+                AppTextButton(onClick = { showDetails = !showDetails }, contentPadding = PaddingValues(0.dp)) {
+                    Text(if(showDetails) "收起详细状态" else "查看详细状态")
+                    Icon(if(showDetails) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, null)
+                }
+                if(showDetails) {
+                    Text("最近尝试：${syncTime(status.lastAttemptAt)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    config.selected.sortedBy { it.ordinal }.forEach { domain ->
+                        val result = status.domains[domain]
+                        Text("${webDavLabels.getValue(domain).first} · " + when {
+                            result?.error != null -> result.error
+                            (result?.pendingCount ?: 0) > 0 -> "待同步 ${result?.pendingCount} 条记录"
+                            result?.pending == true -> "有本机修改等待同步"
+                            else -> syncTime(result?.lastSuccessAt ?: 0)
+                        }, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+        } }
+        if(status.conflicts.isNotEmpty() && (!config.bound || (showConflicts && recovery == null && status.conflicts.size > 1))) {
+            item { WebDavSection("需要选择的资料") }
+            item { Text("不同设备修改的版本均已保留，请选择要使用的资料。", Modifier.padding(horizontal = 16.dp, vertical = 4.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            status.conflicts.forEachIndexed { index, value ->
+                item(key = listOf(value.domain.name, value.recordKey, value.field).joinToString("\u0000")) { WebDavMenuRow(actions.conflictTitle(value), "查看并选择保留的版本", Icons.AutoMirrored.Outlined.CompareArrows,
+                    webDavRowShape(index, status.conflicts.size), enabled = !working) { actions.onConflict(value) } }
+            }
+        }
+    }
     WebDavPage("多设备同步", actions.onBack, action, Icons.Outlined.Sync,
         !working && (config.endpoint.isBlank() || recovery != null || config.selected.isNotEmpty()), working,
         { if(recovery != null) actions.onRecover(recovery) else actions.onSync() }) { padding ->
         Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.TopCenter) {
             AppLazyColumn(Modifier.widthIn(max = 640.dp).fillMaxSize(), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                item { WebDavHero("WebDAV", "连接自己的云盘，让收藏与阅读资料在多台设备间同步。", Icons.Outlined.Devices) }
+                if(!config.bound) item { WebDavHero("WebDAV", "连接自己的云盘，让收藏与阅读资料在多台设备间同步。", Icons.Outlined.Devices) }
                 if(recovery != null) item { WebDavCard {
                     Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("同步目录需要重新连接", style = MaterialTheme.typography.titleMedium)
@@ -74,6 +119,7 @@ internal fun WebDavSyncContent(config: WebDavConfig, status: WebDavSyncStatus, n
                         AppTextButton(onClick = actions.onServer, enabled = !working) { Text("检查服务器和目录") }
                     }
                 } }
+                if(config.bound) syncStatusSection()
                 item { WebDavMenuRow("同步服务器", webDavServerLabel(config), Icons.Outlined.Dns, webDavRowShape(0, 2), enabled = !working, onClick = actions.onServer) }
                 item { WebDavToggleRow("启用 WebDAV", when {
                     !config.enabled -> "已停用，选择下方要同步的内容"
@@ -110,41 +156,10 @@ internal fun WebDavSyncContent(config: WebDavConfig, status: WebDavSyncStatus, n
                         }
                     } }
                 }
-                item { WebDavSection("同步状态") }
-                item { WebDavCard {
-                    Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text(when { status.running -> "正在同步"; recovery != null -> "等待处理同步目录"; !config.enabled -> "同步已停用"; needsConfirmation -> "等待确认同步资料"; else -> "已连接同步资料" }, style = MaterialTheme.typography.titleMedium)
-                        Text("最近成功：${syncTime(status.lastSuccessAt)}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        status.error?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error) }
-                        AppTextButton(onClick = { showDetails = !showDetails }, contentPadding = PaddingValues(0.dp)) {
-                            Text(if(showDetails) "收起详细状态" else "查看详细状态")
-                            Icon(if(showDetails) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore, null)
-                        }
-                        if(showDetails) {
-                            Text("最近尝试：${syncTime(status.lastAttemptAt)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            config.selected.sortedBy { it.ordinal }.forEach { domain ->
-                                val result = status.domains[domain]
-                                Text("${webDavLabels.getValue(domain).first} · " + when {
-                                    result?.error != null -> result.error
-                                    (result?.pendingCount ?: 0) > 0 -> "待同步 ${result?.pendingCount} 条记录"
-                                    result?.pending == true -> "有本机修改等待同步"
-                                    else -> syncTime(result?.lastSuccessAt ?: 0)
-                                }, style = MaterialTheme.typography.bodyMedium)
-                            }
-                        }
-                    }
-                } }
                 if(config.bound && recovery == null && config.enabled && config.selected.isNotEmpty()) item {
                     AppTextButton(onClick = actions.onPreview, enabled = !working, modifier = Modifier.fillMaxWidth()) { Text("查看并合并同步资料") }
                 }
-                if(status.conflicts.isNotEmpty()) {
-                    item { WebDavSection("需要选择的资料") }
-                    item { Text("不同设备修改的版本均已保留，请选择要使用的资料。", Modifier.padding(horizontal = 16.dp, vertical = 4.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                    status.conflicts.forEachIndexed { index, value ->
-                        item(key = "conflict-$index") { WebDavMenuRow(actions.conflictTitle(value), "查看并选择保留的版本", Icons.AutoMirrored.Outlined.CompareArrows,
-                            webDavRowShape(index, status.conflicts.size), enabled = !working) { actions.onConflict(value) } }
-                    }
-                }
+                if(!config.bound) syncStatusSection()
             }
         }
     }

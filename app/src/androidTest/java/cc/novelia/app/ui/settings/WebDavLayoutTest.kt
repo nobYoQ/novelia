@@ -10,6 +10,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.Density
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.data.webdav.SyncDomain
+import cc.novelia.app.data.webdav.SyncConflict
 import cc.novelia.app.data.webdav.WebDavConfig
 import cc.novelia.app.data.webdav.WebDavSyncStatus
 import cc.novelia.app.data.webdav.WebDavRecovery
@@ -25,6 +26,23 @@ import org.junit.Test
 class WebDavLayoutTest {
     @get:Rule val compose = createComposeRule()
     private val fixture = WebDavConfig(endpoint = "https://example.com/dav/", deviceName = "测试设备", enabled = true, datasetId = "layout-fixture")
+
+    @Test fun boundPageShowsStatusFirstAndOpensSelectedConflict() {
+        val progress = SyncConflict(SyncDomain.PROGRESS, "book-1", "position", emptyList())
+        val note = SyncConflict(SyncDomain.NOTES, "note-2", "text", emptyList())
+        var conflicts by mutableStateOf(listOf(progress, note))
+        var opened: SyncConflict? = null
+        compose.setContent { NoveliaTheme("light") {
+            WebDavSyncContent(fixture, WebDavSyncStatus(conflicts = conflicts), false, false,
+                WebDavSyncActions(onConflict = { opened = it }, conflictTitle = { it.recordKey }))
+        } }
+        compose.onNodeWithText("最近成功", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("2 条资料待选择").assertIsDisplayed().performClick()
+        scrollTo("note-2").performClick()
+        compose.runOnIdle { assertEquals(note, opened); conflicts = listOf(progress) }
+        scrollTo("1 条资料待选择").performClick()
+        compose.runOnIdle { assertEquals(progress, opened) }
+    }
 
     @Test fun mainPageKeepsChoicesIndependentAndServerFormSeparate() {
         var config by mutableStateOf(fixture)
@@ -42,8 +60,8 @@ class WebDavLayoutTest {
         compose.onNodeWithText("服务器地址").assertDoesNotExist()
         compose.onNodeWithText("立即同步").assertIsDisplayed()
         screenshot("main-light")
-        compose.onNodeWithText("标签库").performScrollTo().assertIsOn().performClick().assertIsOff()
-        compose.onNodeWithText("本地收藏").performScrollTo().assertIsOn()
+        scrollTo("标签库").assertIsOn().performClick().assertIsOff()
+        scrollTo("本地收藏").assertIsOn()
         scrollTo("阅读历史").assertIsOn()
         assertFalse(SyncDomain.KEYWORDS in config.selected)
         assertTrue(SyncDomain.HISTORY in config.selected)
@@ -58,16 +76,17 @@ class WebDavLayoutTest {
         var running by mutableStateOf(false)
         compose.setContent {
             AppInteractionMode(false, true) { NoveliaTheme("dark") {
-                WebDavSyncContent(fixture, WebDavSyncStatus(running = running), true, running, WebDavSyncActions(onEnabled = { enabled = it }))
+                WebDavSyncContent(fixture.copy(datasetId = null), WebDavSyncStatus(running = running), true, running, WebDavSyncActions(onEnabled = { enabled = it }))
             } }
         }
         compose.onNodeWithText("查看资料并连接").assertIsDisplayed()
+        compose.onNodeWithText("同步服务器").assertIsDisplayed()
         screenshot("main-dark")
         compose.runOnIdle { running = true }
         compose.onNodeWithText("正在处理…").assertIsNotEnabled()
         compose.onNodeWithText("启用 WebDAV").assertIsEnabled().performClick()
         assertFalse(enabled)
-        compose.onNodeWithText("标签库").performScrollTo().assertIsNotEnabled()
+        scrollTo("标签库").assertIsNotEnabled()
     }
 
     @Test fun serverPageMasksPasswordAndSavesCurrentInput() {
