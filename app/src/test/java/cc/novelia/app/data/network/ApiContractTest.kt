@@ -10,6 +10,18 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ApiContractTest {
+    @Test fun editingWebBookTextLeavesAllChapterTranslationsAlone() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse())
+            val api = NoveliaApi(null, server.url("/api/").toString())
+            api.updateWebBookText(BookRef("syosetu", "one"), "标题", "简介", null)
+            val request = server.takeRequest()
+            assertEquals("PUT", request.method)
+            assertEquals("/api/novel/syosetu/one/translation", request.path)
+            assertEquals("""{"title":"标题","introduction":"简介","toc":{}}""", request.body.readUtf8())
+        }
+    }
+
     @Test fun guestSearchUsesAllProvidersAndGeneralAudience() = runBlocking {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setBody("""{"pageNumber":1,"items":[{"providerId":"syosetu","novelId":"n1","titleJp":"Test"}]}"""))

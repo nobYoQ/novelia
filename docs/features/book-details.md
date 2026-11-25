@@ -51,7 +51,7 @@
 
 | 功能 | 实现与注意点 |
 | --- | --- |
-| 网络小说翻译资料 | [EditBookScreen.kt](../../app/src/main/java/cc/novelia/app/ui/book/EditBookScreen.kt) 更新中文标题、简介和目录翻译 |
+| 网络小说翻译资料 | [EditBookScreen.kt](../../app/src/main/java/cc/novelia/app/ui/book/EditBookScreen.kt) 更新中文标题和简介，提交空的 `toc` 映射以保留各章当前译名 |
 | 关联文库 | 单独的 `wenku-id` 请求；前一步成功而这一步失败时，不能声称所有修改都没生效 |
 | 文库新建/修改 | [WenkuEditor.kt](../../app/src/main/java/cc/novelia/app/ui/book/WenkuEditor.kt)，包含出版分卷、作者、封面等 |
 | 术语表 | [GlossaryScreen.kt](../../app/src/main/java/cc/novelia/app/ui/book/GlossaryScreen.kt)，区分本地个人术语与远端作品术语 |
