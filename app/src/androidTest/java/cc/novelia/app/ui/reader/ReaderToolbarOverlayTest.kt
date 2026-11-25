@@ -423,6 +423,11 @@ class ReaderToolbarOverlayTest {
         compose.onNodeWithText("上拉加载下一章").assertIsDisplayed()
         assertChapterUnchanged(app, ref, "first")
         compose.onNodeWithTag("reader-seek-preview").assertTextEquals("100%")
+        compose.onNodeWithTag("reader-seek-bar").performSemanticsAction(SemanticsActions.SetProgress) { it(.7f) }
+        compose.onNodeWithTag("reader-undo-seek").assertIsDisplayed().performClick()
+        compose.waitUntil(10_000) { app.store.state.value.positions[ref.key]?.textOffset == anchor.textOffset }
+        assertEquals(anchor.index, app.store.state.value.positions.getValue(ref.key).index)
+        compose.onNodeWithTag("reader-undo-seek").assertDoesNotExist()
         compose.onNodeWithTag("reader-seek-bar").performSemanticsAction(SemanticsActions.SetProgress) { it(0f) }
         compose.waitUntil(10_000) { app.store.state.value.positions[ref.key]?.let { it.index == 0 && it.offset == 0 } == true }
     }
@@ -449,6 +454,8 @@ class ReaderToolbarOverlayTest {
         slider.performSemanticsAction(SemanticsActions.SetProgress) { it(1f) }
         assertChapterProgress(total, total)
         assertChapterUnchanged(app, ref, "first")
+        compose.onNodeWithTag("reader-undo-seek").performClick()
+        compose.waitUntil(10_000) { pageNumbers().first == 1 }
     }
 
     @Test fun eInkSeekDefersPageRefreshUntilReleaseAndCancelledPreviewDoesNotNavigate() = withReader(
@@ -463,10 +470,11 @@ class ReaderToolbarOverlayTest {
         slider.performTouchInput { cancel() }
         assertEquals(1, pageNumbers().first)
         compose.onNodeWithText("松手跳转").assertDoesNotExist()
+        compose.onNodeWithTag("reader-undo-seek").assertDoesNotExist()
         slider.performTouchInput { down(Offset(width * .2f, centerY)); moveTo(Offset(width * .8f, centerY), delayMillis = 300); up() }
         compose.waitUntil(10_000) { pageNumbers().first > total / 2 }
-        slider.performSemanticsAction(SemanticsActions.SetProgress) { it(0f) }
-        assertEquals(1, pageNumbers().first)
+        compose.onNodeWithTag("reader-undo-seek").performClick()
+        compose.waitUntil(10_000) { pageNumbers().first == 1 }
     }
 
     @Test fun eInkScrollingSeekCommitsOnReleaseAndRetainsAnExactLongParagraphAnchor() = withReader(

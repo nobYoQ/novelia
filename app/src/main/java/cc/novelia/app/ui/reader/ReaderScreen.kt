@@ -220,6 +220,8 @@ import kotlinx.serialization.encodeToString
         mutableStateOf(readerEntry?.savedStateHandle?.remove<String>("readerReturnPoint"))
     }
     val returnPoint = remember(returnPointJson) { returnPointJson?.let { runCatching { appJson.decodeFromString<ReadingReturnPoint>(it) }.getOrNull() } }
+    var seekOriginJson by rememberSaveable(ref.key, chapterId) { mutableStateOf<String?>(null) }
+    LaunchedEffect(menu) { if(!menu) seekOriginJson = null }
     var refreshAnchor by remember(ref, chapterId) { mutableStateOf<ReadingRestoreAnchor?>(null) }
     val cacheGeneration by c.store.cacheGeneration.collectAsStateWithLifecycle()
     val bookCacheGenerations by c.store.bookCacheGenerations.collectAsStateWithLifecycle()
@@ -405,6 +407,7 @@ import kotlinx.serialization.encodeToString
         val seekIndex = remember(paragraphs, settings.resolvedIndentSize, settings.parallel) { ChapterSeekIndex(paragraphs, settings) }
         var seekJob by remember { mutableStateOf<Job?>(null) }
         var seekGeneration by remember { mutableIntStateOf(0) }
+        var seekOriginLayout by remember { mutableStateOf<Any?>(null) }
         var seekTarget by remember { mutableStateOf<Float?>(null) }
         var seekFocused by remember { mutableStateOf(false) }
         val readingProgress by remember(scroll, eInk, settings.staticPagination, seekIndex, scrollLayouts) { derivedStateOf {
@@ -558,16 +561,19 @@ import kotlinx.serialization.encodeToString
                 lastSavedPosition = next
             }
         }
-        fun rememberReadingPlace() {
-            if(leaving || positionState.restoringAnchor || !positionState.initialAnchorRestored || (settings.staticPagination && !eInk.ready)) return
+        fun currentReadingPlace(): ReadingReturnPoint? {
+            if(leaving || positionState.restoringAnchor || !positionState.initialAnchorRestored || (settings.staticPagination && !eInk.ready)) return null
             val paragraph = if(settings.staticPagination) eInk.anchor.paragraph else (scroll.firstVisibleItemIndex - 1).coerceAtLeast(0)
             val source = if(!settings.staticPagination && scroll.firstVisibleItemIndex == 0) null else paragraphs.getOrNull(paragraph)?.index
-            val current = ReadingReturnPoint(Position(chapterId,
+            return ReadingReturnPoint(Position(chapterId,
                 index = if(settings.staticPagination) paragraph + 1 else scroll.firstVisibleItemIndex,
                 offset = if(settings.staticPagination) 0 else scroll.firstVisibleItemScrollOffset,
                 title = chapter.title, textOffset = if(settings.staticPagination) eInk.anchor.textOffset else positionLayout.scrollTextOffset(source),
                 sourceParagraph = source, anchorSource = WebDavProjection.anchorSource(settings),
                 anchorTextHash = if(source == null) null else paragraphHash(paragraphs.getOrNull(paragraph))), source)
+        }
+        fun rememberReadingPlace() {
+            val current = currentReadingPlace() ?: return
             returnPointJson = appJson.encodeToString(retainReadingReturnPoint(returnPoint, current))
         }
         val onChapterLoaded by rememberUpdatedState<(ReaderChapterTarget, AppController.ReaderHandoff) -> Unit>({ target, loaded ->
@@ -699,9 +705,9 @@ import kotlinx.serialization.encodeToString
             }
         }
         val tocSourceParagraph = if(ref.isLocal) paragraphs.getOrNull(firstParagraph)?.index else null
-        fun returnToReadingPlace() {
+        fun returnToReadingPlace(target: ReadingReturnPoint?, fromSeek: Boolean = false) {
+            if(target == null) return
             pauseReadingAutomation()
-            val target = returnPoint ?: return
             searchGeneration++; searchJob?.cancel(); finding = false; activeMatch = null
             search = false; bookSearch = false; toc = false; focusManager.clearFocus()
             if(target.position.chapterId != chapterId) {
@@ -717,15 +723,17 @@ import kotlinx.serialization.encodeToString
                     val paragraphIndex = (resolved.index - 1).coerceAtLeast(0)
                     if(settings.staticPagination) eInk.find(paragraphIndex, resolved.textOffset, target.sourceIndex)
                     else {
-                        scroll.scrollToItem(resolved.index, resolved.offset)
+                        val sameSeekLayout = fromSeek && seekOriginLayout === layoutGeneration
+                        scroll.scrollToItem(resolved.index, if(sameSeekLayout) target.position.offset else resolved.offset)
                         val paragraph = paragraphs.getOrNull(paragraphIndex)
-                        if(resolved.index > 0 && resolved.textOffset > 0 && paragraph != null && paragraph.imageUrl == null && paragraph.localImageId == null) {
+                        if(!sameSeekLayout && resolved.index > 0 && resolved.textOffset > 0 && paragraph != null && paragraph.imageUrl == null && paragraph.localImageId == null) {
                             val layout = snapshotFlow { scrollLayouts[paragraph.index] }.first { it != null && it.parts.size == paragraph.parts.size }!!
                             scroll.scrollToItem(resolved.index, layout.scrollOffsetAt(resolved.textOffset))
                         }
                         positionState.restoredScrollAnchor = RestoredScrollAnchor(layoutGeneration, resolved.index, scroll.firstVisibleItemScrollOffset, resolved.textOffset)
                     }
-                    returnPointJson = null
+                    seekOriginJson = null
+                    if(!fromSeek) returnPointJson = null
                 } finally { positionState.restoringAnchor = false }
                 savePosition()
             }
@@ -786,6 +794,11 @@ import kotlinx.serialization.encodeToString
             pauseReadingAutomation()
             if(leaving || chapterLoad.loading || positionState.restoringAnchor || !positionState.initialAnchorRestored ||
                 (settings.staticPagination && !eInk.ready)) return
+            if(seekOriginJson == null) {
+                val origin = currentReadingPlace() ?: return
+                seekOriginJson = appJson.encodeToString(origin)
+                seekOriginLayout = layoutGeneration
+            }
             val generation = ++seekGeneration
             seekJob?.cancel()
             chapterPull.cancel()
@@ -873,9 +886,12 @@ import kotlinx.serialization.encodeToString
                         findReadingTextMatches(paragraphs, term) { jobContext.ensureActive() }
                     }
                     if(query.trim() != term) return@launch
-                    chapterMatches = matches; matchedQuery = term
-                    if(matches.isEmpty()) { activeMatch = null; c.message("没有找到匹配文字") }
-                    else {
+                    chapterMatches = matches
+                    matchedQuery = term
+                    if(matches.isEmpty()) {
+                        activeMatch = null
+                        c.message("没有找到匹配文字")
+                    } else {
                         val offset = if(settings.staticPagination) eInk.textOffset else positionLayout.scrollTextOffset(paragraphs.getOrNull(firstParagraph)?.index)
                         val visibleParagraph = if(settings.staticPagination) eInk.paragraph else firstParagraph
                         val next = nextReadingMatchIndex(matches, activeMatch, direction, visibleParagraph, offset) { match -> match.textOffset(paragraphs[match.paragraph], settings) }
@@ -1054,7 +1070,7 @@ import kotlinx.serialization.encodeToString
                 onBack = { leaveReader(c::back) },
                 onRefresh = { refreshChapter() }, onToggleSearch = { if(search) focusManager.clearFocus(); search = !search },
                 onSpeech = { autoReading = false; speechSheet = true },
-                onAutoRead = { autoReading = false; autoReadSheet = true }, onReturnToReading = { returnToReadingPlace() },
+                onAutoRead = { autoReading = false; autoReadSheet = true }, onReturnToReading = { returnToReadingPlace(returnPoint) },
                 onQueryChange = { searchGeneration++; searchJob?.cancel(); finding = false; query = it; activeMatch = null; chapterMatches = emptyList(); matchedQuery = "" },
                 onFind = { findNext(it) }, onBookSearch = { focusManager.clearFocus(); bookSearch = true },
             )
@@ -1076,6 +1092,9 @@ import kotlinx.serialization.encodeToString
                 foreground = foreground, readingStatusBarHeight = readingStatusBarHeight, statusColumns = statusColumns, devices = devices, modifier = Modifier.align(Alignment.BottomCenter),
                 onChapterTitle = showChapterTitle,
                 onHeightChanged = { bottomOverlayHeight = it }, onPage = { page(it) }, onSeek = { seekChapter(it) },
+                onUndoSeek = seekOriginJson?.let { origin ->
+                    { returnToReadingPlace(appJson.decodeFromString<ReadingReturnPoint>(origin), fromSeek = true) }
+                },
                 onSeekFocusChanged = { seekFocused = it }, onPreviousChapter = { chapter.prevId?.let { openChapter(it) } },
                 onNextChapter = { if(chapter.nextId != null) openChapter(chapter.nextId) else promptNextVolume() },
                 onToc = { if(wideDirectory) { setWideToc(!settings.showWideToc); if(!settings.showWideToc) tocLocateRequest++ } else toc = true },

@@ -1,6 +1,8 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.reader
 
+import cc.novelia.app.ui.components.base.AppTextButton
+import androidx.compose.material3.ButtonDefaults
 import cc.novelia.app.ui.components.base.AppSlider
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
@@ -45,7 +47,7 @@ import kotlin.math.roundToInt
  */
 @Composable internal fun ReaderSeekBar(
     progress: Float, pageCount: Int?, enabled: Boolean, foreground: Color,
-    onSeek: (Float) -> Unit, modifier: Modifier = Modifier,
+    onSeek: (Float) -> Unit, modifier: Modifier = Modifier, onUndoSeek: (() -> Unit)? = null,
 ) {
     val eInk = LocalEInkMode.current
     val squareCorners = useSquareCorners(SquareCornerTarget.Navigation)
@@ -64,8 +66,13 @@ import kotlin.math.roundToInt
         tween(if(reducedMotion) 0 else AppMotion.Press), label = "reading seek thumb")
     val radius = if(reducedMotion) 6.dp else animatedRadius
     Column(modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text(if(eInk && draft != null) "松手跳转" else "本章进度", style = MaterialTheme.typography.labelSmall, color = foreground)
+            if(onUndoSeek != null && draft == null) {
+                AppTextButton(onClick = onUndoSeek, enabled = enabled,
+                    colors = ButtonDefaults.textButtonColors(contentColor = foreground),
+                    modifier = Modifier.testTag("reader-undo-seek")) { Text("回到拖动前") }
+            }
             Text(if(pageCount != null) "${chapterSeekPage(current, pageCount) + 1} / ${pageCount.coerceAtLeast(1)} 页"
                 else "${(current * 100).roundToInt()}%", Modifier.testTag("reader-seek-preview"), style = MaterialTheme.typography.labelSmall, color = foreground)
         }

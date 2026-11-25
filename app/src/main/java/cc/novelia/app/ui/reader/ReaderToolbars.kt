@@ -146,7 +146,7 @@ internal data class ReaderBottomToolbarState(
     onBookmark: () -> Unit, onPreferences: () -> Unit,
     speechControls: (@Composable () -> Unit)? = null, onSpeechHeightChanged: (Int) -> Unit = {},
     onChapterTitle: () -> Unit = {},
-    onPageButtonsHeightChanged: (Int) -> Unit = {},
+    onPageButtonsHeightChanged: (Int) -> Unit = {}, onUndoSeek: (() -> Unit)? = null,
 ) {
     Column(modifier.testTag("reader-bottom-toolbar").onSizeChanged { onHeightChanged(it.height) }) {
         val persistentControls = speechControls != null || settings.showPageButtons || settings.visibleReadingStatusItems.isNotEmpty()
@@ -171,7 +171,7 @@ internal data class ReaderBottomToolbarState(
                     if(settings.showProgressBar) ReaderSeekBar(state.reading.progress,
                         pageCount = if(settings.staticPagination && state.reading.pageReady) state.reading.pageCount else null,
                         enabled = state.seekEnabled,
-                        foreground = foreground, onSeek = onSeek, modifier = Modifier.padding(top = 8.dp).onFocusChanged { onSeekFocusChanged(it.hasFocus) })
+                        foreground = foreground, onSeek = onSeek, onUndoSeek = onUndoSeek, modifier = Modifier.padding(top = 8.dp).onFocusChanged { onSeekFocusChanged(it.hasFocus) })
                     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         AppIconButton(onClick = onPreviousChapter, enabled = state.previousChapterEnabled) { Icon(Icons.Outlined.SkipPrevious, "上一章") }
                         AppTextButton(onClick = onToc, colors = ButtonDefaults.textButtonColors(contentColor = foreground)) { Icon(Icons.Outlined.FormatListBulleted, null, Modifier.size(18.dp)); Text(if(state.wide && settings.showWideToc) " 收起目录" else " 目录") }
