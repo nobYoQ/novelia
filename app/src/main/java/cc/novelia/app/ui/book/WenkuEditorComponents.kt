@@ -121,10 +121,16 @@ internal fun WenkuEditorField(
 internal fun WenkuEditorFieldPair(first: @Composable () -> Unit, second: @Composable () -> Unit) {
     val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        if(maxWidth / fontScale >= 520.dp) Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        // 改变每行数量时保留输入节点，以便正在进行的焦点和配色动画继续使用同一字段。
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            maxItemsInEachRow = if (maxWidth / fontScale >= 520.dp) 2 else 1,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
             Box(Modifier.weight(1f)) { first() }
             Box(Modifier.weight(1f)) { second() }
-        } else Column(verticalArrangement = Arrangement.spacedBy(14.dp)) { first(); second() }
+        }
     }
 }
 
