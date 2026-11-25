@@ -6,6 +6,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
@@ -17,6 +18,8 @@ import cc.novelia.app.data.community.ForumComment
 import cc.novelia.app.data.community.ForumPage
 import cc.novelia.app.data.storage.LocalStore
 import cc.novelia.app.ui.theme.NoveliaTheme
+import cc.novelia.app.ui.theme.AppInteractionMode
+import cc.novelia.app.ui.theme.AppMotion
 import java.io.File
 import java.util.UUID
 import kotlinx.coroutines.runBlocking
@@ -63,6 +66,42 @@ class ForumLayoutUiTest {
         compose.onNodeWithTag("forum-search-input").assertTextContains("测试帖子")
         compose.onNodeWithContentDescription("清空搜索").performClick()
         compose.runOnIdle { assertEquals("", query.value) }
+    }
+
+    @Test fun searchAnimatesInBothDirectionsAndRespectsMotionPreferences() {
+        var expanded by mutableStateOf(false)
+        var reduced by mutableStateOf(false)
+        var eInk by mutableStateOf(false)
+        compose.setContent { NoveliaTheme("light") { AppInteractionMode(eInk, reduced) {
+            Box(Modifier.testTag("feed-controls")) {
+                ForumFeedControls("全部帖子", "", expanded, "搜索论坛帖子", { expanded = it }, {}) {}
+            }
+        } } }
+        fun height() = compose.onNodeWithTag("feed-controls").getUnclippedBoundsInRoot().let { it.bottom - it.top }
+        val closed = height()
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithContentDescription("展开搜索").performClick()
+        compose.mainClock.advanceTimeBy(96)
+        val opening = height()
+        compose.mainClock.advanceTimeBy(AppMotion.Panel.toLong())
+        val open = height()
+        assertTrue(opening > closed && opening < open)
+        compose.onNodeWithContentDescription("收起搜索").performClick()
+        compose.mainClock.advanceTimeBy(96)
+        val closing = height()
+        assertTrue(closing > closed && closing < open)
+        compose.mainClock.advanceTimeBy(AppMotion.Panel.toLong())
+        assertEquals(closed, height())
+        for(ink in listOf(false, true)) {
+            compose.runOnIdle { eInk = ink; reduced = !ink }
+            compose.mainClock.advanceTimeByFrame()
+            compose.onNodeWithContentDescription("展开搜索").performClick()
+            compose.mainClock.advanceTimeByFrame()
+            assertEquals(open, height())
+            compose.onNodeWithContentDescription("收起搜索").performClick()
+            compose.mainClock.advanceTimeByFrame()
+            assertEquals(closed, height())
+        }
     }
 
     @Test fun dismissingRulesNoticeSurvivesStoreReload() {

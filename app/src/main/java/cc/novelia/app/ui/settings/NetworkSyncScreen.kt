@@ -80,7 +80,7 @@ import cc.novelia.app.ui.navigation.AppController
                 }
             }
             item(key = "automatic-sync") { ProfileToggle("联网自动同步", "自动重试当前账号的收藏和阅读进度", state.autoSync) { enabled -> c.store.update { it.copy(autoSync = enabled) } } }
-            item { ProfileSectionTitle("连接与多设备同步") }
+            item { ProfileSectionTitle("多设备同步") }
             item(key = "webdav") { ProfileMenuRow("WebDAV 多设备同步", when {
                 webDavStatus.running -> "正在同步…"
                 webDavConfig.endpoint.isBlank() -> "配置服务器与同步内容"
@@ -90,6 +90,7 @@ import cc.novelia.app.ui.navigation.AppController
                 c.app.webDav.needsConfirmation() -> "等待确认同步资料"
                 else -> "最近成功：${syncTime(webDavStatus.lastSuccessAt)}"
             }, Icons.Outlined.Devices, { c.go("webdav") }) }
+            item { ProfileSectionTitle("书源与网络诊断") }
             item(key = "book-source") { BookSourcePreference(c) }
             item(key = "ech") {
                 ProfileToggle("启用 ECH", "加密原站小说、论坛和认证连接的握手信息；镜像线路使用普通 HTTPS", echEnabled,

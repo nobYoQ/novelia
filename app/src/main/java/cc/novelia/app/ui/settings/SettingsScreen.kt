@@ -145,23 +145,29 @@ private enum class SettingsSection(val title: String, val summary: String) {
             } }
         }
         if(section == SettingsSection.READING) {
-        item { ProfileSectionTitle("阅读体验") }
+        item { ProfileSectionTitle("排版与显示") }
         item { ProfileMenuRow("默认阅读偏好", "字号、排版、自定义配色、翻译与朗读", Icons.Outlined.TextFields, { reader = true }) }
+        item { ProfileToggle("阅读时隐藏状态栏", "阅读时自动隐藏顶部系统状态栏，退出后恢复", state.reader.hideStatusBar) { value -> c.store.update { it.copy(reader = it.reader.copy(hideStatusBar = value)) } } }
+        item { ProfileSectionTitle("电子纸与翻屏") }
         item { ProfileToggle("电子纸阅读模式", "全应用按屏翻动，关闭滚动惯性和动画，使用按钮调整分卷顺序", state.reader.eInkMode) { value -> c.store.update { it.copy(reader = it.reader.withEInkMode(value)) } } }
         item { ProfileToggle("列表与面板翻屏按钮", "电子纸模式下显示上一屏、下一屏，关闭后仍可滑动翻屏", state.reader.showEInkScreenButtons) { value -> c.store.update { it.copy(reader = it.reader.copy(showEInkScreenButtons = value)) } } }
-        item { ProfileToggle("阅读时隐藏状态栏", "阅读时自动隐藏顶部系统状态栏，退出后恢复", state.reader.hideStatusBar) { value -> c.store.update { it.copy(reader = it.reader.copy(hideStatusBar = value)) } } }
         item { ProfileSectionTitle("朗读") }
         item { ProfileMenuRow("系统朗读引擎", "选择已安装引擎，配置第三方语音服务", Icons.Outlined.RecordVoiceOver, { c.go("tts-settings") }) }
         item { ProfileMenuRow("朗读通知", "允许在通知栏控制朗读", Icons.Outlined.Notifications, { if(Build.VERSION.SDK_INT >= 33) notifications.launch(android.Manifest.permission.POST_NOTIFICATIONS) else c.message("当前系统无需申请通知权限") }) }
         }
         if(section == SettingsSection.APPEARANCE) {
-        item { ProfileSectionTitle("应用外观") }
+        item { ProfileSectionTitle("主题与配色") }
         item { ProfileChoiceRow("应用主题", APP_THEME_MODES.values.toList(), APP_THEME_MODES.keys.indexOf(state.theme)) { index ->
             c.store.update { it.copy(theme = APP_THEME_MODES.keys.elementAt(index)) }
         } }
         item { ProfileMenuRow("自定义主题", if (state.theme == MONOCHROME_APP_THEME) "黑白外观" else state.themePresets.active?.name ?: "默认外观",
             Icons.Outlined.Palette, { c.go("custom-themes") }) }
         item { ProfileToggle("纯黑显示模式", "深色主题使用纯黑底色，卡片与弹层保留层次", state.amoledBlack) { value -> c.store.update { it.copy(amoledBlack = value) } } }
+        item { ProfileSectionTitle("图标与贴纸") }
+        item { LauncherIconPreference(c.app.launcherIcons) }
+        item { StickerPackPreference(c.app.stickerPacks, state.stickerPackId) { c.go("sticker-packs") } }
+        item { ProfileSectionTitle("形状与动效") }
+        item { ProfileToggle("减少动态效果", "关闭页面转场与连续动画反馈", state.reducedMotion) { value -> c.store.update { it.copy(reducedMotion = value) } } }
         item { ProfileToggle("fuck 圆角", "为选中的界面元素使用直角", state.squareCorners) { value -> c.store.update { it.copy(squareCorners = value) } } }
         if(state.squareCorners) {
             item { ProfileSectionTitle("应用直角的元素") }
@@ -175,22 +181,13 @@ private enum class SettingsSection(val title: String, val summary: String) {
                 }
             }
         }
-        item { LauncherIconPreference(c.app.launcherIcons) }
-        item { StickerPackPreference(c.app.stickerPacks, state.stickerPackId) { c.go("sticker-packs") } }
-        item { ProfileSectionTitle("交互与提示") }
+        item { ProfileSectionTitle("快捷操作与搜索") }
         item { ProfileMenuRow("边缘工具栏", "快捷入口、圆点位置与闲置半隐藏", Icons.Outlined.Widgets, { c.go("edge-toolbar", replaceTop = true) }) }
-        item { ProfileToggle("减少动态效果", "关闭页面转场与连续动画反馈", state.reducedMotion) { value -> c.store.update { it.copy(reducedMotion = value) } } }
         item { ProfileToggle("剪贴板链接提示", "返回应用时识别原站链接，点击提示后打开", state.clipboardLinkHints) { value -> c.store.update { it.copy(clipboardLinkHints = value) } } }
         item { ProfileToggle("记住保存搜索的页码", "自动记录每套搜索浏览的页码，再次应用时恢复", state.rememberSavedSearchPage) { value -> c.store.update { it.copy(rememberSavedSearchPage = value) } } }
         }
         if(section == SettingsSection.LIBRARY) {
-        item { ProfileSectionTitle("书架管理") }
-        item { ProfileToggle("自动记录阅读状态", "开始阅读标记在读，读到末尾标记读完；手动设置和旧版状态受保护，可单独或批量恢复自动管理", state.autoReadingStatus) { value -> c.store.update { it.withAutoReadingStatus(value) } } }
-        if(state.books.any { it.readingStatusControl?.automatic != true }) item {
-            ProfileMenuRow("将已有书籍恢复自动管理", "重新判断所有手动设置和旧版保留状态，不改变阅读位置", Icons.Outlined.Sync, {
-                c.store.update { it.withAutomaticReadingStatus(it.books.filter { book -> book.readingStatusControl?.automatic != true }.map { book -> book.book.ref.key }.toSet()) }
-            })
-        }
+        item { ProfileSectionTitle("书架布局与打开方式") }
         item {
             ProfileChoiceRow("书架网格样式", ShelfGridStyle.entries.map { it.label }, state.shelfGridStyle.ordinal) { index ->
                 c.store.update { it.copy(shelfGridStyle = ShelfGridStyle.entries[index]) }
@@ -203,11 +200,18 @@ private enum class SettingsSection(val title: String, val summary: String) {
         }
         item { ProfileToggle("点击书架列表直接续读", "书架和云端收藏列表：点封面打开详情，点其余区域从本机进度续读；无进度或网格模式保持原行为", state.shelfTapToRead) { value -> c.store.update { it.copy(shelfTapToRead = value) } } }
         item { ProfileToggle("记住上次打开的收藏夹", "重新打开应用时恢复上次的书架分区和收藏夹", state.rememberLastShelfFolder) { value -> c.store.update { it.copy(rememberLastShelfFolder = value) } } }
+        item { ProfileSectionTitle("阅读状态与更新提醒") }
+        item { ProfileToggle("自动记录阅读状态", "开始阅读标记在读，读到末尾标记读完；手动设置和旧版状态受保护，可单独或批量恢复自动管理", state.autoReadingStatus) { value -> c.store.update { it.withAutoReadingStatus(value) } } }
+        if(state.books.any { it.readingStatusControl?.automatic != true }) item {
+            ProfileMenuRow("将已有书籍恢复自动管理", "重新判断所有手动设置和旧版保留状态，不改变阅读位置", Icons.Outlined.Sync, {
+                c.store.update { it.withAutomaticReadingStatus(it.books.filter { book -> book.readingStatusControl?.automatic != true }.map { book -> book.book.ref.key }.toSet()) }
+            })
+        }
+        item { ProfileToggle("书架更新提醒", "约每 6 小时检查，系统调度可能延后", state.updateNotifications) { value -> c.store.update { it.copy(updateNotifications = value) }; UpdateWorker.schedule(c.app, value); if(value && Build.VERSION.SDK_INT >= 33) notifications.launch(android.Manifest.permission.POST_NOTIFICATIONS) } }
+        item { ProfileSectionTitle("本地与云端收藏") }
         item { ProfileToggle("云端收藏同时保存到本地", "新增本地副本时优先放入同名收藏夹，没有则放入默认收藏；已有本地收藏不移动", state.autoSaveCloudFavoritesLocally) { value -> c.store.update { it.copy(autoSaveCloudFavoritesLocally = value) } } }
         item { ProfileToggle("本地收藏同时保存到云端", "登录后收藏网络或文库小说时，优先保存到云端同名收藏夹，没有则放入默认收藏夹；已有云端收藏不移动", state.autoSaveLocalFavoritesToCloud) { value -> c.store.update { it.copy(autoSaveLocalFavoritesToCloud = value) } } }
-        item { ProfileToggle("书架更新提醒", "约每 6 小时检查，系统调度可能延后", state.updateNotifications) { value -> c.store.update { it.copy(updateNotifications = value) }; UpdateWorker.schedule(c.app, value); if(value && Build.VERSION.SDK_INT >= 33) notifications.launch(android.Manifest.permission.POST_NOTIFICATIONS) } }
-        item { ProfileToggle("移出书架时删除本地副本", "仅删除本地小说或分卷的导入副本，原文件不受影响；删除后无法撤销", state.deleteLocalCopyOnShelfRemoval) { value -> c.store.update { it.copy(deleteLocalCopyOnShelfRemoval = value) } } }
-        item { ProfileSectionTitle("下载与文件清理") }
+        item { ProfileSectionTitle("下载条件") }
         item {
             val counts = DOWNLOAD_CONCURRENCY_RANGE
             ProfileChoiceRow("同时下载的书籍数", counts.map { "${it} 本" }, counts.indexOf(state.downloadConcurrency.coerceIn(counts))) { index ->
@@ -215,36 +219,39 @@ private enum class SettingsSection(val title: String, val summary: String) {
             }
         }
         item { ProfileToggle("仅在 Wi-Fi 下载", "新建下载任务等待非计费网络", state.wifiOnly) { value -> c.store.update { it.copy(wifiOnly = value) } } }
+        item { ProfileSectionTitle("自动清理文件") }
         item { ProfileToggle("导入书架后删除下载", "成功导入并保存本地副本后，删除下载管理中的任务和下载文件", state.deleteDownloadAfterImport) { value -> c.store.update { it.copy(deleteDownloadAfterImport = value) } } }
+        item { ProfileToggle("移出书架时删除本地副本", "仅删除本地小说或分卷的导入副本，原文件不受影响；删除后无法撤销", state.deleteLocalCopyOnShelfRemoval) { value -> c.store.update { it.copy(deleteLocalCopyOnShelfRemoval = value) } } }
         }
         if(section == SettingsSection.CONTENT) {
-        item { ProfileSectionTitle("评论显示") }
-        item { ProfileToggle("隐藏小说评论", "论坛文章评论仍然显示", state.hideNovelComments) { value -> c.store.update { it.copy(hideNovelComments = value) } } }
-        item { ProfileToggle("不显示已删除或已隐藏的评论", "适用于小说与论坛讨论；一级评论被过滤后，其回复也不显示", state.hideUnavailableComments) { value -> c.store.update { it.copy(hideUnavailableComments = value) } } }
+        item { ProfileSectionTitle("屏蔽名单") }
+        item { ProfileMenuRow("屏蔽管理", "管理作品、标签、作者与用户屏蔽", Icons.Outlined.Block, { c.go("blocked") }) }
         item { ProfileSectionTitle("已收藏作品过滤") }
         item { ProfileSummary("自动屏蔽已收藏书籍", "在发现、搜索结果和排行榜中自动过滤已收藏作品，本地与云端分别控制。") }
         item { ProfileToggle("屏蔽本地已收藏书籍", "根据本地书架过滤，移出本地收藏后重新显示", state.hideLocalFavorites) { value -> c.store.update { it.copy(hideLocalFavorites = value) } } }
         item { ProfileToggle("屏蔽云端已收藏书籍", "根据当前登录账号的云端收藏过滤，包含待同步的收藏变更", state.hideCloudFavorites) { value -> c.store.update { it.copy(hideCloudFavorites = value) } } }
-        item { ProfileSectionTitle("屏蔽名单") }
-        item { ProfileMenuRow("屏蔽管理", "管理作品、标签、作者与用户屏蔽", Icons.Outlined.Block, { c.go("blocked") }) }
+        item { ProfileSectionTitle("评论显示") }
+        item { ProfileToggle("隐藏小说评论", "论坛文章评论仍然显示", state.hideNovelComments) { value -> c.store.update { it.copy(hideNovelComments = value) } } }
+        item { ProfileToggle("不显示已删除或已隐藏的评论", "适用于小说与论坛讨论；一级评论被过滤后，其回复也不显示", state.hideUnavailableComments) { value -> c.store.update { it.copy(hideUnavailableComments = value) } } }
         }
         if(section == SettingsSection.KEYWORDS) {
         item { ProfileSectionTitle("标签管理") }
         item { ProfileMenuRow("标签库与分类", "搜索全部本地标签，管理译名与分类", Icons.Outlined.Label, { c.go("keywords") }) }
         item { KeywordLimitPreference(state.keywordLimit, keywordLibrary.entries.size) { value -> c.store.update { it.copy(keywordLimit = value) } } }
-        item { ProfileSectionTitle("词表迁移") }
+        item { ProfileSectionTitle("标签库导入与导出") }
         item { KeywordTransferControls(keywordTransfer) }
         }
         if(section == SettingsSection.STORAGE) {
         item { ProfileSectionTitle("缓存管理") }
         item { ProfileMenuRow("书籍章节缓存", "查看每本书的缓存章节和占用空间，按书清理", Icons.Outlined.AutoStories, { c.go("chapter-cache") }) }
         item { ProfileMenuRow("阅读与图片缓存", if(clearing) "正在清理…" else size?.let { "已使用 ${"%.1f".format(it / 1024.0 / 1024.0)} MB · 点击清理" } ?: "正在计算缓存大小…", Icons.Outlined.Storage, { if (!clearing) clear = true }) }
-        item { ProfileSectionTitle("普通设置迁移") }
+        item { ProfileSectionTitle("书架与阅读资料") }
+        item { ProfileMenuRow("备份与恢复阅读资料", "迁移书架、阅读进度、笔记和本地小说", Icons.Outlined.Backup, { c.go("backup") }) }
+        item { ProfileSectionTitle("应用设置导入与导出") }
         item { ProfileMenuRow("导出普通设置", "阅读偏好、外观与屏蔽名单，不含账号会话", Icons.Outlined.IosShare, { exportSettings.launch("novelia-settings.json") }) }
         item { ProfileMenuRow("导入普通设置", "从 Novelia 设置文件恢复偏好", Icons.Outlined.FileOpen, { importSettings.launch() }) }
         if(importSettings.showFallback) item { DocumentPickerFallback(importSettings) }
-        item { ProfileSectionTitle("阅读资料与数据保留") }
-        item { ProfileMenuRow("备份与恢复阅读资料", "迁移书架、阅读进度、笔记和本地小说", Icons.Outlined.Backup, { c.go("backup") }) }
+        item { ProfileSectionTitle("本地数据与卸载") }
         item { ProfileSummary("卸载时保留应用数据", if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
             "已启用系统保留选项。卸载时请在系统确认框中勾选“保留应用数据”；不勾选会删除应用数据。选项是否显示及默认勾选状态由系统决定。重新安装相同签名的应用可继续使用保留的数据；卸载前仍建议导出阅读资料备份。"
             else "当前 Android 版本不支持卸载时保留应用数据。卸载会删除应用数据，请先导出阅读资料备份，重新安装后导入恢复。") }

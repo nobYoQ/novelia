@@ -2,6 +2,7 @@
 package cc.novelia.app.ui.community
 
 import cc.novelia.app.ui.components.base.AppTextField
+import cc.novelia.app.ui.components.base.FilterPanelVisibility
 import cc.novelia.app.ui.theme.DefaultShapes
 import cc.novelia.app.ui.components.base.AppPageTabs
 
@@ -57,10 +58,12 @@ import cc.novelia.app.data.community.ForumCategory
                     tint = if(search.isNotBlank()) MaterialTheme.colorScheme.primary else LocalContentColor.current)
             }
         }
-        if(expanded) AppTextField(search, onSearch, label = { Text(searchLabel) }, singleLine = true,
-            leadingIcon = { Icon(Icons.Outlined.Search, null) },
-            trailingIcon = { if(search.isNotEmpty()) AppIconButton(onClick = { onSearch("") }) { Icon(Icons.Outlined.Close, "清空搜索") } },
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp).testTag("forum-search-input"),
-            shape = DefaultShapes.extraLarge)
+        FilterPanelVisibility(expanded) {
+            AppTextField(search, onSearch, enabled = expanded, label = { Text(searchLabel) }, singleLine = true,
+                leadingIcon = { Icon(Icons.Outlined.Search, null) },
+                trailingIcon = { if(search.isNotEmpty()) AppIconButton(onClick = { onSearch("") }, enabled = expanded) { Icon(Icons.Outlined.Close, "清空搜索") } },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp).testTag("forum-search-input"),
+                shape = DefaultShapes.extraLarge)
+        }
     }
 }
