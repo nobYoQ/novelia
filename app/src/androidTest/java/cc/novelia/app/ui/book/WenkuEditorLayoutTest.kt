@@ -54,13 +54,17 @@ class WenkuEditorLayoutTest {
         saveTestScreenshot("wenku-editor-light.png")
         compose.onNodeWithTag("wenku-title").performClick().performTextInput("原文作品")
         compose.onNodeWithTag("wenku-title-zh").performScrollTo().performTextInput("中文作品")
+        compose.onNodeWithTag("wenku-save").assertIsNotEnabled()
+        compose.onNodeWithTag("wenku-cover").performScrollTo().performTextInput("https://example.com/cover.jpg")
         compose.onNodeWithTag("wenku-save").assertIsDisplayed().assertIsEnabled()
         saveTestScreenshot("wenku-editor-keyboard.png")
         compose.runOnIdle { hideKeyboard() }
         compose.onNodeWithTag("wenku-cover").performScrollTo().performTextReplacement("http://example.com/cover.jpg")
         compose.onNodeWithTag("wenku-save").assertIsNotEnabled()
-        compose.onNodeWithText("请使用 HTTPS 链接").assertExists()
+        compose.onNodeWithText("请使用有效的 HTTPS 封面链接").assertExists()
         compose.onNodeWithTag("wenku-cover").performTextClearance()
+        compose.onNodeWithTag("wenku-save").assertIsNotEnabled()
+        compose.onNodeWithTag("wenku-cover").performTextInput("https://example.com/cover.webp?size=2")
         compose.runOnIdle { hideKeyboard() }
         compose.onNodeWithTag("wenku-save").assertIsEnabled()
         compose.onNodeWithTag("wenku-title").performScrollTo()

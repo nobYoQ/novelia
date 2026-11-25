@@ -60,6 +60,7 @@ import kotlinx.serialization.encodeToString
     val draftPersistence = rememberDraftPersistence(c.store, draftKey) { appJson.encodeToString(values()) }
     LaunchedEffect(title, titleZh, authors, artists, intro, cover, tags, level, volumes) { kotlinx.coroutines.delay(700); draftPersistence.save() }
     val canReadAdult = profile?.canReadAdult == true
+    val saveError = values().formError(canReadAdult)
     fun submit(confirmedTitle: String? = null) {
         if (saving) return
         c.action {
@@ -67,6 +68,7 @@ import kotlinx.serialization.encodeToString
             try {
                 val submitted = values()
                 c.session.ensureCurrent(binding)
+                submitted.formError(canReadAdult)?.let { throw IllegalArgumentException(it) }
                 if (id == null && confirmedTitle != submitted.title) {
                     val found = c.api.similarWenku(submitted.title, canReadAdult, binding)
                     if (title.trim() != submitted.title) return@action
@@ -95,17 +97,13 @@ import kotlinx.serialization.encodeToString
             }
         }
     }
-    val invalidCover = cover.isNotBlank() && !cover.startsWith("https://")
+    val coverError = wenkuCoverError(cover.trim())
     WenkuEditorPage(
         title = if(id == null) "新建文库条目" else "编辑文库条目",
         onBack = c::back,
         saving = saving,
-        canSave = title.isNotBlank() && titleZh.isNotBlank() && !invalidCover,
-        saveHint = when {
-            title.isBlank() || titleZh.isBlank() -> "原文标题和中文标题为必填项"
-            invalidCover -> "请将封面链接改为 HTTPS，或留空"
-            else -> "保存会更新原站资料，请确认信息准确"
-        },
+        canSave = saveError == null,
+        saveHint = saveError ?: "保存会更新原站资料，请确认信息准确",
         onSave = { focusManager.clearFocus(); submit() },
     ) {
         WenkuEditorSection("基本信息", Icons.AutoMirrored.Outlined.MenuBook) {
@@ -116,8 +114,8 @@ import kotlinx.serialization.encodeToString
                 second = { WenkuEditorField(artists, { artists = it }, "插画师", hint = "选填，每行一位") },
             )
             WenkuEditorField(cover, { cover = it }, "封面链接", Modifier.testTag("wenku-cover"),
-                keyboardType = KeyboardType.Uri, isError = invalidCover,
-                hint = if(invalidCover) "请使用 HTTPS 链接" else "选填，支持 HTTPS 链接")
+                keyboardType = KeyboardType.Uri, isError = cover.isNotBlank() && coverError != null,
+                hint = "必填，使用 HTTPS 图片链接")
         }
         WenkuEditorSection("分类与简介", Icons.AutoMirrored.Outlined.Subject) {
             val levels = listOf("一般向", "轻文学", "严肃向", "非小说", "成人向", "成人向女")
