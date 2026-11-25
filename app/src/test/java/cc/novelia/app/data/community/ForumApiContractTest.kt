@@ -163,9 +163,10 @@ class ForumApiContractTest {
             assertEquals("PATCH", edit.method); assertEquals("/api/v1/comment/12", edit.path)
             assertEquals("""{"content":"编辑"}""", edit.body.readUtf8())
             val user = Profile("读者", "member", 0, Long.MAX_VALUE, 42)
-            assertTrue(reply.canModify(user, reply.createdEpoch + 1199))
-            assertFalse(reply.canModify(user, reply.createdEpoch + 1200))
-            assertFalse(reply.canModify(user.copy(userId = 43), reply.createdEpoch))
+            val window = CommentModificationWindow.FORUM.entrySeconds
+            assertTrue(reply.canModify(user, window, reply.createdEpoch + 1799))
+            assertFalse(reply.canModify(user, window, reply.createdEpoch + 1800))
+            assertFalse(reply.canModify(user.copy(userId = 43), window, reply.createdEpoch))
         }
     }
 

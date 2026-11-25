@@ -10,6 +10,8 @@ import cc.novelia.app.data.model.Profile
 import cc.novelia.app.data.auth.Session
 import cc.novelia.app.data.markdown.MarkdownLinks
 import cc.novelia.app.data.community.CommentDiscussion
+import cc.novelia.app.data.community.CommentModificationWindow
+import cc.novelia.app.data.auth.AuthTarget
 import cc.novelia.app.data.community.discussion
 import cc.novelia.app.data.community.loadForumReplyCounts
 import cc.novelia.app.data.auth.SessionChangedException
@@ -65,6 +67,10 @@ import kotlinx.coroutines.isActive
 @Composable internal fun DiscussionCommentsPanel(c: AppController, discussion: CommentDiscussion, session: Session,
     locked: Boolean, documentUrl: String?, requireLogin: (() -> Unit) -> Unit) {
     val discussionKey = discussion.key
+    val window = when (session.target) {
+        AuthTarget.FORUM -> CommentModificationWindow.FORUM
+        AuthTarget.NOVEL -> CommentModificationWindow.NOVEL
+    }
     val profile by session.profile.collectAsStateWithLifecycle()
     val state by c.store.state.collectAsStateWithLifecycle()
     val viewerKey = profile?.userId?.toString() ?: profile?.username
@@ -135,7 +141,7 @@ import kotlinx.coroutines.isActive
                             session.ensureCurrent(binding)
                             discussion.replies(root.id, it).also { session.ensureCurrent(binding) }
                         }) { comment, rootPublished, replyToggle ->
-                        ForumCommentRow(comment, profile, locked || !rootPublished,
+                        ForumCommentRow(comment, profile, locked || !rootPublished, window = window,
                             onReply = { editing = null; rootId = comment.replyRoot; replyCount = replyCounts[root.id] ?: root.replyCount ?: 0; composerExpanded = true },
                             onEdit = { editing = comment; rootId = null; composerExpanded = true }, onDelete = { deleting = comment },
                             onBlock = { c.store.update { it.copy(blockedUsers = it.blockedUsers + comment.authorUsername) } },
@@ -159,8 +165,8 @@ import kotlinx.coroutines.isActive
             val commentError = ForumRules.contentError(commentContent, comment = true)
             val commentNow = rememberForumCommentTime(profile)
             val canSend = profile == null || if(editing == null) ForumRules.canCreateComment(profile, commentNow) else ForumRules.canWrite(profile)
-            val editNow = rememberForumModificationTime(editing?.createdEpoch ?: 0)
-            val canEditDraft = editing?.canModify(profile, editNow) != false
+            val editNow = rememberForumModificationTime(editing?.createdEpoch ?: 0, window.submitSeconds)
+            val canEditDraft = editing?.canModify(profile, window.submitSeconds, editNow) != false
             if(rootId != null || editing != null) Row {
                 Text(if(editing != null) "编辑评论 #${editing?.id}" else "回复 #$rootId", Modifier.weight(1f))
                 AppTextButton(onClick = { rootId = null; editing = null }) { Text("取消") }
@@ -175,7 +181,7 @@ import kotlinx.coroutines.isActive
                     requireLogin { c.action {
                         require(ForumRules.canWrite(session.profile.value)) { "当前账号暂不具备评论权限，草稿已保留" }
                         require(submittedEdit != null || ForumRules.canCreateComment(session.profile.value)) { "注册满 30 天后才能发表评论，草稿已保留" }
-                        require(submittedEdit == null || submittedEdit.canModify(session.profile.value)) { "评论只能在发布后 20 分钟内修改，管理员不受此限制。草稿已保留" }
+                        require(submittedEdit == null || submittedEdit.canModify(session.profile.value, window.submitSeconds)) { "评论修改时限已过，草稿已保留" }
                         sending = true
                         try {
                             if(submittedEdit != null) discussion.update(submittedEdit.id, content)
@@ -210,7 +216,7 @@ import kotlinx.coroutines.isActive
     }
     deleting?.let { comment -> ConfirmDialog("删除评论？", "确定删除这条评论吗？", { deleting = null }, confirmLabel = "删除评论") {
         c.action {
-            require(comment.canModify(session.profile.value)) { "评论只能在发布后 20 分钟内删除，管理员不受此限制" }
+            require(comment.canModify(session.profile.value, window.submitSeconds)) { "评论删除时限已过" }
             discussion.delete(comment.id); deleting = null; version++
         }
     } }
@@ -220,15 +226,16 @@ import kotlinx.coroutines.isActive
     onReply: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit, onBlock: () -> Unit,
     extraAction: (@Composable () -> Unit)? = null,
     accountBlockAction: (@Composable () -> Unit)? = null,
+    window: CommentModificationWindow = CommentModificationWindow.FORUM,
     render: @Composable (String) -> Unit) {
-    val now = rememberForumModificationTime(comment.createdEpoch)
+    val now = rememberForumModificationTime(comment.createdEpoch, window.entrySeconds)
     Column(Modifier.padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("${comment.authorUsername} · ${displayDate(comment.createdEpoch)}", style = MaterialTheme.typography.labelLarge)
         comment.rootId?.let { Text("回复 #$it", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         ForumCommentContent(comment, profile, render)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             if(!locked && comment.status == 0) AppTextButton(onClick = onReply) { Text("回复") }
-            if(comment.status == 0 && comment.canModify(profile, now)) {
+            if(comment.status == 0 && comment.canModify(profile, window.entrySeconds, now)) {
                 if(ForumRules.canWrite(profile)) AppTextButton(onClick = onEdit) { Text("编辑") }
                 AppTextButton(onClick = onDelete) { Text("删除") }
             }

@@ -67,7 +67,8 @@ class ForumCommentEditingTest {
         val encoded = Base64.encodeToString(payload.toByteArray(), Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
         preferences.edit().putString("value", DeviceCipher("novelia.forum.session").encrypt("e30.$encoded.synthetic")).commit()
         val session = Session(context, AuthTarget.FORUM)
-        val createdAt = Instant.now().minusSeconds(30).toString()
+        // 论坛作者在第 25 分钟仍能编辑根评论与回复。
+        val createdAt = Instant.now().minusSeconds(25 * 60L).toString()
         val child = ForumComment(102, postId = 1, rootId = 101, content = "原始回复", authorId = 42,
             authorUsername = "评论测试", status = 0, createdAt = createdAt, updatedAt = createdAt)
         val root = child.copy(id = 101, rootId = null, content = "原始评论", replyCount = 1,

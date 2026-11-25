@@ -62,7 +62,7 @@ import kotlinx.coroutines.CancellationException
                     ForumLinks.articleUrl(id), "扫码看原帖", article.forumTags.map { it.name })
                 onDispose { shareCard = null }
             }
-            val now = rememberForumModificationTime(article.createAt)
+            val now = rememberForumModificationTime(article.createAt, ForumRules.POST_DELETE_SECONDS)
             val favorite = remember(article, binding) { ForumFavoriteState(article.forumFavorited) }
             // 留在文章层，切换讨论标签或列表回收按钮后仍保留操作结果。
             var authorBlocked by remember(article, binding) { mutableStateOf(article.forumAuthorBlocked) }

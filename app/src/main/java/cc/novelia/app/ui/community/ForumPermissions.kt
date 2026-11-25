@@ -9,9 +9,10 @@ import kotlinx.coroutines.delay
 import cc.novelia.app.data.model.Profile
 
 /** Recompose at the deadline even when the user leaves the same post or comment open. */
-@Composable internal fun rememberForumModificationTime(createdAt: Long): Long {
-    val now by produceState(Instant.now().epochSecond, createdAt) {
-        val remaining = createdAt + ForumRules.MODIFICATION_SECONDS - Instant.now().epochSecond
+@Composable internal fun rememberForumModificationTime(createdAt: Long, windowSeconds: Long): Long {
+    val now by produceState(Instant.now().epochSecond, createdAt, windowSeconds) {
+        value = Instant.now().epochSecond
+        val remaining = createdAt + windowSeconds - value
         if(remaining > 0) delay(remaining * 1000)
         value = Instant.now().epochSecond
     }

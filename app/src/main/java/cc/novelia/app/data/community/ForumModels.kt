@@ -51,8 +51,8 @@ import cc.novelia.app.data.model.User
     val createdEpoch get() = Instant.parse(createdAt).epochSecond
     fun visible(blockedUsers: Set<String>, hideUnavailable: Boolean) =
         !authorBlocked && authorUsername !in blockedUsers && (!hideUnavailable || status == 0)
-    fun canModify(profile: Profile?, now: Long = Instant.now().epochSecond) =
-        profile != null && (profile.role == "admin" || profile.userId == authorId && now - createdEpoch in 0 until ForumRules.MODIFICATION_SECONDS)
+    fun canModify(profile: Profile?, windowSeconds: Long, now: Long = Instant.now().epochSecond) =
+        profile != null && (profile.role == "admin" || profile.userId == authorId && now - createdEpoch in 0 until windowSeconds)
 }
 @Serializable data class ForumPostInput(val categoryId: Long, val title: String, val content: String, val tagIds: List<Long> = emptyList())
 @Serializable data class ForumCommentInput(val content: String, val rootId: Long? = null)

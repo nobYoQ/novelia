@@ -71,9 +71,17 @@ class ForumRulesTest {
     @Test fun adminCanModifyOldCommentsButAuthorsCannot() {
         val comment = ForumComment(1, content = "评论", authorId = 42, authorUsername = "作者", status = 0,
             createdAt = "2026-09-15T00:00:00Z", updatedAt = "2026-09-15T00:00:00Z")
-        assertTrue(comment.canModify(member, comment.createdEpoch + 1199))
-        assertFalse(comment.canModify(member, comment.createdEpoch + 1200))
-        assertTrue(comment.canModify(admin, comment.createdEpoch + 86400))
+        val forum = CommentModificationWindow.FORUM
+        val novel = CommentModificationWindow.NOVEL
+        assertTrue(comment.canModify(member, novel.entrySeconds, comment.createdEpoch + 1199))
+        assertFalse(comment.canModify(member, novel.entrySeconds, comment.createdEpoch + 1200))
+        assertFalse(comment.canModify(member, novel.submitSeconds, comment.createdEpoch + 1200))
+        assertTrue(comment.canModify(member, forum.entrySeconds, comment.createdEpoch + 1799))
+        assertFalse(comment.canModify(member, forum.entrySeconds, comment.createdEpoch + 1800))
+        assertTrue(comment.canModify(member, forum.submitSeconds, comment.createdEpoch + 3599))
+        assertFalse(comment.canModify(member, forum.submitSeconds, comment.createdEpoch + 3600))
+        assertFalse(comment.canModify(member.copy(userId = 43), forum.submitSeconds, comment.createdEpoch + 1800))
+        assertTrue(comment.canModify(admin, forum.entrySeconds, comment.createdEpoch + 86400))
     }
 
     @Test fun newCommentsRequireThirtyDaysForEveryWritingRoleButPostAndEditRulesStaySeparate() {

@@ -3,13 +3,18 @@ package cc.novelia.app.data.community
 import java.time.Instant
 import cc.novelia.app.data.model.Profile
 
-/** Rules checked against deployment 6bae949, shared by forms and API validation. */
+/** 论坛给已经打开的编辑或删除操作预留了提交时间。 */
+internal enum class CommentModificationWindow(val entrySeconds: Long, val submitSeconds: Long) {
+    FORUM(30 * 60L, 60 * 60L),
+    NOVEL(20 * 60L, 20 * 60L),
+}
+
 object ForumRules {
     const val TITLE_LIMIT = 100
     const val POST_LIMIT = 20000
     const val COMMENT_LIMIT = 1000
     const val TAG_LIMIT = 3
-    const val MODIFICATION_SECONDS = 20 * 60L
+    const val POST_DELETE_SECONDS = 20 * 60L
     const val COMMENT_ACCOUNT_AGE_SECONDS = 30 * 24 * 60 * 60L
 
     // Go counts Unicode code points, not UTF-16 units (an emoji can use two units).
@@ -41,7 +46,7 @@ object ForumRules {
 
     fun canWrite(profile: Profile?) = profile?.role in setOf("admin", "trusted", "member")
 
-    // 服务端的新评论限制对所有角色生效；修改已有评论仍沿用角色和 20 分钟时限。
+    // 注册时长仅限制新评论。
     fun canCreateComment(profile: Profile?, now: Long = Instant.now().epochSecond) =
         canWrite(profile) && profile != null && profile.createdAt <= now &&
             now - profile.createdAt >= COMMENT_ACCOUNT_AGE_SECONDS
@@ -54,5 +59,5 @@ object ForumRules {
 
     fun canDeletePost(article: Article, profile: Profile?, now: Long = Instant.now().epochSecond) =
         profile != null && (profile.role == "admin" || profile.userId != null && profile.userId == article.forumAuthorId &&
-            now - article.createAt in 0 until MODIFICATION_SECONDS)
+            now - article.createAt in 0 until POST_DELETE_SECONDS)
 }
