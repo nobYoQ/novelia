@@ -26,24 +26,32 @@ class CharacterCountFilterUiTest {
     @get:Rule val compose = createComposeRule()
 
     @Test fun invalidRangeCannotApplyAndAValidCustomRangeIncludesItsEndpoints() {
-        var filter by mutableStateOf(CharacterCountFilter())
+        var applied by mutableStateOf(DiscoverFilters())
+        var open by mutableStateOf(true)
         compose.setContent {
-            MaterialTheme { AppScrollColumn(Modifier.width(360.dp).fillMaxHeight()) {
-                CharacterCountFilterFields(filter) { filter = it }
-            } }
+            MaterialTheme {
+                if(open) DiscoverFilterSheet(true, applied, false, { open = false }, { applied = it; open = false }, {}, {})
+            }
         }
-        compose.onNodeWithTag("characters-minimum").performScrollTo().performTextInput("500000")
-        compose.onNodeWithTag("characters-maximum").performScrollTo().performTextInput("100000")
-        compose.onNodeWithTag("apply-character-filter").assertIsNotEnabled()
+        compose.onNodeWithTag("characters-minimum").performScrollTo().performTextReplacement("500000")
+        compose.onNodeWithTag("characters-maximum").performScrollTo().performTextReplacement("100000")
+        compose.onNodeWithTag("discover-filter-apply").assertIsNotEnabled()
         compose.onNodeWithTag("characters-maximum").performTextReplacement("500000")
-        compose.onNodeWithTag("apply-character-filter").performScrollTo().performClick()
+        compose.runOnIdle { assertFalse(applied.local.characters.active) }
+        compose.onNodeWithTag("discover-filter-apply").performClick()
         compose.runOnIdle {
+            val filter = applied.local.characters
             assertTrue(filter.matches(500000))
             assertFalse(filter.matches(499999))
             assertFalse(filter.matches(null))
+            open = true
         }
-        compose.onNodeWithText("不限", useUnmergedTree = true).performScrollTo().performClick()
-        compose.runOnIdle { assertFalse(filter.active) }
+        compose.onNodeWithTag("discover-filter-reset").performClick()
+        compose.onNodeWithTag("discover-filter-close").performClick()
+        compose.runOnIdle { assertTrue(applied.local.characters.active); open = true }
+        compose.onNodeWithTag("discover-filter-reset").performClick()
+        compose.onNodeWithTag("discover-filter-apply").performClick()
+        compose.runOnIdle { assertFalse(applied.local.characters.active) }
     }
 
     @Test fun narrowLayoutBalancesPresetsAndSeparatesSearchHelpAtLargeFontSizes() {

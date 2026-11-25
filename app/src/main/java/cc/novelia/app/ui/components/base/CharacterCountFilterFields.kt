@@ -26,18 +26,27 @@ internal val CharacterCountFilterSaver = Saver<CharacterCountFilter, String>(
     save = { appJson.encodeToString(it) }, restore = { appJson.decodeFromString<CharacterCountFilter>(it).normalized() },
 )
 
-@Composable internal fun CharacterCountFilterFields(value: CharacterCountFilter, onChange: (CharacterCountFilter) -> Unit) {
+@Composable internal fun CharacterCountFilterFields(value: CharacterCountFilter, onValidity: (Boolean) -> Unit = {},
+    onChange: (CharacterCountFilter) -> Unit) {
     var minimum by rememberSaveable(value.minimum, value.maximum) { mutableStateOf(value.minimum?.toString().orEmpty()) }
     var maximum by rememberSaveable(value.minimum, value.maximum) { mutableStateOf(value.maximum?.toString().orEmpty()) }
     val min = minimum.toLongOrNull()
     val max = maximum.toLongOrNull()
     val invalid = (minimum.isNotBlank() && min == null) || (maximum.isNotBlank() && max == null) || (min != null && max != null && min > max)
+    LaunchedEffect(minimum, maximum, value.includeUnknown) {
+        onValidity(!invalid)
+        val next = CharacterCountFilter(min, max, value.includeUnknown)
+        if(!invalid && next != value) onChange(next)
+    }
     val presets = listOf("不限" to CharacterCountFilter(), "10 万以下" to CharacterCountFilter(maximum = 99_999),
         "10～50 万" to CharacterCountFilter(100_000, 499_999), "50 万及以上" to CharacterCountFilter(minimum = 500_000))
     Column(Modifier.fillMaxWidth().testTag("character-filter-fields")) {
         ChoiceRow("字数范围", presets.map { it.first },
             presets.indexOfFirst { value.minimum == it.second.minimum && value.maximum == it.second.maximum }) {
-            onChange(presets[it].second.copy(includeUnknown = value.includeUnknown))
+            val preset = presets[it].second.copy(includeUnknown = value.includeUnknown)
+            minimum = preset.minimum?.toString().orEmpty()
+            maximum = preset.maximum?.toString().orEmpty()
+            onChange(preset)
         }
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 4.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -68,8 +77,6 @@ internal val CharacterCountFilterSaver = Saver<CharacterCountFilter, String>(
                     }
                     Text(if(invalid) "最多字数不能小于最少字数。" else "单位：字 · 包含上下限 · 留空不限", style = MaterialTheme.typography.bodySmall,
                         color = if(invalid) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
-                    AppFilledTonalButton(onClick = { onChange(CharacterCountFilter(min, max, value.includeUnknown)) }, enabled = !invalid,
-                        modifier = Modifier.fillMaxWidth().testTag("apply-character-filter")) { Text("应用字数范围") }
                 }
             }
             Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).toggleable(value.includeUnknown, role = Role.Switch,
