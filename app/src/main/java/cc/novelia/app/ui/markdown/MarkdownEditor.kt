@@ -2,7 +2,7 @@
 
 package cc.novelia.app.ui.markdown
 
-import cc.novelia.app.ui.theme.appControlShape
+import cc.novelia.app.ui.components.base.AppTextField
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
@@ -57,7 +57,7 @@ import androidx.compose.ui.unit.dp
             keyboard?.show()
         })
         MarkdownLinkPaste(current, focused, limit, unicodeLength = unicodeLimit != null) {
-        OutlinedTextField(current, {
+        AppTextField(current, {
             if (unicodeLimit != null || it.text.length <= 20000) { source = it; onTextChange(it.text) }
         }, modifier = Modifier.fillMaxWidth().heightIn(max = inputHeight).testTag("article-body")
             .focusRequester(focus)
@@ -68,8 +68,7 @@ import androidx.compose.ui.unit.dp
                 false
             },
             placeholder = { Text("写下你的想法…") }, minLines = minOf(6, visibleLines), maxLines = visibleLines,
-            isError = length > limit, textStyle = MaterialTheme.typography.bodyLarge,
-            shape = appControlShape())
+            isError = length > limit, textStyle = MaterialTheme.typography.bodyLarge)
         }
         }
         Text("$length / $limit", style = MaterialTheme.typography.bodySmall, color = if(length > limit) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)

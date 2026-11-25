@@ -1,6 +1,6 @@
 package cc.novelia.app.ui.shelf
 
-import cc.novelia.app.ui.theme.appControlShape
+import cc.novelia.app.ui.components.base.AppTextField
 import cc.novelia.app.ui.components.base.AppIconButton
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardActions
@@ -39,7 +39,7 @@ import cc.novelia.app.ui.components.base.FilterPanelVisibility
     val focus = LocalFocusManager.current
     val submit = { focus.clearFocus(); onSubmit() }
     FilterPanelVisibility(expanded) {
-        OutlinedTextField(query, onQuery, enabled = enabled, label = { Text(label) }, singleLine = true,
+        AppTextField(query, onQuery, enabled = enabled, label = { Text(label) }, singleLine = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { submit() }),
             trailingIcon = {
@@ -51,7 +51,6 @@ import cc.novelia.app.ui.components.base.FilterPanelVisibility
                     }
                 }
             },
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp).testTag("$tagPrefix-search-field"),
-            shape = appControlShape())
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp).testTag("$tagPrefix-search-field"))
     }
 }

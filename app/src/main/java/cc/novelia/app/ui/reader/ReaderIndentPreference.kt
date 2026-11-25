@@ -1,6 +1,6 @@
 package cc.novelia.app.ui.reader
 
-import cc.novelia.app.ui.theme.appControlShape
+import cc.novelia.app.ui.components.base.AppTextField
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -55,13 +55,12 @@ import cc.novelia.app.ui.theme.motionClickable
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("每格相当于一个全角字符，0 表示不缩进。", style = MaterialTheme.typography.bodyMedium)
-                OutlinedTextField(input, { input = it }, Modifier.width(128.dp).focusRequester(focus).testTag("reader-indent-input"),
+                AppTextField(input, { input = it }, Modifier.width(128.dp).focusRequester(focus).testTag("reader-indent-input"),
                     label = { Text("格数") }, suffix = { Text("格") }, singleLine = true,
                     textStyle = MaterialTheme.typography.titleLarge.copy(textAlign = TextAlign.Center),
                     isError = parsed == null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { parsed?.let(::save) }),
-                    shape = appControlShape())
+                    keyboardActions = KeyboardActions(onDone = { parsed?.let(::save) }))
                 Text(if(parsed == null) "请输入 0–20 之间的整数" else "可设置 0–20 格",
                     style = MaterialTheme.typography.bodySmall,
                     color = if(parsed == null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)

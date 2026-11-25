@@ -1,7 +1,8 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.reader
 
-import cc.novelia.app.ui.theme.appControlShape
+import cc.novelia.app.ui.components.base.AppTextField
+import cc.novelia.app.ui.components.base.appTextFieldColors
 import cc.novelia.app.ui.components.base.AppTextButton
 import cc.novelia.app.ui.components.base.AppOutlinedButton
 import cc.novelia.app.ui.components.base.AppIconButton
@@ -95,11 +96,17 @@ internal data class ReaderChapterSearchState(
             ) {
                 Column {
                 Row(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(search.query, onQueryChange, label = { Text("搜索本章段落") }, singleLine = true, modifier = Modifier.weight(1f), enabled = search.visible,
-                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = foreground, unfocusedTextColor = foreground,
-                            focusedBorderColor = foreground, unfocusedBorderColor = foreground.copy(alpha = if(monochrome) 1f else .5f),
-                            focusedLabelColor = foreground, unfocusedLabelColor = foreground.copy(alpha = if(monochrome) 1f else .7f), cursorColor = foreground),
-                        shape = appControlShape())
+                    AppTextField(search.query, onQueryChange, label = { Text("搜索本章段落") }, singleLine = true, modifier = Modifier.weight(1f), enabled = search.visible,
+                        colors = appTextFieldColors().copy(
+                            focusedTextColor = foreground, unfocusedTextColor = foreground,
+                            focusedContainerColor = foreground.copy(alpha = .14f),
+                            unfocusedContainerColor = foreground.copy(alpha = .07f),
+                            focusedIndicatorColor = if (monochrome) foreground else Color.Transparent,
+                            unfocusedIndicatorColor = if (monochrome) foreground else Color.Transparent,
+                            focusedLabelColor = foreground,
+                            unfocusedLabelColor = foreground.copy(alpha = if (monochrome) 1f else .78f),
+                            cursorColor = foreground,
+                        ))
                     AppTextButton(onClick = { onFind(1) }, enabled = search.visible && search.query.isNotBlank() && !search.finding,
                         colors = ButtonDefaults.textButtonColors(contentColor = foreground, disabledContentColor = foreground.copy(alpha = .38f))) { Text(if(search.finding) "查找中" else "查找") }
                 }

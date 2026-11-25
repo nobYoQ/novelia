@@ -2,7 +2,6 @@
 
 package cc.novelia.app.ui.settings
 
-import cc.novelia.app.ui.theme.appControlShape
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -123,9 +122,8 @@ private val presetSaver = Saver<ThemePreset, String>(
     val fields: LazyListScope.() -> Unit = {
         when (tab) {
             EditorTab.Colors -> {
-                item(key = "theme-name") { OutlinedTextField(draft.name, { if (it.length <= ThemePreset.MAX_NAME) { draft = draft.copy(name = it); error = null } },
-                    modifier = Modifier.fillMaxWidth(), label = { Text("主题名称") }, singleLine = true, enabled = !busy,
-                    shape = appControlShape()) }
+                item(key = "theme-name") { AppTextField(draft.name, { if (it.length <= ThemePreset.MAX_NAME) { draft = draft.copy(name = it); error = null } },
+                    modifier = Modifier.fillMaxWidth(), label = { Text("主题名称") }, singleLine = true, enabled = !busy) }
                 item { ThemeColorControl("主题色", draft.accent, accentSwatches, onPick = { colorField = ColorField.Accent },
                     onSwatch = { draft = draft.copy(accent = it) }) }
             }

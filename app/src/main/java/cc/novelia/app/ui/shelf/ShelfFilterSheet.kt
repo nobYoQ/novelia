@@ -2,7 +2,6 @@
 package cc.novelia.app.ui.shelf
 
 import cc.novelia.app.ui.theme.DefaultShapes
-import cc.novelia.app.ui.theme.appControlShape
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -116,10 +115,10 @@ import cc.novelia.app.ui.theme.appShape
         }
         if(custom) {
             val field: @Composable (Boolean, Modifier) -> Unit = { lower, modifier ->
-                OutlinedTextField(if(lower) minimum else maximum,
+                AppTextField(if(lower) minimum else maximum,
                     { input -> val digits = input.filter { it in '0'..'9' }.take(12); if(lower) minimum = digits else maximum = digits },
                     label = { Text(if(lower) "最少字数" else "最多字数") }, singleLine = true, isError = !lower && invalid,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), shape = appControlShape(RoundedCornerShape(10.dp)),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = modifier.testTag(if(lower) "characters-minimum" else "characters-maximum"))
             }
             BoxWithConstraints(Modifier.fillMaxWidth()) {

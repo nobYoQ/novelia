@@ -1,6 +1,7 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package cc.novelia.app.ui.settings
 
+import cc.novelia.app.ui.components.base.AppTextField
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -20,7 +21,6 @@ import cc.novelia.app.ui.components.book.BookCover
 import cc.novelia.app.ui.components.book.BookRowStatus
 import cc.novelia.app.ui.shelf.ShelfCoverCard
 import cc.novelia.app.ui.theme.NoveliaTheme
-import cc.novelia.app.ui.theme.appControlShape
 import cc.novelia.app.ui.theme.appPanelShape
 import cc.novelia.app.ui.theme.appShape
 import org.junit.Assert.*
@@ -87,8 +87,7 @@ class SquareCornersComponentsTest {
                     }
                     Card(Modifier.size(100.dp, 40.dp).testTag("card"), colors = CardDefaults.cardColors(containerColor = fill)) {}
                     AppButton({}, Modifier.size(100.dp, 48.dp).testTag("button"), colors = ButtonDefaults.buttonColors(containerColor = fill)) { Text("按钮") }
-                    OutlinedTextField("", {}, Modifier.width(160.dp).testTag("input"), shape = appControlShape(),
-                        colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = fill, unfocusedBorderColor = fill))
+                    AppTextField("", {}, Modifier.width(160.dp).testTag("input"))
                     Surface(Modifier.size(100.dp, 40.dp).testTag("panel"), shape = appPanelShape(), color = fill) {}
                     Surface(Modifier.size(100.dp, 40.dp).testTag("navigation"),
                         shape = appShape(CircleShape, SquareCornerTarget.Navigation), color = fill) {}

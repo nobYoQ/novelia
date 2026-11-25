@@ -1,6 +1,5 @@
 package cc.novelia.app.ui.reader
 
-import cc.novelia.app.ui.theme.appControlShape
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
@@ -73,15 +72,13 @@ import cc.novelia.app.ui.theme.appReducedMotion
                 AppScrollColumn(Modifier.weight(1f), contentModifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     ReplacementStep("1", "找到原文字", "与正文一致，区分大小写")
-                    OutlinedTextField(source, { source = it }, label = { Text("要替换的文字") }, placeholder = { Text("例如：爱丽丝") },
+                    AppTextField(source, { source = it }, label = { Text("要替换的文字") }, placeholder = { Text("例如：爱丽丝") },
                         singleLine = true, isError = duplicate || source.length > MAX_READER_REPLACEMENT_LENGTH,
-                        modifier = Modifier.fillMaxWidth().testTag("reader-replacement-source"), supportingText = { Text("${source.length} / 120") },
-                        shape = appControlShape())
+                        modifier = Modifier.fillMaxWidth().testTag("reader-replacement-source"), supportingText = { Text("${source.length} / 120") })
                     ReplacementStep("2", "填写新文字", "保存后，用这个词替代原文字")
-                    OutlinedTextField(target, { target = it }, label = { Text("显示为") }, placeholder = { Text("例如：艾莉丝") },
+                    AppTextField(target, { target = it }, label = { Text("显示为") }, placeholder = { Text("例如：艾莉丝") },
                         singleLine = true, isError = identical || target.length > MAX_READER_REPLACEMENT_LENGTH,
-                        modifier = Modifier.fillMaxWidth().testTag("reader-replacement-target"), supportingText = { Text("${target.length} / 120") },
-                        shape = appControlShape())
+                        modifier = Modifier.fillMaxWidth().testTag("reader-replacement-target"), supportingText = { Text("${target.length} / 120") })
                     if(error != null) Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                     val matchCount = remember(sample, from) { if(from.isEmpty()) 0 else Regex(Regex.escape(from)).findAll(sample).count() }
                     val context = remember(sample, from) {
@@ -126,9 +123,8 @@ import cc.novelia.app.ui.theme.appReducedMotion
                         }
                     }
                     if(settings.textReplacements.isNotEmpty()) item {
-                        OutlinedTextField(query, { query = it }, label = { Text("查找原词或替换词") }, singleLine = true,
-                            leadingIcon = { Icon(Icons.Outlined.Search, null) }, modifier = Modifier.fillMaxWidth(),
-                            shape = appControlShape())
+                        AppTextField(query, { query = it }, label = { Text("查找原词或替换词") }, singleLine = true,
+                            leadingIcon = { Icon(Icons.Outlined.Search, null) }, modifier = Modifier.fillMaxWidth())
                     }
                     if(sample.isNotBlank() && settings.textReplacements.isNotEmpty()) item {
                         AppTextButton(onClick = { preview = !preview }) {

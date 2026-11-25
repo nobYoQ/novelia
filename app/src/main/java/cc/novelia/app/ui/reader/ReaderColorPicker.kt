@@ -2,7 +2,7 @@
 
 package cc.novelia.app.ui.reader
 
-import cc.novelia.app.ui.theme.appControlShape
+import cc.novelia.app.ui.components.base.AppTextField
 import cc.novelia.app.ui.theme.DefaultShapes
 import cc.novelia.app.ui.components.base.AppSlider
 import cc.novelia.app.ui.components.base.AppTextButton
@@ -187,14 +187,13 @@ private fun rgb(hue: Float, saturation: Float, brightness: Float): Long =
         withFrameNanos { }
         keyboard?.show()
     }
-    OutlinedTextField(value, { value = it; onInput(it.text) }, label = { Text("RGB 色值") }, singleLine = true,
+    AppTextField(value, { value = it; onInput(it.text) }, label = { Text("RGB 色值") }, singleLine = true,
         isError = parseColor(value.text) == null,
         supportingText = { Text("输入 6 位十六进制颜色，例如 #F4ECD8；# 可省略") },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii, capitalization = KeyboardCapitalization.Characters,
             autoCorrectEnabled = false, imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { keyboard?.hide(); focusManager.clearFocus() }),
-        modifier = Modifier.fillMaxWidth().focusRequester(focus).testTag("reader-color-input"),
-        shape = appControlShape())
+        modifier = Modifier.fillMaxWidth().focusRequester(focus).testTag("reader-color-input"))
 }
 
 @Composable private fun SaturationBrightnessPlane(hue: Float, saturation: Float, brightness: Float,

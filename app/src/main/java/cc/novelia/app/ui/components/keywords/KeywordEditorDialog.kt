@@ -1,6 +1,6 @@
 package cc.novelia.app.ui.components.keywords
 
-import cc.novelia.app.ui.theme.appControlShape
+import cc.novelia.app.ui.components.base.AppTextField
 import cc.novelia.app.ui.components.base.AppTextButton
 import cc.novelia.app.ui.components.base.AppOutlinedButton
 import cc.novelia.app.ui.components.base.AppFilledTonalButton
@@ -39,10 +39,9 @@ fun KeywordEditorDialog(
     AppAlertDialog(onDismissRequest = onDismiss, title = { Text(entry.original) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(translation, { translation = it }, label = { Text("中文翻译（可留空）") }, isError = tooLong,
+                AppTextField(translation, { translation = it }, label = { Text("中文翻译（可留空）") }, isError = tooLong,
                     supportingText = { Text(if(tooLong) "原文和翻译最多 ${KeywordCatalog.MAX_TEXT_LENGTH} 字符，请缩短后保存。" else "${translation.length} / ${KeywordCatalog.MAX_TEXT_LENGTH}") },
-                    modifier = Modifier.fillMaxWidth().testTag("keyword-translation"),
-                    shape = appControlShape())
+                    modifier = Modifier.fillMaxWidth().testTag("keyword-translation"))
                 Text("翻译只用于本机显示和联想，搜索仍使用标签原文。", style = MaterialTheme.typography.bodySmall)
                 if(onSaveDetails != null) KeywordCategoryPicker(categories, category, { category = it; error = null })
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }

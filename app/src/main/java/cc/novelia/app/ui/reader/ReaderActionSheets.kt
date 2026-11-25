@@ -1,6 +1,7 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.reader
 
+import cc.novelia.app.ui.components.base.AppTextField
 import cc.novelia.app.ui.theme.DefaultShapes
 import cc.novelia.app.ui.theme.appControlShape
 import cc.novelia.app.ui.components.base.AppTextButton
@@ -55,10 +56,9 @@ import cc.novelia.app.ui.components.base.AppScrollColumn
                 val quote = part.text.substring(start, end)
                 val selection = selectionFor(content, selectedPart, start, end)
                 val excerpt = if (selection == null) part.text else quote
-                OutlinedTextField(value, { value = value.copy(selection = it.selection) }, readOnly = true,
+                AppTextField(value, { value = value.copy(selection = it.selection) }, readOnly = true,
                     minLines = 3, maxLines = 9, textStyle = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.fillMaxWidth().testTag("reader-selection-text"),
-                    shape = appControlShape())
+                    modifier = Modifier.fillMaxWidth().testTag("reader-selection-text"))
                 Text(if(selection == null) "尚未选择文字" else "已选择 ${quote.codePointCount(0, quote.length)} 字",
                     style = MaterialTheme.typography.labelMedium, modifier = Modifier.testTag("reader-selection-count"))
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

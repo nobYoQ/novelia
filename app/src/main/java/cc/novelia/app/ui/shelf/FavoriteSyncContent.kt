@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.DriveFileMove
-import androidx.compose.material.icons.automirrored.outlined.FactCheck
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -45,8 +44,6 @@ import kotlin.math.roundToInt
             style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
         PanelRadioGrid(listOf(FavoriteSyncPriority.Local to "优先本地", FavoriteSyncPriority.Cloud to "优先云端"), priority, onSelect)
     }
-    SyncNotice(Icons.AutoMirrored.Outlined.FactCheck, "先预览，再同步",
-        "逐本查看新增、移动和需要创建的收藏夹，确认后保存。")
     if(error != null) SyncNotice(Icons.Outlined.ErrorOutline, "未完成同步", error, error = true)
 }
 

@@ -29,6 +29,7 @@ class FavoriteSyncSheetUiTest {
             }, { plan, _, progress -> applied += plan; progress(plan.changes.size, 0) },
                 onDismiss = { visible.value = false }, onFinished = { visible.value = false })
         } }
+        compose.onNodeWithText("先预览，再同步").assertDoesNotExist()
         compose.onNodeWithText("确认同步").assertDoesNotExist()
         compose.onNodeWithText("检查差异").performClick()
         compose.onNodeWithText(book.title).assertIsDisplayed()

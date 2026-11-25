@@ -1,6 +1,5 @@
 package cc.novelia.app.ui.components.base
 
-import cc.novelia.app.ui.theme.appControlShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
@@ -46,17 +45,15 @@ internal val CharacterCountFilterSaver = Saver<CharacterCountFilter, String>(
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("自定义范围", style = MaterialTheme.typography.titleSmall)
                     val minimumField: @Composable (Modifier) -> Unit = { modifier ->
-                        OutlinedTextField(minimum, { minimum = it.filter { char -> char in '0'..'9' }.take(12) },
+                        AppTextField(minimum, { minimum = it.filter { char -> char in '0'..'9' }.take(12) },
                             label = { Text("最少字数") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = modifier.testTag("characters-minimum"),
-                            shape = appControlShape())
+                            modifier = modifier.testTag("characters-minimum"))
                     }
                     val maximumField: @Composable (Modifier) -> Unit = { modifier ->
-                        OutlinedTextField(maximum, { maximum = it.filter { char -> char in '0'..'9' }.take(12) },
+                        AppTextField(maximum, { maximum = it.filter { char -> char in '0'..'9' }.take(12) },
                             label = { Text("最多字数") }, singleLine = true, isError = invalid,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = modifier.testTag("characters-maximum"),
-                            shape = appControlShape())
+                            modifier = modifier.testTag("characters-maximum"))
                     }
                     BoxWithConstraints(Modifier.fillMaxWidth()) {
                         if(maxWidth < (240 * LocalDensity.current.fontScale).dp) {

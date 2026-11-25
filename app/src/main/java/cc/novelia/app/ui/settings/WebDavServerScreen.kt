@@ -1,6 +1,6 @@
 package cc.novelia.app.ui.settings
 
-import cc.novelia.app.ui.theme.appControlShape
+import cc.novelia.app.ui.components.base.AppTextField
 import cc.novelia.app.ui.components.base.AppTextButton
 import cc.novelia.app.ui.components.base.AppIconButton
 import androidx.compose.foundation.layout.*
@@ -85,29 +85,23 @@ internal fun WebDavServerForm(
                 item { WebDavHero("连接 WebDAV", "填写云盘或服务器提供的连接信息。", Icons.Outlined.Dns) }
                 item { WebDavCard {
                     Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                        OutlinedTextField(
+                        AppTextField(
                             draft.endpoint, { draft = draft.copy(endpoint = it) },
                             label = { Text("服务器地址") }, placeholder = { Text("https://example.com/dav/") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
-                            singleLine = true, enabled = !working, modifier = Modifier.fillMaxWidth(),
-                            shape = appControlShape()
-                        )
-                        OutlinedTextField(
+                            singleLine = true, enabled = !working, modifier = Modifier.fillMaxWidth())
+                        AppTextField(
                             draft.username, { draft = draft.copy(username = it) }, label = { Text("用户名") },
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                            singleLine = true, enabled = !working, modifier = Modifier.fillMaxWidth(),
-                            shape = appControlShape()
-                        )
-                        OutlinedTextField(
+                            singleLine = true, enabled = !working, modifier = Modifier.fillMaxWidth())
+                        AppTextField(
                             password, { password = it }, label = { Text("密码或应用授权码") },
                             visualTransformation = if(passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
                             trailingIcon = { AppIconButton(onClick = { passwordVisible = !passwordVisible }, enabled = !working) {
                                 Icon(if(passwordVisible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility, if(passwordVisible) "隐藏密码" else "显示密码")
                             } },
-                            singleLine = true, enabled = !working, modifier = Modifier.fillMaxWidth(),
-                            shape = appControlShape()
-                        )
+                            singleLine = true, enabled = !working, modifier = Modifier.fillMaxWidth())
                     }
                 } }
                 item { Text("密码仅保存在此设备。留空可保留已保存的密码；更改服务器、账号或同步目录后，请重新填写。",
@@ -121,13 +115,11 @@ internal fun WebDavServerForm(
                 } }
                 if(advanced) item { WebDavCard {
                     Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        OutlinedTextField(draft.folder, { draft = draft.copy(folder = it) }, label = { Text("同步目录") },
+                        AppTextField(draft.folder, { draft = draft.copy(folder = it) }, label = { Text("同步目录") },
                             supportingText = { Text("相对于服务器地址的目录，所有设备请填写同一目录") },
-                            singleLine = true, enabled = !working, modifier = Modifier.fillMaxWidth(),
-                            shape = appControlShape())
-                        OutlinedTextField(draft.deviceName, { draft = draft.copy(deviceName = it) }, label = { Text("此设备名称") },
-                            singleLine = true, enabled = !working, modifier = Modifier.fillMaxWidth(),
-                            shape = appControlShape())
+                            singleLine = true, enabled = !working, modifier = Modifier.fillMaxWidth())
+                        AppTextField(draft.deviceName, { draft = draft.copy(deviceName = it) }, label = { Text("此设备名称") },
+                            singleLine = true, enabled = !working, modifier = Modifier.fillMaxWidth())
                         AppTextButton(onClick = { password = ""; onClearPassword() }, enabled = !working) { Text("清除已保存的密码") }
                     }
                 } }

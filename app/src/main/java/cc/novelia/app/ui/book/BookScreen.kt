@@ -1,6 +1,7 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package cc.novelia.app.ui.book
 
+import cc.novelia.app.ui.components.base.AppTextField
 import cc.novelia.app.ui.theme.appControlShape
 import cc.novelia.app.ui.theme.DefaultShapes
 import cc.novelia.app.ui.components.base.AppListItem
@@ -435,8 +436,7 @@ import kotlinx.coroutines.withContext
     val scroll = rememberLazyListState(); val scope = rememberCoroutineScope()
     Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize()) {
-        OutlinedTextField(search, { search = it }, label = { Text("搜索章节") }, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), singleLine = true, leadingIcon = { Icon(Icons.Outlined.Search, null) },
-            shape = appControlShape())
+        AppTextField(search, { search = it }, label = { Text("搜索章节") }, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), singleLine = true, leadingIcon = { Icon(Icons.Outlined.Search, null) })
         FlowRow(Modifier.padding(horizontal = 12.dp)) {
             AppTextButton(onClick = { reversed = !reversed }) { Text(if(reversed) "倒序" else "正序") }
             AppTextButton(onClick = { scope.launch { if(reducedMotion || abs(currentIndex - scroll.firstVisibleItemIndex) > 100) scroll.scrollToItem(currentIndex) else scroll.animateScrollToItem(currentIndex) } }, enabled = currentIndex >= 0) { Text("定位当前") }

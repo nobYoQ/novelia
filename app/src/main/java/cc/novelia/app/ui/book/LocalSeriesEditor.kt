@@ -1,6 +1,5 @@
 package cc.novelia.app.ui.book
 
-import cc.novelia.app.ui.theme.appControlShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import android.net.Uri
 import androidx.activity.compose.BackHandler
@@ -123,7 +122,7 @@ internal fun NavGraphBuilder.localSeriesEditorDestination(c: AppController) {
     val focus = LocalFocusManager.current
     val preview = (parent?.book ?: BookCard(ref, "")).copy(title = title.trim().ifEmpty { "本地总集" }, cover = coverUri)
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = if(startAtVolumes) 2 else 0)
-    val fieldShape = appControlShape(RoundedCornerShape(14.dp))
+
     val hasCustomCover = coverUri != null || (savedCover != null && !restoreCover)
     val keywordIndex by c.app.keywords.displayIndex.collectAsStateWithLifecycle()
 
@@ -139,9 +138,9 @@ internal fun NavGraphBuilder.localSeriesEditorDestination(c: AppController) {
                                 LocalSeriesCoverField(preview, coverUri == null && !restoreCover, hasCustomCover, !saving,
                                     onPick = { picker.launch(DocumentPickerTypes.Images.toTypedArray()) },
                                     onRestore = { coverUri = null; restoreCover = savedCover != null })
-                                OutlinedTextField(title, { title = it.take(LOCAL_SERIES_TITLE_LIMIT) }, label = { Text("总集名称") },
+                                AppTextField(title, { title = it.take(LOCAL_SERIES_TITLE_LIMIT) }, label = { Text("总集名称") },
                                     modifier = Modifier.fillMaxWidth().testTag("local-series-title"), enabled = !saving,
-                                    singleLine = true, shape = fieldShape)
+                                    singleLine = true)
                                 LocalSeriesFolderField(folders, selectedFolderId, !saving) { folderId = it }
                             }
                         }
@@ -150,16 +149,16 @@ internal fun NavGraphBuilder.localSeriesEditorDestination(c: AppController) {
                         ProfileDetailCard {
                             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Text("补充资料（选填）", style = MaterialTheme.typography.titleMedium)
-                                OutlinedTextField(authors, { authors = it.take(LOCAL_SERIES_LIST_FIELD_LIMIT) }, label = { Text("作者") },
+                                AppTextField(authors, { authors = it.take(LOCAL_SERIES_LIST_FIELD_LIMIT) }, label = { Text("作者") },
                                     modifier = Modifier.fillMaxWidth().testTag("local-series-authors"), enabled = !saving,
-                                    singleLine = true, shape = fieldShape)
+                                    singleLine = true)
                                 LocalSeriesTagsField(tags, keywordIndex.labels, !saving, onChoose = {
                                     focus.clearFocus()
                                     choosingTags = true
                                 }, onRemove = { tags = ArrayList(tags - it) })
-                                OutlinedTextField(description, { description = it.take(LOCAL_SERIES_DESCRIPTION_LIMIT) }, label = { Text("简介") },
+                                AppTextField(description, { description = it.take(LOCAL_SERIES_DESCRIPTION_LIMIT) }, label = { Text("简介") },
                                     modifier = Modifier.fillMaxWidth().testTag("local-series-description"), enabled = !saving,
-                                    minLines = 2, maxLines = 6, shape = fieldShape)
+                                    minLines = 2, maxLines = 6)
                             }
                         }
                     }
@@ -176,8 +175,8 @@ internal fun NavGraphBuilder.localSeriesEditorDestination(c: AppController) {
                     }
                     if(browsing) {
                         item("volume-search") {
-                            OutlinedTextField(query, { query = it }, label = { Text("搜索已导入的书籍") },
-                                leadingIcon = { Icon(Icons.Outlined.Search, null) }, enabled = !saving, singleLine = true, shape = fieldShape,
+                            AppTextField(query, { query = it }, label = { Text("搜索已导入的书籍") },
+                                leadingIcon = { Icon(Icons.Outlined.Search, null) }, enabled = !saving, singleLine = true,
                                 modifier = Modifier.fillMaxWidth().testTag("local-series-volume-search"))
                         }
                         if(candidates.isEmpty()) item("no-candidates") {

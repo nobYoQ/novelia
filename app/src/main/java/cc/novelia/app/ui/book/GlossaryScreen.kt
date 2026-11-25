@@ -2,7 +2,7 @@
 
 package cc.novelia.app.ui.book
 
-import cc.novelia.app.ui.theme.appControlShape
+import cc.novelia.app.ui.components.base.AppTextField
 import cc.novelia.app.ui.components.base.AppListItem
 import cc.novelia.app.ui.components.base.AppButton
 import cc.novelia.app.ui.components.base.AppTextButton
@@ -99,8 +99,7 @@ import kotlinx.serialization.encodeToString
         LaunchedEffect(glossary) { if(data == null) { data = glossary; original = glossary } }
         Column {
             if(canEdit) DocumentPickerFallback(importer, enabled = !saving)
-            OutlinedTextField(query, { query = it }, label = { Text("查找原文或译名") }, modifier = Modifier.fillMaxWidth().padding(20.dp), singleLine = true,
-                shape = appControlShape())
+            AppTextField(query, { query = it }, label = { Text("查找原文或译名") }, modifier = Modifier.fillMaxWidth().padding(20.dp), singleLine = true)
             AppLazyColumn(Modifier.weight(1f)) {
                 if(entries.isEmpty()) item { EmptyState("暂时没有匹配词条", "术语表用于统一作品中的人名和专有名词。", Icons.Outlined.Translate) }
                 items(entries, key = { it.key }) { item -> AppListItem(headlineContent = { Text(item.key) }, supportingContent = { Text(item.value) }, trailingContent = { if(canEdit) Row { AppIconButton(onClick = { editing = item.key to item.value }) { Icon(Icons.Outlined.Edit, "编辑词条") }; AppIconButton(onClick = { data = data.orEmpty() - item.key }) { Icon(Icons.Outlined.DeleteOutline, "删除词条") } } }) }
@@ -111,8 +110,6 @@ import kotlinx.serialization.encodeToString
     } }
     if(add || editing != null) {
         var source by remember(editing) { mutableStateOf(editing?.first.orEmpty()) }; var target by remember(editing) { mutableStateOf(editing?.second.orEmpty()) }
-        AppAlertDialog(onDismissRequest = { add = false; editing = null }, title = { Text(if(add) "添加词条" else "编辑词条") }, text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { OutlinedTextField(source, { source = it }, label = { Text("原文") },
-            shape = appControlShape()); OutlinedTextField(target, { target = it }, label = { Text("译名") },
-            shape = appControlShape()) } }, confirmButton = { AppTextButton(onClick = { data = (data.orEmpty() - (editing?.first ?: "")) + (source.trim() to target.trim()); add = false; editing = null }, enabled = source.isNotBlank() && target.isNotBlank()) { Text("保存词条") } }, dismissButton = { AppTextButton(onClick = { add = false; editing = null }) { Text("取消") } })
+        AppAlertDialog(onDismissRequest = { add = false; editing = null }, title = { Text(if(add) "添加词条" else "编辑词条") }, text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { AppTextField(source, { source = it }, label = { Text("原文") }); AppTextField(target, { target = it }, label = { Text("译名") }) } }, confirmButton = { AppTextButton(onClick = { data = (data.orEmpty() - (editing?.first ?: "")) + (source.trim() to target.trim()); add = false; editing = null }, enabled = source.isNotBlank() && target.isNotBlank()) { Text("保存词条") } }, dismissButton = { AppTextButton(onClick = { add = false; editing = null }) { Text("取消") } })
     }
 }

@@ -2,7 +2,7 @@
 
 package cc.novelia.app.ui.tools
 
-import cc.novelia.app.ui.theme.appControlShape
+import cc.novelia.app.ui.components.base.AppTextField
 import cc.novelia.app.ui.components.base.AppLinearProgressIndicator
 import cc.novelia.app.ui.components.base.AppButton
 import cc.novelia.app.ui.components.base.AppTextButton
@@ -70,8 +70,7 @@ import cc.novelia.app.files.exporting.PendingExportFiles
         Text(listOf("按 EPUB 阅读顺序提取正文并导出为文本。", "优化 EPUB 中的图片，保留卷目与原始文件结构。", "合并文本中多余的段内换行，按空行和部分句末、对话标点保留分段。支持选择文本文件或粘贴文本，请检查预览后再导出。", "提取片假名词组并统计频率，辅助整理术语。结果不等同于人名判定。")[tool], Modifier.padding(20.dp), style = MaterialTheme.typography.bodyMedium)
         AppOutlinedButton(onClick = { picker.launch() }, Modifier.fillMaxWidth().padding(horizontal = 20.dp), enabled = !busy) { Icon(Icons.Outlined.FileOpen, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(picked?.first ?: "选择文件") }
         DocumentPickerFallback(picker, enabled = !busy)
-        if(tool >= 2) OutlinedTextField(input, { input = it }, enabled = !busy, label = { Text("粘贴或编辑文本") }, minLines = 7, maxLines = 14, modifier = Modifier.fillMaxWidth().padding(20.dp),
-            shape = appControlShape())
+        if(tool >= 2) AppTextField(input, { input = it }, enabled = !busy, label = { Text("粘贴或编辑文本") }, minLines = 7, maxLines = 14, modifier = Modifier.fillMaxWidth().padding(20.dp))
         AppButton(onClick = {
             val selectedTool = tool; val selectedFile = picked; val selectedInput = input
             busy = true; error = null

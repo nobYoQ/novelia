@@ -1,6 +1,6 @@
 package cc.novelia.app.ui.markdown
 
-import cc.novelia.app.ui.theme.appControlShape
+import cc.novelia.app.ui.components.base.AppTextField
 import cc.novelia.app.ui.components.base.AppTextButton
 import cc.novelia.app.ui.components.base.AppIconButton
 import androidx.compose.foundation.layout.*
@@ -86,14 +86,13 @@ internal fun TextFieldValue.format(template: MarkdownTemplate, limit: Int): Text
         })
         Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             MarkdownLinkPaste(current, focused, unicodeLimit ?: 10000, unicodeLength = unicodeLimit != null) {
-            OutlinedTextField(current, ::change, label = { Text(label) }, modifier = Modifier.weight(1f).focusRequester(focus).testTag("comment-body")
+            AppTextField(current, ::change, label = { Text(label) }, modifier = Modifier.weight(1f).focusRequester(focus).testTag("comment-body")
                 .onFocusChanged { focused = it.isFocused; if(it.isFocused) toolbarSelection = null }
                 .onPreviewKeyEvent {
                     // TextField 失焦会收起选区，需在 Tab 转移焦点之前捕获。
                     if(it.type == KeyEventType.KeyDown && it.key == Key.Tab && !it.isCtrlPressed && !it.isAltPressed && !it.isMetaPressed) toolbarSelection = current
                     false
-                }, isError = isError, maxLines = 4,
-                shape = appControlShape())
+                }, isError = isError, maxLines = 4)
             }
             sendButton()
         }

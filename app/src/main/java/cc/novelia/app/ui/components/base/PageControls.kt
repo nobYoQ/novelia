@@ -2,7 +2,6 @@
 package cc.novelia.app.ui.components.base
 
 import cc.novelia.app.ui.theme.DefaultShapes
-import cc.novelia.app.ui.theme.appControlShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.foundation.text.KeyboardActions
@@ -108,13 +107,12 @@ internal fun paginationItems(page: Int, count: Int): List<Int?> {
         FilterPanelVisibility(expanded) {
             Row(Modifier.widthIn(max = 320.dp).testTag("page-jump-input"), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(value = input, onValueChange = { input = it },
+                AppTextField(value = input, onValueChange = { input = it },
                     modifier = Modifier.weight(1f), singleLine = true, label = { Text("跳转页码") },
                     placeholder = { Text("1–$total") }, isError = invalid,
                     supportingText = if (invalid) ({ Text("请输入 1–$total 的页码") }) else null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Go),
-                    keyboardActions = KeyboardActions(onGo = { jump() }),
-                    shape = appControlShape())
+                    keyboardActions = KeyboardActions(onGo = { jump() }))
                 AppTextButton(onClick = { jump() }, enabled = target != null) { Text("跳转") }
             }
         }

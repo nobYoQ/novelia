@@ -1,8 +1,6 @@
 package cc.novelia.app.ui.book
 
-import cc.novelia.app.ui.theme.appControlShape
 import cc.novelia.app.ui.theme.appPanelShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -111,8 +109,8 @@ internal fun WenkuEditorField(
     keyboardType: KeyboardType = KeyboardType.Text,
     isError: Boolean = false,
 ) {
-    OutlinedTextField(value, onValueChange, label = { Text(label) },
-        modifier = modifier.fillMaxWidth(), shape = appControlShape(RoundedCornerShape(16.dp)),
+    AppTextField(value, onValueChange, label = { Text(label) },
+        modifier = modifier.fillMaxWidth(),
         minLines = minLines, singleLine = singleLine, isError = isError,
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         supportingText = hint?.let { { Text(it) } })
