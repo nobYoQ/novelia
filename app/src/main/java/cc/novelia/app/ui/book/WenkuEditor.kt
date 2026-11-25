@@ -20,6 +20,7 @@ import cc.novelia.app.data.model.WenkuDetail
 import cc.novelia.app.data.model.WenkuOutline
 import cc.novelia.app.data.model.WenkuVolume
 import cc.novelia.app.data.network.ApiException
+import cc.novelia.app.data.network.similarWenku
 import cc.novelia.app.data.storage.appJson
 import cc.novelia.app.ui.components.base.AppAlertDialog
 import cc.novelia.app.ui.components.base.AppScrollColumn
@@ -30,7 +31,6 @@ import cc.novelia.app.ui.components.base.Screen
 import cc.novelia.app.ui.markdown.rememberDraftPersistence
 import cc.novelia.app.ui.navigation.AppController
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.*
 
 @Composable fun WenkuEditorScreen(c: AppController, id: String? = null) {
     val profile by c.session.profile.collectAsStateWithLifecycle()
@@ -52,27 +52,49 @@ import kotlinx.serialization.json.*
     var volumes by remember(id) { mutableStateOf(draft.volumes) }
     var volumeEditor by rememberSaveable(id) { mutableStateOf<Int?>(null) }
     var saving by remember { mutableStateOf(false) }
-    var duplicate by remember { mutableStateOf<List<WenkuOutline>?>(null) }
-    var ignoreDuplicate by remember { mutableStateOf(false) }
+    val profile by c.session.profile.collectAsStateWithLifecycle()
+    val binding = c.session.capture()
+    var duplicate by remember(title, binding) { mutableStateOf<List<WenkuOutline>?>(null) }
     val focusManager = LocalFocusManager.current
     fun values() = WenkuDetail(title = title.trim(), titleZh = titleZh.trim(), cover = cover.trim().ifBlank { null }, authors = authors.lines().map(String::trim).filter(String::isNotBlank), artists = artists.lines().map(String::trim).filter(String::isNotBlank), keywords = tags.lines().map(String::trim).filter(String::isNotBlank), level = level, introduction = intro.trim(), volumes = volumes)
     val draftPersistence = rememberDraftPersistence(c.store, draftKey) { appJson.encodeToString(values()) }
     LaunchedEffect(title, titleZh, authors, artists, intro, cover, tags, level, volumes) { kotlinx.coroutines.delay(700); draftPersistence.save() }
-    fun submit() { c.action { saving = true; try {
-        val submitted = values()
-        val submittedDraft = appJson.encodeToString(submitted)
-        if(id == null && !ignoreDuplicate) {
-            val found = c.api.wenkuList(0, submitted.title).items
-            if(found.isNotEmpty()) { duplicate = found; return@action }
+    val canReadAdult = profile?.canReadAdult == true
+    fun submit(confirmedTitle: String? = null) {
+        if (saving) return
+        c.action {
+            saving = true
+            try {
+                val submitted = values()
+                c.session.ensureCurrent(binding)
+                if (id == null && confirmedTitle != submitted.title) {
+                    val found = c.api.similarWenku(submitted.title, canReadAdult, binding)
+                    if (title.trim() != submitted.title) return@action
+                    if (found.isNotEmpty()) {
+                        duplicate = found
+                        return@action
+                    }
+                }
+                val body = submitted.editablePayload().toString()
+                val bookId = if (id == null) {
+                    c.api.request("POST", "wenku", body, binding = binding).trim().trim('"')
+                } else {
+                    val latest = c.api.get<WenkuDetail>("wenku/$id", binding = binding)
+                    if (latest.editablePayload() != original.editablePayload()) {
+                        throw ApiException(409, "条目已被更新，请重新进入后核对再保存")
+                    }
+                    c.api.request("PUT", "wenku/$id", body, binding = binding)
+                    id
+                }
+                draftPersistence.submittedSuccessfully(appJson.encodeToString(submitted))
+                c.back()
+                c.book(BookRef("wenku", bookId))
+                c.message("文库条目已保存")
+            } finally {
+                saving = false
+            }
         }
-        val data = submitted.editablePayload()
-        if(id != null) {
-            val latest = c.api.get<WenkuDetail>("wenku/$id")
-            if(latest.editablePayload() != original.editablePayload()) throw ApiException(409, "条目已被更新，请重新进入后核对再保存")
-        }
-        val result = if(id == null) c.api.post("wenku", JsonObject(data)) else c.api.put("wenku/$id", JsonObject(data))
-        draftPersistence.submittedSuccessfully(submittedDraft); c.back(); c.book(BookRef("wenku", id ?: result.trim().trim('"'))); c.message("文库条目已保存")
-    } finally { saving = false } } }
+    }
     val invalidCover = cover.isNotBlank() && !cover.startsWith("https://")
     WenkuEditorPage(
         title = if(id == null) "新建文库条目" else "编辑文库条目",
@@ -129,7 +151,7 @@ import kotlinx.serialization.json.*
                 }
             },
             confirmButton = {
-                AppTextButton(onClick = { duplicate = null; ignoreDuplicate = true; submit() }) {
+                AppTextButton(onClick = { duplicate = null; submit(confirmedTitle = title.trim()) }) {
                     Text("确认是新作品，继续创建")
                 }
             },

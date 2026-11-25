@@ -56,7 +56,7 @@
 | 文库新建/修改 | [WenkuEditor.kt](../../app/src/main/java/cc/novelia/app/ui/book/WenkuEditor.kt)，包含出版分卷、作者、封面等 |
 | 术语表 | [GlossaryScreen.kt](../../app/src/main/java/cc/novelia/app/ui/book/GlossaryScreen.kt)，区分本地个人术语与远端作品术语 |
 
-文库编辑使用 `wenku:new` 或 `wenku:<id>` 草稿。新建时提示可能重复的标题；修改前重读远端可编辑字段，发现变化则提示冲突。字段白名单由 [WenkuEditPayload.kt](../../app/src/main/java/cc/novelia/app/ui/book/WenkuEditPayload.kt) 共用。
+文库编辑使用 `wenku:new` 或 `wenku:<id>` 草稿。新建时取原文标题中第一段连续的假名或汉字，没有匹配时使用完整标题。分别搜索普通小说与非小说，有权限时也查询两类成人向作品。结果按书目 ID 去重，任一查询失败会保留草稿供重试。修改前重读远端可编辑字段，发现变化则提示冲突。
 
 重读再比较只能发现已经发生的冲突，两个请求之间仍有并发窗口，不是服务端原子锁。成功后只清理与发送快照相同的草稿，发送期间的新输入保留。
 

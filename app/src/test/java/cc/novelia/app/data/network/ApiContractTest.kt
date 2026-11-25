@@ -6,10 +6,48 @@ import cc.novelia.app.data.model.CloudFolders
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.Dispatcher
+import okhttp3.mockwebserver.RecordedRequest
 import org.junit.Assert.*
 import org.junit.Test
 
 class ApiContractTest {
+    @Test fun wenkuDuplicateSearchUsesTheWebsiteKeywordAndAllPermittedLevels() = runBlocking {
+        MockWebServer().use { server ->
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse {
+                    val level = request.requestUrl!!.queryParameter("level")
+                    val id = if (level == "4") "non-fiction" else "same-book"
+                    return MockResponse().setBody("""{"items":[{"id":"$id"}]}""")
+                }
+            }
+            val api = NoveliaApi(null, server.url("/api/").toString())
+            suspend fun check(title: String, adult: Boolean, expectedQuery: String, levels: Set<String>) {
+                assertEquals(listOf("same-book", "non-fiction"), api.similarWenku(title, adult).map { it.id })
+                val urls = List(levels.size) { server.takeRequest().requestUrl!! }
+                assertEquals(levels, urls.map { it.queryParameter("level") }.toSet())
+                assertTrue(urls.all { it.encodedPath == "/api/wenku" && it.queryParameter("query") == expectedQuery &&
+                    it.queryParameter("page") == "0" && it.queryParameter("pageSize") == "6" })
+            }
+            check("86―小説の名！後編", true, "小説の名", setOf("0", "4", "5", "6"))
+            check("  Volume 86  ", false, "Volume 86", setOf("0", "4"))
+            assertEquals(6, server.requestCount)
+        }
+    }
+
+    @Test fun failedWenkuLevelDoesNotReturnPartialDuplicateResults() = runBlocking {
+        MockWebServer().use { server ->
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest) =
+                    if (request.requestUrl!!.queryParameter("level") == "4") MockResponse().setResponseCode(403)
+                    else MockResponse().setBody("""{"items":[]}""")
+            }
+            val api = NoveliaApi(null, server.url("/api/").toString())
+            val failure = runCatching { api.similarWenku("作品", false) }.exceptionOrNull()
+            assertEquals(403, (failure as ApiException).status)
+        }
+    }
+
     @Test fun editingWebBookTextLeavesAllChapterTranslationsAlone() = runBlocking {
         MockWebServer().use { server ->
             server.enqueue(MockResponse())

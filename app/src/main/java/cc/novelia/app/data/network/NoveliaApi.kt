@@ -104,8 +104,8 @@ class NoveliaApi(val session: AuthenticationSession?, val baseUrl: String = "htt
         }
         @Suppress("UNREACHABLE_CODE") error("Unreachable")
     }
-    suspend inline fun <reified T> get(path: String, params: Map<String, String> = emptyMap()): T {
-        val raw = request("GET", path, params = params)
+    suspend inline fun <reified T> get(path: String, params: Map<String, String> = emptyMap(), binding: SessionBinding? = session?.capture()): T {
+        val raw = request("GET", path, params = params, binding = binding)
         return withContext(Dispatchers.Default) { appJson.decodeFromString<T>(raw).also { observeKeywords(it) } }
     }
     /** 只从用户已请求的内容中观察标签，不额外拉取全站标签列表。 */
@@ -126,7 +126,8 @@ class NoveliaApi(val session: AuthenticationSession?, val baseUrl: String = "htt
     suspend inline fun <reified T> put(path: String, value: T): String = request("PUT", path, appJson.encodeToString(value))
     suspend inline fun <reified T> post(path: String, value: T): String = request("POST", path, appJson.encodeToString(value))
     suspend fun webList(page: Int, query: String = "", provider: String = "", type: Int = 0, level: Int = 1, translate: Int = 0, sort: Int = 0) = get<Page<WebOutline>>("novel", mapOf("page" to "$page", "pageSize" to "20", "query" to query, "provider" to provider.ifBlank { providers.keys.joinToString(",") }, "type" to "$type", "level" to "$level", "translate" to "$translate", "sort" to "$sort"))
-    suspend fun wenkuList(page: Int, query: String = "", level: Int = 0) = get<Page<WenkuOutline>>("wenku", mapOf("page" to "$page", "pageSize" to "20", "query" to query, "level" to "$level"))
+    suspend fun wenkuList(page: Int, query: String = "", level: Int = 0, pageSize: Int = 20, binding: SessionBinding? = session?.capture()) =
+        get<Page<WenkuOutline>>("wenku", mapOf("page" to "$page", "pageSize" to "$pageSize", "query" to query, "level" to "$level"), binding)
     suspend fun chapter(ref: BookRef, id: String) = get<Chapter>("novel/${ref.key}/chapter/$id")
     fun downloadUrl(ref: BookRef, volume: String?, mode: String, engines: List<String>, parallel: Boolean, type: String, fileName: String): String = url(
         if (ref.isWenku) "wenku/${ref.id}/file/${encodeSegment(requireNotNull(volume))}" else "novel/${ref.key}/file",
