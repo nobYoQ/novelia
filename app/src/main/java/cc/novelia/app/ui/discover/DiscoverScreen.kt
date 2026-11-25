@@ -217,11 +217,14 @@ import kotlinx.coroutines.sync.withPermit
                         }
                         val books = remember(result.items, visibility) { result.items.filter(visibility::visible) }
                         val emptyContent: @Composable () -> Unit = {
-                            Column {
-                                EmptyState("没有找到匹配的作品", if(filterCount > 0) "先放宽筛选条件，搜索关键词会保留。" else "试试较短的关键词，或检查屏蔽条件。", Icons.Outlined.SearchOff,
+                            if(result.items.isNotEmpty()) {
+                                HiddenDiscoverPage(result.items.size, page + 1 < result.pageNumber,
+                                    onNext = { setPage(section, page + 1) },
+                                    onSettings = { c.go("settings?section=CONTENT") })
+                            } else {
+                                EmptyState("没有找到匹配的作品", if(filterCount > 0) "先放宽筛选条件，搜索关键词会保留。" else if(submitted.isNotBlank()) "试试较短的关键词。" else "书源暂时没有返回作品。", Icons.Outlined.SearchOff,
                                     if(filterCount > 0) "放宽筛选" else if(submitted.isNotBlank()) "浏览全部作品" else "重新加载",
                                     { if(filterCount > 0) applyFilters(section, DiscoverFilters()) else if(submitted.isNotBlank()) { query = ""; submitted = ""; resetPages() } else refresh() }, sticker = Sticker.Curious)
-                                if(local.blockedBooks.isNotEmpty() || local.blockedTags.isNotEmpty() || local.blockedAuthors.isNotEmpty() || local.hideLocalFavorites || local.hideCloudFavorites) AppTextButton(onClick = { c.go("settings?section=CONTENT") }, Modifier.fillMaxWidth()) { Text("检查屏蔽条件") }
                             }
                         }
                         if(section == 2) key(requestKey) {

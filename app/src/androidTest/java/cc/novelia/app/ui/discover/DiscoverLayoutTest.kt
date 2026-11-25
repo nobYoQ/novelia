@@ -34,6 +34,17 @@ import org.junit.Test
 class DiscoverLayoutTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun hiddenPageOffersNextPageAndLastPageOpensVisibilitySettings() {
+        var next by mutableStateOf(true)
+        var settings = false
+        compose.setContent { MaterialTheme { HiddenDiscoverPage(12, next, { next = false }, { settings = true }) } }
+        compose.onNodeWithText("本页 12 本均被当前规则隐藏").assertIsDisplayed()
+        compose.onNodeWithText("看下一页").performClick()
+        compose.onNodeWithText("看下一页").assertDoesNotExist()
+        compose.onNodeWithText("检查屏蔽条件").performClick()
+        compose.runOnIdle { assertTrue(settings) }
+    }
+
     @Test fun savingABookDoesNotAddShelfMetadataToDiscovery() {
         var web by mutableStateOf(BookCard(BookRef("syosetu", "metadata-web"), "网络小说", total = 103, novelType = "已完结"))
         var wenku by mutableStateOf(BookCard(BookRef("wenku", "metadata-wenku"), "文库小说"))
