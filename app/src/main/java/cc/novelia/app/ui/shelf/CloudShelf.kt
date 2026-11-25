@@ -88,7 +88,7 @@ import cc.novelia.app.ui.navigation.AppController
     var bulkLocal by remember { mutableStateOf<List<BookCard>?>(null) }
     var bulkImport by remember { mutableStateOf<Boolean?>(null) }
     var importProgress by remember { mutableStateOf<String?>(null) }
-    var bulkRemoval by remember { mutableStateOf<Pair<String, List<BookCard>>?>(null) }
+    var bulkRemoval by remember { mutableStateOf<String?>(null) }
     SideEffect { onSelectionStateChanged(active && managing, bulkBusy) }
     DisposableEffect(onSelectionStateChanged) { onDispose { onSelectionStateChanged(false, false) } }
     BackHandler(active && managing) { if(!bulkBusy) { managing = false; selection = emptyMap() } }
@@ -225,7 +225,7 @@ import cc.novelia.app.ui.navigation.AppController
                                 managing, { managing = it; if(it) { expanded = false; focus.clearFocus() } }, selection, { selection = it },
                                 bulkBusy, bulkProgress, active, controlsHeight, selectedBookKey,
                                 onOpenBook = { expanded = false; onOpenBook(it) }, onLocal = { bulkLocal = selection.values.toList() },
-                                onRemove = { bulkRemoval = current.id to selection.values.toList() }, onRetry = retry,
+                                onRemove = { bulkRemoval = current.id }, onRetry = retry,
                                 onReadBook = { ref, chapter -> c.read(ref, chapter) },
                                 grid = local.cloudShelfGrid, gridState = gridState,
                                 onImportAll = { bulkImport = it }, progressLabel = importProgress,
@@ -254,9 +254,10 @@ import cc.novelia.app.ui.navigation.AppController
         onCloudFolders = { importBooks(null, wenku = wenku) }) { folder ->
         importBooks(folder, wenku = wenku)
     } }
-    bulkRemoval?.let { (selectedFolder, books) ->
-        ConfirmDialog("取消 ${books.size} 本云端收藏？", "仅取消所选作品的云端收藏，本地收藏和阅读记录会保留。",
-            { bulkRemoval = null }, confirmLabel = "取消云端收藏") {
+    bulkRemoval?.let { selectedFolder ->
+        CloudSelectionDialog(selection, onUnselect = { selection = selection - it }, onDismiss = { bulkRemoval = null }) {
+            val books = selection.values.toList()
+            bulkRemoval = null
             val binding = c.session.capture()
             // 一批完成后统一刷新，避免每本成功都触发列表与元数据请求。
             bulkBusy = true; bulkProgress = 0; expanded = false

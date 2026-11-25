@@ -23,10 +23,17 @@ import androidx.compose.ui.unit.dp
 import cc.novelia.app.ui.components.base.*
 
 @Composable internal fun ShelfSelectionHeader(count: Int, enabled: Boolean, minimumHeight: Dp,
-    onSelectAll: () -> Unit, onFinish: () -> Unit, tagPrefix: String = "local", selectAllLabel: String = "全选") {
+    onSelectAll: () -> Unit, onFinish: () -> Unit, tagPrefix: String = "local", selectAllLabel: String = "全选",
+    onReview: (() -> Unit)? = null) {
     Row(Modifier.fillMaxWidth().heightIn(min = minimumHeight).padding(horizontal = 20.dp).testTag("$tagPrefix-selection-header"),
         verticalAlignment = Alignment.CenterVertically) {
-        Text("已选 $count 本", Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
+        Box(Modifier.weight(1f)) {
+            if(onReview == null) Text("已选 $count 本", style = MaterialTheme.typography.labelLarge)
+            else AppTextButton(onClick = onReview, enabled = enabled && count > 0) {
+                Text("已选 $count 本")
+                Icon(Icons.Outlined.ExpandMore, "查看所选书目", Modifier.size(18.dp))
+            }
+        }
         AppTextButton(onClick = onSelectAll, enabled = enabled, modifier = Modifier.testTag("$tagPrefix-select-all")) { Text(selectAllLabel) }
         AppTextButton(onClick = onFinish, enabled = enabled, modifier = Modifier.testTag("$tagPrefix-selection-done")) { Text("完成") }
     }

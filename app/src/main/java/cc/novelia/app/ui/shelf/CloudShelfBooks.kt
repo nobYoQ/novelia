@@ -35,6 +35,9 @@ import cc.novelia.app.ui.components.book.bookRowStatus
     metadata: @Composable (BookCard) -> BookCard = { it }, actions: @Composable (BookCard, () -> Boolean) -> Unit = { _, _ -> },
     onImportAll: ((Boolean) -> Unit)? = null, progressLabel: String? = null,
 ) {
+    var reviewing by remember(managing, active) { mutableStateOf(false) }
+    if(managing && active && reviewing) CloudSelectionDialog(selection, onUnselect = { onSelection(selection - it) },
+        onDismiss = { reviewing = false })
     BoxWithConstraints(Modifier.fillMaxSize()) {
     val density = LocalDensity.current
     val keys = books.map { it.ref.key }
@@ -56,7 +59,8 @@ import cc.novelia.app.ui.components.book.bookRowStatus
             val allSelected = keys.isNotEmpty() && selection.keys.containsAll(keys)
             ShelfSelectionHeader(selection.size, !busy, if(dragSelection.dragging) with(density) { controlsHeight.toDp() } else 48.dp,
                 onSelectAll = { onSelection(if(allSelected) selection - keys.toSet() else selection + books.associateBy { it.ref.key }) },
-                onFinish = { onManaging(false); onSelection(emptyMap()) }, tagPrefix = "cloud", selectAllLabel = if(allSelected) "取消本页全选" else "全选本页")
+                onFinish = { onManaging(false); onSelection(emptyMap()) }, tagPrefix = "cloud", selectAllLabel = if(allSelected) "取消本页全选" else "全选本页",
+                onReview = { reviewing = true })
         }
         ShelfLayoutTransition(grid, Modifier.weight(1f)) { showGrid ->
         AppLazyColumn(state = layout.current(showGrid), modifier = Modifier.fillMaxSize(),

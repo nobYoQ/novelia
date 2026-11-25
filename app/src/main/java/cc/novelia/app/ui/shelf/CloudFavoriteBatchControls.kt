@@ -2,6 +2,16 @@
 package cc.novelia.app.ui.shelf
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.items
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.text.style.TextOverflow
+import cc.novelia.app.data.model.BookCard
+import cc.novelia.app.data.catalog.providers
+import cc.novelia.app.ui.components.base.AppAlertDialog
+import cc.novelia.app.ui.components.base.AppLazyColumn
+import cc.novelia.app.ui.components.base.AppTextButton
+import cc.novelia.app.ui.components.base.AppIconButton
+import cc.novelia.app.ui.components.base.AppListItem
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -13,6 +23,45 @@ import cc.novelia.app.ui.components.base.AppScrollColumn
 import cc.novelia.app.ui.components.base.AppSheet
 import cc.novelia.app.ui.components.base.MenuRow
 import cc.novelia.app.ui.components.base.TextPrompt
+
+@Composable internal fun CloudSelectionDialog(
+    selection: Map<String, BookCard>, onUnselect: (String) -> Unit, onDismiss: () -> Unit,
+    onConfirmRemoval: (() -> Unit)? = null,
+) {
+    val removing = onConfirmRemoval != null
+    var expanded by rememberSaveable { mutableStateOf(!removing) }
+    AppAlertDialog(onDismissRequest = onDismiss,
+        title = { Text(if(removing) "取消 ${selection.size} 本云端收藏？" else "已选 ${selection.size} 本") },
+        text = {
+            Column {
+                if(removing) {
+                    Text("仅取消所选作品的云端收藏，本地收藏和阅读记录会保留。")
+                    AppTextButton(onClick = { expanded = !expanded }) {
+                        Text(if(expanded) "收起所选书目" else "查看所选书目")
+                    }
+                }
+                if(expanded && selection.isEmpty()) Text("尚未选择书籍")
+                if(expanded && selection.isNotEmpty()) AppLazyColumn(
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp), fillHeight = false,
+                ) {
+                    items(selection.values.toList(), key = { it.ref.key }) { book ->
+                        val source = if(book.ref.isWenku) "文库" else providers[book.ref.provider] ?: book.ref.provider
+                        AppListItem(headlineContent = { Text(book.title, maxLines = 3, overflow = TextOverflow.Ellipsis) },
+                            supportingContent = { Text(listOfNotNull(source,
+                                book.authors.joinToString("、").takeIf(String::isNotBlank)).joinToString(" · ")) },
+                            trailingContent = { AppIconButton(onClick = { onUnselect(book.ref.key) }) {
+                                Icon(Icons.Outlined.Close, "取消选择《${book.title}》")
+                            } })
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if(onConfirmRemoval == null) AppTextButton(onDismiss) { Text("完成") }
+            else AppTextButton(onConfirmRemoval, enabled = selection.isNotEmpty()) { Text("取消云端收藏") }
+        },
+        dismissButton = { if(removing) AppTextButton(onDismiss) { Text("取消") } })
+}
 
 @Composable internal fun CloudFavoriteLocalSheet(folders: List<String>, count: Int, onDismiss: () -> Unit,
     onCloudFolders: (() -> Unit)? = null, onSave: (String) -> Unit) {

@@ -47,6 +47,21 @@ class CloudShelfInteractionTest {
     private val books = List(20) { BookCard(BookRef("wenku", "cloud-preview-$it"), "云端收藏示例 ${it + 1}", authors = listOf("山川遥")) }
     private val folders = listOf(Folder("all", "全部收藏"), Folder("reading", "正在阅读的长名称收藏夹"))
 
+    @Test fun removalReviewSubmitsOnlyTheRemainingBooks() {
+        selected = listOf(books[0], books[10]).associateBy { it.ref.key }
+        var submitted = emptyList<BookCard>()
+        compose.setContent { MaterialTheme {
+            CloudSelectionDialog(selected, { selected = selected - it }, {}) { submitted = selected.values.toList() }
+        } }
+        compose.onNodeWithText("查看所选书目").performClick()
+        compose.onNodeWithContentDescription("取消选择《${books[0].title}》").performClick()
+        compose.onNodeWithText("取消 1 本云端收藏？").assertIsDisplayed()
+        compose.onNodeWithText("取消云端收藏").performClick()
+        compose.runOnIdle { assertEquals(listOf(books[10]), submitted) }
+        compose.onNodeWithContentDescription("取消选择《${books[10].title}》").performClick()
+        compose.onNodeWithText("取消云端收藏").assertIsNotEnabled()
+    }
+
     private fun show(fontScale: Float = 1f, reduced: Boolean = true, gridStyle: ShelfGridStyle = ShelfGridStyle.Classic) {
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, fontScale)) {
@@ -153,6 +168,9 @@ class CloudShelfInteractionTest {
         list.performScrollToIndex(10)
         compose.onNodeWithContentDescription("第 2 页").performClick()
         compose.runOnIdle { assertEquals(1, page); assertEquals(2, selected.size) }
+        compose.onNodeWithText("已选 2 本").performClick()
+        compose.onNodeWithContentDescription("取消选择《${books[0].title}》").assertIsDisplayed()
+        compose.onNode(hasText("完成") and hasAnyAncestor(isDialog())).performClick()
         val next = compose.onNodeWithTag("cloud-book-${books[10].ref.key}")
         val bounds = list.fetchSemanticsNode().boundsInRoot
         val start = next.fetchSemanticsNode().boundsInRoot.center - bounds.topLeft
