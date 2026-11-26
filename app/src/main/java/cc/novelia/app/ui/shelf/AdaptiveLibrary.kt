@@ -65,7 +65,7 @@ import kotlinx.coroutines.flow.map
         },
         detail = { key ->
             val ref = BookRef.fromKey(key)
-            BookScreen(c, ref, onBack = { selectedKey = null }, startAtContents = ref.isWenku)
+            BookScreen(c, ref, onBack = { selectedKey = null }, navigationState = navigationState, startAtContents = ref.isWenku)
         },
     )
 }

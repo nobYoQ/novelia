@@ -224,10 +224,13 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
         nav.previousBackStackEntry?.savedStateHandle?.set(SELECT_SHELF_BOOK, ref.key)
         back()
     }
-    fun returnToBookContents(ref: BookRef) = nav.returnToBookContents(ref)
-    fun read(ref: BookRef, chapter: String, epubFragment: String? = null) {
+    fun returnToBookContents(ref: BookRef, chapter: String) = nav.returnToBookContents(ref, chapter)
+    fun read(ref: BookRef, chapter: String, epubFragment: String? = null, fromBookDetails: Boolean = false) {
         // 从书架/详情重新开始阅读时重新检查目录；连续切章走下面的交接入口。
         synchronized(this) { readerToc = null }
+        // 双栏书架里，详情和左侧的继续阅读按钮共用一个导航项。
+        nav.currentBackStackEntry?.takeIf { it.destination.route == "shelf" }?.savedStateHandle?.set(
+            SHELF_READER_DETAIL_BOOK, ref.key.takeIf { fromBookDetails })
         go(readerRoute(ref, chapter))
         if (ref.isLocal && epubFragment != null) {
             nav.currentBackStackEntry?.savedStateHandle?.set(READER_EPUB_FRAGMENT, epubFragment)

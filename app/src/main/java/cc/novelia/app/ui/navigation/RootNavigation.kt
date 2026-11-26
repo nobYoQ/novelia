@@ -11,22 +11,29 @@ internal const val NEW_LOCAL_SERIES = "new"
 internal const val LOCAL_SERIES_EDITOR_ROUTE = "local-series/edit/{id}?folder={folderId}&volumes={volumes}"
 internal const val DISCOVER_ROUTE = "discover?query={query}&category={category}"
 internal const val COMMUNITY_ROUTE = "community?category={category}&query={query}"
-internal const val SHOW_BOOK_CONTENTS = "showBookContents"
+internal const val SHELF_READER_DETAIL_BOOK = "shelfReaderDetailBook"
+internal fun contentsChapterKey(ref: BookRef) = "contentsChapter:${ref.key}"
 
 /** 优先回到已有详情；直接进入阅读器时替换当前页，避免返回键再次进入末章。 */
-internal fun NavHostController.returnToBookContents(ref: BookRef) {
+internal fun NavHostController.returnToBookContents(ref: BookRef, chapter: String) {
+    val reader = currentBackStackEntry?.takeIf { it.destination.route?.startsWith("reader/") == true } ?: return
+    val source = previousBackStackEntry
+    val fromDetails = when (source?.destination?.route) {
+        "book/{provider}/{id}" -> source.arguments?.getString("provider") == ref.provider && source.arguments?.getString("id") == ref.id
+        "shelf" -> source.savedStateHandle.get<String>(SHELF_READER_DETAIL_BOOK) == ref.key
+        else -> false
+    }
+    val target = contentsChapterKey(ref)
+    if (source != null && fromDetails) {
+        source.savedStateHandle[target] = chapter
+        popBackStack()
+        return
+    }
     val route = "book/${ref.provider}/${Uri.encode(ref.id)}"
-    val existing = runCatching { getBackStackEntry(route) }.getOrNull()
-    if(existing != null) {
-        existing.savedStateHandle[SHOW_BOOK_CONTENTS] = true
-        if(popBackStack(route, inclusive = false)) return
-    }
-    val readerDestination = currentDestination?.takeIf { it.route?.startsWith("reader/") == true }?.id
     navigate(route) {
-        if(readerDestination != null) popUpTo(readerDestination) { inclusive = true }
-        launchSingleTop = true
+        popUpTo(reader.destination.id) { inclusive = true }
     }
-    currentBackStackEntry?.savedStateHandle?.set(SHOW_BOOK_CONTENTS, true)
+    currentBackStackEntry?.savedStateHandle?.set(target, chapter)
 }
 
 internal fun NavHostController.switchRootTab(target: String) {

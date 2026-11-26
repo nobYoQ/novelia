@@ -58,15 +58,19 @@ class RootNavigationTest {
         val ref = BookRef("local", "书名 A&B")
         val bookRoute = "book/local/${Uri.encode(ref.id)}"
         for(fromDetails in listOf(true, false)) {
+            var originalId: String? = null
             compose.runOnIdle {
                 if(fromDetails) nav.navigate(bookRoute)
+                originalId = nav.currentBackStackEntry?.id
                 nav.navigate("reader/local/${Uri.encode(ref.id)}/last")
-                nav.returnToBookContents(ref)
+                nav.returnToBookContents(ref, "last")
             }
             compose.runOnIdle {
                 assertEquals("book/{provider}/{id}", nav.currentDestination?.route)
                 assertEquals(ref.id, nav.currentBackStackEntry?.arguments?.getString("id"))
-                assertEquals(true, nav.currentBackStackEntry?.savedStateHandle?.get<Boolean>(SHOW_BOOK_CONTENTS))
+                if (fromDetails) assertEquals(originalId, nav.currentBackStackEntry?.id)
+                else assertEquals(originalId, nav.previousBackStackEntry?.id)
+                assertEquals("last", nav.currentBackStackEntry?.savedStateHandle?.get<String>(contentsChapterKey(ref)))
                 nav.popBackStack()
             }
             compose.runOnIdle { assertEquals("shelf", nav.currentDestination?.route) }

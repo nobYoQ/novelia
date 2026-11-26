@@ -952,7 +952,7 @@ import kotlinx.serialization.encodeToString
                     if(settings.showScrollPageButtons) {
                         if(chapter.nextId != null) AppButton(onClick = { openChapter(chapter.nextId, inline = true) }, modifier = Modifier.heightIn(min = 48.dp), enabled = !leaving && !chapterLoad.loading) { Text("阅读下一章") }
                         else if(nextVolume != null) { Text("下一分卷：${nextVolume.book.title}", color = foreground, modifier = Modifier.padding(bottom = 12.dp)); AppButton(onClick = ::promptNextVolume, modifier = Modifier.heightIn(min = 48.dp), enabled = !leaving) { Text("阅读下一分卷") } }
-                        else AppOutlinedButton(onClick = { leaveReader { c.returnToBookContents(ref) } },
+                        else AppOutlinedButton(onClick = { leaveReader { c.returnToBookContents(ref, chapterId) } },
                             modifier = Modifier.heightIn(min = 48.dp), enabled = !leaving) { Text("返回目录") }
                     }
                     // 章末留白让同一提示句位于控件上方，不改变正文视口或分页。

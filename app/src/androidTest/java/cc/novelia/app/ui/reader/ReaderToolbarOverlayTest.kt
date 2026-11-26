@@ -638,7 +638,7 @@ class ReaderToolbarOverlayTest {
     }
 
     @Test fun lastChapterReturnOpensTheBookDetailsContentsInsteadOfTheReaderDrawer() = withReader(
-        ReaderSettings(), listOf(LocalChapter("first", "末章测试", listOf("全书完。")))
+        ReaderSettings(), listOf(LocalChapter("first", "末章测试", listOf("全书完。"))), fromShelfContinue = true
     ) { _, _ ->
         scrollToChapterEnd()
         compose.onNodeWithText("返回目录").assertIsDisplayed().performClick()
@@ -1107,7 +1107,7 @@ class ReaderToolbarOverlayTest {
         LocalChapter("first", "第一章 林间旅途", List(6) { paragraph ->
             (1..80).joinToString("") { "第${paragraph + 1}段第${it}句，旅人沿着森林小路前行，寻找远处的小镇。" }
         })
-    ), tapTutorialSeen: Boolean = true, block: (NoveliaApplication, BookRef) -> Unit) {
+    ), tapTutorialSeen: Boolean = true, fromShelfContinue: Boolean = false, block: (NoveliaApplication, BookRef) -> Unit) {
         compose.waitUntil(15_000) { compose.onAllNodesWithText("本地文件").fetchSemanticsNodes().isNotEmpty() }
         val app = compose.activity.application as NoveliaApplication
         val previous = app.store.state.value
@@ -1115,13 +1115,21 @@ class ReaderToolbarOverlayTest {
         try {
             compose.runOnIdle {
                 app.store.update { it.copy(reader = settings, reducedMotion = false, bookSettings = it.bookSettings - ref.key,
-                    positions = it.positions - ref.key, historyPaused = false, readerTapTutorialSeen = tapTutorialSeen) }
+                    positions = if(fromShelfContinue) mapOf(ref.key to Position("first")) else it.positions - ref.key,
+                    historyPaused = false, readerTapTutorialSeen = tapTutorialSeen) }
                 app.store.saveDocument(LocalDocument(ref.id, "工具栏覆盖测试", "txt", chapters))
                 app.store.saveBook(BookCard(ref, "工具栏覆盖测试"))
             }
-            compose.onNodeWithText("本地文件").performClick()
-            compose.onNodeWithText("工具栏覆盖测试").performClick()
+            if (fromShelfContinue) {
+                compose.onNodeWithText("我的书架").performClick()
+                compose.waitUntil(10_000) { compose.onAllNodesWithTag("shelf-continue-reading").fetchSemanticsNodes().isNotEmpty() }
+                compose.onNodeWithTag("shelf-continue-reading").performClick()
+            } else {
+                compose.onNodeWithText("本地文件").performClick()
+                compose.onNodeWithText("工具栏覆盖测试").performClick()
+            }
             compose.waitUntil(15_000) { app.store.state.value.positions[ref.key]?.chapterId == "first" }
+            if (fromShelfContinue) compose.waitUntil(10_000) { compose.onAllNodesWithTag("reader-scroll").fetchSemanticsNodes().isNotEmpty() }
             compose.waitForIdle()
             block(app, ref)
         } finally {

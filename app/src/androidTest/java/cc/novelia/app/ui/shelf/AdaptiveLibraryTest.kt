@@ -17,6 +17,7 @@ import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.NavHost
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.test.platform.app.InstrumentationRegistry
@@ -25,7 +26,11 @@ import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.LocalChapter
 import cc.novelia.app.data.model.LocalDocument
+import cc.novelia.app.data.model.Position
+import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.data.model.SavedBook
+import cc.novelia.app.ui.book.BookScreen
+import cc.novelia.app.ui.reader.ReaderScreen
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.shelf.AdaptiveLibraryLayout
 import cc.novelia.app.ui.shelf.AdaptiveLibraryScreen
@@ -38,6 +43,79 @@ import org.junit.Test
 
 class AdaptiveLibraryTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun chapterEndReturnsToItsDetailPaneOrOpensDetailsAfterShelfContinue() {
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
+        runBlocking { app.initialization.await() }
+        val before = app.store.state.value
+        val ref = BookRef("local", "return-to-contents-${System.nanoTime()}")
+        val chapters = (1..50).map { LocalChapter("$it", "章节 $it", listOf("正文。")) }
+        lateinit var nav: NavHostController
+        fun click(node: SemanticsNodeInteraction) = node.performSemanticsAction(SemanticsActions.OnClick) { it() }
+        fun returnFromLastChapter(expectedRoute: String) {
+            compose.waitUntil(10_000) { compose.onAllNodesWithTag("reader-scroll").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithTag("reader-scroll").performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 100_000f) }
+            click(compose.onNodeWithText("返回目录"))
+            compose.runOnIdle { assertEquals(expectedRoute, nav.currentDestination?.route) }
+            compose.waitUntil(10_000) {
+                compose.onAllNodes(hasText("章节 50") and hasClickAction() and hasAnyAncestor(hasTestTag("book-detail-pager"))).fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.onNodeWithText("目录 50").assertIsSelected()
+        }
+        try {
+            app.store.saveDocument(LocalDocument(ref.id, "目录返回测试", "txt", chapters))
+            app.store.update { it.copy(books = listOf(SavedBook(BookCard(ref, "目录返回测试"))),
+                positions = mapOf(ref.key to Position("49")), shelfTapToRead = false, shelfGrid = false,
+                reader = ReaderSettings(prefetchChapters = 0), reducedMotion = true) }
+            compose.setContent { NoveliaTheme("light") {
+                nav = rememberNavController()
+                val scope = rememberCoroutineScope()
+                val c = remember(nav) { AppController(app, nav, scope, SnackbarHostState()) }
+                NavHost(nav, "shelf") {
+                    composable("shelf") { entry -> Box(Modifier.requiredWidth(1000.dp)) { AdaptiveLibraryScreen(c, entry.savedStateHandle) } }
+                    composable("book/{provider}/{id}") { entry ->
+                        Box(Modifier.widthIn(max = 600.dp)) { BookScreen(c, ref, navigationState = entry.savedStateHandle) }
+                    }
+                    composable("reader/{provider}/{id}/{chapter}") { entry -> ReaderScreen(c, ref, entry.arguments!!.getString("chapter")!!) }
+                }
+            } }
+            val shelf = compose.runOnIdle { nav.currentBackStackEntry }
+            click(compose.onNodeWithText("我的书架"))
+            click(compose.onNode(hasText("目录返回测试") and hasAnyAncestor(hasTestTag("shelf-book-${ref.key}"))))
+            compose.waitUntil(10_000) { compose.onAllNodesWithText("目录 50").fetchSemanticsNodes().isNotEmpty() }
+            click(compose.onNodeWithText("目录 50"))
+            compose.onNodeWithText("搜索章节").performTextInput("49")
+            val penultimate = hasText("章节 49") and hasClickAction() and hasAnyAncestor(hasTestTag("book-detail-pager"))
+            compose.waitUntil(10_000) { compose.onAllNodes(penultimate).fetchSemanticsNodes().isNotEmpty() }
+            click(compose.onNode(penultimate))
+            compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("下一章").fetchSemanticsNodes().isNotEmpty() }
+            click(compose.onNodeWithContentDescription("下一章"))
+            compose.waitUntil(10_000) { app.store.state.value.positions[ref.key]?.chapterId == "50" }
+            returnFromLastChapter("shelf")
+            compose.runOnIdle { assertSame(shelf, nav.currentBackStackEntry) }
+            compose.onNodeWithTag("library-detail-pane").assertExists()
+
+            // 左侧仍选着同一本书，书架的继续阅读仍应新开独立详情。
+            click(compose.onNodeWithTag("shelf-continue-reading"))
+            returnFromLastChapter("book/{provider}/{id}")
+            val standaloneDetail = compose.runOnIdle {
+                assertSame(shelf, nav.previousBackStackEntry)
+                nav.currentBackStackEntry
+            }
+            click(compose.onNodeWithText("信息"))
+            click(compose.onNodeWithText("继续阅读 · 第 50 章"))
+            returnFromLastChapter("book/{provider}/{id}")
+            compose.runOnIdle {
+                assertSame(standaloneDetail, nav.currentBackStackEntry)
+                assertSame(shelf, nav.previousBackStackEntry)
+                nav.popBackStack()
+            }
+            compose.runOnIdle { assertSame(shelf, nav.currentBackStackEntry) }
+        } finally {
+            app.store.removeDocument(ref.id)
+            app.store.update { before }
+        }
+    }
 
     @Test fun resizingAndRecreationKeepSelectionShelfPositionAndEachBookDetail() {
         var width by mutableStateOf(1000.dp)

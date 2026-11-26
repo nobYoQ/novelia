@@ -82,7 +82,7 @@ import cc.novelia.app.ui.components.book.rememberChapterCacheActions
 import cc.novelia.app.ui.downloads.DownloadSheet
 import cc.novelia.app.ui.markdown.format
 import cc.novelia.app.ui.navigation.AppController
-import cc.novelia.app.ui.navigation.SHOW_BOOK_CONTENTS
+import cc.novelia.app.ui.navigation.contentsChapterKey
 import cc.novelia.app.ui.reader.ChapterCacheDialog
 import cc.novelia.app.ui.shelf.FavoriteSheet
 import cc.novelia.app.ui.components.book.LocalBookListPresentation
@@ -108,13 +108,14 @@ import kotlinx.coroutines.withContext
         LocalSeriesScreen(c, ref, onBack)
         return
     }
-    var tab by rememberSaveable(ref.key) { mutableIntStateOf(if(startAtContents || navigationState?.get<Boolean>(SHOW_BOOK_CONTENTS) == true) 1 else 0) }
-    val showContents = navigationState?.getStateFlow(SHOW_BOOK_CONTENTS, false)?.collectAsStateWithLifecycle()?.value == true
-    LaunchedEffect(showContents) {
-        if(showContents) { tab = 1; navigationState?.set(SHOW_BOOK_CONTENTS, false) }
-    }
+    val contentsKey = contentsChapterKey(ref)
+    val locateChapter = navigationState?.getStateFlow<String?>(contentsKey, null)?.collectAsStateWithLifecycle()?.value
+    var tab by rememberSaveable(ref.key) { mutableIntStateOf(if(startAtContents || locateChapter != null) 1 else 0) }
+    LaunchedEffect(locateChapter) { if(locateChapter != null) tab = 1 }
+    val onLocated: () -> Unit = { navigationState?.set<String?>(contentsKey, null) }
+    fun read(chapter: String, fragment: String? = null) = c.read(ref, chapter, fragment, fromBookDetails = true)
     if(ref.isLocal) {
-        LocalBookDetailScreen(c, ref, onBack, tab) { tab = it }
+        LocalBookDetailScreen(c, ref, onBack, tab, { tab = it }, locateChapter, onLocated, ::read)
         return
     }
     var menu by remember { mutableStateOf(false) }; var favorite by remember { mutableStateOf<Pair<BookCard, Boolean>?>(null) }; var download by remember { mutableStateOf<BookCard?>(null) }; var version by remember { mutableIntStateOf(0) }
@@ -230,7 +231,7 @@ import kotlinx.coroutines.withContext
             val destination = remember(detail.toc, localDestination, cloudDestination) { resumeDestination(detail.toc, localDestination?.chapterId, cloudDestination?.chapterId) }
             val start = destination?.chapterId
             val continuing = localDestination != null || cloudDestination != null
-            val continueReading: () -> Unit = { start?.let { if(localDestination != null && cloudDestination != null && localDestination.chapterId != cloudDestination.chapterId) progressChoice = localDestination to cloudDestination else c.read(ref, it) } }
+            val continueReading: () -> Unit = { start?.let { if(localDestination != null && cloudDestination != null && localDestination.chapterId != cloudDestination.chapterId) progressChoice = localDestination to cloudDestination else read(it) } }
             AdaptiveBookDetail(tab, { tab = it }, listOf("简介", "目录 $chapterCount", "讨论"), tabState) { panel ->
                     when(panel) {
                         0 -> AppLazyColumn(contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -239,7 +240,7 @@ import kotlinx.coroutines.withContext
                                 favoriteState = favoriteState, onLocalFavorite = { favorite = book to false }, onCloudFavorite = { favorite = book to true },
                                 onRead = continueReading,
                                 onDownload = { download = book }) }
-                            item { BookUpdateSummary(detail) { id -> c.read(ref, id) } }
+                            item { BookUpdateSummary(detail) { id -> read(id) } }
                             if(!continuing && (state.positions.containsKey(ref.key) || detail.lastReadChapterId != null)) item { Text("原进度章节已不在目录中，将从第一章开始。", Modifier.padding(horizontal = 24.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                             item { FlowRow(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 4.dp),
                                 horizontalArrangement = Arrangement.spacedBy(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -261,7 +262,8 @@ import kotlinx.coroutines.withContext
                             detail.wenkuId?.let { id -> item { MenuRow("关联文库版", "查看分卷与出版信息", Icons.Outlined.LibraryBooks, { c.book(BookRef("wenku", id)) }) } }
                             item { AppTextButton(onClick = refresh, Modifier.fillMaxWidth()) { Text("刷新书籍资料") } }
                         }
-                        1 -> TocPanel(c, ref, detail.toc, start, onContinue = continueReading) { id -> c.read(ref, id) }
+                        1 -> TocPanel(c, ref, detail.toc, start, onContinue = continueReading,
+                            locateChapter = locateChapter, onLocated = onLocated) { id -> read(id) }
                         2 -> NovelCommentsPanel(c, "web-${ref.provider}-${ref.id}")
                     }
             }
@@ -269,9 +271,10 @@ import kotlinx.coroutines.withContext
     }
     favorite?.let { (book, cloud) -> FavoriteSheet(c, book, initialCloud = cloud) { favorite = null } }
     download?.let { book -> DownloadSheet(c, book, emptyList()) { download = null } }
-    progressChoice?.let { (localChapter, cloudChapter) -> AppAlertDialog(onDismissRequest = { progressChoice = null }, title = { Text("选择继续阅读的位置") }, text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { Text("本机与原站记录的章节不同，请选择这次从哪里继续。"); Text("本机：${localChapter.label}"); Text("原站：${cloudChapter.label}") } }, confirmButton = { AppTextButton(onClick = { progressChoice = null; c.read(ref, cloudChapter.chapterId) }) { Text("原站进度") } }, dismissButton = { AppTextButton(onClick = { progressChoice = null; c.read(ref, localChapter.chapterId) }) { Text("本机进度") } }) }
+    progressChoice?.let { (localChapter, cloudChapter) -> AppAlertDialog(onDismissRequest = { progressChoice = null }, title = { Text("选择继续阅读的位置") }, text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { Text("本机与原站记录的章节不同，请选择这次从哪里继续。"); Text("本机：${localChapter.label}"); Text("原站：${cloudChapter.label}") } }, confirmButton = { AppTextButton(onClick = { progressChoice = null; read(cloudChapter.chapterId) }) { Text("原站进度") } }, dismissButton = { AppTextButton(onClick = { progressChoice = null; read(localChapter.chapterId) }) { Text("本机进度") } }) }
 }
-@Composable private fun LocalBookDetailScreen(c: AppController, ref: BookRef, onBack: () -> Unit, tab: Int, onTab: (Int) -> Unit) {
+@Composable private fun LocalBookDetailScreen(c: AppController, ref: BookRef, onBack: () -> Unit, tab: Int, onTab: (Int) -> Unit,
+    locateChapter: String?, onLocated: () -> Unit, onRead: (String, String?) -> Unit) {
     val state by c.store.state.collectAsStateWithLifecycle()
     val coverActions = rememberBookCoverActions(c, ref)
     var menu by remember(ref) { mutableStateOf(false) }
@@ -313,7 +316,7 @@ import kotlinx.coroutines.withContext
                         }
                     }
                     item {
-                        AppButton(onClick = { destination?.let { c.read(ref, it.chapterId) } }, enabled = destination != null,
+                        AppButton(onClick = { destination?.let { onRead(it.chapterId, null) } }, enabled = destination != null,
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
                             Text(when {
                                 savedPosition == null -> "开始阅读"
@@ -325,8 +328,9 @@ import kotlinx.coroutines.withContext
                     }
                     item { MenuRow("本地术语表", "维护此文件的专有名词", Icons.Outlined.Translate, { c.go("glossary/${ref.key}") }) }
                 } else TocPanel(c, ref, toc, current,
-                    onContinue = { destination?.let { c.read(ref, it.chapterId) } },
-                    onNavigateToEntry = { item -> item.chapterId?.let { c.read(ref, it, item.epubFragment) } }) { c.read(ref, it) }
+                    locateChapter = navigationChapterId(readingOrder, toc, locateChapter) ?: locateChapter, onLocated = onLocated,
+                    onContinue = { destination?.let { onRead(it.chapterId, null) } },
+                    onNavigateToEntry = { item -> item.chapterId?.let { onRead(it, item.epubFragment) } }) { onRead(it, null) }
             }
         }
     }
@@ -419,7 +423,8 @@ import kotlinx.coroutines.withContext
         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 @Composable fun TocPanel(c: AppController, ref: BookRef, toc: List<TocItem>, current: String?,
-    onContinue: (() -> Unit)? = null, onNavigateToEntry: ((TocItem) -> Unit)? = null, onRead: (String) -> Unit) {
+    onContinue: (() -> Unit)? = null, onNavigateToEntry: ((TocItem) -> Unit)? = null,
+    locateChapter: String? = null, onLocated: () -> Unit = {}, onRead: (String) -> Unit) {
     var search by rememberSaveable(ref.key) { mutableStateOf("") }; var reversed by rememberSaveable(ref.key) { mutableStateOf(false) }
     var cacheDialog by remember(ref.key) { mutableStateOf(false) }
     val cacheActions = rememberChapterCacheActions(c)
@@ -434,6 +439,17 @@ import kotlinx.coroutines.withContext
     val hasChapters = remember(list) { list.any { it.value.chapterId != null } }
     val reducedMotion = appReducedMotion()
     val scroll = rememberLazyListState(); val scope = rememberCoroutineScope()
+    LaunchedEffect(locateChapter, list) {
+        if (locateChapter == null) return@LaunchedEffect
+        val entry = toc.indexOfFirst { it.chapterId == locateChapter }
+        val index = list.indexOfFirst { it.index == entry }
+        if (entry >= 0 && index < 0) {
+            search = ""
+            return@LaunchedEffect
+        }
+        if (index >= 0) scroll.scrollToItem(index)
+        onLocated()
+    }
     Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize()) {
         AppTextField(search, { search = it }, label = { Text("搜索章节") }, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), singleLine = true, leadingIcon = { Icon(Icons.Outlined.Search, null) })
