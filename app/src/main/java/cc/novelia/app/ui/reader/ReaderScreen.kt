@@ -67,15 +67,9 @@ import cc.novelia.app.data.model.EpubLinkTarget
 import cc.novelia.app.data.model.Note
 import cc.novelia.app.data.model.Position
 import cc.novelia.app.data.library.readingStatusToken
-import cc.novelia.app.data.model.ReaderBrightness
 import cc.novelia.app.data.model.ReaderStatusItems
 import cc.novelia.app.data.model.TocItem
-import cc.novelia.app.data.model.activeBrightness
 import cc.novelia.app.data.model.readingAppearance
-import cc.novelia.app.ui.theme.LocalReaderBrightness
-import cc.novelia.app.ui.theme.LocalReaderBrightnessPreview
-import cc.novelia.app.ui.theme.rememberReaderBrightness
-import cc.novelia.app.ui.theme.ApplyReaderWindowBrightness
 import cc.novelia.app.ui.theme.ReaderNightTheme
 import cc.novelia.app.ui.theme.LocalThemePreset
 import cc.novelia.app.ui.theme.LocalThemeWallpaper
@@ -119,13 +113,9 @@ import kotlinx.serialization.encodeToString
 @Composable fun ReaderScreen(c: AppController, ref: BookRef, chapterId: String) {
     val local by c.store.state.collectAsStateWithLifecycle()
     val settings = local.bookSettings[ref.key] ?: local.reader
-    var brightnessPreview by remember { mutableStateOf<ReaderBrightness?>(null) }
-    val brightness = rememberReaderBrightness(brightnessPreview ?: settings.activeBrightness)
     val eInk = settings.eInkMode
     val appEInk = LocalEInkMode.current || eInk
-    CompositionLocalProvider(LocalScreenPageButtons provides settings.showEInkScreenButtons,
-        LocalReaderBrightness provides brightness, LocalReaderBrightnessPreview provides { brightnessPreview = it }) {
-    ApplyReaderWindowBrightness(LocalContext.current.activityOrNull()?.window)
+    CompositionLocalProvider(LocalScreenPageButtons provides settings.showEInkScreenButtons) {
     ReaderNightTheme(settings.nightReading, eInk = appEInk) {
     AppInteractionMode(appEInk, LocalReducedMotion.current || eInk) {
         val shown = settings.readingAppearance()

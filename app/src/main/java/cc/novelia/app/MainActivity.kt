@@ -86,6 +86,7 @@ import cc.novelia.app.ui.shelf.FavoriteSheet
 import cc.novelia.app.ui.shelf.HistoryScreen
 import cc.novelia.app.ui.shelf.ReadingStatisticsScreen
 import cc.novelia.app.ui.theme.AppInteractionMode
+import cc.novelia.app.ui.theme.ReaderWindowHost
 import cc.novelia.app.ui.theme.appPageEnterTransition
 import cc.novelia.app.ui.theme.appPageExitTransition
 import cc.novelia.app.ui.theme.NoveliaTheme
@@ -228,10 +229,11 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 val entry by nav.currentBackStackEntryAsState(); val route = entry?.destination?.route
-                val readingKey = "${entry?.arguments?.getString("provider")}/${entry?.arguments?.getString("id")}"
-                cc.novelia.app.ui.reader.ReadingSystemBars(reading = route?.startsWith("reader/") == true,
+                val reading = route?.startsWith("reader/") == true
+                val readingKey = if (reading) "${entry?.arguments?.getString("provider")}/${entry?.arguments?.getString("id")}" else null
+                cc.novelia.app.ui.reader.ReadingSystemBars(reading = reading,
                     hideStatusBar = appearance.bookStatusBars[readingKey] ?: appearance.hideStatusBar)
-                cc.novelia.app.ui.reader.ReaderOrientation(route?.startsWith("reader/") == true,
+                cc.novelia.app.ui.reader.ReaderOrientation(reading,
                     appearance.bookOrientations[readingKey] ?: appearance.readerOrientation)
                 ObserveDownloadCelebrations(controller, route)
                 cc.novelia.app.ui.feedback.ObserveAppUpdates(controller, show = route?.startsWith("reader/") != true)
@@ -271,7 +273,8 @@ class MainActivity : ComponentActivity() {
                             navigationBarHeight = barHeight
                             navigationRailWidth = railWidth
                         }
-                        NavHost(nav, startDestination = "shelf", modifier = Modifier.fillMaxSize(), enterTransition = {
+                        ReaderWindowHost(app.store, readingKey) { backdrop ->
+                        NavHost(nav, startDestination = "shelf", modifier = backdrop.fillMaxSize(), enterTransition = {
                             if(reducedMotion || staticReader(initialState) || staticReader(targetState)) return@NavHost EnterTransition.None
                             val from = roots.indexOf(initialState.destination.route)
                             val to = roots.indexOf(targetState.destination.route)
@@ -361,6 +364,7 @@ class MainActivity : ComponentActivity() {
                             composable("about") { AboutScreen(controller) }
                             composable("licenses") { OpenSourceLicensesScreen(controller) }
                             composable("web?url={url}") { SiteWebScreen(controller, it.arguments?.getString("url").orEmpty()) }
+                        }
                         }
                         }
                         val readerEInk = route?.startsWith("reader/") == true && readingKey in appearance.eInkBooks

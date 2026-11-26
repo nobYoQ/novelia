@@ -228,12 +228,12 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
     fun read(ref: BookRef, chapter: String, epubFragment: String? = null) {
         // 从书架/详情重新开始阅读时重新检查目录；连续切章走下面的交接入口。
         synchronized(this) { readerToc = null }
-        goReader(ref, chapter)
+        go(readerRoute(ref, chapter))
         if (ref.isLocal && epubFragment != null) {
             nav.currentBackStackEntry?.savedStateHandle?.set(READER_EPUB_FRAGMENT, epubFragment)
         }
     }
-    private fun goReader(ref: BookRef, chapter: String) = go("reader/${ref.provider}/${ref.id}/${Uri.encode(chapter)}")
+    private fun readerRoute(ref: BookRef, chapter: String) = "reader/${ref.provider}/${ref.id}/${Uri.encode(chapter)}"
     internal suspend fun prepareReaderChapter(ref: BookRef, id: String): ReaderHandoff {
         val binding = session.capture()
         val generation = store.chapterGeneration(ref)
@@ -246,8 +246,10 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
         session.ensureCurrent(prepared.binding)
         check(prepared.generation == store.chapterGeneration(prepared.ref)) { "缓存已更新，请重新加载章节" }
         synchronized(this) { readerHandoff = prepared }
-        nav.popBackStack()
-        goReader(prepared.ref, prepared.id)
+        val current = requireNotNull(nav.currentBackStackEntry)
+        nav.navigate(readerRoute(prepared.ref, prepared.id)) {
+            popUpTo(current.destination.id) { inclusive = true }
+        }
     }
     fun openLink(text: String) {
         when(val link = BookLinks.parse(text)) {

@@ -1,5 +1,9 @@
 package cc.novelia.app.ui.reader
 
+import android.hardware.Sensor
+import android.hardware.SensorManager
+import android.view.Window
+import android.view.WindowManager
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -13,6 +17,7 @@ import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.LocalChapter
 import cc.novelia.app.data.model.LocalDocument
+import cc.novelia.app.data.model.ReaderBrightness
 import cc.novelia.app.data.model.ReaderSettings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -23,6 +28,50 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class ReadingContinuityUiTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
+
+    @Test fun manualNightBrightnessStaysStableAcrossChapters() = verifyChapterBrightness("manual")
+
+    @Test fun adaptiveNightBrightnessStaysStableAcrossChapters() = verifyChapterBrightness("adaptive")
+
+    private fun verifyChapterBrightness(mode: String) = withLocalBook { app, ref ->
+        val window = compose.activity.window
+        val brightness = ReaderBrightness(mode = mode, level = .18f, minimum = .07f, maximum = .07f)
+        val sensor = compose.activity.getSystemService(SensorManager::class.java).getDefaultSensor(Sensor.TYPE_LIGHT)
+        val expected = if (mode == "adaptive" && sensor != null) brightness.minimum else brightness.level
+        val writes = mutableListOf<Float>()
+        val original = compose.runOnIdle { requireNotNull(window.callback) }
+        try {
+            compose.runOnIdle {
+                window.callback = object : Window.Callback by original {
+                    override fun onWindowAttributesChanged(attrs: WindowManager.LayoutParams) {
+                        writes += attrs.screenBrightness
+                        original.onWindowAttributesChanged(attrs)
+                    }
+                }
+            }
+            for (pagination in ReaderSettings.PAGINATION_MODES) {
+                compose.runOnIdle {
+                    app.store.update { state ->
+                        val reader = state.reader.withPaginationMode(pagination).copy(nightReading = true, nightBrightness = brightness)
+                        state.copy(reducedMotion = false, bookSettings = state.bookSettings + (ref.key to reader))
+                    }
+                }
+                compose.waitUntil(10_000) { compose.runOnIdle { window.attributes.screenBrightness == expected } }
+                compose.runOnIdle { writes.clear() }
+                for ((button, chapter) in listOf("下一章" to "second", "上一章" to "first")) {
+                    compose.onNodeWithContentDescription(button).performClick()
+                    compose.waitUntil(15_000) { app.store.state.value.positions[ref.key]?.chapterId == chapter }
+                    compose.runOnIdle {
+                        assertEquals(expected, window.attributes.screenBrightness, 0f)
+                        for (value in writes) assertEquals("$pagination / $button", expected, value, 0f)
+                    }
+                }
+            }
+            compose.onNodeWithContentDescription("返回").performClick()
+            compose.onNodeWithText("连续阅读测试").assertIsDisplayed()
+            compose.runOnIdle { assertEquals(WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE, window.attributes.screenBrightness, 0f) }
+        } finally { compose.runOnIdle { window.callback = original } }
+    }
 
     @Test fun wholeBookSearchFindsAndNavigatesToParagraphInAnotherLocalChapter() = withLocalBook { app, ref ->
         compose.onNodeWithContentDescription("搜索本章").performClick()

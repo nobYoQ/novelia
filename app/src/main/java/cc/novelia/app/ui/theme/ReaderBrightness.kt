@@ -8,20 +8,46 @@ import android.content.Context
 import android.view.Window
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.model.ReaderBrightness
+import cc.novelia.app.data.model.activeBrightness
+import cc.novelia.app.data.model.readingAppearance
+import cc.novelia.app.data.storage.LocalStore
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.max
 
 internal val LocalReaderBrightness = compositionLocalOf<Float?> { null }
 internal val LocalReaderBrightnessPreview = staticCompositionLocalOf<(ReaderBrightness?) -> Unit> { {} }
+
+/** 挂在章节导航外，切章时沿用窗口亮度、光线采样和转场底色。 */
+@Composable internal fun ReaderWindowHost(store: LocalStore, bookKey: String?, content: @Composable (Modifier) -> Unit) {
+    val settings = if (bookKey != null) {
+        val library = store.state.collectAsStateWithLifecycle()
+        val reader by remember(library, bookKey) {
+            derivedStateOf { library.value.bookSettings[bookKey] ?: library.value.reader }
+        }
+        reader
+    } else null
+    var preview by remember(bookKey) { mutableStateOf<ReaderBrightness?>(null) }
+    val brightness = settings?.let { rememberReaderBrightness(preview ?: it.activeBrightness) }
+    val backdrop = remember(settings) {
+        if (settings?.nightReading == true) Modifier.background(nightReaderColors(settings.readingAppearance()).background) else Modifier
+    }
+    CompositionLocalProvider(LocalReaderBrightness provides brightness, LocalReaderBrightnessPreview provides { preview = it }) {
+        ApplyReaderWindowBrightness(LocalContext.current.activityOrNull()?.window)
+        content(backdrop)
+    }
+}
 
 @Composable internal fun hasReaderLightSensor(): Boolean {
     val context = LocalContext.current
@@ -31,7 +57,7 @@ internal val LocalReaderBrightnessPreview = staticCompositionLocalOf<(ReaderBrig
 }
 
 /** 仅前台监听光线；平滑照度、忽略小幅波动，再渐变窗口亮度，不触发正文重排或设置写入。 */
-@Composable internal fun rememberReaderBrightness(preferences: ReaderBrightness): Float {
+@Composable private fun rememberReaderBrightness(preferences: ReaderBrightness): Float {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val manager = remember(context) { context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager }
