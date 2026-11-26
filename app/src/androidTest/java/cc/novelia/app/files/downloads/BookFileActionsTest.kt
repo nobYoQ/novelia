@@ -22,6 +22,25 @@ import cc.novelia.app.files.importing.importLocalDocument
 class BookFileActionsTest {
     private fun app() = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
 
+    @Test fun completeDownloadWithLongMultibyteTitleCanBePublished() = runBlocking {
+        val app = app()
+        app.initialization.await()
+        val title = "这是一本很长的小说书名📖".repeat(10)
+        val book = BookCard(BookRef("syosetu", "long-title"), title)
+        val entry = cc.novelia.app.ui.downloads.downloadEntries(app.api, book, emptyList(), "jp", "sakura", false, "txt").single()
+        val directory = app.store.downloadsDir
+        val part = DownloadFiles.acquire(directory, entry.id, UUID.randomUUID().toString())
+        val destination = File(directory, entry.fileName)
+        val content = "第一章\n完整的正文。"
+        try {
+            part.writeText(content)
+            assertTrue(DownloadFiles.commit(directory, entry.id, part, destination, { true }) {})
+            assertEquals(content, destination.readText())
+            assertEquals(title, entry.title)
+            assertTrue(entry.fileName.endsWith(".txt"))
+        } finally { DownloadFiles.release(part); destination.delete() }
+    }
+
     @Test fun bothCleanupPreferencesRemainIndependentAndCompleteDeletionAlwaysCleansAssociatedFiles() = runBlocking {
         val app = app(); app.initialization.await()
         val before = app.store.state.value

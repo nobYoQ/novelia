@@ -53,7 +53,7 @@ import cc.novelia.app.data.library.withVolumeParent
 import cc.novelia.app.data.library.withMountedVolumes
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.DEFAULT_FOLDER_ID
-import cc.novelia.app.data.model.DownloadEntry
+import cc.novelia.app.ui.downloads.bookDownloadEntry
 import cc.novelia.app.data.model.SavedBook
 import cc.novelia.app.data.model.createShelfFolder
 import cc.novelia.app.data.model.renameShelfFolder
@@ -207,13 +207,11 @@ import kotlinx.coroutines.withContext
                 queueingDownloads = true
                 c.action {
                     try {
-                        val invalidFilenameChars = Regex("[\\/\\\\:*?\"<>|]")
                         val reader = state.reader
                         downloadable.forEach { saved ->
-                            val id = java.util.UUID.randomUUID().toString()
-                            val filename = saved.book.title.replace(invalidFilenameChars, "_").take(120) + ".epub"
-                            val url = c.api.downloadUrl(saved.book.ref, null, reader.mode, reader.engines, reader.parallel, "epub", filename)
-                            cc.novelia.app.files.DownloadWorker.enqueue(c.app, DownloadEntry(id, saved.book.title, "$id-$filename", url, sourceBook = saved.book.ref, sourceCard = saved.book))
+                            val entry = bookDownloadEntry(c.api, saved.book, null, reader.mode, reader.engines, reader.parallel,
+                                "epub", "${saved.book.title}.epub")
+                            cc.novelia.app.files.DownloadWorker.enqueue(c.app, entry)
                         }
                         c.message("已开始下载 ${downloadable.size} 本网络小说", actionLabel = "查看下载") { c.go("downloads", replaceTop = true) }
                         managing = false; selection = emptySet()

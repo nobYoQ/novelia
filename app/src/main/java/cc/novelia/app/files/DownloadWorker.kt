@@ -18,6 +18,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import cc.novelia.app.files.downloads.DownloadFiles
 import cc.novelia.app.files.downloads.downloadFile
+import cc.novelia.app.files.downloads.withUsableFileName
 import cc.novelia.app.files.downloads.resumableDownload
 import cc.novelia.app.data.network.networkConnections
 
@@ -36,7 +37,7 @@ class DownloadWorker(context: Context, parameters: WorkerParameters) : Coroutine
             val saved = app.store.state.value.downloads.find { it.id == id } ?: return@withTaskLock null
             if (isStopped || saved.status == "已暂停" || (saved.workId != null && saved.workId != workId)) return@withTaskLock null
             // 兼容尚无 workId 的旧安装记录，只允许正在运行的 Worker 认领。
-            val current = saved.queued().copy(workId = workId)
+            val current = saved.withUsableFileName().queued().copy(workId = workId)
             app.store.update { state -> state.copy(downloads = state.downloads.map { if (it.id == id) current else it }) }
             current
         } ?: return@withContext Result.failure()

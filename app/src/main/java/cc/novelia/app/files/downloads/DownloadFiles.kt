@@ -1,10 +1,39 @@
 package cc.novelia.app.files.downloads
 
+import cc.novelia.app.data.model.DownloadEntry
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+
+private const val MAX_FILENAME_BYTES = 255
+private val unsafeFilenameChars = Regex("""[\\/:*?"<>|\p{Cntrl}]""")
+
+/** Android 的单个文件名按字节计长，预算包含任务 ID，并为扩展名留出空间。 */
+internal fun downloadFileName(id: String, label: String): String {
+    val name = "$id-${label.replace(unsafeFilenameChars, "_")}"
+    if (name.toByteArray().size <= MAX_FILENAME_BYTES) return name
+    val extension = name.substringAfterLast('.', "").takeIf { it.length in 1..10 && it.all(Char::isLetterOrDigit) }
+        ?.let { ".$it" }.orEmpty()
+    val stem = name.removeSuffix(extension)
+    val budget = MAX_FILENAME_BYTES - extension.toByteArray().size
+    var end = minOf(stem.length, budget)
+    while (stem.substring(0, end).toByteArray().size > budget) end--
+    if (end > 0 && stem[end - 1].isHighSurrogate()) end--
+    return stem.take(end) + extension
+}
+
+/** 旧任务重试时也修正下载名，原站的作品、分卷和翻译参数保持原值。 */
+internal fun DownloadEntry.withUsableFileName(): DownloadEntry {
+    if (fileName.toByteArray().size <= MAX_FILENAME_BYTES && !unsafeFilenameChars.containsMatchIn(fileName)) return this
+    val name = downloadFileName(id, fileName.removePrefix("$id-"))
+    val source = url.toHttpUrlOrNull()
+    val requestUrl = if (source?.queryParameter("filename") != null)
+        source.newBuilder().setQueryParameter("filename", name.removePrefix("$id-")).build().toString() else url
+    return copy(fileName = name, url = requestUrl)
+}
 
 /**
  * 协调下载临时文件与生命周期命令。暂停/删除的取消指令返回时，旧 Worker 可能仍在退出，
