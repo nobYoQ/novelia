@@ -99,11 +99,39 @@ class ResumableDownloadTest {
         }
     }
 
+    @Test(timeout = 15_000) fun disconnectAt99PercentResumesTheLastBytesAndProducesTheWholeBook() = runBlocking {
+        MockWebServer().use { server ->
+            val prefix = "a".repeat(99_000)
+            val tail = "z".repeat(1_000)
+            server.enqueue(MockResponse().setBody(prefix).setHeader("Content-Length", 100_000)
+                .setHeader("ETag", etag).setSocketPolicy(SocketPolicy.DISCONNECT_AT_END))
+            server.enqueue(MockResponse().setResponseCode(206).setBody(tail).setHeader("ETag", etag)
+                .setHeader("Content-Range", "bytes 99000-99999/100000"))
+            val progress = mutableListOf<Long>()
+            val file = download(server, progress = { received, total -> progress += received * 100 / total })
+            assertTrue(99L in progress)
+            assertEquals(100L, progress.last())
+            assertEquals(prefix + tail, file.readText())
+            server.takeRequest()
+            assertEquals("bytes=99000-", server.takeRequest().getHeader("Range"))
+        }
+    }
+
+    @Test(timeout = 10_000) fun aWebPageResponseHasASpecificFailureAndIsNotRetried() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setHeader("Content-Type", "text/html").setBody("<html></html>"))
+            val error = runCatching { download(server) }.exceptionOrNull()
+            assertTrue(error is DownloadResponseException)
+            assertEquals("服务器返回了网页，请稍后重试", error?.message)
+            assertEquals(1, server.requestCount)
+        }
+    }
+
     @Test(timeout = 15_000) fun storageFailureCannotStartAnotherAttempt() = runBlocking {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setBody("file"))
             val invalidFile = File(temporary.newFile(), "cannot-write-here")
-            assertNotNull(runCatching { download(server, invalidFile) }.exceptionOrNull())
+            assertTrue(runCatching { download(server, invalidFile) }.exceptionOrNull() is DownloadStorageException)
             assertEquals(1, server.requestCount)
         }
     }

@@ -2,6 +2,7 @@ package cc.novelia.app.files.downloads
 
 import cc.novelia.app.data.model.DownloadEntry
 import java.io.File
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import kotlinx.coroutines.sync.Mutex
@@ -61,7 +62,11 @@ internal object DownloadFiles {
         isCurrent: () -> Boolean, completed: () -> Unit): Boolean = withTaskLock(directory, downloadId) {
         if (!isCurrent()) return@withTaskLock false
         // 两个路径位于同一私有目录，通过移动发布完整文件，避免出现部分拷贝。
-        Files.move(partial.toPath(), destination.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        try {
+            Files.move(partial.toPath(), destination.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        } catch (e: IOException) {
+            throw DownloadStorageException(e)
+        }
         completed()
         true
     }

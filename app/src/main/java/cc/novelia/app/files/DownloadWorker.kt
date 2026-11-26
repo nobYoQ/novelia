@@ -18,6 +18,8 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import cc.novelia.app.files.downloads.DownloadFiles
 import cc.novelia.app.files.downloads.downloadFile
+import cc.novelia.app.files.downloads.DownloadResponseException
+import cc.novelia.app.files.downloads.DownloadStorageException
 import cc.novelia.app.files.downloads.withUsableFileName
 import cc.novelia.app.files.downloads.resumableDownload
 import cc.novelia.app.data.network.networkConnections
@@ -91,7 +93,11 @@ class DownloadWorker(context: Context, parameters: WorkerParameters) : Coroutine
             if(e is CancellationException) throw e
             if(isStopped) throw CancellationException("Download stopped", e)
             update(app, id, if(e is ApiException && e.status == 401) "需要登录" else "失败",
-                error = if(e is ApiException) e.message else if(e is java.io.IOException) "网络中断，点击重试重新下载" else e.message?.take(160) ?: "下载失败")
+                error = when (e) {
+                    is ApiException, is DownloadResponseException, is DownloadStorageException -> e.message
+                    is java.io.IOException -> "网络中断，点击重试重新下载"
+                    else -> e.message?.take(160) ?: "下载失败"
+                })
             try { app.store.flush() } catch (_: java.io.IOException) { return@withContext Result.retry() }
             Result.failure()
         } finally {

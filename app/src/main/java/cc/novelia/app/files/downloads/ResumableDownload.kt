@@ -16,7 +16,8 @@ import okhttp3.Request
 import okhttp3.Response
 
 private const val MAX_DOWNLOAD_BYTES = 512L * 1024 * 1024
-private class DownloadStorageException(cause: IOException) : IOException("无法写入下载文件，请检查存储空间", cause)
+internal class DownloadStorageException(cause: IOException, override val message: String = "无法保存下载文件，请检查设备存储空间") : IOException(message, cause)
+internal class DownloadResponseException(override val message: String) : ProtocolException(message)
 private class RestartDownload : IOException()
 private data class DownloadVersion(val etag: String, val length: Long, val url: String)
 
@@ -46,17 +47,17 @@ internal suspend fun resumableDownload(request: Request, partial: File, connecti
                 ensureCurrent()
                 if (response.code == 416 && offset > 0) throw RestartDownload()
                 if (!response.isSuccessful) throw ApiException(response.code, "下载失败（${response.code}），请稍后重试")
-                val body = response.body ?: throw ProtocolException("服务器没有返回文件")
-                if (body.contentType().toString().startsWith("text/html")) throw ProtocolException("服务器返回了网页，请稍后重试")
+                val body = response.body ?: throw DownloadResponseException("服务器没有返回文件")
+                if (body.contentType().toString().startsWith("text/html")) throw DownloadResponseException("服务器返回了网页，请稍后重试")
                 if (response.header("Content-Encoding")?.let { !it.equals("identity", true) } == true)
-                    throw ProtocolException("下载编码不支持安全续传")
+                    throw DownloadResponseException("下载编码不支持安全续传")
                 val etag = response.header("ETag")?.takeIf {
                     it.length >= 2 && it.startsWith('"') && it.endsWith('"') &&
                         it.substring(1, it.length - 1).all { c -> c.code >= 0x21 && c != '"' && c.code != 0x7f }
                 }
                 var start = 0L
                 val expected = if (response.code == 206) {
-                    if (offset <= 0 || previous == null) throw ProtocolException("服务器返回了意外的文件范围")
+                    if (offset <= 0 || previous == null) throw DownloadResponseException("服务器返回了意外的文件范围")
                     val range = parseDownloadRange(response.header("Content-Range"))
                     if (range == null || range.first != offset || range.third != previous.length ||
                         range.second != previous.length - 1 || etag != previous.etag || response.request.url.toString() != previous.url ||
@@ -64,10 +65,10 @@ internal suspend fun resumableDownload(request: Request, partial: File, connecti
                     start = offset
                     previous.length
                 } else {
-                    if (response.code != 200) throw ProtocolException("服务器返回了不支持的下载响应")
+                    if (response.code != 200) throw DownloadResponseException("服务器返回了不支持的下载响应")
                     body.contentLength()
                 }
-                if (expected > MAX_DOWNLOAD_BYTES) throw ProtocolException("文件超过 512 MB")
+                if (expected > MAX_DOWNLOAD_BYTES) throw DownloadResponseException("文件超过 512 MB")
                 version = if (etag != null && expected > 0) DownloadVersion(etag, expected, response.request.url.toString()) else null
                 var total = start
                 val output = try { object : FileOutputStream(partial, start > 0) {
@@ -84,13 +85,14 @@ internal suspend fun resumableDownload(request: Request, partial: File, connecti
                             ensureCurrent()
                             if (count < 0) break
                             total += count
-                            if (total > MAX_DOWNLOAD_BYTES || (expected >= 0 && total > expected)) throw ProtocolException("下载文件大小不匹配")
+                            if (total > MAX_DOWNLOAD_BYTES) throw DownloadResponseException("文件超过 512 MB")
+                            if (expected >= 0 && total > expected) throw DownloadResponseException("下载文件大小不匹配")
                             try { sink.write(buffer, 0, count) } catch (e: IOException) { throw DownloadStorageException(e) }
                             onProgress(total, expected)
                         }
                     }
                 }
-                if (total == 0L) throw ProtocolException("下载内容为空")
+                if (total == 0L) throw DownloadResponseException("下载内容为空")
                 if (expected >= 0 && total != expected) throw IOException("下载连接提前中断")
             }
             return
