@@ -17,7 +17,6 @@ import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import cc.novelia.app.files.downloads.DownloadFiles
-import cc.novelia.app.files.downloads.downloadFile
 import cc.novelia.app.files.downloads.DownloadResponseException
 import cc.novelia.app.files.downloads.DownloadStorageException
 import cc.novelia.app.files.downloads.withUsableFileName
@@ -128,10 +127,7 @@ class DownloadWorker(context: Context, parameters: WorkerParameters) : Coroutine
                     // Operation 等待的是取消命令完成，旧 Worker 此时可能尚未退出。
                     WorkManager.getInstance(app).cancelUniqueWork("download-$id").result.get()
                     val entry = app.store.state.value.downloads.find { it.id == id }
-                    entry?.let {
-                        val file = app.store.downloadFile(it)
-                        check(!file.exists() || file.delete()) { "下载文件删除失败，请重试" }
-                    }
+                    entry?.let { DownloadFiles.deleteFinalFile(app.store.downloadsDir, it.fileName) }
                     app.store.update { it.copy(downloads = it.downloads.filterNot { task -> task.id == id }) }
                     app.store.flush()
                     DownloadFiles.cleanup(app.store.downloadsDir, id)

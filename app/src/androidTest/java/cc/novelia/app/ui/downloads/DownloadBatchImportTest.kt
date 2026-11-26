@@ -33,6 +33,20 @@ class DownloadBatchImportTest {
     @get:Rule val compose = createComposeRule()
     private lateinit var controller: AppController
 
+    @Test fun failedLegacyDownloadWithUnusableNameCanBeRemovedFromItsMenu() = withDownloads { app, _, entries ->
+        val failed = entries.last().copy(fileName = "长书名".repeat(50) + ".epub", status = "失败", progress = 99)
+        val keep = entries.first()
+        app.store.update { it.copy(downloads = listOf(failed, keep)) }
+        showDownloads(app)
+        compose.onNodeWithContentDescription("更多下载操作 ${failed.title}").performClick()
+        compose.onNodeWithText("删除").performClick()
+        compose.onNodeWithText("删除下载").performClick()
+        compose.waitUntil(10_000) { app.store.state.value.downloads == listOf(keep) }
+        runBlocking { app.store.flush() }
+        assertEquals(listOf(keep), cc.novelia.app.data.storage.LocalStore(app).state.value.downloads)
+        assertTrue(File(app.store.downloadsDir, keep.fileName).isFile)
+    }
+
     @Test fun showsQueueSourceAndTransferSeparatelyIncludingUnknownLengths() = withDownloads { app, _, entries ->
         val entry = entries.last()
         fun show(value: DownloadEntry) = app.store.update { it.copy(downloads = listOf(value)) }
@@ -135,6 +149,9 @@ class DownloadBatchImportTest {
 
     @Test fun batchDeleteConfirmsMixedStatusesAndPreservesImportedBookAndUnselectedDownloads() = withDownloads { app, _, entries ->
         val imported = runBlocking { importDownloadedDocument(app.store, entries[0]) }
+        val legacy = entries.last().copy(id = UUID.randomUUID().toString(), fileName = "旧书名".repeat(50) + ".txt", status = "失败")
+        val tasks = entries + legacy
+        app.store.update { it.copy(downloads = tasks) }
         val position = Position("0", index = 1, offset = 7)
         app.store.savePosition(imported, position)
         val savedPosition = app.store.state.value.positions.getValue(imported.key)
@@ -144,11 +161,12 @@ class DownloadBatchImportTest {
         compose.onNodeWithTag("download-batch-delete").assertIsNotEnabled()
         selectRow(entries.last()).performClick()
         compose.onNodeWithTag("download-batch-import").assertIsNotEnabled()
+        selectRow(legacy).performClick()
         selectRow(entries[0]).performClick()
         compose.onNodeWithTag("download-batch-delete").performClick()
-        compose.onNodeWithText("删除 2 个下载？").assertIsDisplayed()
+        compose.onNodeWithText("删除 3 个下载？").assertIsDisplayed()
         compose.onNode(hasText("取消") and hasAnyAncestor(isDialog())).performClick()
-        compose.runOnIdle { assertEquals(entries, app.store.state.value.downloads) }
+        compose.runOnIdle { assertEquals(tasks, app.store.state.value.downloads) }
         compose.onNodeWithTag("download-batch-delete").performClick()
         compose.onNodeWithText("删除下载").performClick()
         compose.waitUntil(10_000) { app.store.state.value.downloads.size == 3 }

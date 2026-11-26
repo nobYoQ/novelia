@@ -81,6 +81,18 @@ internal object DownloadFiles {
         active -= file.absolutePath
     }
 
+    /** 旧记录可能指向从未能创建的文件名。只删除下载目录的直接子项。 */
+    fun deleteFinalFile(directory: File, name: String) {
+        val file = File(directory, name)
+        if (file.name != name || name.isEmpty() || name == "." || name == ".." ||
+            '\u0000' in name || name.toByteArray().size > MAX_FILENAME_BYTES) return
+        try {
+            Files.deleteIfExists(file.toPath())
+        } catch (e: IOException) {
+            throw DownloadStorageException(e, "无法删除下载文件，请检查设备存储后重试")
+        }
+    }
+
     /** 只清理符合临时文件命名规则且未被运行任务占用的文件；不触碰下载成品。 */
     @Synchronized fun cleanup(directory: File, downloadId: String? = null) {
         if (downloadId != null) require(safeId.matches(downloadId))
