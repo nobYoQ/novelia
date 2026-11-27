@@ -1,47 +1,59 @@
 package cc.novelia.app.ui.settings
 
-import cc.novelia.app.ui.components.base.AppTextField
-import cc.novelia.app.ui.components.base.AppTextButton
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import cc.novelia.app.ui.components.base.AppAlertDialog
+import cc.novelia.app.ui.account.ProfileDetailCard
+import cc.novelia.app.ui.components.base.AppTextButton
+import cc.novelia.app.ui.components.base.AppTextField
 import cc.novelia.app.ui.components.base.ChoiceRow
-import cc.novelia.app.ui.account.ProfileMenuRow
 
 @Composable internal fun KeywordLimitPreference(limit: Int?, entryCount: Int, onSave: (Int?) -> Unit) {
-    var editing by rememberSaveable { mutableStateOf(false) }
-    ProfileMenuRow("标签数量上限", "${limit?.let { "$it 个" } ?: "不限"} · 当前 $entryCount 个标签", Icons.Outlined.Tune, { editing = true })
-    if(editing) KeywordLimitDialog(limit, entryCount, { editing = false }) { value -> onSave(value); editing = false }
-}
-
-@Composable internal fun KeywordLimitDialog(limit: Int?, entryCount: Int, onDismiss: () -> Unit, onSave: (Int?) -> Unit) {
-    var unlimited by rememberSaveable { mutableStateOf(limit == null) }
-    var input by rememberSaveable { mutableStateOf(limit?.toString().orEmpty()) }
+    var custom by rememberSaveable(limit) { mutableStateOf(limit != null) }
+    var input by rememberSaveable(limit) { mutableStateOf(limit?.toString().orEmpty()) }
     val parsed = input.toIntOrNull()?.takeIf { it > 0 }
-    AppAlertDialog(onDismissRequest = onDismiss, title = { Text("标签数量上限") },
-        text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            ChoiceRow("收集数量", listOf("不限", "自定义"), if(unlimited) 0 else 1) { unlimited = it == 0 }
-            if(!unlimited) AppTextField(input, { input = it }, singleLine = true,
-                label = { Text("最多保存的标签数") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                isError = input.isNotEmpty() && parsed == null,
-                supportingText = { Text(if(input.isNotEmpty() && parsed == null) "请输入有效的正整数" else "当前已有 $entryCount 个标签") },
-                modifier = Modifier.fillMaxWidth().testTag("keyword-limit-input"))
-            Text("默认不限数量。设置上限后，达到上限时停止收集新标签，超限导入会提示调整上限。")
-            Text(if(!unlimited && parsed != null && parsed < entryCount)
-                "已有标签超过此上限，仍会全部保留，并可继续修改译名和分类。"
-                else "调整上限不会删除已有标签。")
-        } },
-        confirmButton = { AppTextButton(enabled = unlimited || parsed != null, onClick = { onSave(if(unlimited) null else parsed) }) { Text("保存") } },
-        dismissButton = { AppTextButton(onClick = onDismiss) { Text("取消") } })
+    val focus = LocalFocusManager.current
+    fun saveLimit() {
+        if(parsed == null) return
+        if(parsed != limit) onSave(parsed)
+        focus.clearFocus()
+    }
+    ProfileDetailCard {
+        ChoiceRow("标签数量上限", listOf("不限", "自定义"), if(custom) 1 else 0) { index ->
+            custom = index == 1
+            if(!custom) {
+                focus.clearFocus()
+                input = ""
+                if(limit != null) onSave(null)
+            }
+        }
+        val count = "当前已有 $entryCount 个标签"
+        if(custom) {
+            val invalid = input.isNotEmpty() && parsed == null
+            AppTextField(input, { input = it }, singleLine = true,
+                modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 14.dp).testTag("keyword-limit-input"),
+                label = { Text("最多保存的标签数") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { saveLimit() }),
+                trailingIcon = { AppTextButton(onClick = ::saveLimit, enabled = parsed != null && parsed != limit) { Text("保存") } },
+                isError = invalid,
+                supportingText = { Text(when {
+                    invalid -> "请输入有效的正整数"
+                    parsed != null && parsed < entryCount -> "$count，设置此上限会保留已有标签并暂停新增。"
+                    else -> count
+                }) })
+        } else {
+            Text(count, Modifier.padding(start = 20.dp, end = 20.dp, bottom = 16.dp),
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
 }
