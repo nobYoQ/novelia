@@ -54,7 +54,7 @@ class KeywordLibraryUiTest {
         compose.onNodeWithTag("library-tag-成员1").performClick()
         compose.onNodeWithContentDescription("返回").performClick()
         val expected = (2..15).joinToString(" ") { "成员$it$" } + " -成员1$"
-        compose.onNodeWithTag("assistant-preview").assertIsDisplayed().assertTextEquals(expected)
+        compose.onNodeWithTag("assistant-preview").assertIsDisplayed().assertTextEquals("手工条件 $expected")
         capture("keyword-category-adjusted")
         compose.onNodeWithTag("assistant-append").performScrollTo().performClick()
         compose.runOnIdle { assertEquals("手工条件 $expected", query); assertFalse(expanded) }
@@ -121,7 +121,7 @@ class KeywordLibraryUiTest {
             .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "未选择"))
         compose.onNodeWithTag("library-tag-tag-40").performClick()
         compose.onNodeWithContentDescription("返回").performClick()
-        compose.onNodeWithTag("assistant-preview").assertIsDisplayed().assertTextEquals("tag-40$")
+        compose.onNodeWithTag("assistant-preview").assertIsDisplayed().assertTextEquals("原有关键词 tag-40$")
         compose.onNodeWithTag("assistant-append").performScrollTo().performClick()
         compose.runOnIdle { assertEquals("原有关键词 tag-40$", query); assertFalse(expanded) }
     }

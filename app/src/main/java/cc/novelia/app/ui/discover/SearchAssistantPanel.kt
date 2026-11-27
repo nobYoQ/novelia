@@ -72,6 +72,7 @@ fun SearchAssistantPanel(
     val panelScroll = key(keywordTab) { rememberPanelScrollState(expanded) }
     val focus = LocalFocusManager.current
     val generated = SearchExpression.build(all, any, exact, excluded, includedTags.joinToString(" "), excludedTags.joinToString(" "), minimum, maximum)
+    val appended = SearchExpression.append(query, generated)
     val invalidBounds = minimum.toIntOrNull()?.let { min -> maximum.toIntOrNull()?.let { max -> min >= max } } == true
     val conflicts = SearchExpression.conflictingTags(query, generated)
     val lookup = remember(entries) { entries.associateBy { it.original } }
@@ -98,7 +99,7 @@ fun SearchAssistantPanel(
             if(query.isNotBlank()) AppTextButton(onClick = { replacing = true }, enabled = generated.isNotBlank() && !invalidBounds) {
                 Text("替换条件…")
             }
-            AppButton(onClick = { apply(SearchExpression.append(query, generated)) },
+            AppButton(onClick = { apply(appended) },
                 enabled = generated.isNotBlank() && !invalidBounds && conflicts.isEmpty(),
                 modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("assistant-append")) {
                 Text(if(query.isBlank()) "应用并搜索" else "追加并搜索")
@@ -125,7 +126,7 @@ fun SearchAssistantPanel(
                     val compactPreview = WindowInsets.isImeVisible || maxHeight < 320.dp
                     val fixedActions = sheetMode && !compactPreview && LocalDensity.current.fontScale <= 1.5f
                     Column {
-                        SearchAssistantPreview(query, generated, compact = compactPreview,
+                        SearchAssistantPreview(query, generated, appended, compact = compactPreview,
                             hasError = invalidBounds || conflicts.isNotEmpty())
                         if(sheetMode) AppPageTabs(if(keywordTab) 1 else 0, 2) { index ->
                             Tab(selected = keywordTab == (index == 1), onClick = { focus.clearFocus(); keywordTab = index == 1 },

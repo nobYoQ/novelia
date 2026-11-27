@@ -11,9 +11,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Density
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -72,7 +74,7 @@ class SearchAssistantTest {
         assertEquals("滚动表单不应移动预览条", beforeScroll, preview.getUnclippedBoundsInRoot())
         compose.onNodeWithTag("assistant-all").performClick().performTextInput(generated)
         compose.waitUntil(5_000) { imeVisible }
-        compose.onNodeWithTag("assistant-preview").assertIsDisplayed().assertTextEquals(generated)
+        compose.onNodeWithTag("assistant-preview").assertIsDisplayed().assertTextEquals("手工条件 $generated")
         val withKeyboard = preview.getUnclippedBoundsInRoot()
         assertTrue("键盘弹起时预览应缩为一行", withKeyboard.bottom - withKeyboard.top < beforeScroll.bottom - beforeScroll.top)
         screenshot("assistant-preview-keyboard")
@@ -85,9 +87,9 @@ class SearchAssistantTest {
         screenshot("assistant-preview-details")
         compose.onNodeWithText("返回编辑").performClick()
         compose.waitUntil(5_000) { !imeVisible }
-        compose.onNodeWithTag("assistant-preview").assertTextEquals(generated)
+        compose.onNodeWithTag("assistant-preview").assertTextEquals("手工条件 $generated")
         compose.runOnIdle { scale = 2f }
-        compose.onNodeWithTag("assistant-preview").assertIsDisplayed().assertTextEquals(generated)
+        compose.onNodeWithTag("assistant-preview").assertIsDisplayed().assertTextEquals("手工条件 $generated")
         val largePreview = preview.getUnclippedBoundsInRoot()
         assertTrue("字体缩放应作用到弹窗内的预览条", largePreview.bottom - largePreview.top > beforeScroll.bottom - beforeScroll.top)
         compose.onNodeWithText("章节数小于").performScrollTo()
@@ -128,6 +130,48 @@ class SearchAssistantTest {
         compose.onNodeWithTag("assistant-preview").assertTextEquals("旅人 冒険$")
         compose.onNodeWithTag("assistant-append").performClick()
         compose.runOnIdle { assertEquals("旅人 冒険$", result) }
+    }
+
+    @OptIn(ExperimentalMaterial3Api::class)
+    @Test fun longAppendPreviewShowsTheEditedConditionEvenWhenItPrecedesOtherTags() {
+        val base = "原有条件 ".repeat(18) + "日常$"
+        val longTag = "春夏秋冬".repeat(12)
+        val entries = listOf(KeywordEntry("日常"), KeywordEntry(longTag, "四季"))
+        var applied = ""
+        compose.setContent { NoveliaTheme("light") {
+            AppSheet(onDismissRequest = {}) {
+                SearchAssistantPanel(base, entries, true, {}, { applied = it }, { _, _ -> }, {},
+                    Modifier.width(320.dp), sheetMode = true)
+            }
+        } }
+        val preview = compose.onNodeWithTag("assistant-preview")
+        fun assertCharacterVisible(expression: String, offset: Int) {
+            val node = preview.assertTextEquals(expression).fetchSemanticsNode()
+            preview.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { getLayout ->
+                val layouts = mutableListOf<TextLayoutResult>()
+                assertTrue(getLayout(layouts))
+                val glyph = layouts.single().getBoundingBox(offset)
+                val top = node.config[SemanticsProperties.VerticalScrollAxisRange].value()
+                assertTrue("编辑位置应在预览条内", glyph.top >= top - 1 && glyph.bottom <= top + node.boundsInRoot.height + 1)
+            }
+        }
+        compose.onNodeWithTag("assistant-candidate-日常").performClick()
+        assertCharacterVisible(base, 0)
+        compose.onNodeWithTag("assistant-candidate-$longTag").performScrollTo().performClick()
+        val withTag = "$base $longTag$"
+        assertCharacterVisible(withTag, withTag.lastIndex)
+        preview.performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, -10_000f) }
+        assertCharacterVisible(withTag, 0)
+        compose.onNodeWithText("关键词与章节").performClick()
+        compose.onNodeWithTag("assistant-all").performTextInput("旅人")
+        val expected = "$base 旅人 $longTag$"
+        assertCharacterVisible(expected, expected.indexOf("旅人") + 1)
+        compose.onNodeWithText("章节数小于").performScrollTo().performTextInput("120")
+        val withLimit = "$expected <120"
+        assertCharacterVisible(withLimit, withLimit.lastIndex)
+        compose.onNodeWithText("标签").performClick()
+        compose.onNodeWithTag("assistant-append").assertIsDisplayed().performClick()
+        compose.runOnIdle { assertEquals(withLimit, applied) }
     }
 
     @Test fun assistantCollapsesAndOnlyChangesManualQueryWhenApplied() {
