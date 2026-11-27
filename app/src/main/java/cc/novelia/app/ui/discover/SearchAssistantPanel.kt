@@ -128,9 +128,12 @@ fun SearchAssistantPanel(
                     Column {
                         SearchAssistantPreview(query, generated, appended, compact = compactPreview,
                             hasError = invalidBounds || conflicts.isNotEmpty())
-                        if(sheetMode) AppPageTabs(if(keywordTab) 1 else 0, 2) { index ->
-                            Tab(selected = keywordTab == (index == 1), onClick = { focus.clearFocus(); keywordTab = index == 1 },
-                                text = { Text(if(index == 0) "标签" else "关键词与章节") })
+                        if(sheetMode) {
+                            Spacer(Modifier.height(if(compactPreview) 8.dp else 12.dp))
+                            AppPageTabs(if(keywordTab) 1 else 0, 2) { index ->
+                                Tab(selected = keywordTab == (index == 1), onClick = { focus.clearFocus(); keywordTab = index == 1 },
+                                    text = { Text(if(index == 0) "标签" else "关键词与章节") })
+                            }
                         }
                         AppScrollColumn(
                             modifier = Modifier.fillMaxWidth().weight(1f, fill = false).testTag("search-assistant-content"),

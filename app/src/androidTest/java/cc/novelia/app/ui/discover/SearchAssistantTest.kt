@@ -64,6 +64,8 @@ class SearchAssistantTest {
         }
         val preview = compose.onNodeWithTag("assistant-preview-bar")
         preview.assertIsDisplayed()
+        val tabs = compose.onNodeWithTag("page-tabs")
+        assertTrue(tabs.getUnclippedBoundsInRoot().top - preview.getUnclippedBoundsInRoot().bottom >= 11.dp)
         compose.onNodeWithTag("assistant-preview").assertTextEquals("手工条件")
         compose.onNodeWithTag("assistant-preview-details").performClick()
         compose.onNodeWithTag("assistant-preview-appended").assertTextEquals("手工条件")
@@ -76,6 +78,7 @@ class SearchAssistantTest {
         compose.waitUntil(5_000) { imeVisible }
         compose.onNodeWithTag("assistant-preview").assertIsDisplayed().assertTextEquals("手工条件 $generated")
         val withKeyboard = preview.getUnclippedBoundsInRoot()
+        assertTrue(tabs.getUnclippedBoundsInRoot().top - withKeyboard.bottom >= 7.dp)
         assertTrue("键盘弹起时预览应缩为一行", withKeyboard.bottom - withKeyboard.top < beforeScroll.bottom - beforeScroll.top)
         screenshot("assistant-preview-keyboard")
         compose.onNodeWithText("章节数小于").performScrollTo()
