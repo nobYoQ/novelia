@@ -84,7 +84,7 @@ class ReaderAdaptiveUiTest {
             val fifth = queue.indexOfFirst { it.paragraph == 4 }
             compose.runOnIdle { ReadAloudService.playback.value = playback(fifth) }
             compose.waitUntil(10_000) { app.store.state.value.positions[ref.key]?.sourceParagraph in 3..4 }
-            compose.onNodeWithText("边听边读").performScrollTo().performClick()
+            compose.onNodeWithText("关闭面板").performClick()
             compose.onNodeWithTag("reader-speech-panel").assertDoesNotExist()
             val ninth = queue.indexOfFirst { it.paragraph == 8 }
             compose.runOnIdle { ReadAloudService.playback.value = playback(ninth, playing = false) }
@@ -120,7 +120,7 @@ class ReaderAdaptiveUiTest {
             saveTestScreenshot("speech-reader-toolbar-open.png")
             compose.onNodeWithContentDescription("朗读选项").performTouchInput { click() }
             compose.runOnIdle { assertTrue(ReadAloudService.playback.value!!.following) }
-            compose.onNodeWithText("边听边读").performScrollTo().performClick()
+            compose.onNodeWithText("关闭面板").performClick()
             compose.onNodeWithTag("reader-scroll").performTouchInput { click(center) }
             compose.runOnIdle { assertFalse(ReadAloudService.playback.value!!.following) }
             compose.onNodeWithText("恢复跟随").performTouchInput { click() }

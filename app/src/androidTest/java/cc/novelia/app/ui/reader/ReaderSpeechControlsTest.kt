@@ -23,14 +23,18 @@ import org.junit.Test
 class ReaderSpeechControlsTest {
     @get:Rule val compose = createComposeRule()
     @Test fun sentenceControlsAndFollowSwitchReflectPlayback() {
-        var playback by mutableStateOf(SpeechPlayback("test", "local/book", "one", SpeechSegment("当前句。", 0, "original"), 0, 3, true))
+        var playback by mutableStateOf(SpeechPlayback("test", "local/book", "one", SpeechSegment("雨停了，邮差沿着山间的石阶慢慢上行。", 0, "original"), 0, 3, true))
         var settings by mutableStateOf(ReaderSettings())
-        compose.setContent { NoveliaTheme("light") { AppInteractionMode(false, true) {
-            ReaderSpeechSheet(settings, "正在朗读：测试章节", {}, {}, {}, {}, {}, {}, playback,
+        var engineSettingsOpened = false
+        var restarts = 0
+        var stops = 0
+        compose.setContent { NoveliaTheme("light") { AppInteractionMode(false, false) {
+            ReaderSpeechSheet(settings, "正在朗读：第一章 山间来信", {}, { restarts++ }, {}, {}, { stops++ }, {}, playback,
                 onPrevious = { playback = playback.copy(index = playback.index - 1) },
                 onNext = { playback = playback.copy(index = playback.index + 1) },
                 onFollow = { playback = playback.copy(following = it) },
-                onRate = { settings = settings.copy(speechRate = it) }, onTimer = { settings = settings.copy(speechMinutes = it) })
+                onRate = { settings = settings.copy(speechRate = it) }, onTimer = { settings = settings.copy(speechMinutes = it) },
+                onEngineSettings = { engineSettingsOpened = true })
         } } }
         compose.onNodeWithTag("reader-speech-sentence").assertTextContains("第 1 / 3 句")
         saveTestScreenshot("speech-options.png")
@@ -41,12 +45,38 @@ class ReaderSpeechControlsTest {
         compose.runOnIdle { assertFalse(playback.following) }
         compose.onNodeWithContentDescription("上一句").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(0, playback.index) }
-        compose.onNodeWithText("1.25×").performScrollTo().performClick()
-        compose.onNodeWithText("15 分钟").performScrollTo().performClick()
+        compose.onNodeWithText("语速").performScrollTo().performClick()
+        compose.onNode(hasText("1×") and hasAnyAncestor(isPopup())).assertIsSelected()
+        compose.onNodeWithText("1.25×").performClick()
+        compose.onNodeWithText("定时停止").performScrollTo().performClick()
+        compose.onNodeWithText("15 分钟").performClick()
         compose.runOnIdle { assertEquals(1.25f, settings.speechRate); assertEquals(15, settings.speechMinutes) }
-        compose.onNodeWithText("不限时").performScrollTo().performClick().assertIsSelected()
+        compose.onNodeWithText("定时停止").performScrollTo().performClick()
+        compose.onNodeWithText("不限时").performClick()
         compose.runOnIdle { assertEquals(0, settings.speechMinutes) }
-        compose.onNodeWithText("不限时，读完或手动停止时结束").assertExists()
+        compose.onNodeWithText("定时停止").assertTextContains("不限时")
+        compose.onNodeWithText("系统朗读引擎").performScrollTo().performClick()
+        compose.runOnIdle { assertTrue(engineSettingsOpened) }
+        compose.onNodeWithContentDescription("从当前段重读").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("停止朗读").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(1, restarts); assertEquals(1, stops) }
+    }
+
+    @Test fun idlePanelShowsTheExcerptAndKeepsPreparationFeedback() {
+        var status by mutableStateOf("")
+        compose.setContent { NoveliaTheme("light") { AppInteractionMode(false, false) {
+            ReaderSpeechSheet(ReaderSettings(speechRate = .9f), status, {}, { status = "正在准备朗读…" },
+                {}, {}, {}, {}, sample = "风翻过一页书。")
+        } } }
+        compose.onNodeWithText("风翻过一页书。").assertIsDisplayed()
+        compose.onNodeWithText("语速").assertTextContains("0.9×")
+        compose.onNode(hasContentDescription("关闭朗读面板") or hasText("关闭面板")).assertHasClickAction()
+        saveTestScreenshot("speech-start.png")
+        compose.onNodeWithText("从这里开始朗读").performClick().assertIsNotEnabled()
+        compose.onNodeWithText("正在准备朗读…").assertIsDisplayed()
+        compose.runOnIdle { status = "朗读准备失败，请重试" }
+        compose.onNodeWithText("朗读准备失败，请重试").assertIsDisplayed()
+        compose.onNodeWithText("从这里开始朗读").assertIsEnabled()
     }
 
     @Test fun dockKeepsSentenceControlsOutsideTheBodyAtLargeFontSizes() {
