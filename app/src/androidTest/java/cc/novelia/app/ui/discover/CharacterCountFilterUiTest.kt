@@ -2,7 +2,6 @@ package cc.novelia.app.ui.discover
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
@@ -17,6 +16,7 @@ import cc.novelia.app.data.catalog.CharacterCountFilter
 import cc.novelia.app.ui.components.base.AppScrollColumn
 import cc.novelia.app.ui.components.base.CharacterCountFilterFields
 import cc.novelia.app.ui.theme.NoveliaTheme
+import cc.novelia.app.ui.saveTestScreenshot
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -29,10 +29,15 @@ class CharacterCountFilterUiTest {
         var applied by mutableStateOf(DiscoverFilters())
         var open by mutableStateOf(true)
         compose.setContent {
-            MaterialTheme {
+            NoveliaTheme("light") {
                 if(open) DiscoverFilterSheet(true, applied, false, { open = false }, { applied = it; open = false }, {}, {})
             }
         }
+        saveTestScreenshot("discover-filters.png")
+        compose.onNodeWithText("连载状态").performScrollTo().performClick()
+        compose.onNodeWithText("已完结").performClick()
+        compose.onNodeWithText("连载状态").assertTextContains("已完结")
+        compose.onNodeWithTag("characters-custom").performScrollTo().performClick()
         compose.onNodeWithTag("characters-minimum").performScrollTo().performTextReplacement("500000")
         compose.onNodeWithTag("characters-maximum").performScrollTo().performTextReplacement("100000")
         compose.onNodeWithTag("discover-filter-apply").assertIsNotEnabled()
@@ -41,6 +46,7 @@ class CharacterCountFilterUiTest {
         compose.onNodeWithTag("discover-filter-apply").performClick()
         compose.runOnIdle {
             val filter = applied.local.characters
+            assertEquals(2, applied.type)
             assertTrue(filter.matches(500000))
             assertFalse(filter.matches(499999))
             assertFalse(filter.matches(null))
@@ -80,6 +86,7 @@ class CharacterCountFilterUiTest {
         assertEquals(presetBounds[0].top, presetBounds[1].top)
         assertEquals(presetBounds[2].top, presetBounds[3].top)
         assertTrue(presetBounds[2].top > presetBounds[0].bottom)
+        compose.onNodeWithTag("characters-custom").performScrollTo().performClick()
         val minimum = compose.onNodeWithTag("characters-minimum").getUnclippedBoundsInRoot()
         val maximum = compose.onNodeWithTag("characters-maximum").getUnclippedBoundsInRoot()
         assertEquals(minimum.top, maximum.top)
@@ -89,15 +96,30 @@ class CharacterCountFilterUiTest {
         compose.runOnIdle { assertTrue(filter.includeUnknown) }
         compose.onNodeWithTag("discover-filter-help").performScrollTo()
         capture("discover-filter-help.png")
-        compose.onNodeWithText("打开辅助搜索").performScrollTo().performClick()
-        compose.onNodeWithText("查看搜索语法").performScrollTo().performClick()
+        compose.onNodeWithText("辅助搜索").performScrollTo().performClick()
+        compose.onNodeWithText("搜索语法").performScrollTo().performClick()
         compose.runOnIdle { assertTrue(assistantOpened); assertTrue(syntaxOpened); scale = 2f }
         compose.onNodeWithTag("characters-minimum").performScrollTo()
         val largeMinimum = compose.onNodeWithTag("characters-minimum").getUnclippedBoundsInRoot()
         val largeMaximum = compose.onNodeWithTag("characters-maximum").getUnclippedBoundsInRoot()
         assertTrue("大字号下上下限应自动分行", largeMaximum.top > largeMinimum.bottom)
         capture("discover-character-filter-large-font.png")
-        compose.onNodeWithText("查看搜索语法").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("搜索语法").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun libraryCategoriesRespectPermissionsAndApplyOnlyOnConfirmation() {
+        var canEdit by mutableStateOf(false)
+        var applied = DiscoverFilters()
+        compose.setContent {
+            NoveliaTheme("light") { DiscoverFilterSheet(false, applied, canEdit, {}, { applied = it }, {}, {}) }
+        }
+        compose.onNodeWithText("R18女性向").assertDoesNotExist()
+        compose.onNodeWithText("辅助搜索").assertDoesNotExist()
+        compose.runOnIdle { canEdit = true }
+        compose.onNodeWithText("R18女性向").performScrollTo().performClick().assertIsSelected()
+        compose.runOnIdle { assertEquals(0, applied.level) }
+        compose.onNodeWithTag("discover-filter-apply").performClick()
+        compose.runOnIdle { assertEquals(6, applied.level) }
     }
 
     private fun capture(name: String) {

@@ -20,6 +20,7 @@ import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
@@ -143,13 +144,13 @@ class FilterPositionTest {
                 }
             }
         }
-        compose.onNodeWithTag("assistant-all").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("章节数小于").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("assistant-open-library").assertIsNotDisplayed()
         compose.onNodeWithTag("search-assistant-toggle").performClick()
         compose.onNodeWithTag("assistant-all").assertDoesNotExist()
         compose.onNodeWithTag("search-assistant-toggle").performClick()
         compose.onNodeWithTag("assistant-open-library").assertIsDisplayed()
-        compose.onNodeWithTag("assistant-all").assertIsNotDisplayed()
+        compose.onNodeWithText("章节数小于").assertIsNotDisplayed()
     }
 
     @Test fun cloudFilterReturnsToTheTopAfterAnimatedCollapse() = checkFilterReopen(false)

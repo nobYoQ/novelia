@@ -112,15 +112,15 @@ import cc.novelia.app.ui.components.book.WebSourceOptions
             onDismiss = { onExpanded(false) },
             onReset = { draftKind = 0; draftSource = providers.keys.joinToString(","); draftType = 0; draftLevel = 0; draftTranslate = 0 },
             onApply = { focus.clearFocus(); onApply(draftKind, filter.copy(source = draftSource, type = draftType, level = draftLevel, translate = draftTranslate)); onExpanded(false) }) {
-            ShelfFilterOptions("小说类型", listOf("网络小说", "文库小说"), setOf(draftKind), "cloud-novel-kind", 2) { draftKind = it }
+            FilterOptions("小说类型", listOf("网络小说", "文库小说"), setOf(draftKind), "cloud-novel-kind", 2) { draftKind = it }
             if(draftKind == 0) {
                 val selectedSources = draftSource.split(',').filter(String::isNotBlank).toSet()
                 WebSourceOptions(selectedSources, onChange = { selected ->
                     draftSource = providers.keys.filter { it in selected }.joinToString(",")
                 }, modifier = Modifier.testTag("cloud-sources"), allowEmptySelection = true, tagPrefix = "cloud-source")
-                ShelfFilterOptions("连载状态", typeLabels, setOf(draftType), "cloud-type") { draftType = it }
-                ShelfFilterOptions("作品分级", levelLabels, setOf(draftLevel), "cloud-level", 3) { draftLevel = it }
-                ShelfFilterOptions("翻译来源", translateLabels, setOf(draftTranslate), "cloud-translate", 3) { draftTranslate = it }
+                FilterOptions("连载状态", typeLabels, setOf(draftType), "cloud-type") { draftType = it }
+                FilterOptions("作品分级", levelLabels, setOf(draftLevel), "cloud-level", 3) { draftLevel = it }
+                FilterOptions("翻译来源", translateLabels, setOf(draftTranslate), "cloud-translate", 3) { draftTranslate = it }
             }
         }
     }

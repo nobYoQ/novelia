@@ -124,10 +124,10 @@ import cc.novelia.app.ui.components.base.*
             onDismiss = { onExpanded(false) },
             onReset = { draftType = ShelfBookType.All; draftStatus = "全部"; draftCharacters = CharacterCountFilter(); validCharacters = true },
             onApply = { focus.clearFocus(); onType(draftType); onStatus(draftStatus); onCharacters(draftCharacters); onExpanded(false) }) {
-            ShelfFilterOptions("小说类型", labels, setOf(types.indexOf(draftType)), "local-novel-kind") { draftType = types[it] }
-            ShelfFilterOptions("阅读状态", statuses, setOf(statuses.indexOf(draftStatus)), "local-reading-status") { draftStatus = statuses[it] }
+            FilterOptions("小说类型", labels, setOf(types.indexOf(draftType)), "local-novel-kind") { draftType = types[it] }
+            FilterOptions("阅读状态", statuses, setOf(statuses.indexOf(draftStatus)), "local-reading-status") { draftStatus = statuses[it] }
             if(!localFiles && draftType == ShelfBookType.Web) {
-                ShelfCharacterFilter(draftCharacters, { draftCharacters = it }, { validCharacters = it })
+                CharacterCountFilterFields(draftCharacters, onValidity = { validCharacters = it }) { draftCharacters = it }
                 trailingContent()
             }
         }

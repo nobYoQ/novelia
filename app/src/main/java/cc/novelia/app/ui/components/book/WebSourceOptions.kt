@@ -20,8 +20,9 @@ import cc.novelia.app.ui.components.base.AppTextButton
 ) {
     Column(modifier) {
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(if(allowEmptySelection) "书源（可多选）" else "书源（可多选，至少保留一个）",
-                Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
+            Text("书源", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+            if(!allowEmptySelection && selected.size == 1) Text("至少保留一个", style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
             AppTextButton(onClick = { onChange(providers.keys.toSet()) }, enabled = selected != providers.keys) { Text("全选") }
         }
         AppChipFlowRow(Modifier.padding(vertical = 10.dp)) {

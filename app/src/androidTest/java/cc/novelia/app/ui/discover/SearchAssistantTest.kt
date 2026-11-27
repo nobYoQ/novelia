@@ -24,6 +24,7 @@ import cc.novelia.app.ui.components.base.AppLazyColumn
 import cc.novelia.app.ui.components.base.AppSheet
 import cc.novelia.app.ui.components.keywords.KeywordEditorDialog
 import cc.novelia.app.ui.components.base.rememberCloudFilterCollapse
+import cc.novelia.app.ui.saveTestScreenshot
 import cc.novelia.app.ui.theme.AppInteractionMode
 import cc.novelia.app.ui.theme.NoveliaTheme
 import java.io.File
@@ -61,7 +62,11 @@ class SearchAssistantTest {
         }
         val preview = compose.onNodeWithTag("assistant-preview-bar")
         preview.assertIsDisplayed()
-        compose.onNodeWithTag("assistant-preview-details").assertIsNotEnabled()
+        compose.onNodeWithTag("assistant-preview").assertTextEquals("手工条件")
+        compose.onNodeWithTag("assistant-preview-details").performClick()
+        compose.onNodeWithTag("assistant-preview-appended").assertTextEquals("手工条件")
+        compose.onNodeWithText("返回编辑").performClick()
+        compose.onNodeWithText("关键词与章节").performClick()
         val beforeScroll = preview.getUnclippedBoundsInRoot()
         compose.onNodeWithTag("assistant-all").performScrollTo()
         assertEquals("滚动表单不应移动预览条", beforeScroll, preview.getUnclippedBoundsInRoot())
@@ -71,7 +76,7 @@ class SearchAssistantTest {
         val withKeyboard = preview.getUnclippedBoundsInRoot()
         assertTrue("键盘弹起时预览应缩为一行", withKeyboard.bottom - withKeyboard.top < beforeScroll.bottom - beforeScroll.top)
         screenshot("assistant-preview-keyboard")
-        compose.onNodeWithText("查看原站搜索语法").performScrollTo()
+        compose.onNodeWithText("章节数小于").performScrollTo()
         assertEquals(withKeyboard, preview.getUnclippedBoundsInRoot())
         preview.assertIsDisplayed()
         compose.onNodeWithTag("assistant-preview-details").performClick()
@@ -85,7 +90,7 @@ class SearchAssistantTest {
         compose.onNodeWithTag("assistant-preview").assertIsDisplayed().assertTextEquals(generated)
         val largePreview = preview.getUnclippedBoundsInRoot()
         assertTrue("字体缩放应作用到弹窗内的预览条", largePreview.bottom - largePreview.top > beforeScroll.bottom - beforeScroll.top)
-        compose.onNodeWithText("查看原站搜索语法").performScrollTo()
+        compose.onNodeWithText("章节数小于").performScrollTo()
         val content = compose.onNodeWithTag("search-assistant-content").getUnclippedBoundsInRoot()
         assertTrue("预览和滚动表单不能重叠", content.top >= preview.getUnclippedBoundsInRoot().bottom)
         assertTrue("大字号下表单应仍有可用空间", content.bottom - content.top > 80.dp)
@@ -102,6 +107,27 @@ class SearchAssistantTest {
             file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
             bitmap.recycle()
         }
+    }
+
+    @OptIn(ExperimentalMaterial3Api::class)
+    @Test fun tagAndKeywordTabsShareTheDraftAndApplyTogether() {
+        val entries = listOf(KeywordEntry("冒険", "冒险"), KeywordEntry("ミステリー", "推理"), KeywordEntry("日常"))
+        var result = ""
+        compose.setContent { NoveliaTheme("dark") {
+            AppSheet(onDismissRequest = {}) {
+                SearchAssistantPanel("", entries, true, {}, { result = it }, { _, _ -> }, {}, sheetMode = true)
+            }
+        } }
+        compose.onNodeWithTag("assistant-candidate-冒険").performClick()
+        compose.onNodeWithTag("assistant-preview").assertTextEquals("冒険$")
+        saveTestScreenshot("discover-search-assistant.png")
+        compose.onNodeWithText("关键词与章节").performClick()
+        compose.onNodeWithTag("assistant-all").performTextInput("旅人")
+        compose.onNodeWithText("标签").performClick()
+        compose.onNodeWithTag("assistant-candidate-冒険").assertIsSelected()
+        compose.onNodeWithTag("assistant-preview").assertTextEquals("旅人 冒険$")
+        compose.onNodeWithTag("assistant-append").performClick()
+        compose.runOnIdle { assertEquals("旅人 冒険$", result) }
     }
 
     @Test fun assistantCollapsesAndOnlyChangesManualQueryWhenApplied() {
@@ -136,6 +162,21 @@ class SearchAssistantTest {
         compose.runOnIdle { assertEquals("-未知の世界$", expression) }
     }
 
+    @Test fun conflictingTagCanOnlyReplaceTheManualSearchAfterConfirmation() {
+        var query = "-标签$"
+        compose.setContent {
+            MaterialTheme { SearchAssistantPanel(query, listOf(KeywordEntry("标签")), true, {}, { query = it }, { _, _ -> }, {}) }
+        }
+        compose.onNodeWithTag("assistant-candidate-标签").performScrollTo().performClick()
+        compose.onNodeWithTag("assistant-append").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithText("替换条件…").performScrollTo().performClick()
+        compose.onNodeWithText("保留原内容").performClick()
+        compose.runOnIdle { assertEquals("-标签$", query) }
+        compose.onNodeWithText("替换条件…").performClick()
+        compose.onNodeWithText("替换并搜索").performClick()
+        compose.runOnIdle { assertEquals("标签$", query) }
+    }
+
     @Test fun candidatesAndSelectedConditionsShareTheThreeStateCycleWithoutOpeningAnEditor() {
         compose.setContent {
             NoveliaTheme("light") { AppInteractionMode(false, true) {
@@ -158,7 +199,7 @@ class SearchAssistantTest {
         candidate.performClick()
         assertState("未选择")
         selected.assertDoesNotExist()
-        compose.onNodeWithTag("assistant-preview").assertTextEquals("添加条件后在此实时预览")
+        compose.onNodeWithTag("assistant-preview").assertTextEquals("暂无条件")
         candidate.performClick()
         selected.performScrollTo().performClick()
         assertState("已排除")
