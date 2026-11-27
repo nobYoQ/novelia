@@ -18,6 +18,7 @@ import cc.novelia.app.MainActivity
 import cc.novelia.app.NoveliaApplication
 import cc.novelia.app.R
 import cc.novelia.app.data.auth.SessionBinding
+import cc.novelia.app.data.auth.SessionChangedException
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.Position
 import cc.novelia.app.data.library.ReadingStatusToken
@@ -127,9 +128,12 @@ class ReadAloudService : Service() {
                             try { appJson.decodeFromString<SpeechRequest>(file.readText(Charsets.UTF_8)) }
                             finally { file.delete() }
                         }
-                        binding = request.ref?.takeUnless { it.isLocal }?.let { SessionBinding(request.account, request.sessionGeneration) }
+                        val requestBinding = request.sessionBinding
+                        binding = request.ref?.takeUnless { it.isLocal }?.let { requestBinding }
                         continuation = request.ref?.takeIf { request.settings.speechContinueChapters }?.let { ref ->
-                            SpeechChapterSequence(request.chapterId, request.nextId, request.settings) { id -> loadChapter(ref, id, request) }
+                            SpeechChapterSequence(request.chapterId, request.nextId, request.settings) { id ->
+                                loadChapter(ref, id, requestBinding, request.settings.speechNetworkContinuation)
+                            }
                         }
                         paragraphs = request.paragraphs; segments = request.segments; bookKey = request.ref?.key; chapterId = request.chapterId; loading = false
                         readingStatusToken = null; statusChapterIds = request.statusChapterIds
@@ -172,7 +176,7 @@ class ReadAloudService : Service() {
     private fun speak() {
         if(sleepTimer.expired(SystemClock.elapsedRealtime())) { stopPlayback(SLEEP_TIMER_FINISHED); return }
         if(binding?.let { it != (application as NoveliaApplication).session.capture() } == true) {
-            stopPlayback("登录账号已变化，请重新开始朗读"); return
+            stopPlayback(SESSION_CHANGED); return
         }
         if(index >= paragraphs.size) continueChapter()
         else if(!paused) {
@@ -196,12 +200,11 @@ class ReadAloudService : Service() {
         app.store.update { it.withReadingActivity(BookRef.fromKey(key), token, point,
             atChapterEnd = index == paragraphs.lastIndex, completeCatalog = true) }
     }
-    private suspend fun loadChapter(ref: BookRef, id: String, request: SpeechRequest): Chapter {
+    private suspend fun loadChapter(ref: BookRef, id: String, binding: SessionBinding, allowNetwork: Boolean): Chapter {
         val app = application as NoveliaApplication
         app.initialization.await()
-        val binding = SessionBinding(request.account, request.sessionGeneration)
         if(!ref.isLocal) app.session.ensureCurrent(binding)
-        val loaded = resolveSpeechChapter(ref, id, request.settings.speechNetworkContinuation, local = { chapterId ->
+        val loaded = resolveSpeechChapter(ref, id, allowNetwork, local = { chapterId ->
             val document = app.store.documentIndex(ref.id)
             val chapterIndex = document.chapters.indexOfFirst { it.id == chapterId }
             check(chapterIndex >= 0) { "下一章已不存在，请从目录重新开始朗读" }
@@ -234,6 +237,9 @@ class ReadAloudService : Service() {
                 getSystemService(NotificationManager::class.java).notify(100, notification())
                 configureAndSpeak()
             } catch(e: CancellationException) { throw e }
+            catch(_: SessionChangedException) {
+                if(activeRequest == requestId) stopPlayback(SESSION_CHANGED)
+            }
             catch(e: Exception) {
                 if(activeRequest == requestId) {
                     loading = false; paused = true
@@ -261,6 +267,7 @@ class ReadAloudService : Service() {
     override fun onDestroy() { engineGeneration++; if(playback.value?.session == activeRequest) playback.value = null; serviceScope.cancel(); handler.removeCallbacksAndMessages(null); engine?.stop(); engine?.shutdown(); getSystemService(AudioManager::class.java).abandonAudioFocusRequest(focus); stopForeground(STOP_FOREGROUND_REMOVE); super.onDestroy() }
     override fun onBind(intent: Intent?): IBinder? = null
     companion object {
+        private const val SESSION_CHANGED = "账号或书源已变化，请重新开始朗读"
         const val SLEEP_TIMER_FINISHED = "朗读定时已结束"
         const val EMPTY_QUEUE = "当前内容没有可朗读的文字"
         val status = MutableStateFlow("")
@@ -292,7 +299,7 @@ class ReadAloudService : Service() {
             val appContext = context.applicationContext
             val id = UUID.randomUUID().toString()
             val file = queueFile(appContext, id)
-            val binding = (appContext as? NoveliaApplication)?.session?.capture()
+            val binding = (appContext as NoveliaApplication).session.capture()
             var submitted = false
             status.value = "正在准备朗读…"
             try {
@@ -303,8 +310,8 @@ class ReadAloudService : Service() {
                     val queue = segments.map { it.text }
                     if(queue.isEmpty() && !(settings.speechContinueChapters && ref != null && nextId != null)) false
                     else {
-                        file.writeText(appJson.encodeToString(SpeechRequest(queue, settings, ref, chapterId, nextId, binding?.account, binding?.generation ?: 0, segments,
-                            statusChapterIds)), Charsets.UTF_8)
+                        val request = SpeechRequest(queue, settings, ref, chapterId, nextId, binding, segments, statusChapterIds)
+                        file.writeText(appJson.encodeToString(request), Charsets.UTF_8)
                         true
                     }
                 }

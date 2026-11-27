@@ -1,19 +1,40 @@
 package cc.novelia.app.reader
 
+import cc.novelia.app.data.auth.SessionBinding
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.Chapter
 import cc.novelia.app.data.model.ReaderSettings
+import cc.novelia.app.data.storage.appJson
 import java.io.IOException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.encodeToString
 import org.junit.Assert.*
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SpeechContinuationTest {
+    @Test fun queuedSpeechPreservesTheSourceAndRevisionCapturedAtStart() {
+        val mirror = SessionBinding("reader", 5, "xkvi", 1)
+        val original = mirror.copy(source = "original", sourceRevision = 2)
+        for(binding in listOf(mirror, original, mirror.copy(account = null))) {
+            val request = SpeechRequest(listOf("正文"), ReaderSettings(), BookRef("syosetu", "book"),
+                "first", "second", binding, emptyList(), emptyList())
+            val restored = appJson.decodeFromString<SpeechRequest>(appJson.encodeToString(request)).sessionBinding
+            assertEquals(binding, restored)
+            assertNotEquals(binding.copy(sourceRevision = binding.sourceRevision + 2), restored)
+        }
+    }
+
+    @Test fun legacyQueueRestoresItsAccountWithTheOriginalSourceDefaults() {
+        val request = appJson.decodeFromString<SpeechRequest>(
+            """{"paragraphs":["正文"],"settings":{},"account":"reader","sessionGeneration":5}""")
+        assertEquals(SessionBinding("reader", 5, "original", 0), request.sessionBinding)
+    }
+
     @Test fun continuationSkipsIllustrationsAndKeepsChosenLanguageAndEngine() = runTest {
         val calls = mutableListOf<String>()
         val settings = ReaderSettings(mode = "jp", speechLanguage = "zh", engines = listOf("gpt", "sakura", "youdao"))

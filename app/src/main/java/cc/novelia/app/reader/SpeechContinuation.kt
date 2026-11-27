@@ -1,5 +1,6 @@
 package cc.novelia.app.reader
 
+import cc.novelia.app.data.auth.SessionBinding
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.Chapter
 import cc.novelia.app.data.model.ReaderSettings
@@ -8,17 +9,26 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.serialization.Serializable
 
 /** 请求文件只包含正文、设置和无令牌的会话身份；Intent 始终仅传文件 ID。 */
-@Serializable internal data class SpeechRequest(
+@Serializable internal class SpeechRequest private constructor(
     val paragraphs: List<String>,
     val settings: ReaderSettings,
     val ref: BookRef? = null,
     val chapterId: String? = null,
     val nextId: String? = null,
-    val account: String? = null,
-    val sessionGeneration: Long = 0,
+    private val account: String? = null,
+    private val sessionGeneration: Long = 0,
+    private val source: String = "original",
+    private val sourceRevision: Long = 0,
     val segments: List<SpeechSegment> = emptyList(),
     val statusChapterIds: List<String> = emptyList()
-)
+) {
+    constructor(paragraphs: List<String>, settings: ReaderSettings, ref: BookRef?, chapterId: String?,
+        nextId: String?, binding: SessionBinding, segments: List<SpeechSegment>, statusChapterIds: List<String>) :
+        this(paragraphs, settings, ref, chapterId, nextId, binding.account, binding.generation,
+            binding.source, binding.sourceRevision, segments, statusChapterIds)
+
+    val sessionBinding: SessionBinding get() = SessionBinding(account, sessionGeneration, source, sourceRevision)
+}
 
 internal data class SpeechChapter(val id: String, val title: String, val paragraphs: List<String>, val segments: List<SpeechSegment> = emptyList())
 
