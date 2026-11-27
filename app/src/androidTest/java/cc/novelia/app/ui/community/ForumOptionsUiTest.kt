@@ -1,7 +1,6 @@
 package cc.novelia.app.ui.community
 
 import android.content.ContextWrapper
-import android.graphics.Bitmap
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -11,11 +10,13 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.navigation.compose.rememberNavController
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.NoveliaApplication
@@ -27,6 +28,7 @@ import cc.novelia.app.data.community.ForumSort
 import cc.novelia.app.data.community.ForumTag
 import cc.novelia.app.data.storage.LocalStore
 import cc.novelia.app.ui.navigation.AppController
+import cc.novelia.app.ui.saveTestScreenshot
 import cc.novelia.app.ui.theme.AppInteractionMode
 import cc.novelia.app.ui.theme.NoveliaTheme
 import java.io.File
@@ -76,9 +78,10 @@ class ForumOptionsUiTest {
             compose.onNodeWithTag("forum-tag-toggle").performClick()
             compose.onNodeWithText("novel-置顶帖子-1").assertIsDisplayed()
             compose.onNodeWithTag("forum-options-toggle").performClick()
-            screenshot("options-panel-$theme")
-            compose.onNodeWithText("跳过置顶").performScrollTo().performClick()
-            compose.onNodeWithContentDescription("关闭论坛选项").performClick()
+            compose.onNodeWithTag("forum-options").assertIsDisplayed()
+            saveTestScreenshot("forum-options-$theme.png")
+            compose.onNodeWithText("从首个非置顶帖开始").performScrollTo().performClick()
+            compose.onNode(hasContentDescription("关闭论坛选项") or hasText("关闭面板")).performClick()
             compose.onNodeWithText("novel-普通帖子-5").assertIsDisplayed()
             compose.onNodeWithTag("forum-article-list").performScrollToIndex(0)
             compose.onNodeWithText("novel-置顶帖子-1").assertIsDisplayed()
@@ -106,15 +109,6 @@ class ForumOptionsUiTest {
     private fun post(category: ForumCategory, id: Long, pinOrder: Int?) = ForumPost(id, category.id,
         "${category.slug}-${if(pinOrder == null) "普通帖子" else "置顶帖子"}-$id", 42, "选项测试作者", 0, 1, 0, false,
         pinOrder = pinOrder, createdAt = "2026-11-11T00:00:00Z", updatedAt = "2026-11-11T00:00:00Z", activeAt = "2026-11-11T00:00:00Z")
-
-    private fun screenshot(name: String) {
-        compose.waitForIdle()
-        val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val directory = File(instrumentation.targetContext.getExternalFilesDir("screenshots"), "forum").apply { mkdirs() }
-        val bitmap = instrumentation.uiAutomation.takeScreenshot()
-        File(directory, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
-        bitmap.recycle()
-    }
 
     @Test fun staticJumpWaitsForActivePageAndPreservesManualReturnToPinsAfterRestore() {
         val active = mutableStateOf(false)
@@ -178,28 +172,65 @@ class ForumOptionsUiTest {
                     { value -> store.update { it.copy(forumDefaultSort = value.apiValue) } },
                     { slug, id -> store.update { it.copy(forumDefaultTagIds = if(id == null) it.forumDefaultTagIds - slug else it.forumDefaultTagIds + (slug to id)) } }, {})
             } }
-            compose.onNodeWithText("默认顺序").assertIsSelected()
-            compose.onNodeWithText("小说讨论").performScrollTo().performClick().assertIsSelected()
-            compose.onNodeWithText("最近活跃").performScrollTo().assertIsSelected()
-            compose.onNodeWithText("评论最多").performScrollTo().performClick().assertIsSelected()
-            compose.onNodeWithText("推书").performScrollTo().performClick().assertIsSelected()
-            compose.onNodeWithText("分类：小说讨论").performScrollTo().performClick()
-            compose.onNode(hasText("意见反馈") and hasAnyAncestor(isPopup())).performClick()
-            compose.onNodeWithText("建议").performScrollTo().performClick().assertIsSelected()
-            compose.onNodeWithText("跳过置顶").performScrollTo().performClick()
+            val category = compose.onNodeWithText("默认打开分类")
+            val sort = compose.onNodeWithText("默认帖子排序")
+            val novel = compose.onNodeWithTag("forum-default-tag-novel")
+            val feedback = compose.onNodeWithTag("forum-default-tag-feedback")
+            category.performScrollTo().performClick()
+            menuOption("默认顺序").assertIsSelected()
+            menuOption("小说讨论").performClick()
+            category.assertTextContains("小说讨论")
+            sort.performScrollTo().performClick()
+            menuOption("最近活跃").assertIsSelected()
+            menuOption("评论最多").performClick()
+            sort.assertTextContains("评论最多")
+            novel.performScrollTo().performClick()
+            menuOption("推书").performClick()
+            feedback.performScrollTo().performClick()
+            menuOption("建议").performClick()
+            novel.assertTextContains("推书")
+            feedback.assertTextContains("建议")
+            compose.onNodeWithText("从首个非置顶帖开始").performScrollTo().performClick()
             runBlocking { store.flush() }
             val restored = LocalStore(context).state.value
             assertEquals("novel", restored.forumDefaultCategory)
             assertTrue(restored.forumSkipPinned)
             assertEquals("comments", restored.forumDefaultSort)
             assertEquals(mapOf("novel" to 41L, "feedback" to 9L), restored.forumDefaultTagIds)
-            compose.onNodeWithText("全部标签").performScrollTo().performClick()
+            feedback.performScrollTo().performClick()
+            menuOption("建议").assertIsSelected()
+            menuOption("全部标签").performClick()
             compose.runOnIdle { assertEquals(mapOf("novel" to 41L), store.state.value.forumDefaultTagIds) }
-            compose.onNodeWithText("默认顺序").performScrollTo().performClick().assertIsSelected()
-            compose.onNodeWithText("跳过置顶").performScrollTo().performClick()
+            category.performScrollTo().performClick()
+            menuOption("默认顺序").performClick()
+            compose.onNodeWithText("从首个非置顶帖开始").performScrollTo().performClick()
             runBlocking { store.flush() }
             assertNull(LocalStore(context).state.value.forumDefaultCategory)
             assertFalse(LocalStore(context).state.value.forumSkipPinned)
         } finally { runBlocking { store.flush() }; directory.deleteRecursively() }
+    }
+
+    private fun menuOption(label: String) = compose.onNode(hasText(label) and hasAnyAncestor(isPopup()))
+
+    @Test fun staleTagCanBeClearedAfterItsCategoryLosesAllTagsAtLargeFontSize() {
+        var defaults by mutableStateOf(mapOf("announcements" to 999L, "novel" to 41L))
+        compose.setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density, 2f)) {
+                NoveliaTheme("dark") { AppInteractionMode(eInk = true, reducedMotion = true) {
+                    Box(Modifier.width(300.dp)) {
+                        ForumOptions(categories, "novel", "removed", false, ForumSort.ACTIVE, defaults, {}, {}, {},
+                            onDefaultTag = { slug, id -> if(id == null) defaults = defaults - slug }, onClose = {})
+                    }
+                } }
+            }
+        }
+        compose.onNodeWithText("默认打开分类").assertTextContains("默认顺序")
+        val announcements = compose.onNodeWithTag("forum-default-tag-announcements")
+        announcements.performScrollTo().assertTextContains("全部标签").performClick()
+        menuOption("全部标签").assertIsSelected().performClick()
+        announcements.assertTextContains("无标签").assertIsNotEnabled()
+        compose.onNodeWithTag("forum-default-tag-novel").performScrollTo().assertTextContains("推书")
+        compose.runOnIdle { assertEquals(mapOf("novel" to 41L), defaults) }
     }
 }
