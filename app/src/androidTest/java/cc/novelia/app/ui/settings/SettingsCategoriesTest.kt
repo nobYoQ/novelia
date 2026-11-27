@@ -1,5 +1,11 @@
 package cc.novelia.app.ui.settings
 
+import android.app.Activity
+import androidx.activity.compose.LocalActivityResultRegistryOwner
+import androidx.activity.result.ActivityResultRegistry
+import androidx.activity.result.ActivityResultRegistryOwner
+import androidx.activity.result.contract.ActivityResultContract
+import androidx.core.app.ActivityOptionsCompat
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
@@ -9,6 +15,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.NoveliaApplication
 import cc.novelia.app.data.model.ShelfGridStyle
+import cc.novelia.app.ui.components.documents.DocumentPickerTypes
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.saveTestScreenshot
 import cc.novelia.app.ui.theme.NoveliaTheme
@@ -19,6 +26,35 @@ import org.junit.Assert.*
 
 class SettingsCategoriesTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun cancelledKeywordImportCanShowAllFilesOrDismissTheHint() {
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
+        runBlocking { app.initialization.await() }
+        val requestedTypes = mutableListOf<List<*>>()
+        val picker = object : ActivityResultRegistryOwner {
+            override val activityResultRegistry = object : ActivityResultRegistry() {
+                override fun <I, O> onLaunch(requestCode: Int, contract: ActivityResultContract<I, O>, input: I, options: ActivityOptionsCompat?) {
+                    requestedTypes.add((input as Array<*>).toList())
+                    dispatchResult(requestCode, Activity.RESULT_CANCELED, null)
+                }
+            }
+        }
+        compose.setContent { NoveliaTheme("light") {
+            CompositionLocalProvider(LocalActivityResultRegistryOwner provides picker) {
+                SettingsScreen(AppController(app, rememberNavController(), rememberCoroutineScope(), remember { SnackbarHostState() }), "KEYWORDS")
+            }
+        } }
+        compose.onNodeWithText("未选择文件").assertDoesNotExist()
+        option("导入标签库").performClick()
+        option("显示所有文件").assertIsDisplayed()
+        saveTestScreenshot("keyword-settings-import-fallback.png")
+        compose.onNodeWithContentDescription("关闭导入提示").performClick()
+        compose.onNodeWithText("显示所有文件").assertDoesNotExist()
+        option("导入标签库").performClick()
+        option("显示所有文件").performClick()
+        compose.onNodeWithText("未选择文件").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(listOf(DocumentPickerTypes.Json, DocumentPickerTypes.Json, listOf("*/*")), requestedTypes) }
+    }
 
     @Test fun bookDownloadSettingUpdatesRunningDispatcherAndSurvivesRecreation() {
         val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
