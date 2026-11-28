@@ -11,6 +11,7 @@ import cc.novelia.app.data.catalog.KeywordStore
 import cc.novelia.app.data.catalog.ClipboardLinkHistory
 import cc.novelia.app.data.chapters.ChapterOffline
 import cc.novelia.app.data.chapters.ChapterCacheQueue
+import cc.novelia.app.data.images.withPixivImageReferer
 import cc.novelia.app.data.model.User
 import cc.novelia.app.data.network.NoveliaApi
 import cc.novelia.app.data.community.NovelCommentApi
@@ -303,7 +304,10 @@ class NoveliaApplication : Application(), ImageLoaderFactory {
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
         .components { add(ech.imageRecovery()) }
         .callFactory {
-            val client = api.transport.newBuilder().echRedirects(true).build()
+            val client = api.transport.newBuilder()
+                .echRedirects(true)
+                .addNetworkInterceptor { chain -> chain.proceed(chain.request().withPixivImageReferer()) }
+                .build()
             object : okhttp3.Call.Factory {
                 override fun newCall(request: okhttp3.Request) = client.newNetworkCall(request.newBuilder()
                     .tag(cc.novelia.app.data.network.RecoverableNetworkRead::class.java, cc.novelia.app.data.network.RecoverableNetworkRead)
