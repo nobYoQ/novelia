@@ -7,6 +7,7 @@ import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.Chapter
 import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.data.model.WebDetail
+import cc.novelia.app.data.model.hasWebIllustration
 import cc.novelia.app.data.storage.appJson
 import org.junit.Assert.*
 import org.junit.Test
@@ -31,10 +32,18 @@ class ReaderAndLinksTest {
         assertEquals("G二", result[1].parts.single().text)
     }
     @Test fun sourceImageMarkerIsAnImageInEveryLanguageMode() {
-        val result = projectParagraphs(Chapter(paragraphs = listOf("前文", "<图片>https://example.org/illustration.png", "后文")), ReaderSettings(mode = "zh"))
+        val chapter = Chapter(paragraphs = listOf("前文", "<图片>https://example.org/illustration.png", "后文"))
+        assertTrue(chapter.hasWebIllustration)
+        val result = projectParagraphs(chapter, ReaderSettings(mode = "zh"))
         assertEquals("https://example.org/illustration.png", result[1].imageUrl)
         assertTrue(result[1].parts.isEmpty())
         assertEquals(2, result[2].index)
+    }
+    @Test fun illustrationStatusRequiresARenderableImageInTheOriginalParagraphs() {
+        val chapter = Chapter(titleJp = "插图", paragraphs = listOf("正文提到<图片>", "<图片>", "<图片>file:///a.png"),
+            gptParagraphs = listOf("<图片>https://example.org/translation.png"))
+        assertFalse(chapter.hasWebIllustration)
+        assertTrue(projectParagraphs(chapter, ReaderSettings()).none { it.imageUrl != null })
     }
     @Test fun supportedLinksNormalizeToSiteIdentifiers() {
         val samples = mapOf(

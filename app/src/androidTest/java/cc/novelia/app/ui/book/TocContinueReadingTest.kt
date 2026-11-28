@@ -2,6 +2,7 @@ package cc.novelia.app.ui.book
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
@@ -18,14 +19,26 @@ import androidx.navigation.compose.rememberNavController
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.NoveliaApplication
 import cc.novelia.app.data.model.BookRef
+import cc.novelia.app.data.model.Chapter
+import cc.novelia.app.data.model.EpubLinkTarget
+import cc.novelia.app.data.model.EpubNavigationEntry
+import cc.novelia.app.data.model.LocalChapter
+import cc.novelia.app.data.model.LocalDocument
+import cc.novelia.app.data.model.LocalReadingContent
+import cc.novelia.app.data.storage.appJson
 import cc.novelia.app.data.model.ThemePreset
 import cc.novelia.app.data.model.TocItem
 import cc.novelia.app.ui.navigation.AppController
+import cc.novelia.app.ui.reader.ReaderTocPane
+import cc.novelia.app.ui.reader.ReaderTocSnapshot
+import cc.novelia.app.ui.reader.ReaderTocState
 import cc.novelia.app.ui.theme.AppInteractionMode
 import cc.novelia.app.ui.theme.NoveliaTheme
 import cc.novelia.app.ui.theme.LocalThemeWallpaper
 import cc.novelia.app.ui.theme.themePaper
 import java.io.File
+import java.util.UUID
+import kotlinx.serialization.encodeToString
 import kotlin.math.abs
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
@@ -34,6 +47,81 @@ import org.junit.Test
 
 class TocContinueReadingTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun existingEpubMarksOnlyItsIllustratedSectionInBothDirectories() {
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
+        runBlocking { app.initialization.await() }
+        val ref = BookRef("local", UUID.randomUUID().toString())
+        val anchors = mapOf("art" to 1)
+        val book = LocalDocument(ref.id, "旧版画集", "epub", listOf(
+            LocalChapter("c", "前言", listOf("纯文字", "novelia-image:${"a".repeat(64)}"), LocalReadingContent(anchors = anchors))
+        ), epubNavigation = listOf(
+            EpubNavigationEntry("前言", EpubLinkTarget("c"), 0),
+            EpubNavigationEntry("画页", EpubLinkTarget("c", "art"), 0),
+        ))
+        // 模拟仅保留旧版已导入正文的设备，没有 EPUB 原件。
+        File(app.store.documentsDir, "${ref.id}.json").writeText(appJson.encodeToString(book), Charsets.UTF_8)
+        var reader by mutableStateOf(false)
+        try {
+            compose.setContent { NoveliaTheme("light") {
+                val nav = rememberNavController()
+                val scope = rememberCoroutineScope()
+                val controller = remember(nav, scope) { AppController(app, nav, scope, SnackbarHostState()) }
+                if (!reader) BookScreen(controller, ref, startAtContents = true)
+                else {
+                    val state = remember { controller.readerToc(ref) }
+                    LaunchedEffect(state) { state.ensureLoaded("c", 1) }
+                    ReaderTocPane(controller, ref, state, onRetry = {}, current = "c", scroll = rememberLazyListState(),
+                        query = "", onQuery = {}, reversed = false, onReversed = {}, locateRequest = 0, onLocated = {}, onRead = {},
+                        sourceParagraph = 1, anchors = anchors)
+                }
+            } }
+            val mark = hasText("画页") and hasText("含插图")
+            compose.waitUntil(10_000) { compose.onAllNodes(mark).fetchSemanticsNodes().isNotEmpty() }
+            compose.onNode(hasText("前言") and hasClickAction()).assertIsDisplayed()
+            compose.onAllNodesWithText("含插图").assertCountEquals(1)
+            compose.runOnIdle { reader = true }
+            compose.waitUntil(10_000) { compose.onAllNodes(mark and hasText("正在阅读")).fetchSemanticsNodes().isNotEmpty() }
+            compose.onNode(mark).assertIsSelected()
+            compose.onAllNodesWithText("含插图").assertCountEquals(1)
+        } finally {
+            app.store.removeDocument(ref.id)
+        }
+    }
+
+    @Test fun illustratedChapterIsMarkedInBothDirectories() {
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication
+        runBlocking { app.initialization.await() }
+        val ref = BookRef("syosetu", "toc-illustration-test")
+        val toc = listOf(TocItem(titleJp = "第一章", chapterId = "1"), TocItem(titleJp = "第二章", chapterId = "2"))
+        val readerToc = ReaderTocState { ReaderTocSnapshot(toc) }
+        runBlocking { readerToc.ensureLoaded("1", toc.size) }
+        try {
+            app.store.cacheChapter(ref, "1", Chapter(paragraphs = listOf("<图片>https://example.org/1.png")))
+            app.store.cacheChapter(ref, "2", Chapter(paragraphs = listOf("纯文字")))
+            compose.setContent { NoveliaTheme("light") {
+                val nav = rememberNavController()
+                val scope = rememberCoroutineScope()
+                val controller = remember(nav, scope) { AppController(app, nav, scope, SnackbarHostState()) }
+                var current by remember { mutableStateOf<String?>(null) }
+                val id = current
+                if (id == null) TocPanel(controller, ref, toc, null) { current = it }
+                else ReaderTocPane(controller, ref, readerToc, onRetry = {}, current = id, scroll = rememberLazyListState(),
+                    query = "", onQuery = {}, reversed = false, onReversed = {}, locateRequest = 0, onLocated = {}, onRead = {})
+            } }
+            val marked = hasText("第一章") and hasText("含插图")
+            compose.waitUntil(5_000) { compose.onAllNodes(marked).fetchSemanticsNodes().isNotEmpty() }
+            compose.onNode(hasText("第二章") and hasText("可离线阅读")).assertIsDisplayed()
+            compose.onAllNodesWithText("含插图").assertCountEquals(1)
+            compose.onNode(marked).performClick()
+            val activeMark = hasTestTag("reader-toc-chapter-1") and marked
+            compose.waitUntil(5_000) { compose.onAllNodes(activeMark).fetchSemanticsNodes().isNotEmpty() }
+            compose.onNode(activeMark).assertIsSelected()
+            compose.onAllNodesWithText("含插图").assertCountEquals(1)
+        } finally {
+            app.store.clearChapterCache(ref)
+        }
+    }
 
     @Test fun chapterRowsFollowWallpaperOpacityAndSwitchBackToSolidColors() {
         val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as NoveliaApplication

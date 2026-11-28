@@ -1,6 +1,7 @@
 package cc.novelia.app.data.model
 
 import kotlinx.serialization.Serializable
+import java.net.URI
 
 @Serializable data class WebOutline(
     val providerId: String = "", val novelId: String = "", val titleJp: String = "", val titleZh: String? = null,
@@ -15,7 +16,8 @@ import kotlinx.serialization.Serializable
 }
 
 @Serializable data class TocItem(val titleJp: String = "", val titleZh: String? = null, val chapterId: String? = null,
-    val createAt: Long? = null, val depth: Int = 0, val epubFragment: String? = null) {
+    val createAt: Long? = null, val depth: Int = 0, val epubFragment: String? = null,
+    @kotlinx.serialization.Transient val epubHasIllustration: Boolean = false) {
     val title get() = titleZh?.takeIf { it.isNotBlank() } ?: titleJp
 }
 
@@ -71,3 +73,15 @@ import kotlinx.serialization.Serializable
     val youdaoParagraphs: List<String>? = null, val gptParagraphs: List<String>? = null, val sakuraParagraphs: List<String>? = null,
     val localContent: LocalReadingContent? = null
 ) { val title get() = titleZh?.takeIf { it.isNotBlank() } ?: titleJp }
+
+internal const val WEB_ILLUSTRATION_PREFIX = "<图片>"
+
+internal fun String.webIllustrationUrl(): String? {
+    if (!startsWith(WEB_ILLUSTRATION_PREFIX)) return null
+    val url = removePrefix(WEB_ILLUSTRATION_PREFIX).trim()
+    val uri = runCatching { URI(url) }.getOrNull() ?: return null
+    return url.takeIf { uri.host != null && (uri.scheme == "http" || uri.scheme == "https") }
+}
+
+internal val Chapter.hasWebIllustration: Boolean
+    get() = paragraphs.any { it.webIllustrationUrl() != null }

@@ -4,14 +4,18 @@ import cc.novelia.app.data.model.LocalChapter
 import cc.novelia.app.data.model.LocalDocument
 import cc.novelia.app.data.model.LocalReadingContent
 import cc.novelia.app.data.model.displayChapterCount
+import cc.novelia.app.data.model.findIllustrationParagraphs
 import cc.novelia.app.data.storage.appJson
 import cc.novelia.app.data.storage.hashName
 import cc.novelia.app.files.epub.EPUB_TITLE_VERSION
+import cc.novelia.app.files.epub.EPUB_CONTENT_VERSION
+import cc.novelia.app.files.epub.recoverEpubChapter
 import cc.novelia.app.files.epub.chapterIds
 import cc.novelia.app.files.epub.readEpubAuthors
 import cc.novelia.app.files.epub.readEpubDirectory
 import java.io.File
 import java.io.IOException
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.encodeToString
 
 /**
@@ -59,7 +63,9 @@ internal class DocumentStorage(
             chapter.id to hash
         }
         checkCancelled()
-        val index = document.copy(chapters = document.chapters.map { it.descriptor() }, images = emptyMap(), chapterFiles = files)
+        val index = document.copy(chapters = document.chapters.map { checkCancelled(); it.descriptor(document.format) },
+            images = emptyMap(), chapterFiles = files)
+        checkCancelled()
         write(manifest(document.id), appJson.encodeToString(index))
         return index
     }
@@ -113,7 +119,7 @@ internal class DocumentStorage(
         val hash = hashName(text)
         val file = chapterFile(index.id, hash)
         if (!file.isFile) { file.parentFile?.mkdirs(); write(file, text) }
-        val next = index.copy(chapters = index.chapters.map { if (it.id == chapter.id) chapter.descriptor() else it },
+        val next = index.copy(chapters = index.chapters.map { if (it.id == chapter.id) chapter.descriptor(index.format) else it },
             chapterFiles = index.chapterFiles + (chapter.id to hash))
         write(manifest(index.id), appJson.encodeToString(next))
         return next
@@ -126,7 +132,51 @@ internal class DocumentStorage(
         return next
     }
 
-    private fun LocalChapter.descriptor() = copy(paragraphs = emptyList(), readingContent = LocalReadingContent())
+    private fun LocalChapter.descriptor(format: String): LocalChapter {
+        val images = if (format == "epub") findIllustrationParagraphs() else null
+        val anchors = if (images.isNullOrEmpty()) emptyMap() else readingContent.anchors
+        return copy(paragraphs = emptyList(), readingContent = LocalReadingContent(anchors = anchors), illustrationParagraphs = images)
+    }
+
+    private fun LocalChapter.needsIllustrationAnchors(fragments: List<String>): Boolean =
+        epubContentVersion < EPUB_CONTENT_VERSION && illustrationParagraphs?.isEmpty() != true &&
+            fragments.any { it !in readingContent.anchors }
+
+    /** 旧索引只需从已保存的正文补一次。单章缺失时保留未知状态，其余目录项仍可使用。 */
+    fun recoverIllustrationIndex(index: LocalDocument, persist: Boolean, source: File? = null, checkCancelled: () -> Unit): LocalDocument {
+        if (index.format != "epub" || index.chapterFiles.isEmpty()) return index
+        // 较早的正文只有图片段落，没有保存小节锚点。仅在需要分辨小节时从保留的原件取回定位。
+        val legacySplits = if (index.chapters.any { it.epubContentVersion < EPUB_CONTENT_VERSION } && source?.isFile == true)
+            index.epubNavigation.mapNotNull { it.target }.distinct().groupBy { it.chapterId }.filterValues { it.size > 1 }
+        else emptyMap()
+        if (legacySplits.isEmpty() && index.chapters.none { it.illustrationParagraphs == null }) return index
+        var changed = false
+        val chapters = index.chapters.map { entry ->
+            checkCancelled()
+            val fragments = legacySplits[entry.id].orEmpty().mapNotNull { it.fragment }
+            if (entry.illustrationParagraphs != null && !entry.needsIllustrationAnchors(fragments)) return@map entry
+            val chapter = try { chapter(index, entry) }
+            catch (_: IOException) { return@map entry }
+            catch (_: IllegalArgumentException) { return@map entry }
+            var descriptor = if (entry.illustrationParagraphs == null) chapter.descriptor(index.format) else entry
+            if (source != null && descriptor.needsIllustrationAnchors(fragments)) {
+                val recovered = try { recoverEpubChapter(source, chapter, index.downloadMode, checkCancelled) }
+                catch (e: CancellationException) { throw e }
+                catch (_: Exception) { null }
+                if (recovered != null) descriptor = descriptor.copy(readingContent = LocalReadingContent(anchors = recovered.readingContent.anchors))
+            }
+            if (descriptor != entry) changed = true
+            descriptor
+        }
+        if (!changed) return index
+        val next = index.copy(chapters = chapters)
+        checkCancelled()
+        if (persist) {
+            try { write(manifest(index.id), appJson.encodeToString(next)) }
+            catch (_: IOException) { /* 空间不足时，本次仍可使用内存中的标记。 */ }
+        }
+        return next
+    }
 
     /** 只更新目录名称；分卷 ID、源文件哈希和外置章节文件均保持稳定。 */
     fun rename(index: LocalDocument, name: String): LocalDocument {

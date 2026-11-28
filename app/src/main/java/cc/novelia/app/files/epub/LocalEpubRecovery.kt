@@ -11,10 +11,10 @@ internal fun DownloadEntry.contentMode(): String? =
     url.toHttpUrlOrNull()?.queryParameter("mode")?.takeIf { it in setOf("zh", "jp", "jp-zh", "zh-jp") }
 
 /** 仅在段落可逐项对应时恢复元数据；采用旧版切段的书仍用原来的阅读和笔记定位。 */
-internal fun recoverEpubChapter(file: File, chapter: LocalChapter, downloadMode: String?): LocalChapter {
+internal fun recoverEpubChapter(file: File, chapter: LocalChapter, downloadMode: String?, checkCancelled: () -> Unit = {}): LocalChapter {
     DocumentTools.requireImportSize(file.length())
     fun read(preserveLegacyBody: Boolean) = readEpubFile(file, imageSink = { _, _ -> }, downloadMode = downloadMode,
-        chapterId = chapter.id, preserveLegacyBody = preserveLegacyBody).chapters.singleOrNull()?.takeIf { restored ->
+        chapterId = chapter.id, preserveLegacyBody = preserveLegacyBody, checkCancelled = checkCancelled).chapters.singleOrNull()?.takeIf { restored ->
         restored.paragraphs.size == chapter.paragraphs.size && restored.paragraphs.indices.all { index ->
             val previous = chapter.paragraphs[index]
             val current = restored.paragraphs[index]

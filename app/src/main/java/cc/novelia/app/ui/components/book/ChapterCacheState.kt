@@ -1,6 +1,18 @@
 package cc.novelia.app.ui.components.book
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.TocItem
@@ -25,4 +37,24 @@ import kotlinx.coroutines.withContext
         }
     }
     return cached
+}
+
+@Composable internal fun CachedChapterStatus(store: LocalStore, ref: BookRef, id: String, reading: Boolean = false) {
+    val revision by store.chapterCacheRevision.collectAsStateWithLifecycle()
+    var illustrated by remember(store, ref, id) { mutableStateOf(false) }
+    LaunchedEffect(store, ref, id, revision) {
+        illustrated = withContext(Dispatchers.IO) { store.cachedChapterHasIllustration(ref, id) }
+    }
+    ChapterStatus(if (reading) "正在阅读 · 可离线阅读" else "可离线阅读", illustrated)
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable internal fun ChapterStatus(label: String? = null, illustrated: Boolean) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (label != null) Text(label)
+        if (illustrated) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            Icon(Icons.Outlined.Image, contentDescription = null, modifier = Modifier.size(16.dp))
+            Text("含插图")
+        }
+    }
 }

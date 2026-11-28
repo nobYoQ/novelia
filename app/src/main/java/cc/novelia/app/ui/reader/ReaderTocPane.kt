@@ -30,6 +30,8 @@ import cc.novelia.app.ui.components.base.friendlyMessage
 import cc.novelia.app.ui.components.base.SectionTitle
 import cc.novelia.app.ui.components.base.rememberDebouncedQuery
 import cc.novelia.app.ui.components.book.rememberCachedChapterIds
+import cc.novelia.app.ui.components.book.CachedChapterStatus
+import cc.novelia.app.ui.components.book.ChapterStatus
 import cc.novelia.app.ui.navigation.AppController
 import cc.novelia.app.ui.theme.appReducedMotion
 import cc.novelia.app.ui.theme.motionClickable
@@ -125,10 +127,12 @@ import kotlinx.coroutines.launch
                     else AppListItem(
                         headlineContent = { Text(item.title, color = if(active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) },
                         leadingContent = { Icon(if(active) Icons.Outlined.Bookmark else Icons.Outlined.Article, null) },
-                        supportingContent = if(active || (!ref.isLocal && id in cachedIds)) ({
-                            Text(listOfNotNull("正在阅读".takeIf { active },
-                                "可离线阅读".takeIf { !ref.isLocal && id in cachedIds }).joinToString(" · "))
-                        }) else null,
+                        supportingContent = when {
+                            item.epubHasIllustration -> ({ ChapterStatus(if (active) "正在阅读" else null, illustrated = true) })
+                            ref.isWebNovel && id in cachedIds -> ({ CachedChapterStatus(c.store, ref, id, reading = active) })
+                            active -> ({ Text("正在阅读") })
+                            else -> null
+                        },
                         modifier = Modifier.fillMaxWidth().padding(start = indent).testTag("reader-toc-chapter-$id").semantics { selected = active }.motionClickable { onRead(item) }
                     )
                 }

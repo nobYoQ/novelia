@@ -3,6 +3,9 @@ package cc.novelia.app.reader
 import cc.novelia.app.data.model.Chapter
 import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.data.model.InlineContent
+import cc.novelia.app.data.model.localImageId
+import cc.novelia.app.data.model.WEB_ILLUSTRATION_PREFIX
+import cc.novelia.app.data.model.webIllustrationUrl
 import com.ibm.icu.text.Transliterator
 
 /** 同一原始段落的一种显示文本；source 标明日文或翻译引擎，secondary 控制辅文本样式。 */
@@ -10,8 +13,6 @@ data class TextPart(val text: String, val source: String, val secondary: Boolean
 /** index 保留原始段落编号；过滤空段后，它不一定等于投影结果的列表下标。 */
 data class ReadingParagraph(val index: Int, val parts: List<TextPart>, val fallback: Boolean = false, val imageUrl: String? = null, val localImageId: String? = null,
     val replacementsSkipped: Boolean = false, val imageDescription: String? = null)
-
-private val localImageMarker = Regex("novelia-image:([a-f0-9]{64})")
 
 /**
  * 把原文和多个译文数组按原始下标对齐，生成阅读、搜索和排版共用的段落投影。
@@ -27,13 +28,12 @@ fun projectParagraphs(chapter: Chapter, settings: ReaderSettings, checkCancelled
     return buildList(count) { for(i in 0 until count) {
         checkCancelled()
         val jp = chapter.paragraphs.getOrNull(i).orEmpty()
-        if(jp.startsWith("<图片>")) {
-            val url = jp.removePrefix("<图片>").trim()
-            val valid = runCatching { java.net.URI(url).let { (it.scheme == "https" || it.scheme == "http") && it.host != null } }.getOrDefault(false)
-            add(if(valid) ReadingParagraph(i, emptyList(), imageUrl = url) else ReadingParagraph(i, listOf(TextPart("插图地址不可用", "插图"))))
+        if(jp.startsWith(WEB_ILLUSTRATION_PREFIX)) {
+            val url = jp.webIllustrationUrl()
+            add(if(url != null) ReadingParagraph(i, emptyList(), imageUrl = url) else ReadingParagraph(i, listOf(TextPart("插图地址不可用", "插图"))))
             continue
         }
-        val imageId = localImageMarker.matchEntire(jp)?.groupValues?.get(1)
+        val imageId = jp.localImageId()
         if(imageId != null) {
             add(ReadingParagraph(i, listOf(TextPart(jp, "插图")), localImageId = imageId))
             continue

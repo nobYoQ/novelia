@@ -179,7 +179,7 @@ class AppController(val app: NoveliaApplication, val nav: NavHostController, val
             withContext(Dispatchers.IO) {
                 session.ensureCurrent(key.binding)
                 val toc = if(ref.isLocal) {
-                    val document = store.documentIndex(ref.id)
+                    val document = store.documentTocIndex(ref.id)
                     val readingOrder = document.readingOrderToc()
                     val navigation = document.navigationToc(readingOrder)
                     ReaderTocSnapshot(readingOrder, navigation, document.navigationWithUnlisted(readingOrder, navigation))

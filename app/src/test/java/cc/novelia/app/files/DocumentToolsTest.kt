@@ -237,6 +237,7 @@ class DocumentToolsTest {
         val doc = DocumentTools.parse("插图.epub", bytes)
         assertEquals(1, doc.images.size)
         assertNotNull(doc.coverImage)
+        assertTrue(doc.navigationToc().single().epubHasIllustration)
         assertEquals("插图之前", doc.chapters.single().paragraphs[0])
         assertTrue(doc.chapters.single().paragraphs[1].startsWith("novelia-image:"))
         assertEquals("插图之后", doc.chapters.single().paragraphs[2])

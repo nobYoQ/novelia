@@ -4,10 +4,15 @@ import cc.novelia.app.data.model.LocalChapter
 import cc.novelia.app.data.model.LocalDocument
 import cc.novelia.app.data.model.LocalBilingualGroup
 import cc.novelia.app.data.model.LocalReadingContent
+import cc.novelia.app.data.model.EpubLinkTarget
+import cc.novelia.app.data.model.EpubNavigationEntry
 import cc.novelia.app.data.model.UNAVAILABLE_EPUB_CHAPTER_TEXT
 import cc.novelia.app.data.model.displayChapterCount
 import cc.novelia.app.data.model.navigationToc
+import cc.novelia.app.data.model.readingOrderToc
+import cc.novelia.app.data.model.navigationWithUnlisted
 import cc.novelia.app.data.storage.appJson
+import cc.novelia.app.files.DocumentTools
 import java.io.File
 import java.nio.file.Files
 import java.util.zip.ZipEntry
@@ -20,6 +25,50 @@ class DocumentStorageTest {
     private val original = LocalDocument("book", "中文书名", "txt", listOf(
         LocalChapter("chapter/1", "第一章", listOf("正文甲")),
         LocalChapter("chapter/2", "第二章", listOf("正文乙"))), sourceHash = "source")
+
+    @Test fun epubIllustrationsSurviveLegacyIndexesAndRespectSectionsWithinOneChapterFile() {
+        val directory = Files.createTempDirectory("epub-illustration-index").toFile()
+        try {
+            val reads = mutableListOf<String>()
+            val writes = mutableListOf<String>()
+            val storage = DocumentStorage(directory, { reads += it.name; it.readText() },
+                { file, text -> writes += file.name; file.writeText(text) })
+            val image = "novelia-image:${"a".repeat(64)}"
+            val book = original.copy(format = "epub", chapters = listOf(
+                LocalChapter("body", "正文", listOf("前言", image, "尾声"), LocalReadingContent(anchors = mapOf("art" to 1, "end" to 2))),
+                LocalChapter("plate", "单页", listOf(image)),
+                LocalChapter("plain", "插图欣赏", listOf("novelia-image:invalid")),
+            ), epubNavigation = listOf(
+                EpubNavigationEntry("卷一", null, 0),
+                EpubNavigationEntry("前言", EpubLinkTarget("body"), 1),
+                EpubNavigationEntry("画页", EpubLinkTarget("body", "art"), 1),
+                EpubNavigationEntry("尾声", EpubLinkTarget("body", "end"), 1),
+                EpubNavigationEntry("插图欣赏", EpubLinkTarget("plain"), 1),
+            ))
+            val fresh = storage.save(book)
+            fun marked(index: LocalDocument): List<String> {
+                val order = index.readingOrderToc()
+                return index.navigationWithUnlisted(order, index.navigationToc(order)).filter { it.epubHasIllustration }.map { it.title }
+            }
+            val expected = listOf("画页", "单页")
+            assertEquals(expected, marked(fresh))
+            val legacy = fresh.copy(chapters = fresh.chapters.map { it.copy(illustrationParagraphs = null, readingContent = LocalReadingContent()) })
+            File(directory, "book.json").writeText(appJson.encodeToString(legacy))
+            writes.clear()
+            val recovered = storage.recoverIllustrationIndex(storage.index("book"), persist = true) {}
+            assertEquals(expected, marked(recovered))
+            assertEquals(listOf("book.json"), writes)
+            assertEquals(fresh.chapterFiles, recovered.chapterFiles)
+            assertEquals(book, storage.full(recovered))
+            val reopened = storage.index("book")
+            reads.clear()
+            assertSame(reopened, storage.recoverIllustrationIndex(reopened, persist = true) {})
+            assertEquals(expected, marked(reopened))
+            assertTrue(reads.isEmpty())
+            val plain = storage.replaceChapter(reopened, book.chapters.first().copy(paragraphs = listOf("只剩下正文")))
+            assertEquals(listOf("单页"), marked(plain))
+        } finally { directory.deleteRecursively() }
+    }
 
     @Test fun epubDisplayCountUsesTheOriginalDirectoryAndIgnoresIllustrationOnlyChapters() {
         val directory = Files.createTempDirectory("document-chapter-count").toFile()
@@ -43,6 +92,34 @@ class DocumentStorageTest {
             assertEquals(setOf("art", "first", "last").map { "${restored.chapterFiles[it]}.json" }.toSet(), reads.toSet())
             assertEquals(document.chapters, storage.full(restored).chapters)
             assertEquals(2, original.displayChapterCount())
+        } finally { directory.deleteRecursively() }
+    }
+
+    @Test fun oldEpubWithoutSavedAnchorsRecoversSectionBoundariesFromMatchingSource() {
+        val directory = Files.createTempDirectory("epub-illustration-anchors").toFile()
+        try {
+            val source = File(directory, "book.epub")
+            ZipOutputStream(source.outputStream()).use { zip ->
+                mapOf(
+                    "META-INF/container.xml" to "<container><rootfile full-path='book.opf'/></container>",
+                    "book.opf" to "<package><manifest><item id='c' href='c.xhtml'/><item id='nav' properties='nav' href='nav.xhtml'/></manifest><spine><itemref idref='c'/></spine></package>",
+                    "nav.xhtml" to "<html><body><nav epub:type='toc'><ol><li><a href='c.xhtml'>上篇</a></li><li><a href='c.xhtml#art'>下篇</a></li></ol></nav></body></html>",
+                    "c.xhtml" to "<html><body><p>上篇</p><p id='art'>下篇</p><img src='art.png'/></body></html>",
+                    "art.png" to "image bytes",
+                ).forEach { (name, text) ->
+                    zip.putNextEntry(ZipEntry(name)); zip.write(text.toByteArray(Charsets.UTF_8)); zip.closeEntry()
+                }
+            }
+            val book = DocumentTools.parse(source.name, source.readBytes())
+            val storage = DocumentStorage(directory, { it.readText() }, { file, text -> file.writeText(text) })
+            val old = storage.save(book.copy(id = "book", chapters = book.chapters.map {
+                it.copy(readingContent = LocalReadingContent(), epubContentVersion = 0)
+            }))
+            assertFalse(old.navigationToc().any { it.epubHasIllustration })
+            val recovered = storage.recoverIllustrationIndex(old, persist = true, source = source) {}
+            assertEquals(listOf("下篇"), recovered.navigationToc().filter { it.epubHasIllustration }.map { it.title })
+            assertEquals(old.chapterFiles, recovered.chapterFiles)
+            assertTrue(storage.chapter(recovered, "c").readingContent.anchors.isEmpty())
         } finally { directory.deleteRecursively() }
     }
 

@@ -16,6 +16,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import cc.novelia.app.ui.components.book.rememberCachedChapterIds
+import cc.novelia.app.ui.components.book.CachedChapterStatus
 
 class ChapterCacheStateTest {
     @get:Rule val compose = createComposeRule()
@@ -33,11 +34,17 @@ class ChapterCacheStateTest {
         val generation = store.cacheGeneration.value
         compose.setContent {
             val cached = rememberCachedChapterIds(store, ref, toc)
-            Text(if("one" in cached) "可离线阅读" else "未缓存")
+            if ("one" in cached) CachedChapterStatus(store, ref, "one") else Text("未缓存")
         }
         compose.onNodeWithText("未缓存").assertIsDisplayed()
-        store.cacheChapter(ref, "one", Chapter(paragraphs = listOf("测试正文")))
+        val illustrated = Chapter(paragraphs = listOf("测试正文", "<图片>https://example.org/image.jpg"))
+        store.cacheChapter(ref, "one", illustrated)
         compose.waitUntil(5_000) { compose.onAllNodesWithText("可离线阅读").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("含插图").fetchSemanticsNodes().isNotEmpty() }
+        assertEquals(true, LocalStore(context).cachedChapterHasIllustration(ref, "one"))
+        store.cacheChapter(ref, "one", Chapter(paragraphs = listOf("纯文字")))
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("含插图").fetchSemanticsNodes().isEmpty() }
+        compose.onNodeWithText("可离线阅读").assertIsDisplayed()
         assertEquals("落盘通知不能使其他在途章节请求失效", generation, store.cacheGeneration.value)
         store.clearChapterCache(ref)
         compose.waitUntil(5_000) { compose.onAllNodesWithText("未缓存").fetchSemanticsNodes().isNotEmpty() }

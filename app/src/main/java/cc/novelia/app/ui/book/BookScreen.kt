@@ -78,6 +78,8 @@ import cc.novelia.app.ui.components.base.displayDate
 import cc.novelia.app.ui.components.documents.readDocument
 import cc.novelia.app.ui.components.base.rememberDebouncedQuery
 import cc.novelia.app.ui.components.book.rememberCachedChapterIds
+import cc.novelia.app.ui.components.book.CachedChapterStatus
+import cc.novelia.app.ui.components.book.ChapterStatus
 import cc.novelia.app.ui.components.book.rememberChapterCacheActions
 import cc.novelia.app.ui.downloads.DownloadSheet
 import cc.novelia.app.ui.markdown.format
@@ -286,7 +288,7 @@ import kotlinx.coroutines.withContext
             AppDropdownMenu(menu, { menu = false }) { BookCoverMenuItems(coverActions) { menu = false } }
         }
     }) { padding ->
-        AsyncContent(ref, load = { withContext(Dispatchers.IO) { c.store.documentIndex(ref.id) } }, modifier = Modifier.padding(padding), revealContent = true) { document, _ ->
+        AsyncContent(ref, load = { c.store.documentTocIndex(ref.id) }, modifier = Modifier.padding(padding), revealContent = true) { document, _ ->
             val book = state.books.firstOrNull { it.book.ref == ref }?.book ?: BookCard(ref, document.name, cover = document.coverImage, total = document.chapters.size)
             val parentKey = state.books.firstOrNull { it.book.ref == ref }?.parentWenkuKey
             DisposableEffect(book, parentKey, coverActions.cover) {
@@ -473,7 +475,11 @@ import kotlinx.coroutines.withContext
                     val highlight = isCurrent && LocalThemePreset.current != null
                     AppListItem(
                         headlineContent = { Text(item.title, color = if (isCurrent && !highlight) scheme.primary else Color.Unspecified) },
-                        supportingContent = if (!ref.isLocal && item.chapterId in cachedIds) ({ Text("可离线阅读") }) else null,
+                        supportingContent = when {
+                            item.epubHasIllustration -> ({ ChapterStatus(illustrated = true) })
+                            ref.isWebNovel && item.chapterId in cachedIds -> ({ CachedChapterStatus(c.store, ref, item.chapterId) })
+                            else -> null
+                        },
                         leadingContent = { Icon(if (isCurrent) Icons.Outlined.Bookmark else Icons.Outlined.Article, null) },
                         trailingContent = { Icon(Icons.Outlined.ChevronRight, null) },
                         containerColor = wallpaperCardColor(if (highlight) scheme.primaryContainer else ListItemDefaults.containerColor),

@@ -27,6 +27,7 @@ import cc.novelia.app.data.updates.withSavedBook
 import cc.novelia.app.data.model.BookCard
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.Chapter
+import cc.novelia.app.data.model.hasWebIllustration
 import cc.novelia.app.data.model.LibraryState
 import cc.novelia.app.data.model.LocalChapter
 import cc.novelia.app.data.model.LocalDocument
@@ -107,6 +108,7 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
     private val documentLock = Any()
     private val checkedDocumentModes = mutableSetOf<String>()
     private val chapterMemory = WeightedMemoryCache<String, Chapter>(24, 12L * 1024 * 1024, ::chapterWeight)
+    private val chapterIllustrations = mutableMapOf<String, Boolean>()
     private val documentMemory = WeightedMemoryCache<String, LocalDocument>(4, 32L * 1024 * 1024, ::documentWeight)
     private val localChapterMemory = WeightedMemoryCache<String, LocalChapter>(12, 12L * 1024 * 1024) { 64 + paragraphsWeight(it.paragraphs) + localContentWeight(it.readingContent) }
     private val documentStorage = DocumentStorage(documentsDir,
@@ -288,13 +290,23 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
     fun savePosition(ref: BookRef, position: Position, bookTitle: String = "") =
         update(ref.key) { it.withReadingPosition(ref, position, bookTitle) }
     fun chapterFile(ref: BookRef, chapter: String) = File(cacheDir, hashName("${ref.key}/$chapter") + ".json")
+
+    private fun readChapterFile(file: File): Chapter? = runCatching {
+        appJson.decodeFromString<Chapter>(AtomicFile(file).openRead().bufferedReader(Charsets.UTF_8).use { it.readText() })
+    }.getOrNull()
+
+    /** 目录按需识别可见章节，查看标记不刷新正文的最近阅读时间。 */
+    internal fun cachedChapterHasIllustration(ref: BookRef, id: String): Boolean = synchronized(chapterLock) {
+        val file = chapterFile(ref, id)
+        chapterIllustrations[file.name] ?: (chapterMemory[file.name] ?: readChapterFile(file))
+            ?.hasWebIllustration?.also { chapterIllustrations[file.name] = it } ?: false
+    }
+
     /** 优先复用已解码章节；缺失或损坏的磁盘缓存按未命中处理，交由上层决定联网或提示。 */
     fun cachedChapter(ref: BookRef, chapter: String): Chapter? = synchronized(chapterLock) {
         val file = chapterFile(ref, chapter)
         chapterMemory[file.name]?.let { chapterIndex.accessed(file); return@synchronized it }
-        runCatching {
-            appJson.decodeFromString<Chapter>(AtomicFile(file).openRead().bufferedReader(Charsets.UTF_8).use { it.readText() })
-        }.getOrNull()?.also {
+        readChapterFile(file)?.also {
             chapterMemory.put(file.name, it); chapterIndex.accessed(file)
             runCatching { chapterCatalog.register(ref, it.novelTitleZh?.takeIf(String::isNotBlank) ?: it.novelTitleJp.orEmpty(), listOf(chapter)) }
         }
@@ -304,9 +316,15 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
         val file = chapterFile(ref, id)
         atomicText(file, appJson.encodeToString(chapter))
         chapterMemory.put(file.name, chapter)
-        chapterIndex.written(file).forEach(chapterMemory::remove)
+        chapterIllustrations[file.name] = chapter.hasWebIllustration
+        chapterIndex.written(file).forEach(::forgetChapter)
         mutableChapterCacheRevision.value += 1
         chapterCatalog.register(ref, chapter.novelTitleZh?.takeIf(String::isNotBlank) ?: chapter.novelTitleJp.orEmpty(), listOf(id))
+    }
+
+    private fun forgetChapter(name: String) {
+        chapterMemory.remove(name)
+        chapterIllustrations.remove(name)
     }
 
     fun registerCachedChapters(ref: BookRef, title: String, ids: Collection<String>) = synchronized(chapterLock) {
@@ -366,7 +384,7 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
             for(file in files) {
                 AtomicFile(file).delete()
                 check(listOf(file, File(file.path + ".bak"), File(file.path + ".new")).none { it.exists() }) { "部分章节缓存未能清理，请重试" }
-                chapterMemory.remove(file.name)
+                forgetChapter(file.name)
                 chapterIndex.removed(file)
             }
             clearChapterFreshness(this, files.map { it.name }.toSet())
@@ -421,6 +439,18 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
 
     private fun loadDocumentIndex(id: String): LocalDocument =
         documentMemory[id] ?: documentStorage.index(id).also { documentMemory.put(id, it) }
+
+    internal suspend fun documentTocIndex(id: String): LocalDocument = withContext(Dispatchers.IO) {
+        val workContext = coroutineContext
+        synchronized(documentLock) {
+            val index = documentIndex(id)
+            if (index.format != "epub") return@synchronized index
+            val updated = documentStorage.recoverIllustrationIndex(index, persist = recoveryIssue.value == null,
+                source = documentSource(index.id, "epub")) { workContext.ensureActive() }
+            if (updated !== index) documentMemory.put(index.id, updated)
+            updated
+        }
+    }
 
     internal suspend fun restoreLocalShelfMetadata(books: List<BookCard>) = withContext(Dispatchers.IO) {
         if(books.isEmpty() || recoveryIssue.value != null) return@withContext
@@ -559,6 +589,7 @@ class LocalStore(val context: Context, private val syncDevicePreferences: () -> 
         mutableCacheGeneration.value += 1
         chapterRequests.invalidateBefore(mutableCacheGeneration.value)
         chapterMemory.clear()
+        chapterIllustrations.clear()
         cacheDir.listFiles()?.toList().orEmpty()
             .filter { it.isFile }.forEach { it.delete() }
         metadataCache.clear()
@@ -596,7 +627,8 @@ private fun chapterWeight(chapter: Chapter): Long = 128 + textWeight(chapter.tit
     paragraphsWeight(chapter.paragraphs) + paragraphsWeight(chapter.youdaoParagraphs) +
     paragraphsWeight(chapter.gptParagraphs) + paragraphsWeight(chapter.sakuraParagraphs) + localContentWeight(chapter.localContent)
 private fun documentWeight(document: LocalDocument): Long = 128 + textWeight(document.name) +
-    document.chapters.sumOf { 64 + textWeight(it.id) + textWeight(it.title) + paragraphsWeight(it.paragraphs) + localContentWeight(it.readingContent) } +
+    document.chapters.sumOf { 64 + textWeight(it.id) + textWeight(it.title) + paragraphsWeight(it.paragraphs) +
+        localContentWeight(it.readingContent) + 24L * it.illustrationParagraphs.orEmpty().size } +
     document.chapterFiles.entries.sumOf { 64 + textWeight(it.key) + textWeight(it.value) } +
     document.epubNavigationIds.sumOf { textWeight(it) } +
     document.epubNavigation.sumOf { 64 + textWeight(it.title) + textWeight(it.target?.chapterId) + textWeight(it.target?.fragment) }
