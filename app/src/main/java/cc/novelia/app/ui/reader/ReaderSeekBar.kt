@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.LayoutDirection
 import cc.novelia.app.reader.ChapterSeekIndex
 import cc.novelia.app.reader.ParagraphScrollLayout
 import cc.novelia.app.reader.ReadingParagraph
@@ -50,11 +51,8 @@ import kotlin.math.roundToInt
     onSeek: (Float) -> Unit, modifier: Modifier = Modifier, onUndoSeek: (() -> Unit)? = null,
 ) {
     val eInk = LocalEInkMode.current
-    val squareCorners = useSquareCorners(SquareCornerTarget.Navigation)
-    val reducedMotion = appReducedMotion()
     var draft by remember { mutableStateOf<Float?>(null) }
     val interaction = remember { MutableInteractionSource() }
-    val dragging by interaction.collectIsDraggedAsState()
     val current = draft ?: progress.safeFraction()
     val latestSeek by rememberUpdatedState(onSeek)
     // 系统取消手势时，不能让墨水屏预览状态残留在进度控件上。
@@ -62,9 +60,6 @@ import kotlin.math.roundToInt
         interaction.interactions.collect { if(it is DragInteraction.Cancel) draft = null }
     }
     LaunchedEffect(enabled) { if(!enabled) draft = null }
-    val animatedRadius by animateDpAsState(if(dragging) 9.dp else 6.dp,
-        tween(if(reducedMotion) 0 else AppMotion.Press), label = "reading seek thumb")
-    val radius = if(reducedMotion) 6.dp else animatedRadius
     Column(modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
         Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text(if(eInk && draft != null) "松手跳转" else "本章进度", style = MaterialTheme.typography.labelSmall, color = foreground)
@@ -76,7 +71,7 @@ import kotlin.math.roundToInt
             Text(if(pageCount != null) "${chapterSeekPage(current, pageCount) + 1} / ${pageCount.coerceAtLeast(1)} 页"
                 else "${(current * 100).roundToInt()}%", Modifier.testTag("reader-seek-preview"), style = MaterialTheme.typography.labelSmall, color = foreground)
         }
-        AppSlider(value = current, onValueChange = { next ->
+        ReaderSeekSlider(value = current, foreground = foreground, onValueChange = { next ->
             draft = next.safeFraction()
             if(!eInk) latestSeek(next.safeFraction())
         }, onValueChangeFinished = {
@@ -93,23 +88,42 @@ import kotlin.math.roundToInt
                         true
                     } else false
                 }
-                .semantics { contentDescription = "本章阅读进度" },
-            thumb = {
-                Canvas(Modifier.size(width = 24.dp, height = 48.dp)) {
-                    val color = foreground.copy(alpha = if(enabled) 1f else .38f)
-                    val r = radius.toPx()
-                    if(squareCorners) drawRect(color, center - Offset(r, r), Size(r * 2, r * 2))
-                    else drawCircle(color, r)
-                }
-            }, track = { state ->
-                Canvas(Modifier.fillMaxWidth().height(4.dp)) {
-                    val middle = size.height / 2
-                    val cap = if(squareCorners) StrokeCap.Butt else StrokeCap.Round
-                    drawLine(foreground.copy(alpha = if(eInk) .5f else .2f), Offset(0f, middle), Offset(size.width, middle), size.height, cap)
-                    drawLine(foreground.copy(alpha = if(enabled) 1f else .38f), Offset(0f, middle), Offset(size.width * state.value, middle), size.height, cap)
-                }
-            })
+                .semantics { contentDescription = "本章阅读进度" })
     }
+}
+
+@Composable internal fun ReaderSeekSlider(
+    value: Float, onValueChange: (Float) -> Unit, onValueChangeFinished: () -> Unit,
+    foreground: Color, enabled: Boolean, modifier: Modifier, steps: Int = 0,
+    valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
+    interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
+) {
+    val square = useSquareCorners(SquareCornerTarget.Navigation)
+    val eInk = LocalEInkMode.current
+    val reduced = appReducedMotion()
+    val dragging by interactionSource.collectIsDraggedAsState()
+    val radius by animateDpAsState(if(dragging && !reduced) 9.dp else 6.dp,
+        tween(if(reduced) 0 else AppMotion.Press), label = "reading seek thumb")
+    val active = foreground.copy(alpha = if(enabled) 1f else .38f)
+    AppSlider(value, onValueChange, modifier, enabled = enabled, onValueChangeFinished = onValueChangeFinished,
+        steps = steps, valueRange = valueRange, interactionSource = interactionSource,
+        thumb = {
+            Canvas(Modifier.size(width = 24.dp, height = 48.dp)) {
+                val r = radius.toPx()
+                if(square) drawRect(active, center - Offset(r, r), Size(r * 2, r * 2))
+                else drawCircle(active, r)
+            }
+        }, track = { state ->
+            Canvas(Modifier.fillMaxWidth().height(4.dp)) {
+                val start = if(layoutDirection == LayoutDirection.Rtl) size.width else 0f
+                val end = size.width - start
+                val fraction = (state.value - valueRange.start) / (valueRange.endInclusive - valueRange.start)
+                val from = Offset(start, center.y)
+                val cap = if(square) StrokeCap.Butt else StrokeCap.Round
+                drawLine(foreground.copy(alpha = if(eInk) .5f else .2f), from, Offset(end, center.y), size.height, cap)
+                drawLine(active, from, Offset(start + (end - start) * fraction, center.y), size.height, cap)
+            }
+        })
 }
 
 /** 先解析精确文字行，再用至多半个视口的动画接近目标，远距离定位也如此。 */

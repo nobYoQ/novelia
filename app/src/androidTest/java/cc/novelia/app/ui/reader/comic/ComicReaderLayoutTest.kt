@@ -9,11 +9,15 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import cc.novelia.app.data.model.ComicPreferences
 import cc.novelia.app.data.model.ComicReadingMode
+import cc.novelia.app.data.model.ReaderCustomColors
+import cc.novelia.app.data.model.ReaderSettings
 import cc.novelia.app.reader.ComicPage
 import cc.novelia.app.ui.saveTestScreenshot
 import cc.novelia.app.ui.theme.AppInteractionMode
@@ -57,6 +61,9 @@ class ComicReaderLayoutTest {
             compose.mainClock.advanceTimeBy(300)
             val openTop = top.assertIsDisplayed().getUnclippedBoundsInRoot()
             val openBottom = bottom.assertIsDisplayed().getUnclippedBoundsInRoot()
+            assertEquals(viewport.left, openBottom.left)
+            assertEquals(viewport.right, openBottom.right)
+            assertEquals(viewport.bottom, openBottom.bottom)
             assertTrue(enteringTop.top < openTop.top)
             assertTrue(enteringBottom.top > openBottom.top)
             reader.performTouchInput { click(center) }
@@ -76,11 +83,15 @@ class ComicReaderLayoutTest {
         val pages = fixturePages()
         var preferences by mutableStateOf(ComicPreferences())
         var default by mutableStateOf(ComicReadingMode.RightToLeft)
+        var theme by mutableStateOf("light")
+        var appearance by mutableStateOf(ReaderSettings())
         var page = -1
+        var coverPage = -1
         compose.setContent {
-            AppInteractionMode(false, true) { NoveliaTheme("light") {
+            AppInteractionMode(false, true) { NoveliaTheme(theme) {
                 ComicReader("河岸边的日常", pages, preferences.mode ?: default, 10, 0, preferences, sections, default,
-                    { default = it }, { preferences = it }, { index, _, _ -> page = index }, {}, {})
+                    { default = it }, { preferences = it }, { index, _, _ -> page = index }, {}, {},
+                    onCover = { coverPage = it }, readerSettings = appearance)
             } }
         }
         compose.waitUntil { page == 10 }
@@ -88,6 +99,24 @@ class ComicReaderLayoutTest {
         compose.onNodeWithContentDescription("第 3 页，共 8 页，显示阅读工具").performClick()
         compose.onNodeWithTag("comic-bottom-toolbar").assertIsDisplayed()
         screenshot("comic-toolbar-light.png")
+        compose.runOnIdle { theme = "dark" }
+        screenshot("comic-toolbar-dark.png")
+        val paper = ReaderCustomColors(text = 0x302818, background = 0xFAF4E4, toolbar = 0xE2D3AF)
+        compose.runOnIdle { appearance = ReaderSettings(theme = "custom", customColors = paper, toolbarTransparency = 0f) }
+        for (tag in listOf("comic-top-toolbar", "comic-bottom-toolbar")) {
+            val bar = compose.onNodeWithTag(tag).captureToImage().asAndroidBitmap()
+            assertEquals("上下工具栏应使用阅读配色", paper.toolbar.toInt(), bar.getPixel(2, bar.height / 2) and 0xFFFFFF)
+        }
+        compose.runOnIdle { theme = "light"; appearance = ReaderSettings() }
+        compose.onNode(hasContentDescription("用本页设置封面") and hasAnyAncestor(hasTestTag("comic-top-toolbar"))).performClick()
+        compose.runOnIdle { assertEquals(10, coverPage) }
+        val previous = compose.onNodeWithContentDescription("上一页")
+        val next = compose.onNodeWithContentDescription("下一页")
+        assertTrue(next.getUnclippedBoundsInRoot().right <= previous.getUnclippedBoundsInRoot().left)
+        next.performClick()
+        compose.waitUntil { page == 11 }
+        compose.onNodeWithContentDescription("本话页码").performSemanticsAction(SemanticsActions.SetProgress) { it(2f) }
+        compose.waitUntil { page == 10 }
         compose.onNodeWithContentDescription("漫画显示设置").performClick()
         compose.onNodeWithText("裁去白边").performScrollTo().performClick()
         compose.runOnIdle { assertTrue(preferences.cropBorders); assertEquals(10, page) }

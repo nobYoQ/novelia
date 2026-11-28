@@ -118,6 +118,7 @@ internal fun LocalComicReader(c: AppController, ref: BookRef, book: LocalComicVo
         var coverPage by rememberSaveable { mutableStateOf<Int?>(null) }
         ComicReader(
             title = book.title, pages = book.pages, mode = mode, preferences = preferences, sections = book.sections,
+            readerSettings = state.bookSettings[ref.key] ?: state.reader,
             defaultMode = state.comicReadingMode, onDefaultMode = { next -> c.store.update { it.copy(comicReadingMode = next) } },
             onDetails = { c.showBookDetails(ref) },
             initialPage = chapter.first + ((saved?.index ?: 1) - 1).coerceIn(0, chapter.count - 1), initialOffset = saved?.offset ?: 0,

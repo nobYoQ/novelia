@@ -123,7 +123,7 @@ class LocalSeriesFlowTest {
             chooseCover("设为本话封面")
             assertEquals(Color.BLUE, coverColor(refs.first()))
             assertNull(store.bookCovers.observe(parent.book.ref).first())
-            compose.onNodeWithText("下一话").performClick()
+            compose.onNodeWithContentDescription("下一话").performClick()
             compose.waitUntil(10_000) { store.state.value.positions[refs.last().key]?.index == 1 }
             compose.onNodeWithContentDescription("第 1 页，共 2 页，显示阅读工具").performClick()
             chooseCover("设为总集封面 · 漫画试读总集")

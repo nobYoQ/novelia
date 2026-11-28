@@ -173,10 +173,10 @@ class SharedDocumentImportTest {
                 compose.onNodeWithText("阅读").performClick()
                 compose.waitUntil(10_000) { compose.onAllNodesWithText("1 / 2").fetchSemanticsNodes().isNotEmpty() }
                 compose.onNodeWithText("1 / 2").performClick()
-                compose.onNodeWithText("上一话").assertIsNotEnabled()
-                compose.onNodeWithText("下一话").performClick()
+                compose.onNodeWithContentDescription("上一话").assertIsNotEnabled()
+                compose.onNodeWithContentDescription("下一话").performClick()
                 compose.waitUntil(10_000) { app.store.state.value.positions[key]?.chapterId == "second" }
-                compose.onNodeWithText("上一话").performClick()
+                compose.onNodeWithContentDescription("上一话").performClick()
                 compose.waitUntil(10_000) { app.store.state.value.positions[key]?.chapterId == "first" }
                 compose.onNodeWithText("目录").performClick()
                 compose.onNodeWithText("章节目录").assertIsDisplayed()

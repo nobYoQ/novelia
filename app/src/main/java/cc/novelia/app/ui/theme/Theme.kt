@@ -123,10 +123,10 @@ internal fun readerColors(theme: String, appColors: ColorScheme): ReaderColors =
     }
 }
 
-@Composable internal fun ReaderPageTheme(monochrome: Boolean, content: @Composable () -> Unit) {
+@Composable internal fun ReaderPageTheme(monochrome: Boolean, eInk: Boolean = LocalEInkMode.current, content: @Composable () -> Unit) {
     val colors = if(monochrome) MonochromeColors else MaterialTheme.colorScheme
     MaterialTheme(colorScheme = colors) {
-        AppInteractionMode(LocalEInkMode.current, LocalReducedMotion.current, content)
+        AppInteractionMode(eInk, LocalReducedMotion.current, content)
     }
 }
 

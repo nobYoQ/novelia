@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -27,10 +28,17 @@ import androidx.compose.ui.unit.LayoutDirection
 import cc.novelia.app.data.model.BookRef
 import cc.novelia.app.data.model.ComicPreferences
 import cc.novelia.app.data.model.ComicReadingMode
+import cc.novelia.app.data.model.ReaderSettings
+import cc.novelia.app.data.model.readingAppearance
 import cc.novelia.app.reader.ComicPage
 import cc.novelia.app.reader.ComicStripLayout
 import cc.novelia.app.ui.reader.ReaderToolbarVisibility
+import cc.novelia.app.ui.theme.LocalEInkMode
+import cc.novelia.app.ui.theme.LocalThemePreset
+import cc.novelia.app.ui.theme.ReaderNightTheme
+import cc.novelia.app.ui.theme.ReaderPageTheme
 import cc.novelia.app.ui.theme.appReducedMotion
+import cc.novelia.app.ui.theme.readerColors
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -50,6 +58,7 @@ internal fun ComicReader(
     modifier: Modifier = Modifier,
     coverRef: BookRef? = null, onCover: ((Int) -> Unit)? = null,
     previousVolume: (() -> Unit)? = null, nextVolume: (() -> Unit)? = null, onSeriesDetails: (() -> Unit)? = null,
+    readerSettings: ReaderSettings = ReaderSettings(),
 ) {
     var menu by rememberSaveable { mutableStateOf(false) }
     var chapters by rememberSaveable { mutableStateOf(false) }
@@ -62,6 +71,7 @@ internal fun ComicReader(
     val webtoon = mode == ComicReadingMode.Webtoon
     val rtl = mode == ComicReadingMode.RightToLeft
     val reduced = appReducedMotion()
+    val appearance = readerSettings.readingAppearance()
     val layout = remember(pages) { ComicStripLayout(pages) }
     val frames = remember(pages, rtl, preferences.splitWide) {
         buildList {
@@ -202,23 +212,31 @@ internal fun ComicReader(
                     }
                 }
             }
-            if (!menu) ComicPageIndicator(page - progressRange.first + 1, progressRange.last - progressRange.first + 1,
-                { menu = true }, Modifier.align(Alignment.BottomCenter))
-            ReaderToolbarVisibility(menu, Modifier.align(Alignment.TopCenter), reduced, fromTop = true) {
-                ComicHeader(title, chapter, onBack, onDetails, Modifier)
-            }
-            ReaderToolbarVisibility(menu, Modifier.align(Alignment.BottomCenter), reduced, fromTop = false) {
-                ComicControls(progressRange, page, mode, hasChapters = sections.size > 1 || onSeriesDetails != null, wholeBook = progressRange == pages.indices,
-                    previousChapter = sections.getOrNull(sectionIndex - 1)?.let { section -> { seek(section.first) } } ?: previousVolume,
-                    nextChapter = sections.getOrNull(sectionIndex + 1)?.let { section -> { seek(section.first) } } ?: nextVolume,
-                    canBack = previousVolume != null || if (webtoon) list.canScrollBackward else pager.currentPage > 0,
-                    canForward = nextVolume != null || if (webtoon) list.canScrollForward else pager.currentPage < frames.lastIndex,
-                    step = ::step, seek = ::seek, onChapters = { chapters = true }, onPages = { overview = true },
-                    onCover = onCover?.takeIf { pages[page].text == null }?.let { setCover -> { setCover(page) } },
-                    onSettings = { settings = true }, onMode = { next ->
-                        save(position())
-                        onPreferences(preferences.copy(mode = next))
-                    }, modifier = Modifier)
+            val eInk = LocalEInkMode.current || readerSettings.eInkMode
+            ReaderNightTheme(readerSettings.nightReading, eInk) {
+                ReaderPageTheme(appearance.resolvedTheme == "monochrome", eInk) {
+                    val palette = readerColors(appearance, MaterialTheme.colorScheme, LocalThemePreset.current != null)
+                    val toolbarColors = palette.copy(toolbar = palette.toolbar.copy(alpha = 1f - appearance.resolvedToolbarTransparency))
+                    val toolbarReducedMotion = appReducedMotion()
+                    if (!menu) ComicPageIndicator(page - progressRange.first + 1, progressRange.last - progressRange.first + 1,
+                        palette, { menu = true }, Modifier.align(Alignment.BottomCenter))
+                    ReaderToolbarVisibility(menu, Modifier.align(Alignment.TopCenter), toolbarReducedMotion, fromTop = true) {
+                        ComicHeader(title, chapter, toolbarColors, onBack, onDetails,
+                            onCover?.takeIf { pages[page].text == null }?.let { setCover -> { setCover(page) } })
+                    }
+                    ReaderToolbarVisibility(menu, Modifier.align(Alignment.BottomCenter), toolbarReducedMotion, fromTop = false) {
+                        ComicControls(progressRange, page, mode, hasChapters = sections.size > 1 || onSeriesDetails != null, wholeBook = progressRange == pages.indices,
+                            previousChapter = sections.getOrNull(sectionIndex - 1)?.let { section -> { seek(section.first) } } ?: previousVolume,
+                            nextChapter = sections.getOrNull(sectionIndex + 1)?.let { section -> { seek(section.first) } } ?: nextVolume,
+                            canBack = previousVolume != null || if (webtoon) list.canScrollBackward else pager.currentPage > 0,
+                            canForward = nextVolume != null || if (webtoon) list.canScrollForward else pager.currentPage < frames.lastIndex,
+                            step = ::step, seek = ::seek, onChapters = { chapters = true }, onPages = { overview = true },
+                            onSettings = { settings = true }, onMode = { next ->
+                                save(position())
+                                onPreferences(preferences.copy(mode = next))
+                            }, colors = toolbarColors)
+                    }
+                }
             }
             if (chapters) ComicChapterSheet(sections, sectionIndex, { seek(sections[it].first); chapters = false }, { chapters = false },
                 coverRef, onSeriesDetails?.let { details -> { chapters = false; details() } })
